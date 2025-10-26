@@ -4,6 +4,8 @@
 
 Codetoreum is an AI agent orchestration platform that automates software development workflows using specialized AI agents. The system integrates with GitHub for work item management and uses Claude Code for agent execution in containerized environments.
 
+**IMPORTANT**: Design documentation for the new Gen 2 architecture is located in the `documentation/01_design/` directory. If a specific design document was not specified for a task, refer to that directory for the relevant design details.
+
 ## Architecture
 
 **Gen 2 Design**: Hexagonal Architecture with Event Sourcing
@@ -37,6 +39,7 @@ codetoreum/
 │       ├── primary_adapters/    # Inbound adapters
 │       ├── secondary_adapters/  # Outbound adapters
 │       ├── events/          # Event catalog
+│       ├── infrastructure/  # Cross-cutting infrastructure
 │       └── external_systems/    # External system integration specs
 └── src/                     # Implementation
 │   ├── domain/              # Core business logic
@@ -75,7 +78,16 @@ codetoreum/
 - **IContainer**: Container runtime abstraction
 - **IRepository**: Git repository operations
 - **IEventStore**: Event sourcing storage
-- **IStorage**: Artifact storage (local, S3, etc.)
+- **IStorage**: Artifact storage (local, etc.)
+
+### Infrastructure Layer (Cross-cutting Concerns)
+- **Resilience Patterns**: Circuit breakers, rate limiting, retries, timeouts
+  - Applied via decorators that wrap adapters
+  - Centralized implementation, reusable across all external integrations
+  - Production and mock implementations for simulation testing
+- **Event Store**: Elasticsearch + Redis for event sourcing
+- **Configuration Store**: Database-backed config with versioning and search
+- **Observability**: Metrics, logging, tracing, auditing
 
 ### Adapters (Implementations)
 **Production**: GitHubTicketAdapter, ClaudeCodeAdapter, DockerContainerAdapter
@@ -141,6 +153,7 @@ General purpose containerized agents:
 - `application_services/` - Application service designs
 - `input_ports/` and `output_ports/` - Port interface specifications
 - `primary_adapters/` and `secondary_adapters/` - Adapter designs
+- `infrastructure/` - Cross-cutting infrastructure (resilience, observability)
 - `events/` - Domain event catalog
 
 ## Technology Stack
@@ -197,6 +210,8 @@ General purpose containerized agents:
 - All state changes must emit domain events
 - Configuration must be database-backed
 - Agents execute in isolated containers with limited privileges
+- Resilience patterns (circuit breakers, rate limiting, etc.) MUST be centralized in infrastructure layer
+- Adapters MUST remain pure (no resilience logic embedded in adapter code)
 
 ## Contact & Resources
 
@@ -204,6 +219,7 @@ General purpose containerized agents:
 - **Legacy System Docs**: `documentation/00_legacy/`
 - **Implementation Plan**: `documentation/01_design/03_implementation_plan.md`
 - **Architecture Overview**: `documentation/01_design/02_high_level_arch.md`
+- **Resilience Infrastructure**: `documentation/01_design/infrastructure/resilience_infrastructure_design.md`
 
 ---
 
