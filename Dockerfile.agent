@@ -1,0 +1,75 @@
+# ============================================================================
+# Stage 1: Base Environment Setup
+# ============================================================================
+FROM clauditoreum-orchestrator:latest
+
+# The base image already includes:
+# - Claude CLI (REQUIRED - must be present)
+# - Git CLI (REQUIRED - must be present)
+# - GitHub CLI (REQUIRED - must be present)
+# - Python 3.11
+# - Essential build tools
+# - procps package (provides 'ps' command needed by Claude CLI)
+
+USER root
+
+# ============================================================================
+# Stage 2: Install Project-Specific Runtimes
+# ============================================================================
+# This is a Python-based project, so we don't need additional runtimes
+# The base image already provides Python 3.11
+
+# Install any additional system packages that may be needed for Python dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    && apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# ============================================================================
+# Stage 3: Pre-install Dependencies (OPTIONAL but RECOMMENDED)
+# ============================================================================
+# Pre-installing dependencies speeds up agent startup time because the agent
+# doesn't have to install them every time it runs.
+
+# WORKDIR should match where the orchestrator will mount the project
+WORKDIR /workspace/codetoreum
+
+# Copy ONLY the dependency manifests needed for installation
+# DO NOT copy source code - it comes from the runtime mount
+COPY requirements.txt* ./
+
+# Pre-install Python dependencies if requirements.txt exists
+# Use BuildKit cache mount for pip cache to speed up rebuilds
+RUN if [ -f requirements.txt ]; then \
+    pip install --no-cache-dir -r requirements.txt; \
+    fi
+
+# ============================================================================
+# Stage 4: Ownership and Permissions
+# ============================================================================
+# Change ownership ONLY of what was installed, NOT source code
+# Source code ownership is handled by the mount
+
+# Python packages are installed as root in /usr/local, no chown needed
+
+# ============================================================================
+# Stage 5: Switch to Runtime User
+# ============================================================================
+USER orchestrator
+
+# ============================================================================
+# Stage 6: Verification (MANDATORY)
+# ============================================================================
+# Verify all critical CLIs are present (from base image)
+RUN claude --version && \
+    git --version && \
+    gh --version && \
+    python3 --version && \
+    pip --version
+
+# ============================================================================
+# Default command
+# ============================================================================
+CMD ["/bin/bash"]

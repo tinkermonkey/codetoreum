@@ -1,0 +1,57 @@
+# Web Framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# Database & ORM
+sqlalchemy>=2.0.0
+alembic>=1.12.0
+asyncpg>=0.29.0
+psycopg2-binary>=2.9.9
+
+# Redis (Event Store & Cache)
+redis>=5.0.0
+hiredis>=2.2.3
+
+# Background Tasks & Async
+celery>=5.3.4
+httpx>=0.25.0
+
+# Git Operations
+gitpython>=3.1.40
+
+# Container Operations
+docker>=6.1.0
+
+# Testing
+pytest>=7.4.3
+pytest-asyncio>=0.21.1
+pytest-cov>=4.1.0
+testcontainers>=3.7.1
+
+# Code Quality
+ruff>=0.1.6
+mypy>=1.7.0
+black>=23.11.0
+
+# Monitoring & Observability
+opentelemetry-api>=1.21.0
+opentelemetry-sdk>=1.21.0
+opentelemetry-instrumentation-fastapi>=0.42b0
+prometheus-client>=0.19.0
+
+# AWS SDK (for S3)
+boto3>=1.29.0
+
+# CLI
+click>=8.1.7
+typer>=0.9.0
+rich>=13.7.0
+
+# GitHub API
+PyGithub>=2.1.1
+
+# Utilities
+python-dotenv>=1.0.0
+python-multipart>=0.0.6
