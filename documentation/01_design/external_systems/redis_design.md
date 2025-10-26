@@ -2,18 +2,43 @@
 
 ## Overview
 
-Redis serves as the high-performance caching and queuing backbone for the Codetoreum platform. This external system provides task queuing, real-time event streaming, container tracking, and session state management. This document details the abstraction layer, data structures, and mock implementations.
+Redis serves as the **high-performance buffering and caching layer** for the Codetoreum platform. It provides the critical bridge between the application and Elasticsearch, enabling high write throughput while maintaining data durability.
+
+**Architecture Role**: Redis is NOT the primary persistence layer. It serves as:
+- **Write Buffer**: Events, logs, and metrics are written to Redis first, then asynchronously persisted to Elasticsearch
+- **Read Cache**: Frequently accessed configurations and projections are cached for fast access
+- **Real-Time Layer**: Pub/sub for real-time event broadcasting and task queuing
+
+**Data Flow**:
+```
+Application → Redis (buffer/cache) → Background Workers → Elasticsearch (persistent storage)
+```
 
 ## System Purpose
 
 **Primary Functions**:
-1. Priority-based task queue for agent execution
-2. Real-time event streaming via pub/sub
-3. Event history storage via streams
-4. Container lifecycle tracking
-5. Execution state management
-6. Conversational session state
-7. Health status caching
+
+### 1. **Buffering Layer** (Critical)
+- **Event Buffering**: Events written to Redis Streams, then batch-persisted to Elasticsearch
+- **Log Buffering**: Logs buffered before bulk insertion to Elasticsearch
+- **Metrics Buffering**: Real-time metrics aggregated and batched
+- **Backpressure Handling**: Prevents Elasticsearch overload during traffic spikes
+
+### 2. **Caching Layer** (Performance)
+- **Configuration Cache**: Hot configurations cached for sub-millisecond access
+- **Projection Cache**: Read model projections cached to reduce Elasticsearch queries
+- **Session State**: Temporary session and execution state
+- **Health Status Cache**: System health and container status
+
+### 3. **Task Queue** (Coordination)
+- **Agent Execution Queue**: Priority-based task scheduling
+- **Background Job Queue**: Asynchronous task processing
+- **Worker Coordination**: Distributed lock and worker assignment
+
+### 4. **Real-Time Communication** (Pub/Sub)
+- **Event Broadcasting**: Real-time event notifications to subscribers
+- **Log Streaming**: Live log tail for active executions
+- **Progress Updates**: Real-time workflow progress to UI clients
 
 ## Port Interface Design
 
@@ -917,16 +942,453 @@ class RedisMemoryMonitor:
         return usage_percent > 90
 ```
 
+## Buffering Architecture for Elasticsearch
+
+### Event Buffering
+
+**Purpose**: Buffer domain events before persisting to Elasticsearch
+
+**Implementation**:
+```python
+class RedisEventBuffer:
+    """
+    Buffers domain events in Redis Streams before Elasticsearch persistence.
+
+    Architecture:
+    - Events written to Redis Stream for immediate acknowledgment
+    - Consumer groups ensure reliable delivery
+    - Background workers batch-write to Elasticsearch
+    - Provides high write throughput with eventual consistency
+    """
+
+    def __init__(self, redis_client):
+        self.redis = redis_client
+        self.stream_name = "events:buffer"
+        self.consumer_group = "elasticsearch-writers"
+
+    async def buffer_event(self, event: Dict[str, Any]) -> str:
+        """
+        Write event to Redis Stream.
+
+        Returns:
+            Message ID from Redis
+        """
+        message_id = await self.redis.xadd(
+            self.stream_name,
+            {
+                "event_id": event["event_id"],
+                "aggregate_id": event["aggregate_id"],
+                "event_type": event["event_type"],
+                "payload": json.dumps(event)
+            }
+        )
+        return message_id
+
+    async def buffer_events_bulk(self, events: List[Dict[str, Any]]) -> List[str]:
+        """Batch buffer multiple events."""
+        message_ids = []
+        for event in events:
+            message_id = await self.buffer_event(event)
+            message_ids.append(message_id)
+        return message_ids
+
+class EventPersistenceWorker:
+    """
+    Background worker that consumes events from Redis and persists to Elasticsearch.
+
+    Uses consumer groups for:
+    - Reliable delivery (no message loss)
+    - Parallel processing (multiple workers)
+    - Automatic retry on failure
+    """
+
+    def __init__(
+        self,
+        redis_client,
+        elasticsearch_store,
+        worker_id: str,
+        batch_size: int = 100
+    ):
+        self.redis = redis_client
+        self.es_store = elasticsearch_store
+        self.worker_id = worker_id
+        self.batch_size = batch_size
+        self.stream_name = "events:buffer"
+        self.consumer_group = "elasticsearch-writers"
+
+    async def process_events_loop(self):
+        """Main processing loop."""
+        while True:
+            try:
+                # Read batch from Redis Stream
+                messages = await self.redis.xreadgroup(
+                    groupname=self.consumer_group,
+                    consumername=self.worker_id,
+                    streams={self.stream_name: ">"},
+                    count=self.batch_size,
+                    block=1000  # Block for 1 second if no messages
+                )
+
+                if not messages:
+                    continue
+
+                # Parse and batch write to Elasticsearch
+                events = [self._parse_event(msg) for _, msg_list in messages for msg in msg_list]
+                await self.es_store.bulk_insert_events(events)
+
+                # Acknowledge successful processing
+                message_ids = [msg[0] for _, msg_list in messages for msg in msg_list]
+                await self.redis.xack(
+                    self.stream_name,
+                    self.consumer_group,
+                    *message_ids
+                )
+
+            except Exception as e:
+                # Log error, message will be retried
+                logger.error(f"Event persistence worker error: {e}")
+                await asyncio.sleep(5)  # Back off on error
+
+    def _parse_event(self, message: tuple) -> Dict[str, Any]:
+        """Parse event from Redis message."""
+        msg_id, fields = message
+        return json.loads(fields[b"payload"])
+```
+
+**Monitoring Metrics**:
+```python
+async def get_buffer_metrics(redis_client) -> Dict[str, int]:
+    """Get event buffer health metrics."""
+    stream_info = await redis_client.xinfo_stream("events:buffer")
+    pending_info = await redis_client.xpending("events:buffer", "elasticsearch-writers")
+
+    return {
+        "total_events": stream_info["length"],
+        "pending_events": pending_info["pending"],
+        "consumer_count": len(stream_info["groups"]),
+        "lag_ms": calculate_lag_milliseconds(stream_info)
+    }
+```
+
+### Log Buffering
+
+**Purpose**: Buffer application and execution logs before Elasticsearch persistence
+
+**Implementation**:
+```python
+class RedisLogBuffer:
+    """
+    Buffers log entries before Elasticsearch persistence.
+
+    Optimizations:
+    - Batch writes for high throughput
+    - Separate stream for each log level for priority processing
+    - TTL to prevent memory exhaustion
+    """
+
+    def __init__(self, redis_client):
+        self.redis = redis_client
+
+    async def buffer_log(self, log_entry: Dict[str, Any]) -> None:
+        """Write log to appropriate stream based on level."""
+        level = log_entry.get("level", "INFO")
+        stream_name = f"logs:buffer:{level.lower()}"
+
+        await self.redis.xadd(
+            stream_name,
+            {
+                "timestamp": log_entry["timestamp"],
+                "message": log_entry["message"],
+                "payload": json.dumps(log_entry)
+            },
+            maxlen=100000,  # Prevent unbounded growth
+            approximate=True
+        )
+
+class LogPersistenceWorker:
+    """Persists logs from Redis to Elasticsearch in batches."""
+
+    async def process_logs_loop(self):
+        """Process logs with priority: ERROR > WARN > INFO > DEBUG."""
+        levels = ["error", "warn", "info", "debug"]
+
+        while True:
+            for level in levels:
+                stream_name = f"logs:buffer:{level}"
+                messages = await self.redis.xreadgroup(
+                    groupname="log-writers",
+                    consumername=self.worker_id,
+                    streams={stream_name: ">"},
+                    count=500
+                )
+
+                if messages:
+                    logs = [self._parse_log(msg) for _, msg_list in messages for msg in msg_list]
+                    await self.es_store.bulk_insert_logs(logs)
+                    # Acknowledge...
+
+            await asyncio.sleep(0.1)  # 100ms cycle
+```
+
+### Configuration Caching
+
+**Purpose**: Cache hot configurations for sub-millisecond access
+
+**Implementation**:
+```python
+class RedisConfigCache:
+    """
+    Write-through cache for configuration data.
+
+    Architecture:
+    - All writes go to both Elasticsearch (source of truth) and Redis (cache)
+    - Reads check Redis first, fall back to Elasticsearch
+    - Cache invalidation via pub/sub
+    - TTL as safety net
+    """
+
+    def __init__(self, redis_client, es_config_store):
+        self.redis = redis_client
+        self.es_store = es_config_store
+        self.ttl = 3600  # 1 hour
+
+    async def get_project_config(self, project_id: str) -> Optional[Dict[str, Any]]:
+        """Get project config from cache or Elasticsearch."""
+        # Check cache first
+        cache_key = f"config:project:{project_id}"
+        cached = await self.redis.get(cache_key)
+
+        if cached:
+            return json.loads(cached)
+
+        # Cache miss - fetch from Elasticsearch
+        config = await self.es_store.get_project(project_id)
+
+        if config:
+            # Populate cache
+            await self.redis.setex(
+                cache_key,
+                self.ttl,
+                json.dumps(config.to_dict())
+            )
+
+        return config
+
+    async def save_project_config(self, config: ProjectConfig) -> str:
+        """Save config to Elasticsearch and update cache."""
+        # Write to Elasticsearch (source of truth)
+        config_id = await self.es_store.save_project(config)
+
+        # Update cache (write-through)
+        cache_key = f"config:project:{config.project_id}"
+        await self.redis.setex(
+            cache_key,
+            self.ttl,
+            json.dumps(config.to_dict())
+        )
+
+        # Broadcast invalidation to other nodes
+        await self.redis.publish(
+            "config:invalidate",
+            json.dumps({"type": "project", "id": config.project_id})
+        )
+
+        return config_id
+
+    async def invalidate_config(self, config_type: str, config_id: str) -> None:
+        """Invalidate cached configuration."""
+        cache_key = f"config:{config_type}:{config_id}"
+        await self.redis.delete(cache_key)
+```
+
+**Cache Invalidation Subscriber**:
+```python
+class ConfigCacheInvalidationSubscriber:
+    """Listens for cache invalidation events."""
+
+    async def subscribe(self):
+        """Subscribe to invalidation channel."""
+        pubsub = self.redis.pubsub()
+        await pubsub.subscribe("config:invalidate")
+
+        async for message in pubsub.listen():
+            if message["type"] == "message":
+                data = json.loads(message["data"])
+                config_type = data["type"]
+                config_id = data["id"]
+
+                # Invalidate local cache
+                cache_key = f"config:{config_type}:{config_id}"
+                await self.redis.delete(cache_key)
+```
+
+### Metrics Buffering and Aggregation
+
+**Purpose**: Buffer and pre-aggregate metrics before Elasticsearch persistence
+
+**Implementation**:
+```python
+class RedisMetricsBuffer:
+    """
+    Buffers and aggregates metrics before Elasticsearch persistence.
+
+    Features:
+    - Real-time counters and gauges
+    - Pre-aggregation to reduce Elasticsearch writes
+    - Periodic flush to Elasticsearch
+    """
+
+    async def record_metric(
+        self,
+        metric_name: str,
+        value: float,
+        tags: Dict[str, str]
+    ) -> None:
+        """Record a metric value."""
+        timestamp = int(time.time())
+        metric_key = self._make_metric_key(metric_name, tags, timestamp)
+
+        # Increment counter or update gauge
+        await self.redis.hincrby(f"metrics:raw:{metric_key}", "count", 1)
+        await self.redis.hincrbyfloat(f"metrics:raw:{metric_key}", "sum", value)
+
+        # Set expiry to prevent memory leak
+        await self.redis.expire(f"metrics:raw:{metric_key}", 3600)
+
+class MetricsAggregationWorker:
+    """Aggregates and persists metrics to Elasticsearch."""
+
+    async def aggregate_and_persist_loop(self):
+        """Aggregate metrics and persist every minute."""
+        while True:
+            # Scan for metric keys
+            pattern = "metrics:raw:*"
+            cursor = 0
+
+            aggregated_metrics = []
+
+            while True:
+                cursor, keys = await self.redis.scan(
+                    cursor,
+                    match=pattern,
+                    count=100
+                )
+
+                for key in keys:
+                    # Get aggregated data
+                    data = await self.redis.hgetall(key)
+                    count = int(data.get(b"count", 0))
+                    sum_val = float(data.get(b"sum", 0.0))
+
+                    metric = {
+                        "metric_name": self._parse_metric_name(key),
+                        "avg_value": sum_val / count if count > 0 else 0,
+                        "count": count,
+                        "sum": sum_val
+                    }
+                    aggregated_metrics.append(metric)
+
+                    # Delete processed key
+                    await self.redis.delete(key)
+
+                if cursor == 0:
+                    break
+
+            # Bulk write to Elasticsearch
+            if aggregated_metrics:
+                await self.es_store.bulk_insert_metrics(aggregated_metrics)
+
+            await asyncio.sleep(60)  # Aggregate every minute
+```
+
+## Data Durability and Recovery
+
+### Redis Persistence Configuration
+
+```python
+# Recommended Redis configuration for production
+CONFIG = {
+    # Enable both RDB and AOF for maximum durability
+    "save": "900 1 300 10 60 10000",  # RDB snapshots
+    "appendonly": "yes",                # AOF enabled
+    "appendfsync": "everysec",          # AOF sync every second
+    "auto-aof-rewrite-percentage": 100,
+    "auto-aof-rewrite-min-size": "64mb",
+
+    # Memory management
+    "maxmemory": "4gb",
+    "maxmemory-policy": "allkeys-lru",  # Evict oldest keys when full
+
+    # Stream configuration
+    "stream-node-max-entries": 100000,
+}
+```
+
+### Disaster Recovery
+
+**Scenario**: Redis failure with buffered events not yet persisted to Elasticsearch
+
+**Recovery Strategy**:
+1. Redis persistence (RDB + AOF) prevents data loss on restart
+2. Consumer groups track last processed message ID
+3. On recovery, workers resume from last acknowledged position
+4. No event loss as long as Redis data persists
+
+**Code**:
+```python
+async def recover_buffer_on_startup():
+    """Ensure consumer group exists and resume processing."""
+    try:
+        # Create consumer group if it doesn't exist
+        await redis.xgroup_create(
+            "events:buffer",
+            "elasticsearch-writers",
+            id="0",
+            mkstream=True
+        )
+    except:
+        # Group already exists
+        pass
+
+    # Check for pending messages (not acknowledged)
+    pending = await redis.xpending(
+        "events:buffer",
+        "elasticsearch-writers"
+    )
+
+    if pending["pending"] > 0:
+        logger.warning(f"Found {pending['pending']} pending events, will retry")
+
+    # Start workers - they will automatically process pending messages
+```
+
 ## Summary
 
 The Redis integration provides:
-1. **Clean abstractions** through IQueue, IEventStream, ICache ports
-2. **Production adapters** for real Redis operations
-3. **Mock adapters** for in-memory testing
-4. **Priority queue** for task management
-5. **Real-time streaming** via pub/sub
-6. **Event history** via streams
-7. **Caching** with TTL support
-8. **Full testing** support without Redis dependency
 
-This design enables the platform to use Redis for high-performance operations while maintaining flexibility to swap in alternative implementations (in-memory, database-backed) or run without Redis in test mode.
+1. **High-Performance Buffering**:
+   - Events buffered for batch Elasticsearch writes
+   - Logs buffered with priority processing
+   - Metrics pre-aggregated before persistence
+
+2. **Intelligent Caching**:
+   - Configuration caching with write-through strategy
+   - Projection caching for fast queries
+   - Cache invalidation via pub/sub
+
+3. **Reliability**:
+   - Consumer groups for guaranteed delivery
+   - RDB + AOF persistence prevents data loss
+   - Automatic recovery after failures
+
+4. **Scalability**:
+   - Multiple workers for parallel processing
+   - Backpressure handling protects Elasticsearch
+   - Horizontal scaling via additional workers
+
+5. **Observability**:
+   - Buffer depth monitoring
+   - Lag metrics and alerts
+   - Processing throughput tracking
+
+**Key Principle**: Redis is the **transient buffer and cache**, Elasticsearch is the **source of truth**. This separation provides both high performance and data durability.

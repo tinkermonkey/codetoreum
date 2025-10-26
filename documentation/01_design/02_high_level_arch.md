@@ -78,16 +78,19 @@ I'll review the project files to understand your current system and design goals
 ┌────────────────────────▼──────────────────────────────────────┐
 │                    SECONDARY ADAPTERS                          │
 │                                                                 │
-│  ┌─────────────────────────┐  ┌─────────────────────────┐    │
-│  │     PRODUCTION          │  │      TESTING/MOCK         │    │
-│  ├─────────────────────────┤  ├─────────────────────────┤    │
-│  │ • GitHubTicketAdapter   │  │ • InMemoryTicketAdapter  │    │
-│  │ • ClaudeCodeAdapter     │  │ • MockLLMAdapter         │    │
-│  │ • GitRepositoryAdapter  │  │ • InMemoryRepoAdapter    │    │
-│  │ • DockerContainerAdapter│  │ • FakeContainerAdapter   │    │
-│  │ • RedisEventStore       │  │ • InMemoryEventStore     │    │
-│  │ • ElasticsearchMetrics  │  │ • InMemoryMetrics        │    │
-│  └─────────────────────────┘  └─────────────────────────┘    │
+│  ┌──────────────────────────────┐  ┌─────────────────────────┐    │
+│  │     PRODUCTION                │  │      TESTING/MOCK       │    │
+│  ├──────────────────────────────┤  ├─────────────────────────┤    │
+│  │ • GitHubTicketAdapter         │  │ • InMemoryTicketAdapter │    │
+│  │ • ClaudeCodeAdapter           │  │ • MockLLMAdapter        │    │
+│  │ • GitRepositoryAdapter        │  │ • InMemoryRepoAdapter   │    │
+│  │ • DockerContainerAdapter      │  │ • FakeContainerAdapter  │    │
+│  │ • ElasticsearchEventStore     │  │ • InMemoryEventStore    │    │
+│  │   + RedisEventBuffer          │  │                         │    │
+│  │ • ElasticsearchConfigStore    │  │ • InMemoryConfigStore   │    │
+│  │   + RedisConfigCache          │  │                         │    │
+│  │ • ElasticsearchMetrics        │  │ • InMemoryMetrics       │    │
+│  └──────────────────────────────┘  └─────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -292,38 +295,78 @@ class SimulationRunner:
 
 ## Configuration Management
 
-### Database-Driven Configuration
-Replace YAML files with database-stored configuration:
+### Elasticsearch-Backed Configuration with Redis Caching
+Replace YAML files with Elasticsearch-stored, versioned configuration:
+
+**Architecture**:
+- **Storage**: Elasticsearch indices (`config-projects`, `config-workflows`, `config-agents`)
+- **Caching**: Redis write-through cache for fast access
+- **Versioning**: Each update creates new document version
+- **Search**: Full-text search across all configurations
 
 ```python
 class ConfigurationService:
-    def __init__(self, storage: IConfigStorage):
-        self.storage = storage
-    
+    def __init__(self, config_store: IConfigStore):
+        self.config_store = config_store  # ElasticsearchConfigStore + RedisCache
+
     async def get_workflow(self, project: str) -> WorkflowConfig:
-        return await self.storage.get_workflow_config(project)
-    
-    async def update_agent_prompt(self, 
-                                  agent_id: str, 
-                                  prompt: str) -> None:
-        config = await self.storage.get_agent_config(agent_id)
+        """Get workflow config (from cache or Elasticsearch)."""
+        return await self.config_store.get_workflow_config(project)
+
+    async def update_agent_prompt(self,
+                                  agent_id: str,
+                                  prompt: str,
+                                  updated_by: str) -> None:
+        """
+        Update agent prompt (creates new version).
+
+        Flow:
+        1. Write to Elasticsearch (versioned)
+        2. Update Redis cache
+        3. Broadcast cache invalidation
+        """
+        config = await self.config_store.get_agent_config(agent_id)
         config.prompt_template = prompt
-        await self.storage.save_agent_config(config)
+        config.updated_by = updated_by
+        await self.config_store.save_agent_config(config)
+
+    async def search_configurations(self, query: str) -> List[Dict]:
+        """Full-text search across all configurations."""
+        return await self.config_store.search_configs(query)
 ```
 
 ### Web-Based Configuration UI
 ```python
-# REST API for configuration
+# REST API for configuration with versioning and history
 @router.post("/api/workflows/{workflow_id}/stages")
 async def add_workflow_stage(
     workflow_id: str,
     stage: StageConfig,
     config_service: ConfigurationService
 ):
+    """Add stage to workflow (creates new version)."""
     workflow = await config_service.get_workflow(workflow_id)
     workflow.add_stage(stage)
     await config_service.save_workflow(workflow)
-    return {"status": "success"}
+    return {"status": "success", "version": workflow.version}
+
+@router.get("/api/configurations/search")
+async def search_configurations(
+    query: str,
+    config_service: ConfigurationService
+):
+    """Full-text search across all configurations."""
+    results = await config_service.search_configurations(query)
+    return {"results": results}
+
+@router.get("/api/workflows/{workflow_id}/history")
+async def get_workflow_history(
+    workflow_id: str,
+    config_service: ConfigurationService
+):
+    """Get configuration change history."""
+    history = await config_service.get_config_history(workflow_id)
+    return {"history": history}
 ```
 
 ## Simulation Mode Features
@@ -427,14 +470,16 @@ registry.register("gpt4", GPT4Adapter)
 3. Validate against production behavior
 
 ### Phase 4: Configuration Migration
-1. Build database schema for configuration
-2. Create web UI for configuration management
-3. Migrate from YAML files to database
+1. Build Elasticsearch indices for configuration storage
+2. Create web UI for configuration management with search
+3. Migrate from YAML files to Elasticsearch
+4. Deploy Redis for configuration caching
 
 ### Phase 5: Full Integration
 1. Replace existing orchestrator with new hexagonal core
 2. Run in parallel mode for validation
-3. Complete cutover once stable
+3. Deploy Elasticsearch + Redis infrastructure
+4. Complete cutover once stable
 
 ## Benefits of This Architecture
 
@@ -442,9 +487,11 @@ registry.register("gpt4", GPT4Adapter)
 2. **Simulation Mode**: Full end-to-end testing without external services
 3. **Observability**: Event sourcing provides complete audit trail and replay capability
 4. **Extensibility**: New ticket systems and LLM providers plug in easily
-5. **Configuration**: Web-based UI with database storage replaces YAML files
+5. **Configuration**: Web-based UI with Elasticsearch storage (versioned, searchable) replaces YAML files
 6. **Maintainability**: Clear boundaries and single responsibilities
-7. **Performance**: Can optimize hot paths independently
+7. **Performance**: Redis buffering/caching optimizes both writes and reads
 8. **Debugging**: Event replay allows reproducing any issue
+9. **Search**: Full-text search across events, logs, and configurations
+10. **Scalability**: Elasticsearch + Redis architecture scales horizontally
 
 This architecture provides the foundation for a highly testable, observable, and extensible system that can run in full simulation mode for testing while maintaining clean separation of concerns.

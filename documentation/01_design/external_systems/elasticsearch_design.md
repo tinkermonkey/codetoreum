@@ -2,18 +2,341 @@
 
 ## Overview
 
-Elasticsearch provides distributed search and analytics capabilities for the Codetoreum platform. This external system is responsible for event indexing, metrics storage, historical analysis, and configuration persistence. This document details the abstraction layer, indexing strategies, and mock implementations.
+Elasticsearch serves as the **primary persistence layer** for the Codetoreum platform, providing distributed search, analytics, and storage capabilities. This external system is responsible for:
+
+- **Event Sourcing**: Persistent storage of all domain events
+- **Logging**: Application and execution logs
+- **Configuration**: Project, workflow, and agent configurations
+- **Metrics**: Performance and business metrics
+- **Search**: Full-text search across all data
+
+**Architecture Pattern**: Elasticsearch is accessed via Redis buffering for high-throughput writes:
+```
+Application → Redis Streams (buffer) → Background Workers → Elasticsearch (persistence)
+```
 
 ## System Purpose
 
 **Primary Functions**:
-1. Event and decision tracking with searchable history
-2. Metrics collection and aggregation
-3. Pattern detection and anomaly analysis
-4. Configuration storage (moving from YAML)
-5. Full-text search capabilities
-6. Time-series data analysis
-7. Debugging and troubleshooting support
+1. **Event Sourcing Storage**: Complete audit trail of all domain events
+2. **Log Aggregation**: Centralized logging from all services and agent executions
+3. **Configuration Management**: Database replacement for YAML configurations
+4. **Metrics Storage**: Time-series performance and business metrics
+5. **Full-Text Search**: Search across events, logs, configurations
+6. **Analytics**: Pattern detection, aggregations, anomaly analysis
+7. **Debugging**: Historical replay and troubleshooting
+
+## Data Flow Architecture
+
+### Write Path
+```
+Application
+    ↓
+Redis Streams (buffering)
+    ↓
+Consumer Groups (background workers)
+    ↓
+Batch Processing
+    ↓
+Elasticsearch Bulk API
+    ↓
+Persistent Storage
+```
+
+### Read Path
+```
+Application Query
+    ↓
+Redis Cache (for hot data)
+    ├─ Cache Hit → Return
+    └─ Cache Miss ↓
+Elasticsearch Query
+    ↓
+Update Redis Cache
+    ↓
+Return Results
+```
+
+## Index Architecture
+
+### 1. Event Indices
+
+**Index Pattern**: `events-{YYYY.MM}`
+
+**Purpose**: Event sourcing - complete history of all domain events
+
+**Mapping**:
+```json
+{
+  "mappings": {
+    "properties": {
+      "event_id": {"type": "keyword"},
+      "aggregate_id": {"type": "keyword"},
+      "aggregate_type": {"type": "keyword"},
+      "event_type": {"type": "keyword"},
+      "event_version": {"type": "integer"},
+      "timestamp": {"type": "date"},
+      "stream_version": {"type": "long"},
+      "correlation_id": {"type": "keyword"},
+      "causation_id": {"type": "keyword"},
+      "user_id": {"type": "keyword"},
+      "data": {"type": "object", "enabled": true},
+      "metadata": {
+        "properties": {
+          "trace_id": {"type": "keyword"},
+          "span_id": {"type": "keyword"},
+          "service": {"type": "keyword"}
+        }
+      }
+    }
+  },
+  "settings": {
+    "number_of_shards": 2,
+    "number_of_replicas": 1,
+    "refresh_interval": "5s",
+    "index.lifecycle.name": "events-policy"
+  }
+}
+```
+
+**ILM Policy**:
+```json
+{
+  "policy": {
+    "phases": {
+      "hot": {
+        "actions": {
+          "rollover": {
+            "max_age": "30d",
+            "max_size": "50gb"
+          }
+        }
+      },
+      "warm": {
+        "min_age": "30d",
+        "actions": {
+          "shrink": {"number_of_shards": 1},
+          "forcemerge": {"max_num_segments": 1}
+        }
+      },
+      "cold": {
+        "min_age": "90d",
+        "actions": {
+          "freeze": {}
+        }
+      },
+      "delete": {
+        "min_age": "365d",
+        "actions": {
+          "delete": {}
+        }
+      }
+    }
+  }
+}
+```
+
+### 2. Log Indices
+
+**Index Pattern**: `logs-{YYYY.MM.DD}`
+
+**Purpose**: Application logs, execution logs, system logs
+
+**Mapping**:
+```json
+{
+  "mappings": {
+    "properties": {
+      "timestamp": {"type": "date"},
+      "level": {"type": "keyword"},
+      "logger": {"type": "keyword"},
+      "message": {"type": "text"},
+      "service": {"type": "keyword"},
+      "environment": {"type": "keyword"},
+      "trace_id": {"type": "keyword"},
+      "span_id": {"type": "keyword"},
+      "execution_id": {"type": "keyword"},
+      "work_item_id": {"type": "keyword"},
+      "agent_name": {"type": "keyword"},
+      "project": {"type": "keyword"},
+      "error": {
+        "properties": {
+          "type": {"type": "keyword"},
+          "message": {"type": "text"},
+          "stack_trace": {"type": "text"}
+        }
+      },
+      "context": {"type": "object", "enabled": true}
+    }
+  },
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 1,
+    "refresh_interval": "5s",
+    "index.lifecycle.name": "logs-policy"
+  }
+}
+```
+
+**ILM Policy**:
+```json
+{
+  "policy": {
+    "phases": {
+      "hot": {
+        "actions": {
+          "rollover": {
+            "max_age": "1d",
+            "max_size": "10gb"
+          }
+        }
+      },
+      "delete": {
+        "min_age": "30d",
+        "actions": {
+          "delete": {}
+        }
+      }
+    }
+  }
+}
+```
+
+### 3. Configuration Indices
+
+**Index Pattern**: `config-{type}` (e.g., `config-projects`, `config-workflows`)
+
+**Purpose**: Replaces YAML configuration files with searchable, versioned storage
+
+**Projects Index**: `config-projects`
+```json
+{
+  "mappings": {
+    "properties": {
+      "project_id": {"type": "keyword"},
+      "name": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
+      "description": {"type": "text"},
+      "github_org": {"type": "keyword"},
+      "github_repo": {"type": "keyword"},
+      "tech_stack": {"type": "keyword"},
+      "environment_variables": {"type": "object", "enabled": true},
+      "mounted_commands": {"type": "object", "enabled": true},
+      "version": {"type": "integer"},
+      "created_at": {"type": "date"},
+      "updated_at": {"type": "date"},
+      "created_by": {"type": "keyword"},
+      "is_active": {"type": "boolean"}
+    }
+  },
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 1,
+    "refresh_interval": "1s"
+  }
+}
+```
+
+**Workflows Index**: `config-workflows`
+```json
+{
+  "mappings": {
+    "properties": {
+      "workflow_id": {"type": "keyword"},
+      "name": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
+      "description": {"type": "text"},
+      "project_id": {"type": "keyword"},
+      "stages": {
+        "type": "nested",
+        "properties": {
+          "stage_id": {"type": "keyword"},
+          "name": {"type": "keyword"},
+          "agent_type": {"type": "keyword"},
+          "entry_conditions": {"type": "object"},
+          "config": {"type": "object"}
+        }
+      },
+      "version": {"type": "integer"},
+      "created_at": {"type": "date"},
+      "updated_at": {"type": "date"},
+      "is_active": {"type": "boolean"}
+    }
+  }
+}
+```
+
+**Agents Index**: `config-agents`
+```json
+{
+  "mappings": {
+    "properties": {
+      "agent_id": {"type": "keyword"},
+      "name": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
+      "agent_type": {"type": "keyword"},
+      "prompt_template": {"type": "text"},
+      "capabilities": {"type": "keyword"},
+      "constraints": {"type": "object"},
+      "version": {"type": "integer"},
+      "created_at": {"type": "date"},
+      "updated_at": {"type": "date"},
+      "is_active": {"type": "boolean"}
+    }
+  }
+}
+```
+
+**Configuration History Index**: `config-history`
+```json
+{
+  "mappings": {
+    "properties": {
+      "change_id": {"type": "keyword"},
+      "config_type": {"type": "keyword"},
+      "config_id": {"type": "keyword"},
+      "action": {"type": "keyword"},
+      "previous_version": {"type": "integer"},
+      "new_version": {"type": "integer"},
+      "changes": {"type": "object", "enabled": true},
+      "changed_by": {"type": "keyword"},
+      "changed_at": {"type": "date"},
+      "reason": {"type": "text"}
+    }
+  }
+}
+```
+
+### 4. Metrics Indices
+
+**Index Pattern**: `metrics-{YYYY.MM}`
+
+**Purpose**: Performance metrics, business metrics, system health
+
+**Mapping**:
+```json
+{
+  "mappings": {
+    "properties": {
+      "metric_id": {"type": "keyword"},
+      "timestamp": {"type": "date"},
+      "metric_name": {"type": "keyword"},
+      "metric_type": {"type": "keyword"},
+      "value": {"type": "double"},
+      "unit": {"type": "keyword"},
+      "tags": {
+        "properties": {
+          "project": {"type": "keyword"},
+          "agent": {"type": "keyword"},
+          "execution_id": {"type": "keyword"},
+          "environment": {"type": "keyword"}
+        }
+      },
+      "dimensions": {"type": "object", "enabled": true}
+    }
+  },
+  "settings": {
+    "index.lifecycle.name": "metrics-policy"
+  }
+}
+```
 
 ## Port Interface Design
 
@@ -21,146 +344,89 @@ Elasticsearch provides distributed search and analytics capabilities for the Cod
 
 ```python
 from abc import ABC, abstractmethod
-from typing import List, Dict, Optional, Any
+from typing import List, Optional, AsyncIterator, Dict, Any
 from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
-
-class EventType(Enum):
-    """Types of events tracked."""
-    TASK_RECEIVED = "task_received"
-    AGENT_INITIALIZED = "agent_initialized"
-    AGENT_STARTED = "agent_started"
-    AGENT_COMPLETED = "agent_completed"
-    AGENT_FAILED = "agent_failed"
-    DECISION = "decision"
-    METRIC = "metric"
+from uuid import UUID
 
 @dataclass
-class Event:
-    """A trackable event."""
-    id: str                          # Unique event ID
-    timestamp: datetime              # When event occurred
-    event_type: EventType            # Type of event
-    agent: str                       # Agent involved
-    task_id: str                     # Task identifier
-    project: str                     # Project name
-    data: Dict[str, Any]             # Event-specific data
-    pipeline_run_id: Optional[str] = None
-
-@dataclass
-class Metric:
-    """A performance or quality metric."""
-    id: str
+class DomainEvent:
+    """Domain event for event sourcing."""
+    event_id: str
+    aggregate_id: str
+    aggregate_type: str
+    event_type: str
+    event_version: int
     timestamp: datetime
-    metric_name: str                 # Metric identifier
-    metric_type: str                 # 'task' or 'quality'
-    value: float                     # Metric value
-    unit: str                        # Unit of measurement
-    tags: Dict[str, str]             # Metadata tags
-    project: str
-    agent: Optional[str] = None
-
-@dataclass
-class SearchQuery:
-    """Query for searching events."""
-    query: str                       # Search query (Lucene syntax)
-    filters: Dict[str, Any]          # Field filters
-    start_time: Optional[datetime]   # Time range start
-    end_time: Optional[datetime]     # Time range end
-    size: int = 100                  # Max results
-    sort_by: str = "timestamp"       # Sort field
-    sort_order: str = "desc"         # 'asc' or 'desc'
+    stream_version: int
+    data: Dict[str, Any]
+    metadata: Dict[str, Any]
+    correlation_id: Optional[str] = None
+    causation_id: Optional[str] = None
 
 class IEventStore(ABC):
     """
-    Port interface for event storage and search.
+    Port interface for event sourcing persistence.
 
-    Abstracts Elasticsearch, database, and in-memory storage.
+    Production: ElasticsearchEventStore with RedisEventBuffer
+    Testing: InMemoryEventStore
     """
 
     @abstractmethod
-    async def store_event(self, event: Event) -> str:
+    async def append(self,
+                     stream_id: str,
+                     events: List[DomainEvent],
+                     expected_version: Optional[int] = None) -> None:
         """
-        Store an event.
+        Append events to a stream.
 
         Args:
-            event: Event to store
+            stream_id: Event stream identifier (aggregate ID)
+            events: Events to append
+            expected_version: Expected current version for optimistic concurrency
 
-        Returns:
-            Event ID
+        Raises:
+            ConcurrencyConflictError: Version mismatch
+            EventStoreError: Persistence failure
         """
         pass
 
     @abstractmethod
-    async def store_events_bulk(self, events: List[Event]) -> List[str]:
-        """
-        Store multiple events efficiently.
-
-        Returns:
-            List of event IDs
-        """
+    async def get_events(self,
+                        stream_id: str,
+                        from_version: int = 0,
+                        to_version: Optional[int] = None) -> List[DomainEvent]:
+        """Get events from a stream."""
         pass
 
     @abstractmethod
-    async def get_event(self, event_id: str) -> Optional[Event]:
-        """Retrieve event by ID."""
+    async def get_events_since(self,
+                              since: datetime,
+                              stream_id: Optional[str] = None,
+                              event_types: Optional[List[str]] = None) -> List[DomainEvent]:
+        """Get events since a timestamp, optionally filtered by type."""
         pass
 
     @abstractmethod
-    async def search_events(
-        self,
-        query: SearchQuery
-    ) -> List[Event]:
-        """
-        Search events with query.
-
-        Returns:
-            List of matching events
-        """
+    async def stream_events(self,
+                           stream_id: Optional[str] = None,
+                           from_version: int = 0) -> AsyncIterator[DomainEvent]:
+        """Stream events in real-time."""
         pass
 
     @abstractmethod
-    async def count_events(
-        self,
-        filters: Dict[str, Any],
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None
-    ) -> int:
-        """Count events matching filters."""
+    async def get_stream_version(self, stream_id: str) -> int:
+        """Get current version of a stream."""
         pass
 
     @abstractmethod
-    async def aggregate_events(
-        self,
-        aggregation_name: str,
-        field: str,
-        filters: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
-        """
-        Aggregate events by field.
-
-        Examples:
-        - Count by agent
-        - Average duration by project
-        - Unique projects per day
-        """
-        pass
-
-    @abstractmethod
-    async def store_metric(self, metric: Metric) -> str:
-        """Store a metric."""
-        pass
-
-    @abstractmethod
-    async def get_metrics(
-        self,
-        metric_name: str,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-        tags: Optional[Dict[str, str]] = None
-    ) -> List[Metric]:
-        """Retrieve metrics with filtering."""
+    async def search_events(self,
+                           query: str,
+                           filters: Optional[Dict[str, Any]] = None,
+                           start_time: Optional[datetime] = None,
+                           end_time: Optional[datetime] = None,
+                           limit: int = 100) -> List[DomainEvent]:
+        """Search events with full-text query and filters."""
         pass
 ```
 
@@ -168,707 +434,574 @@ class IEventStore(ABC):
 
 ```python
 @dataclass
-class ConfigDocument:
-    """A configuration document."""
-    id: str
-    config_type: str                 # 'workflow', 'pipeline', 'agent', 'review_filter'
-    name: str                        # Config name
-    version: int                     # Version number
-    data: Dict[str, Any]             # Configuration data
+class ProjectConfig:
+    """Project configuration."""
+    project_id: str
+    name: str
+    description: str
+    github_org: str
+    github_repo: str
+    tech_stack: str
+    environment_variables: Dict[str, str]
+    mounted_commands: Dict[str, Any]
+    version: int
     created_at: datetime
     updated_at: datetime
     created_by: str
+    is_active: bool = True
+
+@dataclass
+class WorkflowConfig:
+    """Workflow configuration."""
+    workflow_id: str
+    name: str
+    description: str
+    project_id: str
+    stages: List[Dict[str, Any]]
+    version: int
+    created_at: datetime
+    updated_at: datetime
+    is_active: bool = True
+
+@dataclass
+class AgentConfig:
+    """Agent configuration."""
+    agent_id: str
+    name: str
+    agent_type: str
+    prompt_template: str
+    capabilities: List[str]
+    constraints: Dict[str, Any]
+    version: int
+    created_at: datetime
+    updated_at: datetime
     is_active: bool = True
 
 class IConfigStore(ABC):
     """
     Port interface for configuration storage.
 
-    Replaces YAML files with database storage.
+    Replaces YAML files with Elasticsearch-backed storage.
+
+    Production: ElasticsearchConfigStore with RedisConfigCache
+    Testing: InMemoryConfigStore
     """
 
     @abstractmethod
-    async def save_config(self, config: ConfigDocument) -> str:
-        """
-        Save configuration.
-
-        Creates new version if config already exists.
-
-        Returns:
-            Config ID
-        """
+    async def get_project(self, project_id: str) -> Optional[ProjectConfig]:
+        """Get project configuration."""
         pass
 
     @abstractmethod
-    async def get_config(
-        self,
-        config_type: str,
-        name: str,
-        version: Optional[int] = None
-    ) -> Optional[ConfigDocument]:
-        """
-        Retrieve configuration.
-
-        Args:
-            config_type: Type of config
-            name: Config name
-            version: Specific version (None = latest)
-        """
+    async def save_project(self, config: ProjectConfig) -> str:
+        """Save project configuration (creates new version)."""
         pass
 
     @abstractmethod
-    async def list_configs(
-        self,
-        config_type: str,
-        active_only: bool = True
-    ) -> List[ConfigDocument]:
-        """List all configurations of a type."""
+    async def list_projects(self, active_only: bool = True) -> List[ProjectConfig]:
+        """List all projects."""
         pass
 
     @abstractmethod
-    async def update_config(
-        self,
-        config_id: str,
-        data: Dict[str, Any],
-        updated_by: str
-    ) -> ConfigDocument:
-        """
-        Update configuration (creates new version).
-
-        Returns:
-            Updated config with new version
-        """
+    async def get_workflow(self, workflow_id: str) -> Optional[WorkflowConfig]:
+        """Get workflow configuration."""
         pass
 
     @abstractmethod
-    async def deactivate_config(self, config_id: str) -> None:
-        """Mark configuration as inactive."""
+    async def save_workflow(self, config: WorkflowConfig) -> str:
+        """Save workflow configuration (creates new version)."""
+        pass
+
+    @abstractmethod
+    async def list_workflows(self, project_id: Optional[str] = None) -> List[WorkflowConfig]:
+        """List workflows, optionally filtered by project."""
+        pass
+
+    @abstractmethod
+    async def get_agent(self, agent_id: str) -> Optional[AgentConfig]:
+        """Get agent configuration."""
+        pass
+
+    @abstractmethod
+    async def save_agent(self, config: AgentConfig) -> str:
+        """Save agent configuration (creates new version)."""
+        pass
+
+    @abstractmethod
+    async def search_configs(self,
+                            query: str,
+                            config_type: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Full-text search across configurations."""
+        pass
+
+    @abstractmethod
+    async def get_config_history(self,
+                                config_id: str,
+                                limit: int = 10) -> List[Dict[str, Any]]:
+        """Get configuration change history."""
+        pass
+
+    @abstractmethod
+    async def rollback_config(self,
+                             config_id: str,
+                             to_version: int) -> None:
+        """Rollback configuration to a previous version."""
         pass
 ```
 
-## Production Adapter: ElasticsearchAdapter
+### ILogStore Interface
 
-### Implementation Structure
+```python
+@dataclass
+class LogEntry:
+    """Structured log entry."""
+    timestamp: datetime
+    level: str
+    logger: str
+    message: str
+    service: str
+    environment: str
+    trace_id: Optional[str] = None
+    span_id: Optional[str] = None
+    execution_id: Optional[str] = None
+    work_item_id: Optional[str] = None
+    agent_name: Optional[str] = None
+    project: Optional[str] = None
+    error: Optional[Dict[str, Any]] = None
+    context: Optional[Dict[str, Any]] = None
+
+class ILogStore(ABC):
+    """
+    Port interface for log storage.
+
+    Production: ElasticsearchLogStore with RedisLogBuffer
+    Testing: InMemoryLogStore
+    """
+
+    @abstractmethod
+    async def write_log(self, entry: LogEntry) -> None:
+        """Write a single log entry."""
+        pass
+
+    @abstractmethod
+    async def write_logs_bulk(self, entries: List[LogEntry]) -> None:
+        """Write multiple log entries (batch operation)."""
+        pass
+
+    @abstractmethod
+    async def query_logs(self,
+                        query: str,
+                        filters: Optional[Dict[str, Any]] = None,
+                        start_time: Optional[datetime] = None,
+                        end_time: Optional[datetime] = None,
+                        limit: int = 100) -> List[LogEntry]:
+        """Query logs with full-text search."""
+        pass
+
+    @abstractmethod
+    async def get_execution_logs(self,
+                                execution_id: str,
+                                level: Optional[str] = None) -> List[LogEntry]:
+        """Get all logs for a specific execution."""
+        pass
+
+    @abstractmethod
+    async def stream_logs(self,
+                         filters: Optional[Dict[str, Any]] = None) -> AsyncIterator[LogEntry]:
+        """Stream logs in real-time."""
+        pass
+```
+
+## Production Adapters
+
+### ElasticsearchEventStore
 
 ```python
 from elasticsearch import AsyncElasticsearch
-from datetime import datetime, timedelta
-import uuid
+from datetime import datetime
+import json
 
 class ElasticsearchEventStore(IEventStore):
     """
-    Production adapter for Elasticsearch event storage.
+    Production event store using Elasticsearch.
 
-    Uses daily indices for automatic rollover.
+    Events are written to Redis first, then persisted to Elasticsearch
+    by background workers for durability and high throughput.
     """
 
     def __init__(
         self,
-        es_host: str = "localhost",
-        es_port: int = 9200,
-        username: Optional[str] = None,
-        password: Optional[str] = None
+        es_client: AsyncElasticsearch,
+        index_prefix: str = "events"
     ):
-        """
-        Initialize Elasticsearch adapter.
+        self.client = es_client
+        self.index_prefix = index_prefix
 
-        Args:
-            es_host: Elasticsearch hostname
-            es_port: Elasticsearch port
-            username: Optional username for auth
-            password: Optional password for auth
-        """
-        if username and password:
-            self.client = AsyncElasticsearch(
-                hosts=[f"http://{es_host}:{es_port}"],
-                basic_auth=(username, password)
-            )
-        else:
-            self.client = AsyncElasticsearch(
-                hosts=[f"http://{es_host}:{es_port}"]
-            )
+    async def append(self,
+                     stream_id: str,
+                     events: List[DomainEvent],
+                     expected_version: Optional[int] = None) -> None:
+        """Append events to stream with optimistic concurrency control."""
 
-    async def store_event(self, event: Event) -> str:
-        """Store event in daily index."""
-        index_name = self._get_index_name(event.event_type, event.timestamp)
+        # Check current version if expected version provided
+        if expected_version is not None:
+            current_version = await self.get_stream_version(stream_id)
+            if current_version != expected_version:
+                raise ConcurrencyConflictError(
+                    f"Expected version {expected_version}, got {current_version}"
+                )
 
-        doc = {
-            'timestamp': event.timestamp.isoformat(),
-            'event_type': event.event_type.value,
-            'agent': event.agent,
-            'task_id': event.task_id,
-            'project': event.project,
-            'pipeline_run_id': event.pipeline_run_id,
-            **event.data
-        }
-
-        result = await self.client.index(
-            index=index_name,
-            id=event.id,
-            document=doc
-        )
-
-        return result['_id']
-
-    async def store_events_bulk(self, events: List[Event]) -> List[str]:
-        """Bulk store events for better performance."""
+        # Prepare bulk request
         bulk_body = []
-
         for event in events:
-            index_name = self._get_index_name(event.event_type, event.timestamp)
+            index_name = self._get_index_name(event.timestamp)
 
-            # Index action
             bulk_body.append({
-                'index': {
-                    '_index': index_name,
-                    '_id': event.id
+                "index": {
+                    "_index": index_name,
+                    "_id": event.event_id
                 }
             })
 
-            # Document
             bulk_body.append({
-                'timestamp': event.timestamp.isoformat(),
-                'event_type': event.event_type.value,
-                'agent': event.agent,
-                'task_id': event.task_id,
-                'project': event.project,
-                'pipeline_run_id': event.pipeline_run_id,
-                **event.data
+                "event_id": event.event_id,
+                "aggregate_id": event.aggregate_id,
+                "aggregate_type": event.aggregate_type,
+                "event_type": event.event_type,
+                "event_version": event.event_version,
+                "timestamp": event.timestamp.isoformat(),
+                "stream_version": event.stream_version,
+                "correlation_id": event.correlation_id,
+                "causation_id": event.causation_id,
+                "data": event.data,
+                "metadata": event.metadata
             })
 
-        response = await self.client.bulk(body=bulk_body)
+        # Execute bulk insert
+        await self.client.bulk(body=bulk_body, refresh=False)
 
-        # Extract IDs from response
-        ids = [item['index']['_id'] for item in response['items']]
-        return ids
+    async def get_events(self,
+                        stream_id: str,
+                        from_version: int = 0,
+                        to_version: Optional[int] = None) -> List[DomainEvent]:
+        """Get events from a stream."""
 
-    async def search_events(
-        self,
-        query: SearchQuery
-    ) -> List[Event]:
-        """Search events using Elasticsearch query."""
-        # Build query
-        es_query = {
-            'bool': {
-                'must': []
-            }
-        }
-
-        # Add text query if provided
-        if query.query:
-            es_query['bool']['must'].append({
-                'query_string': {
-                    'query': query.query
-                }
-            })
-
-        # Add filters
-        for field, value in query.filters.items():
-            es_query['bool']['must'].append({
-                'term': {field: value}
-            })
-
-        # Add time range
-        if query.start_time or query.end_time:
-            time_range = {}
-            if query.start_time:
-                time_range['gte'] = query.start_time.isoformat()
-            if query.end_time:
-                time_range['lte'] = query.end_time.isoformat()
-
-            es_query['bool']['must'].append({
-                'range': {
-                    'timestamp': time_range
-                }
-            })
-
-        # Determine index pattern
-        index_pattern = self._get_index_pattern(query.start_time, query.end_time)
-
-        # Execute search
-        response = await self.client.search(
-            index=index_pattern,
-            query=es_query,
-            size=query.size,
-            sort=[{query.sort_by: query.sort_order}]
-        )
-
-        # Convert results to Event objects
-        events = []
-        for hit in response['hits']['hits']:
-            source = hit['_source']
-
-            event = Event(
-                id=hit['_id'],
-                timestamp=datetime.fromisoformat(source['timestamp']),
-                event_type=EventType(source['event_type']),
-                agent=source['agent'],
-                task_id=source['task_id'],
-                project=source['project'],
-                pipeline_run_id=source.get('pipeline_run_id'),
-                data={k: v for k, v in source.items()
-                      if k not in ['timestamp', 'event_type', 'agent',
-                                   'task_id', 'project', 'pipeline_run_id']}
-            )
-            events.append(event)
-
-        return events
-
-    async def aggregate_events(
-        self,
-        aggregation_name: str,
-        field: str,
-        filters: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
-        """Perform aggregation on events."""
-        # Build query
-        query = {'match_all': {}}
-        if filters:
-            query = {
-                'bool': {
-                    'must': [
-                        {'term': {k: v}} for k, v in filters.items()
-                    ]
-                }
-            }
-
-        # Build aggregation
-        aggs = {
-            aggregation_name: {
-                'terms': {
-                    'field': f"{field}.keyword",  # Use keyword field
-                    'size': 100
-                }
-            }
-        }
-
-        # Execute
-        response = await self.client.search(
-            index="*-events-*",
-            query=query,
-            aggs=aggs,
-            size=0  # Don't return documents
-        )
-
-        return response['aggregations'][aggregation_name]
-
-    def _get_index_name(
-        self,
-        event_type: EventType,
-        timestamp: datetime
-    ) -> str:
-        """Generate index name with date suffix."""
-        date_suffix = timestamp.strftime("%Y-%m-%d")
-
-        if event_type == EventType.DECISION:
-            return f"decision-events-{date_suffix}"
-        elif event_type == EventType.METRIC:
-            return f"metrics-{date_suffix}"
-        else:
-            return f"agent-events-{date_suffix}"
-
-    def _get_index_pattern(
-        self,
-        start_time: Optional[datetime],
-        end_time: Optional[datetime]
-    ) -> str:
-        """Generate index pattern for search."""
-        if not start_time and not end_time:
-            return "*-events-*"
-
-        # For date ranges, search all indices
-        # Elasticsearch will filter by timestamp
-        return "*-events-*"
-
-
-class ElasticsearchConfigStore(IConfigStore):
-    """Elasticsearch-based configuration storage."""
-
-    def __init__(
-        self,
-        es_host: str = "localhost",
-        es_port: int = 9200,
-        username: Optional[str] = None,
-        password: Optional[str] = None
-    ):
-        if username and password:
-            self.client = AsyncElasticsearch(
-                hosts=[f"http://{es_host}:{es_port}"],
-                basic_auth=(username, password)
-            )
-        else:
-            self.client = AsyncElasticsearch(
-                hosts=[f"http://{es_host}:{es_port}"]
-            )
-
-        self.config_index = "platform-config"
-
-    async def save_config(self, config: ConfigDocument) -> str:
-        """Save configuration to Elasticsearch."""
-        # Check if config exists
-        existing = await self.get_config(
-            config.config_type,
-            config.name
-        )
-
-        if existing:
-            # Increment version
-            config.version = existing.version + 1
-        else:
-            config.version = 1
-
-        config.id = f"{config.config_type}-{config.name}-v{config.version}"
-        config.updated_at = datetime.utcnow()
-
-        doc = {
-            'config_type': config.config_type,
-            'name': config.name,
-            'version': config.version,
-            'data': config.data,
-            'created_at': config.created_at.isoformat(),
-            'updated_at': config.updated_at.isoformat(),
-            'created_by': config.created_by,
-            'is_active': config.is_active
-        }
-
-        await self.client.index(
-            index=self.config_index,
-            id=config.id,
-            document=doc
-        )
-
-        return config.id
-
-    async def get_config(
-        self,
-        config_type: str,
-        name: str,
-        version: Optional[int] = None
-    ) -> Optional[ConfigDocument]:
-        """Retrieve configuration."""
-        # Build query
         query = {
-            'bool': {
-                'must': [
-                    {'term': {'config_type': config_type}},
-                    {'term': {'name.keyword': name}},
-                    {'term': {'is_active': True}}
+            "bool": {
+                "must": [
+                    {"term": {"aggregate_id": stream_id}},
+                    {"range": {"stream_version": {"gte": from_version}}}
                 ]
             }
         }
 
-        if version:
-            query['bool']['must'].append({'term': {'version': version}})
+        if to_version is not None:
+            query["bool"]["must"].append({
+                "range": {"stream_version": {"lte": to_version}}
+            })
 
-        # Search
         response = await self.client.search(
-            index=self.config_index,
+            index=f"{self.index_prefix}-*",
             query=query,
-            sort=[{'version': 'desc'}],
-            size=1
+            sort=[{"stream_version": "asc"}],
+            size=10000
         )
 
-        if not response['hits']['hits']:
-            return None
+        return [self._to_domain_event(hit["_source"]) for hit in response["hits"]["hits"]]
 
-        hit = response['hits']['hits'][0]
-        source = hit['_source']
+    async def search_events(self,
+                           query: str,
+                           filters: Optional[Dict[str, Any]] = None,
+                           start_time: Optional[datetime] = None,
+                           end_time: Optional[datetime] = None,
+                           limit: int = 100) -> List[DomainEvent]:
+        """Search events with full-text query."""
 
-        return ConfigDocument(
-            id=hit['_id'],
-            config_type=source['config_type'],
-            name=source['name'],
-            version=source['version'],
-            data=source['data'],
-            created_at=datetime.fromisoformat(source['created_at']),
-            updated_at=datetime.fromisoformat(source['updated_at']),
-            created_by=source['created_by'],
-            is_active=source['is_active']
+        es_query = {"bool": {"must": []}}
+
+        if query:
+            es_query["bool"]["must"].append({
+                "query_string": {"query": query}
+            })
+
+        if filters:
+            for field, value in filters.items():
+                es_query["bool"]["must"].append({
+                    "term": {field: value}
+                })
+
+        if start_time or end_time:
+            time_range = {}
+            if start_time:
+                time_range["gte"] = start_time.isoformat()
+            if end_time:
+                time_range["lte"] = end_time.isoformat()
+            es_query["bool"]["must"].append({
+                "range": {"timestamp": time_range}
+            })
+
+        response = await self.client.search(
+            index=f"{self.index_prefix}-*",
+            query=es_query,
+            size=limit,
+            sort=[{"timestamp": "desc"}]
+        )
+
+        return [self._to_domain_event(hit["_source"]) for hit in response["hits"]["hits"]]
+
+    def _get_index_name(self, timestamp: datetime) -> str:
+        """Generate index name with monthly rollover."""
+        return f"{self.index_prefix}-{timestamp.strftime('%Y.%m')}"
+
+    def _to_domain_event(self, doc: Dict[str, Any]) -> DomainEvent:
+        """Convert Elasticsearch document to DomainEvent."""
+        return DomainEvent(
+            event_id=doc["event_id"],
+            aggregate_id=doc["aggregate_id"],
+            aggregate_type=doc["aggregate_type"],
+            event_type=doc["event_type"],
+            event_version=doc["event_version"],
+            timestamp=datetime.fromisoformat(doc["timestamp"]),
+            stream_version=doc["stream_version"],
+            data=doc["data"],
+            metadata=doc["metadata"],
+            correlation_id=doc.get("correlation_id"),
+            causation_id=doc.get("causation_id")
         )
 ```
 
-## Mock Adapter: InMemoryEventStore
+### ElasticsearchConfigStore
 
 ```python
-from collections import defaultdict
+class ElasticsearchConfigStore(IConfigStore):
+    """
+    Production config store using Elasticsearch.
 
-class InMemoryEventStore(IEventStore):
-    """Mock event store using in-memory storage."""
+    Provides versioning, history tracking, and full-text search.
+    """
 
-    def __init__(self):
-        self.events: Dict[str, Event] = {}
-        self.metrics: Dict[str, Metric] = {}
+    def __init__(self, es_client: AsyncElasticsearch):
+        self.client = es_client
 
-    async def store_event(self, event: Event) -> str:
-        """Store event in memory."""
-        if not event.id:
-            event.id = str(uuid.uuid4())
+    async def save_project(self, config: ProjectConfig) -> str:
+        """Save project configuration with versioning."""
 
-        self.events[event.id] = event
-        return event.id
-
-    async def store_events_bulk(self, events: List[Event]) -> List[str]:
-        """Bulk store events."""
-        ids = []
-        for event in events:
-            event_id = await self.store_event(event)
-            ids.append(event_id)
-        return ids
-
-    async def get_event(self, event_id: str) -> Optional[Event]:
-        """Retrieve event."""
-        return self.events.get(event_id)
-
-    async def search_events(
-        self,
-        query: SearchQuery
-    ) -> List[Event]:
-        """Search events in memory."""
-        results = list(self.events.values())
-
-        # Apply filters
-        for field, value in query.filters.items():
-            results = [
-                e for e in results
-                if self._match_filter(e, field, value)
-            ]
-
-        # Apply time range
-        if query.start_time:
-            results = [e for e in results if e.timestamp >= query.start_time]
-
-        if query.end_time:
-            results = [e for e in results if e.timestamp <= query.end_time]
-
-        # Apply text query (simple substring match)
-        if query.query:
-            results = [
-                e for e in results
-                if self._match_text(e, query.query)
-            ]
-
-        # Sort
-        reverse = query.sort_order == 'desc'
-        results.sort(
-            key=lambda e: getattr(e, query.sort_by, e.timestamp),
-            reverse=reverse
-        )
-
-        # Limit
-        return results[:query.size]
-
-    async def count_events(
-        self,
-        filters: Dict[str, Any],
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None
-    ) -> int:
-        """Count matching events."""
-        query = SearchQuery(
-            query="",
-            filters=filters,
-            start_time=start_time,
-            end_time=end_time,
-            size=999999
-        )
-
-        results = await self.search_events(query)
-        return len(results)
-
-    def _match_filter(self, event: Event, field: str, value: Any) -> bool:
-        """Check if event matches filter."""
-        if field == 'agent':
-            return event.agent == value
-        elif field == 'project':
-            return event.project == value
-        elif field == 'event_type':
-            return event.event_type.value == value
-        elif field in event.data:
-            return event.data[field] == value
-        return False
-
-    def _match_text(self, event: Event, query: str) -> bool:
-        """Simple text matching."""
-        query_lower = query.lower()
-
-        # Check common fields
-        if query_lower in event.agent.lower():
-            return True
-        if query_lower in event.project.lower():
-            return True
-
-        # Check data values
-        for value in event.data.values():
-            if isinstance(value, str) and query_lower in value.lower():
-                return True
-
-        return False
-
-
-class InMemoryConfigStore(IConfigStore):
-    """Mock config store."""
-
-    def __init__(self):
-        self.configs: Dict[str, ConfigDocument] = {}
-        self.versions: defaultdict = defaultdict(list)
-
-    async def save_config(self, config: ConfigDocument) -> str:
-        """Save config in memory."""
-        key = f"{config.config_type}:{config.name}"
-
-        # Get version
-        if key in self.versions:
-            config.version = len(self.versions[key]) + 1
+        # Get current version
+        current = await self.get_project(config.project_id)
+        if current:
+            config.version = current.version + 1
         else:
             config.version = 1
 
-        config.id = f"{config.config_type}-{config.name}-v{config.version}"
         config.updated_at = datetime.utcnow()
 
-        self.configs[config.id] = config
-        self.versions[key].append(config)
+        # Store new version
+        doc_id = f"{config.project_id}-v{config.version}"
+        await self.client.index(
+            index="config-projects",
+            id=doc_id,
+            document={
+                "project_id": config.project_id,
+                "name": config.name,
+                "description": config.description,
+                "github_org": config.github_org,
+                "github_repo": config.github_repo,
+                "tech_stack": config.tech_stack,
+                "environment_variables": config.environment_variables,
+                "mounted_commands": config.mounted_commands,
+                "version": config.version,
+                "created_at": config.created_at.isoformat(),
+                "updated_at": config.updated_at.isoformat(),
+                "created_by": config.created_by,
+                "is_active": config.is_active
+            }
+        )
 
-        return config.id
+        # Record change in history
+        await self._record_config_change(
+            config_type="project",
+            config_id=config.project_id,
+            new_version=config.version,
+            changed_by=config.created_by
+        )
 
-    async def get_config(
-        self,
-        config_type: str,
-        name: str,
-        version: Optional[int] = None
-    ) -> Optional[ConfigDocument]:
-        """Get config."""
-        key = f"{config_type}:{name}"
+        return doc_id
 
-        if key not in self.versions:
-            return None
+    async def search_configs(self,
+                            query: str,
+                            config_type: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Full-text search across configurations."""
 
-        versions = [c for c in self.versions[key] if c.is_active]
+        indices = []
+        if config_type:
+            indices = [f"config-{config_type}"]
+        else:
+            indices = ["config-*"]
 
-        if not versions:
-            return None
+        es_query = {
+            "bool": {
+                "must": [
+                    {"query_string": {"query": query}},
+                    {"term": {"is_active": True}}
+                ]
+            }
+        }
 
-        if version:
-            for config in versions:
-                if config.version == version:
-                    return config
-            return None
+        response = await self.client.search(
+            index=indices,
+            query=es_query,
+            size=100
+        )
 
-        # Return latest version
-        return max(versions, key=lambda c: c.version)
+        return [hit["_source"] for hit in response["hits"]["hits"]]
+
+    async def _record_config_change(self,
+                                   config_type: str,
+                                   config_id: str,
+                                   new_version: int,
+                                   changed_by: str) -> None:
+        """Record configuration change in history index."""
+        await self.client.index(
+            index="config-history",
+            document={
+                "config_type": config_type,
+                "config_id": config_id,
+                "new_version": new_version,
+                "changed_by": changed_by,
+                "changed_at": datetime.utcnow().isoformat()
+            }
+        )
 ```
 
-## Error Handling
+## Redis Buffering Architecture
+
+All writes to Elasticsearch go through Redis first:
 
 ```python
-class ElasticsearchError(Exception):
-    """Base exception for Elasticsearch operations."""
-    pass
+class RedisEventBuffer:
+    """
+    Buffers events in Redis Streams before Elasticsearch persistence.
 
-class ConnectionError(ElasticsearchError):
-    """Raised when connection fails."""
-    pass
+    Provides:
+    - High-throughput writes
+    - Reliable delivery via consumer groups
+    - Backpressure handling
+    """
 
-class IndexError(ElasticsearchError):
-    """Raised when index operation fails."""
-    pass
+    def __init__(self, redis_client):
+        self.redis = redis_client
+        self.stream_name = "events:buffer"
 
-class SearchError(ElasticsearchError):
-    """Raised when search fails."""
-    pass
+    async def buffer_event(self, event: DomainEvent) -> None:
+        """Write event to Redis Stream."""
+        await self.redis.xadd(
+            self.stream_name,
+            {
+                "event_id": event.event_id,
+                "aggregate_id": event.aggregate_id,
+                "payload": json.dumps({
+                    "event_type": event.event_type,
+                    "data": event.data,
+                    "metadata": event.metadata
+                })
+            }
+        )
+
+class EventPersistenceWorker:
+    """
+    Background worker that reads from Redis and persists to Elasticsearch.
+
+    Uses consumer groups for reliable delivery and parallel processing.
+    """
+
+    async def process_events(self):
+        """Read events from Redis and persist to Elasticsearch."""
+        while True:
+            # Read batch from Redis Stream
+            messages = await self.redis.xreadgroup(
+                groupname="elasticsearch-writers",
+                consumername=self.worker_id,
+                streams={self.stream_name: ">"},
+                count=100,
+                block=1000
+            )
+
+            if not messages:
+                continue
+
+            # Batch write to Elasticsearch
+            events = [self._parse_event(msg) for msg in messages]
+            await self.es_store.append_batch(events)
+
+            # Acknowledge processing
+            await self.redis.xack(
+                self.stream_name,
+                "elasticsearch-writers",
+                *[msg["id"] for msg in messages]
+            )
 ```
 
-## Configuration
+## Backup and Recovery
+
+### Snapshot Configuration
 
 ```python
-@dataclass
-class ElasticsearchConfig:
-    """Elasticsearch adapter configuration."""
-    host: str = "localhost"
-    port: int = 9200
-    username: Optional[str] = None
-    password: Optional[str] = None
+# Create snapshot repository
+PUT /_snapshot/backup_repo
+{
+  "type": "s3",
+  "settings": {
+    "bucket": "codetoreum-backups",
+    "region": "us-east-1",
+    "base_path": "elasticsearch-snapshots"
+  }
+}
 
-    # Index settings
-    event_index_pattern: str = "{type}-events-{date}"
-    metric_index_pattern: str = "metrics-{date}"
-    config_index: str = "platform-config"
-
-    # Retention settings
-    event_retention_days: int = 90
-    metric_retention_days: int = 365
-
-    # Performance settings
-    bulk_size: int = 1000
-    refresh_interval: str = "1s"
-    number_of_shards: int = 1
-    number_of_replicas: int = 0  # 0 for dev, 1+ for prod
+# Configure automated snapshots
+PUT /_slm/policy/daily-snapshots
+{
+  "schedule": "0 0 * * *",
+  "name": "<daily-snap-{now/d}>",
+  "repository": "backup_repo",
+  "config": {
+    "indices": ["events-*", "config-*", "logs-*"],
+    "include_global_state": false
+  },
+  "retention": {
+    "expire_after": "30d",
+    "min_count": 7,
+    "max_count": 30
+  }
+}
 ```
 
-## Testing Strategy
-
-### Unit Tests
+### Point-in-Time Recovery
 
 ```python
-import pytest
-
-@pytest.fixture
-def memory_store():
-    return InMemoryEventStore()
-
-async def test_store_and_retrieve(memory_store):
-    """Test event storage and retrieval."""
-    event = Event(
-        id="test-1",
-        timestamp=datetime.utcnow(),
-        event_type=EventType.AGENT_COMPLETED,
-        agent="test-agent",
-        task_id="task-123",
-        project="test-project",
-        data={'duration': 10.5}
-    )
-
-    event_id = await memory_store.store_event(event)
-    assert event_id == "test-1"
-
-    retrieved = await memory_store.get_event(event_id)
-    assert retrieved.agent == "test-agent"
-
-async def test_search_filtering(memory_store):
-    """Test event search with filters."""
-    # Store multiple events
-    for i in range(5):
-        await memory_store.store_event(Event(
-            id=f"event-{i}",
-            timestamp=datetime.utcnow(),
-            event_type=EventType.AGENT_COMPLETED,
-            agent=f"agent-{i % 2}",
-            task_id=f"task-{i}",
-            project="test-project",
-            data={}
-        ))
-
-    # Search for specific agent
-    query = SearchQuery(
-        query="",
-        filters={'agent': 'agent-0'},
-        size=100
-    )
-
-    results = await memory_store.search_events(query)
-    assert len(results) == 3  # agents 0, 2, 4
+async def restore_to_point_in_time(self, timestamp: datetime):
+    """Restore system to a specific point in time."""
+    # 1. Find snapshot closest to timestamp
+    # 2. Restore snapshot
+    # 3. Replay events from snapshot time to target time
+    pass
 ```
 
 ## Summary
 
-The Elasticsearch integration provides:
-1. **Clean abstractions** through IEventStore and IConfigStore ports
-2. **Production adapter** for real Elasticsearch operations
-3. **Mock adapter** for in-memory testing
-4. **Event storage** with automatic daily indexing
-5. **Metrics tracking** with time-series support
-6. **Configuration storage** replacing YAML files
-7. **Search capabilities** with full-text and filtering
-8. **Aggregations** for analytics
-9. **Full testing** support without Elasticsearch dependency
+Elasticsearch serves as the **primary persistence layer** for Codetoreum, providing:
 
-This design enables the platform to use Elasticsearch for powerful search and analytics while maintaining flexibility to swap in alternative implementations (PostgreSQL, MongoDB) or run without Elasticsearch in test mode.
+1. **Event Sourcing**: Complete audit trail with event replay capability
+2. **Logging**: Centralized logs from all services and executions
+3. **Configuration**: Versioned, searchable configuration management
+4. **Metrics**: Time-series performance and business metrics
+5. **Search**: Full-text search across all data types
+6. **Analytics**: Aggregations, pattern detection, anomaly analysis
+7. **Durability**: Snapshots, replication, and disaster recovery
+
+**Architecture Benefits**:
+- Redis buffering provides high write throughput
+- Elasticsearch provides powerful search and analytics
+- Index lifecycle management handles data retention
+- Full-text search enables configuration discovery
+- Event sourcing enables time-travel debugging
+- Versioning enables safe configuration rollback

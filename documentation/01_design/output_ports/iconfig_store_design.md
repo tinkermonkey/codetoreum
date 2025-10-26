@@ -2,7 +2,23 @@
 
 ## Overview
 
-The `IConfigStore` port provides an abstraction for configuration storage and retrieval. This replaces the legacy YAML-based configuration with database-backed, web-editable configuration.
+The `IConfigStore` port provides an abstraction for configuration storage and retrieval. This replaces the legacy YAML-based configuration with Elasticsearch-backed, web-editable configuration.
+
+**Storage Architecture**: Elasticsearch with Redis caching:
+```
+Application → IConfigStore → Redis Cache (read) → Elasticsearch (source of truth)
+                          ↓
+                    Write-through to both Redis & Elasticsearch
+```
+
+**Production Implementation**: `ElasticsearchConfigStore` with `RedisConfigCache`
+**Testing Implementation**: `InMemoryConfigStore`
+
+**Key Features**:
+- **Versioning**: All configuration changes create new versions
+- **History**: Complete audit trail of configuration changes
+- **Search**: Full-text search across all configurations
+- **Caching**: Hot configurations cached for sub-millisecond access
 
 ## Port Interface
 
@@ -99,23 +115,275 @@ class AgentConfig:
 
 ## Adapter Implementations
 
-### Elasticsearch Config Store
+### Elasticsearch Config Store with Redis Caching (Production)
+
+The production implementation uses **Elasticsearch for persistence** with **Redis for caching**:
 
 ```python
 class ElasticsearchConfigStore(IConfigStore):
-    """Elasticsearch-based configuration storage."""
+    """
+    Production config store using Elasticsearch with Redis caching.
 
-    def __init__(self, es_client, index_prefix: str = "config"):
+    Architecture:
+    - Write-through cache: Writes go to both Elasticsearch and Redis
+    - Read strategy: Check Redis first, fall back to Elasticsearch
+    - Cache invalidation: Pub/sub pattern for distributed cache invalidation
+    - Versioning: New writes create new document versions in Elasticsearch
+
+    This provides:
+    - Fast reads (Redis cache: < 1ms)
+    - Durable storage (Elasticsearch persistence)
+    - Full-text search (Elasticsearch capabilities)
+    - Configuration history (versioned documents)
+    """
+
+    def __init__(
+        self,
+        es_client,
+        redis_client,
+        index_prefix: str = "config",
+        cache_ttl: int = 3600
+    ):
         self.es = es_client
+        self.redis = redis_client
         self.index_prefix = index_prefix
+        self.cache_ttl = cache_ttl
 
     async def get_project_config(self, project_id: str) -> ProjectConfig:
-        """Get from Elasticsearch."""
-        result = await self.es.get(
+        """
+        Get project config with caching.
+
+        Flow:
+        1. Check Redis cache
+        2. On cache miss, query Elasticsearch
+        3. Populate cache for future reads
+        """
+        # Check cache first
+        cache_key = f"config:project:{project_id}"
+        cached = await self.redis.get(cache_key)
+
+        if cached:
+            return ProjectConfig(**json.loads(cached))
+
+        # Cache miss - query Elasticsearch
+        query = {
+            "bool": {
+                "must": [
+                    {"term": {"project_id": project_id}},
+                    {"term": {"is_active": True}}
+                ]
+            }
+        }
+
+        response = await self.es.search(
             index=f"{self.index_prefix}-projects",
-            id=project_id
+            query=query,
+            sort=[{"version": "desc"}],
+            size=1
         )
-        return ProjectConfig(**result['_source'])
+
+        if not response["hits"]["hits"]:
+            raise ConfigNotFoundError(f"Project {project_id} not found")
+
+        doc = response["hits"]["hits"][0]["_source"]
+        config = ProjectConfig(**doc)
+
+        # Populate cache
+        await self.redis.setex(
+            cache_key,
+            self.cache_ttl,
+            json.dumps(config.to_dict())
+        )
+
+        return config
+
+    async def save_project_config(self, config: ProjectConfig) -> None:
+        """
+        Save project config with write-through caching.
+
+        Flow:
+        1. Write to Elasticsearch (create new version)
+        2. Update Redis cache
+        3. Publish cache invalidation event
+        """
+        # Get current version
+        current = await self._get_latest_version(
+            "projects",
+            config.project_id
+        )
+
+        # Increment version
+        config.version = (current.version + 1) if current else 1
+        config.updated_at = datetime.utcnow()
+
+        # Write to Elasticsearch (source of truth)
+        doc_id = f"{config.project_id}-v{config.version}"
+        await self.es.index(
+            index=f"{self.index_prefix}-projects",
+            id=doc_id,
+            document=config.to_dict()
+        )
+
+        # Record change in history
+        await self._record_config_change(
+            "project",
+            config.project_id,
+            config.version,
+            config.updated_by
+        )
+
+        # Update cache (write-through)
+        cache_key = f"config:project:{config.project_id}"
+        await self.redis.setex(
+            cache_key,
+            self.cache_ttl,
+            json.dumps(config.to_dict())
+        )
+
+        # Broadcast cache invalidation to other nodes
+        await self.redis.publish(
+            "config:invalidate",
+            json.dumps({
+                "type": "project",
+                "id": config.project_id
+            })
+        )
+
+    async def search_configs(
+        self,
+        query: str,
+        config_type: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Full-text search across configurations.
+
+        Uses Elasticsearch query_string syntax for powerful searches:
+        - "agent:reviewer AND status:active"
+        - "workflow AND (python OR javascript)"
+        - name:*test*
+        """
+        indices = []
+        if config_type:
+            indices = [f"{self.index_prefix}-{config_type}"]
+        else:
+            indices = [f"{self.index_prefix}-*"]
+
+        es_query = {
+            "bool": {
+                "must": [
+                    {"query_string": {"query": query}},
+                    {"term": {"is_active": True}}
+                ]
+            }
+        }
+
+        response = await self.es.search(
+            index=indices,
+            query=es_query,
+            size=100,
+            sort=[{"updated_at": "desc"}]
+        )
+
+        return [hit["_source"] for hit in response["hits"]["hits"]]
+
+    async def get_config_history(
+        self,
+        config_id: str,
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """Get configuration change history."""
+        query = {"term": {"config_id": config_id}}
+
+        response = await self.es.search(
+            index=f"{self.index_prefix}-history",
+            query=query,
+            sort=[{"changed_at": "desc"}],
+            size=limit
+        )
+
+        return [hit["_source"] for hit in response["hits"]["hits"]]
+
+    async def rollback_config(
+        self,
+        config_id: str,
+        to_version: int
+    ) -> None:
+        """
+        Rollback configuration to a previous version.
+
+        Strategy:
+        1. Fetch specified historical version from Elasticsearch
+        2. Create new version with historical data
+        3. Mark as rollback in metadata
+        """
+        # Get historical version
+        doc_id = f"{config_id}-v{to_version}"
+        result = await self.es.get(
+            index=f"{self.index_prefix}-*",
+            id=doc_id
+        )
+
+        historical_config = result["_source"]
+
+        # Create new version with historical data
+        # (versioning handled in save_project_config)
+        config = ProjectConfig(**historical_config)
+        config.metadata = {
+            **config.metadata,
+            "rollback": True,
+            "rollback_from_version": to_version
+        }
+
+        await self.save_project_config(config)
+
+    async def _record_config_change(
+        self,
+        config_type: str,
+        config_id: str,
+        new_version: int,
+        changed_by: str
+    ) -> None:
+        """Record configuration change in history index."""
+        await self.es.index(
+            index=f"{self.index_prefix}-history",
+            document={
+                "config_type": config_type,
+                "config_id": config_id,
+                "new_version": new_version,
+                "changed_by": changed_by,
+                "changed_at": datetime.utcnow().isoformat()
+            }
+        )
+```
+
+**Cache Invalidation Subscriber** (runs in each application instance):
+```python
+class ConfigCacheInvalidationSubscriber:
+    """
+    Listens for cache invalidation events and updates local cache.
+
+    Ensures cache consistency across multiple application instances.
+    """
+
+    def __init__(self, redis_client):
+        self.redis = redis_client
+
+    async def subscribe_and_invalidate(self):
+        """Subscribe to invalidation channel."""
+        pubsub = self.redis.pubsub()
+        await pubsub.subscribe("config:invalidate")
+
+        async for message in pubsub.listen():
+            if message["type"] == "message":
+                data = json.loads(message["data"])
+                config_type = data["type"]
+                config_id = data["id"]
+
+                # Invalidate local cache
+                cache_key = f"config:{config_type}:{config_id}"
+                await self.redis.delete(cache_key)
+
+                logger.info(f"Invalidated cache for {config_type}:{config_id}")
 ```
 
 ### In-Memory Config Store (Testing)

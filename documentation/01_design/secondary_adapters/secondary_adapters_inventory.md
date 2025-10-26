@@ -254,51 +254,42 @@ Based on the high-level architecture and legacy system analysis, secondary adapt
 
 ## 5. Event Store Adapters
 
-### 5.1 Redis Event Store (Production)
+### 5.1 Elasticsearch Event Store with Redis Buffering (Production)
 
-**Purpose**: Store and stream events using Redis Streams
-
-**Interface**: `IEventStore`
-
-**Key Capabilities**:
-- Append domain events
-- Query events by time range
-- Pub/sub for real-time delivery
-- Event replay capabilities
-- TTL-based retention
-
-**Dependencies**: Redis server
-
-**Configuration**:
-- Redis host and port
-- Stream key names
-- Retention policies
-
----
-
-### 5.2 Elasticsearch Event Store (Production)
-
-**Purpose**: Store events in Elasticsearch for advanced querying and analytics
+**Purpose**: Store events in Elasticsearch with Redis buffering for high-throughput writes
 
 **Interface**: `IEventStore`
 
+**Architecture**: Two-tier design
+- **Write Path**: Application → Redis Streams → Background Workers → Elasticsearch
+- **Read Path**: Application → Elasticsearch (queries) + Redis (recent events if needed)
+
 **Key Capabilities**:
-- Index events with full-text search
+- High-throughput event writes (buffered in Redis)
+- Durable persistence in Elasticsearch
+- Full-text search across all events
 - Complex queries and aggregations
-- Time-series analysis
-- Daily index rotation
-- Long-term retention
+- Event replay capabilities
+- Time-series analysis with ILM policies
+- Monthly index rotation (`events-{YYYY.MM}`)
 
-**Dependencies**: Elasticsearch cluster
+**Dependencies**: Elasticsearch cluster, Redis server
 
 **Configuration**:
-- Elasticsearch URL
-- Index patterns
-- Mapping templates
+- Elasticsearch URL and credentials
+- Redis connection string
+- Index patterns and templates
+- ILM policies
+- Worker count for background persistence
+
+**Components**:
+1. **ElasticsearchEventStore**: Main adapter implementation
+2. **RedisEventBuffer**: Buffering layer using Redis Streams
+3. **EventPersistenceWorker**: Background workers for batch persistence
 
 ---
 
-### 5.3 In-Memory Event Store (Testing/Mock)
+### 5.2 In-Memory Event Store (Testing/Mock)
 
 **Purpose**: Store events in memory for testing
 
@@ -356,11 +347,47 @@ Based on the high-level architecture and legacy system analysis, secondary adapt
 
 ---
 
-## 7. Storage Adapters
+## 7. Configuration Storage Adapters
 
-### 7.1 File System Storage Adapter (Production)
+### 7.1 Elasticsearch Config Store with Redis Caching (Production)
 
-**Purpose**: Store configuration and state on local filesystem
+**Purpose**: Store all configurations in Elasticsearch with Redis caching (replaces YAML files)
+
+**Interface**: `IConfigStore`
+
+**Architecture**: Two-tier design
+- **Write Path**: Application → Elasticsearch (versioned) + Redis (write-through cache)
+- **Read Path**: Application → Redis Cache (hot data) → Elasticsearch (cache miss)
+
+**Key Capabilities**:
+- Store project, workflow, and agent configurations
+- Automatic versioning of all configuration changes
+- Configuration change history and audit trail
+- Full-text search across all configurations
+- Rollback to previous versions
+- Fast reads via Redis caching (< 1ms)
+- Cache invalidation via pub/sub
+
+**Dependencies**: Elasticsearch cluster, Redis server
+
+**Configuration**:
+- Elasticsearch URL and credentials
+- Redis connection string
+- Index names (`config-projects`, `config-workflows`, `config-agents`, `config-history`)
+- Cache TTL settings
+
+**Components**:
+1. **ElasticsearchConfigStore**: Main adapter implementation
+2. **RedisConfigCache**: Write-through cache for hot configurations
+3. **ConfigCacheInvalidationSubscriber**: Pub/sub for distributed cache invalidation
+
+**Status**: Primary configuration storage for Gen 2
+
+---
+
+### 7.2 File System Storage Adapter (Legacy)
+
+**Purpose**: Legacy YAML file storage (deprecated in Gen 2)
 
 **Interface**: `IStorage`
 
@@ -368,33 +395,12 @@ Based on the high-level architecture and legacy system analysis, secondary adapt
 - Read/write YAML files
 - JSON file operations
 - Directory management
-- File locking for concurrent access
 
-**Configuration**:
-- Base directory paths
-- File permissions
+**Status**: To be replaced by Elasticsearch Config Store
 
 ---
 
-### 7.2 Database Storage Adapter (Production)
-
-**Purpose**: Store configuration in database (replacing YAML files)
-
-**Interface**: `IStorage`
-
-**Key Capabilities**:
-- Store project configurations
-- Store agent configurations
-- Version configuration changes
-- Web UI for management
-
-**Dependencies**: Database (e.g., PostgreSQL, or Elasticsearch)
-
-**Status**: Planned for configuration migration
-
----
-
-### 7.3 In-Memory Storage Adapter (Testing/Mock)
+### 7.3 In-Memory Config Store (Testing/Mock)
 
 **Purpose**: Store data in memory for testing
 
@@ -461,27 +467,26 @@ Based on the high-level architecture and legacy system analysis, secondary adapt
 
 ## Summary
 
-### Production Adapters (Currently Implemented or Planned)
+### Production Adapters (Gen 2 Architecture)
 
 1. **GitHub Issues Adapter** - Primary ticket system
 2. **Claude Code Adapter** - Primary LLM provider
 3. **Git Repository Adapter** - Version control
 4. **Docker Container Adapter** - Agent execution
-5. **Redis Event Store** - Real-time event streaming
-6. **Elasticsearch Event Store** - Event indexing and analytics
-7. **Elasticsearch Metrics Adapter** - Metrics storage
-8. **File System Storage Adapter** - Current configuration storage
-9. **GitHub Notifier** - Primary notification channel
+5. **Elasticsearch Event Store + Redis Buffer** - Event sourcing with high-throughput buffering
+6. **Elasticsearch Config Store + Redis Cache** - Versioned configuration with fast caching
+7. **Elasticsearch Metrics Adapter** - Metrics storage and analytics
+8. **GitHub Notifier** - Primary notification channel
 
-### Testing/Mock Adapters (Needed for Redesign Goals)
+### Testing/Mock Adapters (Simulation Mode)
 
 1. **In-Memory Ticket Adapter** - For testing without GitHub
 2. **Mock LLM Adapter** - For deterministic testing
 3. **In-Memory Repository Adapter** - For testing without Git
 4. **Fake Container Adapter** - For testing without Docker
 5. **In-Memory Event Store** - For testing event sourcing
-6. **In-Memory Metrics Adapter** - For testing metrics
-7. **In-Memory Storage Adapter** - For testing configuration
+6. **In-Memory Config Store** - For testing configuration
+7. **In-Memory Metrics Adapter** - For testing metrics
 8. **Console Notifier** - For testing notifications
 
 ### Extensibility Targets (Future)
@@ -490,9 +495,13 @@ Based on the high-level architecture and legacy system analysis, secondary adapt
 2. **Markdown File Adapter** - File-based ticket system
 3. **Aider Adapter** - Alternative LLM provider
 4. **GPT-4 Adapter** - Alternative LLM provider
-5. **Database Storage Adapter** - For web-based configuration
-6. **Email Notifier** - Additional notification channel
-7. **Slack Notifier** - Additional notification channel
+5. **Email Notifier** - Additional notification channel
+6. **Slack Notifier** - Additional notification channel
+
+### Deprecated/Legacy (Gen 1)
+
+1. **File System Storage Adapter** - Replaced by Elasticsearch Config Store
+2. **Redis-only Event Store** - Replaced by Elasticsearch + Redis architecture
 
 ---
 

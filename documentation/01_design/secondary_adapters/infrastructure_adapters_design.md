@@ -570,23 +570,51 @@ class IEventStore(ABC):
         pass
 ```
 
-## Redis Event Store (Production)
+## Elasticsearch Event Store with Redis Buffering (Production)
+
+**Architecture**: Events are buffered in Redis Streams then asynchronously persisted to Elasticsearch by background workers.
 
 ```python
+from elasticsearch import AsyncElasticsearch
 import redis.asyncio as aioredis
 import json
 from typing import List, Optional
 from datetime import datetime
 
-class RedisEventStore(IEventStore):
-    """Event store using Redis Streams."""
+class ElasticsearchEventStore(IEventStore):
+    """
+    Production event store using Elasticsearch with Redis buffering.
 
-    def __init__(self, redis_url: str):
+    Architecture:
+    1. Events written to Redis Stream (immediate acknowledgment)
+    2. Background workers consume from Redis and batch-persist to Elasticsearch
+    3. Queries read from Elasticsearch (durable storage)
+
+    Benefits:
+    - High write throughput (Redis buffering)
+    - Data durability (Elasticsearch persistence)
+    - Event replay capability (Elasticsearch queries)
+    - Full-text search (Elasticsearch features)
+    """
+
+    def __init__(
+        self,
+        es_url: str,
+        redis_url: str,
+        index_prefix: str = "events"
+    ):
+        self.es = AsyncElasticsearch([es_url])
         self.redis = aioredis.from_url(redis_url)
-        self.stream_key = "orchestrator:events"
+        self.index_prefix = index_prefix
+        self.buffer_stream = "events:buffer"
 
     async def append(self, event: DomainEvent) -> None:
-        """Append event to Redis Stream."""
+        """
+        Append event via Redis buffer.
+
+        Event is written to Redis Stream and acknowledged immediately.
+        Background workers will persist to Elasticsearch asynchronously.
+        """
         event_data = {
             'event_id': event.event_id,
             'event_type': event.event_type,
@@ -597,7 +625,8 @@ class RedisEventStore(IEventStore):
             'metadata': json.dumps(event.metadata)
         }
 
-        await self.redis.xadd(self.stream_key, event_data)
+        # Write to Redis Stream for buffering
+        await self.redis.xadd(self.buffer_stream, event_data)
 
     async def get_events(
         self,
@@ -607,44 +636,221 @@ class RedisEventStore(IEventStore):
         to_time: Optional[datetime] = None,
         limit: int = 1000
     ) -> List[DomainEvent]:
-        """Query events from Redis Stream."""
-        # Read from stream
-        events = await self.redis.xrange(
-            self.stream_key,
-            min='-',
-            max='+',
-            count=limit
+        """
+        Query events from Elasticsearch.
+
+        Note: Recently written events may have slight lag (< 5s)
+        before appearing in query results.
+        """
+        # Build Elasticsearch query
+        must_clauses = []
+
+        if aggregate_id:
+            must_clauses.append({"term": {"aggregate_id": aggregate_id}})
+
+        if event_type:
+            must_clauses.append({"term": {"event_type": event_type}})
+
+        if from_time or to_time:
+            time_range = {}
+            if from_time:
+                time_range["gte"] = from_time.isoformat()
+            if to_time:
+                time_range["lte"] = to_time.isoformat()
+            must_clauses.append({"range": {"timestamp": time_range}})
+
+        query = {
+            "bool": {"must": must_clauses}
+        } if must_clauses else {"match_all": {}}
+
+        # Execute search
+        response = await self.es.search(
+            index=f"{self.index_prefix}-*",
+            query=query,
+            size=limit,
+            sort=[{"timestamp": "asc"}]
         )
 
-        # Parse and filter
-        domain_events = []
-        for event_id, event_data in events:
-            event = self._parse_event(event_id, event_data)
+        # Parse results
+        return [
+            self._parse_es_event(hit["_source"])
+            for hit in response["hits"]["hits"]
+        ]
 
-            # Apply filters
-            if aggregate_id and event.aggregate_id != aggregate_id:
-                continue
-            if event_type and event.event_type != event_type:
-                continue
-            if from_time and event.timestamp < from_time:
-                continue
-            if to_time and event.timestamp > to_time:
-                continue
+    async def replay_events(
+        self,
+        aggregate_id: str,
+        from_event_id: Optional[str] = None
+    ) -> List[DomainEvent]:
+        """
+        Replay events for an aggregate.
 
-            domain_events.append(event)
+        Retrieves all events for the aggregate from Elasticsearch,
+        ordered by timestamp.
+        """
+        query = {"term": {"aggregate_id": aggregate_id}}
 
-        return domain_events
+        if from_event_id:
+            # Find the timestamp of from_event_id
+            from_event = await self.es.get(
+                index=f"{self.index_prefix}-*",
+                id=from_event_id
+            )
+            from_time = from_event["_source"]["timestamp"]
 
-    def _parse_event(self, event_id: str, event_data: Dict) -> DomainEvent:
-        """Parse Redis event to DomainEvent."""
+            query = {
+                "bool": {
+                    "must": [
+                        {"term": {"aggregate_id": aggregate_id}},
+                        {"range": {"timestamp": {"gt": from_time}}}
+                    ]
+                }
+            }
+
+        response = await self.es.search(
+            index=f"{self.index_prefix}-*",
+            query=query,
+            size=10000,
+            sort=[{"timestamp": "asc"}]
+        )
+
+        return [
+            self._parse_es_event(hit["_source"])
+            for hit in response["hits"]["hits"]
+        ]
+
+    def _parse_es_event(self, doc: Dict) -> DomainEvent:
+        """Parse Elasticsearch document to DomainEvent."""
         return DomainEvent(
-            event_id=event_data['event_id'].decode('utf-8'),
-            event_type=event_data['event_type'].decode('utf-8'),
-            aggregate_id=event_data['aggregate_id'].decode('utf-8'),
-            aggregate_type=event_data['aggregate_type'].decode('utf-8'),
-            timestamp=datetime.fromisoformat(event_data['timestamp'].decode('utf-8')),
-            data=json.loads(event_data['data'].decode('utf-8')),
-            metadata=json.loads(event_data['metadata'].decode('utf-8'))
+            event_id=doc['event_id'],
+            event_type=doc['event_type'],
+            aggregate_id=doc['aggregate_id'],
+            aggregate_type=doc['aggregate_type'],
+            timestamp=datetime.fromisoformat(doc['timestamp']),
+            data=json.loads(doc['data']) if isinstance(doc['data'], str) else doc['data'],
+            metadata=json.loads(doc['metadata']) if isinstance(doc['metadata'], str) else doc['metadata']
+        )
+
+    def _get_index_name(self, timestamp: datetime) -> str:
+        """Generate index name with monthly rollover."""
+        return f"{self.index_prefix}-{timestamp.strftime('%Y.%m')}"
+```
+
+**Background Worker** (deployed as separate service):
+
+```python
+class EventPersistenceWorker:
+    """
+    Background worker that consumes events from Redis and persists to Elasticsearch.
+
+    Deployment:
+    - Run as separate process/container
+    - Scale horizontally by adding more workers
+    - Uses consumer groups for reliable delivery
+    """
+
+    def __init__(
+        self,
+        es_client: AsyncElasticsearch,
+        redis_client: aioredis.Redis,
+        worker_id: str,
+        batch_size: int = 100,
+        index_prefix: str = "events"
+    ):
+        self.es = es_client
+        self.redis = redis_client
+        self.worker_id = worker_id
+        self.batch_size = batch_size
+        self.index_prefix = index_prefix
+        self.consumer_group = "elasticsearch-writers"
+        self.stream_name = "events:buffer"
+
+    async def run(self):
+        """Main worker loop."""
+        # Create consumer group if not exists
+        try:
+            await self.redis.xgroup_create(
+                self.stream_name,
+                self.consumer_group,
+                id="0",
+                mkstream=True
+            )
+        except:
+            pass  # Group already exists
+
+        while True:
+            try:
+                # Read batch from Redis Stream
+                messages = await self.redis.xreadgroup(
+                    groupname=self.consumer_group,
+                    consumername=self.worker_id,
+                    streams={self.stream_name: ">"},
+                    count=self.batch_size,
+                    block=1000  # Block for 1 second
+                )
+
+                if not messages:
+                    continue
+
+                # Parse events
+                events = []
+                message_ids = []
+
+                for stream_name, message_list in messages:
+                    for message_id, fields in message_list:
+                        event = self._parse_event(fields)
+                        events.append(event)
+                        message_ids.append(message_id)
+
+                # Bulk insert to Elasticsearch
+                if events:
+                    await self._bulk_insert_to_elasticsearch(events)
+
+                    # Acknowledge successful processing
+                    await self.redis.xack(
+                        self.stream_name,
+                        self.consumer_group,
+                        *message_ids
+                    )
+
+            except Exception as e:
+                logger.error(f"Event persistence worker error: {e}")
+                await asyncio.sleep(5)  # Back off on error
+
+    async def _bulk_insert_to_elasticsearch(self, events: List[DomainEvent]):
+        """Batch insert events to Elasticsearch."""
+        bulk_body = []
+
+        for event in events:
+            index_name = f"{self.index_prefix}-{event.timestamp.strftime('%Y.%m')}"
+
+            # Add index action
+            bulk_body.append({"index": {"_index": index_name, "_id": event.event_id}})
+
+            # Add document
+            bulk_body.append({
+                "event_id": event.event_id,
+                "event_type": event.event_type,
+                "aggregate_id": event.aggregate_id,
+                "aggregate_type": event.aggregate_type,
+                "timestamp": event.timestamp.isoformat(),
+                "data": event.data,
+                "metadata": event.metadata
+            })
+
+        # Execute bulk request
+        await self.es.bulk(body=bulk_body, refresh=False)
+
+    def _parse_event(self, fields: Dict) -> DomainEvent:
+        """Parse event from Redis message."""
+        return DomainEvent(
+            event_id=fields[b'event_id'].decode('utf-8'),
+            event_type=fields[b'event_type'].decode('utf-8'),
+            aggregate_id=fields[b'aggregate_id'].decode('utf-8'),
+            aggregate_type=fields[b'aggregate_type'].decode('utf-8'),
+            timestamp=datetime.fromisoformat(fields[b'timestamp'].decode('utf-8')),
+            data=json.loads(fields[b'data'].decode('utf-8')),
+            metadata=json.loads(fields[b'metadata'].decode('utf-8'))
         )
 ```
 
@@ -690,6 +896,226 @@ class InMemoryEventStore(IEventStore):
     def get_all_events(self) -> List[DomainEvent]:
         """Get all events for testing."""
         return list(self._events)
+```
+
+---
+
+# Configuration Storage Adapters
+
+## Port Interface
+
+```python
+from abc import ABC, abstractmethod
+from typing import List, Optional, Dict, Any
+from dataclasses import dataclass
+from datetime import datetime
+
+@dataclass
+class ProjectConfig:
+    """Project configuration."""
+    project_id: str
+    name: str
+    description: str
+    version: int
+    created_at: datetime
+    updated_at: datetime
+    is_active: bool = True
+
+class IConfigStore(ABC):
+    """Output port for configuration storage."""
+
+    @abstractmethod
+    async def get_project(self, project_id: str) -> Optional[ProjectConfig]:
+        """Get project configuration."""
+        pass
+
+    @abstractmethod
+    async def save_project(self, config: ProjectConfig) -> None:
+        """Save project configuration."""
+        pass
+
+    @abstractmethod
+    async def search_configs(
+        self,
+        query: str,
+        config_type: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Search configurations with full-text query."""
+        pass
+```
+
+## Elasticsearch Config Store with Redis Caching (Production)
+
+```python
+from elasticsearch import AsyncElasticsearch
+import redis.asyncio as aioredis
+import json
+
+class ElasticsearchConfigStore(IConfigStore):
+    """
+    Production config store using Elasticsearch with Redis caching.
+
+    Architecture:
+    - Write-through cache: Writes go to both Elasticsearch and Redis
+    - Read strategy: Check Redis first, fall back to Elasticsearch
+    - Cache invalidation: Pub/sub pattern for distributed invalidation
+    - Versioning: Each save creates new version in Elasticsearch
+
+    Benefits:
+    - Fast reads (Redis cache: < 1ms)
+    - Durable storage (Elasticsearch)
+    - Full-text search (Elasticsearch)
+    - Configuration history (versioned documents)
+    """
+
+    def __init__(
+        self,
+        es_url: str,
+        redis_url: str,
+        index_prefix: str = "config",
+        cache_ttl: int = 3600
+    ):
+        self.es = AsyncElasticsearch([es_url])
+        self.redis = aioredis.from_url(redis_url)
+        self.index_prefix = index_prefix
+        self.cache_ttl = cache_ttl
+
+    async def get_project(self, project_id: str) -> Optional[ProjectConfig]:
+        """Get project config with caching."""
+        # Check cache first
+        cache_key = f"config:project:{project_id}"
+        cached = await self.redis.get(cache_key)
+
+        if cached:
+            return ProjectConfig(**json.loads(cached))
+
+        # Cache miss - query Elasticsearch
+        query = {
+            "bool": {
+                "must": [
+                    {"term": {"project_id": project_id}},
+                    {"term": {"is_active": True}}
+                ]
+            }
+        }
+
+        response = await self.es.search(
+            index=f"{self.index_prefix}-projects",
+            query=query,
+            sort=[{"version": "desc"}],
+            size=1
+        )
+
+        if not response["hits"]["hits"]:
+            return None
+
+        doc = response["hits"]["hits"][0]["_source"]
+        config = ProjectConfig(**doc)
+
+        # Populate cache
+        await self.redis.setex(
+            cache_key,
+            self.cache_ttl,
+            json.dumps(config.__dict__)
+        )
+
+        return config
+
+    async def save_project(self, config: ProjectConfig) -> None:
+        """Save project config with write-through caching."""
+        # Get current version
+        current = await self.get_project(config.project_id)
+        config.version = (current.version + 1) if current else 1
+        config.updated_at = datetime.utcnow()
+
+        # Write to Elasticsearch (source of truth)
+        doc_id = f"{config.project_id}-v{config.version}"
+        await self.es.index(
+            index=f"{self.index_prefix}-projects",
+            id=doc_id,
+            document=config.__dict__
+        )
+
+        # Update cache (write-through)
+        cache_key = f"config:project:{config.project_id}"
+        await self.redis.setex(
+            cache_key,
+            self.cache_ttl,
+            json.dumps(config.__dict__)
+        )
+
+        # Broadcast cache invalidation to other nodes
+        await self.redis.publish(
+            "config:invalidate",
+            json.dumps({"type": "project", "id": config.project_id})
+        )
+
+    async def search_configs(
+        self,
+        query: str,
+        config_type: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Full-text search across configurations."""
+        indices = [f"{self.index_prefix}-{config_type}"] if config_type else [f"{self.index_prefix}-*"]
+
+        es_query = {
+            "bool": {
+                "must": [
+                    {"query_string": {"query": query}},
+                    {"term": {"is_active": True}}
+                ]
+            }
+        }
+
+        response = await self.es.search(
+            index=indices,
+            query=es_query,
+            size=100,
+            sort=[{"updated_at": "desc"}]
+        )
+
+        return [hit["_source"] for hit in response["hits"]["hits"]]
+```
+
+## In-Memory Config Store (Testing)
+
+```python
+class InMemoryConfigStore(IConfigStore):
+    """In-memory configuration for testing."""
+
+    def __init__(self):
+        self.projects: Dict[str, ProjectConfig] = {}
+
+    async def get_project(self, project_id: str) -> Optional[ProjectConfig]:
+        """Get from memory."""
+        return self.projects.get(project_id)
+
+    async def save_project(self, config: ProjectConfig) -> None:
+        """Save to memory."""
+        if config.project_id in self.projects:
+            current = self.projects[config.project_id]
+            config.version = current.version + 1
+        else:
+            config.version = 1
+
+        config.updated_at = datetime.utcnow()
+        self.projects[config.project_id] = config
+
+    async def search_configs(
+        self,
+        query: str,
+        config_type: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Simple substring search in memory."""
+        results = []
+        for config in self.projects.values():
+            if query.lower() in config.name.lower() or query.lower() in config.description.lower():
+                results.append(config.__dict__)
+        return results
+
+    def reset(self) -> None:
+        """Clear all configs for testing."""
+        self.projects.clear()
 ```
 
 ---

@@ -4,6 +4,32 @@
 
 This document provides a detailed, phased implementation plan for building Codetoreum Generation 2 based on the Hexagonal Architecture with Event Sourcing described in `02_high_level_arch.md`. The plan prioritizes testability, simulation capabilities, and incremental delivery.
 
+## Persistence Architecture
+
+**Primary Storage: Elasticsearch**
+- Events (event sourcing)
+- Logs (application and execution logs)
+- Configuration (projects, workflows, agents)
+- Metrics (historical analysis)
+
+**Buffering & Caching: Redis**
+- Event buffering before Elasticsearch persistence
+- Configuration caching for fast access
+- Real-time pub/sub for event handlers
+- Task queue management
+
+**Data Flow Pattern:**
+```
+Application → Redis (buffer/cache) → Background Workers → Elasticsearch (persistence)
+```
+
+This architecture provides:
+- High write throughput via Redis buffering
+- Fast reads via Redis caching
+- Full-text search capabilities via Elasticsearch
+- Time-series data management via index lifecycle management
+- Reliable delivery via Redis consumer groups
+
 ## Implementation Principles
 
 1. **Incremental Development**: Each phase delivers working, testable functionality
@@ -184,6 +210,7 @@ This document provides a detailed, phased implementation plan for building Codet
 ### Objectives
 
 - Define all port interfaces (contracts between core and adapters)
+- Implement infrastructure resilience layer (circuit breakers, rate limiting, retries, timeouts)
 - Implement production adapters for critical external systems
 - Implement basic in-memory adapters for testing
 
@@ -250,7 +277,52 @@ This document provides a detailed, phased implementation plan for building Codet
   - Methods: update_workflow(), update_agent_config(), update_project_config()
   - See `input_ports/config_command_port.md`
 
-#### 2.3 Production Secondary Adapters
+#### 2.3 Infrastructure Resilience Layer
+
+**See `infrastructure/resilience_infrastructure_design.md`**
+
+- [ ] Define resilience component interfaces
+
+  - `IRateLimiter` interface (request and token-based rate limiting)
+  - `ICircuitBreaker` interface (prevent cascading failures)
+  - `IRetryPolicy` interface (exponential backoff with jitter)
+  - `ITimeout` interface (async timeout management)
+
+- [ ] Implement production resilience components
+
+  - `TokenBucketRateLimiter` (requests per time window)
+  - `SlidingWindowRateLimiter` (token-based for LLM APIs)
+  - `CircuitBreaker` (CLOSED/OPEN/HALF_OPEN state machine)
+  - `ExponentialBackoffRetry` (configurable retry logic)
+  - `AsyncTimeout` (per-operation timeouts)
+  - Unit tests for all components
+
+- [ ] Implement simulation resilience components
+
+  - `MockRateLimiter` (no delays, enforces limits in simulation)
+  - `MockCircuitBreaker` (controllable state for testing)
+  - `MockRetryPolicy` (immediate retries without delays)
+  - `MockTimeout` (instant timeouts for fast tests)
+  - Unit tests for all mock components
+
+- [ ] Implement resilient adapter decorators
+
+  - `ResilientTicketSystemDecorator` (wraps ITicketSystem)
+  - `ResilientLLMProviderDecorator` (wraps ILLMProvider)
+  - `ResilientRepositoryDecorator` (wraps IRepository)
+  - `ResilientContainerDecorator` (wraps IContainer)
+  - `ResilientEventStoreDecorator` (wraps IEventStore)
+  - Composable decorators (mix and match patterns)
+  - Integration tests with mock adapters
+
+- [ ] Implement resilience factory
+
+  - `ResilientAdapterFactory` (creates wrapped adapters based on mode)
+  - Configuration-driven resilience policies
+  - Modes: PRODUCTION, SIMULATION, INTEGRATION_TEST
+  - Service-specific configurations (GitHub: 5000/hr, Claude: 50/min)
+
+#### 2.4 Production Secondary Adapters
 
 **See `secondary_adapters/` directory for detailed designs**
 
@@ -293,7 +365,7 @@ This document provides a detailed, phased implementation plan for building Codet
   - See `secondary_adapters/infrastructure_adapters_design.md`
   - Integration tests with LocalStack
 
-#### 2.4 Testing Adapters
+#### 2.5 Testing Adapters
 
 - [ ] Implement `InMemoryTicketAdapter`
 
@@ -318,7 +390,7 @@ This document provides a detailed, phased implementation plan for building Codet
   - Simple list-based event storage
   - Supports replay for testing
 
-#### 2.5 Adapter Registry & Factory
+#### 2.6 Adapter Registry & Factory
 
 - [ ] Implement adapter registries for each port type
 
@@ -336,9 +408,12 @@ This document provides a detailed, phased implementation plan for building Codet
 ### Success Criteria
 
 - [ ] All port interfaces defined with comprehensive documentation
+- [ ] Infrastructure resilience layer implemented and tested
+- [ ] Resilient adapter decorators working for all port types
 - [ ] Critical production adapters implemented and tested
 - [ ] In-memory/mock adapters available for all ports
 - [ ] Adapter registry and factory working
+- [ ] Resilience factory creating adapters based on mode
 - [ ] Integration tests passing for all adapters
 
 ### Risks & Mitigations
@@ -356,34 +431,52 @@ This document provides a detailed, phased implementation plan for building Codet
 
 - Build event store infrastructure for persistence and replay
 - Implement event handlers and projections
-- Create event streaming capabilities
+- Create event streaming capabilities with Redis buffering
 - Build event replay and debugging tools
+- Establish data flow: Application → Redis (buffer) → Elasticsearch (persistence)
 
 ### Deliverables
 
 #### 3.1 Event Store Implementation
 
-**See `external_systems/redis_design.md` and `output_ports/event_store_port.md`**
+**See `external_systems/elasticsearch_design.md` and `output_ports/event_store_port.md`**
 
-- [ ] Implement `RedisEventStore` (Production)
+**Data Flow Architecture:**
+```
+Application → Redis Streams (buffer) → Background Workers → Elasticsearch (persistent storage)
+                    ↓
+              In-Memory Event Bus (for real-time event handlers)
+```
 
-  - Redis Streams for event storage
-  - Support for event versioning
-  - Efficient querying by aggregate ID, timestamp, event type
-  - Optimistic concurrency control
-  - Integration tests with Redis testcontainer
+- [ ] Implement `ElasticsearchEventStore` (Production)
 
-- [ ] Implement `PostgreSQLEventStore` (Alternative)
+  - Index design: events-{YYYY.MM} with mappings for id, aggregate_id, event_type, data, timestamp, version
+  - Efficient querying by aggregate ID, timestamp, event type using Elasticsearch queries
+  - Optimistic concurrency control using version field
+  - Index lifecycle management for retention
+  - Integration tests with Elasticsearch testcontainer
 
-  - Table design: events(id, aggregate_id, event_type, data, timestamp, version)
-  - Indexed queries for replay
-  - Transaction support
-  - Integration tests with PostgreSQL testcontainer
+- [ ] Implement `RedisEventBuffer` (Buffering Layer)
+
+  - Redis Streams for buffering events before Elasticsearch persistence
+  - Consumer groups for reliable delivery to Elasticsearch
+  - Configurable batch size and flush intervals
+  - Failure handling and retry logic
+  - Monitoring of buffer depth and throughput
+  - Dual-purpose: buffer for persistence AND pub/sub for real-time handlers
+
+- [ ] Implement background workers for Elasticsearch persistence
+
+  - Consumer processes that read from Redis Streams
+  - Batch insertion to Elasticsearch for efficiency
+  - Error handling with dead letter queue
+  - Monitoring and alerting for lag
 
 - [ ] Implement event serialization
   - JSON serialization with schema versioning
   - Support for backward/forward compatibility
   - Compression for large events
+  - Elasticsearch document mapping
 
 #### 3.2 Event Publishing & Subscription
 
@@ -856,60 +949,65 @@ This document provides a detailed, phased implementation plan for building Codet
 
 ### Objectives
 
-- Replace YAML files with database-backed configuration
-- Build web UI for configuration management
+- Replace YAML files with Elasticsearch-backed configuration
+- Build web UI for configuration management with search capabilities
 - Implement configuration versioning and rollback
 - Support project-specific and global configurations
+- Enable full-text search across all configurations
 
 ### Deliverables
 
-#### 7.1 Configuration Database Schema
+#### 7.1 Configuration Index Schema
 
-- [ ] Design database schema
+- [ ] Design Elasticsearch indices
 
-  - projects table
-  - workflows table
-  - workflow_stages table
-  - agents table
-  - agent_configurations table
-  - environment_variables table
-  - configuration_history table
+  - `config-projects` index for project configurations
+  - `config-workflows` index for workflow definitions
+  - `config-workflow-stages` index for stage configurations
+  - `config-agents` index for agent configurations
+  - `config-environment` index for environment variables
+  - `config-history` index for configuration change audit trail
+  - Define mappings for all fields (nested objects for complex configs)
 
-- [ ] Implement database migrations (Alembic)
+- [ ] Implement index templates and settings
 
-  - Initial schema
-  - Support for schema evolution
-
-- [ ] Create ORM models (SQLAlchemy or similar)
+  - Index templates for consistent mapping across indices
+  - Analyzers for configuration search capabilities
+  - Retention policies using ILM
 
 #### 7.2 Configuration Storage Adapter
 
-- [ ] Implement `PostgreSQLConfigStorage`
+- [ ] Implement `ElasticsearchConfigStorage`
 
   - CRUD operations for all configuration entities
-  - Query methods for complex lookups
-  - Transaction support
-  - Integration tests with test database
+  - Complex queries using Elasticsearch DSL
+  - Optimistic concurrency control
+  - Full-text search capabilities for configuration discovery
+  - Integration tests with Elasticsearch testcontainer
 
-- [ ] Implement configuration caching
-  - Redis-backed cache
-  - Cache invalidation on updates
-  - TTL-based expiration
+- [ ] Implement `RedisConfigCache` (Buffering Layer)
+  - Redis-backed cache for frequently accessed configurations
+  - Write-through cache for configuration updates
+  - Cache invalidation on updates (pub/sub pattern)
+  - TTL-based expiration with automatic refresh
+  - Monitoring of cache hit rates
 
 #### 7.3 Configuration Service Enhancement
 
 - [ ] Enhance `ConfigurationService`
 
-  - Database-backed storage
+  - Elasticsearch-backed storage
   - Configuration validation
   - Configuration versioning
-  - Audit trail for changes
-  - Rollback capability
+  - Audit trail for changes (stored in config-history index)
+  - Rollback capability using historical documents
+  - Full-text search across configurations
 
 - [ ] Implement configuration templates
   - Pre-built workflow templates
   - Pre-configured agent types
   - Easy instantiation for new projects
+  - Template search and discovery using Elasticsearch queries
 
 #### 7.4 Configuration Web UI
 
@@ -948,22 +1046,25 @@ This document provides a detailed, phased implementation plan for building Codet
 
   - Parse existing YAML configurations
   - Validate against schema
-  - Import into database
+  - Import into Elasticsearch indices
   - Generate migration report
 
 - [ ] Test migration with existing configurations
 
   - Verify all data migrated correctly
   - Validate behavior unchanged
+  - Test search and query capabilities
 
 - [ ] Documentation for configuration management
 
 ### Success Criteria
 
-- [ ] Database schema designed and implemented
-- [ ] Configuration stored in database, not YAML files
+- [ ] Elasticsearch indices designed and implemented
+- [ ] Configuration stored in Elasticsearch, not YAML files
+- [ ] Redis caching layer operational
 - [ ] Web UI for configuration management working
 - [ ] Configuration versioning and rollback working
+- [ ] Full-text search capabilities working
 - [ ] Existing YAML configurations migrated successfully
 
 ### Risks & Mitigations
@@ -1032,7 +1133,7 @@ This document provides a detailed, phased implementation plan for building Codet
 
 - [ ] Migrate pilot project configuration
 
-  - Import configuration to Gen 2 database
+  - Import configuration to Gen 2 Elasticsearch indices
   - Validate configuration
   - Set up monitoring
 
@@ -1141,28 +1242,29 @@ This document provides a detailed, phased implementation plan for building Codet
 
 #### 9.1 Reliability Improvements
 
-- [ ] Implement circuit breakers
+**Note**: Infrastructure resilience layer (circuit breakers, rate limiting, retries, timeouts) is implemented in Phase 2. This phase focuses on production configuration and monitoring.
 
-  - For external API calls
-  - For database connections
-  - For event store operations
+- [ ] Configure resilience policies for production
 
-- [ ] Implement retry logic with backoff
+  - GitHub API: 5000 requests/hour, circuit breaker (5 failures in 1 min)
+  - Claude API: 50 requests/minute, token-based rate limiting
+  - Docker operations: 10 concurrent containers, 30s timeout
+  - Elasticsearch: Circuit breaker (10 failures in 5 min), 10s timeout
+  - Redis: Circuit breaker (5 failures in 30s), 5s timeout
 
-  - Exponential backoff for transient failures
-  - Configurable retry limits
-  - Dead letter queue for failed events
+- [ ] Configure retry policies for production
 
-- [ ] Implement rate limiting
-
-  - API rate limits
-  - LLM provider rate limits
-  - GitHub API rate limits
+  - Exponential backoff: 1s, 2s, 4s, 8s, 16s (max 5 retries)
+  - Jitter: +/- 20% randomization to prevent thundering herd
+  - Dead letter queue for permanently failed events
+  - Configurable per-service based on API characteristics
 
 - [ ] Implement health checks
-  - Liveness probe
-  - Readiness probe
-  - Dependency health checks
+  - Liveness probe (service is running)
+  - Readiness probe (service can handle requests)
+  - Dependency health checks (Elasticsearch, Redis, GitHub, Claude)
+  - Circuit breaker status checks
+  - Rate limiter status checks
 
 #### 9.2 Monitoring & Observability
 
@@ -1171,24 +1273,43 @@ This document provides a detailed, phased implementation plan for building Codet
   - Contextual logging with trace IDs
   - Log levels appropriate for production
   - Sensitive data redaction
+  - Logs streamed to Elasticsearch via Redis buffer
+  - Index pattern: logs-{YYYY.MM.DD} for time-based retention
 
 - [ ] Implement metrics collection
 
   - Execution metrics (duration, success rate, etc.)
   - System metrics (CPU, memory, etc.)
   - Business metrics (workflows completed, work items processed, etc.)
-  - Integration with Prometheus/Grafana
+  - **Resilience metrics** (NEW):
+    - Circuit breaker state changes and trip counts
+    - Rate limiter utilization and throttle events
+    - Retry attempts and failure rates
+    - Timeout occurrences
+    - Per-service health status
+  - Metrics stored in Elasticsearch for historical analysis
+  - Integration with Prometheus/Grafana for real-time monitoring
+  - Redis for metrics buffering and aggregation
 
 - [ ] Implement distributed tracing
 
   - OpenTelemetry integration
   - Trace execution flow across services
-  - Integration with Jaeger or similar
+  - Traces stored in Elasticsearch
+  - Integration with Jaeger or Kibana APM
 
 - [ ] Create monitoring dashboards
+  - Kibana dashboards for logs, events, and metrics
   - System health dashboard
   - Execution metrics dashboard
   - Business metrics dashboard
+  - **Resilience dashboard** (NEW):
+    - Circuit breaker status per service
+    - Rate limiter utilization trends
+    - Retry attempt distribution
+    - Timeout occurrence heatmap
+    - Service health matrix
+  - Grafana dashboards for real-time metrics
 
 #### 9.3 Alerting
 
@@ -1198,6 +1319,12 @@ This document provides a detailed, phased implementation plan for building Codet
   - System errors above threshold
   - Performance degradation
   - Dependency failures
+  - **Resilience alerts** (NEW):
+    - Circuit breaker trips (OPEN state)
+    - Rate limiter saturation (> 90% utilization)
+    - Excessive retry attempts (> 50% of requests)
+    - Frequent timeout occurrences (> 10% of requests)
+    - Service health degradation
 
 - [ ] Implement alerting
 
@@ -1209,14 +1336,20 @@ This document provides a detailed, phased implementation plan for building Codet
   - Troubleshooting steps
   - Resolution procedures
   - Escalation paths
+  - **Resilience runbooks** (NEW):
+    - Circuit breaker recovery procedures
+    - Rate limit adjustment guidelines
+    - Retry policy tuning
+    - Timeout configuration guidance
+    - Service health check debugging
 
 #### 9.4 Performance Optimization
 
 - [ ] Profile system under load
 
   - Identify bottlenecks
-  - Optimize database queries
-  - Optimize event processing
+  - Optimize Elasticsearch queries and indexing
+  - Optimize event processing and Redis buffering
 
 - [ ] Implement caching strategies
 
@@ -1226,7 +1359,8 @@ This document provides a detailed, phased implementation plan for building Codet
 
 - [ ] Optimize resource usage
   - Container resource limits
-  - Database connection pooling
+  - Elasticsearch connection pooling
+  - Redis connection pooling
   - Async I/O optimization
 
 #### 9.5 Operational Tooling
@@ -1238,16 +1372,26 @@ This document provides a detailed, phased implementation plan for building Codet
 
 - [ ] Create backup and recovery procedures
 
-  - Database backups
-  - Event store backups
-  - Configuration backups
+  - Elasticsearch snapshot and restore
+  - Event store backups (snapshot indices)
+  - Configuration backups (snapshot indices)
+  - Redis persistence configuration (RDB + AOF)
   - Disaster recovery plan
+  - Point-in-time recovery using snapshots
 
 - [ ] Create operational documentation
   - Deployment guide
   - Troubleshooting guide
   - Architecture overview
   - API documentation
+  - Elasticsearch index management guide
+  - Redis buffer monitoring guide
+  - **Resilience configuration guide** (NEW):
+    - Circuit breaker tuning
+    - Rate limiter configuration
+    - Retry policy customization
+    - Timeout adjustment guidelines
+    - Service-specific resilience patterns
 
 ### Success Criteria
 
@@ -1274,11 +1418,12 @@ Some components can be developed in parallel to reduce overall timeline:
 ### Track 1: Core Domain + Event Sourcing
 
 - Phase 1: Foundation & Core Domain
-- Phase 3: Event Sourcing Infrastructure
+- Phase 3: Event Sourcing Infrastructure (Elasticsearch + Redis)
 
-### Track 2: Ports & Adapters
+### Track 2: Ports, Adapters & Infrastructure
 
 - Phase 2: Port Interfaces & Basic Adapters
+  - Includes infrastructure resilience layer (circuit breakers, rate limiting, retries, timeouts)
 - Phase 4: Mock Adapters & Simulation Mode
 
 ### Track 3: Application Layer
@@ -1336,12 +1481,15 @@ With parallel tracks, timeline can be reduced to approximately 20-28 weeks (5-7 
 ### Infrastructure Requirements
 
 - **Compute**: Kubernetes cluster for services, Docker for agent containers
-- **Storage**: PostgreSQL for configuration, Redis for event store, S3 for artifacts
-- **Monitoring**: Prometheus, Grafana, Jaeger
+- **Storage**:
+  - Elasticsearch cluster (primary persistence: events, logs, configuration, metrics)
+  - Redis cluster (buffering and caching: event buffer, config cache, task queue)
+- **Monitoring**: Prometheus, Grafana, Kibana, Jaeger/Kibana APM
+- **Background Workers**: Worker pool for Redis → Elasticsearch persistence
 
 ### Deployment Phases
 
-1. **Development**: Local development with Docker Compose
+1. **Development**: Local development with Docker Compose (Elasticsearch + Redis + services)
 2. **Staging**: Staging environment with production-like infrastructure
 3. **Production Pilot**: Single project on Gen 2
 4. **Production Rollout**: Gradual migration of all projects
@@ -1380,9 +1528,11 @@ With parallel tracks, timeline can be reduced to approximately 20-28 weeks (5-7 
 
 1. **Complex domain model** - Mitigate with regular reviews and refactoring
 2. **Event sourcing complexity** - Mitigate with comprehensive testing and documentation
-3. **Adapter compatibility** - Mitigate with contract tests and versioning
-4. **Migration issues** - Mitigate with phased approach and rollback plan
-5. **Performance issues** - Mitigate with load testing and optimization
+3. **Elasticsearch + Redis architecture** - Mitigate with monitoring, alerting, and disaster recovery plans
+4. **Adapter compatibility** - Mitigate with contract tests and versioning
+5. **Infrastructure resilience configuration** - Mitigate with load testing, observability, and tuning
+6. **Migration issues** - Mitigate with phased approach and rollback plan
+7. **Performance issues** - Mitigate with load testing and optimization
 
 ### Risk Monitoring
 
@@ -1400,8 +1550,14 @@ With parallel tracks, timeline can be reduced to approximately 20-28 weeks (5-7 
 - [ ] Domain model documentation
 - [ ] API documentation (OpenAPI)
 - [ ] Adapter documentation (each adapter)
+- [ ] **Infrastructure resilience documentation** (NEW)
+  - Circuit breaker patterns
+  - Rate limiting strategies
+  - Retry policy configuration
+  - Timeout management
+  - Resilient adapter composition
 - [ ] Event catalog
-- [ ] Configuration guide
+- [ ] Configuration guide (Elasticsearch + Redis architecture)
 - [ ] Deployment guide
 
 ### Operational Documentation
@@ -1426,16 +1582,22 @@ With parallel tracks, timeline can be reduced to approximately 20-28 weeks (5-7 
 
 - **Language**: Python 3.11+
 - **Web Framework**: FastAPI
-- **ORM**: SQLAlchemy
-- **Database**: PostgreSQL (config), Redis (events)
+- **Search & Storage**: Elasticsearch (events, logs, configuration, metrics)
+- **Caching & Buffering**: Redis (event buffering, config caching, task queues)
 - **Container Runtime**: Docker
-- **Testing**: pytest, pytest-asyncio, testcontainers
+- **Testing**: pytest, pytest-asyncio, testcontainers (Elasticsearch, Redis)
 - **API Documentation**: OpenAPI/Swagger
-- **Monitoring**: Prometheus, Grafana, Jaeger
+- **Monitoring**: Prometheus, Grafana, Kibana, Jaeger/Kibana APM
+- **Infrastructure Resilience**: Custom implementations (circuit breakers, rate limiters, retry policies, timeouts)
 - **Frontend**: React or Vue (for dashboard)
 
 ### References
 
 - See `02_high_level_arch.md` for architecture details
-- See `01_design_changes.md` for design requirements
+- See `01_design_changes.md` for design requirements (includes Elasticsearch + Redis architecture rationale)
+- See `infrastructure/resilience_infrastructure_design.md` for resilience layer details
+- See `external_systems/elasticsearch_design.md` for Elasticsearch integration
+- See `external_systems/redis_design.md` for Redis buffering and caching
+- See `output_ports/ievent_store_design.md` for event store architecture
+- See `output_ports/iconfig_store_design.md` for configuration storage architecture
 - See `domains/`, `ports/`, `adapters/`, `application_services/` for component details
