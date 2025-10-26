@@ -169,7 +169,6 @@ This document provides a detailed, phased implementation plan for building Codet
 - [ ] 100% unit test coverage for domain layer
 - [ ] All domain events defined and tested
 - [ ] Domain models can be instantiated and manipulated in memory
-- [ ] Documentation updated in `domains/` directory
 
 ### Risks & Mitigations
 
@@ -341,7 +340,6 @@ This document provides a detailed, phased implementation plan for building Codet
 - [ ] In-memory/mock adapters available for all ports
 - [ ] Adapter registry and factory working
 - [ ] Integration tests passing for all adapters
-- [ ] Documentation updated in `ports/` and `adapters/` directories
 
 ### Risks & Mitigations
 
@@ -445,7 +443,6 @@ This document provides a detailed, phased implementation plan for building Codet
 - [ ] Event replay working correctly
 - [ ] Projections updating in real-time from events
 - [ ] Event debugging tools available
-- [ ] Documentation updated in `infrastructure/` directory
 
 ### Risks & Mitigations
 
@@ -561,7 +558,6 @@ This document provides a detailed, phased implementation plan for building Codet
 - [ ] Test scenarios defined and passing
 - [ ] Simulation mode 10-100x faster than real execution
 - [ ] Deterministic test results (no flakiness)
-- [ ] Documentation updated in `tests/simulation/` directory
 
 ### Risks & Mitigations
 
@@ -690,7 +686,6 @@ This document provides a detailed, phased implementation plan for building Codet
 - [ ] Event-driven architecture working end-to-end
 - [ ] Integration tests passing with mock adapters
 - [ ] Services can run in simulation mode
-- [ ] Documentation updated in `application_services/` directory
 
 ### Risks & Mitigations
 
@@ -847,7 +842,6 @@ This document provides a detailed, phased implementation plan for building Codet
 - [ ] CLI working for all major operations
 - [ ] Authentication and authorization working
 - [ ] Basic web dashboard operational
-- [ ] Documentation updated in `primary_adapters/` directory
 
 ### Risks & Mitigations
 
@@ -971,7 +965,6 @@ This document provides a detailed, phased implementation plan for building Codet
 - [ ] Web UI for configuration management working
 - [ ] Configuration versioning and rollback working
 - [ ] Existing YAML configurations migrated successfully
-- [ ] Documentation updated
 
 ### Risks & Mitigations
 
@@ -1123,7 +1116,6 @@ This document provides a detailed, phased implementation plan for building Codet
 - [ ] No critical issues or rollbacks
 - [ ] Performance meets or exceeds Gen 1
 - [ ] User feedback positive
-- [ ] Documentation updated
 
 ### Risks & Mitigations
 
