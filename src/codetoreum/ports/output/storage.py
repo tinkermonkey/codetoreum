@@ -6,6 +6,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from codetoreum.domain.types import BucketName, StorageKey
+
 
 # ============================================================================
 # Data Models
@@ -16,7 +18,7 @@ from typing import Any, Dict, List, Optional
 class StorageObject:
     """Storage object metadata."""
 
-    key: str
+    key: StorageKey
     size: int
     last_modified: datetime
     content_type: Optional[str]

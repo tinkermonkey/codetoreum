@@ -6,6 +6,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, List, Optional
 
+from codetoreum.domain.types import ExecutionId, UserId
+
 
 # ============================================================================
 # Data Models
@@ -44,8 +46,9 @@ class ExecutionContext:
     mcp_servers: List[Dict[str, Any]] = field(default_factory=list)
 
     # Metadata
-    user_id: Optional[str] = None
+    user_id: Optional[UserId] = None
     session_id: Optional[str] = None
+    execution_id: Optional[ExecutionId] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 

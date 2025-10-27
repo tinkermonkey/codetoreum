@@ -4,46 +4,9 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, AsyncIterator, Dict, List, Optional
 
+from codetoreum.domain.comment import Comment
+from codetoreum.domain.types import ProjectId, UserId, WorkItemId
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
-
-
-class Comment:
-    """Domain model for work item comments."""
-
-    def __init__(
-        self,
-        id: str,
-        work_item_id: str,
-        body: str,
-        author: str,
-        created_at: datetime,
-        updated_at: Optional[datetime] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-    ):
-        """
-        Initialize comment.
-
-        Args:
-            id: Unique comment identifier
-            work_item_id: ID of the work item this comment belongs to
-            body: Comment text content
-            author: User ID of comment author
-            created_at: When comment was created
-            updated_at: When comment was last updated (if edited)
-            metadata: Additional comment metadata
-        """
-        self.id = id
-        self.work_item_id = work_item_id
-        self.body = body
-        self.author = author
-        self.created_at = created_at
-        self.updated_at = updated_at
-        self.metadata = metadata or {}
-
-    @property
-    def is_edited(self) -> bool:
-        """Check if comment has been edited."""
-        return self.updated_at is not None
 
 
 class ITicketSystem(ABC):
@@ -57,7 +20,7 @@ class ITicketSystem(ABC):
     # Work Item Operations
 
     @abstractmethod
-    async def get_work_item(self, item_id: str) -> WorkItem:
+    async def get_work_item(self, item_id: WorkItemId) -> WorkItem:
         """
         Retrieve a work item by ID.
 
@@ -68,7 +31,7 @@ class ITicketSystem(ABC):
             WorkItem: The requested work item
 
         Raises:
-            ResourceNotFoundError: Work item doesn't exist
+            WorkItemNotFoundError: Work item doesn't exist
             ExternalServiceError: Service communication failure
         """
         pass
@@ -78,9 +41,9 @@ class ITicketSystem(ABC):
         self,
         title: str,
         description: str,
-        project_id: str,
+        project_id: ProjectId,
         labels: Optional[List[str]] = None,
-        assignee: Optional[str] = None,
+        assignee: Optional[UserId] = None,
         priority: Optional[WorkItemPriority] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> WorkItem:
@@ -101,13 +64,14 @@ class ITicketSystem(ABC):
 
         Raises:
             ValidationError: Invalid input data
+            ProjectNotFoundError: Project doesn't exist
             ExternalServiceError: Service communication failure
         """
         pass
 
     @abstractmethod
     async def update_work_item(
-        self, item_id: str, updates: Dict[str, Any]
+        self, item_id: WorkItemId, updates: Dict[str, Any]
     ) -> WorkItem:
         """
         Update an existing work item.
@@ -120,14 +84,14 @@ class ITicketSystem(ABC):
             WorkItem: Updated work item
 
         Raises:
-            ResourceNotFoundError: Work item doesn't exist
+            WorkItemNotFoundError: Work item doesn't exist
             ValidationError: Invalid update data
             ExternalServiceError: Service communication failure
         """
         pass
 
     @abstractmethod
-    async def delete_work_item(self, item_id: str) -> None:
+    async def delete_work_item(self, item_id: WorkItemId) -> None:
         """
         Delete a work item.
 
@@ -135,7 +99,7 @@ class ITicketSystem(ABC):
             item_id: Work item identifier
 
         Raises:
-            ResourceNotFoundError: Work item doesn't exist
+            WorkItemNotFoundError: Work item doesn't exist
             ExternalServiceError: Service communication failure
         """
         pass
@@ -143,7 +107,7 @@ class ITicketSystem(ABC):
     @abstractmethod
     async def update_status(
         self,
-        item_id: str,
+        item_id: WorkItemId,
         status: WorkItemStatus,
         reason: Optional[str] = None,
     ) -> WorkItem:
@@ -159,7 +123,7 @@ class ITicketSystem(ABC):
             WorkItem: Updated work item
 
         Raises:
-            ResourceNotFoundError: Work item doesn't exist
+            WorkItemNotFoundError: Work item doesn't exist
             ValidationError: Invalid status transition
             ExternalServiceError: Service communication failure
         """
@@ -170,9 +134,9 @@ class ITicketSystem(ABC):
     @abstractmethod
     async def list_work_items(
         self,
-        project_id: Optional[str] = None,
+        project_id: Optional[ProjectId] = None,
         status: Optional[WorkItemStatus] = None,
-        assignee: Optional[str] = None,
+        assignee: Optional[UserId] = None,
         labels: Optional[List[str]] = None,
         created_after: Optional[datetime] = None,
         updated_after: Optional[datetime] = None,
@@ -197,6 +161,7 @@ class ITicketSystem(ABC):
 
         Raises:
             ValidationError: Invalid filter parameters
+            ProjectNotFoundError: Project doesn't exist
             ExternalServiceError: Service communication failure
         """
         pass
@@ -205,7 +170,7 @@ class ITicketSystem(ABC):
     async def search_work_items(
         self,
         query: str,
-        project_id: Optional[str] = None,
+        project_id: Optional[ProjectId] = None,
         limit: int = 100,
     ) -> List[WorkItem]:
         """
@@ -220,6 +185,7 @@ class ITicketSystem(ABC):
             List[WorkItem]: List of matching work items
 
         Raises:
+            ProjectNotFoundError: Project doesn't exist
             ExternalServiceError: Service communication failure
         """
         pass
@@ -227,7 +193,7 @@ class ITicketSystem(ABC):
     @abstractmethod
     async def get_work_item_stream(
         self,
-        project_id: Optional[str] = None,
+        project_id: Optional[ProjectId] = None,
         since: Optional[datetime] = None,
     ) -> AsyncIterator[WorkItem]:
         """
@@ -241,6 +207,7 @@ class ITicketSystem(ABC):
             WorkItem: Work items as they are created/updated
 
         Raises:
+            ProjectNotFoundError: Project doesn't exist (if project_id specified)
             ExternalServiceError: Service communication failure
         """
         pass
@@ -250,9 +217,9 @@ class ITicketSystem(ABC):
     @abstractmethod
     async def add_comment(
         self,
-        item_id: str,
+        item_id: WorkItemId,
         body: str,
-        author: Optional[str] = None,
+        author: Optional[UserId] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Comment:
         """
@@ -268,7 +235,7 @@ class ITicketSystem(ABC):
             Comment: Newly created comment
 
         Raises:
-            ResourceNotFoundError: Work item doesn't exist
+            WorkItemNotFoundError: Work item doesn't exist
             ValidationError: Invalid comment data
             ExternalServiceError: Service communication failure
         """
@@ -277,7 +244,7 @@ class ITicketSystem(ABC):
     @abstractmethod
     async def get_comments(
         self,
-        item_id: str,
+        item_id: WorkItemId,
         since: Optional[datetime] = None,
         limit: int = 100,
     ) -> List[Comment]:
@@ -293,7 +260,7 @@ class ITicketSystem(ABC):
             List[Comment]: List of comments
 
         Raises:
-            ResourceNotFoundError: Work item doesn't exist
+            WorkItemNotFoundError: Work item doesn't exist
             ExternalServiceError: Service communication failure
         """
         pass
@@ -303,8 +270,8 @@ class ITicketSystem(ABC):
     @abstractmethod
     async def link_work_items(
         self,
-        source_id: str,
-        target_id: str,
+        source_id: WorkItemId,
+        target_id: WorkItemId,
         relationship: str,
     ) -> None:
         """
@@ -318,7 +285,7 @@ class ITicketSystem(ABC):
             relationship: Type of relationship
 
         Raises:
-            ResourceNotFoundError: One or both work items don't exist
+            WorkItemNotFoundError: One or both work items don't exist
             ValidationError: Invalid relationship type
             ExternalServiceError: Service communication failure
         """
@@ -327,7 +294,7 @@ class ITicketSystem(ABC):
     @abstractmethod
     async def get_related_items(
         self,
-        item_id: str,
+        item_id: WorkItemId,
         relationship: Optional[str] = None,
     ) -> List[WorkItem]:
         """
@@ -341,7 +308,7 @@ class ITicketSystem(ABC):
             List[WorkItem]: List of related work items
 
         Raises:
-            ResourceNotFoundError: Work item doesn't exist
+            WorkItemNotFoundError: Work item doesn't exist
             ExternalServiceError: Service communication failure
         """
         pass
@@ -353,7 +320,7 @@ class ITicketSystem(ABC):
         self,
         url: str,
         events: List[str],
-        project_id: Optional[str] = None,
+        project_id: Optional[ProjectId] = None,
     ) -> str:
         """
         Register a webhook for events.
@@ -368,6 +335,7 @@ class ITicketSystem(ABC):
 
         Raises:
             ValidationError: Invalid webhook configuration
+            ProjectNotFoundError: Project doesn't exist
             ExternalServiceError: Service communication failure
         """
         pass

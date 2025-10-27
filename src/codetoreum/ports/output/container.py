@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
+from codetoreum.domain.types import ContainerId, ImageId
+
 
 # ============================================================================
 # Data Models
@@ -19,14 +21,14 @@ class ContainerResult:
     stdout: str
     stderr: str
     duration_ms: int
-    container_id: str
+    container_id: ContainerId
 
 
 @dataclass
 class ContainerStatus:
     """Container status information."""
 
-    id: str
+    id: ContainerId
     status: str  # running, stopped, exited, paused, restarting, dead
     created_at: datetime
     started_at: Optional[datetime]

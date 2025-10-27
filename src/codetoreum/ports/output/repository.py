@@ -6,6 +6,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
+from codetoreum.domain.types import BranchName, CommitHash, RemoteName, RepositoryId
+
 
 # ============================================================================
 # Data Models
@@ -16,7 +18,7 @@ from typing import List, Optional
 class RepositoryStatus:
     """Repository status information."""
 
-    current_branch: str
+    current_branch: BranchName
     is_dirty: bool
     staged_files: List[str]
     unstaged_files: List[str]
@@ -31,7 +33,7 @@ class MergeResult:
 
     success: bool
     conflicts: List[str]
-    merge_commit: Optional[str]
+    merge_commit: Optional[CommitHash]
 
 
 # ============================================================================
@@ -47,8 +49,8 @@ class IRepository(ABC):
         self,
         url: str,
         destination: Path,
-        branch: Optional[str] = None,
-    ) -> None:
+        branch: Optional[BranchName] = None,
+    ) -> RepositoryId:
         """
         Clone a repository.
 
@@ -56,6 +58,9 @@ class IRepository(ABC):
             url: Repository URL
             destination: Local destination path
             branch: Optional branch to clone
+
+        Returns:
+            RepositoryId: Identifier for the cloned repository
 
         Raises:
             RepositoryError: Clone operation failed
@@ -67,7 +72,7 @@ class IRepository(ABC):
     async def checkout(
         self,
         repo_path: Path,
-        branch: str,
+        branch: BranchName,
         create: bool = False,
     ) -> None:
         """
@@ -88,8 +93,8 @@ class IRepository(ABC):
     async def create_branch(
         self,
         repo_path: Path,
-        branch_name: str,
-        from_branch: Optional[str] = None,
+        branch_name: BranchName,
+        from_branch: Optional[BranchName] = None,
     ) -> None:
         """
         Create a new branch.
@@ -113,7 +118,7 @@ class IRepository(ABC):
         author_name: str,
         author_email: str,
         files: Optional[List[str]] = None,
-    ) -> str:
+    ) -> CommitHash:
         """
         Create a commit.
 

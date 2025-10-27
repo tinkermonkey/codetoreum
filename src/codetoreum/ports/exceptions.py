@@ -87,6 +87,24 @@ class TicketSystemError(PortError):
     pass
 
 
+class WorkItemNotFoundError(TicketSystemError):
+    """Work item doesn't exist."""
+
+    pass
+
+
+class ColumnNotFoundError(TicketSystemError):
+    """Column doesn't exist."""
+
+    pass
+
+
+class ProjectNotFoundError(TicketSystemError):
+    """Project doesn't exist."""
+
+    pass
+
+
 # LLM Provider Errors
 
 
@@ -199,6 +217,18 @@ class EventStoreError(PortError):
     pass
 
 
+class StreamNotFoundError(EventStoreError):
+    """Event stream doesn't exist."""
+
+    pass
+
+
+class SnapshotNotFoundError(EventStoreError):
+    """Snapshot doesn't exist."""
+
+    pass
+
+
 # Storage Errors
 
 
@@ -228,5 +258,17 @@ class NotificationError(PortError):
 
 class UnsupportedChannelError(NotificationError):
     """Notification channel not supported."""
+
+    pass
+
+
+class ChannelNotFoundError(NotificationError):
+    """Notification channel doesn't exist."""
+
+    pass
+
+
+class TemplateNotFoundError(NotificationError):
+    """Notification template doesn't exist."""
 
     pass

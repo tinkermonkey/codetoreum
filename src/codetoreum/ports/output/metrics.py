@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from codetoreum.domain.types import MetricName
+
 
 # ============================================================================
 # Data Models
@@ -16,7 +18,7 @@ class MetricData:
     """Metric data point."""
 
     timestamp: datetime
-    name: str
+    name: MetricName
     value: float
     labels: Dict[str, str]
     metric_type: str  # counter, gauge, histogram, summary
