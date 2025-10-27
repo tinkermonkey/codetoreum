@@ -30,6 +30,13 @@ def create_config() -> SimulationConfig:
         "Code Generation -> Review -> Testing"
     )
 
+    # Configurable test output values
+    config.metadata.update({
+        "tests_passed": 10,
+        "tests_failed": 0,
+        "coverage_percent": 95,
+    })
+
     # Configure code generator agent
     config.add_agent_response_pattern(
         agent_id="code-generator",
@@ -62,9 +69,9 @@ def create_config() -> SimulationConfig:
         pattern=r".*test.*",
         response=(
             "Test execution completed:\n"
-            "- 10 tests passed\n"
-            "- 0 tests failed\n"
-            "- Coverage: 95%"
+            "- {tests_passed} tests passed\n"
+            "- {tests_failed} tests failed\n"
+            "- Coverage: {coverage_percent}%"
         ),
     )
 
@@ -72,7 +79,7 @@ def create_config() -> SimulationConfig:
     config.set_container_command_result(
         command="pytest",
         exit_code=0,
-        stdout="====== 10 passed in 2.5s =======",
+        stdout=f"====== {config.metadata['tests_passed']} passed in 2.5s =======",
         stderr="",
     )
 

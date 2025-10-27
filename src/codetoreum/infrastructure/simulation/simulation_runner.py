@@ -1,6 +1,7 @@
 """Simulation runner for orchestrating test scenarios."""
 
 import asyncio
+import traceback
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, TypeVar
@@ -176,7 +177,9 @@ class SimulationRunner:
                 scenario_func(self)
 
         except Exception as e:
-            errors.append(f"Scenario execution failed: {str(e)}")
+            error_msg = f"Scenario execution failed: {str(e)}"
+            error_traceback = traceback.format_exc()
+            errors.append(f"{error_msg}\n{error_traceback}")
 
         self._end_time = datetime.now(timezone.utc)
         simulated_end_time = self.clock.now()

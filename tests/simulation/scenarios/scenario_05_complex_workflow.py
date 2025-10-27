@@ -30,11 +30,18 @@ def create_config() -> SimulationConfig:
 
     config.scenario_description = "Multi-stage workflow with conditional branches"
 
+    # Configurable test output values
+    config.metadata.update({
+        "analysis_approach": "approach B (refactoring)",
+        "test_status": "All tests passed",
+        "validation_status": "Validation successful",
+    })
+
     # Configure multiple agents
     config.add_agent_response_pattern(
         agent_id="analyzer",
         pattern=r".*",
-        response="Analysis: This requires approach B (refactoring)",
+        response="Analysis: This requires {analysis_approach}",
     )
 
     config.add_agent_response_pattern(
@@ -46,13 +53,13 @@ def create_config() -> SimulationConfig:
     config.add_agent_response_pattern(
         agent_id="tester",
         pattern=r".*",
-        response="All tests passed",
+        response="{test_status}",
     )
 
     config.add_agent_response_pattern(
         agent_id="validator",
         pattern=r".*",
-        response="Validation successful",
+        response="{validation_status}",
     )
 
     return config

@@ -2,8 +2,9 @@
 
 import asyncio
 import threading
+import traceback
 from datetime import datetime, timedelta, timezone
-from typing import Callable, Optional
+from typing import Callable, List, Optional, Tuple, Union
 
 
 class SimulationClock:
@@ -50,7 +51,7 @@ class SimulationClock:
         self._current_time: datetime = datetime.now(timezone.utc)
 
         # Callbacks scheduled for specific times
-        self._scheduled_callbacks: list[tuple[datetime, Callable]] = []
+        self._scheduled_callbacks: List[Tuple[datetime, Callable]] = []
 
         # Thread safety
         self._lock = threading.RLock()
@@ -168,8 +169,10 @@ class SimulationClock:
                 else:
                     callback(scheduled_time)
             except Exception as e:
-                # Log but don't stop advancing
-                print(f"Error in scheduled callback: {e}")
+                # Log but don't stop advancing - distinguish between sync and async errors
+                callback_type = "async" if asyncio.iscoroutinefunction(callback) else "sync"
+                print(f"Error in scheduled {callback_type} callback: {e}")
+                print(traceback.format_exc())
 
     def schedule_callback(
         self,
@@ -204,7 +207,7 @@ class SimulationClock:
             self._scheduled_callbacks.append((trigger_time, callback))
             self._scheduled_callbacks.sort(key=lambda x: x[0])
 
-    def get_scheduled_callbacks(self) -> list[tuple[datetime, Callable]]:
+    def get_scheduled_callbacks(self) -> List[Tuple[datetime, Callable]]:
         """
         Get all scheduled callbacks.
 
@@ -355,10 +358,10 @@ class RealTimeClock:
 
 
 # Global clock instance that can be swapped for testing
-_global_clock: Optional[SimulationClock | RealTimeClock] = None
+_global_clock: Optional[Union[SimulationClock, RealTimeClock]] = None
 
 
-def get_clock() -> SimulationClock | RealTimeClock:
+def get_clock() -> Union[SimulationClock, RealTimeClock]:
     """
     Get the global clock instance.
 
@@ -371,7 +374,7 @@ def get_clock() -> SimulationClock | RealTimeClock:
     return _global_clock
 
 
-def set_clock(clock: SimulationClock | RealTimeClock) -> None:
+def set_clock(clock: Union[SimulationClock, RealTimeClock]) -> None:
     """
     Set the global clock instance.
 

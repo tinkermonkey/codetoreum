@@ -486,7 +486,6 @@ Potential improvements for Phase 5+:
 - **Design Doc**: `documentation/01_design/infrastructure/simulation_design.md`
 - **Scenario Format**: `SCENARIO_FORMAT.md`
 - **Source Code**: `src/codetoreum/infrastructure/simulation/`
-- **Issue**: Phase 4 - Mock Adapters & Simulation Mode
 
 ## Support
 

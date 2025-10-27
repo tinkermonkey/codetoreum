@@ -291,6 +291,15 @@ class MockNotifierAdapter(INotifier):
         if not notifications:
             raise ValidationError("Notifications list cannot be empty")
 
+        # Validate all notifications have required fields before processing
+        for i, notification in enumerate(notifications):
+            if not notification.recipient:
+                raise ValidationError(f"Notification {i} missing recipient")
+            if not notification.message:
+                raise ValidationError(f"Notification {i} missing message")
+            if not notification.channel:
+                raise ValidationError(f"Notification {i} missing channel")
+
         results = []
         for notification in notifications:
             result = await self.send(

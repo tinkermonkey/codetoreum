@@ -45,8 +45,8 @@ class InMemoryMetricsAdapter(IMetrics):
         # Gauges (current values)
         self._gauges: Dict[str, Dict[str, float]] = defaultdict(dict)
 
-        # Active timers
-        self._timers: Dict[str, datetime] = {}
+        # Active timers (timer_id -> (timer_name, start_time))
+        self._timers: Dict[str, tuple[str, datetime]] = {}
 
         # Thread safety
         self._lock = threading.Lock()
@@ -246,7 +246,7 @@ class InMemoryMetricsAdapter(IMetrics):
         timer_id = str(uuid4())
 
         with self._lock:
-            self._timers[timer_id] = datetime.now(timezone.utc)
+            self._timers[timer_id] = (name, datetime.now(timezone.utc))
 
         return timer_id
 
@@ -272,14 +272,12 @@ class InMemoryMetricsAdapter(IMetrics):
             if timer_id not in self._timers:
                 raise ResourceNotFoundError("Timer", timer_id)
 
-            start_time = self._timers.pop(timer_id)
+            timer_name, start_time = self._timers.pop(timer_id)
 
         end_time = datetime.now(timezone.utc)
         duration = (end_time - start_time).total_seconds()
 
-        # Extract timer name from labels or use generic
-        timer_name = labels.get("timer_name", "timer_duration") if labels else "timer_duration"
-
+        # Use the timer name from when it was started
         self._record_metric(timer_name, duration, "histogram", labels)
 
         return duration
@@ -628,8 +626,8 @@ class InMemoryMetricsAdapter(IMetrics):
         Returns:
             Current counter value (0 if not found)
         """
-        label_key = self._get_label_key(labels)
         with self._lock:
+            label_key = self._get_label_key(labels)
             return self._counters[name].get(label_key, 0)
 
     def get_gauge_value(
@@ -647,8 +645,8 @@ class InMemoryMetricsAdapter(IMetrics):
         Returns:
             Current gauge value (None if not found)
         """
-        label_key = self._get_label_key(labels)
         with self._lock:
+            label_key = self._get_label_key(labels)
             return self._gauges[name].get(label_key)
 
     def get_metric_count(self, name: str) -> int:

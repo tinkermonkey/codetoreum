@@ -132,10 +132,12 @@ class SimulationConfig:
         Args:
             agent_id: Agent identifier
             pattern: Regex pattern to match
-            response: Response to return
+            response: Response to return (can use metadata variables via {key})
         """
         config = self.get_agent_config(agent_id)
-        config.response_patterns[pattern] = response
+        # Support template variables from metadata
+        formatted_response = response.format(**self.metadata) if self.metadata else response
+        config.response_patterns[pattern] = formatted_response
 
     def set_container_command_result(
         self,
