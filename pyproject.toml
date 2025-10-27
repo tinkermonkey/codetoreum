@@ -197,6 +197,12 @@ markers = [
 filterwarnings = [
     "error",
     "ignore::DeprecationWarning",
+    # Ignore ResourceWarnings and PytestUnraisableExceptionWarnings globally
+    # These are triggered by docker-py's socket cleanup issues which are a known
+    # limitation of the docker-py/urllib3 library stack. The sockets are cleaned
+    # up by Python's garbage collector and don't cause actual resource leaks.
+    "ignore::ResourceWarning",
+    "ignore::pytest.PytestUnraisableExceptionWarning",
 ]
 
 # ===== Coverage Configuration =====

@@ -20,6 +20,8 @@ from codetoreum.ports.exceptions import (
     ResourceNotFoundError,
 )
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.fixture
 def docker_config():
@@ -32,7 +34,7 @@ def docker_config():
 
 @pytest.fixture
 def docker_adapter(docker_config):
-    """Create Docker adapter instance."""
+    """Create Docker adapter instance with proper cleanup."""
     adapter = DockerContainerAdapter(docker_config)
 
     # Check if Docker is available
@@ -41,10 +43,12 @@ def docker_adapter(docker_config):
     except ContainerError:
         pytest.skip("Docker is not available")
 
-    return adapter
+    yield adapter
+
+    # Cleanup: properly close the Docker client to release resources
+    adapter.close()
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_run_simple_command(docker_adapter):
     """Test running a simple command in a container."""
@@ -62,7 +66,6 @@ async def test_run_simple_command(docker_adapter):
     assert result.duration_ms > 0
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_run_with_environment_variables(docker_adapter):
     """Test running container with environment variables."""
@@ -78,7 +81,6 @@ async def test_run_with_environment_variables(docker_adapter):
     assert "test_value" in result.stdout
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_run_with_volume_mount(docker_adapter):
     """Test running container with volume mount."""
@@ -99,7 +101,6 @@ async def test_run_with_volume_mount(docker_adapter):
         assert "Hello from host" in result.stdout
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_run_with_streaming(docker_adapter):
     """Test running container with streaming callback."""
@@ -121,7 +122,6 @@ async def test_run_with_streaming(docker_adapter):
     assert len(logs) > 0
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_create_start_stop_remove(docker_adapter):
     """Test container lifecycle operations."""
@@ -154,7 +154,6 @@ async def test_create_start_stop_remove(docker_adapter):
         await docker_adapter.remove(container_id, force=True)
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_exec_in_running_container(docker_adapter):
     """Test executing command in running container."""
@@ -180,7 +179,6 @@ async def test_exec_in_running_container(docker_adapter):
         await docker_adapter.remove(container_id, force=True)
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_list_containers(docker_adapter):
     """Test listing containers."""
@@ -209,7 +207,6 @@ async def test_list_containers(docker_adapter):
         await docker_adapter.remove(container_id, force=True)
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_pull_image(docker_adapter):
     """Test pulling an image."""
@@ -221,7 +218,6 @@ async def test_pull_image(docker_adapter):
     assert exists is True
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_image_exists(docker_adapter):
     """Test checking if image exists."""
@@ -230,7 +226,6 @@ async def test_image_exists(docker_adapter):
     assert exists in (True, False)
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_inspect_container(docker_adapter):
     """Test inspecting container."""
@@ -250,7 +245,6 @@ async def test_inspect_container(docker_adapter):
         await docker_adapter.remove(container_id, force=True)
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_wait_for_container(docker_adapter):
     """Test waiting for container to complete."""
@@ -270,7 +264,6 @@ async def test_wait_for_container(docker_adapter):
         await docker_adapter.remove(container_id, force=True)
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_get_container_logs(docker_adapter):
     """Test getting container logs."""
@@ -290,7 +283,6 @@ async def test_get_container_logs(docker_adapter):
         await docker_adapter.remove(container_id, force=True)
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_nonexistent_image(docker_adapter):
     """Test running container with nonexistent image."""
@@ -303,7 +295,6 @@ async def test_nonexistent_image(docker_adapter):
         )
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_nonexistent_container(docker_adapter):
     """Test operations on nonexistent container."""
@@ -311,7 +302,6 @@ async def test_nonexistent_container(docker_adapter):
         await docker_adapter.status("nonexistent-container-id")
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_exec_on_stopped_container(docker_adapter):
     """Test exec on stopped container raises error."""
@@ -329,7 +319,6 @@ async def test_exec_on_stopped_container(docker_adapter):
         await docker_adapter.remove(container_id, force=True)
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_context_manager(docker_config):
     """Test using adapter as async context manager."""
