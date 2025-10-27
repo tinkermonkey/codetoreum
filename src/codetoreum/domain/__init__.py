@@ -21,6 +21,15 @@ from codetoreum.domain.events import (
     ExecutionStarted,
     ExecutionTimeout,
     WorkflowAttached,
+    WorkflowCancelled,
+    WorkflowCompleted,
+    WorkflowCreated,
+    WorkflowFailed,
+    WorkflowPaused,
+    WorkflowResumed,
+    WorkflowStageAdvanced,
+    WorkflowStageStatusUpdated,
+    WorkflowStarted,
     WorkItemBlocked,
     WorkItemCompleted,
     WorkItemCreated,
@@ -33,7 +42,10 @@ from codetoreum.domain.events import (
     WorkItemUnderReview,
 )
 from codetoreum.domain.exceptions import DomainError
+from codetoreum.domain.pipeline_stage import PipelineStage, StageStatus, StageType
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
+from codetoreum.domain.workflow import Workflow, WorkflowStatus
+from codetoreum.domain.workflow_template import StageTemplate, WorkflowTemplate
 
 __all__ = [
     # Base classes
@@ -50,6 +62,16 @@ __all__ = [
     # Agent Execution
     "AgentExecution",
     "ExecutionStatus",
+    # Pipeline Stage
+    "PipelineStage",
+    "StageStatus",
+    "StageType",
+    # Workflow
+    "Workflow",
+    "WorkflowStatus",
+    # Workflow Template
+    "WorkflowTemplate",
+    "StageTemplate",
     # Work Item Events
     "WorkItemCreated",
     "AgentAssigned",
@@ -80,4 +102,14 @@ __all__ = [
     "ExecutionCompleted",
     "ExecutionFailed",
     "ExecutionTimeout",
+    # Workflow Events
+    "WorkflowCreated",
+    "WorkflowStarted",
+    "WorkflowStageAdvanced",
+    "WorkflowStageStatusUpdated",
+    "WorkflowCompleted",
+    "WorkflowFailed",
+    "WorkflowPaused",
+    "WorkflowResumed",
+    "WorkflowCancelled",
 ]

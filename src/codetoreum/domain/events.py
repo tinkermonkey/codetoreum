@@ -622,3 +622,191 @@ class ExecutionTimeout(DomainEvent):
             payload=payload,
             **kwargs
         )
+
+
+# =============================================================================
+# Workflow Events
+# =============================================================================
+
+
+class WorkflowCreated(DomainEvent):
+    """Emitted when a workflow is created."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize WorkflowCreated event.
+
+        Required payload fields:
+        - work_item_id: str
+        - template_id: str
+        - project_id: str
+        - stage_count: int
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="Workflow",
+            payload=payload,
+            **kwargs
+        )
+
+
+class WorkflowStarted(DomainEvent):
+    """Emitted when workflow execution begins."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize WorkflowStarted event.
+
+        Required payload fields:
+        - started_at: str (ISO format)
+        - work_item_id: str
+        - first_stage: str
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="Workflow",
+            payload=payload,
+            **kwargs
+        )
+
+
+class WorkflowStageAdvanced(DomainEvent):
+    """Emitted when workflow moves to the next stage."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize WorkflowStageAdvanced event.
+
+        Required payload fields:
+        - from_stage: str
+        - to_stage: str
+        - stage_index: int
+        - advanced_at: str (ISO format)
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="Workflow",
+            payload=payload,
+            **kwargs
+        )
+
+
+class WorkflowStageStatusUpdated(DomainEvent):
+    """Emitted when a stage's status changes."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize WorkflowStageStatusUpdated event.
+
+        Required payload fields:
+        - stage_name: str
+        - old_status: str
+        - new_status: str
+        - updated_at: str (ISO format)
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="Workflow",
+            payload=payload,
+            **kwargs
+        )
+
+
+class WorkflowCompleted(DomainEvent):
+    """Emitted when workflow completes successfully."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize WorkflowCompleted event.
+
+        Required payload fields:
+        - completed_at: str (ISO format)
+        - work_item_id: str
+        - duration_seconds: float
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="Workflow",
+            payload=payload,
+            **kwargs
+        )
+
+
+class WorkflowFailed(DomainEvent):
+    """Emitted when workflow fails."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize WorkflowFailed event.
+
+        Required payload fields:
+        - failed_at: str (ISO format)
+        - reason: str
+        - failed_stage: str
+        - completed_stages: List[str]
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="Workflow",
+            payload=payload,
+            **kwargs
+        )
+
+
+class WorkflowPaused(DomainEvent):
+    """Emitted when workflow is paused."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize WorkflowPaused event.
+
+        Required payload fields:
+        - paused_at: str (ISO format)
+        - reason: str
+        - current_stage: str
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="Workflow",
+            payload=payload,
+            **kwargs
+        )
+
+
+class WorkflowResumed(DomainEvent):
+    """Emitted when workflow is resumed."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize WorkflowResumed event.
+
+        Required payload fields:
+        - resumed_at: str (ISO format)
+        - current_stage: str
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="Workflow",
+            payload=payload,
+            **kwargs
+        )
+
+
+class WorkflowCancelled(DomainEvent):
+    """Emitted when workflow is cancelled."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize WorkflowCancelled event.
+
+        Required payload fields:
+        - cancelled_at: str (ISO format)
+        - reason: str
+        - completed_stages: List[str]
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="Workflow",
+            payload=payload,
+            **kwargs
+        )
