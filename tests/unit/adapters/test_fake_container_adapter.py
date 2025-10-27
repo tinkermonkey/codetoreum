@@ -1,0 +1,257 @@
+"""Tests for FakeContainerAdapter."""
+
+import pytest
+from datetime import datetime
+
+from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
+from codetoreum.ports.exceptions import ResourceNotFoundError, ValidationError, ContainerError
+
+
+@pytest.mark.asyncio
+class TestFakeContainerAdapter:
+    """Test suite for FakeContainerAdapter."""
+
+    async def test_run_command_default_response(self):
+        """Test running a command with default response."""
+        adapter = FakeContainerAdapter()
+
+        result = await adapter.run(
+            image="python:3.11",
+            command=["python", "--version"],
+            volumes={},
+            environment={},
+        )
+
+        assert result.exit_code == 0
+        assert result.stdout == "Fake container output"
+        assert result.container_id.startswith("fake-")
+
+    async def test_run_command_with_pattern(self):
+        """Test running a command with predefined pattern."""
+        adapter = FakeContainerAdapter()
+        adapter.set_command_result("pytest", exit_code=0, stdout="All tests passed")
+
+        result = await adapter.run(
+            image="python:3.11",
+            command=["pytest", "tests/"],
+            volumes={},
+            environment={},
+        )
+
+        assert result.exit_code == 0
+        assert result.stdout == "All tests passed"
+
+    async def test_run_command_validation(self):
+        """Test validation of run parameters."""
+        adapter = FakeContainerAdapter()
+
+        with pytest.raises(ValidationError, match="Image name is required"):
+            await adapter.run(
+                image="",
+                command=["echo", "test"],
+                volumes={},
+                environment={},
+            )
+
+        with pytest.raises(ValidationError, match="Command is required"):
+            await adapter.run(
+                image="python:3.11",
+                command=[],
+                volumes={},
+                environment={},
+            )
+
+    async def test_create_container(self):
+        """Test creating a container."""
+        adapter = FakeContainerAdapter()
+
+        container_id = await adapter.create(
+            image="python:3.11",
+            name="test-container",
+            command=["python", "script.py"],
+        )
+
+        assert container_id == "test-container"
+        status = await adapter.status(container_id)
+        assert status.status == "created"
+
+    async def test_start_container(self):
+        """Test starting a container."""
+        adapter = FakeContainerAdapter()
+
+        container_id = await adapter.create(image="python:3.11")
+        await adapter.start(container_id)
+
+        status = await adapter.status(container_id)
+        assert status.status == "running"
+        assert status.started_at is not None
+
+    async def test_stop_container(self):
+        """Test stopping a container."""
+        adapter = FakeContainerAdapter()
+
+        container_id = await adapter.create(image="python:3.11")
+        await adapter.start(container_id)
+        await adapter.stop(container_id)
+
+        status = await adapter.status(container_id)
+        assert status.status == "exited"
+        assert status.exit_code == 0
+
+    async def test_remove_container(self):
+        """Test removing a container."""
+        adapter = FakeContainerAdapter()
+
+        container_id = await adapter.create(image="python:3.11")
+        await adapter.remove(container_id)
+
+        with pytest.raises(ResourceNotFoundError, match="Container"):
+            await adapter.status(container_id)
+
+    async def test_kill_container(self):
+        """Test killing a container."""
+        adapter = FakeContainerAdapter()
+
+        container_id = await adapter.create(image="python:3.11")
+        await adapter.start(container_id)
+        await adapter.kill(container_id)
+
+        status = await adapter.status(container_id)
+        assert status.status == "dead"
+        assert status.exit_code == 137
+
+    async def test_exec_in_container(self):
+        """Test executing command in running container."""
+        adapter = FakeContainerAdapter()
+        adapter.set_command_result("ls", exit_code=0, stdout="file1.txt\nfile2.txt")
+
+        container_id = await adapter.create(image="python:3.11")
+        await adapter.start(container_id)
+
+        result = await adapter.exec(
+            container_id=container_id,
+            command=["ls", "-la"],
+        )
+
+        assert result.exit_code == 0
+        assert "file1.txt" in result.stdout
+
+    async def test_exec_not_running(self):
+        """Test executing in non-running container fails."""
+        adapter = FakeContainerAdapter()
+
+        container_id = await adapter.create(image="python:3.11")
+
+        with pytest.raises(ContainerError, match="not running"):
+            await adapter.exec(
+                container_id=container_id,
+                command=["ls"],
+            )
+
+    async def test_list_containers(self):
+        """Test listing containers."""
+        adapter = FakeContainerAdapter()
+
+        # Create multiple containers
+        c1 = await adapter.create(image="python:3.11")
+        await adapter.start(c1)
+
+        c2 = await adapter.create(image="python:3.11")
+
+        # List all containers
+        all_containers = await adapter.list_containers(all=True)
+        assert len(all_containers) == 2
+
+        # List only running
+        running = await adapter.list_containers(all=False)
+        assert len(running) == 1
+        assert running[0].id == c1
+
+    async def test_container_logs(self):
+        """Test retrieving container logs."""
+        adapter = FakeContainerAdapter()
+
+        container_id = await adapter.create(image="python:3.11")
+        logs = await adapter.logs(container_id)
+
+        assert isinstance(logs, str)
+        assert "Fake logs" in logs
+
+    async def test_pull_image(self):
+        """Test pulling an image."""
+        adapter = FakeContainerAdapter()
+
+        await adapter.pull_image("python", tag="3.11")
+
+        # Should complete without error
+        exists = await adapter.image_exists("python", tag="3.11")
+        assert exists is True
+
+    async def test_execution_history(self):
+        """Test tracking execution history."""
+        adapter = FakeContainerAdapter()
+
+        await adapter.run(
+            image="python:3.11",
+            command=["python", "--version"],
+            volumes={},
+            environment={},
+        )
+
+        await adapter.run(
+            image="node:18",
+            command=["node", "--version"],
+            volumes={},
+            environment={},
+        )
+
+        history = adapter.get_execution_history()
+        assert len(history) == 2
+        assert history[0]["image"] == "python:3.11"
+        assert history[1]["image"] == "node:18"
+
+    async def test_configurable_defaults(self):
+        """Test configurable default values."""
+        adapter = FakeContainerAdapter(
+            default_exit_code=1,
+            default_stdout="Custom output",
+            execution_delay=0.01,
+            max_containers=50,
+        )
+
+        result = await adapter.run(
+            image="test:latest",
+            command=["test"],
+            volumes={},
+            environment={},
+        )
+
+        assert result.exit_code == 1
+        assert result.stdout == "Custom output"
+
+    async def test_container_limit_validation(self):
+        """Test max container limit enforcement."""
+        adapter = FakeContainerAdapter(max_containers=2)
+
+        await adapter.create(image="test:1")
+        await adapter.create(image="test:2")
+
+        with pytest.raises(ValidationError, match="Maximum container limit"):
+            await adapter.create(image="test:3")
+
+    async def test_clear_helper(self):
+        """Test clearing all data."""
+        adapter = FakeContainerAdapter()
+
+        await adapter.create(image="python:3.11")
+        await adapter.run(
+            image="python:3.11",
+            command=["python"],
+            volumes={},
+            environment={},
+        )
+
+        adapter.clear()
+
+        assert adapter.get_container_count() == 0
+        assert adapter.get_execution_count() == 0

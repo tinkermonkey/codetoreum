@@ -2,6 +2,7 @@
 
 import asyncio
 import re
+import threading
 from datetime import datetime, timezone
 from typing import AsyncIterator, Dict, List, Optional, Pattern
 from uuid import uuid4
@@ -30,6 +31,14 @@ class MockLLMAdapter(ILLMProvider):
 
     Returns predefined responses based on prompt patterns. Useful for
     deterministic testing without calling real LLM APIs.
+
+    This adapter is thread-safe for concurrent test execution. All shared
+    state modifications are protected by a lock.
+
+    Attributes:
+        _default_response: Default response when no pattern matches
+        _delay_seconds: Simulated execution delay
+        _simulate_rate_limits: Whether to simulate rate limiting behavior
     """
 
     def __init__(
@@ -37,15 +46,28 @@ class MockLLMAdapter(ILLMProvider):
         default_response: str = "Mock LLM response",
         delay_seconds: float = 0.0,
         simulate_rate_limits: bool = False,
+        model_name: str = "mock-model-v1",
+        cost_per_input_token: float = 0.0,
+        cost_per_output_token: float = 0.0,
+        context_window: int = 100000,
+        max_output_tokens: int = 4096,
     ):
         """
         Initialize the mock LLM adapter.
 
         Args:
             default_response: Default response text when no pattern matches
-            delay_seconds: Simulated execution delay
-            simulate_rate_limits: Whether to simulate rate limiting
+            delay_seconds: Simulated execution delay in seconds
+            simulate_rate_limits: Whether to simulate rate limiting (fails after 100 requests)
+            model_name: Name of the mock model
+            cost_per_input_token: Cost per input token (default: 0.0 for testing)
+            cost_per_output_token: Cost per output token (default: 0.0 for testing)
+            context_window: Maximum context window size
+            max_output_tokens: Maximum output tokens
         """
+        if delay_seconds < 0:
+            raise ValidationError("Delay seconds cannot be negative")
+
         self._default_response = default_response
         self._delay_seconds = delay_seconds
         self._simulate_rate_limits = simulate_rate_limits
@@ -62,18 +84,21 @@ class MockLLMAdapter(ILLMProvider):
         # Conversations
         self._conversations: Dict[str, List[Dict[str, str]]] = {}
 
-        # Model info
+        # Model info (configurable)
         self._model_info = ModelInfo(
-            model_id="mock-model-v1",
+            model_id=model_name,
             provider="mock",
-            display_name="Mock Model v1",
-            context_window=100000,
-            max_output_tokens=4096,
+            display_name=model_name.replace("-", " ").title(),
+            context_window=context_window,
+            max_output_tokens=max_output_tokens,
             supports_tools=True,
             supports_streaming=True,
-            cost_per_input_token=0.0,
-            cost_per_output_token=0.0,
+            cost_per_input_token=cost_per_input_token,
+            cost_per_output_token=cost_per_output_token,
         )
+
+        # Thread safety
+        self._lock = threading.Lock()
 
     def add_response_pattern(self, pattern: str, response: str) -> None:
         """
@@ -82,16 +107,34 @@ class MockLLMAdapter(ILLMProvider):
         Args:
             pattern: Regex pattern to match against prompts
             response: Response to return when pattern matches
+
+        Raises:
+            ValidationError: If pattern or response is empty
         """
+        if not pattern:
+            raise ValidationError("Pattern cannot be empty")
+        if not response:
+            raise ValidationError("Response cannot be empty")
+
         compiled_pattern = re.compile(pattern, re.IGNORECASE | re.DOTALL)
-        self._response_patterns.append((compiled_pattern, response))
+        with self._lock:
+            self._response_patterns.append((compiled_pattern, response))
 
     def _get_response_for_prompt(self, prompt: str) -> str:
-        """Get response for a given prompt based on patterns."""
-        for pattern, response in self._response_patterns:
-            if pattern.search(prompt):
-                return response
-        return self._default_response
+        """
+        Get response for a given prompt based on patterns.
+
+        Args:
+            prompt: The input prompt
+
+        Returns:
+            Response string (either pattern-matched or default)
+        """
+        with self._lock:
+            for pattern, response in self._response_patterns:
+                if pattern.search(prompt):
+                    return response
+            return self._default_response
 
     async def execute(
         self,
@@ -99,12 +142,27 @@ class MockLLMAdapter(ILLMProvider):
         context: Optional[ExecutionContext] = None,
         stream_callback: Optional[StreamCallback] = None,
     ) -> ExecutionResult:
-        """Execute a prompt with the LLM."""
+        """
+        Execute a prompt with the LLM.
+
+        Args:
+            prompt: The prompt to execute (required, non-empty)
+            context: Optional execution context
+            stream_callback: Optional callback for streaming
+
+        Returns:
+            Execution result with generated content
+
+        Raises:
+            ValidationError: If prompt is empty
+            RateLimitError: If rate limits are simulated and exceeded
+        """
         if not prompt or not prompt.strip():
             raise ValidationError("Prompt cannot be empty")
 
-        if self._simulate_rate_limits and self._total_requests > 100:
-            raise RateLimitError("Mock rate limit exceeded")
+        with self._lock:
+            if self._simulate_rate_limits and self._total_requests >= 100:
+                raise RateLimitError("Mock rate limit exceeded (100 requests)")
 
         # Simulate delay
         if self._delay_seconds > 0:
@@ -120,10 +178,11 @@ class MockLLMAdapter(ILLMProvider):
         completion_tokens = len(response.split())
 
         # Update usage stats
-        self._total_requests += 1
-        self._input_tokens += prompt_tokens
-        self._output_tokens += completion_tokens
-        self._total_tokens += prompt_tokens + completion_tokens
+        with self._lock:
+            self._total_requests += 1
+            self._input_tokens += prompt_tokens
+            self._output_tokens += completion_tokens
+            self._total_tokens += prompt_tokens + completion_tokens
 
         completed_at = datetime.now(timezone.utc)
         duration_ms = int((completed_at - started_at).total_seconds() * 1000)
@@ -155,14 +214,32 @@ class MockLLMAdapter(ILLMProvider):
         context: Optional[ExecutionContext] = None,
         stream_callback: Optional[StreamCallback] = None,
     ) -> ExecutionResult:
-        """Execute prompt with tool/function calling capabilities."""
+        """
+        Execute prompt with tool/function calling capabilities.
+
+        Args:
+            prompt: The prompt to execute
+            tools: List of available tools
+            context: Optional execution context
+            stream_callback: Optional callback for streaming
+
+        Returns:
+            Execution result with optional tool calls
+
+        Raises:
+            ValidationError: If prompt is empty or tools list is invalid
+        """
+        if not tools:
+            raise ValidationError("Tools list cannot be empty for tool execution")
+
         # For mock, just execute normally and optionally include tool calls
         result = await self.execute(prompt, context, stream_callback)
 
         # Check if prompt mentions any tool names, simulate tool call
         tool_calls = []
+        prompt_lower = prompt.lower()
         for tool in tools:
-            if tool.name.lower() in prompt.lower():
+            if tool.name and tool.name.lower() in prompt_lower:
                 tool_calls.append(
                     ToolCall(
                         tool_name=tool.name,
@@ -179,7 +256,19 @@ class MockLLMAdapter(ILLMProvider):
         prompt: str,
         context: Optional[ExecutionContext] = None,
     ) -> AsyncIterator[StreamChunk]:
-        """Stream completion tokens as they're generated."""
+        """
+        Stream completion tokens as they're generated.
+
+        Args:
+            prompt: The prompt to execute
+            context: Optional execution context
+
+        Yields:
+            StreamChunk objects with incremental content
+
+        Raises:
+            ValidationError: If prompt is empty
+        """
         if not prompt or not prompt.strip():
             raise ValidationError("Prompt cannot be empty")
 
@@ -205,7 +294,13 @@ class MockLLMAdapter(ILLMProvider):
         response: str,
         callback: StreamCallback,
     ) -> None:
-        """Simulate streaming by calling callback with chunks."""
+        """
+        Simulate streaming by calling callback with chunks.
+
+        Args:
+            response: The complete response to stream
+            callback: Callback function to receive chunks
+        """
         words = response.split()
         for i, word in enumerate(words):
             chunk = StreamChunk(
@@ -220,15 +315,26 @@ class MockLLMAdapter(ILLMProvider):
         system_prompt: Optional[str] = None,
         parameters: Optional[ExecutionContext] = None,
     ) -> str:
-        """Create a new conversation session."""
-        conversation_id = str(uuid4())
-        self._conversations[conversation_id] = []
+        """
+        Create a new conversation session.
 
-        if system_prompt:
-            self._conversations[conversation_id].append({
-                "role": "system",
-                "content": system_prompt,
-            })
+        Args:
+            system_prompt: Optional system prompt to initialize conversation
+            parameters: Optional execution parameters
+
+        Returns:
+            Unique conversation ID
+        """
+        conversation_id = str(uuid4())
+
+        with self._lock:
+            self._conversations[conversation_id] = []
+
+            if system_prompt:
+                self._conversations[conversation_id].append({
+                    "role": "system",
+                    "content": system_prompt,
+                })
 
         return conversation_id
 
@@ -238,35 +344,64 @@ class MockLLMAdapter(ILLMProvider):
         message: str,
         stream_callback: Optional[StreamCallback] = None,
     ) -> ExecutionResult:
-        """Continue an existing conversation."""
-        if conversation_id not in self._conversations:
-            from codetoreum.ports.exceptions import ConversationNotFoundError
-            raise ConversationNotFoundError(f"Conversation {conversation_id} not found")
+        """
+        Continue an existing conversation.
 
-        # Add user message
-        self._conversations[conversation_id].append({
-            "role": "user",
-            "content": message,
-        })
+        Args:
+            conversation_id: ID of the conversation to continue
+            message: User message to add
+            stream_callback: Optional callback for streaming
+
+        Returns:
+            Execution result with assistant response
+
+        Raises:
+            ResourceNotFoundError: If conversation does not exist
+            ValidationError: If message is empty
+        """
+        if not message or not message.strip():
+            raise ValidationError("Message cannot be empty")
+
+        with self._lock:
+            if conversation_id not in self._conversations:
+                from codetoreum.ports.exceptions import ResourceNotFoundError
+                raise ResourceNotFoundError("Conversation", conversation_id)
+
+            # Add user message
+            self._conversations[conversation_id].append({
+                "role": "user",
+                "content": message,
+            })
 
         # Execute
         context = ExecutionContext(conversation_id=conversation_id)
         result = await self.execute(message, context, stream_callback)
 
         # Add assistant response
-        self._conversations[conversation_id].append({
-            "role": "assistant",
-            "content": result.content,
-        })
+        with self._lock:
+            self._conversations[conversation_id].append({
+                "role": "assistant",
+                "content": result.content,
+            })
 
         return result
 
     async def get_model_info(self) -> ModelInfo:
-        """Get information about the current model."""
+        """
+        Get information about the current model.
+
+        Returns:
+            ModelInfo object with model specifications
+        """
         return self._model_info
 
     async def list_available_models(self) -> List[ModelInfo]:
-        """List all available models from this provider."""
+        """
+        List all available models from this provider.
+
+        Returns:
+            List of available model info objects
+        """
         return [
             self._model_info,
             ModelInfo(
@@ -277,6 +412,8 @@ class MockLLMAdapter(ILLMProvider):
                 max_output_tokens=8192,
                 supports_tools=True,
                 supports_streaming=True,
+                cost_per_input_token=0.0,
+                cost_per_output_token=0.0,
             ),
         ]
 
@@ -285,52 +422,92 @@ class MockLLMAdapter(ILLMProvider):
         text: str,
         model: Optional[str] = None,
     ) -> int:
-        """Count tokens in text."""
-        # Simple word-based token counting for mock
+        """
+        Count tokens in text.
+
+        Args:
+            text: Text to count tokens for
+            model: Optional model name (ignored in mock)
+
+        Returns:
+            Token count (simple word-based counting for mock)
+        """
+        if not text:
+            return 0
         return len(text.split())
 
     async def get_usage_stats(
         self,
         since: Optional[datetime] = None,
     ) -> UsageStats:
-        """Get usage statistics."""
-        return UsageStats(
-            total_requests=self._total_requests,
-            total_tokens=self._total_tokens,
-            input_tokens=self._input_tokens,
-            output_tokens=self._output_tokens,
-            total_cost=0.0,
-            period_start=since or datetime.now(timezone.utc),
-            period_end=datetime.now(timezone.utc),
-            by_model={
-                self._model_info.model_id: {
-                    "requests": self._total_requests,
-                    "tokens": self._total_tokens,
-                }
-            },
-        )
+        """
+        Get usage statistics.
+
+        Args:
+            since: Optional start timestamp for stats period
+
+        Returns:
+            Usage statistics object
+        """
+        with self._lock:
+            return UsageStats(
+                total_requests=self._total_requests,
+                total_tokens=self._total_tokens,
+                input_tokens=self._input_tokens,
+                output_tokens=self._output_tokens,
+                total_cost=0.0,
+                period_start=since or datetime.now(timezone.utc),
+                period_end=datetime.now(timezone.utc),
+                by_model={
+                    self._model_info.model_id: {
+                        "requests": self._total_requests,
+                        "tokens": self._total_tokens,
+                    }
+                },
+            )
 
     # Helper methods for testing
 
     def reset_stats(self) -> None:
-        """Reset usage statistics."""
-        self._total_requests = 0
-        self._total_tokens = 0
-        self._input_tokens = 0
-        self._output_tokens = 0
+        """Reset usage statistics to zero."""
+        with self._lock:
+            self._total_requests = 0
+            self._total_tokens = 0
+            self._input_tokens = 0
+            self._output_tokens = 0
 
     def clear_conversations(self) -> None:
-        """Clear all conversations."""
-        self._conversations.clear()
+        """Clear all conversation history."""
+        with self._lock:
+            self._conversations.clear()
 
     def clear_patterns(self) -> None:
         """Clear all response patterns."""
-        self._response_patterns.clear()
+        with self._lock:
+            self._response_patterns.clear()
 
     def set_default_response(self, response: str) -> None:
-        """Set the default response text."""
-        self._default_response = response
+        """
+        Set the default response text.
+
+        Args:
+            response: New default response
+
+        Raises:
+            ValidationError: If response is empty
+        """
+        if not response:
+            raise ValidationError("Default response cannot be empty")
+
+        with self._lock:
+            self._default_response = response
 
     def get_request_count(self) -> int:
-        """Get total number of requests made."""
-        return self._total_requests
+        """
+        Get total number of requests made.
+
+        Returns:
+            Total request count
+        """
+        with self._lock:
+            return self._total_requests
