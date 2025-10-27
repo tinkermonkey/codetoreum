@@ -6,7 +6,7 @@ Thread-safe for concurrent registration and lookup operations.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Type, TypeVar, Generic, Callable, Any
+from typing import Dict, List, Optional, Type, TypeVar, Generic, Callable, Any, Union
 from dataclasses import dataclass
 import threading
 from datetime import datetime
@@ -20,7 +20,7 @@ class AdapterMetadata:
     """Metadata about a registered adapter."""
 
     name: str
-    adapter_type: Type[Any]
+    adapter_type: Type
     description: str
     version: str
     tags: List[str]
@@ -49,11 +49,11 @@ class AdapterRegistry(ABC, Generic[T]):
         Args:
             port_interface: The port interface class this registry manages
         """
-        self._port_interface = port_interface
+        self._port_interface: Type[T] = port_interface
         self._adapters: Dict[str, Type[T]] = {}
         self._metadata: Dict[str, AdapterMetadata] = {}
         self._factories: Dict[str, Callable[..., T]] = {}
-        self._lock = threading.RLock()
+        self._lock: threading.RLock = threading.RLock()
         self._default_adapter: Optional[str] = None
 
     @property

@@ -11,7 +11,7 @@ Provides registries for managing implementations of:
 """
 
 import inspect
-from typing import Type
+from typing import Type, Set
 
 from codetoreum.infrastructure.adapters.registry_base import AdapterRegistry
 from codetoreum.ports.output.ticket_system import ITicketSystem
@@ -20,6 +20,55 @@ from codetoreum.ports.output.container import IContainer
 from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.ports.output.storage import IStorage
+
+
+def _get_interface_methods(interface_class: Type) -> Set[str]:
+    """
+    Extract all abstract method names from a port interface.
+
+    Args:
+        interface_class: The port interface class
+
+    Returns:
+        Set of method names defined in the interface
+    """
+    methods = set()
+    for name, method in inspect.getmembers(interface_class, predicate=inspect.isfunction):
+        # Skip private methods and special methods
+        if not name.startswith('_'):
+            # Check if it's an abstract method
+            if hasattr(method, '__isabstractmethod__') and method.__isabstractmethod__:
+                methods.add(name)
+    return methods
+
+
+def _validate_adapter_implements_interface(
+    adapter_type: Type,
+    interface_class: Type
+) -> bool:
+    """
+    Validate that an adapter implements all required methods from interface.
+
+    Uses dynamic introspection of the interface to discover required methods.
+
+    Args:
+        adapter_type: The adapter class to validate
+        interface_class: The port interface class
+
+    Returns:
+        True if adapter implements all interface methods
+    """
+    # Get required methods from interface
+    required_methods = _get_interface_methods(interface_class)
+
+    # Get methods implemented by adapter
+    adapter_methods = {
+        name for name, _ in inspect.getmembers(adapter_type, predicate=inspect.isfunction)
+        if not name.startswith('_')
+    }
+
+    # Check that all required methods are implemented
+    return required_methods.issubset(adapter_methods)
 
 
 class TicketSystemRegistry(AdapterRegistry[ITicketSystem]):
@@ -33,8 +82,8 @@ class TicketSystemRegistry(AdapterRegistry[ITicketSystem]):
         """
         Validate that an adapter implements ITicketSystem.
 
-        Checks that the adapter class implements all required methods
-        from the ITicketSystem interface.
+        Uses dynamic introspection to check that the adapter class implements
+        all required methods from the ITicketSystem interface.
 
         Args:
             adapter_type: The adapter class to validate
@@ -42,25 +91,7 @@ class TicketSystemRegistry(AdapterRegistry[ITicketSystem]):
         Returns:
             True if adapter implements all ITicketSystem methods
         """
-        required_methods = {
-            'get_work_item',
-            'create_work_item',
-            'update_work_item',
-            'list_work_items',
-            'search_work_items',
-            'get_work_item_stream',
-            'add_comment',
-            'get_comments',
-            'link_work_items',
-            'register_webhook',
-            'unregister_webhook'
-        }
-
-        adapter_methods = {
-            name for name, _ in inspect.getmembers(adapter_type, predicate=inspect.isfunction)
-        }
-
-        return required_methods.issubset(adapter_methods)
+        return _validate_adapter_implements_interface(adapter_type, self._port_interface)
 
 
 class LLMProviderRegistry(AdapterRegistry[ILLMProvider]):
@@ -74,8 +105,8 @@ class LLMProviderRegistry(AdapterRegistry[ILLMProvider]):
         """
         Validate that an adapter implements ILLMProvider.
 
-        Checks that the adapter class implements all required methods
-        from the ILLMProvider interface.
+        Uses dynamic introspection to check that the adapter class implements
+        all required methods from the ILLMProvider interface.
 
         Args:
             adapter_type: The adapter class to validate
@@ -83,23 +114,7 @@ class LLMProviderRegistry(AdapterRegistry[ILLMProvider]):
         Returns:
             True if adapter implements all ILLMProvider methods
         """
-        required_methods = {
-            'execute',
-            'execute_with_tools',
-            'stream_completion',
-            'create_conversation',
-            'continue_conversation',
-            'get_model_info',
-            'list_available_models',
-            'count_tokens',
-            'get_usage_stats'
-        }
-
-        adapter_methods = {
-            name for name, _ in inspect.getmembers(adapter_type, predicate=inspect.isfunction)
-        }
-
-        return required_methods.issubset(adapter_methods)
+        return _validate_adapter_implements_interface(adapter_type, self._port_interface)
 
 
 class ContainerRegistry(AdapterRegistry[IContainer]):
@@ -113,8 +128,8 @@ class ContainerRegistry(AdapterRegistry[IContainer]):
         """
         Validate that an adapter implements IContainer.
 
-        Checks that the adapter class implements all required methods
-        from the IContainer interface.
+        Uses dynamic introspection to check that the adapter class implements
+        all required methods from the IContainer interface.
 
         Args:
             adapter_type: The adapter class to validate
@@ -122,30 +137,7 @@ class ContainerRegistry(AdapterRegistry[IContainer]):
         Returns:
             True if adapter implements all IContainer methods
         """
-        required_methods = {
-            'run',
-            'create',
-            'start',
-            'stop',
-            'remove',
-            'kill',
-            'logs',
-            'status',
-            'exec',
-            'list_containers',
-            'pull_image',
-            'image_exists',
-            'inspect',
-            'wait',
-            'copy_to_container',
-            'copy_from_container'
-        }
-
-        adapter_methods = {
-            name for name, _ in inspect.getmembers(adapter_type, predicate=inspect.isfunction)
-        }
-
-        return required_methods.issubset(adapter_methods)
+        return _validate_adapter_implements_interface(adapter_type, self._port_interface)
 
 
 class RepositoryRegistry(AdapterRegistry[IRepository]):
@@ -159,8 +151,8 @@ class RepositoryRegistry(AdapterRegistry[IRepository]):
         """
         Validate that an adapter implements IRepository.
 
-        Checks that the adapter class implements all required methods
-        from the IRepository interface.
+        Uses dynamic introspection to check that the adapter class implements
+        all required methods from the IRepository interface.
 
         Args:
             adapter_type: The adapter class to validate
@@ -168,30 +160,7 @@ class RepositoryRegistry(AdapterRegistry[IRepository]):
         Returns:
             True if adapter implements all IRepository methods
         """
-        required_methods = {
-            'clone',
-            'checkout',
-            'create_branch',
-            'commit',
-            'push',
-            'pull',
-            'fetch',
-            'diff',
-            'status',
-            'list_branches',
-            'merge',
-            'get_file_content',
-            'get_commit_info',
-            'get_commit_history',
-            'add_remote',
-            'remove_remote'
-        }
-
-        adapter_methods = {
-            name for name, _ in inspect.getmembers(adapter_type, predicate=inspect.isfunction)
-        }
-
-        return required_methods.issubset(adapter_methods)
+        return _validate_adapter_implements_interface(adapter_type, self._port_interface)
 
 
 class EventStoreRegistry(AdapterRegistry[IEventStore]):
@@ -205,8 +174,8 @@ class EventStoreRegistry(AdapterRegistry[IEventStore]):
         """
         Validate that an adapter implements IEventStore.
 
-        Checks that the adapter class implements all required methods
-        from the IEventStore interface.
+        Uses dynamic introspection to check that the adapter class implements
+        all required methods from the IEventStore interface.
 
         Args:
             adapter_type: The adapter class to validate
@@ -214,28 +183,7 @@ class EventStoreRegistry(AdapterRegistry[IEventStore]):
         Returns:
             True if adapter implements all IEventStore methods
         """
-        required_methods = {
-            'append',
-            'get_events',
-            'get_events_since',
-            'stream_events',
-            'get_stream_version',
-            'stream_exists',
-            'save_snapshot',
-            'get_latest_snapshot',
-            'delete_stream',
-            'get_all_stream_ids',
-            'get_events_by_type',
-            'get_events_by_correlation_id',
-            'replay_events',
-            'get_statistics'
-        }
-
-        adapter_methods = {
-            name for name, _ in inspect.getmembers(adapter_type, predicate=inspect.isfunction)
-        }
-
-        return required_methods.issubset(adapter_methods)
+        return _validate_adapter_implements_interface(adapter_type, self._port_interface)
 
 
 class StorageRegistry(AdapterRegistry[IStorage]):
@@ -249,8 +197,8 @@ class StorageRegistry(AdapterRegistry[IStorage]):
         """
         Validate that an adapter implements IStorage.
 
-        Checks that the adapter class implements all required methods
-        from the IStorage interface.
+        Uses dynamic introspection to check that the adapter class implements
+        all required methods from the IStorage interface.
 
         Args:
             adapter_type: The adapter class to validate
@@ -258,28 +206,4 @@ class StorageRegistry(AdapterRegistry[IStorage]):
         Returns:
             True if adapter implements all IStorage methods
         """
-        required_methods = {
-            'upload',
-            'upload_from_file',
-            'download',
-            'download_to_file',
-            'delete',
-            'delete_many',
-            'list_files',
-            'exists',
-            'get_metadata',
-            'update_metadata',
-            'copy',
-            'move',
-            'generate_presigned_url',
-            'get_size',
-            'get_content_type',
-            'list_prefixes',
-            'get_storage_info'
-        }
-
-        adapter_methods = {
-            name for name, _ in inspect.getmembers(adapter_type, predicate=inspect.isfunction)
-        }
-
-        return required_methods.issubset(adapter_methods)
+        return _validate_adapter_implements_interface(adapter_type, self._port_interface)
