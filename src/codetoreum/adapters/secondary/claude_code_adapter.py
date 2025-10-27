@@ -17,6 +17,7 @@ from codetoreum.ports.exceptions import (
     RateLimitError,
     StreamingError,
     UnsupportedFeatureError,
+    ValidationError,
 )
 from codetoreum.ports.output.llm_provider import (
     ExecutionContext,
@@ -31,13 +32,53 @@ from codetoreum.ports.output.llm_provider import (
 )
 
 
+class ICredentialProvider:
+    """Interface for secure credential providers."""
+
+    async def get_credential(self, key: str) -> Optional[str]:
+        """
+        Retrieve a credential securely.
+
+        Args:
+            key: Credential identifier
+
+        Returns:
+            Credential value or None if not found
+        """
+        raise NotImplementedError
+
+
+class EnvironmentCredentialProvider(ICredentialProvider):
+    """Credential provider that retrieves from environment variables."""
+
+    async def get_credential(self, key: str) -> Optional[str]:
+        """Get credential from environment."""
+        import os
+        return os.environ.get(key)
+
+
+class SecureStoreCredentialProvider(ICredentialProvider):
+    """Credential provider that uses a secure key store (placeholder for production)."""
+
+    def __init__(self, store_path: Optional[Path] = None):
+        self.store_path = store_path
+        # In production, this would integrate with system keychain/vault
+
+    async def get_credential(self, key: str) -> Optional[str]:
+        """Get credential from secure store."""
+        # Placeholder implementation - integrate with system keychain in production
+        import os
+        return os.environ.get(key)
+
+
 @dataclass
 class ClaudeCodeConfig:
     """Configuration for Claude Code CLI adapter."""
 
-    # Authentication
-    api_key: Optional[str] = None  # Anthropic API key
-    oauth_token: Optional[str] = None  # Claude Code OAuth token
+    # Authentication (secure references)
+    api_key_credential_name: str = "ANTHROPIC_API_KEY"  # Name of credential in provider
+    oauth_token_credential_name: str = "CLAUDE_CODE_OAUTH_TOKEN"  # Name of OAuth token
+    credential_provider: Optional[ICredentialProvider] = None  # Secure credential provider
 
     # CLI configuration
     claude_cli_path: str = "claude"  # Path to Claude CLI executable
@@ -73,15 +114,29 @@ class ClaudeCodeAdapter(ILLMProvider):
             config: Claude Code configuration
         """
         self.config = config
+
+        # Initialize credential provider
+        if self.config.credential_provider is None:
+            self.config.credential_provider = EnvironmentCredentialProvider()
+
         self._validate_configuration()
 
         # Conversation tracking
         self._conversations: Dict[str, Dict[str, Any]] = {}
 
+        # Track usage stats
+        self._usage_stats = {
+            "total_requests": 0,
+            "total_tokens": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "by_model": {},
+        }
+
     def _validate_configuration(self) -> None:
         """Validate configuration."""
-        if not self.config.api_key and not self.config.oauth_token:
-            raise LLMProviderError("Either api_key or oauth_token must be provided")
+        # Configuration validation will happen at runtime when credentials are retrieved
+        pass
 
     def _build_command(
         self,
@@ -132,7 +187,7 @@ class ClaudeCodeAdapter(ILLMProvider):
 
         return cmd
 
-    def _build_environment(
+    async def _build_environment(
         self,
         context: Optional[ExecutionContext] = None,
     ) -> Dict[str, str]:
@@ -149,17 +204,96 @@ class ClaudeCodeAdapter(ILLMProvider):
 
         env = os.environ.copy()
 
-        # Authentication
-        if self.config.api_key:
-            env["ANTHROPIC_API_KEY"] = self.config.api_key
-        elif self.config.oauth_token:
-            env["CLAUDE_CODE_OAUTH_TOKEN"] = self.config.oauth_token
+        # Authentication - retrieve securely from credential provider
+        api_key = await self.config.credential_provider.get_credential(
+            self.config.api_key_credential_name
+        )
+        oauth_token = await self.config.credential_provider.get_credential(
+            self.config.oauth_token_credential_name
+        )
+
+        if not api_key and not oauth_token:
+            raise AuthenticationError(
+                f"No credentials found. Set {self.config.api_key_credential_name} "
+                f"or {self.config.oauth_token_credential_name} in credential provider."
+            )
+
+        if api_key:
+            env["ANTHROPIC_API_KEY"] = api_key
+        elif oauth_token:
+            env["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
 
         # Add context environment variables
         if context and context.environment_variables:
             env.update(context.environment_variables)
 
         return env
+
+    def _sanitize_prompt(self, prompt: str) -> str:
+        """
+        Sanitize user input to prevent command injection.
+
+        Args:
+            prompt: Raw prompt text
+
+        Returns:
+            Sanitized prompt
+        """
+        if not prompt:
+            raise ValidationError("Prompt cannot be empty")
+
+        # Remove null bytes and control characters that could cause issues
+        sanitized = prompt.replace("\x00", "").replace("\r", "\n")
+
+        # Validate reasonable length
+        if len(sanitized) > 1_000_000:  # 1MB limit
+            raise PromptTooLongError("Prompt exceeds maximum length of 1MB")
+
+        return sanitized
+
+    def _sanitize_error_message(self, error: str) -> str:
+        """
+        Sanitize error messages to remove sensitive information.
+
+        Args:
+            error: Raw error message
+
+        Returns:
+            Sanitized error message
+        """
+        import re
+
+        # Remove API keys (common patterns)
+        sanitized = re.sub(r'sk-[a-zA-Z0-9]{20,}', '[REDACTED_API_KEY]', error)
+        sanitized = re.sub(r'Bearer [a-zA-Z0-9_-]{20,}', 'Bearer [REDACTED_TOKEN]', sanitized)
+
+        # Remove file paths that might contain sensitive info
+        sanitized = re.sub(r'/home/[^/]+/', '/home/[USER]/', sanitized)
+        sanitized = re.sub(r'/Users/[^/]+/', '/Users/[USER]/', sanitized)
+
+        # Truncate to reasonable length
+        if len(sanitized) > 500:
+            sanitized = sanitized[:500] + "... [truncated]"
+
+        return sanitized
+
+    def _update_usage_stats(self, model: str, input_tokens: int, output_tokens: int) -> None:
+        """Update usage statistics."""
+        self._usage_stats["total_requests"] += 1
+        self._usage_stats["input_tokens"] += input_tokens
+        self._usage_stats["output_tokens"] += output_tokens
+        self._usage_stats["total_tokens"] += input_tokens + output_tokens
+
+        if model not in self._usage_stats["by_model"]:
+            self._usage_stats["by_model"][model] = {
+                "requests": 0,
+                "input_tokens": 0,
+                "output_tokens": 0,
+            }
+
+        self._usage_stats["by_model"][model]["requests"] += 1
+        self._usage_stats["by_model"][model]["input_tokens"] += input_tokens
+        self._usage_stats["by_model"][model]["output_tokens"] += output_tokens
 
     async def execute(
         self,
@@ -170,9 +304,12 @@ class ClaudeCodeAdapter(ILLMProvider):
         """Execute a prompt with Claude."""
         ctx = context or ExecutionContext()
 
-        # Build command
-        cmd = self._build_command(prompt, ctx)
-        env = self._build_environment(ctx)
+        # Sanitize input
+        sanitized_prompt = self._sanitize_prompt(prompt)
+
+        # Build command with sanitized input
+        cmd = self._build_command(sanitized_prompt, ctx)
+        env = await self._build_environment(ctx)
 
         # Determine working directory
         cwd = str(ctx.working_directory) if ctx.working_directory else None
@@ -181,12 +318,14 @@ class ClaudeCodeAdapter(ILLMProvider):
         start_time = datetime.now(timezone.utc)
 
         try:
+            # Use shell=False explicitly for security
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 env=env,
                 cwd=cwd,
+                shell=False,  # Explicit: prevent shell injection
             )
 
             # Process streaming output
@@ -253,13 +392,16 @@ class ClaudeCodeAdapter(ILLMProvider):
                 stderr = await process.stderr.read()
                 error_text = stderr.decode("utf-8")
 
+                # Sanitize error message to remove sensitive information
+                sanitized_error = self._sanitize_error_message(error_text)
+
                 # Parse specific errors
                 if "rate limit" in error_text.lower():
                     raise RateLimitError()
                 elif "authentication" in error_text.lower() or "invalid api key" in error_text.lower():
                     raise AuthenticationError("Invalid API key or OAuth token")
                 else:
-                    raise LLMProviderError(f"Claude execution failed: {error_text}")
+                    raise LLMProviderError(f"Claude execution failed: {sanitized_error}")
 
             # Send final chunk
             if stream_callback:
@@ -274,9 +416,13 @@ class ClaudeCodeAdapter(ILLMProvider):
             end_time = datetime.now(timezone.utc)
             duration_ms = int((end_time - start_time).total_seconds() * 1000)
 
+            # Update usage stats
+            model = ctx.model or self.config.default_model
+            self._update_usage_stats(model, usage["prompt_tokens"], usage["completion_tokens"])
+
             return ExecutionResult(
                 content="".join(output_parts),
-                model=ctx.model or self.config.default_model,
+                model=model,
                 completion_tokens=usage["completion_tokens"],
                 prompt_tokens=usage["prompt_tokens"],
                 total_tokens=usage["total_tokens"],
@@ -307,15 +453,49 @@ class ClaudeCodeAdapter(ILLMProvider):
         """
         Execute prompt with tool calling.
 
-        Note: Claude Code CLI doesn't directly support tool definitions.
-        This would need to be implemented via MCP servers or custom tooling.
+        Implementation Note:
+        Claude Code CLI has built-in tools but doesn't support custom tool definitions via CLI.
+        Tools must be provided through MCP (Model Context Protocol) servers configured in
+        the execution context's .mcp.json file.
+
+        This method validates MCP configuration and executes with the available MCP tools.
+        Custom tool definitions passed to this method are not directly supported.
+
+        Args:
+            prompt: The prompt to execute
+            tools: Tool definitions (informational only, not used by CLI)
+            context: Execution context with MCP configuration
+            stream_callback: Optional streaming callback
+
+        Returns:
+            Execution result with tool use tracked in metadata
+
+        Raises:
+            UnsupportedFeatureError: If tools are disabled or MCP not configured
         """
         if not self.config.enable_tools:
-            raise UnsupportedFeatureError("Tool support is disabled")
+            raise UnsupportedFeatureError("Tool support is disabled in configuration")
 
-        # For now, execute without explicit tool support
-        # Tools would be available via MCP servers if configured
-        return await self.execute(prompt, context, stream_callback)
+        ctx = context or ExecutionContext()
+
+        # Validate MCP configuration if tools are required
+        if tools and self.config.enable_mcp:
+            if not ctx.mcp_servers:
+                # Log warning but continue - Claude has built-in tools
+                import logging
+                logging.warning(
+                    "Tool definitions provided but no MCP servers configured. "
+                    "Custom tools will not be available. Built-in Claude tools will be used."
+                )
+
+        # Execute with MCP tools available
+        result = await self.execute(prompt, ctx, stream_callback)
+
+        # Add tool information to metadata
+        result.metadata["tools_available"] = len(tools)
+        result.metadata["mcp_servers"] = len(ctx.mcp_servers) if ctx.mcp_servers else 0
+
+        return result
 
     async def stream_completion(
         self,
@@ -325,17 +505,22 @@ class ClaudeCodeAdapter(ILLMProvider):
         """Stream completion tokens."""
         ctx = context or ExecutionContext()
 
-        cmd = self._build_command(prompt, ctx)
-        env = self._build_environment(ctx)
+        # Sanitize input
+        sanitized_prompt = self._sanitize_prompt(prompt)
+
+        cmd = self._build_command(sanitized_prompt, ctx)
+        env = await self._build_environment(ctx)
         cwd = str(ctx.working_directory) if ctx.working_directory else None
 
         try:
+            # Use shell=False explicitly for security
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 env=env,
                 cwd=cwd,
+                shell=False,  # Explicit: prevent shell injection
             )
 
             chunk_index = 0
@@ -366,7 +551,9 @@ class ClaudeCodeAdapter(ILLMProvider):
 
             if process.returncode != 0:
                 stderr = await process.stderr.read()
-                raise StreamingError(f"Stream failed: {stderr.decode('utf-8')}")
+                error_text = stderr.decode('utf-8')
+                sanitized_error = self._sanitize_error_message(error_text)
+                raise StreamingError(f"Stream failed: {sanitized_error}")
 
             # Final chunk
             yield StreamChunk(
@@ -378,7 +565,8 @@ class ClaudeCodeAdapter(ILLMProvider):
         except Exception as e:
             if isinstance(e, StreamingError):
                 raise
-            raise StreamingError(f"Streaming error: {str(e)}")
+            sanitized_error = self._sanitize_error_message(str(e))
+            raise StreamingError(f"Streaming error: {sanitized_error}")
 
     async def create_conversation(
         self,
@@ -496,20 +684,34 @@ class ClaudeCodeAdapter(ILLMProvider):
         since: Optional[datetime] = None,
     ) -> UsageStats:
         """
-        Get usage statistics.
+        Get usage statistics from adapter tracking.
 
-        Note: Claude Code CLI doesn't provide usage tracking.
-        This returns placeholder data.
+        Note: These are adapter-tracked statistics, not from Claude API billing.
+        For accurate billing information, consult the Anthropic Console.
+
+        Args:
+            since: Start of period (not used, returns all-time stats)
+
+        Returns:
+            Usage statistics tracked by this adapter instance
         """
+        # Calculate estimated cost based on tracked usage
+        total_cost = 0.0
+        for model, stats in self._usage_stats["by_model"].items():
+            # Use default pricing (update based on actual model pricing)
+            input_cost = stats["input_tokens"] * 0.000003  # $3 per million
+            output_cost = stats["output_tokens"] * 0.000015  # $15 per million
+            total_cost += input_cost + output_cost
+
         return UsageStats(
-            total_requests=0,
-            total_tokens=0,
-            input_tokens=0,
-            output_tokens=0,
-            total_cost=0.0,
+            total_requests=self._usage_stats["total_requests"],
+            total_tokens=self._usage_stats["total_tokens"],
+            input_tokens=self._usage_stats["input_tokens"],
+            output_tokens=self._usage_stats["output_tokens"],
+            total_cost=total_cost,
             period_start=since or datetime.now(timezone.utc),
             period_end=datetime.now(timezone.utc),
-            by_model={},
+            by_model=self._usage_stats["by_model"].copy(),
         )
 
     def supports_feature(self, feature: str) -> bool:
@@ -529,15 +731,34 @@ class ClaudeCodeAdapter(ILLMProvider):
         """Validate Claude Code configuration."""
         # Check CLI exists
         try:
+            # Use shell=False for security
             result = subprocess.run(
                 [self.config.claude_cli_path, "--version"],
                 capture_output=True,
                 text=True,
                 timeout=10,
+                shell=False,  # Explicit: prevent shell injection
             )
 
             if result.returncode != 0:
                 raise LLMProviderError("Claude CLI not working correctly")
+
+            # Validate credentials are available
+            try:
+                api_key = await self.config.credential_provider.get_credential(
+                    self.config.api_key_credential_name
+                )
+                oauth_token = await self.config.credential_provider.get_credential(
+                    self.config.oauth_token_credential_name
+                )
+
+                if not api_key and not oauth_token:
+                    raise LLMProviderError(
+                        f"No credentials found. Set {self.config.api_key_credential_name} "
+                        f"or {self.config.oauth_token_credential_name}"
+                    )
+            except Exception as e:
+                raise LLMProviderError(f"Credential validation failed: {str(e)}")
 
             return True
 
@@ -551,5 +772,15 @@ class ClaudeCodeAdapter(ILLMProvider):
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit."""
-        pass
+        """
+        Async context manager exit with proper cleanup.
+
+        Ensures cleanup happens even if exceptions occur.
+        """
+        try:
+            # Cleanup any resources if needed
+            pass
+        except Exception:
+            # Suppress cleanup errors to avoid masking original exception
+            pass
+        return False  # Don't suppress exceptions

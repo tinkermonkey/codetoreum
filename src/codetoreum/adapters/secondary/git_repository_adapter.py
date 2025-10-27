@@ -62,6 +62,35 @@ class GitRepositoryAdapter(IRepository):
         """
         self.config = config
 
+    def _sanitize_git_args(self, args: List[str]) -> List[str]:
+        """
+        Sanitize git command arguments to prevent injection.
+
+        Args:
+            args: Git command arguments
+
+        Returns:
+            Sanitized arguments
+
+        Raises:
+            ValidationError: Invalid arguments
+        """
+        sanitized = []
+        for arg in args:
+            # Remove null bytes and ensure arguments are strings
+            if not isinstance(arg, str):
+                raise ValidationError(f"Invalid argument type: {type(arg)}")
+
+            sanitized_arg = arg.replace("\x00", "")
+
+            # Validate argument doesn't contain dangerous patterns
+            if sanitized_arg.startswith("-") and ".." in sanitized_arg:
+                raise ValidationError(f"Potentially dangerous argument: {arg}")
+
+            sanitized.append(sanitized_arg)
+
+        return sanitized
+
     async def _run_git_command(
         self,
         args: List[str],
@@ -70,7 +99,7 @@ class GitRepositoryAdapter(IRepository):
         check: bool = True,
     ) -> subprocess.CompletedProcess:
         """
-        Run git command asynchronously.
+        Run git command asynchronously with security measures.
 
         Args:
             args: Git command arguments
@@ -83,13 +112,17 @@ class GitRepositoryAdapter(IRepository):
 
         Raises:
             RepositoryError: Command failed
+            ValidationError: Invalid arguments
         """
-        cmd = [self.config.git_path] + args
+        # Sanitize arguments
+        sanitized_args = self._sanitize_git_args(args)
+        cmd = [self.config.git_path] + sanitized_args
 
         loop = asyncio.get_event_loop()
 
         def _run():
             try:
+                # Explicit shell=False for security
                 result = subprocess.run(
                     cmd,
                     cwd=cwd,
@@ -98,6 +131,7 @@ class GitRepositoryAdapter(IRepository):
                     text=True,
                     timeout=self.config.timeout_seconds,
                     check=check,
+                    shell=False,  # Explicit: prevent shell injection
                 )
                 return result
             except subprocess.CalledProcessError as e:
@@ -579,5 +613,15 @@ class GitRepositoryAdapter(IRepository):
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit."""
-        pass
+        """
+        Async context manager exit with proper cleanup.
+
+        Ensures cleanup happens even if exceptions occur.
+        """
+        try:
+            # Cleanup any resources if needed
+            pass
+        except Exception:
+            # Suppress cleanup errors to avoid masking original exception
+            pass
+        return False  # Don't suppress exceptions

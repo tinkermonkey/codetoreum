@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
+from dateutil import parser as dateparser
+
 from codetoreum.domain.types import ContainerId
 from codetoreum.ports.exceptions import (
     AuthenticationError,
@@ -153,7 +155,11 @@ class DockerContainerAdapter(IContainer):
         # Run in thread pool to avoid blocking
         loop = asyncio.get_event_loop()
 
+        # Track task for cancellation handling
+        executor_task = None
+
         def _run_container():
+            container = None
             try:
                 # Check if image exists locally
                 try:
@@ -166,7 +172,7 @@ class DockerContainerAdapter(IContainer):
 
                 # Stream logs if callback provided
                 if stream_callback:
-                    for line in container.logs(stream=True, follow=True):
+                    for line in container.logs(stream=True, follow=True, timeout=timeout):
                         stream_callback(line.decode("utf-8", errors="replace"))
 
                 # Wait for container with timeout
@@ -195,6 +201,13 @@ class DockerContainerAdapter(IContainer):
                 )
 
             except Exception as e:
+                # Cleanup container on error
+                if container and not self.config.remove_on_completion:
+                    try:
+                        container.remove(force=True)
+                    except Exception:
+                        pass  # Ignore cleanup errors
+
                 if "timeout" in str(e).lower():
                     raise ContainerTimeoutError(f"Container execution timed out after {timeout}s")
                 elif "not found" in str(e).lower() and "image" in str(e).lower():
@@ -203,8 +216,18 @@ class DockerContainerAdapter(IContainer):
                     raise ContainerExecutionError(f"Container execution failed: {str(e)}")
 
         try:
-            result = await loop.run_in_executor(None, _run_container)
+            # Create executor task for cancellation support
+            executor_task = loop.run_in_executor(None, _run_container)
+
+            # Await with cancellation support
+            result = await executor_task
             return result
+
+        except asyncio.CancelledError:
+            # Handle cancellation - the container might still be running
+            if executor_task and not executor_task.done():
+                executor_task.cancel()
+            raise
         except (ContainerError, ValidationError, ImageNotFoundError):
             raise
         except Exception as e:
@@ -383,21 +406,25 @@ class DockerContainerAdapter(IContainer):
                 state = attrs["State"]
                 status = state["Status"]
 
+                # Parse dates using proper date parser
                 started_at = None
                 if state.get("StartedAt"):
-                    started_at = datetime.fromisoformat(
-                        state["StartedAt"].replace("Z", "+00:00").split(".")[0] + "+00:00"
-                    )
+                    try:
+                        started_at = dateparser.isoparse(state["StartedAt"])
+                    except Exception:
+                        pass  # Invalid date
 
                 finished_at = None
                 if state.get("FinishedAt") and state["FinishedAt"] != "0001-01-01T00:00:00Z":
-                    finished_at = datetime.fromisoformat(
-                        state["FinishedAt"].replace("Z", "+00:00").split(".")[0] + "+00:00"
-                    )
+                    try:
+                        finished_at = dateparser.isoparse(state["FinishedAt"])
+                    except Exception:
+                        pass  # Invalid date
 
-                created_at = datetime.fromisoformat(
-                    attrs["Created"].replace("Z", "+00:00").split(".")[0] + "+00:00"
-                )
+                try:
+                    created_at = dateparser.isoparse(attrs["Created"])
+                except Exception:
+                    created_at = datetime.now(timezone.utc)  # Fallback
 
                 return ContainerStatus(
                     id=ContainerId(container_id),
@@ -485,21 +512,25 @@ class DockerContainerAdapter(IContainer):
                     attrs = container.attrs
                     state = attrs["State"]
 
+                    # Parse dates using proper date parser
                     started_at = None
                     if state.get("StartedAt"):
-                        started_at = datetime.fromisoformat(
-                            state["StartedAt"].replace("Z", "+00:00").split(".")[0] + "+00:00"
-                        )
+                        try:
+                            started_at = dateparser.isoparse(state["StartedAt"])
+                        except Exception:
+                            pass  # Invalid date
 
                     finished_at = None
                     if state.get("FinishedAt") and state["FinishedAt"] != "0001-01-01T00:00:00Z":
-                        finished_at = datetime.fromisoformat(
-                            state["FinishedAt"].replace("Z", "+00:00").split(".")[0] + "+00:00"
-                        )
+                        try:
+                            finished_at = dateparser.isoparse(state["FinishedAt"])
+                        except Exception:
+                            pass  # Invalid date
 
-                    created_at = datetime.fromisoformat(
-                        attrs["Created"].replace("Z", "+00:00").split(".")[0] + "+00:00"
-                    )
+                    try:
+                        created_at = dateparser.isoparse(attrs["Created"])
+                    except Exception:
+                        created_at = datetime.now(timezone.utc)  # Fallback
 
                     statuses.append(
                         ContainerStatus(
@@ -682,5 +713,14 @@ class DockerContainerAdapter(IContainer):
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit."""
-        self.close()
+        """
+        Async context manager exit with proper cleanup.
+
+        Ensures cleanup happens even if exceptions occur.
+        """
+        try:
+            self.close()
+        except Exception:
+            # Suppress cleanup errors to avoid masking original exception
+            pass
+        return False  # Don't suppress exceptions

@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 import httpx
+from dateutil import parser as dateparser
 
 from codetoreum.domain.comment import Comment
 from codetoreum.domain.types import ProjectId, UserId, WorkItemId, CommentId
@@ -42,6 +43,7 @@ class GitHubConfig:
 
     # Caching
     cache_ttl_seconds: int = 300  # 5 minutes
+    cache_max_entries: int = 1000  # Maximum cache entries before eviction
 
 
 class GitHubTicketAdapter(ITicketSystem):
@@ -62,8 +64,13 @@ class GitHubTicketAdapter(ITicketSystem):
         self.config = config
         self._http_client: Optional[httpx.AsyncClient] = None
 
-        # Simple in-memory cache
+        # In-memory cache with eviction support
         self._cache: Dict[str, tuple[datetime, Any]] = {}
+        self._cache_access_times: Dict[str, datetime] = {}  # Track LRU
+
+        # Rate limit tracking
+        self._rate_limit_remaining: Optional[int] = None
+        self._rate_limit_reset: Optional[datetime] = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
@@ -88,6 +95,22 @@ class GitHubTicketAdapter(ITicketSystem):
             await self._http_client.aclose()
             self._http_client = None
 
+    def _evict_cache_if_needed(self) -> None:
+        """Evict oldest cache entries if cache is full."""
+        if len(self._cache) >= self.config.cache_max_entries:
+            # Evict 10% of oldest entries (LRU)
+            evict_count = max(1, self.config.cache_max_entries // 10)
+
+            # Sort by access time and remove oldest
+            sorted_keys = sorted(
+                self._cache_access_times.keys(),
+                key=lambda k: self._cache_access_times[k]
+            )
+
+            for key in sorted_keys[:evict_count]:
+                self._cache.pop(key, None)
+                self._cache_access_times.pop(key, None)
+
     def _check_cache(self, key: str) -> Optional[Any]:
         """Check cache for value."""
         if key not in self._cache:
@@ -98,17 +121,71 @@ class GitHubTicketAdapter(ITicketSystem):
 
         if age_seconds > self.config.cache_ttl_seconds:
             del self._cache[key]
+            self._cache_access_times.pop(key, None)
             return None
 
+        # Update access time for LRU
+        self._cache_access_times[key] = datetime.now(timezone.utc)
         return value
 
     def _set_cache(self, key: str, value: Any) -> None:
-        """Set cache value."""
+        """Set cache value with eviction if needed."""
+        self._evict_cache_if_needed()
         self._cache[key] = (datetime.now(timezone.utc), value)
+        self._cache_access_times[key] = datetime.now(timezone.utc)
 
     def _invalidate_cache(self, key: str) -> None:
         """Invalidate cache entry."""
         self._cache.pop(key, None)
+        self._cache_access_times.pop(key, None)
+
+    def _sanitize_error_message(self, error: str) -> str:
+        """
+        Sanitize error messages to remove sensitive information.
+
+        Args:
+            error: Raw error message
+
+        Returns:
+            Sanitized error message
+        """
+        import re
+
+        # Remove tokens
+        sanitized = re.sub(r'ghp_[a-zA-Z0-9]{36}', '[REDACTED_TOKEN]', error)
+        sanitized = re.sub(r'ghs_[a-zA-Z0-9]{36}', '[REDACTED_TOKEN]', sanitized)
+
+        # Truncate to reasonable length
+        if len(sanitized) > 500:
+            sanitized = sanitized[:500] + "... [truncated]"
+
+        return sanitized
+
+    def _update_rate_limits(self, response: httpx.Response) -> None:
+        """
+        Update rate limit tracking from response headers.
+
+        Args:
+            response: HTTP response with rate limit headers
+        """
+        # Parse GitHub rate limit headers
+        remaining = response.headers.get("X-RateLimit-Remaining")
+        reset = response.headers.get("X-RateLimit-Reset")
+
+        if remaining:
+            self._rate_limit_remaining = int(remaining)
+
+        if reset:
+            self._rate_limit_reset = datetime.fromtimestamp(int(reset), tz=timezone.utc)
+
+    async def _wait_for_rate_limit_if_needed(self) -> None:
+        """Wait if we're approaching rate limits."""
+        if self._rate_limit_remaining is not None and self._rate_limit_remaining < 10:
+            if self._rate_limit_reset:
+                wait_seconds = (self._rate_limit_reset - datetime.now(timezone.utc)).total_seconds()
+                if wait_seconds > 0:
+                    # Wait with a maximum of 60 seconds
+                    await asyncio.sleep(min(wait_seconds, 60))
 
     async def _make_request(
         self,
@@ -117,7 +194,7 @@ class GitHubTicketAdapter(ITicketSystem):
         **kwargs,
     ) -> httpx.Response:
         """
-        Make HTTP request with retry logic.
+        Make HTTP request with retry logic and rate limit handling.
 
         Args:
             method: HTTP method
@@ -131,22 +208,33 @@ class GitHubTicketAdapter(ITicketSystem):
             AuthenticationError: Invalid credentials
             ExternalServiceError: GitHub API error
         """
+        # Check if we should wait for rate limits
+        await self._wait_for_rate_limit_if_needed()
+
         client = await self._get_client()
 
         for attempt in range(self.config.max_retries):
             try:
                 response = await client.request(method, path, **kwargs)
 
+                # Update rate limit tracking from headers
+                self._update_rate_limits(response)
+
                 # Handle authentication errors
                 if response.status_code == 401:
                     raise AuthenticationError("Invalid GitHub token")
 
-                # Handle rate limiting
+                # Handle rate limiting with intelligent backoff
                 if response.status_code == 403:
                     if "rate limit" in response.text.lower():
-                        # Wait and retry
-                        if attempt < self.config.max_retries - 1:
-                            await asyncio.sleep(self.config.retry_delay_seconds * (2 ** attempt))
+                        # Parse reset time from headers
+                        reset_time = response.headers.get("X-RateLimit-Reset")
+                        if reset_time and attempt < self.config.max_retries - 1:
+                            reset_dt = datetime.fromtimestamp(int(reset_time), tz=timezone.utc)
+                            wait_seconds = (reset_dt - datetime.now(timezone.utc)).total_seconds()
+                            # Wait for reset or exponential backoff, whichever is shorter
+                            backoff_seconds = self.config.retry_delay_seconds * (2 ** attempt)
+                            await asyncio.sleep(min(wait_seconds, backoff_seconds, 60))
                             continue
                         raise ExternalServiceError("GitHub", "Rate limit exceeded")
 
@@ -161,7 +249,8 @@ class GitHubTicketAdapter(ITicketSystem):
                 if attempt < self.config.max_retries - 1:
                     await asyncio.sleep(self.config.retry_delay_seconds * (2 ** attempt))
                     continue
-                raise ExternalServiceError("GitHub", f"Request failed: {str(e)}")
+                sanitized_error = self._sanitize_error_message(str(e))
+                raise ExternalServiceError("GitHub", f"Request failed: {sanitized_error}")
 
         raise ExternalServiceError("GitHub", "Max retries exceeded")
 
@@ -209,6 +298,11 @@ class GitHubTicketAdapter(ITicketSystem):
                 assigned_agent_id = label.split(":", 1)[1]
                 break
 
+        # Parse dates using proper date parser
+        created_at = dateparser.isoparse(issue["created_at"])
+        updated_at = dateparser.isoparse(issue["updated_at"])
+        completed_at = dateparser.isoparse(issue["closed_at"]) if issue.get("closed_at") else None
+
         return WorkItem(
             id=WorkItemId(str(issue["number"])),
             project_id=project_id,
@@ -223,9 +317,9 @@ class GitHubTicketAdapter(ITicketSystem):
             assigned_at=None,  # GitHub doesn't track this separately
             current_workflow_id=None,
             current_stage=None,
-            created_at=datetime.fromisoformat(issue["created_at"].replace("Z", "+00:00")),
-            updated_at=datetime.fromisoformat(issue["updated_at"].replace("Z", "+00:00")),
-            completed_at=datetime.fromisoformat(issue["closed_at"].replace("Z", "+00:00")) if issue.get("closed_at") else None,
+            created_at=created_at,
+            updated_at=updated_at,
+            completed_at=completed_at,
         )
 
     async def get_work_item(self, item_id: WorkItemId) -> WorkItem:
@@ -241,7 +335,8 @@ class GitHubTicketAdapter(ITicketSystem):
         if response.status_code == 404:
             raise WorkItemNotFoundError(f"Work item {item_id} not found")
         elif response.status_code != 200:
-            raise ExternalServiceError("GitHub", f"Unexpected status {response.status_code}: {response.text}")
+            sanitized_error = self._sanitize_error_message(response.text)
+            raise ExternalServiceError("GitHub", f"Unexpected status {response.status_code}: {sanitized_error}")
 
         issue = response.json()
         # Extract project_id from repository
@@ -338,8 +433,19 @@ class GitHubTicketAdapter(ITicketSystem):
         """
         Delete a work item.
 
-        Note: GitHub doesn't support deleting issues via API.
-        This method closes the issue instead.
+        **Implementation Limitation**:
+        GitHub's REST API does not support deleting issues. This is a platform limitation,
+        not an adapter limitation. As a workaround, this method closes the issue by setting
+        its status to COMPLETED.
+
+        If true deletion is required, you must use the GitHub web interface with appropriate
+        repository permissions.
+
+        Args:
+            item_id: ID of the work item to delete (close)
+
+        Raises:
+            WorkItemNotFoundError: Work item not found
         """
         await self.update_work_item(item_id, {"status": WorkItemStatus.COMPLETED})
         self._invalidate_cache(f"issue:{item_id}")
@@ -501,13 +607,17 @@ class GitHubTicketAdapter(ITicketSystem):
 
         comment_data = response.json()
 
+        # Parse dates using proper date parser
+        created_at = dateparser.isoparse(comment_data["created_at"])
+        updated_at = dateparser.isoparse(comment_data["updated_at"]) if comment_data.get("updated_at") else None
+
         return Comment(
             id=CommentId(str(comment_data["id"])),
             work_item_id=item_id,
             author_id=UserId(comment_data["user"]["login"]),
             body=comment_data["body"],
-            created_at=datetime.fromisoformat(comment_data["created_at"].replace("Z", "+00:00")),
-            updated_at=datetime.fromisoformat(comment_data["updated_at"].replace("Z", "+00:00")) if comment_data.get("updated_at") else None,
+            created_at=created_at,
+            updated_at=updated_at,
         )
 
     async def get_comments(
@@ -534,17 +644,22 @@ class GitHubTicketAdapter(ITicketSystem):
 
         comments_data = response.json()
 
-        return [
-            Comment(
+        comments = []
+        for comment in comments_data:
+            # Parse dates using proper date parser
+            created_at = dateparser.isoparse(comment["created_at"])
+            updated_at = dateparser.isoparse(comment["updated_at"]) if comment.get("updated_at") else None
+
+            comments.append(Comment(
                 id=CommentId(str(comment["id"])),
                 work_item_id=item_id,
                 author_id=UserId(comment["user"]["login"]),
                 body=comment["body"],
-                created_at=datetime.fromisoformat(comment["created_at"].replace("Z", "+00:00")),
-                updated_at=datetime.fromisoformat(comment["updated_at"].replace("Z", "+00:00")) if comment.get("updated_at") else None,
-            )
-            for comment in comments_data
-        ]
+                created_at=created_at,
+                updated_at=updated_at,
+            ))
+
+        return comments
 
     async def link_work_items(
         self,
@@ -645,5 +760,14 @@ class GitHubTicketAdapter(ITicketSystem):
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit."""
-        await self.close()
+        """
+        Async context manager exit with proper cleanup.
+
+        Ensures cleanup happens even if exceptions occur.
+        """
+        try:
+            await self.close()
+        except Exception:
+            # Suppress cleanup errors to avoid masking original exception
+            pass
+        return False  # Don't suppress exceptions
