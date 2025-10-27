@@ -25,9 +25,17 @@ from codetoreum.domain.exceptions import DomainError
 class AgentType(Enum):
     """Types of agents in the system."""
 
+    # Generic workflow roles
     MAKER = "maker"  # Creates/produces output
     REVIEWER = "reviewer"  # Reviews output
     SPECIALIZED = "specialized"  # Specific task (e.g., dev env setup)
+
+    # Specific agent types (as per requirements)
+    REQUIREMENTS_ANALYST = "requirements_analyst"
+    ARCHITECT = "architect"
+    DEVELOPER = "developer"
+    TESTER = "tester"
+    DEVOPS = "devops"
 
 
 @dataclass

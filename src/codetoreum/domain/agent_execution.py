@@ -20,7 +20,8 @@ from codetoreum.domain.exceptions import DomainError
 class ExecutionStatus(Enum):
     """Status enumeration for agent executions."""
 
-    INITIALIZED = "initialized"
+    PENDING = "pending"  # Waiting to be started
+    INITIALIZED = "initialized"  # Created but not yet running
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"

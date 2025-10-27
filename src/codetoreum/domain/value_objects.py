@@ -1,122 +1,74 @@
 """Value objects for the domain layer."""
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from enum import Enum
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
-from uuid import UUID, uuid4
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, TypeVar, Generic
+from uuid import uuid4
 
 from codetoreum.domain.exceptions import DomainError
 
 
 # ============================================================================
-# Type-Safe Identifiers
+# Type-Safe Identifiers (Generic Base)
 # ============================================================================
 
+T = TypeVar("T", bound="TypeSafeId")
+
 
 @dataclass(frozen=True)
-class WorkItemId:
+class TypeSafeId(Generic[T]):
+    """Generic base class for type-safe identifiers."""
+
+    value: str
+    _type_name: str = field(default="", init=False, repr=False, compare=False)
+
+    def __post_init__(self):
+        """Validate identifier."""
+        if not self.value:
+            object.__setattr__(self, "_type_name", self.__class__.__name__)
+            raise DomainError(f"{self._type_name} cannot be empty")
+
+    @classmethod
+    def generate(cls: type[T]) -> T:
+        """Generate new unique identifier."""
+        return cls(value=str(uuid4()))
+
+    @classmethod
+    def from_string(cls: type[T], value: str) -> T:
+        """Create from string value."""
+        return cls(value=value)
+
+    def __str__(self) -> str:
+        """Return string representation."""
+        return self.value
+
+
+@dataclass(frozen=True)
+class WorkItemId(TypeSafeId["WorkItemId"]):
     """Type-safe identifier for work items."""
 
-    value: str
-
-    def __post_init__(self):
-        """Validate work item ID."""
-        if not self.value:
-            raise DomainError("WorkItemId cannot be empty")
-
-    @classmethod
-    def generate(cls) -> "WorkItemId":
-        """Generate new unique work item ID."""
-        return cls(value=str(uuid4()))
-
-    @classmethod
-    def from_string(cls, value: str) -> "WorkItemId":
-        """Create from string value."""
-        return cls(value=value)
-
-    def __str__(self) -> str:
-        """Return string representation."""
-        return self.value
+    pass
 
 
 @dataclass(frozen=True)
-class WorkflowId:
+class WorkflowId(TypeSafeId["WorkflowId"]):
     """Type-safe identifier for workflows."""
 
-    value: str
-
-    def __post_init__(self):
-        """Validate workflow ID."""
-        if not self.value:
-            raise DomainError("WorkflowId cannot be empty")
-
-    @classmethod
-    def generate(cls) -> "WorkflowId":
-        """Generate new unique workflow ID."""
-        return cls(value=str(uuid4()))
-
-    @classmethod
-    def from_string(cls, value: str) -> "WorkflowId":
-        """Create from string value."""
-        return cls(value=value)
-
-    def __str__(self) -> str:
-        """Return string representation."""
-        return self.value
+    pass
 
 
 @dataclass(frozen=True)
-class AgentId:
+class AgentId(TypeSafeId["AgentId"]):
     """Type-safe identifier for agents."""
 
-    value: str
-
-    def __post_init__(self):
-        """Validate agent ID."""
-        if not self.value:
-            raise DomainError("AgentId cannot be empty")
-
-    @classmethod
-    def generate(cls) -> "AgentId":
-        """Generate new unique agent ID."""
-        return cls(value=str(uuid4()))
-
-    @classmethod
-    def from_string(cls, value: str) -> "AgentId":
-        """Create from string value."""
-        return cls(value=value)
-
-    def __str__(self) -> str:
-        """Return string representation."""
-        return self.value
+    pass
 
 
 @dataclass(frozen=True)
-class ExecutionId:
+class ExecutionId(TypeSafeId["ExecutionId"]):
     """Type-safe identifier for agent executions."""
 
-    value: str
-
-    def __post_init__(self):
-        """Validate execution ID."""
-        if not self.value:
-            raise DomainError("ExecutionId cannot be empty")
-
-    @classmethod
-    def generate(cls) -> "ExecutionId":
-        """Generate new unique execution ID."""
-        return cls(value=str(uuid4()))
-
-    @classmethod
-    def from_string(cls, value: str) -> "ExecutionId":
-        """Create from string value."""
-        return cls(value=value)
-
-    def __str__(self) -> str:
-        """Return string representation."""
-        return self.value
+    pass
 
 
 # ============================================================================
