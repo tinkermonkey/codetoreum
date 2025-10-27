@@ -9,7 +9,7 @@ from codetoreum.infrastructure.event_bus import EventBus, EventHandler, event_ha
 
 
 @event_handler("WorkItemCreated")
-class TestWorkItemCreatedHandler(EventHandler):
+class _TestWorkItemCreatedHandler(EventHandler):
     """Test handler for WorkItemCreated events."""
 
     def __init__(self):
@@ -21,7 +21,7 @@ class TestWorkItemCreatedHandler(EventHandler):
 
 
 @event_handler("WorkItemCreated", "WorkItemCompleted")
-class TestMultiEventHandler(EventHandler):
+class _TestMultiEventHandler(EventHandler):
     """Test handler for multiple event types."""
 
     def __init__(self):
@@ -32,7 +32,7 @@ class TestMultiEventHandler(EventHandler):
         self.handled_events.append(event)
 
 
-class TestWildcardHandler(EventHandler):
+class _TestWildcardHandler(EventHandler):
     """Test handler that receives all events."""
 
     def __init__(self):
@@ -55,7 +55,7 @@ class TestEventBus:
         """Test registering handler and publishing events."""
         # Arrange
         bus = EventBus()
-        handler = TestWorkItemCreatedHandler()
+        handler = _TestWorkItemCreatedHandler()
         bus.register_handler(handler)
 
         event = WorkItemCreated(
@@ -74,8 +74,8 @@ class TestEventBus:
         """Test that multiple handlers receive the same event."""
         # Arrange
         bus = EventBus()
-        handler1 = TestWorkItemCreatedHandler()
-        handler2 = TestWorkItemCreatedHandler()
+        handler1 = _TestWorkItemCreatedHandler()
+        handler2 = _TestWorkItemCreatedHandler()
 
         bus.register_handler(handler1)
         bus.register_handler(handler2)
@@ -98,7 +98,7 @@ class TestEventBus:
         """Test handler registered for multiple event types."""
         # Arrange
         bus = EventBus()
-        handler = TestMultiEventHandler()
+        handler = _TestMultiEventHandler()
         bus.register_handler(handler)
 
         event1 = WorkItemCreated(
@@ -124,7 +124,7 @@ class TestEventBus:
         """Test wildcard handler receives all event types."""
         # Arrange
         bus = EventBus()
-        handler = TestWildcardHandler()
+        handler = _TestWildcardHandler()
         bus.register_handler(handler)
 
         event1 = WorkItemCreated(
@@ -201,7 +201,7 @@ class TestEventBus:
         """Test unregistering a handler."""
         # Arrange
         bus = EventBus()
-        handler = TestWorkItemCreatedHandler()
+        handler = _TestWorkItemCreatedHandler()
         bus.register_handler(handler)
 
         event = WorkItemCreated(
@@ -249,7 +249,7 @@ class TestEventBus:
         """Test publishing multiple events."""
         # Arrange
         bus = EventBus()
-        handler = TestWorkItemCreatedHandler()
+        handler = _TestWorkItemCreatedHandler()
         bus.register_handler(handler)
 
         events = [
@@ -349,7 +349,7 @@ class TestEventBus:
         """Test getting event bus statistics."""
         # Arrange
         bus = EventBus()
-        handler = TestWorkItemCreatedHandler()
+        handler = _TestWorkItemCreatedHandler()
         bus.register_handler(handler)
 
         event = WorkItemCreated(
@@ -370,7 +370,7 @@ class TestEventBus:
         """Test resetting statistics."""
         # Arrange
         bus = EventBus()
-        handler = TestWorkItemCreatedHandler()
+        handler = _TestWorkItemCreatedHandler()
         bus.register_handler(handler)
 
         event = WorkItemCreated(
@@ -392,7 +392,7 @@ class TestEventBus:
         """Test @event_handler decorator."""
         # Arrange - handler was already decorated in class definition
 
-        handler = TestWorkItemCreatedHandler()
+        handler = _TestWorkItemCreatedHandler()
 
         # Act
         event_types = handler.get_event_types()

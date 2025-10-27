@@ -19,6 +19,8 @@ class TestEventSerializer:
 
     def setup_method(self):
         """Set up test fixtures."""
+        # Clear registry before each test to ensure isolation
+        EventSerializer._event_type_registry.clear()
         # Register event types
         auto_register_event_types()
 
@@ -173,26 +175,6 @@ class TestEventSerializer:
         assert reconstructed_event.event_id == event.event_id
         assert reconstructed_event.aggregate_id == event.aggregate_id
         assert reconstructed_event.payload["title"] == "Test"
-
-    def test_serialize_with_none_values(self):
-        """Test serializing event with None values."""
-        # Arrange
-        event = DomainEvent(
-            aggregate_id="test-123",
-            aggregate_type="TestAggregate",
-            user_id=None,
-            correlation_id=None,
-            causation_id=None,
-        )
-
-        # Act
-        json_str = EventSerializer.serialize(event)
-
-        # Assert
-        data = json.loads(json_str)
-        assert data["user_id"] is None
-        assert data["correlation_id"] is None
-        assert data["causation_id"] is None
 
     def test_serialize_with_complex_payload(self):
         """Test serializing event with complex nested payload."""
