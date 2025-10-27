@@ -38,13 +38,13 @@ class TestAgentCapability:
 
     def test_capability_proficiency_too_low_raises_error(self):
         """Test that proficiency < 0.0 raises error."""
-        with pytest.raises(ValueError) as exc:
+        with pytest.raises(DomainError) as exc:
             AgentCapability("python", -0.1)
         assert "between 0.0 and 1.0" in str(exc.value)
 
     def test_capability_proficiency_too_high_raises_error(self):
         """Test that proficiency > 1.0 raises error."""
-        with pytest.raises(ValueError) as exc:
+        with pytest.raises(DomainError) as exc:
             AgentCapability("python", 1.1)
         assert "between 0.0 and 1.0" in str(exc.value)
 

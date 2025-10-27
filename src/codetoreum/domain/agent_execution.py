@@ -1,7 +1,7 @@
 """Agent Execution entity."""
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
@@ -123,7 +123,7 @@ class AgentExecution:
             input_tokens=0,
             output_tokens=0,
             duration_seconds=None,
-            initialized_at=datetime.utcnow(),
+            initialized_at=datetime.now(timezone.utc),
             started_at=None,
             completed_at=None,
             metadata={},
@@ -131,7 +131,6 @@ class AgentExecution:
 
         event = ExecutionInitialized(
             aggregate_id=execution.id,
-            aggregate_type="AgentExecution",
             payload={
                 "agent_id": agent_id,
                 "work_item_id": work_item_id,
@@ -160,12 +159,11 @@ class AgentExecution:
             raise DomainError(f"Cannot start execution in status {self.status.value}")
 
         self.status = ExecutionStatus.RUNNING
-        self.started_at = datetime.utcnow()
+        self.started_at = datetime.now(timezone.utc)
         self.container_name = container_name
 
         event = ExecutionStarted(
             aggregate_id=self.id,
-            aggregate_type="AgentExecution",
             payload={
                 "started_at": self.started_at.isoformat(),
                 "container_name": container_name,
@@ -200,7 +198,7 @@ class AgentExecution:
             )
 
         self.status = ExecutionStatus.COMPLETED
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
         self.output = output
         self.input_tokens = input_tokens
         self.output_tokens = output_tokens
@@ -216,7 +214,6 @@ class AgentExecution:
 
         event = ExecutionCompleted(
             aggregate_id=self.id,
-            aggregate_type="AgentExecution",
             payload={
                 "completed_at": self.completed_at.isoformat(),
                 "input_tokens": input_tokens,
@@ -244,7 +241,7 @@ class AgentExecution:
             raise DomainError(f"Cannot fail execution in status {self.status.value}")
 
         self.status = ExecutionStatus.FAILED
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
         self.error_message = error_message
         self.exit_code = exit_code
 
@@ -255,7 +252,6 @@ class AgentExecution:
 
         event = ExecutionFailed(
             aggregate_id=self.id,
-            aggregate_type="AgentExecution",
             payload={
                 "failed_at": self.completed_at.isoformat(),
                 "error_message": error_message,
@@ -278,7 +274,7 @@ class AgentExecution:
             raise DomainError(f"Cannot timeout execution in status {self.status.value}")
 
         self.status = ExecutionStatus.TIMEOUT
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
         self.error_message = "Execution exceeded timeout"
         self.exit_code = -1
 
@@ -289,7 +285,6 @@ class AgentExecution:
 
         event = ExecutionTimeout(
             aggregate_id=self.id,
-            aggregate_type="AgentExecution",
             payload={
                 "timeout_at": self.completed_at.isoformat(),
                 "duration_seconds": self.duration_seconds,
@@ -353,9 +348,10 @@ class AgentExecution:
         Get pending events.
 
         Returns:
-            Copy of the pending events list
+            Shallow copy of the pending events list. Creates a new list
+            containing references to the same event objects.
         """
-        return self._events.copy()
+        return list(self._events)
 
     def clear_events(self) -> None:
         """Clear pending events."""

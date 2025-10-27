@@ -1,7 +1,7 @@
 """Agent entity and value objects."""
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
@@ -12,6 +12,7 @@ from codetoreum.domain.events import (
     AgentCapabilityUpdated,
     AgentConstraintsUpdated,
     AgentCreated,
+    AgentMaxRetriesUpdated,
     AgentMcpServerAdded,
     AgentMcpServerRemoved,
     AgentModelUpdated,
@@ -40,7 +41,7 @@ class AgentCapability:
     def __post_init__(self):
         """Validate proficiency range."""
         if not 0.0 <= self.proficiency <= 1.0:
-            raise ValueError("Proficiency must be between 0.0 and 1.0")
+            raise DomainError("Proficiency must be between 0.0 and 1.0")
 
 
 @dataclass
@@ -172,13 +173,12 @@ class Agent:
             filesystem_write_allowed=filesystem_write_allowed,
             mcp_servers=mcp_servers or [],
             metadata={},
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         )
 
         event = AgentCreated(
             aggregate_id=agent.id,
-            aggregate_type="Agent",
             payload={
                 "name": name,
                 "display_name": display_name,
@@ -208,12 +208,11 @@ class Agent:
             raise DomainError(f"Agent already has capability {capability.skill}")
 
         self.capabilities[capability.skill] = capability
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         self._version += 1
 
         event = AgentCapabilityAdded(
             aggregate_id=self.id,
-            aggregate_type="Agent",
             payload={
                 "skill": capability.skill,
                 "proficiency": capability.proficiency,
@@ -244,12 +243,11 @@ class Agent:
             raise DomainError("Cannot remove last capability")
 
         del self.capabilities[skill]
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         self._version += 1
 
         event = AgentCapabilityRemoved(
             aggregate_id=self.id,
-            aggregate_type="Agent",
             payload={"skill": skill, "removed_at": self.updated_at.isoformat()},
         )
         self._add_event(event)
@@ -275,12 +273,11 @@ class Agent:
 
         old_proficiency = self.capabilities[skill].proficiency
         self.capabilities[skill].proficiency = proficiency
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         self._version += 1
 
         event = AgentCapabilityUpdated(
             aggregate_id=self.id,
-            aggregate_type="Agent",
             payload={
                 "skill": skill,
                 "old_proficiency": old_proficiency,
@@ -308,12 +305,11 @@ class Agent:
 
         old_model = self.model
         self.model = model
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         self._version += 1
 
         event = AgentModelUpdated(
             aggregate_id=self.id,
-            aggregate_type="Agent",
             payload={
                 "old_model": old_model,
                 "new_model": model,
@@ -339,15 +335,44 @@ class Agent:
 
         old_timeout = self.timeout_seconds
         self.timeout_seconds = timeout_seconds
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         self._version += 1
 
         event = AgentTimeoutUpdated(
             aggregate_id=self.id,
-            aggregate_type="Agent",
             payload={
                 "old_timeout": old_timeout,
                 "new_timeout": timeout_seconds,
+                "updated_at": self.updated_at.isoformat(),
+            },
+        )
+        self._add_event(event)
+
+    def update_max_retries(self, max_retries: int) -> None:
+        """
+        Update agent max retries.
+
+        Args:
+            max_retries: New max retries value
+
+        Raises:
+            DomainError: If max_retries is negative
+
+        Emits: AgentMaxRetriesUpdated event
+        """
+        if max_retries < 0:
+            raise DomainError("Max retries must be non-negative")
+
+        old_max_retries = self.max_retries
+        self.max_retries = max_retries
+        self.updated_at = datetime.now(timezone.utc)
+        self._version += 1
+
+        event = AgentMaxRetriesUpdated(
+            aggregate_id=self.id,
+            payload={
+                "old_max_retries": old_max_retries,
+                "new_max_retries": max_retries,
                 "updated_at": self.updated_at.isoformat(),
             },
         )
@@ -369,8 +394,21 @@ class Agent:
             makes_code_changes: Whether agent makes code changes
             filesystem_write_allowed: Whether agent can write files
 
+        Raises:
+            DomainError: If any non-None value is not a boolean
+
         Emits: AgentConstraintsUpdated event
         """
+        # Validate types
+        if requires_docker is not None and not isinstance(requires_docker, bool):
+            raise DomainError("requires_docker must be a boolean")
+        if requires_dev_container is not None and not isinstance(requires_dev_container, bool):
+            raise DomainError("requires_dev_container must be a boolean")
+        if makes_code_changes is not None and not isinstance(makes_code_changes, bool):
+            raise DomainError("makes_code_changes must be a boolean")
+        if filesystem_write_allowed is not None and not isinstance(filesystem_write_allowed, bool):
+            raise DomainError("filesystem_write_allowed must be a boolean")
+
         old_constraints = {
             "requires_docker": self.requires_docker,
             "requires_dev_container": self.requires_dev_container,
@@ -387,12 +425,11 @@ class Agent:
         if filesystem_write_allowed is not None:
             self.filesystem_write_allowed = filesystem_write_allowed
 
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         self._version += 1
 
         event = AgentConstraintsUpdated(
             aggregate_id=self.id,
-            aggregate_type="Agent",
             payload={
                 "old_constraints": old_constraints,
                 "new_constraints": {
@@ -423,12 +460,11 @@ class Agent:
             raise DomainError(f"MCP server {server_name} already configured")
 
         self.mcp_servers.append(server_name)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         self._version += 1
 
         event = AgentMcpServerAdded(
             aggregate_id=self.id,
-            aggregate_type="Agent",
             payload={
                 "server_name": server_name,
                 "added_at": self.updated_at.isoformat(),
@@ -452,12 +488,11 @@ class Agent:
             raise DomainError(f"MCP server {server_name} not configured")
 
         self.mcp_servers.remove(server_name)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         self._version += 1
 
         event = AgentMcpServerRemoved(
             aggregate_id=self.id,
-            aggregate_type="Agent",
             payload={
                 "server_name": server_name,
                 "removed_at": self.updated_at.isoformat(),
@@ -547,9 +582,10 @@ class Agent:
         Get all pending events.
 
         Returns:
-            Copy of the pending events list
+            Shallow copy of the pending events list. Creates a new list
+            containing references to the same event objects.
         """
-        return self._events.copy()
+        return list(self._events)
 
     def clear_events(self) -> None:
         """Clear pending events."""

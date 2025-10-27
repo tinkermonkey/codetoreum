@@ -1,7 +1,7 @@
 """Work Item aggregate root."""
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
@@ -158,15 +158,14 @@ class WorkItem:
             assigned_at=None,
             current_workflow_id=None,
             current_stage=None,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
             completed_at=None,
         )
 
         # Emit creation event
         event = WorkItemCreated(
             aggregate_id=work_item.id,
-            aggregate_type="WorkItem",
             payload={
                 "title": title,
                 "description": description,
@@ -208,14 +207,13 @@ class WorkItem:
             raise DomainError(f"Agent {agent_id} is already assigned")
 
         self.assigned_agent_id = agent_id
-        self.assigned_at = datetime.utcnow()
+        self.assigned_at = datetime.now(timezone.utc)
         self.status = WorkItemStatus.ASSIGNED
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         self._version += 1
 
         event = AgentAssigned(
             aggregate_id=self.id,
-            aggregate_type="WorkItem",
             payload={
                 "agent_id": agent_id,
                 "reason": reason,
@@ -244,12 +242,11 @@ class WorkItem:
             raise DomainError(f"Cannot start work item in status {self.status.value}")
 
         self.status = WorkItemStatus.IN_PROGRESS
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         self._version += 1
 
         event = WorkItemStarted(
             aggregate_id=self.id,
-            aggregate_type="WorkItem",
             payload={
                 "started_at": self.updated_at.isoformat(),
                 "agent_id": self.assigned_agent_id,
@@ -275,12 +272,11 @@ class WorkItem:
             )
 
         self.status = WorkItemStatus.UNDER_REVIEW
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         self._version += 1
 
         event = WorkItemUnderReview(
             aggregate_id=self.id,
-            aggregate_type="WorkItem",
             payload={"review_started_at": self.updated_at.isoformat()},
         )
         self._add_event(event)
@@ -306,13 +302,12 @@ class WorkItem:
             )
 
         self.status = WorkItemStatus.COMPLETED
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
         self.updated_at = self.completed_at
         self._version += 1
 
         event = WorkItemCompleted(
             aggregate_id=self.id,
-            aggregate_type="WorkItem",
             payload={
                 "completed_at": self.completed_at.isoformat(),
                 "agent_id": self.assigned_agent_id,
@@ -342,12 +337,11 @@ class WorkItem:
             )
 
         self.status = WorkItemStatus.FAILED
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         self._version += 1
 
         event = WorkItemFailed(
             aggregate_id=self.id,
-            aggregate_type="WorkItem",
             payload={
                 "failed_at": self.updated_at.isoformat(),
                 "reason": reason,
@@ -379,12 +373,11 @@ class WorkItem:
             )
 
         self.status = WorkItemStatus.BLOCKED
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         self._version += 1
 
         event = WorkItemBlocked(
             aggregate_id=self.id,
-            aggregate_type="WorkItem",
             payload={
                 "blocked_at": self.updated_at.isoformat(),
                 "reason": reason,
@@ -414,12 +407,11 @@ class WorkItem:
             if self.assigned_agent_id
             else WorkItemStatus.NEW
         )
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         self._version += 1
 
         event = WorkItemUnblocked(
             aggregate_id=self.id,
-            aggregate_type="WorkItem",
             payload={
                 "unblocked_at": self.updated_at.isoformat(),
                 "new_status": self.status.value,
@@ -446,12 +438,11 @@ class WorkItem:
             )
 
         self.current_workflow_id = workflow_id
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         self._version += 1
 
         event = WorkflowAttached(
             aggregate_id=self.id,
-            aggregate_type="WorkItem",
             payload={
                 "workflow_id": workflow_id,
                 "attached_at": self.updated_at.isoformat(),
@@ -476,12 +467,11 @@ class WorkItem:
 
         old_stage = self.current_stage
         self.current_stage = stage
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         self._version += 1
 
         event = WorkItemStageUpdated(
             aggregate_id=self.id,
-            aggregate_type="WorkItem",
             payload={
                 "workflow_id": self.current_workflow_id,
                 "old_stage": old_stage,
@@ -499,16 +489,28 @@ class WorkItem:
         Args:
             labels: New list of labels
 
+        Raises:
+            DomainError: If labels is None or not a list
+
         Emits: WorkItemLabelsUpdated event
         """
+        if labels is None:
+            raise DomainError("Labels cannot be None")
+
+        if not isinstance(labels, list):
+            raise DomainError("Labels must be a list")
+
+        # Validate all elements are strings
+        if not all(isinstance(label, str) for label in labels):
+            raise DomainError("All labels must be strings")
+
         old_labels = self.labels.copy()
         self.labels = labels
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         self._version += 1
 
         event = WorkItemLabelsUpdated(
             aggregate_id=self.id,
-            aggregate_type="WorkItem",
             payload={
                 "old_labels": old_labels,
                 "new_labels": labels,
@@ -528,12 +530,11 @@ class WorkItem:
         """
         old_priority = self.priority
         self.priority = priority
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         self._version += 1
 
         event = WorkItemPriorityUpdated(
             aggregate_id=self.id,
-            aggregate_type="WorkItem",
             payload={
                 "old_priority": old_priority.value,
                 "new_priority": priority.value,
@@ -591,9 +592,10 @@ class WorkItem:
         Get all pending events.
 
         Returns:
-            Copy of the pending events list
+            Shallow copy of the pending events list. Creates a new list
+            containing references to the same event objects.
         """
-        return self._events.copy()
+        return list(self._events)
 
     def clear_events(self) -> None:
         """Clear pending events (after persistence)."""
@@ -626,6 +628,15 @@ class WorkItem:
 
         # Create initial state from creation event
         payload = first_event.payload
+
+        # Validate required fields are present in payload
+        required_fields = ["project_id", "title", "description", "priority", "labels"]
+        missing_fields = [f for f in required_fields if f not in payload]
+        if missing_fields:
+            raise DomainError(
+                f"Missing required fields in WorkItemCreated event: {', '.join(missing_fields)}"
+            )
+
         work_item = cls(
             id=first_event.aggregate_id,
             project_id=payload["project_id"],
