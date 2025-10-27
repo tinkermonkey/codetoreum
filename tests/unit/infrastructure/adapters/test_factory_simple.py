@@ -75,7 +75,6 @@ class TestAdapterFactory:
         assert factory.container_registry is not None
         assert factory.repository_registry is not None
         assert factory.event_store_registry is not None
-        assert factory.storage_registry is not None
 
     def test_default_adapters_registered(self):
         """Test that default adapters are registered."""

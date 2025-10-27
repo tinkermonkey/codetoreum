@@ -53,9 +53,10 @@ class TestAdapterFactoryConfig:
         """Test custom configuration."""
         custom_resilience = {
             "ticket_system": ServiceResilienceConfig(
+                service_name="ticket_system",
                 rate_limit=RateLimitConfig(max_requests=100, window_seconds=60),
                 circuit_breaker=CircuitBreakerConfig(failure_threshold=3),
-                retry=RetryConfig(max_attempts=2),
+                retry=RetryConfig(max_retries=2),
                 timeout=TimeoutConfig(default_timeout_seconds=30)
             )
         }
@@ -100,7 +101,6 @@ class TestAdapterFactory:
         assert factory.container_registry is not None
         assert factory.repository_registry is not None
         assert factory.event_store_registry is not None
-        assert factory.storage_registry is not None
 
     def test_default_adapters_registered(self):
         """Test that default adapters are registered."""
@@ -152,7 +152,8 @@ class TestTicketSystemCreation:
         factory = AdapterFactory()
 
         adapter = factory.create_ticket_system(adapter_name="in_memory")
-        assert isinstance(adapter, InMemoryTicketAdapter)
+        # When resilience is enabled, returns decorated adapter
+        assert isinstance(adapter, ITicketSystem)
 
     def test_create_ticket_system_with_resilience_disabled(self):
         """Test creating ticket system with resilience disabled."""
@@ -187,7 +188,7 @@ class TestLLMProviderCreation:
 
         claude_config = ClaudeCodeConfig(
             api_key_credential_name="ANTHROPIC_API_KEY",
-            model="claude-sonnet-4"
+            default_model="claude-sonnet-4"
         )
 
         adapter = factory.create_llm_provider(adapter_config=claude_config)
@@ -198,16 +199,18 @@ class TestLLMProviderCreation:
         factory = AdapterFactory()
 
         adapter = factory.create_llm_provider(adapter_name="mock")
-        assert isinstance(adapter, MockLLMAdapter)
+        # When resilience is enabled, returns decorated adapter
+        assert isinstance(adapter, ILLMProvider)
 
     def test_create_llm_provider_with_custom_resilience(self):
         """Test creating LLM provider with custom resilience config."""
         factory = AdapterFactory()
 
         custom_resilience = ServiceResilienceConfig(
+            service_name="llm_provider",
             rate_limit=RateLimitConfig(max_requests=10, window_seconds=60),
             circuit_breaker=CircuitBreakerConfig(failure_threshold=2),
-            retry=RetryConfig(max_attempts=1),
+            retry=RetryConfig(max_retries=1),
             timeout=TimeoutConfig(default_timeout_seconds=60)
         )
 
@@ -245,7 +248,7 @@ class TestRepositoryCreation:
         """Test creating default repository adapter."""
         factory = AdapterFactory()
 
-        git_config = GitConfig(git_command_path="/usr/bin/git")
+        git_config = GitConfig(git_path="/usr/bin/git")
 
         adapter = factory.create_repository(adapter_config=git_config)
         assert isinstance(adapter, IRepository)
@@ -445,9 +448,10 @@ class TestFactoryIntegration:
     def test_custom_resilience_config(self):
         """Test using custom resilience configurations."""
         custom_config = ServiceResilienceConfig(
+            service_name="ticket_system",
             rate_limit=RateLimitConfig(max_requests=1000, window_seconds=3600),
             circuit_breaker=CircuitBreakerConfig(failure_threshold=10),
-            retry=RetryConfig(max_attempts=5),
+            retry=RetryConfig(max_retries=5),
             timeout=TimeoutConfig(default_timeout_seconds=120)
         )
 
@@ -476,4 +480,5 @@ class TestFactoryIntegration:
 
         # Create instance of custom adapter
         adapter = factory.create_ticket_system(adapter_name="custom")
-        assert isinstance(adapter, InMemoryTicketAdapter)
+        # When resilience is enabled, returns decorated adapter
+        assert isinstance(adapter, ITicketSystem)
