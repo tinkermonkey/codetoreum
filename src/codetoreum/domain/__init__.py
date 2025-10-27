@@ -2,6 +2,18 @@
 
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
 from codetoreum.domain.agent_execution import AgentExecution, ExecutionStatus
+from codetoreum.domain.value_objects import (
+    AgentId,
+    ContainerConfig,
+    ExecutionContext,
+    ExecutionId,
+    ExecutionResult,
+    Requirement,
+    TimeRange,
+    TokenUsage,
+    WorkflowId,
+    WorkItemId,
+)
 from codetoreum.domain.events import (
     AgentAssigned,
     AgentCapabilityAdded,
@@ -74,6 +86,17 @@ __all__ = [
     # Base classes
     "DomainEvent",
     "DomainError",
+    # Value Objects
+    "WorkItemId",
+    "WorkflowId",
+    "AgentId",
+    "ExecutionId",
+    "Requirement",
+    "ExecutionResult",
+    "ContainerConfig",
+    "ExecutionContext",
+    "TimeRange",
+    "TokenUsage",
     # Work Item
     "WorkItem",
     "WorkItemStatus",
