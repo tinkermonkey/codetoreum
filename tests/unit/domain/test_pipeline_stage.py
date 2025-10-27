@@ -19,17 +19,16 @@ class TestPipelineStageCreation:
         stage = PipelineStage.create(
             name="test-stage",
             workflow_id="wf-123",
-            agent_id="agent-1",
+            agent_config={"agent_id": "agent-1"},
         )
 
         assert stage.name == "test-stage"
         assert stage.workflow_id == "wf-123"
-        assert stage.agent_id == "agent-1"
+        assert stage.agent_config["agent_id"] == "agent-1"
         assert stage.stage_type == StageType.SEQUENTIAL
         assert stage.status == StageStatus.PENDING
         assert stage.dependencies == []
         assert stage.is_parallel is False
-        assert stage.requires_review is False
         assert stage.execution_id is None
         assert stage.started_at is None
         assert stage.completed_at is None
@@ -42,12 +41,11 @@ class TestPipelineStageCreation:
         stage = PipelineStage.create(
             name="review-stage",
             workflow_id="wf-123",
-            agent_id="agent-1",
+            agent_config={"agent_id": "agent-1"},
             stage_type=StageType.REVIEW,
             description="Review stage description",
             dependencies=["stage-1", "stage-2"],
             is_parallel=True,
-            requires_review=True,
             maker_agent_id="maker-1",
             reviewer_agent_id="reviewer-1",
             max_review_iterations=5,
@@ -55,12 +53,11 @@ class TestPipelineStageCreation:
 
         assert stage.name == "review-stage"
         assert stage.workflow_id == "wf-123"
-        assert stage.agent_id == "agent-1"
+        assert stage.agent_config["agent_id"] == "agent-1"
         assert stage.stage_type == StageType.REVIEW
         assert stage.description == "Review stage description"
         assert stage.dependencies == ["stage-1", "stage-2"]
         assert stage.is_parallel is True
-        assert stage.requires_review is True
         assert stage.maker_agent_id == "maker-1"
         assert stage.reviewer_agent_id == "reviewer-1"
         assert stage.max_review_iterations == 5
@@ -171,33 +168,33 @@ class TestStageLifecycle:
 class TestStageDependencies:
     """Test stage dependency logic."""
 
-    def test_can_start_with_no_dependencies(self):
-        """Test that stage with no dependencies can start."""
+    def test_can_enter_with_no_dependencies(self):
+        """Test that stage with no dependencies can enter."""
         stage = PipelineStage.create("test", "wf-1", "agent-1")
         stage.mark_ready()
 
-        assert stage.can_start([])
-        assert stage.can_start(["other-stage"])
+        assert stage.can_enter([])
+        assert stage.can_enter(["other-stage"])
 
-    def test_can_start_with_satisfied_dependencies(self):
-        """Test that stage can start when dependencies are satisfied."""
+    def test_can_enter_with_satisfied_dependencies(self):
+        """Test that stage can enter when dependencies are satisfied."""
         stage = PipelineStage.create(
             "test", "wf-1", "agent-1", dependencies=["stage-1", "stage-2"]
         )
         stage.mark_ready()
 
-        assert not stage.can_start([])
-        assert not stage.can_start(["stage-1"])
-        assert stage.can_start(["stage-1", "stage-2"])
-        assert stage.can_start(["stage-1", "stage-2", "stage-3"])
+        assert not stage.can_enter([])
+        assert not stage.can_enter(["stage-1"])
+        assert stage.can_enter(["stage-1", "stage-2"])
+        assert stage.can_enter(["stage-1", "stage-2", "stage-3"])
 
-    def test_can_start_fails_if_not_pending_or_ready(self):
+    def test_can_enter_fails_if_not_pending_or_ready(self):
         """Test that can_start returns False if stage is not pending or ready."""
         stage = PipelineStage.create("test", "wf-1", "agent-1")
         stage.mark_ready()
         stage.start("exec-1")
 
-        assert not stage.can_start([])
+        assert not stage.can_enter([])
 
 
 class TestStageQueries:
@@ -275,10 +272,47 @@ class TestStageQueries:
 
     def test_update_status_invalid_value(self):
         """Test update_status with invalid value."""
-        stage = PipelineStage.create("test", "wf-1", "agent-1")
+        stage = PipelineStage.create("test", "wf-1", agent_config={"agent_id": "agent-1"})
 
         with pytest.raises(ValueError):
             stage.update_status("invalid")
+
+    def test_get_agent_for_execution_sequential(self):
+        """Test get_agent_for_execution for sequential stage."""
+        stage = PipelineStage.create(
+            "test",
+            "wf-1",
+            agent_config={"agent_id": "agent-1", "capability": "test"},
+        )
+
+        config = stage.get_agent_for_execution()
+        assert config["agent_id"] == "agent-1"
+        assert config["capability"] == "test"
+
+    def test_get_agent_for_execution_review(self):
+        """Test get_agent_for_execution for review stage."""
+        stage = PipelineStage.create(
+            "test",
+            "wf-1",
+            agent_config={"agent_id": "agent-1"},
+            stage_type=StageType.REVIEW,
+            maker_agent_id="maker-1",
+            reviewer_agent_id="reviewer-1",
+        )
+
+        config = stage.get_agent_for_execution()
+        assert config["agent_id"] == "maker-1"
+        assert config["stage_type"] == "review_maker"
+
+    def test_get_agent_for_execution_review_missing_maker(self):
+        """Test get_agent_for_execution fails for review stage without maker."""
+        with pytest.raises(DomainError, match="Review stages require both maker and reviewer"):
+            PipelineStage.create(
+                "test",
+                "wf-1",
+                agent_config={"agent_id": "agent-1"},
+                stage_type=StageType.REVIEW,
+            )
 
 
 class TestStageTypes:
@@ -309,14 +343,12 @@ class TestStageTypes:
         stage = PipelineStage.create(
             "test",
             "wf-1",
-            "agent-1",
+            agent_config={"agent_id": "agent-1"},
             stage_type=StageType.REVIEW,
-            requires_review=True,
             maker_agent_id="maker-1",
             reviewer_agent_id="reviewer-1",
         )
         assert stage.stage_type == StageType.REVIEW
-        assert stage.requires_review
         assert stage.maker_agent_id == "maker-1"
         assert stage.reviewer_agent_id == "reviewer-1"
 

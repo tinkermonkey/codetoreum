@@ -18,7 +18,6 @@ class StageTemplate:
     stage_type: str  # "sequential", "parallel", "review"
     dependencies: List[str]
     is_parallel: bool
-    requires_review: bool
     maker_agent_id: Optional[str]
     reviewer_agent_id: Optional[str]
     max_review_iterations: int
@@ -95,7 +94,6 @@ class WorkflowTemplate:
         stage_type: str = "sequential",
         dependencies: Optional[List[str]] = None,
         is_parallel: bool = False,
-        requires_review: bool = False,
         maker_agent_id: Optional[str] = None,
         reviewer_agent_id: Optional[str] = None,
     ) -> StageTemplate:
@@ -108,7 +106,6 @@ class WorkflowTemplate:
             stage_type: Type of stage (default: "sequential")
             dependencies: List of dependency stage names (default: [])
             is_parallel: Whether stage can run in parallel (default: False)
-            requires_review: Whether stage requires review (default: False)
             maker_agent_id: ID of maker agent for review stages (default: None)
             reviewer_agent_id: ID of reviewer agent for review stages (default: None)
 
@@ -121,7 +118,6 @@ class WorkflowTemplate:
             stage_type=stage_type,
             dependencies=dependencies or [],
             is_parallel=is_parallel,
-            requires_review=requires_review,
             maker_agent_id=maker_agent_id,
             reviewer_agent_id=reviewer_agent_id,
             max_review_iterations=3,
@@ -133,11 +129,34 @@ class WorkflowTemplate:
 
         return stage
 
+    def instantiate_workflow(self, work_item_id: str, project_id: str) -> "Workflow":
+        """
+        Instantiate a workflow from this template.
+
+        Args:
+            work_item_id: ID of the work item
+            project_id: ID of the project
+
+        Returns:
+            Newly created Workflow instance
+
+        Note:
+            This method is the primary way to create workflows from templates.
+            It handles creating pipeline stages and initializing the workflow.
+        """
+        from codetoreum.domain.workflow import Workflow
+
+        return Workflow.create(
+            work_item_id=work_item_id,
+            template=self,
+            project_id=project_id,
+        )
+
     def build_stages(self) -> List[PipelineStage]:
         """
         Build concrete pipeline stages from template.
 
-        Used when instantiating a workflow.
+        Internal method used by Workflow.create() to construct stages.
 
         Returns:
             List of PipelineStage instances
@@ -147,11 +166,10 @@ class WorkflowTemplate:
             stage = PipelineStage.create(
                 name=template.name,
                 workflow_id="",  # Set by workflow
-                agent_id=template.agent_id,
+                agent_config={"agent_id": template.agent_id},
                 stage_type=StageType(template.stage_type),
                 dependencies=template.dependencies,
                 is_parallel=template.is_parallel,
-                requires_review=template.requires_review,
                 maker_agent_id=template.maker_agent_id,
                 reviewer_agent_id=template.reviewer_agent_id,
                 max_review_iterations=template.max_review_iterations,
@@ -185,7 +203,7 @@ class WorkflowTemplate:
 
         # Check review stages
         for stage in self.stage_templates:
-            if stage.requires_review:
+            if stage.stage_type == "review":
                 if not stage.maker_agent_id or not stage.reviewer_agent_id:
                     raise DomainError(
                         f"Review stage {stage.name} missing agents"

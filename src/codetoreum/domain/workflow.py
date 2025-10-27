@@ -21,6 +21,9 @@ from codetoreum.domain.events import (
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.pipeline_stage import PipelineStage
 
+# Constants
+MAX_PARALLEL_STAGES = 10
+
 
 class WorkflowStatus(Enum):
     """Status enumeration for workflows."""
@@ -71,10 +74,12 @@ class Workflow:
     # Event tracking
     _events: List[DomainEvent] = field(default_factory=list, init=False, repr=False)
     _version: int = field(default=0, init=False, repr=False)
+    _skip_validation: bool = field(default=False, init=False, repr=False)
 
     def __post_init__(self):
         """Validate invariants after initialization."""
-        self._validate_invariants()
+        if not self._skip_validation:
+            self._validate_invariants()
 
     def _validate_invariants(self) -> None:
         """
@@ -89,8 +94,8 @@ class Workflow:
         if len(self.stages) < 1:
             raise DomainError("Workflow must have at least one stage")
 
-        if self._count_parallel_stages() > 10:
-            raise DomainError("Cannot exceed 10 parallel stages")
+        if self._count_parallel_stages() > MAX_PARALLEL_STAGES:
+            raise DomainError(f"Cannot exceed {MAX_PARALLEL_STAGES} parallel stages")
 
         if self._has_circular_dependencies():
             raise DomainError("Workflow has circular stage dependencies")
@@ -619,31 +624,79 @@ class Workflow:
         # reconstruct stages from template or events
         payload = first_event.payload
 
-        # Create workflow without triggering __post_init__ validation
-        # since stages will be empty during event reconstruction
-        workflow = object.__new__(cls)
-        workflow.id = first_event.aggregate_id
-        workflow.work_item_id = payload["work_item_id"]
-        workflow.template_id = payload["template_id"]
-        workflow.project_id = payload["project_id"]
-        workflow.status = WorkflowStatus.PENDING
-        workflow.stages = []  # Would be reconstructed from template or stored in events
-        workflow.current_stage_index = 0
-        workflow.completed_stages = []
-        workflow.started_at = None
-        workflow.completed_at = None
-        workflow.paused_at = None
-        workflow.metadata = {}
-        workflow.created_at = first_event.occurred_at
-        workflow.updated_at = first_event.occurred_at
-        workflow._events = []
-        workflow._version = 0
+        # Create workflow with validation skipped (stages will be empty during reconstruction)
+        workflow = cls._create_without_validation(
+            id=first_event.aggregate_id,
+            work_item_id=payload["work_item_id"],
+            template_id=payload["template_id"],
+            project_id=payload["project_id"],
+            status=WorkflowStatus.PENDING,
+            stages=[],  # Would be reconstructed from template or stored in events
+            current_stage_index=0,
+            completed_stages=[],
+            started_at=None,
+            completed_at=None,
+            paused_at=None,
+            metadata={},
+            created_at=first_event.occurred_at,
+            updated_at=first_event.occurred_at,
+        )
 
         # Apply subsequent events
         for event in events[1:]:
             workflow._apply_event(event)
 
         workflow._version = len(events)
+        return workflow
+
+    @classmethod
+    def _create_without_validation(
+        cls,
+        id: str,
+        work_item_id: str,
+        template_id: str,
+        project_id: str,
+        status: WorkflowStatus,
+        stages: List[PipelineStage],
+        current_stage_index: int,
+        completed_stages: List[str],
+        started_at: Optional[datetime],
+        completed_at: Optional[datetime],
+        paused_at: Optional[datetime],
+        metadata: Dict[str, Any],
+        created_at: datetime,
+        updated_at: datetime,
+    ) -> "Workflow":
+        """
+        Private constructor for event sourcing that skips invariant validation.
+
+        Used when reconstructing workflows from events where stages may not yet be loaded.
+
+        Args:
+            All workflow properties
+
+        Returns:
+            Workflow instance with validation skipped
+        """
+        # Create instance without calling __init__ or __post_init__
+        workflow = object.__new__(cls)
+        workflow.id = id
+        workflow.work_item_id = work_item_id
+        workflow.template_id = template_id
+        workflow.project_id = project_id
+        workflow.status = status
+        workflow.stages = stages
+        workflow.current_stage_index = current_stage_index
+        workflow.completed_stages = completed_stages
+        workflow.started_at = started_at
+        workflow.completed_at = completed_at
+        workflow.paused_at = paused_at
+        workflow.metadata = metadata
+        workflow.created_at = created_at
+        workflow.updated_at = updated_at
+        workflow._events = []
+        workflow._version = 0
+        workflow._skip_validation = True
         return workflow
 
     def _apply_event(self, event: DomainEvent) -> None:

@@ -62,7 +62,6 @@ class TestStageTemplateManagement:
         assert stage.stage_type == "sequential"
         assert stage.dependencies == []
         assert stage.is_parallel is False
-        assert stage.requires_review is False
         assert stage.maker_agent_id is None
         assert stage.reviewer_agent_id is None
         assert stage.max_review_iterations == 3
@@ -77,7 +76,6 @@ class TestStageTemplateManagement:
             stage_type="review",
             dependencies=["stage1"],
             is_parallel=True,
-            requires_review=True,
             maker_agent_id="maker-1",
             reviewer_agent_id="reviewer-1",
         )
@@ -87,7 +85,6 @@ class TestStageTemplateManagement:
         assert stage.stage_type == "review"
         assert stage.dependencies == ["stage1"]
         assert stage.is_parallel is True
-        assert stage.requires_review is True
         assert stage.maker_agent_id == "maker-1"
         assert stage.reviewer_agent_id == "reviewer-1"
 
@@ -125,7 +122,7 @@ class TestBuildStages:
 
         assert len(stages) == 1
         assert stages[0].name == "stage1"
-        assert stages[0].agent_id == "agent-1"
+        assert stages[0].agent_config["agent_id"] == "agent-1"
         assert stages[0].stage_type == StageType.SEQUENTIAL
 
     def test_build_multiple_stages(self):
@@ -151,7 +148,6 @@ class TestBuildStages:
             "review-stage",
             "agent-1",
             stage_type="review",
-            requires_review=True,
             maker_agent_id="maker-1",
             reviewer_agent_id="reviewer-1",
         )
@@ -160,7 +156,7 @@ class TestBuildStages:
 
         assert len(stages) == 1
         assert stages[0].stage_type == StageType.REVIEW
-        assert stages[0].requires_review is True
+        assert stages[0].stage_type == StageType.REVIEW
         assert stages[0].maker_agent_id == "maker-1"
         assert stages[0].reviewer_agent_id == "reviewer-1"
 
@@ -199,7 +195,7 @@ class TestTemplateValidation:
         template.add_stage(
             "review-stage",
             "agent-1",
-            requires_review=True,
+            stage_type="review",
             reviewer_agent_id="reviewer-1",
         )
 
@@ -212,7 +208,7 @@ class TestTemplateValidation:
         template.add_stage(
             "review-stage",
             "agent-1",
-            requires_review=True,
+            stage_type="review",
             maker_agent_id="maker-1",
         )
 
@@ -225,7 +221,7 @@ class TestTemplateValidation:
         template.add_stage(
             "review-stage",
             "agent-1",
-            requires_review=True,
+            stage_type="review",
             maker_agent_id="agent-1",
             reviewer_agent_id="agent-1",
         )
@@ -318,8 +314,8 @@ class TestCommonTemplates:
         template.add_stage(
             "coding",
             "senior_engineer",
+            stage_type="review",
             dependencies=["analysis"],
-            requires_review=True,
             maker_agent_id="senior_engineer",
             reviewer_agent_id="tech_lead",
         )
@@ -328,7 +324,7 @@ class TestCommonTemplates:
 
         stages = template.build_stages()
         assert len(stages) == 2
-        assert stages[1].requires_review is True
+        assert stages[1].stage_type == StageType.REVIEW
 
     def test_parallel_stages_template(self):
         """Test workflow with parallel stages."""

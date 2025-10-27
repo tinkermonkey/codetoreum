@@ -36,12 +36,13 @@ class PipelineStage:
     """
 
     # Identity
+    id: str
     name: str
     workflow_id: str
 
     # Configuration
     stage_type: StageType
-    agent_id: str
+    agent_config: Dict[str, Any]
     description: str
 
     # Dependencies
@@ -49,7 +50,6 @@ class PipelineStage:
     is_parallel: bool
 
     # Review configuration (if stage_type == REVIEW)
-    requires_review: bool
     maker_agent_id: Optional[str]
     reviewer_agent_id: Optional[str]
     max_review_iterations: int
@@ -74,15 +74,15 @@ class PipelineStage:
         cls,
         name: str,
         workflow_id: str,
-        agent_id: str,
+        agent_config: Dict[str, Any],
         stage_type: StageType = StageType.SEQUENTIAL,
         description: str = "",
         dependencies: Optional[List[str]] = None,
         is_parallel: bool = False,
-        requires_review: bool = False,
         maker_agent_id: Optional[str] = None,
         reviewer_agent_id: Optional[str] = None,
         max_review_iterations: int = 3,
+        id: Optional[str] = None,
     ) -> "PipelineStage":
         """
         Create new pipeline stage.
@@ -90,28 +90,40 @@ class PipelineStage:
         Args:
             name: Stage name/identifier
             workflow_id: ID of parent workflow
-            agent_id: ID of agent to execute stage
+            agent_config: Configuration for agent execution (agent_id, capabilities, etc.)
             stage_type: Type of stage (default: SEQUENTIAL)
             description: Stage description (default: "")
             dependencies: List of stage names this depends on (default: [])
             is_parallel: Whether stage can run in parallel (default: False)
-            requires_review: Whether stage requires review (default: False)
             maker_agent_id: ID of maker agent for review stages (default: None)
             reviewer_agent_id: ID of reviewer agent for review stages (default: None)
             max_review_iterations: Maximum review iterations (default: 3)
+            id: Stage ID (auto-generated if not provided)
 
         Returns:
             Newly created PipelineStage instance
+
+        Raises:
+            DomainError: If review stage is missing required agents
         """
+        from uuid import uuid4
+
+        # Validate review stages
+        if stage_type == StageType.REVIEW:
+            if not maker_agent_id or not reviewer_agent_id:
+                raise DomainError("Review stages require both maker and reviewer agents")
+            if maker_agent_id == reviewer_agent_id:
+                raise DomainError("Review stages must have different maker and reviewer agents")
+
         return cls(
+            id=id or str(uuid4()),
             name=name,
             workflow_id=workflow_id,
             stage_type=stage_type,
-            agent_id=agent_id,
+            agent_config=agent_config,
             description=description,
             dependencies=dependencies or [],
             is_parallel=is_parallel,
-            requires_review=requires_review,
             maker_agent_id=maker_agent_id,
             reviewer_agent_id=reviewer_agent_id,
             max_review_iterations=max_review_iterations,
@@ -124,9 +136,9 @@ class PipelineStage:
             metadata={},
         )
 
-    def can_start(self, completed_stages: List[str]) -> bool:
+    def can_enter(self, completed_stages: List[str]) -> bool:
         """
-        Check if stage can start based on dependencies.
+        Check if stage entry conditions are met.
 
         Business rules:
         - All dependencies must be completed
@@ -136,12 +148,37 @@ class PipelineStage:
             completed_stages: List of completed stage names
 
         Returns:
-            True if stage can start, False otherwise
+            True if stage entry conditions are met, False otherwise
         """
         if self.status not in [StageStatus.PENDING, StageStatus.READY]:
             return False
 
         return all(dep in completed_stages for dep in self.dependencies)
+
+    def get_agent_for_execution(self) -> Dict[str, Any]:
+        """
+        Get agent configuration for execution.
+
+        Returns appropriate agent config based on stage type:
+        - SEQUENTIAL/PARALLEL: Return agent_config
+        - REVIEW: Return maker_agent configuration
+
+        Returns:
+            Agent configuration dictionary with agent_id and other settings
+
+        Raises:
+            DomainError: If review stage is missing maker agent
+        """
+        if self.stage_type == StageType.REVIEW:
+            if not self.maker_agent_id:
+                raise DomainError(f"Review stage {self.name} is missing maker agent")
+            return {
+                **self.agent_config,
+                "agent_id": self.maker_agent_id,
+                "stage_type": "review_maker",
+            }
+
+        return self.agent_config
 
     def mark_ready(self) -> None:
         """
