@@ -80,6 +80,13 @@ from codetoreum.domain.workspace_context import (
     WorkspaceContext,
     WorkspaceType,
 )
+from codetoreum.domain.services import (
+    AgentMatchingService,
+    AssignmentResult,
+    ExecutionContextBuilder,
+    WorkAssignmentService,
+    WorkflowValidationService,
+)
 
 __all__ = [
     # Base classes
@@ -178,4 +185,10 @@ __all__ = [
     "WorkflowPaused",
     "WorkflowResumed",
     "WorkflowCancelled",
+    # Domain Services
+    "AgentMatchingService",
+    "WorkAssignmentService",
+    "AssignmentResult",
+    "WorkflowValidationService",
+    "ExecutionContextBuilder",
 ]
