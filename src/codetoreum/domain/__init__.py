@@ -43,9 +43,32 @@ from codetoreum.domain.events import (
 )
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.pipeline_stage import PipelineStage, StageStatus, StageType
+from codetoreum.domain.project_context import (
+    ProjectContext,
+    ProjectContextCreated,
+    ProjectDockerConfigUpdated,
+    ProjectTestConfigUpdated,
+    ProjectWorkflowMappingAdded,
+)
+from codetoreum.domain.review_cycle import (
+    ReviewCycle,
+    ReviewCycleApproved,
+    ReviewCycleCreated,
+    ReviewCycleEscalated,
+    ReviewDecision,
+    ReviewFeedback,
+    ReviewFeedbackSubmitted,
+    ReviewIteration,
+    ReviewIterationStarted,
+    ReviewStatus,
+)
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
 from codetoreum.domain.workflow import Workflow, WorkflowStatus
 from codetoreum.domain.workflow_template import StageTemplate, WorkflowTemplate
+from codetoreum.domain.workspace_context import (
+    WorkspaceContext,
+    WorkspaceType,
+)
 
 __all__ = [
     # Base classes
@@ -72,6 +95,26 @@ __all__ = [
     # Workflow Template
     "WorkflowTemplate",
     "StageTemplate",
+    # Project Context
+    "ProjectContext",
+    "ProjectContextCreated",
+    "ProjectDockerConfigUpdated",
+    "ProjectTestConfigUpdated",
+    "ProjectWorkflowMappingAdded",
+    # Workspace Context
+    "WorkspaceContext",
+    "WorkspaceType",
+    # Review Cycle
+    "ReviewCycle",
+    "ReviewStatus",
+    "ReviewDecision",
+    "ReviewFeedback",
+    "ReviewIteration",
+    "ReviewCycleCreated",
+    "ReviewIterationStarted",
+    "ReviewFeedbackSubmitted",
+    "ReviewCycleApproved",
+    "ReviewCycleEscalated",
     # Work Item Events
     "WorkItemCreated",
     "AgentAssigned",
