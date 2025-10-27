@@ -45,6 +45,32 @@ class ElasticsearchEventStore(IEventStore):
       "data": object (enabled),
       "metadata": object
     }
+
+    **Resilience Patterns**:
+    This adapter should be wrapped with resilience decorators at instantiation:
+    - Circuit breaker: Prevents cascading failures
+    - Rate limiting: Controls request rate to Elasticsearch
+    - Retry policy: Handles transient failures
+    - Timeout: Prevents indefinite waits
+
+    Example:
+        ```python
+        from codetoreum.infrastructure.resilience.factory import create_resilient_adapter
+
+        event_store = create_resilient_adapter(
+            adapter=ElasticsearchEventStore(es_client),
+            adapter_type="event_store",
+            config={
+                "circuit_breaker": {"failure_threshold": 5},
+                "retry": {"max_attempts": 3},
+                "rate_limit": {"requests_per_second": 100},
+                "timeout": {"seconds": 30}
+            }
+        )
+        ```
+
+    The adapter itself remains pure without embedded resilience logic, following
+    the project's hexagonal architecture principles.
     """
 
     def __init__(
@@ -52,6 +78,9 @@ class ElasticsearchEventStore(IEventStore):
         es_client: AsyncElasticsearch,
         index_prefix: str = "events",
         create_index_template: bool = True,
+        batch_size_limit: int = 10000,
+        shard_count: int = 2,
+        replica_count: int = 1,
     ):
         """
         Initialize Elasticsearch event store.
@@ -60,11 +89,17 @@ class ElasticsearchEventStore(IEventStore):
             es_client: AsyncElasticsearch client
             index_prefix: Prefix for event indices (default: "events")
             create_index_template: Whether to create index template on init
+            batch_size_limit: Maximum events per stream query (configurable)
+            shard_count: Number of shards for indices (configurable)
+            replica_count: Number of replicas for indices (configurable)
         """
         self.client = es_client
         self.index_prefix = index_prefix
         self._initialized = False
         self._create_index_template = create_index_template
+        self.batch_size_limit = batch_size_limit
+        self.shard_count = shard_count
+        self.replica_count = replica_count
 
     async def initialize(self) -> None:
         """
@@ -208,7 +243,7 @@ class ElasticsearchEventStore(IEventStore):
                 index=f"{self.index_prefix}-*",
                 query=query,
                 sort=[{"stream_version": "asc"}],
-                size=10000,  # Max events per stream
+                size=self.batch_size_limit,  # Max events per stream (configurable)
             )
 
             hits = response["hits"]["hits"]
@@ -726,8 +761,8 @@ class ElasticsearchEventStore(IEventStore):
             "index_patterns": [f"{self.index_prefix}-*"],
             "template": {
                 "settings": {
-                    "number_of_shards": 2,
-                    "number_of_replicas": 1,
+                    "number_of_shards": self.shard_count,
+                    "number_of_replicas": self.replica_count,
                     "refresh_interval": "5s",
                 },
                 "mappings": {

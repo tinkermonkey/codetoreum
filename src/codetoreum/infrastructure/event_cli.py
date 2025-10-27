@@ -2,9 +2,8 @@
 
 import asyncio
 import json
-import sys
 from datetime import datetime
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 import click
 from rich.console import Console
@@ -248,7 +247,7 @@ class EventCLI:
 
     async def search_events(self, query: str, limit: int = 50) -> None:
         """
-        Search events by content.
+        Search events by content using Elasticsearch full-text search.
 
         Args:
             query: Search query
@@ -257,25 +256,57 @@ class EventCLI:
         console.print(f"[bold]Search Results for: '{query}'[/bold]\n")
 
         try:
-            # Get all events and search in payload
-            # (In production, would use Elasticsearch full-text search)
-            stream_ids = await self.event_store.get_all_stream_ids()
+            # Use Elasticsearch's full-text search if the event store supports it
+            # Check if the event store has a search method
+            if hasattr(self.event_store, 'client'):
+                # Use Elasticsearch query_string for full-text search
+                from elasticsearch import AsyncElasticsearch
 
-            matching_events = []
-            for stream_id in stream_ids:
-                events = await self.event_store.get_events(stream_id=stream_id)
-                for event in events:
-                    # Search in event type and payload
-                    if query.lower() in event.event_type.lower():
-                        matching_events.append(event)
-                    elif query.lower() in str(event.payload).lower():
-                        matching_events.append(event)
+                # Get the index prefix from the event store
+                index_prefix = getattr(self.event_store, 'index_prefix', 'events')
+
+                # Perform full-text search across event data
+                response = await self.event_store.client.search(
+                    index=f"{index_prefix}-*",
+                    query={
+                        "query_string": {
+                            "query": query,
+                            "fields": ["event_type^2", "data.*", "aggregate_type", "user_id"]
+                        }
+                    },
+                    sort=[{"timestamp": "desc"}],
+                    size=limit,
+                )
+
+                hits = response["hits"]["hits"]
+
+                if not hits:
+                    console.print("[yellow]No matching events found[/yellow]")
+                    return
+
+                # Convert to domain events
+                from codetoreum.infrastructure.event_serialization import EventSerializer
+                matching_events = [EventSerializer.from_dict(hit["_source"]) for hit in hits]
+
+            else:
+                # Fallback to in-memory search for non-Elasticsearch stores
+                stream_ids = await self.event_store.get_all_stream_ids()
+
+                matching_events = []
+                for stream_id in stream_ids:
+                    events = await self.event_store.get_events(stream_id=stream_id)
+                    for event in events:
+                        # Search in event type and payload
+                        if query.lower() in event.event_type.lower():
+                            matching_events.append(event)
+                        elif query.lower() in str(event.payload).lower():
+                            matching_events.append(event)
+
+                        if len(matching_events) >= limit:
+                            break
 
                     if len(matching_events) >= limit:
                         break
-
-                if len(matching_events) >= limit:
-                    break
 
             if not matching_events:
                 console.print("[yellow]No matching events found[/yellow]")
@@ -318,42 +349,82 @@ def cli(ctx):
 @click.option("--since", help="Filter by timestamp (ISO format)")
 @click.option("--limit", default=50, help="Maximum number of events to show")
 @click.pass_context
-def list_events(ctx, stream_id, event_type, since, limit):
+def list_events(ctx: click.Context, stream_id: Optional[str], event_type: Optional[str], since: Optional[str], limit: int) -> None:
     """List events."""
-    # Would initialize event store and call EventCLI.list_events()
-    click.echo("Event listing functionality")
+    # Get event store from context
+    event_store = ctx.obj.get("event_store") if ctx.obj else None
+    if not event_store:
+        click.echo("Error: Event store not initialized")
+        return
+
+    # Parse timestamp
+    since_dt = None
+    if since:
+        try:
+            since_dt = datetime.fromisoformat(since)
+        except ValueError:
+            click.echo(f"Error: Invalid timestamp format: {since}")
+            return
+
+    # Create CLI and run
+    event_cli = EventCLI(event_store)
+    asyncio.run(event_cli.list_events(stream_id=stream_id, event_type=event_type, since=since_dt, limit=limit))
 
 
 @cli.command()
 @click.argument("event_id")
 @click.pass_context
-def show(ctx, event_id):
+def show(ctx: click.Context, event_id: str) -> None:
     """Show detailed event information."""
-    click.echo(f"Showing event: {event_id}")
+    event_store = ctx.obj.get("event_store") if ctx.obj else None
+    if not event_store:
+        click.echo("Error: Event store not initialized")
+        return
+
+    event_cli = EventCLI(event_store)
+    asyncio.run(event_cli.show_event(event_id))
 
 
 @cli.command()
 @click.argument("stream_id")
 @click.pass_context
-def stream(ctx, stream_id):
+def stream(ctx: click.Context, stream_id: str) -> None:
     """Show all events in a stream."""
-    click.echo(f"Showing stream: {stream_id}")
+    event_store = ctx.obj.get("event_store") if ctx.obj else None
+    if not event_store:
+        click.echo("Error: Event store not initialized")
+        return
+
+    event_cli = EventCLI(event_store)
+    asyncio.run(event_cli.show_stream(stream_id))
 
 
 @cli.command()
 @click.pass_context
-def stats(ctx):
+def stats(ctx: click.Context) -> None:
     """Show event store statistics."""
-    click.echo("Event store statistics")
+    event_store = ctx.obj.get("event_store") if ctx.obj else None
+    if not event_store:
+        click.echo("Error: Event store not initialized")
+        return
+
+    event_cli = EventCLI(event_store)
+    asyncio.run(event_cli.show_statistics())
 
 
 @cli.command()
 @click.argument("query")
 @click.option("--limit", default=50, help="Maximum number of results")
 @click.pass_context
-def search(ctx, query, limit):
+def search(ctx: click.Context, query: str, limit: int) -> None:
     """Search events by content."""
-    click.echo(f"Searching for: {query}")
+    event_store = ctx.obj.get("event_store") if ctx.obj else None
+    if not event_store:
+        click.echo("Error: Event store not initialized")
+        return
+
+    event_cli = EventCLI(event_store)
+    asyncio.run(event_cli.search_events(query, limit))
 
 
 if __name__ == "__main__":

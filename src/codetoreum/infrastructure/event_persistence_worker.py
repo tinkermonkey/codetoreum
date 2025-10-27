@@ -3,10 +3,14 @@
 import asyncio
 import logging
 import signal
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from codetoreum.infrastructure.redis_event_buffer import RedisEventBuffer
+from codetoreum.infrastructure.redis_event_buffer import (
+    RedisEventBuffer,
+    RedisEventBufferError,
+)
+from codetoreum.ports.exceptions import EventStoreError
 from codetoreum.ports.output.event_store import IEventStore
 
 logger = logging.getLogger(__name__)
@@ -94,7 +98,7 @@ class EventPersistenceWorker:
             )
 
         self._running = True
-        self._stats["started_at"] = datetime.utcnow()
+        self._stats["started_at"] = datetime.now(timezone.utc)
 
         logger.info(
             f"Starting event persistence worker '{self.worker_id}' "
@@ -213,7 +217,7 @@ class EventPersistenceWorker:
                 # Update statistics
                 self._stats["events_processed"] += len(events)
                 self._stats["batches_processed"] += 1
-                self._stats["last_batch_at"] = datetime.utcnow()
+                self._stats["last_batch_at"] = datetime.now(timezone.utc)
 
                 logger.debug(
                     f"Worker {self.worker_id} persisted {len(events)} events "
@@ -222,29 +226,36 @@ class EventPersistenceWorker:
 
                 return  # Success!
 
-            except Exception as e:
+            except (EventStoreError, RedisEventBufferError) as e:
                 logger.warning(
                     f"Worker {self.worker_id} failed to process batch "
                     f"(attempt {attempt + 1}/{self.max_retries + 1}): {e}"
                 )
 
-                if attempt < self.max_retries:
-                    # Wait before retrying
-                    await asyncio.sleep(self.retry_delay_seconds * (attempt + 1))
-                else:
-                    # All retries exhausted - log error
-                    # Events will remain in pending state and can be manually recovered
-                    self._stats["events_failed"] += len(events)
-                    self._stats["batches_failed"] += 1
+            except Exception as e:
+                logger.error(
+                    f"Worker {self.worker_id} unexpected error processing batch "
+                    f"(attempt {attempt + 1}/{self.max_retries + 1}): {e}",
+                    exc_info=True
+                )
 
-                    logger.error(
-                        f"Worker {self.worker_id} failed to process batch after "
-                        f"{self.max_retries + 1} attempts. Events will remain in "
-                        f"pending state for manual recovery.",
-                        exc_info=True,
-                    )
+            if attempt < self.max_retries:
+                # Wait before retrying
+                await asyncio.sleep(self.retry_delay_seconds * (attempt + 1))
+            else:
+                # All retries exhausted - log error
+                # Events will remain in pending state and can be manually recovered
+                self._stats["events_failed"] += len(events)
+                self._stats["batches_failed"] += 1
 
-                    raise
+                logger.error(
+                    f"Worker {self.worker_id} failed to process batch after "
+                    f"{self.max_retries + 1} attempts. Events will remain in "
+                    f"pending state for manual recovery.",
+                    exc_info=True,
+                )
+
+                raise
 
     def _group_events_by_stream(
         self, events: List[Any]
@@ -287,7 +298,7 @@ class EventPersistenceWorker:
         # Calculate runtime
         if stats["started_at"]:
             runtime_seconds = (
-                datetime.utcnow() - stats["started_at"]
+                datetime.now(timezone.utc) - stats["started_at"]
             ).total_seconds()
             stats["runtime_seconds"] = runtime_seconds
 

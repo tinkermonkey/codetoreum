@@ -3,7 +3,7 @@
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from redis import asyncio as aioredis
@@ -42,7 +42,7 @@ class RedisEventBuffer:
         redis_client: aioredis.Redis,
         stream_name: str = "events:buffer",
         consumer_group: str = "elasticsearch-writers",
-        max_stream_length: int = 100000,
+        stream_max_length: int = 100000,
         dead_letter_stream: str = "events:dead-letter",
     ):
         """
@@ -52,13 +52,13 @@ class RedisEventBuffer:
             redis_client: Redis async client
             stream_name: Name of the Redis stream for events
             consumer_group: Name of the consumer group for persistence workers
-            max_stream_length: Maximum stream length before trimming (MAXLEN)
+            stream_max_length: Maximum stream length before trimming (MAXLEN) - configurable
             dead_letter_stream: Stream for events that fail processing
         """
         self.redis = redis_client
         self.stream_name = stream_name
         self.consumer_group = consumer_group
-        self.max_stream_length = max_stream_length
+        self.stream_max_length = stream_max_length
         self.dead_letter_stream = dead_letter_stream
 
         self._initialized = False
@@ -132,7 +132,7 @@ class RedisEventBuffer:
                     "timestamp": event.occurred_at.isoformat(),
                     "payload": event_json,
                 },
-                maxlen=self.max_stream_length,
+                maxlen=self.stream_max_length,
                 approximate=True,  # Use ~ for efficiency
             )
 
@@ -182,7 +182,7 @@ class RedisEventBuffer:
                             "timestamp": event.occurred_at.isoformat(),
                             "payload": event_json,
                         },
-                        maxlen=self.max_stream_length,
+                        maxlen=self.stream_max_length,
                         approximate=True,
                     )
 
@@ -378,10 +378,10 @@ class RedisEventBuffer:
                 "last_entry_id": (
                     stream_info.get("last-entry", [None])[0] if stream_info else None
                 ),
-                "max_stream_length": self.max_stream_length,
+                "max_stream_length": self.stream_max_length,
                 "utilization": (
-                    stream_length / self.max_stream_length
-                    if self.max_stream_length > 0
+                    stream_length / self.stream_max_length
+                    if self.stream_max_length > 0
                     else 0
                 ),
             }
@@ -407,7 +407,7 @@ class RedisEventBuffer:
                     **fields,
                     b"original_message_id": message_id,
                     b"error": error.encode("utf-8"),
-                    b"moved_at": datetime.utcnow().isoformat().encode("utf-8"),
+                    b"moved_at": datetime.now(timezone.utc).isoformat().encode("utf-8"),
                 },
             )
 
