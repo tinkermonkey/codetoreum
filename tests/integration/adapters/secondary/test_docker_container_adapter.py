@@ -292,12 +292,10 @@ async def test_get_container_logs(docker_adapter):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_nonexistent_image():
+async def test_nonexistent_image(docker_adapter):
     """Test running container with nonexistent image."""
-    adapter = DockerContainerAdapter(DockerConfig())
-
     with pytest.raises(ImageNotFoundError):
-        await adapter.run(
+        await docker_adapter.run(
             image="nonexistent-image-12345",
             command=["echo", "test"],
             volumes={},
@@ -336,6 +334,12 @@ async def test_exec_on_stopped_container(docker_adapter):
 async def test_context_manager(docker_config):
     """Test using adapter as async context manager."""
     async with DockerContainerAdapter(docker_config) as adapter:
+        # Check if Docker is available
+        try:
+            adapter._get_client()
+        except ContainerError:
+            pytest.skip("Docker is not available")
+
         result = await adapter.run(
             image="alpine:latest",
             command=["echo", "test"],

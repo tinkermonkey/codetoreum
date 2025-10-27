@@ -118,6 +118,18 @@ class GitRepositoryAdapter(IRepository):
         sanitized_args = self._sanitize_git_args(args)
         cmd = [self.config.git_path] + sanitized_args
 
+        # Set up clean git environment
+        import os
+
+        git_env = os.environ.copy()
+        # Disable global and system git config to avoid issues
+        git_env["GIT_CONFIG_GLOBAL"] = "/dev/null"
+        git_env["GIT_CONFIG_SYSTEM"] = "/dev/null"
+
+        # Merge with provided environment variables
+        if env:
+            git_env.update(env)
+
         loop = asyncio.get_event_loop()
 
         def _run():
@@ -126,7 +138,7 @@ class GitRepositoryAdapter(IRepository):
                 result = subprocess.run(
                     cmd,
                     cwd=cwd,
-                    env=env,
+                    env=git_env,
                     capture_output=True,
                     text=True,
                     timeout=self.config.timeout_seconds,
@@ -341,11 +353,31 @@ class GitRepositoryAdapter(IRepository):
             raise ValidationError(f"Repository path does not exist: {repo_path}")
 
         # Get current branch
+        # Use check=False because this may fail if there are no commits yet
         result = await self._run_git_command(
             ["rev-parse", "--abbrev-ref", "HEAD"],
             cwd=repo_path,
+            check=False,
         )
-        current_branch = BranchName(result.stdout.strip())
+
+        # If there are no commits yet, HEAD doesn't exist. Use default branch name.
+        if result.returncode != 0:
+            # Get the default branch name from config, or use "main"
+            try:
+                result = await self._run_git_command(
+                    ["config", "--get", "init.defaultBranch"],
+                    cwd=repo_path,
+                    check=False,
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    current_branch = BranchName(result.stdout.strip())
+                else:
+                    # Fallback to config default or "master"
+                    current_branch = BranchName(self.config.default_branch)
+            except Exception:
+                current_branch = BranchName(self.config.default_branch)
+        else:
+            current_branch = BranchName(result.stdout.strip())
 
         # Get status (short format)
         result = await self._run_git_command(

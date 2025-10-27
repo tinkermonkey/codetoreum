@@ -23,10 +23,10 @@ def claude_config():
         pytest.skip("ANTHROPIC_API_KEY environment variable not set")
 
     return ClaudeCodeConfig(
-        api_key=api_key,
         default_model="claude-sonnet-4-5-20250929",
         output_format="stream-json",
         verbose=False,
+        # credential_provider defaults to EnvironmentCredentialProvider which reads from env
     )
 
 
@@ -192,8 +192,13 @@ async def test_count_tokens(claude_adapter):
 @pytest.mark.asyncio
 async def test_invalid_api_key():
     """Test authentication error with invalid API key."""
+    # Create a mock credential provider that returns an invalid key
+    class MockInvalidCredentialProvider:
+        async def get_credential(self, key: str):
+            return "invalid-key-that-will-fail"
+
     config = ClaudeCodeConfig(
-        api_key="invalid-key",
+        credential_provider=MockInvalidCredentialProvider(),
     )
 
     adapter = ClaudeCodeAdapter(config)
