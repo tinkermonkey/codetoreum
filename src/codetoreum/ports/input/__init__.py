@@ -5,10 +5,29 @@ This module exports all input port interfaces and their related types.
 Input ports define how external systems interact with the application.
 """
 
+from .exceptions import (
+    AgentExecutionNotFoundError,
+    AgentNotFoundError,
+    ArtifactNotFoundError,
+    CommandFileNotFoundError,
+    CommandNotFoundError,
+    PermissionError,
+    PipelineNotFoundError,
+    PortException,
+    ProjectNotFoundError,
+    StageNotFoundError,
+    SubAgentNotFoundError,
+    ValidationError,
+    VariableNotFoundError,
+    WorkflowNotActiveError,
+    WorkflowNotFoundError,
+    WorkflowNotPausedError,
+    WorkItemNotFoundError,
+)
 from .config_command import (
     AddEnvironmentVariableCommand,
     ConfigurationCommandResult,
-    IConfigCommandPort,
+    IConfigurationCommandPort,
     MountCommandCommand,
     MountSubAgentCommand,
     RemoveEnvironmentVariableCommand,
@@ -41,6 +60,24 @@ from .workflow_command import (
 )
 
 __all__ = [
+    # Exceptions
+    "PortException",
+    "ProjectNotFoundError",
+    "WorkflowNotFoundError",
+    "WorkflowNotActiveError",
+    "WorkflowNotPausedError",
+    "PipelineNotFoundError",
+    "WorkItemNotFoundError",
+    "StageNotFoundError",
+    "AgentNotFoundError",
+    "AgentExecutionNotFoundError",
+    "ValidationError",
+    "VariableNotFoundError",
+    "CommandFileNotFoundError",
+    "CommandNotFoundError",
+    "SubAgentNotFoundError",
+    "PermissionError",
+    "ArtifactNotFoundError",
     # Workflow Command Port
     "IWorkflowCommandPort",
     "StartWorkflowCommand",
@@ -61,7 +98,7 @@ __all__ = [
     "ExecutionHistoryEntry",
     "ExecutionStatus",
     # Config Command Port
-    "IConfigCommandPort",
+    "IConfigurationCommandPort",
     "UpdateProjectConfigCommand",
     "UpdateAgentConfigCommand",
     "UpdatePipelineConfigCommand",

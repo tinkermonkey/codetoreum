@@ -2,12 +2,12 @@
 Unit tests for Configuration Command Input Port
 
 Tests the data structures and interface contract of the
-IConfigCommandPort without requiring implementations.
+IConfigurationCommandPort without requiring implementations.
 """
 
 import pytest
 from codetoreum.ports.input.config_command import (
-    IConfigCommandPort,
+    IConfigurationCommandPort,
     UpdateProjectConfigCommand,
     UpdateAgentConfigCommand,
     UpdatePipelineConfigCommand,
@@ -18,6 +18,17 @@ from codetoreum.ports.input.config_command import (
     MountSubAgentCommand,
     UnmountSubAgentCommand,
     ConfigurationCommandResult,
+)
+from codetoreum.ports.input.exceptions import (
+    ProjectNotFoundError,
+    AgentNotFoundError,
+    PipelineNotFoundError,
+    ValidationError,
+    VariableNotFoundError,
+    CommandFileNotFoundError,
+    CommandNotFoundError,
+    SubAgentNotFoundError,
+    PermissionError,
 )
 
 
@@ -261,13 +272,13 @@ class TestConfigurationCommandResult:
         assert result.errors == errors
 
 
-class TestIConfigCommandPortInterface:
-    """Tests for IConfigCommandPort interface contract"""
+class TestIConfigurationCommandPortInterface:
+    """Tests for IConfigurationCommandPort interface contract"""
 
     def test_interface_is_abstract(self):
-        """Test that IConfigCommandPort cannot be instantiated directly"""
+        """Test that IConfigurationCommandPort cannot be instantiated directly"""
         with pytest.raises(TypeError):
-            IConfigCommandPort()
+            IConfigurationCommandPort()
 
     def test_interface_has_required_methods(self):
         """Test that interface defines all required methods"""
@@ -284,14 +295,14 @@ class TestIConfigCommandPortInterface:
         ]
 
         for method_name in required_methods:
-            assert hasattr(IConfigCommandPort, method_name)
-            method = getattr(IConfigCommandPort, method_name)
+            assert hasattr(IConfigurationCommandPort, method_name)
+            method = getattr(IConfigurationCommandPort, method_name)
             assert callable(method)
 
     def test_concrete_implementation_requirements(self):
         """Test that concrete implementation must implement all methods"""
 
-        class IncompletePort(IConfigCommandPort):
+        class IncompletePort(IConfigurationCommandPort):
             async def update_project_config(self, command):
                 pass
             # Missing other methods
@@ -302,7 +313,7 @@ class TestIConfigCommandPortInterface:
     def test_complete_implementation(self):
         """Test that complete implementation can be instantiated"""
 
-        class CompletePort(IConfigCommandPort):
+        class CompletePort(IConfigurationCommandPort):
             async def update_project_config(self, command):
                 return ConfigurationCommandResult(
                     success=True,
@@ -376,7 +387,7 @@ class TestIConfigCommandPortInterface:
                 )
 
         port = CompletePort()
-        assert isinstance(port, IConfigCommandPort)
+        assert isinstance(port, IConfigurationCommandPort)
 
 
 @pytest.mark.asyncio
@@ -386,7 +397,7 @@ class TestConfigCommandPortBehavior:
     async def test_update_project_config_returns_result(self):
         """Test that update_project_config returns ConfigurationCommandResult"""
 
-        class MockPort(IConfigCommandPort):
+        class MockPort(IConfigurationCommandPort):
             async def update_project_config(self, command):
                 return ConfigurationCommandResult(
                     success=True,
@@ -436,7 +447,7 @@ class TestConfigCommandPortBehavior:
     async def test_add_environment_variable_handles_secrets(self):
         """Test that add_environment_variable can handle secret variables"""
 
-        class MockPort(IConfigCommandPort):
+        class MockPort(IConfigurationCommandPort):
             async def update_project_config(self, command):
                 pass
 
@@ -484,3 +495,380 @@ class TestConfigCommandPortBehavior:
         assert isinstance(result, ConfigurationCommandResult)
         assert result.success is True
         assert result.config_version == 3
+
+
+@pytest.mark.asyncio
+class TestConfigCommandPortErrorHandling:
+    """Tests for error handling in configuration command implementations"""
+
+    async def test_update_project_config_raises_project_not_found(self):
+        """Test that update_project_config raises ProjectNotFoundError for non-existent project"""
+
+        class MockPort(IConfigurationCommandPort):
+            async def update_project_config(self, command):
+                raise ProjectNotFoundError(f"Project '{command.project_name}' not found")
+
+            async def update_agent_config(self, command):
+                pass
+
+            async def update_pipeline_config(self, command):
+                pass
+
+            async def add_environment_variable(self, command):
+                pass
+
+            async def remove_environment_variable(self, command):
+                pass
+
+            async def mount_command(self, command):
+                pass
+
+            async def unmount_command(self, command):
+                pass
+
+            async def mount_subagent(self, command):
+                pass
+
+            async def unmount_subagent(self, command):
+                pass
+
+        port = MockPort()
+        cmd = UpdateProjectConfigCommand(
+            project_name="non-existent",
+            updates={"key": "value"},
+            user_id="user-123"
+        )
+
+        with pytest.raises(ProjectNotFoundError, match="Project 'non-existent' not found"):
+            await port.update_project_config(cmd)
+
+    async def test_update_project_config_raises_validation_error(self):
+        """Test that update_project_config raises ValidationError for invalid updates"""
+
+        class MockPort(IConfigurationCommandPort):
+            async def update_project_config(self, command):
+                raise ValidationError("Invalid configuration format")
+
+            async def update_agent_config(self, command):
+                pass
+
+            async def update_pipeline_config(self, command):
+                pass
+
+            async def add_environment_variable(self, command):
+                pass
+
+            async def remove_environment_variable(self, command):
+                pass
+
+            async def mount_command(self, command):
+                pass
+
+            async def unmount_command(self, command):
+                pass
+
+            async def mount_subagent(self, command):
+                pass
+
+            async def unmount_subagent(self, command):
+                pass
+
+        port = MockPort()
+        cmd = UpdateProjectConfigCommand(
+            project_name="test-project",
+            updates={"invalid": "format"},
+            user_id="user-123"
+        )
+
+        with pytest.raises(ValidationError, match="Invalid configuration format"):
+            await port.update_project_config(cmd)
+
+    async def test_update_agent_config_raises_agent_not_found(self):
+        """Test that update_agent_config raises AgentNotFoundError"""
+
+        class MockPort(IConfigurationCommandPort):
+            async def update_project_config(self, command):
+                pass
+
+            async def update_agent_config(self, command):
+                raise AgentNotFoundError(f"Agent '{command.agent_name}' not found")
+
+            async def update_pipeline_config(self, command):
+                pass
+
+            async def add_environment_variable(self, command):
+                pass
+
+            async def remove_environment_variable(self, command):
+                pass
+
+            async def mount_command(self, command):
+                pass
+
+            async def unmount_command(self, command):
+                pass
+
+            async def mount_subagent(self, command):
+                pass
+
+            async def unmount_subagent(self, command):
+                pass
+
+        port = MockPort()
+        cmd = UpdateAgentConfigCommand(
+            project_name="test-project",
+            agent_name="non-existent-agent",
+            updates={"model": "claude-3-opus"},
+            user_id="user-123"
+        )
+
+        with pytest.raises(AgentNotFoundError, match="Agent 'non-existent-agent' not found"):
+            await port.update_agent_config(cmd)
+
+    async def test_update_pipeline_config_raises_pipeline_not_found(self):
+        """Test that update_pipeline_config raises PipelineNotFoundError"""
+
+        class MockPort(IConfigurationCommandPort):
+            async def update_project_config(self, command):
+                pass
+
+            async def update_agent_config(self, command):
+                pass
+
+            async def update_pipeline_config(self, command):
+                raise PipelineNotFoundError(f"Pipeline '{command.pipeline_name}' not found")
+
+            async def add_environment_variable(self, command):
+                pass
+
+            async def remove_environment_variable(self, command):
+                pass
+
+            async def mount_command(self, command):
+                pass
+
+            async def unmount_command(self, command):
+                pass
+
+            async def mount_subagent(self, command):
+                pass
+
+            async def unmount_subagent(self, command):
+                pass
+
+        port = MockPort()
+        cmd = UpdatePipelineConfigCommand(
+            project_name="test-project",
+            pipeline_name="non-existent-pipeline",
+            updates={"stages": ["build"]},
+            user_id="user-123"
+        )
+
+        with pytest.raises(PipelineNotFoundError, match="Pipeline 'non-existent-pipeline' not found"):
+            await port.update_pipeline_config(cmd)
+
+    async def test_remove_environment_variable_raises_variable_not_found(self):
+        """Test that remove_environment_variable raises VariableNotFoundError"""
+
+        class MockPort(IConfigurationCommandPort):
+            async def update_project_config(self, command):
+                pass
+
+            async def update_agent_config(self, command):
+                pass
+
+            async def update_pipeline_config(self, command):
+                pass
+
+            async def add_environment_variable(self, command):
+                pass
+
+            async def remove_environment_variable(self, command):
+                raise VariableNotFoundError(f"Variable '{command.variable_name}' not found")
+
+            async def mount_command(self, command):
+                pass
+
+            async def unmount_command(self, command):
+                pass
+
+            async def mount_subagent(self, command):
+                pass
+
+            async def unmount_subagent(self, command):
+                pass
+
+        port = MockPort()
+        cmd = RemoveEnvironmentVariableCommand(
+            project_name="test-project",
+            variable_name="NON_EXISTENT_VAR",
+            user_id="user-123"
+        )
+
+        with pytest.raises(VariableNotFoundError, match="Variable 'NON_EXISTENT_VAR' not found"):
+            await port.remove_environment_variable(cmd)
+
+    async def test_mount_command_raises_command_file_not_found(self):
+        """Test that mount_command raises CommandFileNotFoundError"""
+
+        class MockPort(IConfigurationCommandPort):
+            async def update_project_config(self, command):
+                pass
+
+            async def update_agent_config(self, command):
+                pass
+
+            async def update_pipeline_config(self, command):
+                pass
+
+            async def add_environment_variable(self, command):
+                pass
+
+            async def remove_environment_variable(self, command):
+                pass
+
+            async def mount_command(self, command):
+                raise CommandFileNotFoundError(f"Command file '{command.command_path}' not found")
+
+            async def unmount_command(self, command):
+                pass
+
+            async def mount_subagent(self, command):
+                pass
+
+            async def unmount_subagent(self, command):
+                pass
+
+        port = MockPort()
+        cmd = MountCommandCommand(
+            project_name="test-project",
+            command_name="custom-build",
+            command_path="/nonexistent/command.sh",
+            user_id="user-123"
+        )
+
+        with pytest.raises(CommandFileNotFoundError, match="Command file '/nonexistent/command.sh' not found"):
+            await port.mount_command(cmd)
+
+    async def test_unmount_command_raises_command_not_found(self):
+        """Test that unmount_command raises CommandNotFoundError"""
+
+        class MockPort(IConfigurationCommandPort):
+            async def update_project_config(self, command):
+                pass
+
+            async def update_agent_config(self, command):
+                pass
+
+            async def update_pipeline_config(self, command):
+                pass
+
+            async def add_environment_variable(self, command):
+                pass
+
+            async def remove_environment_variable(self, command):
+                pass
+
+            async def mount_command(self, command):
+                pass
+
+            async def unmount_command(self, command):
+                raise CommandNotFoundError(f"Command '{command.command_name}' not mounted")
+
+            async def mount_subagent(self, command):
+                pass
+
+            async def unmount_subagent(self, command):
+                pass
+
+        port = MockPort()
+        cmd = UnmountCommandCommand(
+            project_name="test-project",
+            command_name="non-existent-command",
+            user_id="user-123"
+        )
+
+        with pytest.raises(CommandNotFoundError, match="Command 'non-existent-command' not mounted"):
+            await port.unmount_command(cmd)
+
+    async def test_unmount_subagent_raises_subagent_not_found(self):
+        """Test that unmount_subagent raises SubAgentNotFoundError"""
+
+        class MockPort(IConfigurationCommandPort):
+            async def update_project_config(self, command):
+                pass
+
+            async def update_agent_config(self, command):
+                pass
+
+            async def update_pipeline_config(self, command):
+                pass
+
+            async def add_environment_variable(self, command):
+                pass
+
+            async def remove_environment_variable(self, command):
+                pass
+
+            async def mount_command(self, command):
+                pass
+
+            async def unmount_command(self, command):
+                pass
+
+            async def mount_subagent(self, command):
+                pass
+
+            async def unmount_subagent(self, command):
+                raise SubAgentNotFoundError(f"Sub-agent '{command.subagent_name}' not mounted")
+
+        port = MockPort()
+        cmd = UnmountSubAgentCommand(
+            project_name="test-project",
+            subagent_name="non-existent-agent",
+            user_id="user-123"
+        )
+
+        with pytest.raises(SubAgentNotFoundError, match="Sub-agent 'non-existent-agent' not mounted"):
+            await port.unmount_subagent(cmd)
+
+    async def test_operation_raises_permission_error(self):
+        """Test that operations raise PermissionError when user lacks permission"""
+
+        class MockPort(IConfigurationCommandPort):
+            async def update_project_config(self, command):
+                raise PermissionError(f"User '{command.user_id}' lacks permission")
+
+            async def update_agent_config(self, command):
+                pass
+
+            async def update_pipeline_config(self, command):
+                pass
+
+            async def add_environment_variable(self, command):
+                pass
+
+            async def remove_environment_variable(self, command):
+                pass
+
+            async def mount_command(self, command):
+                pass
+
+            async def unmount_command(self, command):
+                pass
+
+            async def mount_subagent(self, command):
+                pass
+
+            async def unmount_subagent(self, command):
+                pass
+
+        port = MockPort()
+        cmd = UpdateProjectConfigCommand(
+            project_name="test-project",
+            updates={"key": "value"},
+            user_id="unauthorized-user"
+        )
+
+        with pytest.raises(PermissionError, match="User 'unauthorized-user' lacks permission"):
+            await port.update_project_config(cmd)

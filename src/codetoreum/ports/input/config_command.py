@@ -104,7 +104,7 @@ class ConfigurationCommandResult:
     errors: Optional[List[str]] = field(default=None)
 
 
-class IConfigCommandPort(ABC):
+class IConfigurationCommandPort(ABC):
     """
     Input port for configuration commands.
 
