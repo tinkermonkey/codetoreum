@@ -65,6 +65,59 @@ class DomainEvent:
             "metadata": self.metadata,
         }
 
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "DomainEvent":
+        """
+        Deserialize event from dictionary.
+
+        Args:
+            data: Dictionary representation of the event
+
+        Returns:
+            DomainEvent instance
+
+        Raises:
+            ValueError: If required fields are missing or invalid
+        """
+        try:
+            return cls(
+                aggregate_id=data["aggregate_id"],
+                aggregate_type=data["aggregate_type"],
+                payload=data.get("payload", {}),
+                user_id=data.get("user_id"),
+                correlation_id=UUID(data["correlation_id"]) if data.get("correlation_id") else None,
+                causation_id=UUID(data["causation_id"]) if data.get("causation_id") else None,
+                event_id=UUID(data["event_id"]) if data.get("event_id") else None,
+                occurred_at=datetime.fromisoformat(data["occurred_at"]) if data.get("occurred_at") else None,
+            )
+        except KeyError as e:
+            raise ValueError(f"Missing required field: {e}")
+        except (ValueError, TypeError) as e:
+            raise ValueError(f"Invalid field value: {e}")
+
+    def __eq__(self, other: object) -> bool:
+        """
+        Compare events for equality based on event_id.
+
+        Args:
+            other: Object to compare with
+
+        Returns:
+            True if events have the same event_id
+        """
+        if not isinstance(other, DomainEvent):
+            return False
+        return self.event_id == other.event_id
+
+    def __hash__(self) -> int:
+        """
+        Generate hash based on event_id.
+
+        Returns:
+            Hash value
+        """
+        return hash(self.event_id)
+
 
 # =============================================================================
 # Work Item Events
@@ -807,6 +860,231 @@ class WorkflowCancelled(DomainEvent):
         super().__init__(
             aggregate_id=aggregate_id,
             aggregate_type="Workflow",
+            payload=payload,
+            **kwargs
+        )
+
+
+# =============================================================================
+# Review Cycle Events
+# =============================================================================
+
+
+class ReviewCycleCreated(DomainEvent):
+    """Emitted when a review cycle is created."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize ReviewCycleCreated event.
+
+        Required payload fields:
+        - work_item_id: str
+        - workflow_id: str
+        - stage_name: str
+        - execution_id: str
+        - max_iterations: int
+        - review_type: str
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="ReviewCycle",
+            payload=payload,
+            **kwargs
+        )
+
+
+class ReviewIterationStarted(DomainEvent):
+    """Emitted when a new review iteration starts."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize ReviewIterationStarted event.
+
+        Required payload fields:
+        - iteration_number: int
+        - started_at: str (ISO format)
+        - reviewer_agent_id: Optional[str]
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="ReviewCycle",
+            payload=payload,
+            **kwargs
+        )
+
+
+class ReviewFeedbackSubmitted(DomainEvent):
+    """Emitted when reviewer provides feedback."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize ReviewFeedbackSubmitted event.
+
+        Required payload fields:
+        - iteration_number: int
+        - submitted_at: str (ISO format)
+        - feedback: str
+        - decision: str (approved, rejected, needs_changes)
+        - reviewer_id: str
+        - issues_found: List[Dict[str, Any]]
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="ReviewCycle",
+            payload=payload,
+            **kwargs
+        )
+
+
+class ReviewCycleApproved(DomainEvent):
+    """Emitted when review is approved."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize ReviewCycleApproved event.
+
+        Required payload fields:
+        - approved_at: str (ISO format)
+        - final_iteration: int
+        - reviewer_id: str
+        - approval_notes: Optional[str]
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="ReviewCycle",
+            payload=payload,
+            **kwargs
+        )
+
+
+class ReviewCycleRejected(DomainEvent):
+    """Emitted when review is rejected."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize ReviewCycleRejected event.
+
+        Required payload fields:
+        - rejected_at: str (ISO format)
+        - final_iteration: int
+        - reviewer_id: str
+        - rejection_reason: str
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="ReviewCycle",
+            payload=payload,
+            **kwargs
+        )
+
+
+class ReviewCycleEscalated(DomainEvent):
+    """Emitted when review is escalated to human."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize ReviewCycleEscalated event.
+
+        Required payload fields:
+        - escalated_at: str (ISO format)
+        - reason: str
+        - iteration_count: int
+        - escalated_to: str
+        - escalation_notes: Optional[str]
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="ReviewCycle",
+            payload=payload,
+            **kwargs
+        )
+
+
+# =============================================================================
+# Project Context Events
+# =============================================================================
+
+
+class ProjectContextCreated(DomainEvent):
+    """Emitted when project context is created."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize ProjectContextCreated event.
+
+        Required payload fields:
+        - project_name: str
+        - repository_url: str
+        - default_branch: str
+        - language: Optional[str]
+        - framework: Optional[str]
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="ProjectContext",
+            payload=payload,
+            **kwargs
+        )
+
+
+class ProjectTestConfigUpdated(DomainEvent):
+    """Emitted when test configuration changes."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize ProjectTestConfigUpdated event.
+
+        Required payload fields:
+        - updated_at: str (ISO format)
+        - test_command: str
+        - test_directory: str
+        - coverage_threshold: Optional[float]
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="ProjectContext",
+            payload=payload,
+            **kwargs
+        )
+
+
+class ProjectDockerConfigUpdated(DomainEvent):
+    """Emitted when Docker configuration changes."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize ProjectDockerConfigUpdated event.
+
+        Required payload fields:
+        - updated_at: str (ISO format)
+        - base_image: str
+        - build_args: Dict[str, str]
+        - environment_vars: Dict[str, str]
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="ProjectContext",
+            payload=payload,
+            **kwargs
+        )
+
+
+class ProjectWorkflowMappingAdded(DomainEvent):
+    """Emitted when custom workflow mapping is added."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize ProjectWorkflowMappingAdded event.
+
+        Required payload fields:
+        - added_at: str (ISO format)
+        - label_pattern: str
+        - workflow_template_id: str
+        - priority: int
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="ProjectContext",
             payload=payload,
             **kwargs
         )
