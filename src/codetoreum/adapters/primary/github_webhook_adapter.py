@@ -7,20 +7,27 @@ and translating them into domain commands.
 
 import hashlib
 import hmac
+import json
+import logging
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional
 
 from fastapi import Header, HTTPException, Request
 
 from codetoreum.domain.events import DomainEvent
+from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.ports.output.config_store import IConfigStore
+from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.ports.input.workflow_command import (
     IWorkflowCommandPort,
     StartWorkflowCommand,
     TriggerType,
     WorkflowCommandResult,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================================
@@ -97,71 +104,6 @@ class WebhookProcessingError(WebhookError):
     http_status = 500
 
 
-# ============================================================================
-# Configuration Service Interface
-# ============================================================================
-
-
-class IConfigurationService:
-    """Interface for configuration service (temporary until config service is available)"""
-
-    async def get_webhook_secret(self) -> Optional[str]:
-        """Get webhook secret for signature verification"""
-        raise NotImplementedError
-
-    async def list_projects(self) -> List[str]:
-        """List all configured projects"""
-        raise NotImplementedError
-
-    async def get_project_config(self, project: str) -> Any:
-        """Get project configuration"""
-        raise NotImplementedError
-
-    async def load_github_state(self, project: str) -> Optional[Dict[str, Any]]:
-        """Load GitHub state (column mappings, etc.)"""
-        raise NotImplementedError
-
-    async def get_workflow_template(self, workflow_name: str) -> Any:
-        """Get workflow template"""
-        raise NotImplementedError
-
-
-# ============================================================================
-# Event Bus Interface
-# ============================================================================
-
-
-class IEventBus:
-    """Interface for event bus (temporary until event bus is available)"""
-
-    async def publish(self, event: DomainEvent) -> None:
-        """Publish domain event"""
-        raise NotImplementedError
-
-
-# ============================================================================
-# Logger Interface
-# ============================================================================
-
-
-class ILogger:
-    """Interface for logger"""
-
-    def info(self, message: str) -> None:
-        """Log info message"""
-        pass
-
-    def warning(self, message: str) -> None:
-        """Log warning message"""
-        pass
-
-    def error(self, message: str) -> None:
-        """Log error message"""
-        pass
-
-    def debug(self, message: str) -> None:
-        """Log debug message"""
-        pass
 
 
 # ============================================================================
