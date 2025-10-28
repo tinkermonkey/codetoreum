@@ -87,6 +87,14 @@ from codetoreum.domain.services import (
     WorkAssignmentService,
     WorkflowValidationService,
 )
+from codetoreum.domain.user import (
+    APIKey,
+    AuthContext,
+    Permission,
+    ROLE_PERMISSIONS,
+    User,
+    UserRole,
+)
 
 __all__ = [
     # Base classes
@@ -191,4 +199,11 @@ __all__ = [
     "AssignmentResult",
     "WorkflowValidationService",
     "ExecutionContextBuilder",
+    # User & Authentication
+    "User",
+    "UserRole",
+    "Permission",
+    "ROLE_PERMISSIONS",
+    "APIKey",
+    "AuthContext",
 ]

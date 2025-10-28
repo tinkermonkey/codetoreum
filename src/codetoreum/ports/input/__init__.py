@@ -58,6 +58,18 @@ from .workflow_command import (
     TriggerType,
     WorkflowCommandResult,
 )
+from .authentication import (
+    APIKeyNotFoundError,
+    AuthenticationError,
+    CreateAPIKeyCommand,
+    CreateUserCommand,
+    IAuthenticationPort,
+    LoginCommand,
+    LoginResult,
+    UpdateUserCommand,
+    UserAlreadyExistsError,
+    UserNotFoundError,
+)
 
 __all__ = [
     # Exceptions
@@ -109,4 +121,15 @@ __all__ = [
     "MountSubAgentCommand",
     "UnmountSubAgentCommand",
     "ConfigurationCommandResult",
+    # Authentication Port
+    "IAuthenticationPort",
+    "CreateUserCommand",
+    "UpdateUserCommand",
+    "LoginCommand",
+    "LoginResult",
+    "CreateAPIKeyCommand",
+    "AuthenticationError",
+    "UserAlreadyExistsError",
+    "UserNotFoundError",
+    "APIKeyNotFoundError",
 ]
