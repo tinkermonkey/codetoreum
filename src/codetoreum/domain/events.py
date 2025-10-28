@@ -1303,3 +1303,179 @@ class PipelineFailed(DomainEvent):
             payload=payload,
             **kwargs
         )
+
+
+# =============================================================================
+# Configuration Events
+# =============================================================================
+
+
+class ProjectConfigUpdated(DomainEvent):
+    """Emitted when project configuration is updated."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize ProjectConfigUpdated event.
+
+        Required payload fields:
+        - project_id: str
+        - version: int
+        - changes: Dict[str, Any]
+        - updated_by: str
+        - reason: Optional[str]
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="ProjectConfig",
+            payload=payload,
+            **kwargs
+        )
+
+
+class AgentConfigUpdated(DomainEvent):
+    """Emitted when agent configuration is updated."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize AgentConfigUpdated event.
+
+        Required payload fields:
+        - project_id: str
+        - agent_name: str
+        - version: int
+        - changes: Dict[str, Any]
+        - updated_by: str
+        - reason: Optional[str]
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="AgentConfig",
+            payload=payload,
+            **kwargs
+        )
+
+
+class PipelineConfigUpdated(DomainEvent):
+    """Emitted when pipeline configuration is updated."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize PipelineConfigUpdated event.
+
+        Required payload fields:
+        - project_id: str
+        - pipeline_name: str
+        - version: int
+        - changes: Dict[str, Any]
+        - updated_by: str
+        - reason: Optional[str]
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="PipelineConfig",
+            payload=payload,
+            **kwargs
+        )
+
+
+class EnvironmentVariableChanged(DomainEvent):
+    """Emitted when environment variable is added, updated, or removed."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize EnvironmentVariableChanged event.
+
+        Required payload fields:
+        - project_id: str
+        - variable_name: str
+        - action: str (added, updated, removed)
+        - is_secret: bool
+        - changed_by: str
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="ProjectConfig",
+            payload=payload,
+            **kwargs
+        )
+
+
+class CommandMounted(DomainEvent):
+    """Emitted when command is mounted to project agent."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize CommandMounted event.
+
+        Required payload fields:
+        - project_id: str
+        - command_name: str
+        - command_path: str
+        - mounted_by: str
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="ProjectConfig",
+            payload=payload,
+            **kwargs
+        )
+
+
+class CommandUnmounted(DomainEvent):
+    """Emitted when command is unmounted from project agent."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize CommandUnmounted event.
+
+        Required payload fields:
+        - project_id: str
+        - command_name: str
+        - unmounted_by: str
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="ProjectConfig",
+            payload=payload,
+            **kwargs
+        )
+
+
+class SubAgentMounted(DomainEvent):
+    """Emitted when sub-agent is mounted to project agent."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize SubAgentMounted event.
+
+        Required payload fields:
+        - project_id: str
+        - subagent_name: str
+        - mounted_by: str
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="ProjectConfig",
+            payload=payload,
+            **kwargs
+        )
+
+
+class SubAgentUnmounted(DomainEvent):
+    """Emitted when sub-agent is unmounted from project agent."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize SubAgentUnmounted event.
+
+        Required payload fields:
+        - project_id: str
+        - subagent_name: str
+        - unmounted_by: str
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="ProjectConfig",
+            payload=payload,
+            **kwargs
+        )
