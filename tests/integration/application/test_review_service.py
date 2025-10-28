@@ -552,3 +552,292 @@ async def test_get_review_status(
     assert status["needs_revision"]
     assert status["latest_feedback"] is not None
     assert status["latest_feedback"]["issues_count"] == 2
+
+
+# Error Handling Tests
+
+
+class FailingEventStore:
+    """Mock event store that fails on append."""
+
+    def __init__(self, fail_on_call: int = 1):
+        """
+        Initialize failing event store.
+
+        Args:
+            fail_on_call: Which call number to fail on (1-indexed)
+        """
+        self.events: List[DomainEvent] = []
+        self.call_count = 0
+        self.fail_on_call = fail_on_call
+
+    async def append(self, event: DomainEvent) -> None:
+        """Append event to store, failing on specified call."""
+        self.call_count += 1
+        if self.call_count == self.fail_on_call:
+            from codetoreum.ports.exceptions import EventStoreError
+
+            raise EventStoreError("Event store connection failed")
+        self.events.append(event)
+
+    async def get_events(
+        self, aggregate_id: str, from_version: int = 0
+    ) -> List[DomainEvent]:
+        """Get events for aggregate."""
+        return [e for e in self.events if e.aggregate_id == aggregate_id]
+
+
+@pytest.mark.asyncio
+async def test_create_review_cycle_event_store_error(maker_agent, reviewer_agent):
+    """Test error handling when event store fails during creation."""
+    failing_store = FailingEventStore(fail_on_call=1)
+    review_service = ReviewService(event_store=failing_store)
+
+    from codetoreum.ports.exceptions import EventStoreError
+
+    with pytest.raises(EventStoreError, match="Event store connection failed"):
+        await review_service.create_review_cycle(
+            workflow_id="workflow-1",
+            stage_name="coding",
+            maker_agent=maker_agent,
+            reviewer_agent=reviewer_agent,
+            max_iterations=3,
+        )
+
+    # Verify no events were persisted
+    assert len(failing_store.events) == 0
+
+
+@pytest.mark.asyncio
+async def test_start_iteration_event_store_error(
+    maker_agent, reviewer_agent, maker_execution
+):
+    """Test error handling when event store fails during iteration start."""
+    # Create with working store
+    working_store = MockEventStore()
+    review_service_1 = ReviewService(event_store=working_store)
+
+    result = await review_service_1.create_review_cycle(
+        workflow_id="workflow-1",
+        stage_name="coding",
+        maker_agent=maker_agent,
+        reviewer_agent=reviewer_agent,
+    )
+    review_cycle = result.review_cycle
+
+    # Now fail on start_iteration
+    failing_store = FailingEventStore(fail_on_call=1)
+    review_service_2 = ReviewService(event_store=failing_store)
+
+    from codetoreum.ports.exceptions import EventStoreError
+
+    with pytest.raises(EventStoreError, match="Event store connection failed"):
+        await review_service_2.start_iteration(
+            review_cycle=review_cycle,
+            maker_output="def hello(): return 'world'",
+            maker_execution=maker_execution,
+        )
+
+    # Verify no events were persisted
+    assert len(failing_store.events) == 0
+
+
+@pytest.mark.asyncio
+async def test_submit_review_event_store_error(
+    maker_agent, reviewer_agent, maker_execution, reviewer_execution
+):
+    """Test error handling when event store fails during review submission."""
+    # Create and start with working store
+    working_store = MockEventStore()
+    review_service_1 = ReviewService(event_store=working_store)
+
+    result = await review_service_1.create_review_cycle(
+        workflow_id="workflow-1",
+        stage_name="coding",
+        maker_agent=maker_agent,
+        reviewer_agent=reviewer_agent,
+    )
+    review_cycle = result.review_cycle
+
+    await review_service_1.start_iteration(
+        review_cycle=review_cycle,
+        maker_output="def hello(): return 'world'",
+        maker_execution=maker_execution,
+    )
+
+    # Now fail on submit_review
+    failing_store = FailingEventStore(fail_on_call=1)
+    review_service_2 = ReviewService(event_store=failing_store)
+
+    from codetoreum.ports.exceptions import EventStoreError
+
+    with pytest.raises(EventStoreError, match="Event store connection failed"):
+        await review_service_2.submit_review(
+            review_cycle=review_cycle,
+            decision=ReviewDecision.APPROVE,
+            comment="Looks good!",
+            reviewer_execution=reviewer_execution,
+        )
+
+    # Verify no events were persisted
+    assert len(failing_store.events) == 0
+
+
+@pytest.mark.asyncio
+async def test_complete_cycle_event_store_error(
+    maker_agent, reviewer_agent, maker_execution, reviewer_execution
+):
+    """Test error handling when event store fails during cycle completion."""
+    # Create review cycle
+    working_store = MockEventStore()
+    review_service_1 = ReviewService(event_store=working_store)
+
+    result = await review_service_1.create_review_cycle(
+        workflow_id="workflow-1",
+        stage_name="coding",
+        maker_agent=maker_agent,
+        reviewer_agent=reviewer_agent,
+        max_iterations=3,
+    )
+    review_cycle = result.review_cycle
+
+    # Start iteration and get it approved
+    await review_service_1.start_iteration(
+        review_cycle=review_cycle,
+        maker_output="def hello(): return 'world'",
+        maker_execution=maker_execution,
+    )
+
+    await review_service_1.submit_review(
+        review_cycle=review_cycle,
+        decision=ReviewDecision.APPROVE,
+        comment="Looks good!",
+        reviewer_execution=reviewer_execution,
+    )
+
+    # Manually reset status to test complete_cycle error handling
+    # (In real scenario, this wouldn't happen, but we need to test the error path)
+    review_cycle.status = ReviewStatus.IN_PROGRESS
+    review_cycle.completed_at = None
+
+    # Now try to complete with failing store
+    failing_store = FailingEventStore(fail_on_call=1)
+    review_service_2 = ReviewService(event_store=failing_store)
+
+    from codetoreum.ports.exceptions import EventStoreError
+
+    with pytest.raises(EventStoreError, match="Event store connection failed"):
+        await review_service_2.complete_cycle(review_cycle=review_cycle, approved=True)
+
+    # Verify no events were persisted
+    assert len(failing_store.events) == 0
+
+
+@pytest.mark.asyncio
+async def test_escalate_on_first_iteration(
+    review_service, maker_agent, reviewer_agent, maker_execution, reviewer_execution
+):
+    """Test that explicit escalation works on first iteration."""
+    # Create review cycle
+    create_result = await review_service.create_review_cycle(
+        workflow_id="workflow-1",
+        stage_name="coding",
+        maker_agent=maker_agent,
+        reviewer_agent=reviewer_agent,
+        max_iterations=3,
+    )
+    review_cycle = create_result.review_cycle
+
+    # Start first iteration
+    await review_service.start_iteration(
+        review_cycle=review_cycle,
+        maker_output="def hello(): return 'world'",
+        maker_execution=maker_execution,
+    )
+
+    # Submit explicit escalation on first iteration
+    await review_service.submit_review(
+        review_cycle=review_cycle,
+        decision=ReviewDecision.ESCALATE,
+        comment="This is too complex for me to review properly",
+        reviewer_execution=reviewer_execution,
+    )
+
+    # Should detect escalation even on first iteration
+    should_escalate = await review_service.should_escalate(review_cycle)
+    assert should_escalate
+
+    # Complete cycle should escalate
+    result = await review_service.complete_cycle(review_cycle=review_cycle, approved=False)
+    assert result.escalated
+    assert review_cycle.status == ReviewStatus.ESCALATED
+
+
+@pytest.mark.asyncio
+async def test_multiple_file_types_in_feedback():
+    """Test FeedbackProcessor with multiple file types."""
+    from codetoreum.application.feedback_processor import FeedbackProcessor
+
+    processor = FeedbackProcessor()
+
+    review_output = """
+## Issues
+
+1. [Type Error]: Missing type annotation in user_service.ts:45
+2. [Security Issue]: SQL injection vulnerability in database.go:123
+3. [Memory Leak]: Unfreed pointer in parser.cpp:89
+4. [Syntax Error]: Invalid syntax in Main.java:234
+"""
+
+    result = await processor.parse_review_output(review_output)
+
+    assert result.success
+    assert len(result.parsed_feedback.issues) == 4
+
+    # Check each file type was parsed
+    file_paths = [issue.file_path for issue in result.parsed_feedback.issues]
+    assert "user_service.ts" in file_paths
+    assert "database.go" in file_paths
+    assert "parser.cpp" in file_paths
+    assert "Main.java" in file_paths
+
+    # Check line numbers
+    line_numbers = [issue.line_number for issue in result.parsed_feedback.issues]
+    assert 45 in line_numbers
+    assert 123 in line_numbers
+    assert 89 in line_numbers
+    assert 234 in line_numbers
+
+
+@pytest.mark.asyncio
+async def test_custom_severity_keywords():
+    """Test FeedbackProcessor with custom severity keywords."""
+    from codetoreum.application.feedback_processor import FeedbackProcessor, Severity
+
+    # Custom severity keywords for a specific domain
+    custom_keywords = {
+        Severity.CRITICAL: ["showstopper", "catastrophic"],
+        Severity.HIGH: ["major", "significant"],
+        Severity.MEDIUM: ["moderate", "noticeable"],
+        Severity.LOW: ["trivial", "cosmetic"],
+        Severity.INFO: ["note", "observation"],
+    }
+
+    processor = FeedbackProcessor(severity_keywords=custom_keywords)
+
+    review_output = """
+## Issues
+
+1. [Database Error]: Showstopper bug in connection pool
+2. [UI Bug]: Cosmetic issue with button alignment
+"""
+
+    result = await processor.parse_review_output(review_output)
+
+    assert result.success
+    assert len(result.parsed_feedback.issues) == 2
+
+    # Check custom severity detection
+    severities = [issue.severity for issue in result.parsed_feedback.issues]
+    assert Severity.CRITICAL in severities  # "showstopper"
+    assert Severity.LOW in severities  # "cosmetic"

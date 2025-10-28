@@ -4,7 +4,7 @@ import logging
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from codetoreum.domain.review_cycle import ReviewDecision
 
@@ -86,10 +86,40 @@ class FeedbackProcessor:
     - Classify feedback severity and priority
     """
 
-    def __init__(self):
-        """Initialize FeedbackProcessor."""
+    # Default severity keywords (can be overridden via constructor)
+    DEFAULT_SEVERITY_KEYWORDS = {
+        Severity.CRITICAL: [
+            "critical",
+            "blocker",
+            "security",
+            "vulnerability",
+            "broken",
+            "injection",
+            "xss",
+            "csrf",
+        ],
+        Severity.HIGH: ["error", "bug", "fails?", "incorrect", "wrong"],
+        Severity.MEDIUM: ["warning", "improvement", "should", "consider"],
+        Severity.LOW: ["minor", "nitpick", "style", "formatting"],
+        Severity.INFO: ["note", "info", "fyi", "suggestion"],
+    }
+
+    def __init__(
+        self,
+        approval_patterns: Optional[List[str]] = None,
+        escalation_patterns: Optional[List[str]] = None,
+        severity_keywords: Optional[Dict[Severity, List[str]]] = None,
+    ):
+        """
+        Initialize FeedbackProcessor.
+
+        Args:
+            approval_patterns: Custom patterns for detecting approval (optional)
+            escalation_patterns: Custom patterns for detecting escalation (optional)
+            severity_keywords: Custom severity keywords mapping (optional)
+        """
         # Patterns for detecting approval
-        self.approval_patterns = [
+        self.approval_patterns = approval_patterns or [
             r"\[APPROVED\]",
             r"LGTM",
             r"looks?\s+good",
@@ -98,30 +128,15 @@ class FeedbackProcessor:
         ]
 
         # Patterns for detecting escalation
-        self.escalation_patterns = [
+        self.escalation_patterns = escalation_patterns or [
             r"\[ESCALATE\]",
             r"escalat(e|ing)",
             r"needs?\s+human\s+review",
             r"requires?\s+manual\s+review",
         ]
 
-        # Severity keywords
-        self.severity_keywords = {
-            Severity.CRITICAL: [
-                "critical",
-                "blocker",
-                "security",
-                "vulnerability",
-                "broken",
-                "injection",
-                "xss",
-                "csrf",
-            ],
-            Severity.HIGH: ["error", "bug", "fails?", "incorrect", "wrong"],
-            Severity.MEDIUM: ["warning", "improvement", "should", "consider"],
-            Severity.LOW: ["minor", "nitpick", "style", "formatting"],
-            Severity.INFO: ["note", "info", "fyi", "suggestion"],
-        }
+        # Severity keywords (use custom or default)
+        self.severity_keywords = severity_keywords or self.DEFAULT_SEVERITY_KEYWORDS.copy()
 
     async def parse_review_output(
         self, review_output: str
@@ -454,14 +469,28 @@ class FeedbackProcessor:
         # Default to medium
         return Severity.MEDIUM
 
-    def _extract_location(self, description: str) -> tuple[Optional[str], Optional[int]]:
+    def _extract_location(self, description: str) -> "Tuple[Optional[str], Optional[int]]":
         """
         Extract file path and line number from description.
 
+        Supports multiple file extensions:
+        - Python: .py
+        - JavaScript/TypeScript: .js, .ts, .jsx, .tsx
+        - Java: .java
+        - Go: .go
+        - C/C++: .c, .cpp, .h, .hpp
+        - Ruby: .rb
+        - PHP: .php
+        - Rust: .rs
+        - Kotlin: .kt
+        - Swift: .swift
+        - Scala: .scala
+        - C#: .cs
+
         Looks for patterns like:
-        - "in file.py:123"
-        - "file.py line 123"
-        - "file.py:123"
+        - "in file.ext:123"
+        - "file.ext line 123"
+        - "file.ext:123"
 
         Args:
             description: Issue description
@@ -469,11 +498,14 @@ class FeedbackProcessor:
         Returns:
             Tuple of (file_path, line_number) or (None, None)
         """
-        # Pattern: "path/to/file.py:123" or "file.py line 123"
+        # Supported file extensions
+        extensions = r"(?:py|js|ts|jsx|tsx|java|go|c|cpp|h|hpp|rb|php|rs|kt|swift|scala|cs)"
+
+        # Patterns: "path/to/file.ext:123" or "file.ext line 123"
         patterns = [
-            r"([a-zA-Z0-9_/\.\-]+\.py):(\d+)",  # file.py:123
-            r"([a-zA-Z0-9_/\.\-]+\.py)\s+line\s+(\d+)",  # file.py line 123
-            r"in\s+([a-zA-Z0-9_/\.\-]+\.py):(\d+)",  # in file.py:123
+            rf"([a-zA-Z0-9_/\.\-]+\.{extensions}):(\d+)",  # file.ext:123
+            rf"([a-zA-Z0-9_/\.\-]+\.{extensions})\s+line\s+(\d+)",  # file.ext line 123
+            rf"in\s+([a-zA-Z0-9_/\.\-]+\.{extensions}):(\d+)",  # in file.ext:123
         ]
 
         for pattern in patterns:

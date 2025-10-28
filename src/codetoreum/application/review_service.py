@@ -53,16 +53,6 @@ class ReviewCompletionResult:
     reason: Optional[str] = None
 
 
-@dataclass
-class StageConfig:
-    """Configuration for a pipeline stage with review."""
-
-    agent: Agent
-    reviewer_agent: Optional[Agent]
-    max_iterations: int = 3
-    requires_review: bool = False
-
-
 class ReviewService:
     """
     Application service for orchestrating maker-checker review cycles.
@@ -111,7 +101,9 @@ class ReviewService:
 
         Raises:
             DomainError: If validation fails
+            EventStoreError: If event persistence fails
         """
+        review_cycle = None
         try:
             review_cycle = ReviewCycle.create(
                 workflow_id=workflow_id,
@@ -141,6 +133,9 @@ class ReviewService:
 
         except EventStoreError as e:
             logger.error(f"Failed to persist review cycle creation events: {e}")
+            # Clear any pending events to maintain consistency
+            if review_cycle:
+                review_cycle.clear_events()
             raise
         except DomainError as e:
             logger.error(f"Failed to create review cycle (validation error): {e}")
@@ -165,6 +160,7 @@ class ReviewService:
 
         Raises:
             DomainError: If max iterations exceeded
+            EventStoreError: If event persistence fails
         """
         try:
             review_cycle.start_iteration(
@@ -193,6 +189,8 @@ class ReviewService:
             logger.error(
                 f"Failed to persist iteration start events for cycle {review_cycle.id}: {e}"
             )
+            # Clear any pending events to maintain consistency
+            review_cycle.clear_events()
             raise
         except DomainError as e:
             logger.error(
@@ -258,6 +256,8 @@ class ReviewService:
                 f"Failed to persist review submission events for cycle "
                 f"{review_cycle.id}: {e}"
             )
+            # Clear any pending events to maintain consistency
+            review_cycle.clear_events()
             raise
         except DomainError as e:
             logger.error(
@@ -271,9 +271,9 @@ class ReviewService:
         Check if review cycle should be escalated to human review.
 
         Escalation criteria:
-        - Max iterations reached
+        - Explicit escalation decision from reviewer (any iteration)
         - Already marked as escalated
-        - Explicit escalation decision from reviewer
+        - Max iterations reached with changes still requested
 
         Args:
             review_cycle: Review cycle to check
@@ -285,23 +285,23 @@ class ReviewService:
         if review_cycle.status == ReviewStatus.ESCALATED:
             return True
 
+        # Explicit escalation decision (check first, applies to any iteration)
+        latest_feedback = review_cycle.get_latest_feedback()
+        if latest_feedback and latest_feedback.decision == ReviewDecision.ESCALATE:
+            logger.info(
+                f"Review cycle {review_cycle.id} explicitly escalated by reviewer "
+                f"at iteration {review_cycle.current_iteration}"
+            )
+            return True
+
         # Max iterations reached
         if review_cycle.current_iteration >= review_cycle.max_iterations:
-            latest_feedback = review_cycle.get_latest_feedback()
             if latest_feedback and latest_feedback.decision == ReviewDecision.REQUEST_CHANGES:
                 logger.warning(
                     f"Review cycle {review_cycle.id} reached max iterations "
                     f"({review_cycle.max_iterations}), escalating to human"
                 )
                 return True
-
-        # Explicit escalation decision
-        latest_feedback = review_cycle.get_latest_feedback()
-        if latest_feedback and latest_feedback.decision == ReviewDecision.ESCALATE:
-            logger.info(
-                f"Review cycle {review_cycle.id} explicitly escalated by reviewer"
-            )
-            return True
 
         return False
 
@@ -346,30 +346,33 @@ class ReviewService:
                 # Check if should escalate
                 should_escalate = await self.should_escalate(review_cycle)
 
-                if should_escalate and not review_cycle.is_complete():
-                    reason = (
-                        f"Max iterations reached ({review_cycle.max_iterations})"
-                        if review_cycle.current_iteration >= review_cycle.max_iterations
-                        else "Reviewer requested escalation"
-                    )
-                    review_cycle.escalate(reason)
+                if should_escalate:
+                    # Either already escalated or needs escalation
+                    if not review_cycle.is_complete():
+                        reason = (
+                            f"Max iterations reached ({review_cycle.max_iterations})"
+                            if review_cycle.current_iteration >= review_cycle.max_iterations
+                            else "Reviewer requested escalation"
+                        )
+                        review_cycle.escalate(reason)
 
-                    # Persist events
-                    events = review_cycle.get_pending_events()
-                    for event in events:
-                        await self.event_store.append(event)
-                    review_cycle.clear_events()
+                        # Persist events
+                        events = review_cycle.get_pending_events()
+                        for event in events:
+                            await self.event_store.append(event)
+                        review_cycle.clear_events()
 
-                    logger.warning(
-                        f"Review cycle {review_cycle.id} escalated to human: {reason}"
-                    )
+                        logger.warning(
+                            f"Review cycle {review_cycle.id} escalated to human: {reason}"
+                        )
 
+                    # Return escalation result (either just escalated or already was)
                     return ReviewCompletionResult(
                         success=True,
                         review_cycle=review_cycle,
                         approved=False,
                         escalated=True,
-                        reason=reason,
+                        reason=review_cycle.escalation_reason or "Escalated to human",
                     )
                 else:
                     # Not complete, needs another iteration
@@ -391,6 +394,8 @@ class ReviewService:
                 f"Failed to persist review completion events for cycle "
                 f"{review_cycle.id}: {e}"
             )
+            # Clear any pending events to maintain consistency
+            review_cycle.clear_events()
             raise
         except DomainError as e:
             logger.error(
