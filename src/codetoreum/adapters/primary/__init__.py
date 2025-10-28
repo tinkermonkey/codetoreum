@@ -1,0 +1,31 @@
+"""
+Primary Adapters
+
+This module contains the primary (inbound) adapters for the Codetoreum system.
+Primary adapters are entry points that receive external requests and translate
+them into domain commands.
+
+Available Adapters:
+- GitHubWebhookAdapter: Receives webhook events from GitHub
+- RestAPIAdapter: Provides RESTful HTTP API for programmatic access
+- WebSocketAdapter: Provides real-time event streaming via WebSocket
+"""
+
+from codetoreum.adapters.primary.fastapi_app import create_app, create_development_app
+from codetoreum.adapters.primary.github_webhook_adapter import (
+    GitHubWebhookAdapter,
+    WebhookEvent,
+    WebhookProcessingResult,
+)
+from codetoreum.adapters.primary.rest_api_adapter import RestAPIAdapter
+from codetoreum.adapters.primary.websocket_adapter import WebSocketAdapter
+
+__all__ = [
+    "create_app",
+    "create_development_app",
+    "GitHubWebhookAdapter",
+    "WebhookEvent",
+    "WebhookProcessingResult",
+    "RestAPIAdapter",
+    "WebSocketAdapter",
+]
