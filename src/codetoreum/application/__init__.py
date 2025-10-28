@@ -12,7 +12,17 @@ from codetoreum.application.execution_service import (
     ExecutionServiceResult,
     LogEntry,
 )
+from codetoreum.application.pipeline_manager import (
+    PipelineManager,
+    PipelineResult,
+    StageResult,
+)
 from codetoreum.application.workflow_orchestrator import WorkflowOrchestrator
+from codetoreum.application.workspace_router import (
+    WorkspaceRouter,
+    WorkspacePreparationResult,
+    WorkspaceFinalizationResult,
+)
 
 __all__ = [
     "WorkflowOrchestrator",
@@ -24,4 +34,10 @@ __all__ = [
     "ExecutionServiceResult",
     "ExecutionFailureReason",
     "LogEntry",
+    "PipelineManager",
+    "PipelineResult",
+    "StageResult",
+    "WorkspaceRouter",
+    "WorkspacePreparationResult",
+    "WorkspaceFinalizationResult",
 ]

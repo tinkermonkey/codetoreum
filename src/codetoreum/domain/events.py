@@ -1088,3 +1088,218 @@ class ProjectWorkflowMappingAdded(DomainEvent):
             payload=payload,
             **kwargs
         )
+
+
+# =============================================================================
+# Pipeline Execution Events
+# =============================================================================
+
+
+class PipelineStageStarted(DomainEvent):
+    """Emitted when a pipeline stage starts execution."""
+
+    def __init__(
+        self,
+        aggregate_id: str,
+        pipeline_id: str,
+        stage_name: str,
+        stage_type: str,
+        agent_config: Dict[str, Any],
+        execution_id: str,
+        timestamp: Optional[datetime] = None,
+        **kwargs
+    ):
+        """
+        Initialize PipelineStageStarted event.
+
+        Args:
+            aggregate_id: Workflow ID
+            pipeline_id: Pipeline execution ID
+            stage_name: Name of the stage
+            stage_type: Type of stage (sequential, parallel, review)
+            agent_config: Agent configuration for this stage
+            execution_id: Execution ID for this stage
+            timestamp: Event timestamp
+        """
+        payload = {
+            "pipeline_id": pipeline_id,
+            "stage_name": stage_name,
+            "stage_type": stage_type,
+            "agent_config": agent_config,
+            "execution_id": execution_id,
+            "started_at": (timestamp or datetime.now(timezone.utc)).isoformat(),
+        }
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="Workflow",
+            payload=payload,
+            **kwargs
+        )
+
+
+class PipelineStageCompleted(DomainEvent):
+    """Emitted when a pipeline stage completes successfully."""
+
+    def __init__(
+        self,
+        aggregate_id: str,
+        pipeline_id: str,
+        stage_name: str,
+        execution_id: str,
+        output: str,
+        duration_seconds: float,
+        timestamp: Optional[datetime] = None,
+        **kwargs
+    ):
+        """
+        Initialize PipelineStageCompleted event.
+
+        Args:
+            aggregate_id: Workflow ID
+            pipeline_id: Pipeline execution ID
+            stage_name: Name of the stage
+            execution_id: Execution ID for this stage
+            output: Stage output
+            duration_seconds: Duration in seconds
+            timestamp: Event timestamp
+        """
+        payload = {
+            "pipeline_id": pipeline_id,
+            "stage_name": stage_name,
+            "execution_id": execution_id,
+            "output": output,
+            "duration_seconds": duration_seconds,
+            "completed_at": (timestamp or datetime.now(timezone.utc)).isoformat(),
+        }
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="Workflow",
+            payload=payload,
+            **kwargs
+        )
+
+
+class PipelineStageFailed(DomainEvent):
+    """Emitted when a pipeline stage fails."""
+
+    def __init__(
+        self,
+        aggregate_id: str,
+        pipeline_id: str,
+        stage_name: str,
+        execution_id: str,
+        error: str,
+        duration_seconds: float,
+        timestamp: Optional[datetime] = None,
+        **kwargs
+    ):
+        """
+        Initialize PipelineStageFailed event.
+
+        Args:
+            aggregate_id: Workflow ID
+            pipeline_id: Pipeline execution ID
+            stage_name: Name of the stage
+            execution_id: Execution ID for this stage
+            error: Error message
+            duration_seconds: Duration in seconds
+            timestamp: Event timestamp
+        """
+        payload = {
+            "pipeline_id": pipeline_id,
+            "stage_name": stage_name,
+            "execution_id": execution_id,
+            "error": error,
+            "duration_seconds": duration_seconds,
+            "failed_at": (timestamp or datetime.now(timezone.utc)).isoformat(),
+        }
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="Workflow",
+            payload=payload,
+            **kwargs
+        )
+
+
+class PipelineCompleted(DomainEvent):
+    """Emitted when entire pipeline completes successfully."""
+
+    def __init__(
+        self,
+        aggregate_id: str,
+        pipeline_id: str,
+        workflow_id: str,
+        completed_stages: list,
+        outputs: Dict[str, Any],
+        duration_seconds: float,
+        timestamp: Optional[datetime] = None,
+        **kwargs
+    ):
+        """
+        Initialize PipelineCompleted event.
+
+        Args:
+            aggregate_id: Pipeline execution ID
+            pipeline_id: Pipeline execution ID
+            workflow_id: Workflow ID
+            completed_stages: List of completed stage names
+            outputs: Dictionary of stage outputs
+            duration_seconds: Total duration in seconds
+            timestamp: Event timestamp
+        """
+        payload = {
+            "pipeline_id": pipeline_id,
+            "workflow_id": workflow_id,
+            "completed_stages": completed_stages,
+            "outputs": outputs,
+            "duration_seconds": duration_seconds,
+            "completed_at": (timestamp or datetime.now(timezone.utc)).isoformat(),
+        }
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="Pipeline",
+            payload=payload,
+            **kwargs
+        )
+
+
+class PipelineFailed(DomainEvent):
+    """Emitted when pipeline execution fails."""
+
+    def __init__(
+        self,
+        aggregate_id: str,
+        pipeline_id: str,
+        workflow_id: str,
+        error: str,
+        completed_stages: list,
+        failed_stages: list,
+        timestamp: Optional[datetime] = None,
+        **kwargs
+    ):
+        """
+        Initialize PipelineFailed event.
+
+        Args:
+            aggregate_id: Pipeline execution ID
+            pipeline_id: Pipeline execution ID
+            workflow_id: Workflow ID
+            error: Error message
+            completed_stages: List of completed stage names
+            failed_stages: List of failed stage names
+            timestamp: Event timestamp
+        """
+        payload = {
+            "pipeline_id": pipeline_id,
+            "workflow_id": workflow_id,
+            "error": error,
+            "completed_stages": completed_stages,
+            "failed_stages": failed_stages,
+            "failed_at": (timestamp or datetime.now(timezone.utc)).isoformat(),
+        }
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="Pipeline",
+            payload=payload,
+            **kwargs
+        )
