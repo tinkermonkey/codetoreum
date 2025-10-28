@@ -15,8 +15,9 @@ from codetoreum.ports.output.llm_provider import ILLMProvider
 from codetoreum.ports.output.container import IContainer
 from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.event_store import IEventStore
-from codetoreum.domain.work_item import WorkItem, WorkItemStatus, WorkItemType
-from codetoreum.domain.value_objects import ExecutionResult, ExecutionStatus
+from codetoreum.domain.work_item import WorkItem, WorkItemStatus, WorkItemPriority
+from codetoreum.domain.value_objects import ExecutionResult
+from codetoreum.domain.agent_execution import ExecutionStatus
 from codetoreum.adapters.testing import (
     InMemoryTicketAdapter,
     MockLLMAdapter,
@@ -44,24 +45,21 @@ class TestTicketSystemSwapping:
     @pytest.mark.asyncio
     async def test_swap_github_to_in_memory(self, factory: AdapterFactory):
         """Test swapping from GitHub to in-memory adapter."""
+        from codetoreum.domain.types import ProjectId
+
         # Create in-memory adapter (GitHub requires credentials)
         adapter1 = factory.create_ticket_system(adapter_name="in_memory")
 
-        # Create work item
-        work_item = WorkItem(
-            id="TEST-1",
+        # Create work item using the adapter interface
+        work_item = await adapter1.create_work_item(
             title="Test Issue",
             description="Test description",
-            type=WorkItemType.TASK,
-            status=WorkItemStatus.OPEN,
-            metadata={}
+            project_id=ProjectId("test-project")
         )
 
-        await adapter1.create_work_item(work_item)
-
         # Verify created
-        retrieved = await adapter1.get_work_item("TEST-1")
-        assert retrieved.id == "TEST-1"
+        retrieved = await adapter1.get_work_item(work_item.id)
+        assert retrieved.id == work_item.id
         assert retrieved.title == "Test Issue"
 
         # Swap to another in-memory instance
@@ -69,33 +67,30 @@ class TestTicketSystemSwapping:
 
         # New instance should be independent
         with pytest.raises(Exception):
-            await adapter2.get_work_item("TEST-1")
+            await adapter2.get_work_item(work_item.id)
 
     @pytest.mark.asyncio
     async def test_in_memory_adapter_isolation(self, factory: AdapterFactory):
         """Test that in-memory adapters are isolated."""
+        from codetoreum.domain.types import ProjectId
+
         adapter1 = factory.create_ticket_system(adapter_name="in_memory")
         adapter2 = factory.create_ticket_system(adapter_name="in_memory")
 
         # Create work item in adapter1
-        work_item = WorkItem(
-            id="TEST-1",
+        work_item = await adapter1.create_work_item(
             title="Test Issue",
             description="Test description",
-            type=WorkItemType.TASK,
-            status=WorkItemStatus.OPEN,
-            metadata={}
+            project_id=ProjectId("test-project")
         )
 
-        await adapter1.create_work_item(work_item)
-
         # Should exist in adapter1
-        retrieved = await adapter1.get_work_item("TEST-1")
+        retrieved = await adapter1.get_work_item(work_item.id)
         assert retrieved is not None
 
         # Should NOT exist in adapter2 (isolated instance)
         with pytest.raises(Exception):
-            await adapter2.get_work_item("TEST-1")
+            await adapter2.get_work_item(work_item.id)
 
 
 class TestLLMProviderSwapping:
@@ -105,36 +100,40 @@ class TestLLMProviderSwapping:
     async def test_swap_claude_to_mock(self, factory: AdapterFactory):
         """Test swapping from Claude to mock adapter."""
         # Create mock adapter (Claude requires credentials)
+        # Disable resilience to access the unwrapped adapter
+        factory.enable_resilience(False)
         adapter = factory.create_llm_provider(adapter_name="mock")
 
         # Configure mock response
         if isinstance(adapter, MockLLMAdapter):
-            adapter.add_response("test", "mock response")
+            adapter.add_response_pattern("test", "mock response")
 
         # Execute
         result = await adapter.execute("test")
-        assert result.output == "mock response"
+        assert result.content == "mock response"
 
     @pytest.mark.asyncio
     async def test_mock_adapter_response_patterns(self, factory: AdapterFactory):
         """Test mock adapter with different response patterns."""
+        # Disable resilience to access the unwrapped adapter
+        factory.enable_resilience(False)
         adapter = factory.create_llm_provider(adapter_name="mock")
 
         if isinstance(adapter, MockLLMAdapter):
             # Add multiple patterns
-            adapter.add_response("hello.*", "Hello, world!")
-            adapter.add_response("goodbye.*", "Goodbye!")
-            adapter.add_response(".*", "Default response")
+            adapter.add_response_pattern("hello.*", "Hello, world!")
+            adapter.add_response_pattern("goodbye.*", "Goodbye!")
+            adapter.add_response_pattern(".*", "Default response")
 
             # Test pattern matching
             result1 = await adapter.execute("hello there")
-            assert result1.output == "Hello, world!"
+            assert result1.content == "Hello, world!"
 
             result2 = await adapter.execute("goodbye friend")
-            assert result2.output == "Goodbye!"
+            assert result2.content == "Goodbye!"
 
             result3 = await adapter.execute("random prompt")
-            assert result3.output == "Default response"
+            assert result3.content == "Default response"
 
 
 class TestContainerSwapping:
@@ -150,7 +149,8 @@ class TestContainerSwapping:
         result = await adapter.run(
             image="python:3.11",
             command=["python", "--version"],
-            name="test-container"
+            volumes={},
+            environment={}
         )
 
         assert result is not None
@@ -192,29 +192,42 @@ class TestRepositorySwapping:
         # Create in-memory adapter (Git requires git binary)
         adapter = factory.create_repository(adapter_name="in_memory")
 
+        # First need to clone a repo to have a repo_path
+        from pathlib import Path
+        from codetoreum.domain.types import BranchName
+        repo_id = await adapter.clone("https://github.com/test/test.git", Path("/tmp/test-repo"))
+        repo_path = Path("/tmp/test-repo")
+
         # Create branch
-        await adapter.create_branch("feature-branch")
+        await adapter.create_branch(repo_path, BranchName("feature-branch"))
 
         # List branches
-        branches = await adapter.list_branches()
+        branches = await adapter.list_branches(repo_path)
         assert "feature-branch" in branches
 
     @pytest.mark.asyncio
     async def test_in_memory_repository_operations(self, factory: AdapterFactory):
         """Test in-memory repository adapter operations."""
+        from pathlib import Path
+        from codetoreum.domain.types import BranchName
+
         adapter = factory.create_repository(adapter_name="in_memory")
 
+        # First clone a repo
+        repo_id = await adapter.clone("https://github.com/test/test.git", Path("/tmp/test-repo2"))
+        repo_path = Path("/tmp/test-repo2")
+
         # Create branch
-        await adapter.create_branch("feature-1")
-        await adapter.create_branch("feature-2")
+        await adapter.create_branch(repo_path, BranchName("feature-1"))
+        await adapter.create_branch(repo_path, BranchName("feature-2"))
 
         # List branches
-        branches = await adapter.list_branches()
+        branches = await adapter.list_branches(repo_path)
         assert "feature-1" in branches
         assert "feature-2" in branches
 
         # Checkout branch
-        await adapter.checkout("feature-1")
+        await adapter.checkout(repo_path, BranchName("feature-1"))
 
         # Get current branch (if adapter supports it)
         # Note: InMemoryRepositoryAdapter might not track current branch
@@ -250,7 +263,7 @@ class TestModeBasedSwapping:
         """Test adapter selection in simulation mode."""
         config = AdapterFactoryConfig(
             operation_mode=OperationMode.SIMULATION,
-            enable_resilience=True
+            enable_resilience=False  # Disable resilience to get unwrapped adapters
         )
         factory = AdapterFactory(config)
 
@@ -260,7 +273,7 @@ class TestModeBasedSwapping:
         container = factory.create_container(adapter_name="fake")
         repository = factory.create_repository(adapter_name="in_memory")
 
-        # Verify they work
+        # Verify they are the correct types (without resilience wrappers)
         assert isinstance(ticket_system, InMemoryTicketAdapter)
         assert isinstance(llm_provider, MockLLMAdapter)
         assert isinstance(container, FakeContainerAdapter)
@@ -273,28 +286,26 @@ class TestRuntimeAdapterSwapping:
     @pytest.mark.asyncio
     async def test_swap_during_execution(self, factory: AdapterFactory):
         """Test swapping adapters during execution."""
+        from codetoreum.domain.types import ProjectId
+
         # Start with in-memory adapter
         adapter1 = factory.create_ticket_system(adapter_name="in_memory")
 
         # Create work item
-        work_item = WorkItem(
-            id="TEST-1",
+        work_item = await adapter1.create_work_item(
             title="Test Issue",
             description="Test description",
-            type=WorkItemType.TASK,
-            status=WorkItemStatus.OPEN,
-            metadata={}
+            project_id=ProjectId("test-project")
         )
 
-        await adapter1.create_work_item(work_item)
-        assert await adapter1.get_work_item("TEST-1") is not None
+        assert await adapter1.get_work_item(work_item.id) is not None
 
         # Swap to different adapter instance
         adapter2 = factory.create_ticket_system(adapter_name="in_memory")
 
         # New adapter should be empty (different instance)
         with pytest.raises(Exception):
-            await adapter2.get_work_item("TEST-1")
+            await adapter2.get_work_item(work_item.id)
 
     @pytest.mark.asyncio
     async def test_mode_change_during_execution(self):
@@ -343,9 +354,10 @@ class TestAdapterConfiguration:
 
         # Custom resilience config
         custom_config = ServiceResilienceConfig(
+            service_name="test-service",
             rate_limit=RateLimitConfig(max_requests=10, window_seconds=1),
             circuit_breaker=CircuitBreakerConfig(failure_threshold=2),
-            retry=RetryConfig(max_attempts=1),
+            retry=RetryConfig(max_retries=1),
             timeout=TimeoutConfig(default_timeout_seconds=5)
         )
 
@@ -381,36 +393,44 @@ class TestMultipleAdapterTypes:
     @pytest.mark.asyncio
     async def test_coordinated_adapter_operations(self, factory: AdapterFactory):
         """Test coordinated operations across multiple adapters."""
+        from codetoreum.domain.types import ProjectId
+
         # Create adapters
         ticket_system = factory.create_ticket_system(adapter_name="in_memory")
         llm_provider = factory.create_llm_provider(adapter_name="mock")
 
-        # Configure mock LLM
-        if isinstance(llm_provider, MockLLMAdapter):
-            llm_provider.add_response(".*", "Task completed")
+        # Configure mock LLM - need to get unwrapped adapter
+        factory.enable_resilience(False)
+        llm_provider_unwrapped = factory.create_llm_provider(adapter_name="mock")
+        if isinstance(llm_provider_unwrapped, MockLLMAdapter):
+            llm_provider_unwrapped.add_response_pattern(".*", "Task completed")
+        factory.enable_resilience(True)
 
         # Create work item
-        work_item = WorkItem(
-            id="TEST-1",
+        work_item = await ticket_system.create_work_item(
             title="Test Task",
             description="Complete this task",
-            type=WorkItemType.TASK,
-            status=WorkItemStatus.IN_PROGRESS,
-            metadata={}
+            project_id=ProjectId("test-project")
         )
 
-        await ticket_system.create_work_item(work_item)
-
         # Execute LLM operation
-        result = await llm_provider.execute("Complete task TEST-1")
-        assert result.output == "Task completed"
+        result = await llm_provider_unwrapped.execute("Complete task")
+        assert result.content == "Task completed"
 
-        # Update work item based on result
-        work_item.status = WorkItemStatus.COMPLETED
-        await ticket_system.update_work_item(work_item)
+        # Assign, start and complete the work item
+        work_item.assign_agent("test-agent", "Testing")
+        work_item.start()
+        work_item.complete()
+
+        # Update work item using the interface
+        from codetoreum.domain.types import WorkItemId
+        await ticket_system.update_work_item(
+            WorkItemId(work_item.id),
+            {"status": WorkItemStatus.COMPLETED}
+        )
 
         # Verify update
-        updated = await ticket_system.get_work_item("TEST-1")
+        updated = await ticket_system.get_work_item(work_item.id)
         assert updated.status == WorkItemStatus.COMPLETED
 
 
@@ -428,7 +448,8 @@ class TestRegistryModification:
             tags=["custom", "testing"]
         )
 
-        # Create instance
+        # Create instance (with resilience disabled to check type)
+        factory.enable_resilience(False)
         adapter = factory.create_ticket_system(adapter_name="custom_in_memory")
         assert isinstance(adapter, InMemoryTicketAdapter)
 

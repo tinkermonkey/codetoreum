@@ -1,6 +1,28 @@
 """Test configuration and shared fixtures."""
 
+import docker
 import pytest
+
+
+def is_docker_available() -> bool:
+    """Check if Docker is available and running.
+
+    Returns:
+        bool: True if Docker daemon is accessible, False otherwise
+    """
+    try:
+        client = docker.from_env()
+        client.ping()
+        return True
+    except (docker.errors.DockerException, Exception):
+        return False
+
+
+# Create a global pytest marker for tests requiring Docker
+docker_available = pytest.mark.skipif(
+    not is_docker_available(),
+    reason="Docker is not available or not running"
+)
 
 
 @pytest.fixture

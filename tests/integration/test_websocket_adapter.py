@@ -11,6 +11,7 @@ from codetoreum.adapters.primary.fastapi_app import create_development_app
 from codetoreum.domain.events import DomainEvent
 
 
+
 @pytest.fixture
 def client():
     """Create test client with development app"""

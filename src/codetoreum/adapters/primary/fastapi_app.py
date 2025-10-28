@@ -387,33 +387,102 @@ def create_development_app() -> FastAPI:
             print(f"Mock event published: {event}")
 
     class MockConfigService(IConfigurationService):
-        async def get_webhook_secret(self) -> Optional[str]:
-            return "mock-secret-key"
+        """Mock configuration service for development."""
+
+        async def get_project_config(self, project_id: str):
+            from codetoreum.ports.output.config_store import ProjectConfig
+            return ProjectConfig(
+                id=project_id,
+                name="test-project",
+                github_org="test-org",
+                github_repo="test-repo",
+                pipelines=[]
+            )
+
+        async def get_project_config_by_name(self, project_name: str):
+            from codetoreum.ports.output.config_store import ProjectConfig
+            return ProjectConfig(
+                id="test-id",
+                name=project_name,
+                github_org="test-org",
+                github_repo="test-repo",
+                pipelines=[]
+            )
+
+        async def save_project_config(self, config) -> None:
+            pass
+
+        async def get_agent_config(self, project_id: str, agent_name: str):
+            from codetoreum.ports.output.config_store import AgentConfig
+            return AgentConfig(
+                project_id=project_id,
+                agent_name=agent_name,
+                model="claude-3-5-sonnet-20241022",
+                timeout=300,
+                requires_docker=False,
+                makes_code_changes=False
+            )
+
+        async def save_agent_config(self, config) -> None:
+            pass
+
+        async def get_pipeline_config(self, project_id: str, pipeline_name: str):
+            from codetoreum.ports.output.config_store import PipelineConfig
+            return PipelineConfig(
+                id=f"{project_id}-{pipeline_name}",
+                project_id=project_id,
+                name=pipeline_name,
+                stages=[]
+            )
+
+        async def save_pipeline_config(self, config) -> None:
+            pass
+
+        async def get_workflow_template(self, template_name: str):
+            from codetoreum.ports.output.config_store import WorkflowTemplate
+            return WorkflowTemplate(
+                id=template_name,
+                name=template_name,
+                description="Mock workflow template",
+                stages=[]
+            )
+
+        async def save_workflow_template(self, template) -> None:
+            pass
 
         async def list_projects(self) -> list:
-            return ["test-project"]
+            return []
 
-        async def get_project_config(self, project: str):
-            class MockGitHub:
-                org = "test-org"
-                repo = "test-repo"
+        async def list_agents(self, project_id: str) -> list:
+            return []
 
-            class MockConfig:
-                github = MockGitHub()
-                pipelines = []
+        async def list_pipelines(self, project_id: str) -> list:
+            return []
 
-            return MockConfig()
+        async def search_configs(self, query: str, config_type: Optional[str] = None) -> list:
+            return []
 
-        async def load_github_state(self, project: str) -> Optional[Dict[str, Any]]:
-            return {"boards": {}}
+        async def get_config_version(self, config_id: str, version: int) -> Dict[str, Any]:
+            return {}
 
-        async def get_workflow_template(self, workflow_name: str):
-            class MockWorkflow:
-                columns = []
+        async def list_config_versions(self, config_id: str, limit: int = 10) -> list:
+            return []
 
-            return MockWorkflow()
+        async def delete_project_config(self, project_id: str) -> None:
+            pass
 
-    class MockLogger(ILogger):
+        async def delete_agent_config(self, project_id: str, agent_name: str) -> None:
+            pass
+
+        async def exists(self, project_id: str) -> bool:
+            return False
+
+    class MockLogger:
+        """Mock logger for development."""
+
+        def __init__(self):
+            pass
+
         def info(self, message: str) -> None:
             print(f"INFO: {message}")
 

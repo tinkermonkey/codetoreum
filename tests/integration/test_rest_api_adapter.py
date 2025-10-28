@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from codetoreum.adapters.primary.fastapi_app import create_development_app
 
 
+
 @pytest.fixture
 def client():
     """Create test client with development app"""

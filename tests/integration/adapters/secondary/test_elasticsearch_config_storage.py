@@ -21,6 +21,10 @@ from codetoreum.ports.output.config_store import (
     ProjectConfig,
     WorkflowTemplate,
 )
+from tests.conftest import docker_available
+
+# Mark all tests in this module as requiring Docker
+pytestmark = docker_available
 
 
 @pytest.fixture(scope="module")

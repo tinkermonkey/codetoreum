@@ -27,6 +27,11 @@ from codetoreum.ports.input.workflow_command import (
     WorkflowCommandResult,
 )
 
+# Type aliases for missing interfaces
+IEventBus = EventBus
+IConfigurationService = IConfigStore
+ILogger = logging.Logger
+
 logger = logging.getLogger(__name__)
 
 

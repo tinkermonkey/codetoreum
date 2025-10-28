@@ -9,8 +9,8 @@ from datetime import datetime, timedelta
 from typing import Optional
 from uuid import UUID
 
+import bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from codetoreum.domain.user import (
     ROLE_PERMISSIONS,
@@ -80,16 +80,36 @@ class AuthenticationService(IAuthenticationPort):
         self.access_token_expire_minutes = access_token_expire_minutes
         self.refresh_token_expire_days = refresh_token_expire_days
 
-        # Password hashing context
-        self.pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        # We use bcrypt directly (not passlib) for password hashing
+        # to avoid compatibility issues with newer bcrypt versions
 
     def _hash_password(self, password: str) -> str:
-        """Hash a password using bcrypt."""
-        return self.pwd_context.hash(password)
+        """Hash a password using bcrypt.
+
+        Note: bcrypt has a maximum password length of 72 bytes.
+        Passwords longer than this are truncated.
+        """
+        # Truncate to 72 bytes for bcrypt compatibility
+        password_bytes = password.encode('utf-8')[:72]
+        salt = bcrypt.gensalt()
+        hashed = bcrypt.hashpw(password_bytes, salt)
+        # Return as string for consistency with existing code
+        return hashed.decode('utf-8')
 
     def _verify_password(self, plain_password: str, hashed_password: str) -> bool:
-        """Verify a password against a hash."""
-        return self.pwd_context.verify(plain_password, hashed_password)
+        """Verify a password against a hash.
+
+        Note: bcrypt has a maximum password length of 72 bytes.
+        Passwords longer than this are truncated to match hashing behavior.
+        """
+        # Truncate to 72 bytes for bcrypt compatibility
+        password_bytes = plain_password.encode('utf-8')[:72]
+        # Convert hash string to bytes if needed
+        if isinstance(hashed_password, str):
+            hashed_bytes = hashed_password.encode('utf-8')
+        else:
+            hashed_bytes = hashed_password
+        return bcrypt.checkpw(password_bytes, hashed_bytes)
 
     def _create_access_token(
         self, data: dict, expires_delta: Optional[timedelta] = None
