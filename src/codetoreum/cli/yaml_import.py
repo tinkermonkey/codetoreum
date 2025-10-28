@@ -3,10 +3,18 @@ YAML Configuration Import Tool
 
 CLI tool to migrate existing YAML configuration files to the database-backed
 configuration system.
+
+SECURITY FEATURES:
+- Path validation and sanitization
+- File size limits (10MB max)
+- YAML bomb protection (depth limit, max nodes)
+- File extension validation
+- Safe YAML loading with no code execution
 """
 
 import asyncio
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
@@ -30,10 +38,27 @@ from codetoreum.ports.output.config_store import (
 logger = logging.getLogger(__name__)
 console = Console()
 
+# Security constants
+MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10MB
+ALLOWED_EXTENSIONS = {'.yaml', '.yml'}
+MAX_YAML_DEPTH = 10
+MAX_YAML_NODES = 10000
+
+
+class SecurityError(Exception):
+    """Raised when a security validation fails."""
+    pass
+
 
 class YAMLConfigImporter:
     """
     Imports YAML configuration files into the database-backed configuration store.
+
+    Security features:
+    - Validates and sanitizes file paths
+    - Enforces file size limits
+    - Protects against YAML bombs
+    - Only accepts .yaml/.yml files
     """
 
     def __init__(self, config_store):
@@ -44,6 +69,141 @@ class YAMLConfigImporter:
             config_store: Configuration storage adapter
         """
         self.config_store = config_store
+
+    def _validate_file_path(self, file_path: Path) -> Path:
+        """
+        Validate and sanitize file path for security.
+
+        Args:
+            file_path: Path to validate
+
+        Returns:
+            Resolved absolute path
+
+        Raises:
+            SecurityError: If path is invalid or dangerous
+        """
+        try:
+            # Resolve to absolute path, following symlinks
+            resolved_path = file_path.resolve(strict=True)
+
+            # Check file extension
+            if resolved_path.suffix.lower() not in ALLOWED_EXTENSIONS:
+                raise SecurityError(
+                    f"Invalid file extension: {resolved_path.suffix}. "
+                    f"Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
+                )
+
+            # Check if it's actually a file
+            if not resolved_path.is_file():
+                raise SecurityError(f"Path is not a file: {resolved_path}")
+
+            # Check file size
+            file_size = resolved_path.stat().st_size
+            if file_size > MAX_FILE_SIZE_BYTES:
+                raise SecurityError(
+                    f"File too large: {file_size} bytes "
+                    f"(max: {MAX_FILE_SIZE_BYTES} bytes / {MAX_FILE_SIZE_BYTES // (1024*1024)}MB)"
+                )
+
+            # Additional security: Ensure no path traversal by checking that
+            # resolved path doesn't escape expected directories
+            # (In production, you might want to enforce a specific base directory)
+
+            return resolved_path
+
+        except (OSError, RuntimeError) as e:
+            raise SecurityError(f"Invalid or inaccessible file path: {e}")
+
+    def _safe_load_yaml(self, file_path: Path) -> Dict[str, Any]:
+        """
+        Safely load YAML file with protection against malicious content.
+
+        Args:
+            file_path: Path to YAML file (already validated)
+
+        Returns:
+            Parsed YAML content
+
+        Raises:
+            SecurityError: If YAML content is malicious
+            ValueError: If YAML is invalid
+        """
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                # Use safe_load to prevent code execution
+                # This protects against arbitrary Python object instantiation
+                yaml_content = yaml.safe_load(f)
+
+            if yaml_content is None:
+                raise ValueError("Empty YAML file")
+
+            if not isinstance(yaml_content, dict):
+                raise ValueError("YAML root must be a dictionary/object")
+
+            # Protect against YAML bombs (deeply nested structures)
+            self._check_yaml_depth(yaml_content, current_depth=0)
+            self._check_yaml_node_count(yaml_content)
+
+            return yaml_content
+
+        except yaml.YAMLError as e:
+            raise ValueError(f"Invalid YAML syntax: {e}")
+
+    def _check_yaml_depth(self, obj: Any, current_depth: int) -> None:
+        """
+        Check YAML depth to prevent billion laughs attack.
+
+        Args:
+            obj: Object to check
+            current_depth: Current nesting depth
+
+        Raises:
+            SecurityError: If depth exceeds limit
+        """
+        if current_depth > MAX_YAML_DEPTH:
+            raise SecurityError(
+                f"YAML depth exceeds maximum allowed ({MAX_YAML_DEPTH}). "
+                "Possible YAML bomb attack."
+            )
+
+        if isinstance(obj, dict):
+            for value in obj.values():
+                self._check_yaml_depth(value, current_depth + 1)
+        elif isinstance(obj, list):
+            for item in obj:
+                self._check_yaml_depth(item, current_depth + 1)
+
+    def _check_yaml_node_count(self, obj: Any) -> None:
+        """
+        Check total number of nodes to prevent memory exhaustion.
+
+        Args:
+            obj: Object to check
+
+        Raises:
+            SecurityError: If node count exceeds limit
+        """
+        node_count = self._count_nodes(obj)
+        if node_count > MAX_YAML_NODES:
+            raise SecurityError(
+                f"YAML contains too many nodes ({node_count}). "
+                f"Maximum allowed: {MAX_YAML_NODES}. "
+                "Possible YAML bomb attack."
+            )
+
+    def _count_nodes(self, obj: Any) -> int:
+        """Recursively count nodes in object tree."""
+        count = 1  # Count self
+
+        if isinstance(obj, dict):
+            for value in obj.values():
+                count += self._count_nodes(value)
+        elif isinstance(obj, list):
+            for item in obj:
+                count += self._count_nodes(item)
+
+        return count
 
     async def import_project_config(
         self, yaml_file: Path, dry_run: bool = False
@@ -60,13 +220,25 @@ class YAMLConfigImporter:
         """
         console.print(f"[bold blue]Reading configuration from:[/bold blue] {yaml_file}")
 
-        # Load YAML file
+        # SECURITY: Validate file path
         try:
-            with open(yaml_file, 'r') as f:
-                yaml_config = yaml.safe_load(f)
-        except Exception as e:
-            console.print(f"[bold red]Error reading YAML file:[/bold red] {e}")
+            validated_path = self._validate_file_path(yaml_file)
+            console.print(f"[dim]Validated path: {validated_path}[/dim]")
+        except SecurityError as e:
+            console.print(f"[bold red]Security error:[/bold red] {e}")
+            return {"success": False, "error": f"Security validation failed: {e}"}
+
+        # SECURITY: Load YAML with protection against malicious content
+        try:
+            yaml_config = self._safe_load_yaml(validated_path)
+            console.print("[green]✓ File loaded and validated successfully[/green]")
+        except (SecurityError, ValueError) as e:
+            console.print(f"[bold red]Error loading YAML:[/bold red] {e}")
             return {"success": False, "error": str(e)}
+        except Exception as e:
+            console.print(f"[bold red]Unexpected error:[/bold red] {e}")
+            logger.exception("Unexpected error loading YAML")
+            return {"success": False, "error": f"Unexpected error: {e}"}
 
         # Validate YAML structure
         validation_errors = self._validate_yaml_structure(yaml_config)

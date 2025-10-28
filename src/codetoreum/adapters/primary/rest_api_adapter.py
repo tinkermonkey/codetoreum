@@ -739,3 +739,196 @@ class RestAPIAdapter:
 
             except Exception as e:
                 raise HTTPException(status_code=400, detail=str(e))
+
+        # ====================================================================
+        # Configuration Query Endpoints (NEW)
+        # ====================================================================
+
+        @self.router.get(
+            "/configurations/projects/{project_name}",
+            response_model=Dict[str, Any],
+            summary="Get project configuration",
+        )
+        async def get_project_config(project_name: str) -> Dict[str, Any]:
+            """
+            Retrieves the current configuration for a project.
+
+            **Parameters:**
+            - project_name: Project identifier
+
+            **Returns:**
+            - 200 OK: Project configuration
+            - 404 Not Found: Project not found
+            """
+            try:
+                result = await self.config_port.get_project_config(project_name)
+                return result
+            except Exception as e:
+                raise HTTPException(status_code=404, detail=str(e))
+
+        @self.router.get(
+            "/configurations/agents",
+            response_model=List[Dict[str, Any]],
+            summary="List all agent configurations",
+        )
+        async def list_agent_configs(
+            project_name: Optional[str] = Query(None)
+        ) -> List[Dict[str, Any]]:
+            """
+            Lists all agent configurations, optionally filtered by project.
+
+            **Query Parameters:**
+            - project_name: (Optional) Filter by project
+
+            **Returns:**
+            - 200 OK: List of agent configurations
+            """
+            try:
+                result = await self.config_port.list_agent_configs(
+                    project_name=project_name
+                )
+                return result
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=str(e))
+
+        @self.router.get(
+            "/configurations/agents/{agent_name}",
+            response_model=Dict[str, Any],
+            summary="Get agent configuration",
+        )
+        async def get_agent_config(agent_name: str) -> Dict[str, Any]:
+            """
+            Retrieves configuration for a specific agent.
+
+            **Parameters:**
+            - agent_name: Agent identifier
+
+            **Returns:**
+            - 200 OK: Agent configuration
+            - 404 Not Found: Agent not found
+            """
+            try:
+                result = await self.config_port.get_agent_config(agent_name)
+                return result
+            except Exception as e:
+                raise HTTPException(status_code=404, detail=str(e))
+
+        @self.router.get(
+            "/configurations/pipelines",
+            response_model=List[Dict[str, Any]],
+            summary="List all pipeline configurations",
+        )
+        async def list_pipeline_configs(
+            project_name: Optional[str] = Query(None)
+        ) -> List[Dict[str, Any]]:
+            """
+            Lists all pipeline (workflow) configurations, optionally filtered by project.
+
+            **Query Parameters:**
+            - project_name: (Optional) Filter by project
+
+            **Returns:**
+            - 200 OK: List of pipeline configurations
+            """
+            try:
+                result = await self.config_port.list_pipeline_configs(
+                    project_name=project_name
+                )
+                return result
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=str(e))
+
+        @self.router.get(
+            "/configurations/pipelines/{pipeline_name}",
+            response_model=Dict[str, Any],
+            summary="Get pipeline configuration",
+        )
+        async def get_pipeline_config(pipeline_name: str) -> Dict[str, Any]:
+            """
+            Retrieves configuration for a specific pipeline.
+
+            **Parameters:**
+            - pipeline_name: Pipeline identifier
+
+            **Returns:**
+            - 200 OK: Pipeline configuration
+            - 404 Not Found: Pipeline not found
+            """
+            try:
+                result = await self.config_port.get_pipeline_config(pipeline_name)
+                return result
+            except Exception as e:
+                raise HTTPException(status_code=404, detail=str(e))
+
+        @self.router.get(
+            "/configurations/history",
+            response_model=List[Dict[str, Any]],
+            summary="Get configuration change history",
+        )
+        async def get_configuration_history(
+            project_name: Optional[str] = Query(None),
+            config_type: Optional[str] = Query(
+                None, description="Filter by type: project, agent, pipeline"
+            ),
+            limit: int = Query(50, ge=1, le=500),
+            offset: int = Query(0, ge=0),
+        ) -> List[Dict[str, Any]]:
+            """
+            Retrieves configuration change history.
+
+            **Query Parameters:**
+            - project_name: (Optional) Filter by project
+            - config_type: (Optional) Filter by configuration type
+            - limit: Maximum number of changes to return (default: 50, max: 500)
+            - offset: Number of changes to skip (default: 0)
+
+            **Returns:**
+            - 200 OK: List of configuration changes with diffs
+            """
+            try:
+                result = await self.config_port.get_configuration_history(
+                    project_name=project_name,
+                    config_type=config_type,
+                    limit=limit,
+                    offset=offset,
+                )
+                return result
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=str(e))
+
+        @self.router.post(
+            "/configurations/rollback/{change_id}",
+            response_model=ConfigurationResponse,
+            summary="Rollback configuration change",
+        )
+        async def rollback_configuration(
+            change_id: str, user_id: str = Query(...), reason: Optional[str] = Query(None)
+        ) -> ConfigurationResponse:
+            """
+            Rolls back a configuration change to a previous version.
+
+            **Parameters:**
+            - change_id: Configuration change identifier
+            - user_id: User performing the rollback
+            - reason: (Optional) Reason for rollback
+
+            **Returns:**
+            - 200 OK: Configuration rolled back
+            - 404 Not Found: Change not found
+            - 400 Bad Request: Cannot rollback
+            """
+            try:
+                result = await self.config_port.rollback_configuration(
+                    change_id=change_id, user_id=user_id, reason=reason
+                )
+
+                return ConfigurationResponse(
+                    success=result.success,
+                    config_version=result.config_version,
+                    message=result.message,
+                    changes_applied=result.changes_applied,
+                    errors=result.errors,
+                )
+
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=str(e))
