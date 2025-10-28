@@ -83,11 +83,11 @@ class MockLLMProvider:
         if self.should_rate_limit:
             self.failure_count += 1
             if self.failure_count < 3:
-                raise RateLimitError("Rate limit exceeded")
+                raise RateLimitError(retry_after=60)
 
         # Simulate failure
         if self.should_fail:
-            raise ExternalServiceError("LLM service error")
+            raise ExternalServiceError("llm", "LLM service error")
 
         # Simulate streaming
         if stream_callback and self.stream_enabled:
@@ -175,7 +175,7 @@ class MockContainer:
         self.should_fail = False
         self.should_timeout = False
         self.exit_code = 0
-        self.logs = "Container execution logs\nToken usage: input=20, output=10"
+        self.log_output = "Container execution logs\nToken usage: input=20, output=10"
 
     async def create(
         self,
@@ -239,11 +239,11 @@ class MockContainer:
         if stream:
 
             async def log_generator():
-                for line in self.logs.split("\n"):
+                for line in self.log_output.split("\n"):
                     yield line
 
             return log_generator()
-        return self.logs
+        return self.log_output
 
     async def status(self, container_id: str) -> ContainerStatus:
         """Get container status."""
@@ -319,7 +319,7 @@ class MockContainer:
         """Run container."""
         return ContainerResult(
             exit_code=self.exit_code,
-            stdout=self.logs,
+            stdout=self.log_output,
             stderr="",
             duration_ms=100,
             container_id="test-container",
@@ -406,13 +406,14 @@ def sample_agent():
         name="test-agent",
         display_name="Test Agent",
         agent_type=AgentType.DEVELOPER,
-        capabilities=[
-            AgentCapability(
+        role_description="Develops and tests Python code",
+        capabilities={
+            "python": AgentCapability(
                 skill="python",
                 proficiency=0.9,
                 description="Python development",
             )
-        ],
+        },
         model="claude-3-5-sonnet-20250219",
         makes_code_changes=True,
     )
@@ -422,9 +423,9 @@ def sample_agent():
 def sample_work_item():
     """Create sample work item."""
     return WorkItem.create(
-        id="issue-123",
         title="Test Issue",
         description="Test description",
+        project_id="project-123",
         priority=WorkItemPriority.MEDIUM,
     )
 

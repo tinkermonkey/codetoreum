@@ -252,8 +252,10 @@ class ContextBuilder:
             )
 
             # Create workspace directory
+            # Use work_item_id and workspace_type to create unique workspace path
+            workspace_dir_name = f"{workspace.workspace_type.value}_{workspace.work_item_id}"
             workspace_path = (
-                self.workspace_base_path / work_item.id / workspace.workspace_id
+                self.workspace_base_path / work_item.id / workspace_dir_name
             )
             workspace_path.mkdir(parents=True, exist_ok=True)
 
@@ -374,14 +376,15 @@ class ContextBuilder:
             lines.append(work_item.description)
             lines.append("")
 
-        if work_item.acceptance_criteria:
+        # Note: acceptance_criteria and comments are not yet implemented in WorkItem domain model
+        if hasattr(work_item, "acceptance_criteria") and work_item.acceptance_criteria:
             lines.append("## Acceptance Criteria")
             lines.append("")
             for i, criterion in enumerate(work_item.acceptance_criteria, 1):
                 lines.append(f"{i}. {criterion}")
             lines.append("")
 
-        if work_item.comments:
+        if hasattr(work_item, "comments") and work_item.comments:
             lines.append("## Comments")
             lines.append("")
             for comment in work_item.comments:
@@ -442,7 +445,7 @@ class ContextBuilder:
                     "proficiency": cap.proficiency,
                     "description": cap.description,
                 }
-                for cap in agent.capabilities
+                for cap in agent.capabilities.values()
             ],
             "makes_code_changes": agent.makes_code_changes,
             "filesystem_write_allowed": agent.filesystem_write_allowed,
@@ -464,16 +467,15 @@ class ContextBuilder:
             Workspace context dictionary
         """
         return {
-            "workspace_id": workspace.workspace_id,
             "workspace_type": workspace.workspace_type.value,
             "project_id": workspace.project_id,
             "work_item_id": workspace.work_item_id,
             "branch_name": workspace.branch_name,
             "discussion_id": workspace.discussion_id,
             "create_commits": workspace.create_commits,
-            "mounted_files": workspace.mounted_files,
-            "read_only_paths": workspace.read_only_paths,
-            "environment_variables": workspace.environment_variables,
+            "create_pr": workspace.create_pr,
+            "allow_code_changes": workspace.allow_code_changes,
+            "post_comments": workspace.post_comments,
         }
 
     async def gather_previous_stage_context(

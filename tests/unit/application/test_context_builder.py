@@ -123,13 +123,14 @@ def sample_agent():
         name="test-agent",
         display_name="Test Agent",
         agent_type=AgentType.DEVELOPER,
-        capabilities=[
-            AgentCapability(
+        role_description="Develops and tests Python code",
+        capabilities={
+            "python": AgentCapability(
                 skill="python",
                 proficiency=0.9,
                 description="Python development",
             )
-        ],
+        },
         model="claude-3-5-sonnet-20250219",
         makes_code_changes=True,
     )
@@ -139,43 +140,41 @@ def sample_agent():
 def sample_work_item():
     """Create sample work item."""
     work_item = WorkItem.create(
-        id="issue-123",
         title="Implement feature X",
         description="This feature should do X, Y, and Z",
+        project_id="project-123",
+        labels=["enhancement", "backend"],
         priority=WorkItemPriority.HIGH,
     )
-    work_item.add_acceptance_criterion("Must handle edge case A")
-    work_item.add_acceptance_criterion("Must have unit tests")
-    work_item.add_label("enhancement")
-    work_item.add_label("backend")
     return work_item
 
 
 @pytest.fixture
 def sample_project():
     """Create sample project context."""
-    return ProjectContext.create(
-        id="project-123",
+    project = ProjectContext.create(
         name="test-project",
         display_name="Test Project",
         repository_url="https://github.com/test/project",
         default_branch="main",
         primary_language="python",
         tech_stack=["python", "fastapi", "postgresql"],
-        test_framework="pytest",
-        test_command="pytest tests/",
     )
+    project.update_test_configuration(
+        test_command="pytest tests/",
+        test_framework="pytest",
+    )
+    return project
 
 
 @pytest.fixture
-def sample_workspace():
+def sample_workspace(sample_work_item, sample_project):
     """Create sample workspace context."""
-    return WorkspaceContext.create(
-        workspace_type=WorkspaceType.ISSUES,
-        project_id="project-123",
-        work_item_id="issue-123",
-        branch_name="feature/issue-123",
-        create_commits=True,
+    return WorkspaceContext.for_issue(
+        project_id=sample_project.id,
+        work_item_id=sample_work_item.id,
+        branch_name=f"feature/{sample_work_item.id}",
+        create_pr=True,
     )
 
 
@@ -238,17 +237,17 @@ async def test_build_execution_context_with_metadata(
 async def test_fetch_work_item_details(context_builder, mock_ticket_system):
     """Test fetching work item details."""
     work_item = WorkItem.create(
-        id="issue-456",
         title="Test Issue",
         description="Test description",
+        project_id="proj-1",
         priority=WorkItemPriority.MEDIUM,
     )
-    mock_ticket_system.work_items["issue-456"] = work_item
+    mock_ticket_system.work_items[work_item.id] = work_item
 
-    result = await context_builder.fetch_work_item_details("issue-456")
+    result = await context_builder.fetch_work_item_details(work_item.id)
 
     assert result is not None
-    assert result.id == "issue-456"
+    assert result.id == work_item.id
     assert result.title == "Test Issue"
 
 
@@ -384,8 +383,6 @@ def test_format_work_item_context(context_builder, sample_work_item):
 
     assert "Implement feature X" in content
     assert "This feature should do X, Y, and Z" in content
-    assert "Must handle edge case A" in content
-    assert "Must have unit tests" in content
     assert "enhancement" in content
     assert "backend" in content
 
@@ -394,7 +391,7 @@ def test_format_project_context(context_builder, sample_project):
     """Test formatting project context."""
     context = context_builder._format_project_context(sample_project)
 
-    assert context["id"] == "project-123"
+    assert context["id"] == sample_project.id
     assert context["name"] == "test-project"
     assert context["primary_language"] == "python"
     assert "python" in context["tech_stack"]
@@ -412,17 +409,19 @@ def test_format_agent_context(context_builder, sample_agent):
     assert context["model"] == "claude-3-5-sonnet-20250219"
     assert context["makes_code_changes"]
     assert len(context["capabilities"]) > 0
-    assert context["capabilities"][0]["skill"] == "python"
+    # Capabilities is a list of dicts created from the capabilities dict
+    skill_names = [cap["skill"] for cap in context["capabilities"]]
+    assert "python" in skill_names
 
 
-def test_format_workspace_context(context_builder, sample_workspace):
+def test_format_workspace_context(context_builder, sample_workspace, sample_work_item, sample_project):
     """Test formatting workspace context."""
     context = context_builder._format_workspace_context(sample_workspace)
 
-    assert context["workspace_type"] == "issues"
-    assert context["project_id"] == "project-123"
-    assert context["work_item_id"] == "issue-123"
-    assert context["branch_name"] == "feature/issue-123"
+    assert context["workspace_type"] == "issue"  # Note: enum value is "issue" not "issues"
+    assert context["project_id"] == sample_project.id
+    assert context["work_item_id"] == sample_work_item.id
+    assert context["branch_name"] == f"feature/{sample_work_item.id}"
     assert context["create_commits"]
 
 
