@@ -75,36 +75,46 @@ class RedisConfigCache:
         self._pubsub: Optional[aioredis.client.PubSub] = None
         self._listener_task: Optional[asyncio.Task] = None
         self._initialized = False
+        self._init_lock = asyncio.Lock()  # Prevent concurrent initialization
         self._stats = {
             "hits": 0,
             "misses": 0,
             "writes": 0,
             "invalidations": 0,
         }
+        self._stats_lock = asyncio.Lock()  # Thread-safe statistics
 
     async def initialize(self) -> None:
         """
         Initialize the cache (set up pub/sub listener).
 
+        This method is safe to call concurrently - only one initialization will occur.
+
         Raises:
             RedisConfigCacheError: If initialization fails
         """
-        if self._initialized:
-            return
+        # Use lock to prevent concurrent initialization
+        async with self._init_lock:
+            if self._initialized:
+                return
 
-        try:
-            # Set up pub/sub for cache invalidation
-            self._pubsub = self.redis.pubsub()
-            await self._pubsub.subscribe(self.invalidation_channel)
+            try:
+                # Set up pub/sub for cache invalidation
+                self._pubsub = self.redis.pubsub()
+                await self._pubsub.subscribe(self.invalidation_channel)
 
-            # Start listener task
-            self._listener_task = asyncio.create_task(self._listen_for_invalidations())
+                # Start listener task
+                self._listener_task = asyncio.create_task(
+                    self._listen_for_invalidations()
+                )
 
-            self._initialized = True
-            logger.info("Redis configuration cache initialized")
+                self._initialized = True
+                logger.info("Redis configuration cache initialized")
 
-        except Exception as e:
-            raise RedisConfigCacheError(f"Failed to initialize cache: {e}") from e
+            except Exception as e:
+                raise RedisConfigCacheError(
+                    f"Failed to initialize cache: {e}"
+                ) from e
 
     async def _listen_for_invalidations(self) -> None:
         """Listen for cache invalidation messages."""
@@ -150,7 +160,8 @@ class RedisConfigCache:
                 await self.redis.delete(key_pattern)
                 logger.debug(f"Invalidated key: {key_pattern}")
 
-            self._stats["invalidations"] += 1
+            async with self._stats_lock:
+                self._stats["invalidations"] += 1
 
         except Exception as e:
             logger.error(f"Failed to invalidate cache for {key_pattern}: {e}")
@@ -177,16 +188,19 @@ class RedisConfigCache:
             data = await self.redis.get(key)
 
             if data:
-                self._stats["hits"] += 1
+                async with self._stats_lock:
+                    self._stats["hits"] += 1
                 config_dict = json.loads(data)
                 return self._deserialize_project(config_dict)
 
-            self._stats["misses"] += 1
+            async with self._stats_lock:
+                self._stats["misses"] += 1
             return None
 
         except Exception as e:
             logger.warning(f"Failed to get project config from cache: {e}")
-            self._stats["misses"] += 1
+            async with self._stats_lock:
+                self._stats["misses"] += 1
             return None
 
     async def get_project_config_by_name(
@@ -209,16 +223,19 @@ class RedisConfigCache:
             data = await self.redis.get(key)
 
             if data:
-                self._stats["hits"] += 1
+                async with self._stats_lock:
+                    self._stats["hits"] += 1
                 config_dict = json.loads(data)
                 return self._deserialize_project(config_dict)
 
-            self._stats["misses"] += 1
+            async with self._stats_lock:
+                self._stats["misses"] += 1
             return None
 
         except Exception as e:
             logger.warning(f"Failed to get project config by name from cache: {e}")
-            self._stats["misses"] += 1
+            async with self._stats_lock:
+                self._stats["misses"] += 1
             return None
 
     async def set_project_config(
@@ -247,7 +264,8 @@ class RedisConfigCache:
             key_name = self._make_key("project", "name", config.name)
             await self.redis.setex(key_name, ttl, data)
 
-            self._stats["writes"] += 1
+            async with self._stats_lock:
+                self._stats["writes"] += 1
             logger.debug(f"Cached project config: {config.id}")
 
         except Exception as e:
@@ -274,16 +292,19 @@ class RedisConfigCache:
             data = await self.redis.get(key)
 
             if data:
-                self._stats["hits"] += 1
+                async with self._stats_lock:
+                    self._stats["hits"] += 1
                 config_dict = json.loads(data)
                 return self._deserialize_agent(config_dict)
 
-            self._stats["misses"] += 1
+            async with self._stats_lock:
+                self._stats["misses"] += 1
             return None
 
         except Exception as e:
             logger.warning(f"Failed to get agent config from cache: {e}")
-            self._stats["misses"] += 1
+            async with self._stats_lock:
+                self._stats["misses"] += 1
             return None
 
     async def set_agent_config(
@@ -307,7 +328,8 @@ class RedisConfigCache:
             key = self._make_key("agent", config.project_id, config.agent_name)
             await self.redis.setex(key, ttl, data)
 
-            self._stats["writes"] += 1
+            async with self._stats_lock:
+                self._stats["writes"] += 1
             logger.debug(f"Cached agent config: {config.project_id}/{config.agent_name}")
 
         except Exception as e:
@@ -334,16 +356,19 @@ class RedisConfigCache:
             data = await self.redis.get(key)
 
             if data:
-                self._stats["hits"] += 1
+                async with self._stats_lock:
+                    self._stats["hits"] += 1
                 config_dict = json.loads(data)
                 return self._deserialize_pipeline(config_dict)
 
-            self._stats["misses"] += 1
+            async with self._stats_lock:
+                self._stats["misses"] += 1
             return None
 
         except Exception as e:
             logger.warning(f"Failed to get pipeline config from cache: {e}")
-            self._stats["misses"] += 1
+            async with self._stats_lock:
+                self._stats["misses"] += 1
             return None
 
     async def set_pipeline_config(
@@ -367,7 +392,8 @@ class RedisConfigCache:
             key = self._make_key("pipeline", config.project_id, config.name)
             await self.redis.setex(key, ttl, data)
 
-            self._stats["writes"] += 1
+            async with self._stats_lock:
+                self._stats["writes"] += 1
             logger.debug(f"Cached pipeline config: {config.project_id}/{config.name}")
 
         except Exception as e:
@@ -393,16 +419,19 @@ class RedisConfigCache:
             data = await self.redis.get(key)
 
             if data:
-                self._stats["hits"] += 1
+                async with self._stats_lock:
+                    self._stats["hits"] += 1
                 config_dict = json.loads(data)
                 return self._deserialize_workflow(config_dict)
 
-            self._stats["misses"] += 1
+            async with self._stats_lock:
+                self._stats["misses"] += 1
             return None
 
         except Exception as e:
             logger.warning(f"Failed to get workflow template from cache: {e}")
-            self._stats["misses"] += 1
+            async with self._stats_lock:
+                self._stats["misses"] += 1
             return None
 
     async def set_workflow_template(
@@ -426,7 +455,8 @@ class RedisConfigCache:
             key = self._make_key("workflow", template.name)
             await self.redis.setex(key, ttl, data)
 
-            self._stats["writes"] += 1
+            async with self._stats_lock:
+                self._stats["writes"] += 1
             logger.debug(f"Cached workflow template: {template.name}")
 
         except Exception as e:
