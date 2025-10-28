@@ -5,7 +5,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, AsyncIterator, Callable, Dict, List, Optional
+from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Tuple
 
 from codetoreum.domain.agent import Agent
 from codetoreum.domain.agent_execution import AgentExecution, ExecutionStatus
@@ -21,8 +21,11 @@ from codetoreum.domain.workspace_context import WorkspaceContext
 from codetoreum.ports.exceptions import (
     ContainerExecutionError,
     ContainerTimeoutError,
+    EventStoreError,
     ExternalServiceError,
+    LLMProviderError,
     RateLimitError,
+    StorageError,
 )
 from codetoreum.ports.output import IContainer, IEventStore, ILLMProvider, IStorage
 
@@ -164,8 +167,11 @@ class ExecutionService:
 
             return execution
 
-        except Exception as e:
-            logger.error(f"Failed to create execution: {e}")
+        except EventStoreError as e:
+            logger.error(f"Failed to persist execution creation events: {e}")
+            raise
+        except DomainError as e:
+            logger.error(f"Failed to create execution (validation error): {e}")
             raise
 
     async def start_execution(
@@ -223,13 +229,21 @@ class ExecutionService:
                 reason="Execution started successfully",
             )
 
-        except Exception as e:
-            logger.error(f"Failed to start execution {execution.id}: {e}")
+        except EventStoreError as e:
+            logger.error(f"Failed to persist start event for execution {execution.id}: {e}")
             return ExecutionServiceResult(
                 success=False,
                 execution=execution,
                 error=str(e),
                 failure_reason=ExecutionFailureReason.UNKNOWN,
+            )
+        except DomainError as e:
+            logger.error(f"Failed to start execution {execution.id} (validation error): {e}")
+            return ExecutionServiceResult(
+                success=False,
+                execution=execution,
+                error=str(e),
+                failure_reason=ExecutionFailureReason.VALIDATION_ERROR,
             )
 
     async def execute_with_llm(
@@ -305,7 +319,7 @@ class ExecutionService:
                     await asyncio.sleep(self.retry_delay_seconds * retry_count)
                 continue
 
-            except ExternalServiceError as e:
+            except (ExternalServiceError, LLMProviderError) as e:
                 logger.error(
                     f"LLM service error for execution {execution.id}: {e}, "
                     f"retry {retry_count + 1}/{self.max_retries}"
@@ -316,8 +330,13 @@ class ExecutionService:
                     await asyncio.sleep(self.retry_delay_seconds)
                 continue
 
-            except Exception as e:
-                logger.error(f"Unexpected error during execution {execution.id}: {e}")
+            except EventStoreError as e:
+                logger.error(f"Event store error during execution {execution.id}: {e}")
+                last_error = e
+                break
+
+            except DomainError as e:
+                logger.error(f"Domain validation error during execution {execution.id}: {e}")
                 last_error = e
                 break
 
@@ -401,8 +420,6 @@ class ExecutionService:
             logs = await self.container.logs(container_id)
 
             # Extract token usage from logs (if available)
-            # This is a simplified implementation - actual implementation
-            # would parse structured logs
             input_tokens, output_tokens = self._extract_token_usage(logs)
 
             if exit_code == 0:
@@ -465,8 +482,8 @@ class ExecutionService:
                 failure_reason=ExecutionFailureReason.TIMEOUT,
             )
 
-        except Exception as e:
-            logger.error(f"Container execution {execution.id} failed: {e}")
+        except ContainerExecutionError as e:
+            logger.error(f"Container execution error for {execution.id}: {e}")
 
             error_message = f"Container execution error: {e}"
             execution.fail(error_message=error_message)
@@ -484,15 +501,30 @@ class ExecutionService:
                 failure_reason=ExecutionFailureReason.CONTAINER_ERROR,
             )
 
+        except EventStoreError as e:
+            logger.error(f"Event store error during container execution {execution.id}: {e}")
+
+            error_message = f"Event store error: {e}"
+            execution.fail(error_message=error_message)
+
+            return ExecutionServiceResult(
+                success=False,
+                execution=execution,
+                error=error_message,
+                failure_reason=ExecutionFailureReason.UNKNOWN,
+            )
+
         finally:
-            # Clean up container
+            # Clean up container with retry
             if container_id:
-                try:
-                    await self.container.stop(container_id, timeout=5)
-                    await self.container.remove(container_id, force=True)
-                    logger.info(f"Cleaned up container {container_id}")
-                except Exception as e:
-                    logger.warning(f"Failed to clean up container {container_id}: {e}")
+                cleanup_success = await self._cleanup_container_with_retry(
+                    container_id, max_attempts=3
+                )
+                if not cleanup_success:
+                    logger.error(
+                        f"CRITICAL: Failed to cleanup container {container_id} after retries. "
+                        f"Manual intervention may be required."
+                    )
 
             # Clean up tracking
             self._active_executions.pop(execution.id, None)
@@ -511,12 +543,12 @@ class ExecutionService:
             if not execution.is_terminal():
                 # Stop container if running in Docker
                 if execution.container_id:
-                    try:
-                        await self.container.stop(execution.container_id, timeout=5)
-                        await self.container.remove(execution.container_id, force=True)
-                    except Exception as e:
-                        logger.warning(
-                            f"Failed to stop container {execution.container_id}: {e}"
+                    cleanup_success = await self._cleanup_container_with_retry(
+                        execution.container_id, max_attempts=3
+                    )
+                    if not cleanup_success:
+                        logger.error(
+                            f"Failed to stop container {execution.container_id} during cancellation"
                         )
 
                 # Mark as failed
@@ -543,8 +575,13 @@ class ExecutionService:
                     error="Execution already in terminal state",
                 )
 
-        except Exception as e:
-            logger.error(f"Failed to cancel execution {execution.id}: {e}")
+        except EventStoreError as e:
+            logger.error(f"Failed to persist cancellation for execution {execution.id}: {e}")
+            return ExecutionServiceResult(
+                success=False, execution=execution, error=str(e)
+            )
+        except DomainError as e:
+            logger.error(f"Domain error during cancellation of execution {execution.id}: {e}")
             return ExecutionServiceResult(
                 success=False, execution=execution, error=str(e)
             )
@@ -583,8 +620,12 @@ class ExecutionService:
                             )
                         )
 
+        except ContainerExecutionError as e:
+            logger.error(f"Container error getting logs for execution {execution.id}: {e}")
+            # Return empty list on container errors
         except Exception as e:
-            logger.error(f"Failed to get logs for execution {execution.id}: {e}")
+            logger.error(f"Unexpected error getting logs for execution {execution.id}: {e}")
+            # Return empty list on unexpected errors
 
         return logs
 
@@ -686,7 +727,7 @@ class ExecutionService:
 
     def _create_stream_callback(
         self, execution_id: str, user_callback: Optional[Callable[[str], None]]
-    ) -> Callable:
+    ) -> Callable[[Any], None]:
         """
         Create streaming callback that notifies subscribers and user callback.
 
@@ -695,10 +736,10 @@ class ExecutionService:
             user_callback: Optional user-provided callback
 
         Returns:
-            Async callback function
+            Async callback function that accepts stream chunks
         """
 
-        async def callback(chunk):
+        async def callback(chunk: Any) -> None:
             content = chunk.content if hasattr(chunk, "content") else str(chunk)
 
             # Notify log subscribers
@@ -750,32 +791,80 @@ class ExecutionService:
         except Exception as e:
             logger.error(f"Error streaming container logs: {e}")
 
-    def _extract_token_usage(self, logs: str) -> tuple[int, int]:
+    def _extract_token_usage(self, logs: str) -> Tuple[int, int]:
         """
         Extract token usage from logs.
+
+        This method attempts to parse token usage from structured log output.
+        If token information is not found, returns (0, 0).
+
+        Expected log format: "Token usage: input=<N>, output=<M>"
+        This format should be emitted by LLM provider adapters.
 
         Args:
             logs: Container logs
 
         Returns:
-            Tuple of (input_tokens, output_tokens)
+            Tuple of (input_tokens, output_tokens), or (0, 0) if not found
         """
-        # This is a simplified implementation
-        # Real implementation would parse structured logs or API responses
+        import re
+
         input_tokens = 0
         output_tokens = 0
 
-        # Look for token usage patterns in logs
-        # Example: "Token usage: input=1234, output=5678"
-        import re
-
+        # Look for standardized token usage pattern
+        # LLM provider adapters should emit this format
         pattern = r"Token usage: input=(\d+), output=(\d+)"
         match = re.search(pattern, logs)
         if match:
             input_tokens = int(match.group(1))
             output_tokens = int(match.group(2))
+        else:
+            # Token information not found in logs
+            # This is expected if the LLM provider doesn't emit token usage
+            logger.debug("Token usage information not found in logs")
 
         return input_tokens, output_tokens
+
+    async def _cleanup_container_with_retry(
+        self, container_id: str, max_attempts: int = 3
+    ) -> bool:
+        """
+        Clean up container with exponential backoff retry.
+
+        Args:
+            container_id: Container ID to clean up
+            max_attempts: Maximum cleanup attempts
+
+        Returns:
+            True if cleanup succeeded, False otherwise
+        """
+        for attempt in range(max_attempts):
+            try:
+                # Stop container first
+                await self.container.stop(container_id, timeout=5)
+
+                # Then remove it
+                await self.container.remove(container_id, force=True)
+
+                logger.info(f"Successfully cleaned up container {container_id}")
+                return True
+
+            except ContainerExecutionError as e:
+                logger.warning(
+                    f"Cleanup attempt {attempt + 1}/{max_attempts} failed for "
+                    f"container {container_id}: {e}"
+                )
+                if attempt < max_attempts - 1:
+                    # Exponential backoff: 1s, 2s, 4s
+                    await asyncio.sleep(2 ** attempt)
+                else:
+                    logger.error(
+                        f"Failed to cleanup container {container_id} after {max_attempts} attempts"
+                    )
+                    return False
+
+        return False
 
     def _classify_failure(
         self, error: Optional[Exception]

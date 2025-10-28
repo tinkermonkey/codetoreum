@@ -2,6 +2,7 @@
 
 import json
 import logging
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -15,6 +16,7 @@ from codetoreum.domain.services.execution_context_builder import (
 from codetoreum.domain.value_objects import ExecutionContext
 from codetoreum.domain.workspace_context import WorkspaceContext, WorkspaceType
 from codetoreum.domain.work_item import WorkItem
+from codetoreum.ports.exceptions import ResourceNotFoundError, TicketSystemError
 from codetoreum.ports.output import IStorage, ITicketSystem
 
 logger = logging.getLogger(__name__)
@@ -157,8 +159,11 @@ class ContextBuilder:
 
             return work_item
 
-        except Exception as e:
-            logger.error(f"Failed to fetch work item {work_item_id}: {e}")
+        except TicketSystemError as e:
+            logger.error(f"Ticket system error fetching work item {work_item_id}: {e}")
+            return None
+        except ResourceNotFoundError as e:
+            logger.warning(f"Work item {work_item_id} not found: {e}")
             return None
 
     async def build_workspace_context(
@@ -305,8 +310,11 @@ class ContextBuilder:
             logger.info(f"Successfully wrote all context files to {workspace_path}")
             return True
 
+        except OSError as e:
+            logger.error(f"File system error writing context files: {e}")
+            return False
         except Exception as e:
-            logger.error(f"Failed to write context files: {e}")
+            logger.error(f"Unexpected error writing context files: {e}")
             return False
 
     async def cleanup_workspace(self, workspace_path: Path) -> bool:
@@ -320,16 +328,19 @@ class ContextBuilder:
             True if successful, False otherwise
         """
         try:
-            import shutil
-
             if workspace_path.exists():
                 shutil.rmtree(workspace_path)
                 logger.info(f"Cleaned up workspace: {workspace_path}")
                 return True
-            return True
+            else:
+                logger.debug(f"Workspace {workspace_path} does not exist, skipping cleanup")
+                return True
 
+        except OSError as e:
+            logger.error(f"File system error cleaning up workspace {workspace_path}: {e}")
+            return False
         except Exception as e:
-            logger.error(f"Failed to cleanup workspace {workspace_path}: {e}")
+            logger.error(f"Unexpected error cleaning up workspace {workspace_path}: {e}")
             return False
 
     # Helper methods for formatting context
