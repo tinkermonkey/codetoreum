@@ -36,6 +36,31 @@ class PipelineStatus(Enum):
 
 
 @dataclass
+class StageOutput:
+    """Typed output from a pipeline stage."""
+
+    stage_name: str
+    success: bool
+    data: Any  # Stage-specific output data
+    artifacts: Dict[str, str] = field(default_factory=dict)  # artifact_name -> path
+    metrics: Dict[str, float] = field(default_factory=dict)  # metric_name -> value
+    error: Optional[str] = None
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for context propagation."""
+        return {
+            "stage_name": self.stage_name,
+            "success": self.success,
+            "data": self.data,
+            "artifacts": self.artifacts,
+            "metrics": self.metrics,
+            "error": self.error,
+            "timestamp": self.timestamp.isoformat(),
+        }
+
+
+@dataclass
 class PipelineCheckpoint:
     """Pipeline checkpoint for recovery."""
 
@@ -110,6 +135,23 @@ class PipelineManager:
         self.event_store = event_store
         self.checkpoint_store = checkpoint_store
         self._logger = logging.getLogger(f"{__name__}.PipelineManager")
+
+    async def _emit_event_safely(self, event: Any) -> None:
+        """
+        Emit event to event store with error handling.
+
+        Logs failures but doesn't break main flow.
+
+        Args:
+            event: Event to emit
+        """
+        try:
+            await self.event_store.append(event)
+        except Exception as e:
+            self._logger.error(
+                f"Failed to emit event {type(event).__name__}: {e}",
+                exc_info=True
+            )
 
     # ========================================================================
     # Public API
@@ -190,11 +232,31 @@ class PipelineManager:
                 if stage_result.success:
                     completed_stages.append(stage.name)
                     outputs[stage.name] = stage_result.output
+
+                    # Create typed output for context propagation
+                    stage_output = StageOutput(
+                        stage_name=stage.name,
+                        success=True,
+                        data=stage_result.output,
+                        artifacts={},
+                        metrics={"duration_seconds": stage_result.duration_seconds},
+                    )
+
                     # Propagate output to context for next stages
-                    context[f"{stage.name}_output"] = stage_result.output
+                    context[f"{stage.name}_output"] = stage_output.to_dict()
                 else:
                     failed_stages.append(stage.name)
                     errors[stage.name] = stage_result.error or "Unknown error"
+
+                    # Store error in context for debugging
+                    stage_output = StageOutput(
+                        stage_name=stage.name,
+                        success=False,
+                        data=None,
+                        error=stage_result.error,
+                        metrics={"duration_seconds": stage_result.duration_seconds},
+                    )
+                    context[f"{stage.name}_output"] = stage_output.to_dict()
 
                 # Checkpoint after each stage
                 await self.checkpoint(
@@ -223,9 +285,13 @@ class PipelineManager:
                         )
                         continue
                     else:
-                        # For sequential stages, stop pipeline
+                        # For sequential stages, stop pipeline and cleanup
                         self._logger.error(
                             f"Sequential stage {stage.name} failed, stopping pipeline"
+                        )
+                        # Cleanup partial state
+                        await self._cleanup_failed_pipeline(
+                            pipeline_id, context, completed_stages, failed_stages
                         )
                         raise Exception(
                             f"Stage {stage.name} failed: {stage_result.error}"
@@ -457,7 +523,7 @@ class PipelineManager:
             execution_id=stage.execution_id or "",
             timestamp=datetime.now(timezone.utc),
         )
-        await self.event_store.append(event)
+        await self._emit_event_safely(event)
 
     async def _emit_stage_completed(
         self,
@@ -476,7 +542,7 @@ class PipelineManager:
             duration_seconds=duration_seconds,
             timestamp=datetime.now(timezone.utc),
         )
-        await self.event_store.append(event)
+        await self._emit_event_safely(event)
 
     async def _emit_stage_failed(
         self,
@@ -495,7 +561,7 @@ class PipelineManager:
             duration_seconds=duration_seconds,
             timestamp=datetime.now(timezone.utc),
         )
-        await self.event_store.append(event)
+        await self._emit_event_safely(event)
 
     async def _emit_pipeline_completed(
         self,
@@ -515,7 +581,7 @@ class PipelineManager:
             duration_seconds=duration_seconds,
             timestamp=datetime.now(timezone.utc),
         )
-        await self.event_store.append(event)
+        await self._emit_event_safely(event)
 
     async def _emit_pipeline_failed(
         self,
@@ -535,4 +601,46 @@ class PipelineManager:
             failed_stages=failed_stages,
             timestamp=datetime.now(timezone.utc),
         )
-        await self.event_store.append(event)
+        await self._emit_event_safely(event)
+
+    async def _cleanup_failed_pipeline(
+        self,
+        pipeline_id: str,
+        context: Dict[str, Any],
+        completed_stages: List[str],
+        failed_stages: List[str],
+    ) -> None:
+        """
+        Cleanup resources and partial state from failed pipeline.
+
+        Args:
+            pipeline_id: Pipeline identifier
+            context: Pipeline execution context
+            completed_stages: List of successfully completed stages
+            failed_stages: List of failed stages
+        """
+        self._logger.info(
+            f"Cleaning up failed pipeline: pipeline_id={pipeline_id}, "
+            f"completed={len(completed_stages)}, failed={len(failed_stages)}"
+        )
+
+        try:
+            # Clear stage outputs from context to prevent stale data
+            for stage_name in completed_stages + failed_stages:
+                output_key = f"{stage_name}_output"
+                if output_key in context:
+                    del context[output_key]
+
+            # TODO: Add rollback logic for specific stages if needed
+            # This could include:
+            # - Deleting temporary files
+            # - Rolling back database changes
+            # - Cleaning up container resources
+
+            self._logger.info(f"Cleanup completed for pipeline {pipeline_id}")
+
+        except Exception as e:
+            self._logger.error(
+                f"Error during pipeline cleanup: {e}",
+                exc_info=True
+            )

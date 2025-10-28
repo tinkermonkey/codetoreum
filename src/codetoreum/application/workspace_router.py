@@ -1,7 +1,7 @@
 """Workspace Router application service."""
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -12,6 +12,39 @@ from codetoreum.domain.workspace_context import WorkspaceContext, WorkspaceType
 from codetoreum.ports.output import IContainer, IEventStore, IRepository
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# Configuration
+# ============================================================================
+
+
+@dataclass
+class WorkspaceRouterConfig:
+    """Configuration for WorkspaceRouter service."""
+
+    # Branch naming
+    branch_prefix_default: str = "feature/"
+    branch_name_format: str = "{prefix}issue-{number}-{title}"
+    branch_title_max_length: int = 40
+
+    # Commit message format
+    commit_message_format: str = (
+        "Complete work for issue #{work_item_id}\n\n"
+        "Automated changes by agent: {agent_id}\n"
+        "{summary}"
+        "\n🤖 Generated with Codetoreum\n"
+        "Co-Authored-By: Codetoreum <noreply@codetoreum.ai>\n"
+    )
+
+    # Workspace labels
+    discussion_labels: set[str] = field(default_factory=lambda: {
+        "discussion", "research", "question", "analysis"
+    })
+
+    # Author info defaults
+    default_author_name: str = "Codetoreum"
+    default_author_email: str = "noreply@codetoreum.ai"
 
 
 # ============================================================================
@@ -67,6 +100,7 @@ class WorkspaceRouter:
         repository: IRepository,
         container: IContainer,
         event_store: IEventStore,
+        config: Optional[WorkspaceRouterConfig] = None,
     ):
         """
         Initialize WorkspaceRouter.
@@ -75,11 +109,30 @@ class WorkspaceRouter:
             repository: Repository operations port
             container: Container orchestration port
             event_store: Event store port for emitting events
+            config: Optional configuration (uses defaults if not provided)
         """
         self.repository = repository
         self.container = container
         self.event_store = event_store
+        self.config = config or WorkspaceRouterConfig()
         self._logger = logging.getLogger(f"{__name__}.WorkspaceRouter")
+
+    async def _emit_event_safely(self, event: Any) -> None:
+        """
+        Emit event to event store with error handling.
+
+        Logs failures but doesn't break main flow.
+
+        Args:
+            event: Event to emit
+        """
+        try:
+            await self.event_store.append(event)
+        except Exception as e:
+            self._logger.error(
+                f"Failed to emit event {type(event).__name__}: {e}",
+                exc_info=True
+            )
 
     # ========================================================================
     # Public API
@@ -98,6 +151,7 @@ class WorkspaceRouter:
         - Issues with 'discussion', 'research', or 'question' labels → Discussion workspace
         - Agents that don't make code changes → Discussion workspace
         - Default → Issue workspace with feature branch
+        - Validates agent capabilities match work item requirements
 
         Args:
             work_item: Work item being processed
@@ -116,13 +170,15 @@ class WorkspaceRouter:
         )
 
         # Check for discussion labels
-        discussion_labels = {"discussion", "research", "question", "analysis"}
         has_discussion_label = any(
-            label.lower() in discussion_labels for label in work_item.labels
+            label.lower() in self.config.discussion_labels for label in work_item.labels
         )
 
         # Check if agent makes code changes
-        agent_makes_code_changes = agent.capabilities.get("makes_code_changes", True)
+        agent_makes_code_changes = agent.makes_code_changes
+
+        # Validate agent capabilities match work item
+        self._validate_agent_capabilities(work_item, agent, has_discussion_label)
 
         # Determine workspace type
         if has_discussion_label or not agent_makes_code_changes:
@@ -150,11 +206,43 @@ class WorkspaceRouter:
                 create_pr=True,
             )
 
+    def _validate_agent_capabilities(
+        self,
+        work_item: WorkItem,
+        agent: Agent,
+        has_discussion_label: bool,
+    ) -> None:
+        """
+        Validate agent capabilities match work item requirements.
+
+        Args:
+            work_item: Work item being processed
+            agent: Agent to validate
+            has_discussion_label: Whether work item has discussion label
+
+        Raises:
+            ValueError: If agent capabilities don't match work item
+        """
+        # If work item is discussion-only, agent shouldn't make code changes
+        if has_discussion_label and agent.makes_code_changes:
+            self._logger.warning(
+                f"Code-changing agent {agent.id} assigned to discussion work item {work_item.id}. "
+                f"This may not be optimal."
+            )
+
+        # If work item needs code changes, agent must have that capability
+        if not has_discussion_label and not agent.makes_code_changes:
+            raise ValueError(
+                f"Agent {agent.id} cannot make code changes but is assigned to "
+                f"code work item {work_item.id}"
+            )
+
     async def prepare_workspace(
         self,
         context: WorkspaceContext,
         project: ProjectContext,
         work_item: WorkItem,
+        repository_path: str,
     ) -> WorkspacePreparationResult:
         """
         Prepare workspace for agent execution.
@@ -172,6 +260,7 @@ class WorkspaceRouter:
             context: Workspace context
             project: Project context
             work_item: Work item being processed
+            repository_path: Local path to cloned repository
 
         Returns:
             WorkspacePreparationResult: Result of preparation operation
@@ -190,7 +279,7 @@ class WorkspaceRouter:
         try:
             if context.should_create_branch():
                 # Issue workspace - prepare git branch
-                repo_path = Path(project.repository_path)
+                repo_path = Path(repository_path)
 
                 # Check if branch exists
                 branches = await self.repository.list_branches(
@@ -244,7 +333,7 @@ class WorkspaceRouter:
                 return WorkspacePreparationResult(
                     success=True,
                     workspace_context=context,
-                    workspace_dir=Path(project.repository_path),
+                    workspace_dir=Path(repository_path),
                     reason="Discussion workspace prepared successfully",
                     metadata=metadata,
                 )
@@ -254,7 +343,7 @@ class WorkspaceRouter:
             return WorkspacePreparationResult(
                 success=False,
                 workspace_context=context,
-                workspace_dir=Path(project.repository_path),
+                workspace_dir=Path(repository_path),
                 reason=f"Workspace preparation failed: {str(e)}",
                 metadata={"error": str(e)},
             )
@@ -264,6 +353,7 @@ class WorkspaceRouter:
         context: WorkspaceContext,
         project: ProjectContext,
         execution_result: Dict[str, Any],
+        repository_path: str,
     ) -> WorkspaceFinalizationResult:
         """
         Finalize workspace after agent execution.
@@ -280,6 +370,7 @@ class WorkspaceRouter:
             context: Workspace context
             project: Project context
             execution_result: Result from agent execution
+            repository_path: Local path to cloned repository
 
         Returns:
             WorkspaceFinalizationResult: Result of finalization operation
@@ -298,7 +389,7 @@ class WorkspaceRouter:
 
         try:
             if context.is_issue_workspace() and context.create_commits:
-                repo_path = Path(project.repository_path)
+                repo_path = Path(repository_path)
 
                 # Check if there are changes to commit
                 status = await self.repository.status(repo_path)
@@ -315,11 +406,19 @@ class WorkspaceRouter:
                     )
                     self._logger.info(f"Committing changes: {commit_message}")
 
+                    # Get author info, use config defaults if not in project
+                    author_name = getattr(
+                        project, 'author_name', self.config.default_author_name
+                    )
+                    author_email = getattr(
+                        project, 'author_email', self.config.default_author_email
+                    )
+
                     commit_sha = await self.repository.commit(
                         repo_path,
                         message=commit_message,
-                        author_name=project.author_name,
-                        author_email=project.author_email,
+                        author_name=author_name,
+                        author_email=author_email,
                         files=None,  # Commit all changes
                     )
                     metadata["commit_sha"] = commit_sha
@@ -400,7 +499,7 @@ class WorkspaceRouter:
             "CODETOREUM_ALLOW_CODE_CHANGES": str(context.allow_code_changes),
             # Agent identification
             "CODETOREUM_AGENT_ID": agent.id,
-            "CODETOREUM_AGENT_TYPE": agent.type.value,
+            "CODETOREUM_AGENT_TYPE": agent.agent_type.value,
         }
 
         # Add branch info for issue workspaces
@@ -422,6 +521,7 @@ class WorkspaceRouter:
         self,
         context: WorkspaceContext,
         project: ProjectContext,
+        repository_path: str,
     ) -> Dict[str, str]:
         """
         Prepare volume mounts for container execution.
@@ -429,11 +529,12 @@ class WorkspaceRouter:
         Args:
             context: Workspace context
             project: Project context
+            repository_path: Local path to cloned repository
 
         Returns:
             Dict[str, str]: Volume mounts (host_path: container_path:mode)
         """
-        repo_path = Path(project.repository_path)
+        repo_path = Path(repository_path)
 
         volumes = {}
 
@@ -462,7 +563,7 @@ class WorkspaceRouter:
         """
         Generate branch name following project conventions.
 
-        Format: feature/issue-{number}-{title-slug}
+        Uses configured format from WorkspaceRouterConfig.
 
         Args:
             work_item: Work item
@@ -472,11 +573,13 @@ class WorkspaceRouter:
             str: Branch name
         """
         issue_number = work_item.external_id
+
+        # Create title slug
         title_slug = (
             work_item.title.lower()
             .replace(" ", "-")
             .replace("/", "-")
-            .replace("_", "-")[:40]
+            .replace("_", "-")[:self.config.branch_title_max_length]
         )
         # Remove any non-alphanumeric characters except hyphens
         title_slug = "".join(c for c in title_slug if c.isalnum() or c == "-")
@@ -485,14 +588,25 @@ class WorkspaceRouter:
             title_slug = title_slug.replace("--", "-")
         title_slug = title_slug.strip("-")
 
-        branch_prefix = getattr(project, "branch_prefix", "feature/")
-        return f"{branch_prefix}issue-{issue_number}-{title_slug}"
+        # Get branch prefix from project or use default
+        branch_prefix = getattr(
+            project, "branch_prefix", self.config.branch_prefix_default
+        )
+
+        # Format using config template
+        return self.config.branch_name_format.format(
+            prefix=branch_prefix,
+            number=issue_number,
+            title=title_slug,
+        )
 
     def _generate_commit_message(
         self, context: WorkspaceContext, execution_result: Dict[str, Any]
     ) -> str:
         """
         Generate commit message for workspace changes.
+
+        Uses configured format from WorkspaceRouterConfig.
 
         Args:
             context: Workspace context
@@ -504,14 +618,14 @@ class WorkspaceRouter:
         agent_id = execution_result.get("agent_id", "unknown")
         work_item_id = context.work_item_id
 
-        message = f"Complete work for issue #{work_item_id}\n\n"
-        message += f"Automated changes by agent: {agent_id}\n"
-
-        # Add summary from execution result if available
+        # Build summary section
+        summary = ""
         if "summary" in execution_result:
-            message += f"\n{execution_result['summary']}\n"
+            summary = f"\n{execution_result['summary']}\n"
 
-        message += "\n🤖 Generated with Codetoreum\n"
-        message += f"Co-Authored-By: Codetoreum <noreply@codetoreum.ai>\n"
-
-        return message
+        # Format using config template
+        return self.config.commit_message_format.format(
+            work_item_id=work_item_id,
+            agent_id=agent_id,
+            summary=summary,
+        )

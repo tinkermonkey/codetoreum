@@ -203,6 +203,14 @@ def sample_project():
     )
 
 
+@pytest.fixture
+def repository_path(tmp_path):
+    """Create temporary repository path for testing."""
+    repo_dir = tmp_path / "test-repo"
+    repo_dir.mkdir()
+    return str(repo_dir)
+
+
 # ============================================================================
 # Tests: Workspace Routing
 # ============================================================================
@@ -239,10 +247,11 @@ async def test_route_workspace_discussion_label(workspace_router, discussion_wor
 
 
 @pytest.mark.asyncio
-async def test_route_workspace_analyst_agent(workspace_router, sample_work_item, analyst_agent, sample_project):
+async def test_route_workspace_analyst_agent(workspace_router, discussion_work_item, analyst_agent, sample_project):
     """Test routing to discussion workspace when agent doesn't make code changes."""
+    # Analyst agent should work on discussion work items
     context = await workspace_router.route_workspace(
-        work_item=sample_work_item,
+        work_item=discussion_work_item,
         agent=analyst_agent,
         project=sample_project,
     )
@@ -269,7 +278,7 @@ async def test_branch_name_generation(workspace_router, sample_work_item, sample
 
 
 @pytest.mark.asyncio
-async def test_prepare_workspace_new_branch(workspace_router, sample_work_item, sample_agent, sample_project, mock_repository):
+async def test_prepare_workspace_new_branch(workspace_router, sample_work_item, sample_agent, sample_project, mock_repository, repository_path):
     """Test preparing workspace with new branch creation."""
     # Arrange
     context = await workspace_router.route_workspace(
@@ -284,6 +293,7 @@ async def test_prepare_workspace_new_branch(workspace_router, sample_work_item, 
         context=context,
         project=sample_project,
         work_item=sample_work_item,
+        repository_path=repository_path,
     )
 
     # Assert
@@ -295,7 +305,7 @@ async def test_prepare_workspace_new_branch(workspace_router, sample_work_item, 
 
 
 @pytest.mark.asyncio
-async def test_prepare_workspace_existing_branch(workspace_router, sample_work_item, sample_agent, sample_project, mock_repository):
+async def test_prepare_workspace_existing_branch(workspace_router, sample_work_item, sample_agent, sample_project, mock_repository, repository_path):
     """Test preparing workspace with existing branch."""
     # Arrange
     context = await workspace_router.route_workspace(
@@ -310,6 +320,7 @@ async def test_prepare_workspace_existing_branch(workspace_router, sample_work_i
         context=context,
         project=sample_project,
         work_item=sample_work_item,
+        repository_path=repository_path,
     )
 
     # Assert
@@ -320,7 +331,7 @@ async def test_prepare_workspace_existing_branch(workspace_router, sample_work_i
 
 
 @pytest.mark.asyncio
-async def test_prepare_workspace_discussion(workspace_router, discussion_work_item, analyst_agent, sample_project):
+async def test_prepare_workspace_discussion(workspace_router, discussion_work_item, analyst_agent, sample_project, repository_path):
     """Test preparing discussion workspace requires no git operations."""
     # Arrange
     context = await workspace_router.route_workspace(
@@ -334,6 +345,7 @@ async def test_prepare_workspace_discussion(workspace_router, discussion_work_it
         context=context,
         project=sample_project,
         work_item=discussion_work_item,
+        repository_path=repository_path,
     )
 
     # Assert
@@ -347,7 +359,7 @@ async def test_prepare_workspace_discussion(workspace_router, discussion_work_it
 
 
 @pytest.mark.asyncio
-async def test_finalize_workspace_with_changes(workspace_router, sample_work_item, sample_agent, sample_project, mock_repository):
+async def test_finalize_workspace_with_changes(workspace_router, sample_work_item, sample_agent, sample_project, mock_repository, repository_path):
     """Test finalizing workspace with code changes."""
     # Arrange
     context = await workspace_router.route_workspace(
@@ -377,6 +389,7 @@ async def test_finalize_workspace_with_changes(workspace_router, sample_work_ite
         context=context,
         project=sample_project,
         execution_result=execution_result,
+        repository_path=repository_path,
     )
 
     # Assert
@@ -388,7 +401,7 @@ async def test_finalize_workspace_with_changes(workspace_router, sample_work_ite
 
 
 @pytest.mark.asyncio
-async def test_finalize_workspace_no_changes(workspace_router, sample_work_item, sample_agent, sample_project, mock_repository):
+async def test_finalize_workspace_no_changes(workspace_router, sample_work_item, sample_agent, sample_project, mock_repository, repository_path):
     """Test finalizing workspace with no changes."""
     # Arrange
     context = await workspace_router.route_workspace(
@@ -415,6 +428,7 @@ async def test_finalize_workspace_no_changes(workspace_router, sample_work_item,
         context=context,
         project=sample_project,
         execution_result=execution_result,
+        repository_path=repository_path,
     )
 
     # Assert
@@ -425,7 +439,7 @@ async def test_finalize_workspace_no_changes(workspace_router, sample_work_item,
 
 
 @pytest.mark.asyncio
-async def test_finalize_workspace_discussion(workspace_router, discussion_work_item, analyst_agent, sample_project):
+async def test_finalize_workspace_discussion(workspace_router, discussion_work_item, analyst_agent, sample_project, repository_path):
     """Test finalizing discussion workspace is no-op."""
     # Arrange
     context = await workspace_router.route_workspace(
@@ -441,6 +455,7 @@ async def test_finalize_workspace_discussion(workspace_router, discussion_work_i
         context=context,
         project=sample_project,
         execution_result=execution_result,
+        repository_path=repository_path,
     )
 
     # Assert
@@ -453,10 +468,10 @@ async def test_finalize_workspace_discussion(workspace_router, discussion_work_i
 # ============================================================================
 
 
-def test_prepare_container_environment(workspace_router, sample_work_item, sample_agent, sample_project):
+@pytest.mark.asyncio
+async def test_prepare_container_environment(workspace_router, sample_work_item, sample_agent, sample_project):
     """Test environment variable preparation for containers."""
-    context = WorkspaceRouter.route_workspace.__wrapped__(
-        workspace_router,
+    context = await workspace_router.route_workspace(
         work_item=sample_work_item,
         agent=sample_agent,
         project=sample_project,
@@ -475,10 +490,10 @@ def test_prepare_container_environment(workspace_router, sample_work_item, sampl
     assert env_vars["ENV"] == "test"  # From project env vars
 
 
-def test_prepare_container_volumes_read_write(workspace_router, sample_work_item, sample_agent, sample_project):
+@pytest.mark.asyncio
+async def test_prepare_container_volumes_read_write(workspace_router, sample_work_item, sample_agent, sample_project, repository_path):
     """Test volume mounts for code-changing agents."""
-    context = WorkspaceRouter.route_workspace.__wrapped__(
-        workspace_router,
+    context = await workspace_router.route_workspace(
         work_item=sample_work_item,
         agent=sample_agent,
         project=sample_project,
@@ -487,16 +502,17 @@ def test_prepare_container_volumes_read_write(workspace_router, sample_work_item
     volumes = workspace_router.prepare_container_volumes(
         context=context,
         project=sample_project,
+        repository_path=repository_path,
     )
 
     # Should have read-write mount
     assert any(":rw" in v for v in volumes.values())
 
 
-def test_prepare_container_volumes_read_only(workspace_router, discussion_work_item, analyst_agent, sample_project):
+@pytest.mark.asyncio
+async def test_prepare_container_volumes_read_only(workspace_router, discussion_work_item, analyst_agent, sample_project, repository_path):
     """Test volume mounts for non-code-changing agents."""
-    context = WorkspaceRouter.route_workspace.__wrapped__(
-        workspace_router,
+    context = await workspace_router.route_workspace(
         work_item=discussion_work_item,
         agent=analyst_agent,
         project=sample_project,
@@ -505,6 +521,7 @@ def test_prepare_container_volumes_read_only(workspace_router, discussion_work_i
     volumes = workspace_router.prepare_container_volumes(
         context=context,
         project=sample_project,
+        repository_path=repository_path,
     )
 
     # Should have read-only mount
