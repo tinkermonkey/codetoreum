@@ -84,7 +84,7 @@ class WorkflowEventHandler(EventHandler):
         """
         logger.info(
             f"Starting workflow for new work item: {event.aggregate_id} "
-            f"(title: {event.title})"
+            f"(title: {event.payload.get('title')})"
         )
 
         # Note: In a full implementation, this would:

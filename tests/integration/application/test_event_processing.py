@@ -266,12 +266,13 @@ class TestExecutionEventHandling:
         """Test handling ExecutionInitialized event."""
         event = ExecutionInitialized(
             aggregate_id="exec-123",
-            agent_id="agent-456",
-            work_item_id="work-789",
-            workflow_id="workflow-001",
-            stage_name="implementation",
-            prompt="Test prompt",
-            model="claude-3-5-sonnet-20241022",
+            payload={
+                "agent_id": "agent-456",
+                "work_item_id": "work-789",
+                "workflow_id": "workflow-001",
+                "stage_name": "implementation",
+                "model": "claude-3-5-sonnet-20241022",
+            },
         )
 
         await event_registry.event_bus.publish(event)
@@ -288,20 +289,23 @@ class TestExecutionEventHandling:
         # First initialize
         init_event = ExecutionInitialized(
             aggregate_id="exec-123",
-            agent_id="agent-456",
-            work_item_id="work-789",
-            workflow_id="workflow-001",
-            stage_name="implementation",
-            prompt="Test prompt",
-            model="claude-3-5-sonnet-20241022",
+            payload={
+                "agent_id": "agent-456",
+                "work_item_id": "work-789",
+                "workflow_id": "workflow-001",
+                "stage_name": "implementation",
+                "model": "claude-3-5-sonnet-20241022",
+            },
         )
         await event_registry.event_bus.publish(init_event)
 
         # Then start
         start_event = ExecutionStarted(
             aggregate_id="exec-123",
-            work_item_id="work-789",
-            container_name="test-container",
+            payload={
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "container_name": "test-container",
+            },
         )
         await event_registry.event_bus.publish(start_event)
 
@@ -316,30 +320,35 @@ class TestExecutionEventHandling:
         # Initialize and start
         init_event = ExecutionInitialized(
             aggregate_id="exec-123",
-            agent_id="agent-456",
-            work_item_id="work-789",
-            workflow_id="workflow-001",
-            stage_name="implementation",
-            prompt="Test prompt",
-            model="claude-3-5-sonnet-20241022",
+            payload={
+                "agent_id": "agent-456",
+                "work_item_id": "work-789",
+                "workflow_id": "workflow-001",
+                "stage_name": "implementation",
+                "model": "claude-3-5-sonnet-20241022",
+            },
         )
         await event_registry.event_bus.publish(init_event)
 
         start_event = ExecutionStarted(
             aggregate_id="exec-123",
-            work_item_id="work-789",
-            container_name="test-container",
+            payload={
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "container_name": "test-container",
+            },
         )
         await event_registry.event_bus.publish(start_event)
 
         # Complete
         complete_event = ExecutionCompleted(
             aggregate_id="exec-123",
-            work_item_id="work-789",
-            output="Test output",
-            input_tokens=100,
-            output_tokens=200,
-            session_id="session-123",
+            payload={
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "input_tokens": 100,
+                "output_tokens": 200,
+                "duration_seconds": 10.5,
+                "session_id": "session-123",
+            },
         )
         await event_registry.event_bus.publish(complete_event)
 
@@ -356,28 +365,34 @@ class TestExecutionEventHandling:
         # Initialize and start
         init_event = ExecutionInitialized(
             aggregate_id="exec-123",
-            agent_id="agent-456",
-            work_item_id="work-789",
-            workflow_id="workflow-001",
-            stage_name="implementation",
-            prompt="Test prompt",
-            model="claude-3-5-sonnet-20241022",
+            payload={
+                "agent_id": "agent-456",
+                "work_item_id": "work-789",
+                "workflow_id": "workflow-001",
+                "stage_name": "implementation",
+                "model": "claude-3-5-sonnet-20241022",
+            },
         )
         await event_registry.event_bus.publish(init_event)
 
         start_event = ExecutionStarted(
             aggregate_id="exec-123",
-            work_item_id="work-789",
-            container_name="test-container",
+            payload={
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "container_name": "test-container",
+            },
         )
         await event_registry.event_bus.publish(start_event)
 
         # Fail
         fail_event = ExecutionFailed(
             aggregate_id="exec-123",
-            work_item_id="work-789",
-            error_message="Test error",
-            exit_code=1,
+            payload={
+                "failed_at": datetime.now(timezone.utc).isoformat(),
+                "error_message": "Test error",
+                "exit_code": 1,
+                "duration_seconds": 5.0,
+            },
         )
         await event_registry.event_bus.publish(fail_event)
 
@@ -393,25 +408,32 @@ class TestExecutionEventHandling:
         # Initialize and start
         init_event = ExecutionInitialized(
             aggregate_id="exec-123",
-            agent_id="agent-456",
-            work_item_id="work-789",
-            workflow_id="workflow-001",
-            stage_name="implementation",
-            prompt="Test prompt",
-            model="claude-3-5-sonnet-20241022",
+            payload={
+                "agent_id": "agent-456",
+                "work_item_id": "work-789",
+                "workflow_id": "workflow-001",
+                "stage_name": "implementation",
+                "model": "claude-3-5-sonnet-20241022",
+            },
         )
         await event_registry.event_bus.publish(init_event)
 
         start_event = ExecutionStarted(
             aggregate_id="exec-123",
-            work_item_id="work-789",
-            container_name="test-container",
+            payload={
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "container_name": "test-container",
+            },
         )
         await event_registry.event_bus.publish(start_event)
 
         # Timeout
         timeout_event = ExecutionTimeout(
-            aggregate_id="exec-123", work_item_id="work-789"
+            aggregate_id="exec-123",
+            payload={
+                "timeout_at": datetime.now(timezone.utc).isoformat(),
+                "duration_seconds": 120.0,
+            },
         )
         await event_registry.event_bus.publish(timeout_event)
 
@@ -431,11 +453,13 @@ class TestReviewEventHandling:
         """Test handling ReviewCycleCreated event."""
         event = ReviewCycleCreated(
             aggregate_id="review-123",
-            workflow_id="workflow-001",
-            stage_name="implementation",
-            maker_agent_id="agent-maker",
-            reviewer_agent_id="agent-reviewer",
-            max_iterations=3,
+            payload={
+                "workflow_id": "workflow-001",
+                "stage_name": "implementation",
+                "maker_agent_id": "agent-maker",
+                "reviewer_agent_id": "agent-reviewer",
+                "max_iterations": 3,
+            },
         )
 
         await event_registry.event_bus.publish(event)
@@ -452,20 +476,23 @@ class TestReviewEventHandling:
         # Create review first
         create_event = ReviewCycleCreated(
             aggregate_id="review-123",
-            workflow_id="workflow-001",
-            stage_name="implementation",
-            maker_agent_id="agent-maker",
-            reviewer_agent_id="agent-reviewer",
-            max_iterations=3,
+            payload={
+                "workflow_id": "workflow-001",
+                "stage_name": "implementation",
+                "maker_agent_id": "agent-maker",
+                "reviewer_agent_id": "agent-reviewer",
+                "max_iterations": 3,
+            },
         )
         await event_registry.event_bus.publish(create_event)
 
         # Start iteration
         iteration_event = ReviewIterationStarted(
             aggregate_id="review-123",
-            iteration_number=1,
-            maker_execution_id="exec-123",
-            maker_output="Test output",
+            payload={
+                "iteration_number": 1,
+                "maker_execution_id": "exec-123",
+            },
         )
         await event_registry.event_bus.publish(iteration_event)
 
@@ -479,17 +506,23 @@ class TestReviewEventHandling:
         # Create review
         create_event = ReviewCycleCreated(
             aggregate_id="review-123",
-            workflow_id="workflow-001",
-            stage_name="implementation",
-            maker_agent_id="agent-maker",
-            reviewer_agent_id="agent-reviewer",
-            max_iterations=3,
+            payload={
+                "workflow_id": "workflow-001",
+                "stage_name": "implementation",
+                "maker_agent_id": "agent-maker",
+                "reviewer_agent_id": "agent-reviewer",
+                "max_iterations": 3,
+            },
         )
         await event_registry.event_bus.publish(create_event)
 
         # Approve
         approve_event = ReviewCycleApproved(
-            aggregate_id="review-123", total_iterations=2
+            aggregate_id="review-123",
+            payload={
+                "total_iterations": 2,
+                "approved_at": datetime.now(timezone.utc).isoformat(),
+            },
         )
         await event_registry.event_bus.publish(approve_event)
 
@@ -506,17 +539,25 @@ class TestReviewEventHandling:
         # Create review
         create_event = ReviewCycleCreated(
             aggregate_id="review-123",
-            workflow_id="workflow-001",
-            stage_name="implementation",
-            maker_agent_id="agent-maker",
-            reviewer_agent_id="agent-reviewer",
-            max_iterations=3,
+            payload={
+                "workflow_id": "workflow-001",
+                "stage_name": "implementation",
+                "maker_agent_id": "agent-maker",
+                "reviewer_agent_id": "agent-reviewer",
+                "max_iterations": 3,
+            },
         )
         await event_registry.event_bus.publish(create_event)
 
         # Reject (max iterations reached)
         reject_event = ReviewCycleRejected(
-            aggregate_id="review-123", current_iteration=3, max_iterations=3
+            aggregate_id="review-123",
+            payload={
+                "rejected_at": datetime.now(timezone.utc).isoformat(),
+                "final_iteration": 3,
+                "reviewer_id": "agent-reviewer",
+                "rejection_reason": "Max iterations reached",
+            },
         )
         await event_registry.event_bus.publish(reject_event)
 
@@ -531,17 +572,24 @@ class TestReviewEventHandling:
         # Create review
         create_event = ReviewCycleCreated(
             aggregate_id="review-123",
-            workflow_id="workflow-001",
-            stage_name="implementation",
-            maker_agent_id="agent-maker",
-            reviewer_agent_id="agent-reviewer",
-            max_iterations=3,
+            payload={
+                "workflow_id": "workflow-001",
+                "stage_name": "implementation",
+                "maker_agent_id": "agent-maker",
+                "reviewer_agent_id": "agent-reviewer",
+                "max_iterations": 3,
+            },
         )
         await event_registry.event_bus.publish(create_event)
 
         # Escalate
         escalate_event = ReviewCycleEscalated(
-            aggregate_id="review-123", reason="Reviewer requested human review"
+            aggregate_id="review-123",
+            payload={
+                "reason": "Reviewer requested human review",
+                "total_iterations": 2,
+                "escalated_at": datetime.now(timezone.utc).isoformat(),
+            },
         )
         await event_registry.event_bus.publish(escalate_event)
 
@@ -561,44 +609,51 @@ class TestEndToEndEventFlow:
         # Work item created
         work_item_event = WorkItemCreated(
             aggregate_id="work-123",
-            title="Test work item",
-            description="Test description",
-            repository="test/repo",
-            issue_number=42,
-            priority=WorkItemPriority.MEDIUM,
-            labels=["feature"],
-            reporter="test-user",
+            payload={
+                "title": "Test work item",
+                "description": "Test description",
+                "project_id": "test/repo",
+                "labels": ["feature"],
+                "priority": WorkItemPriority.MEDIUM.value,
+                "external_id": "42",
+                "external_url": "https://github.com/test/repo/issues/42",
+            },
         )
         await event_registry.event_bus.publish(work_item_event)
 
         # Execution initialized
         init_event = ExecutionInitialized(
             aggregate_id="exec-123",
-            agent_id="agent-456",
-            work_item_id="work-123",
-            workflow_id="workflow-001",
-            stage_name="implementation",
-            prompt="Test prompt",
-            model="claude-3-5-sonnet-20241022",
+            payload={
+                "agent_id": "agent-456",
+                "work_item_id": "work-123",
+                "workflow_id": "workflow-001",
+                "stage_name": "implementation",
+                "model": "claude-3-5-sonnet-20241022",
+            },
         )
         await event_registry.event_bus.publish(init_event)
 
         # Execution started
         start_event = ExecutionStarted(
             aggregate_id="exec-123",
-            work_item_id="work-123",
-            container_name="test-container",
+            payload={
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "container_name": "test-container",
+            },
         )
         await event_registry.event_bus.publish(start_event)
 
         # Execution completed
         complete_event = ExecutionCompleted(
             aggregate_id="exec-123",
-            work_item_id="work-123",
-            output="Test output",
-            input_tokens=100,
-            output_tokens=200,
-            session_id="session-123",
+            payload={
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "input_tokens": 100,
+                "output_tokens": 200,
+                "duration_seconds": 10.5,
+                "session_id": "session-123",
+            },
         )
         await event_registry.event_bus.publish(complete_event)
 
@@ -616,38 +671,47 @@ class TestEndToEndEventFlow:
         # Review created
         create_event = ReviewCycleCreated(
             aggregate_id="review-123",
-            workflow_id="workflow-001",
-            stage_name="implementation",
-            maker_agent_id="agent-maker",
-            reviewer_agent_id="agent-reviewer",
-            max_iterations=3,
+            payload={
+                "workflow_id": "workflow-001",
+                "stage_name": "implementation",
+                "maker_agent_id": "agent-maker",
+                "reviewer_agent_id": "agent-reviewer",
+                "max_iterations": 3,
+            },
         )
         await event_registry.event_bus.publish(create_event)
 
         # First iteration
         iteration_event = ReviewIterationStarted(
             aggregate_id="review-123",
-            iteration_number=1,
-            maker_execution_id="exec-123",
-            maker_output="Test output",
+            payload={
+                "iteration_number": 1,
+                "maker_execution_id": "exec-123",
+            },
         )
         await event_registry.event_bus.publish(iteration_event)
 
         # Feedback submitted
         feedback_event = ReviewFeedbackSubmitted(
             aggregate_id="review-123",
-            iteration_number=1,
-            reviewer_execution_id="exec-456",
-            decision=ReviewDecision.APPROVE.value,
-            comment="Looks good!",
-            issues=[],
-            suggestions=[],
+            payload={
+                "iteration_number": 1,
+                "submitted_at": datetime.now(timezone.utc).isoformat(),
+                "feedback": "Looks good!",
+                "decision": ReviewDecision.APPROVE.value,
+                "reviewer_id": "exec-456",
+                "issues_found": [],
+            },
         )
         await event_registry.event_bus.publish(feedback_event)
 
         # Approved
         approve_event = ReviewCycleApproved(
-            aggregate_id="review-123", total_iterations=1
+            aggregate_id="review-123",
+            payload={
+                "total_iterations": 1,
+                "approved_at": datetime.now(timezone.utc).isoformat(),
+            },
         )
         await event_registry.event_bus.publish(approve_event)
 
@@ -666,56 +730,68 @@ class TestEndToEndEventFlow:
         # Review created
         create_event = ReviewCycleCreated(
             aggregate_id="review-123",
-            workflow_id="workflow-001",
-            stage_name="implementation",
-            maker_agent_id="agent-maker",
-            reviewer_agent_id="agent-reviewer",
-            max_iterations=3,
+            payload={
+                "workflow_id": "workflow-001",
+                "stage_name": "implementation",
+                "maker_agent_id": "agent-maker",
+                "reviewer_agent_id": "agent-reviewer",
+                "max_iterations": 3,
+            },
         )
         await event_registry.event_bus.publish(create_event)
 
         # Iteration 1 - rejected
         iteration_1 = ReviewIterationStarted(
             aggregate_id="review-123",
-            iteration_number=1,
-            maker_execution_id="exec-123",
-            maker_output="First attempt",
+            payload={
+                "iteration_number": 1,
+                "maker_execution_id": "exec-123",
+            },
         )
         await event_registry.event_bus.publish(iteration_1)
 
         feedback_1 = ReviewFeedbackSubmitted(
             aggregate_id="review-123",
-            iteration_number=1,
-            reviewer_execution_id="exec-456",
-            decision=ReviewDecision.REQUEST_CHANGES.value,
-            comment="Needs improvement",
-            issues=["Issue 1", "Issue 2"],
-            suggestions=["Suggestion 1"],
+            payload={
+                "iteration_number": 1,
+                "submitted_at": datetime.now(timezone.utc).isoformat(),
+                "feedback": "Needs improvement",
+                "decision": ReviewDecision.REQUEST_CHANGES.value,
+                "reviewer_id": "exec-456",
+                "issues_found": [{"issue": "Issue 1"}, {"issue": "Issue 2"}],
+            },
         )
         await event_registry.event_bus.publish(feedback_1)
 
         # Iteration 2 - approved
         iteration_2 = ReviewIterationStarted(
             aggregate_id="review-123",
-            iteration_number=2,
-            maker_execution_id="exec-789",
-            maker_output="Second attempt",
+            payload={
+                "iteration_number": 2,
+                "maker_execution_id": "exec-789",
+            },
         )
         await event_registry.event_bus.publish(iteration_2)
 
         feedback_2 = ReviewFeedbackSubmitted(
             aggregate_id="review-123",
-            iteration_number=2,
-            reviewer_execution_id="exec-012",
-            decision=ReviewDecision.APPROVE.value,
-            comment="Much better!",
-            issues=[],
-            suggestions=[],
+            payload={
+                "iteration_number": 2,
+                "submitted_at": datetime.now(timezone.utc).isoformat(),
+                "feedback": "Much better!",
+                "decision": ReviewDecision.APPROVE.value,
+                "reviewer_id": "exec-012",
+                "issues_found": [],
+            },
         )
         await event_registry.event_bus.publish(feedback_2)
 
         approve_event = ReviewCycleApproved(
-            aggregate_id="review-123", total_iterations=2
+            aggregate_id="review-123",
+            payload={
+                "total_iterations": 2,
+                "approved_at": datetime.now(timezone.utc).isoformat(),
+            },
         )
         await event_registry.event_bus.publish(approve_event)
 
@@ -734,30 +810,35 @@ class TestEndToEndEventFlow:
         events = [
             WorkItemCreated(
                 aggregate_id="work-1",
-                title="Test 1",
-                description="Desc 1",
-                repository="test/repo",
-                issue_number=1,
-                priority=WorkItemPriority.HIGH,
-                labels=[],
-                reporter="user",
+                payload={
+                    "title": "Test 1",
+                    "description": "Desc 1",
+                    "project_id": "test/repo",
+                    "labels": [],
+                    "priority": WorkItemPriority.HIGH.value,
+                    "external_id": "1",
+                    "external_url": "https://github.com/test/repo/issues/1",
+                },
             ),
             ExecutionInitialized(
                 aggregate_id="exec-1",
-                agent_id="agent-1",
-                work_item_id="work-1",
-                workflow_id="wf-1",
-                stage_name="test",
-                prompt="Test",
-                model="claude-3-5-sonnet-20241022",
+                payload={
+                    "agent_id": "agent-1",
+                    "work_item_id": "work-1",
+                    "workflow_id": "wf-1",
+                    "stage_name": "test",
+                    "model": "claude-3-5-sonnet-20241022",
+                },
             ),
             ReviewCycleCreated(
                 aggregate_id="review-1",
-                workflow_id="wf-1",
-                stage_name="test",
-                maker_agent_id="agent-1",
-                reviewer_agent_id="agent-2",
-                max_iterations=3,
+                payload={
+                    "workflow_id": "wf-1",
+                    "stage_name": "test",
+                    "maker_agent_id": "agent-1",
+                    "reviewer_agent_id": "agent-2",
+                    "max_iterations": 3,
+                },
             ),
         ]
 
@@ -796,13 +877,15 @@ class TestEventHandlerErrorHandling:
 
         event = WorkItemCreated(
             aggregate_id="work-1",
-            title="Test",
-            description="Desc",
-            repository="test/repo",
-            issue_number=1,
-            priority=WorkItemPriority.MEDIUM,
-            labels=[],
-            reporter="user",
+            payload={
+                "title": "Test",
+                "description": "Desc",
+                "project_id": "test/repo",
+                "labels": [],
+                "priority": WorkItemPriority.MEDIUM.value,
+                "external_id": "1",
+                "external_url": "https://github.com/test/repo/issues/1",
+            },
         )
 
         await event_bus.publish(event)
@@ -834,13 +917,15 @@ class TestEventHandlerErrorHandling:
 
         event = WorkItemCreated(
             aggregate_id="work-1",
-            title="Test",
-            description="Desc",
-            repository="test/repo",
-            issue_number=1,
-            priority=WorkItemPriority.MEDIUM,
-            labels=[],
-            reporter="user",
+            payload={
+                "title": "Test",
+                "description": "Desc",
+                "project_id": "test/repo",
+                "labels": [],
+                "priority": WorkItemPriority.MEDIUM.value,
+                "external_id": "1",
+                "external_url": "https://github.com/test/repo/issues/1",
+            },
         )
 
         await event_bus.publish(event)

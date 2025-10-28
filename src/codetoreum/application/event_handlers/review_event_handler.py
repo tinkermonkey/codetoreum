@@ -97,13 +97,13 @@ class ReviewEventHandler(EventHandler):
         """
         self._metrics["total_reviews"] += 1
         self._metrics["active_reviews"] += 1
-        self._active_reviews[event.aggregate_id] = event.workflow_id
+        self._active_reviews[event.aggregate_id] = event.payload.get('workflow_id', '')
 
         logger.info(
             f"Review cycle created: {event.aggregate_id} "
-            f"(workflow: {event.workflow_id}, stage: {event.stage_name}, "
-            f"maker: {event.maker_agent_id}, reviewer: {event.reviewer_agent_id}, "
-            f"max_iterations: {event.max_iterations})"
+            f"(workflow: {event.payload.get('workflow_id')}, stage: {event.payload.get('stage_name')}, "
+            f"maker: {event.payload.get('maker_agent_id')}, reviewer: {event.payload.get('reviewer_agent_id')}, "
+            f"max_iterations: {event.payload.get('max_iterations')})"
         )
 
         logger.debug(
@@ -130,8 +130,8 @@ class ReviewEventHandler(EventHandler):
 
         logger.info(
             f"Review iteration started: {event.aggregate_id}, "
-            f"iteration {event.iteration_number} "
-            f"(maker_execution: {event.maker_execution_id})"
+            f"iteration {event.payload.get('iteration_number')} "
+            f"(maker_execution: {event.payload.get('maker_execution_id')})"
         )
 
         logger.debug(
@@ -154,16 +154,17 @@ class ReviewEventHandler(EventHandler):
         Args:
             event: ReviewFeedbackSubmitted event
         """
+        issues_found = event.payload.get('issues_found', [])
         logger.info(
             f"Review feedback submitted: {event.aggregate_id}, "
-            f"iteration {event.iteration_number}, "
-            f"decision: {event.decision}, "
-            f"issues: {len(event.issues)}, "
-            f"suggestions: {len(event.suggestions)}"
+            f"iteration {event.payload.get('iteration_number')}, "
+            f"decision: {event.payload.get('decision')}, "
+            f"issues: {len(issues_found)}"
         )
 
-        if event.comment:
-            logger.debug(f"Reviewer comment: {event.comment}")
+        feedback_text = event.payload.get('feedback')
+        if feedback_text:
+            logger.debug(f"Reviewer comment: {feedback_text}")
 
         # Note: In a full implementation, this would:
         # 1. Parse feedback for actionable items
@@ -187,7 +188,7 @@ class ReviewEventHandler(EventHandler):
 
         logger.info(
             f"Review cycle approved: {event.aggregate_id}, "
-            f"total iterations: {event.total_iterations}"
+            f"total iterations: {event.payload.get('total_iterations')}"
         )
 
         logger.info(
@@ -212,25 +213,16 @@ class ReviewEventHandler(EventHandler):
         """
         self._metrics["rejected_reviews"] += 1
 
-        # Only decrement active if this is final rejection (max iterations reached)
-        if event.current_iteration >= event.max_iterations:
-            self._metrics["active_reviews"] -= 1
-            self._active_reviews.pop(event.aggregate_id, None)
+        # Decrement active reviews since rejection means review is complete
+        self._metrics["active_reviews"] -= 1
+        self._active_reviews.pop(event.aggregate_id, None)
 
+        final_iteration = event.payload.get('final_iteration', 0)
         logger.warning(
             f"Review cycle rejected: {event.aggregate_id}, "
-            f"iteration {event.current_iteration}/{event.max_iterations}"
+            f"final iteration: {final_iteration}, "
+            f"reason: {event.payload.get('rejection_reason')}"
         )
-
-        if event.current_iteration >= event.max_iterations:
-            logger.error(
-                f"Review cycle {event.aggregate_id} reached max iterations, "
-                f"should be escalated"
-            )
-        else:
-            logger.info(
-                f"Review cycle {event.aggregate_id} will continue with maker revision"
-            )
 
         logger.warning(
             f"Rejection rate: {self._metrics['rejected_reviews']}/{self._metrics['total_reviews']} "
@@ -260,7 +252,7 @@ class ReviewEventHandler(EventHandler):
 
         logger.warning(
             f"Review cycle escalated: {event.aggregate_id}, "
-            f"reason: {event.reason}"
+            f"reason: {event.payload.get('reason')}"
         )
 
         logger.warning(

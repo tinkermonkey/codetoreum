@@ -93,8 +93,8 @@ class ExecutionEventHandler(EventHandler):
 
         logger.info(
             f"Execution initialized: {event.aggregate_id} "
-            f"(agent: {event.agent_id}, work_item: {event.work_item_id}, "
-            f"workflow: {event.workflow_id}, stage: {event.stage_name})"
+            f"(agent: {event.payload.get('agent_id')}, work_item: {event.payload.get('work_item_id')}, "
+            f"workflow: {event.payload.get('workflow_id')}, stage: {event.payload.get('stage_name')})"
         )
 
         logger.debug(
@@ -110,11 +110,11 @@ class ExecutionEventHandler(EventHandler):
             event: ExecutionStarted event
         """
         self._metrics["active_executions"] += 1
-        self._active_executions[event.aggregate_id] = event.work_item_id
+        self._active_executions[event.aggregate_id] = event.aggregate_id  # Track by execution ID
 
         logger.info(
             f"Execution started: {event.aggregate_id} "
-            f"(container: {event.container_name or 'none'})"
+            f"(container: {event.payload.get('container_name') or 'none'})"
         )
 
         logger.debug(
@@ -139,10 +139,12 @@ class ExecutionEventHandler(EventHandler):
         self._metrics["active_executions"] -= 1
         self._active_executions.pop(event.aggregate_id, None)
 
+        input_tokens = event.payload.get('input_tokens', 0)
+        output_tokens = event.payload.get('output_tokens', 0)
         logger.info(
             f"Execution completed: {event.aggregate_id} "
-            f"(tokens: input={event.input_tokens}, output={event.output_tokens}, "
-            f"total={event.input_tokens + event.output_tokens})"
+            f"(tokens: input={input_tokens}, output={output_tokens}, "
+            f"total={input_tokens + output_tokens})"
         )
 
         logger.debug(
@@ -169,13 +171,13 @@ class ExecutionEventHandler(EventHandler):
         self._active_executions.pop(event.aggregate_id, None)
 
         logger.error(
-            f"Execution failed: {event.aggregate_id} "
-            f"(work_item: {event.work_item_id}), "
-            f"error: {event.error_message}"
+            f"Execution failed: {event.aggregate_id}, "
+            f"error: {event.payload.get('error_message')}"
         )
 
-        if event.exit_code:
-            logger.error(f"Exit code: {event.exit_code}")
+        exit_code = event.payload.get('exit_code')
+        if exit_code:
+            logger.error(f"Exit code: {exit_code}")
 
         logger.warning(
             f"Failure rate: {self._metrics['failed_executions']}/{self._metrics['total_executions']} "
@@ -203,8 +205,7 @@ class ExecutionEventHandler(EventHandler):
         self._active_executions.pop(event.aggregate_id, None)
 
         logger.error(
-            f"Execution timed out: {event.aggregate_id} "
-            f"(work_item: {event.work_item_id})"
+            f"Execution timed out: {event.aggregate_id}"
         )
 
         logger.warning(
