@@ -146,7 +146,8 @@ class PipelineManager:
             event: Event to emit
         """
         try:
-            await self.event_store.append(event)
+            # Use aggregate_id as stream_id and wrap event in a list
+            await self.event_store.append(event.aggregate_id, [event])
         except Exception as e:
             self._logger.error(
                 f"Failed to emit event {type(event).__name__}: {e}",

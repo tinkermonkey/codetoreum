@@ -12,6 +12,8 @@ from codetoreum.application.pipeline_manager import (
 from codetoreum.adapters.testing import InMemoryEventStore
 from codetoreum.domain.pipeline_stage import PipelineStage, StageStatus, StageType
 from codetoreum.domain.workflow import Workflow, WorkflowStatus
+from codetoreum.domain.workflow_template import WorkflowTemplate
+from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.events import (
     PipelineStageStarted,
     PipelineStageCompleted,
@@ -53,127 +55,64 @@ def pipeline_manager(mock_event_store, mock_checkpoint_store):
 @pytest.fixture
 def simple_workflow():
     """Create simple sequential workflow with 3 stages."""
+    # Create template
+    template = WorkflowTemplate.create("simple", "Simple Workflow", "Simple 3-stage workflow")
+    template.add_stage("stage1", "developer", stage_type="sequential")
+    template.add_stage("stage2", "reviewer", stage_type="sequential", dependencies=["stage1"])
+    template.add_stage("stage3", "tester", stage_type="sequential", dependencies=["stage2"])
+
+    # Create workflow from template
     workflow = Workflow.create(
-        name="simple-workflow",
+        work_item_id="work-item-1",
+        template=template,
         project_id="test-project",
-        description="Simple 3-stage workflow",
-        stages=[],
     )
 
-    # Add stages
-    stage1 = PipelineStage.create(
-        name="stage1",
-        workflow_id=workflow.id,
-        agent_config={"agent_id": "developer", "task": "implement"},
-        stage_type=StageType.SEQUENTIAL,
-        description="First stage",
-    )
-
-    stage2 = PipelineStage.create(
-        name="stage2",
-        workflow_id=workflow.id,
-        agent_config={"agent_id": "reviewer", "task": "review"},
-        stage_type=StageType.SEQUENTIAL,
-        description="Second stage",
-        dependencies=["stage1"],
-    )
-
-    stage3 = PipelineStage.create(
-        name="stage3",
-        workflow_id=workflow.id,
-        agent_config={"agent_id": "tester", "task": "test"},
-        stage_type=StageType.SEQUENTIAL,
-        description="Third stage",
-        dependencies=["stage2"],
-    )
-
-    workflow.stages = [stage1, stage2, stage3]
     return workflow
 
 
 @pytest.fixture
 def parallel_workflow():
     """Create workflow with parallel stages."""
+    # Create template
+    template = WorkflowTemplate.create("parallel", "Parallel Workflow", "Workflow with parallel stages")
+    template.add_stage("stage1", "analyzer", stage_type="sequential")
+    template.add_stage("stage2a", "developer-a", stage_type="parallel", dependencies=["stage1"], is_parallel=True)
+    template.add_stage("stage2b", "developer-b", stage_type="parallel", dependencies=["stage1"], is_parallel=True)
+    template.add_stage("stage3", "integrator", stage_type="sequential", dependencies=["stage2a", "stage2b"])
+
+    # Create workflow from template
     workflow = Workflow.create(
-        name="parallel-workflow",
+        work_item_id="work-item-1",
+        template=template,
         project_id="test-project",
-        description="Workflow with parallel stages",
-        stages=[],
     )
 
-    # Stage 1 - sequential
-    stage1 = PipelineStage.create(
-        name="stage1",
-        workflow_id=workflow.id,
-        agent_config={"agent_id": "analyzer", "task": "analyze"},
-        stage_type=StageType.SEQUENTIAL,
-        description="Analysis stage",
-    )
-
-    # Stages 2a and 2b - parallel (both depend on stage1)
-    stage2a = PipelineStage.create(
-        name="stage2a",
-        workflow_id=workflow.id,
-        agent_config={"agent_id": "developer-a", "task": "implement"},
-        stage_type=StageType.PARALLEL,
-        description="Parallel implementation A",
-        dependencies=["stage1"],
-        is_parallel=True,
-    )
-
-    stage2b = PipelineStage.create(
-        name="stage2b",
-        workflow_id=workflow.id,
-        agent_config={"agent_id": "developer-b", "task": "implement"},
-        stage_type=StageType.PARALLEL,
-        description="Parallel implementation B",
-        dependencies=["stage1"],
-        is_parallel=True,
-    )
-
-    # Stage 3 - depends on both parallel stages
-    stage3 = PipelineStage.create(
-        name="stage3",
-        workflow_id=workflow.id,
-        agent_config={"agent_id": "integrator", "task": "integrate"},
-        stage_type=StageType.SEQUENTIAL,
-        description="Integration stage",
-        dependencies=["stage2a", "stage2b"],
-    )
-
-    workflow.stages = [stage1, stage2a, stage2b, stage3]
     return workflow
 
 
 @pytest.fixture
 def review_workflow():
     """Create workflow with review stage."""
-    workflow = Workflow.create(
-        name="review-workflow",
-        project_id="test-project",
-        description="Workflow with review stage",
-        stages=[],
-    )
-
-    stage1 = PipelineStage.create(
-        name="implementation",
-        workflow_id=workflow.id,
-        agent_config={"agent_id": "developer", "task": "implement"},
-        stage_type=StageType.SEQUENTIAL,
-    )
-
-    stage2 = PipelineStage.create(
-        name="review",
-        workflow_id=workflow.id,
-        agent_config={"agent_id": "reviewer", "task": "review"},
-        stage_type=StageType.REVIEW,
+    # Create template
+    template = WorkflowTemplate.create("review", "Review Workflow", "Workflow with review stage")
+    template.add_stage("implementation", "developer", stage_type="sequential")
+    template.add_stage(
+        "review",
+        "reviewer",
+        stage_type="review",
         dependencies=["implementation"],
         maker_agent_id="developer",
         reviewer_agent_id="reviewer",
-        max_review_iterations=3,
     )
 
-    workflow.stages = [stage1, stage2]
+    # Create workflow from template
+    workflow = Workflow.create(
+        work_item_id="work-item-1",
+        template=template,
+        project_id="test-project",
+    )
+
     return workflow
 
 
@@ -203,7 +142,7 @@ async def test_execute_simple_pipeline(pipeline_manager, simple_workflow, mock_e
     assert len(result.failed_stages) == 0
 
     # Assert events were emitted
-    events = mock_event_store.events
+    events = mock_event_store.get_all_events_list()
     assert len(events) > 0
 
     # Check stage started events
@@ -260,7 +199,7 @@ async def test_execute_stage_successful(pipeline_manager, simple_workflow, mock_
     assert stage.execution_id is not None
 
     # Assert events
-    events = mock_event_store.events
+    events = mock_event_store.get_all_events_list()
     stage_started = [e for e in events if isinstance(e, PipelineStageStarted)]
     stage_completed = [e for e in events if isinstance(e, PipelineStageCompleted)]
     assert len(stage_started) == 1
@@ -408,12 +347,12 @@ async def test_pipeline_failure_emits_event(pipeline_manager, simple_workflow, m
     )
 
     # Check failure event was emitted
-    events = mock_event_store.events
+    events = mock_event_store.get_all_events_list()
     failed_events = [e for e in events if isinstance(e, PipelineFailed)]
     assert len(failed_events) == 1
-    assert failed_events[0].error == "Test error"
-    assert failed_events[0].completed_stages == ["stage1"]
-    assert failed_events[0].failed_stages == ["stage2"]
+    assert failed_events[0].payload["error"] == "Test error"
+    assert failed_events[0].payload["completed_stages"] == ["stage1"]
+    assert failed_events[0].payload["failed_stages"] == ["stage2"]
 
 
 # ============================================================================
@@ -500,22 +439,18 @@ async def test_stage_tracks_duration(pipeline_manager, simple_workflow):
 
 @pytest.mark.asyncio
 async def test_empty_workflow(pipeline_manager):
-    """Test executing workflow with no stages."""
-    workflow = Workflow.create(
-        name="empty-workflow",
-        project_id="test-project",
-        description="Empty workflow",
-        stages=[],
-    )
+    """Test executing workflow with no stages - this should fail validation."""
+    # Attempting to create a workflow with no stages should raise an error
+    template = WorkflowTemplate.create("empty", "Empty Workflow", "Empty workflow")
+    # Don't add any stages
 
-    result = await pipeline_manager.execute_pipeline(
-        workflow=workflow,
-        context={},
-    )
-
-    assert result.success is True
-    assert len(result.completed_stages) == 0
-    assert result.status == PipelineStatus.COMPLETED
+    # This should raise DomainError because workflows must have at least one stage
+    with pytest.raises(DomainError, match="at least one stage"):
+        workflow = Workflow.create(
+            work_item_id="work-item-1",
+            template=template,
+            project_id="test-project",
+        )
 
 
 @pytest.mark.asyncio
