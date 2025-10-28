@@ -317,12 +317,25 @@ class IConfigStore(ABC):
         """
         Search configurations using full-text search.
 
+        Search Behavior:
+        - Case-insensitive matching
+        - Partial substring matches supported
+        - Multiple space-separated terms are treated as AND search
+          (all terms must be present)
+        - Searches across all text fields (name, description, metadata, etc.)
+        - Results sorted by relevance (most relevant first)
+
+        Example queries:
+        - "api gateway" -> matches configs containing both "api" AND "gateway"
+        - "claude-sonnet" -> matches configs with "claude-sonnet" in any field
+        - "production" -> matches all configs with "production" in any field
+
         Args:
-            query: Search query string
+            query: Search query string (space-separated terms for AND search)
             config_type: Optional filter by config type (project, agent, pipeline)
 
         Returns:
-            List of matching configurations
+            List of matching configurations (dictionaries with config data)
         """
         pass
 

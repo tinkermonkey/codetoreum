@@ -180,18 +180,43 @@ class InMemoryConfigStore(IConfigStore):
         """
         Search configurations using simple substring matching.
 
+        Search behavior:
+        - Case-insensitive
+        - Space-separated terms treated as AND search
+        - Searches across all text fields
+
         This is a simplified implementation for testing. Production
         implementation would use Elasticsearch full-text search.
         """
         results = []
-        query_lower = query.lower()
+
+        # Split query into terms (AND search)
+        terms = [term.lower() for term in query.split() if term]
+
+        def matches_all_terms(text: str) -> bool:
+            """Check if text contains all search terms."""
+            text_lower = text.lower()
+            return all(term in text_lower for term in terms)
+
+        def config_matches(config) -> bool:
+            """Check if config matches all search terms."""
+            # Build searchable text from all fields
+            searchable_fields = [
+                str(getattr(config, 'name', '')),
+                str(getattr(config, 'github_org', '')),
+                str(getattr(config, 'github_repo', '')),
+                str(getattr(config, 'agent_name', '')),
+                str(getattr(config, 'model', '')),
+                str(getattr(config, 'metadata', {})),
+                str(getattr(config, 'tech_stacks', {})),
+            ]
+            combined_text = ' '.join(searchable_fields)
+            return matches_all_terms(combined_text)
 
         # Search projects
         if not config_type or config_type == "project":
             for config in self.projects.values():
-                # Simple search in name and metadata
-                if (query_lower in config.name.lower() or
-                    query_lower in str(config.metadata).lower()):
+                if config_matches(config):
                     results.append({
                         "type": "project",
                         "id": config.id,
@@ -203,8 +228,7 @@ class InMemoryConfigStore(IConfigStore):
         if not config_type or config_type == "agent":
             for project_agents in self.agents.values():
                 for config in project_agents.values():
-                    if (query_lower in config.agent_name.lower() or
-                        query_lower in config.model.lower()):
+                    if config_matches(config):
                         results.append({
                             "type": "agent",
                             "id": f"{config.project_id}:{config.agent_name}",
@@ -216,7 +240,7 @@ class InMemoryConfigStore(IConfigStore):
         if not config_type or config_type == "pipeline":
             for project_pipelines in self.pipelines.values():
                 for config in project_pipelines.values():
-                    if query_lower in config.name.lower():
+                    if config_matches(config):
                         results.append({
                             "type": "pipeline",
                             "id": config.id,

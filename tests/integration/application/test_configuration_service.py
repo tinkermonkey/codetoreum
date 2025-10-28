@@ -644,3 +644,297 @@ class TestConfigurationCaching:
         # Verify final version
         project = await config_store.get_project_config(sample_project.id)
         assert project.version == initial_version + 5
+
+
+# New tests for revision 1
+
+@pytest.mark.asyncio
+async def test_concurrent_configuration_updates(
+    config_service, config_store, sample_project
+):
+    """Test that concurrent updates are properly serialized with locks."""
+    import asyncio
+
+    # Create multiple concurrent update tasks
+    async def update_tech_stack(stack_name: str):
+        command = UpdateProjectConfigCommand(
+            project_name=sample_project.name,
+            updates={
+                "tech_stacks": {stack_name: "1.0.0"}
+            },
+            user_id="test_user",
+        )
+        return await config_service.update_project_config(command)
+
+    # Run 10 concurrent updates
+    tasks = [update_tech_stack(f"stack_{i}") for i in range(10)]
+    results = await asyncio.gather(*tasks)
+
+    # All should succeed
+    assert all(r.success for r in results)
+
+    # Verify all tech stacks were added
+    project = await config_store.get_project_config(sample_project.id)
+    assert len(project.tech_stacks) >= 10  # At least the 10 we added
+
+    # Version should be initial + 10 (one for each update)
+    assert project.version == 11  # Initial version 1 + 10 updates
+
+
+@pytest.mark.asyncio
+async def test_large_configuration_objects(config_service, config_store, sample_project):
+    """Test handling of large configuration objects."""
+    # Create a large configuration with many pipelines
+    large_pipelines = [
+        {
+            "name": f"pipeline_{i}",
+            "stages": [
+                {"name": f"stage_{j}", "agent": "test_agent"}
+                for j in range(20)  # 20 stages per pipeline
+            ],
+        }
+        for i in range(50)  # 50 pipelines
+    ]
+
+    command = UpdateProjectConfigCommand(
+        project_name=sample_project.name,
+        updates={"pipelines": large_pipelines},
+        user_id="test_user",
+    )
+
+    result = await config_service.update_project_config(command)
+    assert result.success
+
+    # Verify all pipelines were saved
+    project = await config_store.get_project_config(sample_project.id)
+    assert len(project.pipelines) == 50
+    assert all(len(p["stages"]) == 20 for p in project.pipelines)
+
+
+@pytest.mark.asyncio
+async def test_malformed_json_in_configuration(config_service, sample_project):
+    """Test handling of malformed/invalid JSON-like structures."""
+    # Try to update with invalid pipeline structure
+    command = UpdateProjectConfigCommand(
+        project_name=sample_project.name,
+        updates={
+            "pipelines": "not_a_list",  # Should be a list
+        },
+        user_id="test_user",
+    )
+
+    with pytest.raises(ValidationError) as exc_info:
+        await config_service.update_project_config(command)
+
+    assert "pipelines must be a list" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_search_functionality(config_store, sample_project):
+    """Test configuration search functionality."""
+    # Save a few more projects with different names
+    project1 = ProjectConfig(
+        id="proj-api-gateway",
+        name="api-gateway-service",
+        github_org="test",
+        github_repo="api-gateway",
+        tech_stacks={"python": "3.11"},
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    project2 = ProjectConfig(
+        id="proj-user-service",
+        name="user-management",
+        github_org="test",
+        github_repo="users",
+        tech_stacks={"java": "17"},
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    await config_store.save_project_config(project1)
+    await config_store.save_project_config(project2)
+
+    # Test search for single term
+    results = await config_store.search_configs("gateway")
+    assert len(results) > 0
+    assert any("gateway" in str(r).lower() for r in results)
+
+    # Test search for multiple terms (AND search)
+    results = await config_store.search_configs("api gateway")
+    assert len(results) > 0
+    # Should match project1 which has both "api" and "gateway"
+
+    # Test search with no results
+    results = await config_store.search_configs("nonexistent_term_xyz")
+    assert len(results) == 0
+
+
+@pytest.mark.asyncio
+async def test_encryption_service_integration(config_store, event_bus, sample_project):
+    """Test integration with encryption service for secrets."""
+    from codetoreum.adapters.testing.simple_encryption_adapter import SimpleEncryptionAdapter
+
+    encryption_service = SimpleEncryptionAdapter()
+    config_service = ConfigurationService(
+        config_store=config_store,
+        event_bus=event_bus,
+        encryption_service=encryption_service,
+    )
+
+    # Add a secret environment variable
+    command = AddEnvironmentVariableCommand(
+        project_name=sample_project.name,
+        variable_name="API_SECRET_KEY",
+        variable_value="my-super-secret-key-12345",
+        is_secret=True,
+        user_id="test_user",
+    )
+
+    result = await config_service.add_environment_variable(command)
+    assert result.success
+
+    # Verify the secret is encrypted in storage
+    project = await config_store.get_project_config(sample_project.id)
+    stored_value = project.environment_variables["API_SECRET_KEY"]["value"]
+
+    # Should not be plaintext
+    assert stored_value != "my-super-secret-key-12345"
+
+    # Should be in encrypted format (key_id:nonce:ciphertext)
+    assert stored_value.count(":") == 2
+
+    # Verify we can decrypt it
+    decrypted = await encryption_service.decrypt(stored_value)
+    assert decrypted == "my-super-secret-key-12345"
+
+
+@pytest.mark.asyncio
+async def test_pipeline_stage_uniqueness_validation(config_service, sample_project):
+    """Test validation of pipeline stage name uniqueness."""
+    command = UpdatePipelineConfigCommand(
+        project_name=sample_project.name,
+        pipeline_name="test-pipeline",
+        updates={
+            "stages": [
+                {"name": "build", "agent": "builder"},
+                {"name": "test", "agent": "tester"},
+                {"name": "build", "agent": "duplicate"},  # Duplicate name
+            ]
+        },
+        user_id="test_user",
+    )
+
+    with pytest.raises(ValidationError) as exc_info:
+        await config_service.update_pipeline_config(command)
+
+    assert "stage names must be unique" in str(exc_info.value).lower()
+
+
+@pytest.mark.asyncio
+async def test_pipeline_circular_dependency_detection(config_service, sample_project):
+    """Test detection of circular dependencies in pipeline stages."""
+    command = UpdatePipelineConfigCommand(
+        project_name=sample_project.name,
+        pipeline_name="test-pipeline",
+        updates={
+            "stages": [
+                {"name": "A", "agent": "agent1", "transitions": ["B"]},
+                {"name": "B", "agent": "agent2", "transitions": ["C"]},
+                {"name": "C", "agent": "agent3", "transitions": ["A"]},  # Circular!
+            ]
+        },
+        user_id="test_user",
+    )
+
+    with pytest.raises(ValidationError) as exc_info:
+        await config_service.update_pipeline_config(command)
+
+    assert "circular dependency" in str(exc_info.value).lower()
+
+
+@pytest.mark.asyncio
+async def test_reserved_environment_variable_validation(config_service, sample_project):
+    """Test that reserved environment variables are rejected."""
+    reserved_vars = ["PATH", "HOME", "USER", "SHELL"]
+
+    for var_name in reserved_vars:
+        command = AddEnvironmentVariableCommand(
+            project_name=sample_project.name,
+            variable_name=var_name,
+            variable_value="some_value",
+            user_id="test_user",
+        )
+
+        with pytest.raises(ValidationError) as exc_info:
+            await config_service.add_environment_variable(command)
+
+        assert "reserved" in str(exc_info.value).lower()
+
+
+@pytest.mark.asyncio
+async def test_rollback_on_event_emission_failure(
+    config_store, sample_project, event_store
+):
+    """Test that configuration changes are rolled back if event emission fails."""
+    # Create an event bus that fails on publish
+    class FailingEventBus(EventBus):
+        async def publish(self, event):
+            raise RuntimeError("Event emission failed!")
+
+    failing_event_bus = FailingEventBus(event_store)
+    config_service = ConfigurationService(
+        config_store=config_store,
+        event_bus=failing_event_bus,
+    )
+
+    initial_version = sample_project.version
+    initial_tech_stacks = sample_project.tech_stacks.copy()
+
+    command = UpdateProjectConfigCommand(
+        project_name=sample_project.name,
+        updates={"tech_stacks": {"new_stack": "1.0.0"}},
+        user_id="test_user",
+    )
+
+    # Should raise the event emission error
+    with pytest.raises(RuntimeError, match="Event emission failed"):
+        await config_service.update_project_config(command)
+
+    # Verify configuration was rolled back
+    project = await config_store.get_project_config(sample_project.id)
+    assert project.version == initial_version
+    assert project.tech_stacks == initial_tech_stacks
+
+
+@pytest.mark.asyncio
+async def test_concurrent_agent_config_updates(
+    config_service, config_store, sample_project
+):
+    """Test concurrent updates to different agent configurations."""
+    import asyncio
+
+    async def update_agent_timeout(agent_name: str, timeout: int):
+        command = UpdateAgentConfigCommand(
+            project_name=sample_project.name,
+            agent_name=agent_name,
+            updates={"timeout": timeout},
+            user_id="test_user",
+        )
+        return await config_service.update_agent_config(command)
+
+    # Update 5 different agents concurrently
+    tasks = [
+        update_agent_timeout(f"agent_{i}", 3600 + i * 100)
+        for i in range(5)
+    ]
+    results = await asyncio.gather(*tasks)
+
+    # All should succeed
+    assert all(r.success for r in results)
+
+    # Verify all agents were configured
+    for i in range(5):
+        agent_config = await config_store.get_agent_config(
+            sample_project.id, f"agent_{i}"
+        )
+        assert agent_config.timeout == 3600 + i * 100

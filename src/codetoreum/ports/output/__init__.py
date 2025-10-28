@@ -5,6 +5,11 @@ from codetoreum.ports.output.container import (
     ContainerStatus,
     IContainer,
 )
+from codetoreum.ports.output.encryption_service import (
+    DecryptionError,
+    EncryptionError,
+    IEncryptionService,
+)
 from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.ports.output.llm_provider import (
     ExecutionContext,
@@ -43,6 +48,10 @@ __all__ = [
     "IContainer",
     "ContainerResult",
     "ContainerStatus",
+    # Encryption Service
+    "IEncryptionService",
+    "EncryptionError",
+    "DecryptionError",
     # Event Store
     "IEventStore",
     # LLM Provider

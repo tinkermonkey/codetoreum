@@ -5,6 +5,8 @@ Application service for configuration management with validation,
 versioning, and event emission.
 """
 
+import asyncio
+import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,6 +23,9 @@ from codetoreum.domain.events import (
     SubAgentUnmounted,
 )
 from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.ports.output import IEncryptionService
+
+logger = logging.getLogger(__name__)
 from codetoreum.ports.input.config_command import (
     AddEnvironmentVariableCommand,
     ConfigurationCommandResult,
@@ -62,6 +67,7 @@ class ConfigurationService:
         self,
         config_store: IConfigStore,
         event_bus: EventBus,
+        encryption_service: Optional[IEncryptionService] = None,
         validator: Optional["ConfigurationValidator"] = None,
     ):
         """
@@ -70,11 +76,21 @@ class ConfigurationService:
         Args:
             config_store: Configuration storage port
             event_bus: Event bus for publishing events
+            encryption_service: Encryption service for sensitive values (optional)
             validator: Configuration validator (created if not provided)
         """
         self.config_store = config_store
         self.event_bus = event_bus
+        self.encryption_service = encryption_service
         self.validator = validator or ConfigurationValidator()
+        # Locks for concurrent access protection (one per project)
+        self._locks: Dict[str, asyncio.Lock] = {}
+
+    def _get_lock(self, project_name: str) -> asyncio.Lock:
+        """Get or create lock for a project."""
+        if project_name not in self._locks:
+            self._locks[project_name] = asyncio.Lock()
+        return self._locks[project_name]
 
     async def update_project_config(
         self,
@@ -93,75 +109,92 @@ class ConfigurationService:
             ConfigNotFoundError: If project doesn't exist
             ValidationError: If updates invalid
         """
-        # Load current config
-        try:
-            config = await self.config_store.get_project_config_by_name(
-                command.project_name
+        # Acquire lock for this project to prevent concurrent updates
+        async with self._get_lock(command.project_name):
+            # Load current config
+            try:
+                config = await self.config_store.get_project_config_by_name(
+                    command.project_name
+                )
+            except ConfigNotFoundError:
+                raise ConfigNotFoundError(
+                    f"Project '{command.project_name}' not found"
+                )
+
+            # Validate updates
+            validation = self.validator.validate_project_updates(
+                config,
+                command.updates
             )
-        except ConfigNotFoundError:
-            raise ConfigNotFoundError(
-                f"Project '{command.project_name}' not found"
+            if not validation.valid:
+                raise ValidationError("; ".join(validation.errors or []))
+
+            # Store old values for computing changes
+            old_config = {
+                "tech_stacks": config.tech_stacks.copy(),
+                "pipelines": [p.copy() for p in config.pipelines],
+                "testing": config.testing.copy(),
+            }
+
+            # Apply updates (deep merge)
+            self._deep_merge(config.tech_stacks, command.updates.get("tech_stacks", {}))
+            if "pipelines" in command.updates:
+                config.pipelines = command.updates["pipelines"]
+            if "testing" in command.updates:
+                self._deep_merge(config.testing, command.updates["testing"])
+
+            # Update metadata
+            config.updated_at = datetime.now(timezone.utc)
+            config.version += 1
+            config.metadata["updated_by"] = command.user_id
+            if command.reason:
+                config.metadata["update_reason"] = command.reason
+
+            # Save configuration with rollback on event emission failure
+            old_version = config.version - 1
+            try:
+                await self.config_store.save_project_config(config)
+
+                # Compute changes
+                changes = self._compute_changes(old_config, {
+                    "tech_stacks": config.tech_stacks,
+                    "pipelines": config.pipelines,
+                    "testing": config.testing,
+                })
+
+                # Emit event
+                event = ProjectConfigUpdated(
+                    aggregate_id=config.id,
+                    payload={
+                        "project_id": config.id,
+                        "version": config.version,
+                        "changes": changes,
+                        "updated_by": command.user_id,
+                        "reason": command.reason,
+                    },
+                    user_id=command.user_id,
+                )
+                await self.event_bus.publish(event)
+
+            except Exception as e:
+                # Rollback on failure
+                logger.error(
+                    f"Failed to update project config or emit event: {e}. "
+                    f"Rolling back changes for project '{command.project_name}'"
+                )
+                config.version = old_version
+                config.tech_stacks = old_config["tech_stacks"]
+                config.pipelines = old_config["pipelines"]
+                config.testing = old_config["testing"]
+                await self.config_store.save_project_config(config)
+                raise
+
+            return ConfigurationCommandResult(
+                success=True,
+                config_version=config.version,
+                message=f"Project config updated to version {config.version}",
+                changes_applied=changes,
             )
-
-        # Validate updates
-        validation = self.validator.validate_project_updates(
-            config,
-            command.updates
-        )
-        if not validation.valid:
-            raise ValidationError("; ".join(validation.errors or []))
-
-        # Store old values for computing changes
-        old_config = {
-            "tech_stacks": config.tech_stacks.copy(),
-            "pipelines": [p.copy() for p in config.pipelines],
-            "testing": config.testing.copy(),
-        }
-
-        # Apply updates (deep merge)
-        self._deep_merge(config.tech_stacks, command.updates.get("tech_stacks", {}))
-        if "pipelines" in command.updates:
-            config.pipelines = command.updates["pipelines"]
-        if "testing" in command.updates:
-            self._deep_merge(config.testing, command.updates["testing"])
-
-        # Update metadata
-        config.updated_at = datetime.now(timezone.utc)
-        config.version += 1
-        config.metadata["updated_by"] = command.user_id
-        if command.reason:
-            config.metadata["update_reason"] = command.reason
-
-        # Save configuration
-        await self.config_store.save_project_config(config)
-
-        # Compute changes
-        changes = self._compute_changes(old_config, {
-            "tech_stacks": config.tech_stacks,
-            "pipelines": config.pipelines,
-            "testing": config.testing,
-        })
-
-        # Emit event
-        event = ProjectConfigUpdated(
-            aggregate_id=config.id,
-            payload={
-                "project_id": config.id,
-                "version": config.version,
-                "changes": changes,
-                "updated_by": command.user_id,
-                "reason": command.reason,
-            },
-            user_id=command.user_id,
-        )
-        await self.event_bus.publish(event)
-
-        return ConfigurationCommandResult(
-            success=True,
-            config_version=config.version,
-            message=f"Project config updated to version {config.version}",
-            changes_applied=changes,
-        )
 
     async def update_agent_config(
         self,
@@ -415,44 +448,70 @@ class ConfigurationService:
         if not validation.valid:
             raise ValidationError("; ".join(validation.errors or []))
 
-        # Check if updating existing variable
-        is_update = command.variable_name in config.environment_variables
-        action = "updated" if is_update else "added"
+        # Acquire lock for concurrent access protection
+        async with self._get_lock(command.project_name):
+            # Check if updating existing variable
+            is_update = command.variable_name in config.environment_variables
+            action = "updated" if is_update else "added"
 
-        # Add/update variable (encryption would be handled here in production)
-        stored_value = command.variable_value
-        if command.is_secret:
-            # In production, encrypt the value
-            stored_value = self._encrypt(command.variable_value)
+            # Add/update variable with encryption for secrets
+            stored_value = command.variable_value
+            if command.is_secret:
+                if self.encryption_service:
+                    try:
+                        stored_value = await self.encryption_service.encrypt(command.variable_value)
+                        logger.debug(f"Encrypted environment variable '{command.variable_name}'")
+                    except Exception as e:
+                        logger.error(f"Failed to encrypt environment variable: {e}")
+                        raise ValidationError(f"Failed to encrypt variable: {e}")
+                else:
+                    logger.warning(
+                        f"No encryption service configured. Storing secret "
+                        f"'{command.variable_name}' in plaintext"
+                    )
 
-        config.environment_variables[command.variable_name] = {
-            "value": stored_value,
-            "is_secret": command.is_secret,
-            "description": command.description,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "created_by": command.user_id,
-        }
-
-        # Update metadata
-        config.updated_at = datetime.now(timezone.utc)
-        config.version += 1
-
-        # Save
-        await self.config_store.save_project_config(config)
-
-        # Emit event
-        event = EnvironmentVariableChanged(
-            aggregate_id=config.id,
-            payload={
-                "project_id": config.id,
-                "variable_name": command.variable_name,
-                "action": action,
+            config.environment_variables[command.variable_name] = {
+                "value": stored_value,
                 "is_secret": command.is_secret,
-                "changed_by": command.user_id,
-            },
-            user_id=command.user_id,
-        )
-        await self.event_bus.publish(event)
+                "description": command.description,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_by": command.user_id,
+            }
+
+            # Update metadata
+            config.updated_at = datetime.now(timezone.utc)
+            config.version += 1
+
+            # Save with rollback on failure
+            old_version = config.version - 1
+            old_env_vars = config.environment_variables.copy()
+            try:
+                await self.config_store.save_project_config(config)
+
+                # Emit event
+                event = EnvironmentVariableChanged(
+                    aggregate_id=config.id,
+                    payload={
+                        "project_id": config.id,
+                        "variable_name": command.variable_name,
+                        "action": action,
+                        "is_secret": command.is_secret,
+                        "changed_by": command.user_id,
+                    },
+                    user_id=command.user_id,
+                )
+                await self.event_bus.publish(event)
+
+            except Exception as e:
+                # Rollback on failure
+                logger.error(
+                    f"Failed to add/update environment variable or emit event: {e}. "
+                    f"Rolling back changes"
+                )
+                config.version = old_version
+                config.environment_variables = old_env_vars
+                await self.config_store.save_project_config(config)
+                raise
 
         return ConfigurationCommandResult(
             success=True,
@@ -790,21 +849,40 @@ class ConfigurationService:
 
     # Helper methods
 
-    def _deep_merge(self, target: Dict[str, Any], source: Dict[str, Any]) -> None:
-        """Deep merge source into target dict."""
+    def _deep_merge(self, target: Dict[str, Any], source: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Deep merge source into target dict.
+
+        Args:
+            target: Target dictionary to merge into
+            source: Source dictionary to merge from
+
+        Returns:
+            The merged target dictionary
+        """
         for key, value in source.items():
             if key in target and isinstance(target[key], dict) and isinstance(value, dict):
                 self._deep_merge(target[key], value)
             else:
                 target[key] = value
+        return target
 
     def _compute_changes(
         self,
         old_config: Dict[str, Any],
         new_config: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Compute changes between old and new config."""
-        changes = {}
+        """
+        Compute changes between old and new config.
+
+        Args:
+            old_config: Old configuration dictionary
+            new_config: New configuration dictionary
+
+        Returns:
+            Dictionary mapping changed keys to old/new values
+        """
+        changes: Dict[str, Any] = {}
         for key in new_config:
             if key not in old_config or old_config[key] != new_config[key]:
                 changes[key] = {
@@ -812,15 +890,6 @@ class ConfigurationService:
                     "new": new_config[key],
                 }
         return changes
-
-    def _encrypt(self, value: str) -> str:
-        """
-        Encrypt a value (placeholder implementation).
-
-        In production, this would use cryptography.fernet or similar.
-        """
-        # TODO: Implement actual encryption
-        return f"encrypted:{value}"
 
 
 class ConfigurationValidator:
@@ -909,13 +978,37 @@ class ConfigurationValidator:
         pipeline_name: str,
         updates: Dict[str, Any]
     ) -> "ValidationResult":
-        """Validate pipeline configuration updates."""
-        errors = []
+        """
+        Validate pipeline configuration updates.
+
+        Checks:
+        - Stages format and uniqueness
+        - No circular dependencies in stage transitions
+        """
+        errors: List[str] = []
 
         # Validate stages
         if "stages" in updates:
             if not isinstance(updates["stages"], list):
                 errors.append("stages must be a list")
+            else:
+                # Check for unique stage names
+                stage_names = [s.get("name") for s in updates["stages"] if isinstance(s, dict)]
+                if len(stage_names) != len(set(stage_names)):
+                    errors.append("Pipeline stage names must be unique")
+
+                # Check for circular dependencies
+                stage_map = {s.get("name"): s for s in updates["stages"] if isinstance(s, dict)}
+                for stage in updates["stages"]:
+                    if isinstance(stage, dict) and "transitions" in stage:
+                        if self._has_circular_dependency(
+                            stage.get("name"),
+                            stage.get("transitions", []),
+                            stage_map,
+                        ):
+                            errors.append(
+                                f"Circular dependency detected in stage '{stage.get('name')}'"
+                            )
 
         # Validate triggers
         if "triggers" in updates:
@@ -927,6 +1020,44 @@ class ConfigurationValidator:
             errors=errors if errors else None
         )
 
+    def _has_circular_dependency(
+        self,
+        start_stage: str,
+        transitions: List[str],
+        stage_map: Dict[str, Any],
+        visited: Optional[set] = None
+    ) -> bool:
+        """
+        Check for circular dependencies in pipeline stage transitions.
+
+        Args:
+            start_stage: Starting stage name
+            transitions: List of stage transitions
+            stage_map: Map of stage names to stage configs
+            visited: Set of visited stages (for recursion)
+
+        Returns:
+            True if circular dependency detected, False otherwise
+        """
+        if visited is None:
+            visited = set()
+
+        visited.add(start_stage)
+
+        for next_stage in transitions:
+            if next_stage == start_stage:
+                return True
+            if next_stage in visited:
+                return True
+            if next_stage in stage_map:
+                next_transitions = stage_map[next_stage].get("transitions", [])
+                if self._has_circular_dependency(
+                    start_stage, next_transitions, stage_map, visited.copy()
+                ):
+                    return True
+
+        return False
+
     def validate_environment_variable(
         self,
         name: str,
@@ -936,11 +1067,11 @@ class ConfigurationValidator:
         Validate environment variable.
 
         Checks:
-        - Name follows ENV_VAR conventions
-        - No dangerous names
+        - Name follows ENV_VAR conventions (uppercase with underscores)
+        - Not a reserved system variable
         - Value is string
         """
-        errors = []
+        errors: List[str] = []
 
         # Check name format
         if not re.match(r'^[A-Z][A-Z0-9_]*$', name):
@@ -948,10 +1079,21 @@ class ConfigurationValidator:
                 f"Variable name must be uppercase with underscores: {name}"
             )
 
-        # Check reserved names
-        reserved = ['PATH', 'HOME', 'USER', 'SHELL', 'PWD']
+        # Check reserved names (expanded list of common system variables)
+        reserved = [
+            # System paths
+            'PATH', 'HOME', 'PWD', 'OLDPWD', 'TMPDIR', 'TEMP', 'TMP',
+            # User/session
+            'USER', 'LOGNAME', 'USERNAME', 'SHELL', 'TERM', 'EDITOR',
+            # System info
+            'HOSTNAME', 'HOSTTYPE', 'OSTYPE', 'MACHTYPE', 'LANG', 'LC_ALL',
+            # Process info
+            'PID', 'PPID', 'UID', 'GID', 'EUID', 'EGID',
+            # Special
+            'IFS', 'PS1', 'PS2', 'PS3', 'PS4', 'BASH_VERSION', 'SHLVL',
+        ]
         if name in reserved:
-            errors.append(f"Cannot override reserved variable: {name}")
+            errors.append(f"Cannot override reserved system variable: {name}")
 
         # Check value is string
         if not isinstance(value, str):

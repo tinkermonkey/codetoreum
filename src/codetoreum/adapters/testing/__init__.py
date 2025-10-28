@@ -9,6 +9,7 @@ from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdap
 from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
 from codetoreum.adapters.testing.in_memory_metrics_adapter import InMemoryMetricsAdapter
 from codetoreum.adapters.testing.mock_notifier_adapter import MockNotifierAdapter
+from codetoreum.adapters.testing.simple_encryption_adapter import SimpleEncryptionAdapter
 
 __all__ = [
     "InMemoryEventStore",
@@ -18,4 +19,5 @@ __all__ = [
     "MockLLMAdapter",
     "InMemoryMetricsAdapter",
     "MockNotifierAdapter",
+    "SimpleEncryptionAdapter",
 ]
