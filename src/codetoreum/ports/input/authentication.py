@@ -3,6 +3,7 @@
 This module defines the input port interface for authentication operations.
 """
 
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
@@ -10,6 +11,104 @@ from typing import Optional
 from uuid import UUID
 
 from codetoreum.domain.user import APIKey, AuthContext, User, UserRole
+
+
+# ============================================================================
+# Exceptions
+# ============================================================================
+
+
+class AuthenticationError(Exception):
+    """Raised when authentication fails."""
+
+    pass
+
+
+class UserAlreadyExistsError(Exception):
+    """Raised when trying to create a user that already exists."""
+
+    pass
+
+
+class UserNotFoundError(Exception):
+    """Raised when a user is not found."""
+
+    pass
+
+
+class APIKeyNotFoundError(Exception):
+    """Raised when an API key is not found."""
+
+    pass
+
+
+class ValidationError(Exception):
+    """Raised when validation fails."""
+
+    pass
+
+
+# ============================================================================
+# Validation Functions
+# ============================================================================
+
+
+def validate_email(email: str) -> None:
+    """Validate email format.
+
+    Args:
+        email: Email address to validate
+
+    Raises:
+        ValidationError: If email format is invalid
+    """
+    email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+    if not re.match(email_pattern, email):
+        msg = f"Invalid email format: {email}"
+        raise ValidationError(msg)
+
+
+def validate_username(username: str) -> None:
+    """Validate username format.
+
+    Args:
+        username: Username to validate
+
+    Raises:
+        ValidationError: If username format is invalid
+    """
+    if len(username) < 3:
+        msg = "Username must be at least 3 characters long"
+        raise ValidationError(msg)
+    if len(username) > 50:
+        msg = "Username must be at most 50 characters long"
+        raise ValidationError(msg)
+    if not re.match(r"^[a-zA-Z0-9_-]+$", username):
+        msg = "Username can only contain letters, numbers, underscores, and hyphens"
+        raise ValidationError(msg)
+
+
+def validate_password(password: str) -> None:
+    """Validate password strength.
+
+    Args:
+        password: Password to validate
+
+    Raises:
+        ValidationError: If password doesn't meet requirements
+    """
+    if len(password) < 8:
+        msg = "Password must be at least 8 characters long"
+        raise ValidationError(msg)
+    if not re.search(r"[A-Z]", password):
+        msg = "Password must contain at least one uppercase letter"
+        raise ValidationError(msg)
+    if not re.search(r"[a-z]", password):
+        msg = "Password must contain at least one lowercase letter"
+        raise ValidationError(msg)
+    if not re.search(r"[0-9]", password):
+        msg = "Password must contain at least one digit"
+        raise ValidationError(msg)
 
 
 @dataclass
@@ -262,33 +361,3 @@ class IAuthenticationPort(ABC):
             True if permission granted, False otherwise
         """
         pass
-
-
-class AuthenticationError(Exception):
-    """Raised when authentication fails."""
-
-    pass
-
-
-class UserAlreadyExistsError(Exception):
-    """Raised when trying to create a user that already exists."""
-
-    pass
-
-
-class UserNotFoundError(Exception):
-    """Raised when a user is not found."""
-
-    pass
-
-
-class APIKeyNotFoundError(Exception):
-    """Raised when an API key is not found."""
-
-    pass
-
-
-class ValidationError(Exception):
-    """Raised when validation fails."""
-
-    pass

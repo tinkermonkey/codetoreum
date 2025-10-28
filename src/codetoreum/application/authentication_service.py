@@ -32,6 +32,9 @@ from codetoreum.ports.input.authentication import (
     UserAlreadyExistsError,
     UserNotFoundError,
     ValidationError,
+    validate_email,
+    validate_password,
+    validate_username,
 )
 
 
@@ -129,6 +132,11 @@ class AuthenticationService(IAuthenticationPort):
 
     async def create_user(self, command: CreateUserCommand) -> User:
         """Create a new user."""
+        # Validate input
+        validate_username(command.username)
+        validate_email(command.email)
+        validate_password(command.password)
+
         # Check if user already exists
         try:
             await self.user_repo.get_by_username(command.username)
@@ -163,6 +171,12 @@ class AuthenticationService(IAuthenticationPort):
 
     async def update_user(self, command: UpdateUserCommand) -> User:
         """Update a user."""
+        # Validate input
+        if command.email is not None:
+            validate_email(command.email)
+        if command.password is not None:
+            validate_password(command.password)
+
         # Get existing user
         user = await self.user_repo.get(command.user_id)
 

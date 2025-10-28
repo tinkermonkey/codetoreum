@@ -12,6 +12,7 @@ from fastapi import FastAPI, Header, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from codetoreum.adapters.primary.auth_api_adapter import AuthAPIAdapter
 from codetoreum.adapters.primary.github_webhook_adapter import (
     GitHubWebhookAdapter,
     IConfigurationService,
@@ -20,6 +21,7 @@ from codetoreum.adapters.primary.github_webhook_adapter import (
 )
 from codetoreum.adapters.primary.rest_api_adapter import RestAPIAdapter
 from codetoreum.adapters.primary.websocket_adapter import WebSocketAdapter
+from codetoreum.ports.input.authentication import IAuthenticationPort
 from codetoreum.ports.input.config_command import IConfigurationCommandPort
 from codetoreum.ports.input.task_query import ITaskQueryPort
 from codetoreum.ports.input.workflow_command import IWorkflowCommandPort
@@ -57,6 +59,7 @@ def create_app(
     event_bus: IEventBus,
     config_service: IConfigurationService,
     logger: ILogger,
+    auth_service: Optional[IAuthenticationPort] = None,
     cors_origins: Optional[list] = None,
 ) -> FastAPI:
     """
@@ -69,6 +72,7 @@ def create_app(
         event_bus: Event bus for publishing events
         config_service: Configuration service
         logger: Logger instance
+        auth_service: Optional authentication service
         cors_origins: List of allowed CORS origins
 
     Returns:
@@ -167,6 +171,11 @@ def create_app(
 
     # Include REST API router
     app.include_router(rest_api_adapter.router)
+
+    # Include Authentication API router (if auth service provided)
+    if auth_service is not None:
+        auth_api_adapter = AuthAPIAdapter(auth_service)
+        app.include_router(auth_api_adapter.router)
 
     # ========================================================================
     # WebSocket Endpoints
@@ -296,11 +305,20 @@ def create_development_app() -> FastAPI:
     Returns:
         FastAPI application with mock dependencies
     """
+    import os
+
     from codetoreum.adapters.primary.github_webhook_adapter import (
         IConfigurationService,
         IEventBus,
         ILogger,
     )
+    from codetoreum.adapters.secondary.in_memory_api_key_repository import (
+        InMemoryAPIKeyRepository,
+    )
+    from codetoreum.adapters.secondary.in_memory_user_repository import (
+        InMemoryUserRepository,
+    )
+    from codetoreum.application.authentication_service import AuthenticationService
     from codetoreum.ports.input.config_command import (
         IConfigurationCommandPort,
         ConfigurationCommandResult,
@@ -544,6 +562,17 @@ def create_development_app() -> FastAPI:
                 changes_applied={},
             )
 
+    # Create authentication service with in-memory repositories
+    user_repo = InMemoryUserRepository()
+    api_key_repo = InMemoryAPIKeyRepository()
+    auth_service = AuthenticationService(
+        user_repository=user_repo,
+        api_key_repository=api_key_repo,
+        secret_key=os.getenv("JWT_SECRET_KEY", "development-secret-key-change-in-production"),
+        access_token_expire_minutes=30,
+        refresh_token_expire_days=7,
+    )
+
     return create_app(
         workflow_command_port=MockWorkflowCommandPort(),
         task_query_port=MockTaskQueryPort(),
@@ -551,6 +580,7 @@ def create_development_app() -> FastAPI:
         event_bus=MockEventBus(),
         config_service=MockConfigService(),
         logger=MockLogger(),
+        auth_service=auth_service,
         cors_origins=["*"],
     )
 
