@@ -52,8 +52,8 @@ class TokenBucketRateLimiter(IRateLimiter):
         """Wait until operation can proceed within rate limits."""
         start_time = time.time()
 
-        async with self._lock:
-            while True:
+        while True:
+            async with self._lock:
                 now = time.time()
 
                 # Check if we've waited too long
@@ -85,12 +85,8 @@ class TokenBucketRateLimiter(IRateLimiter):
                 # Calculate wait time
                 wait_time = self._calculate_wait_time()
 
-                # Release lock during wait to allow other operations
-                # to proceed (though they'll also hit the limit)
-
-        # Wait outside the lock
-        await asyncio.sleep(wait_time)
-        # Re-acquire lock in the next loop iteration
+            # Wait outside the lock to allow other operations to proceed
+            await asyncio.sleep(wait_time)
 
     def try_acquire(self, operation: str, cost: int = 1) -> bool:
         """Try to acquire without blocking."""

@@ -6,6 +6,8 @@ This package contains cross-cutting concerns and infrastructure components:
 - Event replayer for debugging and recovery
 - Configuration caching with Redis
 - Resilience patterns (circuit breakers, rate limiting, retries, timeouts)
+- Health checks (liveness, readiness, dependency monitoring)
+- Dead letter queue for failed event handling
 """
 
 from codetoreum.infrastructure.event_bus import EventBus, EventHandler, event_handler
@@ -16,8 +18,15 @@ from codetoreum.infrastructure.event_serialization import (
 )
 from codetoreum.infrastructure.redis_config_cache import RedisConfigCache
 from codetoreum.infrastructure.redis_event_buffer import RedisEventBuffer
+from codetoreum.infrastructure.dead_letter_queue import (
+    DeadLetterQueue,
+    FailedEvent,
+    FailureReason,
+    DeadLetterQueueStats,
+)
 
 __all__ = [
+    # Event infrastructure
     "EventSerializer",
     "auto_register_event_types",
     "EventBus",
@@ -26,4 +35,9 @@ __all__ = [
     "EventReplayer",
     "RedisConfigCache",
     "RedisEventBuffer",
+    # Dead letter queue
+    "DeadLetterQueue",
+    "FailedEvent",
+    "FailureReason",
+    "DeadLetterQueueStats",
 ]
