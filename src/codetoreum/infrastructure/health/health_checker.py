@@ -29,7 +29,8 @@ class HealthChecker(IHealthCheck):
         self,
         dependencies: Optional[Dict[str, IHealthCheck]] = None,
         app_name: str = "codetoreum",
-        version: str = "unknown"
+        version: str = "unknown",
+        check_timeout: float = 5.0
     ):
         """
         Initialize health checker.
@@ -38,10 +39,12 @@ class HealthChecker(IHealthCheck):
             dependencies: Dictionary of dependency name -> health check
             app_name: Application name
             version: Application version
+            check_timeout: Timeout in seconds for individual health checks
         """
         self.dependencies = dependencies or {}
         self.app_name = app_name
         self.version = version
+        self.check_timeout = check_timeout
         self._start_time = time.time()
 
     async def check_liveness(self) -> HealthCheckResult:
@@ -116,7 +119,7 @@ class HealthChecker(IHealthCheck):
         try:
             result = await asyncio.wait_for(
                 checker.check_readiness(),
-                timeout=5.0  # 5 second timeout for health checks
+                timeout=self.check_timeout
             )
 
             response_time_ms = (time.time() - start_time) * 1000
@@ -134,7 +137,7 @@ class HealthChecker(IHealthCheck):
             return DependencyHealth(
                 name=name,
                 status=HealthStatus.UNHEALTHY,
-                message=f"Health check timed out after 5 seconds",
+                message=f"Health check timed out after {self.check_timeout} seconds",
                 last_check=datetime.utcnow()
             )
         except Exception as e:
@@ -232,7 +235,72 @@ class CompositeHealthCheck(IHealthCheck):
         )
 
 
-class DatabaseHealthCheck(IHealthCheck):
+class ConnectionHealthCheck(IHealthCheck):
+    """
+    Base health check for connection-based dependencies.
+
+    Provides common functionality for checking database connections,
+    cache connections, event stores, and other similar dependencies.
+    """
+
+    def __init__(self, check_func: Callable[[], bool], resource_name: str, resource_type: str = "resource"):
+        """
+        Initialize connection health check.
+
+        Args:
+            check_func: Async function that returns True if resource is healthy
+            resource_name: Name of the resource instance (e.g., "postgres", "redis-cache")
+            resource_type: Type of resource for messaging (e.g., "database", "cache")
+        """
+        self.check_func = check_func
+        self.resource_name = resource_name
+        self.resource_type = resource_type
+
+    async def check_liveness(self) -> HealthCheckResult:
+        """Liveness doesn't depend on external connections."""
+        return HealthCheckResult(
+            status=HealthStatus.HEALTHY,
+            message=f"{self.resource_name} health check is alive"
+        )
+
+    async def check_readiness(self) -> HealthCheckResult:
+        """Check if resource is reachable."""
+        start_time = time.time()
+        try:
+            is_healthy = await self.check_func()
+            response_time = (time.time() - start_time) * 1000
+
+            if is_healthy:
+                return HealthCheckResult(
+                    status=HealthStatus.HEALTHY,
+                    message=f"{self.resource_name} is reachable",
+                    metadata={"response_time_ms": response_time, "resource_type": self.resource_type}
+                )
+            else:
+                return HealthCheckResult(
+                    status=HealthStatus.UNHEALTHY,
+                    message=f"{self.resource_name} is not healthy"
+                )
+
+        except Exception as e:
+            return HealthCheckResult(
+                status=HealthStatus.UNHEALTHY,
+                message=f"{self.resource_name} check failed: {str(e)}"
+            )
+
+    async def check_dependency(self, dependency_name: str) -> DependencyHealth:
+        """Check resource health."""
+        result = await self.check_readiness()
+        return DependencyHealth(
+            name=self.resource_name,
+            status=result.status,
+            message=result.message,
+            last_check=result.timestamp,
+            metadata=result.metadata
+        )
+
+
+class DatabaseHealthCheck(ConnectionHealthCheck):
     """Health check for database connections."""
 
     def __init__(self, check_func: Callable[[], bool], db_name: str = "database"):
@@ -243,53 +311,10 @@ class DatabaseHealthCheck(IHealthCheck):
             check_func: Async function that returns True if database is healthy
             db_name: Name of the database
         """
-        self.check_func = check_func
-        self.db_name = db_name
-
-    async def check_liveness(self) -> HealthCheckResult:
-        """Liveness doesn't depend on database."""
-        return HealthCheckResult(
-            status=HealthStatus.HEALTHY,
-            message=f"{self.db_name} health check is alive"
-        )
-
-    async def check_readiness(self) -> HealthCheckResult:
-        """Check if database is reachable."""
-        start_time = time.time()
-        try:
-            is_healthy = await self.check_func()
-            response_time = (time.time() - start_time) * 1000
-
-            if is_healthy:
-                return HealthCheckResult(
-                    status=HealthStatus.HEALTHY,
-                    message=f"{self.db_name} is reachable",
-                    metadata={"response_time_ms": response_time}
-                )
-            else:
-                return HealthCheckResult(
-                    status=HealthStatus.UNHEALTHY,
-                    message=f"{self.db_name} is not healthy"
-                )
-
-        except Exception as e:
-            return HealthCheckResult(
-                status=HealthStatus.UNHEALTHY,
-                message=f"{self.db_name} check failed: {str(e)}"
-            )
-
-    async def check_dependency(self, dependency_name: str) -> DependencyHealth:
-        """Check database health."""
-        result = await self.check_readiness()
-        return DependencyHealth(
-            name=self.db_name,
-            status=result.status,
-            message=result.message,
-            last_check=result.timestamp
-        )
+        super().__init__(check_func, db_name, "database")
 
 
-class RedisHealthCheck(IHealthCheck):
+class RedisHealthCheck(ConnectionHealthCheck):
     """Health check for Redis connections."""
 
     def __init__(self, check_func: Callable[[], bool], redis_name: str = "redis"):
@@ -300,53 +325,10 @@ class RedisHealthCheck(IHealthCheck):
             check_func: Async function that returns True if Redis is healthy
             redis_name: Name of the Redis instance
         """
-        self.check_func = check_func
-        self.redis_name = redis_name
-
-    async def check_liveness(self) -> HealthCheckResult:
-        """Liveness doesn't depend on Redis."""
-        return HealthCheckResult(
-            status=HealthStatus.HEALTHY,
-            message=f"{self.redis_name} health check is alive"
-        )
-
-    async def check_readiness(self) -> HealthCheckResult:
-        """Check if Redis is reachable."""
-        start_time = time.time()
-        try:
-            is_healthy = await self.check_func()
-            response_time = (time.time() - start_time) * 1000
-
-            if is_healthy:
-                return HealthCheckResult(
-                    status=HealthStatus.HEALTHY,
-                    message=f"{self.redis_name} is reachable",
-                    metadata={"response_time_ms": response_time}
-                )
-            else:
-                return HealthCheckResult(
-                    status=HealthStatus.UNHEALTHY,
-                    message=f"{self.redis_name} is not healthy"
-                )
-
-        except Exception as e:
-            return HealthCheckResult(
-                status=HealthStatus.UNHEALTHY,
-                message=f"{self.redis_name} check failed: {str(e)}"
-            )
-
-    async def check_dependency(self, dependency_name: str) -> DependencyHealth:
-        """Check Redis health."""
-        result = await self.check_readiness()
-        return DependencyHealth(
-            name=self.redis_name,
-            status=result.status,
-            message=result.message,
-            last_check=result.timestamp
-        )
+        super().__init__(check_func, redis_name, "cache")
 
 
-class EventStoreHealthCheck(IHealthCheck):
+class EventStoreHealthCheck(ConnectionHealthCheck):
     """Health check for event store."""
 
     def __init__(self, check_func: Callable[[], bool], store_name: str = "event_store"):
@@ -357,50 +339,7 @@ class EventStoreHealthCheck(IHealthCheck):
             check_func: Async function that returns True if event store is healthy
             store_name: Name of the event store
         """
-        self.check_func = check_func
-        self.store_name = store_name
-
-    async def check_liveness(self) -> HealthCheckResult:
-        """Liveness doesn't depend on event store."""
-        return HealthCheckResult(
-            status=HealthStatus.HEALTHY,
-            message=f"{self.store_name} health check is alive"
-        )
-
-    async def check_readiness(self) -> HealthCheckResult:
-        """Check if event store is reachable."""
-        start_time = time.time()
-        try:
-            is_healthy = await self.check_func()
-            response_time = (time.time() - start_time) * 1000
-
-            if is_healthy:
-                return HealthCheckResult(
-                    status=HealthStatus.HEALTHY,
-                    message=f"{self.store_name} is reachable",
-                    metadata={"response_time_ms": response_time}
-                )
-            else:
-                return HealthCheckResult(
-                    status=HealthStatus.UNHEALTHY,
-                    message=f"{self.store_name} is not healthy"
-                )
-
-        except Exception as e:
-            return HealthCheckResult(
-                status=HealthStatus.UNHEALTHY,
-                message=f"{self.store_name} check failed: {str(e)}"
-            )
-
-    async def check_dependency(self, dependency_name: str) -> DependencyHealth:
-        """Check event store health."""
-        result = await self.check_readiness()
-        return DependencyHealth(
-            name=self.store_name,
-            status=result.status,
-            message=result.message,
-            last_check=result.timestamp
-        )
+        super().__init__(check_func, store_name, "event_store")
 
 
 class CircuitBreakerHealthCheck(IHealthCheck):

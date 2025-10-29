@@ -13,6 +13,7 @@ from .interfaces import (
 from .health_checker import (
     CircuitBreakerHealthCheck,
     CompositeHealthCheck,
+    ConnectionHealthCheck,
     DatabaseHealthCheck,
     EventStoreHealthCheck,
     HealthChecker,
@@ -29,6 +30,7 @@ __all__ = [
     # Implementations
     "HealthChecker",
     "CompositeHealthCheck",
+    "ConnectionHealthCheck",
     "DatabaseHealthCheck",
     "RedisHealthCheck",
     "EventStoreHealthCheck",

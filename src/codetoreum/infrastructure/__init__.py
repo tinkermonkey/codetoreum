@@ -24,6 +24,23 @@ from codetoreum.infrastructure.dead_letter_queue import (
     FailureReason,
     DeadLetterQueueStats,
 )
+from codetoreum.infrastructure.mock_dead_letter_queue import MockDeadLetterQueue
+from codetoreum.infrastructure.health.interfaces import (
+    IHealthCheck,
+    HealthCheckResult,
+    HealthStatus,
+    DependencyHealth,
+)
+from codetoreum.infrastructure.health.health_checker import (
+    HealthChecker,
+    CompositeHealthCheck,
+    ConnectionHealthCheck,
+    DatabaseHealthCheck,
+    RedisHealthCheck,
+    EventStoreHealthCheck,
+    CircuitBreakerHealthCheck,
+    RateLimiterHealthCheck,
+)
 
 __all__ = [
     # Event infrastructure
@@ -40,4 +57,18 @@ __all__ = [
     "FailedEvent",
     "FailureReason",
     "DeadLetterQueueStats",
+    "MockDeadLetterQueue",
+    # Health checks
+    "IHealthCheck",
+    "HealthCheckResult",
+    "HealthStatus",
+    "DependencyHealth",
+    "HealthChecker",
+    "CompositeHealthCheck",
+    "ConnectionHealthCheck",
+    "DatabaseHealthCheck",
+    "RedisHealthCheck",
+    "EventStoreHealthCheck",
+    "CircuitBreakerHealthCheck",
+    "RateLimiterHealthCheck",
 ]

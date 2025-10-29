@@ -4,12 +4,15 @@ Handles failed events with retry logic and persistent storage.
 """
 
 import asyncio
+import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 from uuid import uuid4
+
+logger = logging.getLogger(__name__)
 
 
 class FailureReason(Enum):
@@ -103,6 +106,14 @@ class DeadLetterQueue:
     - Configurable max retries
     - Statistics and monitoring
     - Event filtering and querying
+
+    IMPORTANT - Memory Management:
+    This implementation uses in-memory storage by default. Failed events
+    accumulate indefinitely unless purged manually or integrated with
+    persistent storage. For production use:
+    1. Pass a persistent storage backend (e.g., database dict-like wrapper)
+    2. Configure periodic purging via purge_old_events() or purge_exhausted_events()
+    3. Monitor memory usage via get_stats()
     """
 
     def __init__(
@@ -222,6 +233,22 @@ class DeadLetterQueue:
             # Failed - update retry time
             self._total_retries_failed += 1
 
+            logger.warning(
+                "Failed to retry event %s (attempt %d/%d): %s",
+                event_id,
+                event.retry_count,
+                event.max_retries,
+                str(e),
+                extra={
+                    "event_id": event_id,
+                    "event_type": event.event_type,
+                    "retry_count": event.retry_count,
+                    "max_retries": event.max_retries,
+                    "failure_reason": event.failure_reason.value,
+                    "component": "dead_letter_queue"
+                }
+            )
+
             if event.can_retry():
                 event.next_retry_at = event.calculate_next_retry(
                     self._base_delay_seconds,
@@ -230,6 +257,18 @@ class DeadLetterQueue:
             else:
                 # Exhausted retries
                 event.next_retry_at = None
+                logger.error(
+                    "Event %s exhausted all retries (%d attempts)",
+                    event_id,
+                    event.retry_count,
+                    extra={
+                        "event_id": event_id,
+                        "event_type": event.event_type,
+                        "retry_count": event.retry_count,
+                        "original_failure": event.failure_reason.value,
+                        "component": "dead_letter_queue"
+                    }
+                )
 
             return False
 
@@ -264,9 +303,17 @@ class DeadLetterQueue:
         while self._running:
             try:
                 await self._process_retryable_events()
-            except Exception:
+            except Exception as e:
                 # Log error but continue processing
-                pass
+                logger.error(
+                    "Error processing retryable events in dead letter queue: %s",
+                    str(e),
+                    exc_info=True,
+                    extra={
+                        "component": "dead_letter_queue",
+                        "operation": "retry_loop"
+                    }
+                )
 
             await asyncio.sleep(self._retry_interval_seconds)
 
