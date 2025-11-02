@@ -1086,9 +1086,10 @@ class ElasticsearchConfigStorage(IConfigStore):
             await self.initialize()
 
         try:
-            return await self.client.exists(
+            result = await self.client.exists(
                 index=self.INDEX_PROJECTS, id=project_id
             )
+            return bool(result)
 
         except Exception as e:
             logger.error(f"Failed to check if project exists {project_id}: {e}")

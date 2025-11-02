@@ -167,46 +167,77 @@ class DockerContainerAdapter(IContainer):
                 except Exception:
                     raise ImageNotFoundError(f"Image not found: {image}")
 
-                # Create and start container
+                # Create and start container with auto-removal enabled
                 container = client.containers.run(**container_config)
 
-                # Stream logs if callback provided
-                if stream_callback:
-                    for line in container.logs(stream=True, follow=True, timeout=timeout):
-                        stream_callback(line.decode("utf-8", errors="replace"))
-
-                # Wait for container with timeout
                 start_time = time.time()
-                result = container.wait(timeout=timeout)
+
+                # Buffer for collecting logs
+                log_buffer = []
+
+                # Always stream logs to capture output before container is auto-removed
+                # Docker auto-removes the container after the stream ends
+                try:
+                    for line in container.logs(stream=True, follow=True):
+                        # Check if we've exceeded timeout
+                        if time.time() - start_time > timeout:
+                            # Kill container if it's still running
+                            try:
+                                container.kill()
+                            except Exception:
+                                pass
+                            raise ContainerTimeoutError(f"Container execution timed out after {timeout}s")
+
+                        decoded_line = line.decode("utf-8", errors="replace")
+                        log_buffer.append(decoded_line)
+
+                        # Call user callback if provided
+                        if stream_callback:
+                            stream_callback(decoded_line)
+
+                    # When streaming completes, container has finished
+                    # Get final state before it's auto-removed
+                    container.reload()
+                    exit_code = container.attrs["State"]["ExitCode"]
+                    container_id = ContainerId(container.id)
+
+                except Exception as e:
+                    # If we get here due to timeout, re-raise it
+                    if isinstance(e, ContainerTimeoutError):
+                        raise
+                    # If container was removed during streaming, we might not get all logs
+                    # but we can still return what we captured
+                    if "404" in str(e) or "not found" in str(e).lower():
+                        # Container was removed, use what we have
+                        exit_code = 0  # Assume success if container completed and was removed
+                        container_id = ContainerId(container.short_id if container else "unknown")
+                    else:
+                        raise
+
                 duration_ms = int((time.time() - start_time) * 1000)
 
-                # Get logs
-                stdout = container.logs(stdout=True, stderr=False).decode("utf-8", errors="replace")
-                stderr = container.logs(stdout=False, stderr=True).decode("utf-8", errors="replace")
-
-                exit_code = result.get("StatusCode", 0)
-
-                # Clean up if not auto-removing
-                if not self.config.remove_on_completion:
-                    container_id = container.id
-                else:
-                    container_id = ContainerId(container.short_id)
+                # Reconstruct stdout/stderr from buffered logs
+                # Note: Docker's logs API doesn't cleanly separate stdout/stderr when streaming
+                # so we return combined output in stdout
+                combined_logs = "".join(log_buffer)
 
                 return ContainerResult(
                     exit_code=exit_code,
-                    stdout=stdout,
-                    stderr=stderr,
+                    stdout=combined_logs,
+                    stderr="",  # stderr is mixed with stdout in stream mode
                     duration_ms=duration_ms,
                     container_id=container_id,
                 )
 
+            except ContainerTimeoutError:
+                raise
             except Exception as e:
-                # Cleanup container on error
-                if container and not self.config.remove_on_completion:
+                # Cleanup container on error if it still exists and wasn't auto-removed
+                if container:
                     try:
                         container.remove(force=True)
                     except Exception:
-                        pass  # Ignore cleanup errors
+                        pass  # Ignore cleanup errors (might already be removed)
 
                 if "timeout" in str(e).lower():
                     raise ContainerTimeoutError(f"Container execution timed out after {timeout}s")

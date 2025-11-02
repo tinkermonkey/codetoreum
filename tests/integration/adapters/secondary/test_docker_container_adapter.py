@@ -6,6 +6,7 @@ These tests interact with the actual Docker daemon and require:
 """
 
 import os
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -39,13 +40,35 @@ def docker_adapter(docker_config):
 
     # Check if Docker is available
     try:
-        adapter._get_client()
+        client = adapter._get_client()
     except ContainerError:
         pytest.skip("Docker is not available")
 
+    # Cleanup any leftover test containers from previous runs
+    try:
+        # Remove any stopped alpine containers from previous test runs
+        for container in client.containers.list(all=True, filters={"ancestor": "alpine:latest"}):
+            try:
+                container.remove(force=True)
+            except Exception:
+                pass  # Ignore errors during cleanup
+    except Exception:
+        pass  # Ignore cleanup errors
+
     yield adapter
 
-    # Cleanup: properly close the Docker client to release resources
+    # Cleanup: remove any remaining test containers and close the Docker client
+    try:
+        # Clean up any containers that might have been left behind
+        for container in client.containers.list(all=True, filters={"ancestor": "alpine:latest"}):
+            try:
+                container.remove(force=True)
+            except Exception:
+                pass  # Ignore errors during cleanup
+    except Exception:
+        pass  # Ignore cleanup errors
+
+    # Close the Docker client to release resources
     adapter.close()
 
 
@@ -85,20 +108,28 @@ async def test_run_with_environment_variables(docker_adapter):
 async def test_run_with_volume_mount(docker_adapter):
     """Test running container with volume mount."""
     # Create temporary directory with test file
-    with tempfile.TemporaryDirectory() as tmpdir:
-        test_file = Path(tmpdir) / "test.txt"
+    # Note: Using cwd instead of /tmp because Docker may not have access to tmpfs
+    test_dir = Path.cwd() / f".test_docker_volume_{os.getpid()}"
+    test_dir.mkdir(exist_ok=True)
+
+    try:
+        test_file = test_dir / "test.txt"
         test_file.write_text("Hello from host")
 
         result = await docker_adapter.run(
             image="alpine:latest",
             command=["cat", "/data/test.txt"],
-            volumes={tmpdir: "/data:ro"},
+            volumes={str(test_dir): "/data:ro"},
             environment={},
             timeout=30,
         )
 
         assert result.exit_code == 0
         assert "Hello from host" in result.stdout
+    finally:
+        # Cleanup test directory
+        if test_dir.exists():
+            shutil.rmtree(test_dir)
 
 
 @pytest.mark.asyncio

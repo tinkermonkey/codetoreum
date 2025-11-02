@@ -267,7 +267,7 @@ class ConnectionManager:
             timestamp=event_dict.get("timestamp", datetime.utcnow()),
         )
 
-        message_dict = event_message.dict()
+        message_dict = event_message.model_dump(mode='json')
 
         # Send to all recipients
         disconnected = []
@@ -409,7 +409,7 @@ class WebSocketAdapter:
                             code="unknown_message_type",
                             message=f"Unknown message type: {message_type}",
                             timestamp=datetime.utcnow(),
-                        ).dict(),
+                        ).model_dump(mode='json'),
                         connection_id,
                     )
 
@@ -424,7 +424,7 @@ class WebSocketAdapter:
                         code="internal_error",
                         message=f"Internal error: {str(e)}",
                         timestamp=datetime.utcnow(),
-                    ).dict(),
+                    ).model_dump(mode='json'),
                     connection_id,
                 )
             except:
@@ -479,7 +479,7 @@ class WebSocketAdapter:
                     code="subscribe_failed",
                     message=f"Failed to subscribe: {str(e)}",
                     timestamp=datetime.utcnow(),
-                ).dict(),
+                ).model_dump(mode='json'),
                 connection_id,
             )
 

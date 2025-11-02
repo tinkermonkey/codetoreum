@@ -12,11 +12,12 @@ from codetoreum.domain.events import DomainEvent
 
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def client():
     """Create test client with development app"""
     app = create_development_app()
-    return TestClient(app)
+    with TestClient(app) as test_client:
+        yield test_client
 
 
 class TestWebSocketConnection:
@@ -172,6 +173,7 @@ class TestWebSocketSubscriptions:
 class TestWebSocketErrorHandling:
     """Tests for WebSocket error handling"""
 
+    @pytest.mark.timeout(5)
     def test_invalid_message_type(self, client):
         """Test sending invalid message type"""
         with client.websocket_connect("/ws/events") as websocket:
@@ -186,6 +188,10 @@ class TestWebSocketErrorHandling:
             assert data["type"] == "error"
             assert data["code"] == "unknown_message_type"
 
+            # Close connection cleanly
+            websocket.close()
+
+    @pytest.mark.timeout(5)
     def test_invalid_subscription_type(self, client):
         """Test subscribing with invalid subscription type"""
         with client.websocket_connect("/ws/events") as websocket:
@@ -202,10 +208,14 @@ class TestWebSocketErrorHandling:
             assert data["type"] == "error"
             assert data["code"] == "subscribe_failed"
 
+            # Close connection cleanly
+            websocket.close()
+
 
 class TestWebSocketMultipleConnections:
     """Tests for multiple WebSocket connections"""
 
+    @pytest.mark.timeout(10)
     def test_multiple_concurrent_connections(self, client):
         """Test multiple concurrent WebSocket connections"""
         with client.websocket_connect("/ws/events") as ws1:
@@ -220,6 +230,7 @@ class TestWebSocketMultipleConnections:
                 # Connection IDs should be different
                 assert data1["connection_id"] != data2["connection_id"]
 
+    @pytest.mark.timeout(10)
     def test_multiple_subscriptions_per_connection(self, client):
         """Test multiple subscriptions on same connection"""
         with client.websocket_connect("/ws/events") as websocket:

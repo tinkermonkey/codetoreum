@@ -1,5 +1,6 @@
 """Common test fixtures and utilities for integration tests."""
 
+import pytest
 from typing import Any, Dict, List, Optional
 from codetoreum.ports.output.config_store import (
     IConfigStore,
@@ -9,6 +10,9 @@ from codetoreum.ports.output.config_store import (
     WorkflowTemplate,
     ConfigVersion,
 )
+
+# Set default timeout for all integration tests to prevent hanging
+pytestmark = pytest.mark.timeout(30)
 
 
 class MockConfigService(IConfigStore):
