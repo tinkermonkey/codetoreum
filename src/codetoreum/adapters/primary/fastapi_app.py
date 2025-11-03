@@ -157,6 +157,7 @@ def create_app(
         workflow_command_port=workflow_command_port,
         task_query_port=task_query_port,
         config_command_port=config_command_port,
+        auth_dependencies=auth_deps,
     )
 
     websocket_adapter = WebSocketAdapter()
