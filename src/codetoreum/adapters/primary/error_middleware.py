@@ -5,6 +5,7 @@ Provides centralized error handling for the FastAPI application with
 standardized error responses and correlation IDs for request tracking.
 """
 
+import os
 import traceback
 from typing import Callable
 from uuid import uuid4
@@ -14,6 +15,9 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError as PydanticValidationError
 
 from codetoreum.adapters.primary.api_models import ErrorCode, ErrorDetail, ErrorResponse
+
+# Check if debug mode is enabled
+DEBUG_MODE = os.getenv("CODETOREUM_DEBUG", "false").lower() == "true"
 
 
 async def error_handling_middleware(request: Request, call_next: Callable):
@@ -123,18 +127,28 @@ async def error_handling_middleware(request: Request, call_next: Callable):
         print(f"Unhandled exception [{correlation_id}]:")
         print(traceback.format_exc())
 
-        error_response = ErrorResponse(
-            error=ErrorCode.INTERNAL_ERROR,
-            message="An unexpected error occurred",
-            details=[
-                ErrorDetail(
-                    message=str(exc),
-                    code=type(exc).__name__,
-                )
-            ],
-            correlation_id=correlation_id,
-            path=str(request.url.path),
-        )
+        # In production, hide exception details to prevent information disclosure
+        if DEBUG_MODE:
+            error_response = ErrorResponse(
+                error=ErrorCode.INTERNAL_ERROR,
+                message="An unexpected error occurred",
+                details=[
+                    ErrorDetail(
+                        message=str(exc),
+                        code=type(exc).__name__,
+                    )
+                ],
+                correlation_id=correlation_id,
+                path=str(request.url.path),
+            )
+        else:
+            # Production mode - generic error message only
+            error_response = ErrorResponse(
+                error=ErrorCode.INTERNAL_ERROR,
+                message="An unexpected error occurred. Please contact support with the correlation ID if this persists.",
+                correlation_id=correlation_id,
+                path=str(request.url.path),
+            )
 
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

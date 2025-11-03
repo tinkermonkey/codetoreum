@@ -39,7 +39,7 @@ class SimpleTokenAuthManager:
     def __init__(
         self,
         secret_key: Optional[str] = None,
-        token_expiry_days: int = 365,
+        token_expiry_days: Optional[int] = None,
     ):
         """
         Initialize the authentication manager.
@@ -47,10 +47,16 @@ class SimpleTokenAuthManager:
         Args:
             secret_key: Optional secret key. If not provided, one will be generated.
                        For production, provide a persistent secret key via environment variable.
-            token_expiry_days: How long the token is valid (default: 365 days)
+            token_expiry_days: How long the token is valid (default: 365 days, configurable via CODETOREUM_TOKEN_EXPIRATION_DAYS)
         """
-        # Generate or use provided secret key
-        self.secret_key = secret_key or secrets.token_urlsafe(32)
+        import os
+
+        # Generate or use provided secret key (64 bytes for long-lived tokens)
+        self.secret_key = secret_key or secrets.token_urlsafe(64)
+
+        # Get expiration from env var or use provided value or default
+        if token_expiry_days is None:
+            token_expiry_days = int(os.getenv("CODETOREUM_TOKEN_EXPIRATION_DAYS", "365"))
 
         # Generate the server token
         self.server_start_time = datetime.utcnow()

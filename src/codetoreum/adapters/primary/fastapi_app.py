@@ -21,6 +21,10 @@ from typing import Any, Dict, Optional
 from fastapi import Depends, FastAPI, Header, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from codetoreum.adapters.primary.api_models import (
@@ -42,6 +46,48 @@ from codetoreum.infrastructure.auth import SimpleTokenAuthManager
 from codetoreum.ports.input.config_command import IConfigurationCommandPort
 from codetoreum.ports.input.task_query import ITaskQueryPort
 from codetoreum.ports.input.workflow_command import IWorkflowCommandPort
+
+
+# ============================================================================
+# Security Headers Middleware
+# ============================================================================
+
+
+async def security_headers_middleware(request: Request, call_next):
+    """
+    Add security headers to all responses.
+
+    Headers added:
+    - X-Content-Type-Options: nosniff - Prevents MIME type sniffing
+    - X-Frame-Options: DENY - Prevents clickjacking
+    - X-XSS-Protection: 1; mode=block - Enables XSS filtering
+    - Strict-Transport-Security: Enforces HTTPS (if enabled)
+    - Content-Security-Policy: Restricts resource loading
+    """
+    response = await call_next(request)
+
+    # Security headers
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+
+    # Add HSTS header if using HTTPS
+    if os.getenv("API_USE_HTTPS", "false").lower() == "true":
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains"
+        )
+
+    # Content Security Policy
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "font-src 'self'; "
+        "connect-src 'self'"
+    )
+
+    return response
 
 
 # ============================================================================
@@ -105,6 +151,10 @@ def create_app(
     Returns:
         Configured FastAPI application
     """
+    # Get configuration from environment
+    max_request_size = int(os.getenv("CODETOREUM_MAX_REQUEST_SIZE", str(10 * 1024 * 1024)))  # 10MB default
+    rate_limit = os.getenv("CODETOREUM_RATE_LIMIT", "100/minute")
+
     # Create FastAPI app
     app = FastAPI(
         title="Codetoreum API",
@@ -121,6 +171,9 @@ def create_app(
         lifespan=lifespan,
     )
 
+    # Configure request body size limit
+    app.state.max_request_size = max_request_size
+
     # Create authentication manager (unless disabled)
     auth_manager = None
     auth_deps = None
@@ -130,19 +183,36 @@ def create_app(
         app.state.auth_manager = auth_manager
         app.state.auth_deps = auth_deps
 
+    # Configure rate limiting
+    limiter = Limiter(key_func=get_remote_address, default_limits=[rate_limit])
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    app.add_middleware(SlowAPIMiddleware)
+
+    # Add security headers middleware
+    app.add_middleware(BaseHTTPMiddleware, dispatch=security_headers_middleware)
+
     # Add error handling middleware
     app.add_middleware(BaseHTTPMiddleware, dispatch=error_handling_middleware)
 
-    # Add CORS middleware
+    # Add CORS middleware - use environment variables for production
     if cors_origins is None:
-        cors_origins = ["*"]  # Development default
+        # Get from environment or use restrictive defaults
+        cors_origins_env = os.getenv("CODETOREUM_ALLOWED_ORIGINS", "")
+        if cors_origins_env:
+            cors_origins = [origin.strip() for origin in cors_origins_env.split(",")]
+        else:
+            # Development default - allows all origins
+            cors_origins = ["*"]
 
+    # In production, be more restrictive with CORS
+    allow_all = "*" in cors_origins
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cors_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_credentials=not allow_all,  # Can't use credentials with allow_origins=*
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"] if not allow_all else ["*"],
+        allow_headers=["Authorization", "Content-Type"] if not allow_all else ["*"],
     )
 
     # Create adapters

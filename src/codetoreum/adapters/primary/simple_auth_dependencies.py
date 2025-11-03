@@ -31,6 +31,29 @@ class SimpleAuthDependencies:
         """
         self.auth_manager = auth_manager
 
+    def _validate_token_format(self, token: str) -> bool:
+        """
+        Pre-validate token format before JWT processing.
+
+        This prevents unnecessary CPU usage on obviously invalid tokens.
+        JWT tokens should be at least 20 characters and contain dots.
+
+        Args:
+            token: Token string to validate
+
+        Returns:
+            True if format looks valid, False otherwise
+        """
+        if not token or len(token) < 20 or len(token) > 2000:
+            return False
+        if '.' not in token:
+            return False
+        # JWT should have 3 parts separated by dots
+        parts = token.count('.')
+        if parts != 2:
+            return False
+        return True
+
     async def require_auth(
         self,
         authorization: Optional[str] = Header(None),
@@ -64,6 +87,14 @@ class SimpleAuthDependencies:
         """
         # Try query parameter first (for initial web UI authentication)
         if token:
+            # Pre-validate token format
+            if not self._validate_token_format(token):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid authentication token format",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+
             if self.auth_manager.validate_token(token):
                 return True
             # Invalid token provided
@@ -83,6 +114,15 @@ class SimpleAuthDependencies:
                 )
 
             token = authorization[7:]  # Remove "Bearer " prefix
+
+            # Pre-validate token format
+            if not self._validate_token_format(token):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid authentication token format",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+
             if self.auth_manager.validate_token(token):
                 return True
 

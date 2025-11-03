@@ -22,7 +22,13 @@ The Codetoreum API uses a simplified single-token authentication system similar 
 #### Step 1: Start the Server
 
 ```bash
-python -m uvicorn codetoreum.adapters.primary.fastapi_app:app --host 0.0.0.0 --port 8000
+# Set environment variables (optional)
+export API_HOST=localhost          # or your server hostname
+export API_PORT=8000               # or your desired port
+export API_USE_HTTPS=false         # set to 'true' for HTTPS
+
+# Start the server
+python -m uvicorn codetoreum.adapters.primary.fastapi_app:app --host $API_HOST --port $API_PORT
 ```
 
 #### Step 2: Copy the Authentication URL
@@ -34,11 +40,11 @@ The console will display output like this:
 Codetoreum API Server
 ======================================================================
 
-Server URL: http://localhost:8000
+Server URL: http://${API_HOST}:${API_PORT}
 
 Authentication token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
-🔗 Access URL: http://localhost:8000/?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+🔗 Access URL: http://${API_HOST}:${API_PORT}/?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 📋 To authenticate:
    1. Copy the access URL above and open it in your browser
@@ -47,18 +53,20 @@ Authentication token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
       - Header: Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 🔌 WebSocket connection:
-   ws://localhost:8000/ws/events?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+   ws://${API_HOST}:${API_PORT}/ws/events?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 ⚠️  Important:
-   - This token is valid for 365 days
+   - This token is valid for 365 days (configurable via CODETOREUM_TOKEN_EXPIRATION_DAYS)
    - Anyone with this token has full access to the API
    - Restart the server to generate a new token
    - Use HTTPS in production to protect the token
 
 📚 API Documentation:
-   http://localhost:8000/api/docs
+   http://${API_HOST}:${API_PORT}/api/docs
 ======================================================================
 ```
+
+**Note**: Replace `${API_HOST}` and `${API_PORT}` with your actual server hostname and port in the examples below.
 
 #### Step 3: Use the Token
 
@@ -69,20 +77,27 @@ Click the access URL. Your browser will navigate to the Codetoreum web interface
 **Option B: API Requests (Authorization Header)**
 
 ```bash
-curl -H "Authorization: Bearer YOUR_TOKEN_HERE" \
-  http://localhost:8000/api/v1/workflows
+# Replace ${API_HOST}, ${API_PORT}, and ${TOKEN} with actual values
+curl -H "Authorization: Bearer ${TOKEN}" \
+  http://${API_HOST}:${API_PORT}/api/v1/workflows
 ```
 
 **Option C: API Requests (Query Parameter)**
 
 ```bash
-curl "http://localhost:8000/api/v1/workflows?token=YOUR_TOKEN_HERE"
+# Replace ${API_HOST}, ${API_PORT}, and ${TOKEN} with actual values
+curl "http://${API_HOST}:${API_PORT}/api/v1/workflows?token=${TOKEN}"
 ```
 
 **Option D: WebSocket Connection**
 
 ```javascript
-const ws = new WebSocket('ws://localhost:8000/ws/events?token=YOUR_TOKEN_HERE');
+// Replace ${API_HOST}, ${API_PORT}, and ${TOKEN} with actual values
+const apiHost = process.env.API_HOST || 'localhost';
+const apiPort = process.env.API_PORT || '8000';
+const token = process.env.CODETOREUM_TOKEN; // Set from server startup output
+
+const ws = new WebSocket(`ws://${apiHost}:${apiPort}/ws/events?token=${token}`);
 ```
 
 ---
@@ -123,35 +138,84 @@ The server validates tokens by:
 
 #### Environment Variables
 
-**CODETOREUM_AUTH_SECRET**
+**Authentication Configuration**
 
-Provide a custom secret key for JWT signing. If not set, a random key is generated on each startup.
+`CODETOREUM_AUTH_SECRET` - Custom secret key for JWT signing. If not set, a random 64-byte key is generated on each startup.
 
 ```bash
 export CODETOREUM_AUTH_SECRET="your-secure-secret-key-here"
-python -m uvicorn codetoreum.adapters.primary.fastapi_app:app
 ```
 
 **Important**: Use a persistent secret key in production to prevent token invalidation on restarts.
 
-**CODETOREUM_DISABLE_AUTH**
-
-Disable authentication entirely (for development/testing only).
+`CODETOREUM_DISABLE_AUTH` - Disable authentication entirely (for development/testing only).
 
 ```bash
 export CODETOREUM_DISABLE_AUTH=true
-python -m uvicorn codetoreum.adapters.primary.fastapi_app:app
 ```
 
-**API_HOST** / **API_PORT** / **API_USE_HTTPS**
+`CODETOREUM_TOKEN_EXPIRATION_DAYS` - Token expiration in days (default: 365).
 
-Configure the server URL displayed in the console output.
+```bash
+export CODETOREUM_TOKEN_EXPIRATION_DAYS=30  # 30-day tokens
+```
+
+**Server Configuration**
+
+`API_HOST` / `API_PORT` / `API_USE_HTTPS` - Configure the server URL displayed in console output.
 
 ```bash
 export API_HOST=example.com
 export API_PORT=443
 export API_USE_HTTPS=true
-python -m uvicorn codetoreum.adapters.primary.fastapi_app:app
+```
+
+**Security Configuration**
+
+`CODETOREUM_DEBUG` - Enable debug mode (shows detailed error messages). Set to `false` in production.
+
+```bash
+export CODETOREUM_DEBUG=false  # Production
+```
+
+`CODETOREUM_ALLOWED_ORIGINS` - Comma-separated list of allowed CORS origins. Default: `*` (all origins in development).
+
+```bash
+export CODETOREUM_ALLOWED_ORIGINS="https://app.example.com,https://admin.example.com"
+```
+
+`CODETOREUM_RATE_LIMIT` - Rate limit for API requests (default: 100/minute).
+
+```bash
+export CODETOREUM_RATE_LIMIT="200/minute"  # Allow 200 requests per minute
+```
+
+`CODETOREUM_MAX_REQUEST_SIZE` - Maximum request body size in bytes (default: 10MB).
+
+```bash
+export CODETOREUM_MAX_REQUEST_SIZE=20971520  # 20MB
+```
+
+**Complete Production Example**
+
+```bash
+# Authentication
+export CODETOREUM_AUTH_SECRET="$(openssl rand -base64 48)"
+export CODETOREUM_TOKEN_EXPIRATION_DAYS=90
+
+# Server
+export API_HOST=api.example.com
+export API_PORT=443
+export API_USE_HTTPS=true
+
+# Security
+export CODETOREUM_DEBUG=false
+export CODETOREUM_ALLOWED_ORIGINS="https://app.example.com"
+export CODETOREUM_RATE_LIMIT="100/minute"
+export CODETOREUM_MAX_REQUEST_SIZE=10485760
+
+# Start server
+python -m uvicorn codetoreum.adapters.primary.fastapi_app:app --host 0.0.0.0 --port 8000
 ```
 
 ---
