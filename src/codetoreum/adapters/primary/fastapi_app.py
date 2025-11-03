@@ -3,16 +3,32 @@ FastAPI Application Setup
 
 This module sets up the FastAPI application with all primary adapters,
 including webhook endpoints, REST API, and WebSocket support.
+
+Authentication:
+--------------
+Uses a simplified JupyterLab-style single-token authentication system.
+On startup, the server generates a token and prints an authentication URL
+to the console. Users can click this URL or use the token in API requests.
+
+This is NOT a multi-user system - it's designed for single-tenant deployments
+and development environments.
 """
 
+import os
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional
 
-from fastapi import FastAPI, Header, Request, WebSocket
+from fastapi import Depends, FastAPI, Header, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
-from codetoreum.adapters.primary.auth_api_adapter import AuthAPIAdapter
+from codetoreum.adapters.primary.api_models import (
+    HealthCheckResponse,
+    ReadinessCheckResponse,
+    TokenInfoResponse,
+)
+from codetoreum.adapters.primary.error_middleware import error_handling_middleware
 from codetoreum.adapters.primary.github_webhook_adapter import (
     GitHubWebhookAdapter,
     IConfigurationService,
@@ -20,8 +36,9 @@ from codetoreum.adapters.primary.github_webhook_adapter import (
     ILogger,
 )
 from codetoreum.adapters.primary.rest_api_adapter import RestAPIAdapter
+from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
 from codetoreum.adapters.primary.websocket_adapter import WebSocketAdapter
-from codetoreum.ports.input.authentication import IAuthenticationPort
+from codetoreum.infrastructure.auth import SimpleTokenAuthManager
 from codetoreum.ports.input.config_command import IConfigurationCommandPort
 from codetoreum.ports.input.task_query import ITaskQueryPort
 from codetoreum.ports.input.workflow_command import IWorkflowCommandPort
@@ -39,12 +56,20 @@ async def lifespan(app: FastAPI):
     Handles startup and shutdown events.
     """
     # Startup
-    print("Starting FastAPI application...")
+    print("Starting Codetoreum API Server...")
+
+    # Print authentication info if auth manager exists
+    if hasattr(app.state, "auth_manager"):
+        auth_manager: SimpleTokenAuthManager = app.state.auth_manager
+        host = os.getenv("API_HOST", "localhost")
+        port = int(os.getenv("API_PORT", "8000"))
+        use_https = os.getenv("API_USE_HTTPS", "false").lower() == "true"
+        auth_manager.print_auth_info(host=host, port=port, use_https=use_https)
 
     yield
 
     # Shutdown
-    print("Shutting down FastAPI application...")
+    print("Shutting down Codetoreum API Server...")
 
 
 # ============================================================================
@@ -59,7 +84,8 @@ def create_app(
     event_bus: IEventBus,
     config_service: IConfigurationService,
     logger: ILogger,
-    auth_service: Optional[IAuthenticationPort] = None,
+    auth_secret_key: Optional[str] = None,
+    disable_auth: bool = False,
     cors_origins: Optional[list] = None,
 ) -> FastAPI:
     """
@@ -72,7 +98,8 @@ def create_app(
         event_bus: Event bus for publishing events
         config_service: Configuration service
         logger: Logger instance
-        auth_service: Optional authentication service
+        auth_secret_key: Optional secret key for JWT signing. If not provided, one will be generated.
+        disable_auth: If True, authentication is disabled (for development/testing only)
         cors_origins: List of allowed CORS origins
 
     Returns:
@@ -81,13 +108,30 @@ def create_app(
     # Create FastAPI app
     app = FastAPI(
         title="Codetoreum API",
-        description="AI Agent Orchestration Platform API",
+        description=(
+            "AI Agent Orchestration Platform API\n\n"
+            "Authentication: This API uses a single-token authentication system similar to JupyterLab. "
+            "The authentication token is printed to the console on server startup. "
+            "Use it in your requests via the Authorization header (Bearer token) or as a query parameter."
+        ),
         version="2.0.0",
         docs_url="/api/docs",
         redoc_url="/api/redoc",
         openapi_url="/api/openapi.json",
         lifespan=lifespan,
     )
+
+    # Create authentication manager (unless disabled)
+    auth_manager = None
+    auth_deps = None
+    if not disable_auth:
+        auth_manager = SimpleTokenAuthManager(secret_key=auth_secret_key)
+        auth_deps = SimpleAuthDependencies(auth_manager)
+        app.state.auth_manager = auth_manager
+        app.state.auth_deps = auth_deps
+
+    # Add error handling middleware
+    app.add_middleware(BaseHTTPMiddleware, dispatch=error_handling_middleware)
 
     # Add CORS middleware
     if cors_origins is None:
@@ -172,11 +216,6 @@ def create_app(
     # Include REST API router
     app.include_router(rest_api_adapter.router)
 
-    # Include Authentication API router (if auth service provided)
-    if auth_service is not None:
-        auth_api_adapter = AuthAPIAdapter(auth_service)
-        app.include_router(auth_api_adapter.router)
-
     # ========================================================================
     # WebSocket Endpoints
     # ========================================================================
@@ -226,50 +265,84 @@ def create_app(
         await websocket_adapter.handle_websocket(websocket)
 
     # ========================================================================
-    # Health Check Endpoints
+    # Health Check Endpoints (Unauthenticated)
     # ========================================================================
 
     @app.get(
-        "/health",
+        "/api/v2/health",
         tags=["health"],
         summary="Health check endpoint",
+        response_model=HealthCheckResponse,
     )
-    async def health_check() -> Dict[str, Any]:
+    async def health_check() -> HealthCheckResponse:
         """
         Basic health check endpoint.
+
+        This endpoint does NOT require authentication and can be used for
+        monitoring and load balancer health checks.
 
         Returns:
             Health status
         """
-        return {
-            "status": "healthy",
-            "service": "codetoreum-api",
-            "version": "2.0.0",
-        }
+        return HealthCheckResponse(
+            status="healthy",
+            service="codetoreum-api",
+            version="2.0.0",
+        )
 
     @app.get(
-        "/health/ready",
+        "/api/v2/health/ready",
         tags=["health"],
         summary="Readiness check endpoint",
+        response_model=ReadinessCheckResponse,
     )
-    async def readiness_check() -> Dict[str, Any]:
+    async def readiness_check() -> ReadinessCheckResponse:
         """
         Readiness check endpoint.
 
         Verifies that the service is ready to handle requests.
+        This endpoint does NOT require authentication.
 
         Returns:
             Readiness status
         """
         # TODO: Add checks for dependencies (database, event store, etc.)
-        return {
-            "status": "ready",
-            "service": "codetoreum-api",
-            "dependencies": {
+        return ReadinessCheckResponse(
+            status="ready",
+            service="codetoreum-api",
+            dependencies={
                 "event_bus": "connected",
                 "config_service": "connected",
             },
-        }
+        )
+
+    @app.get(
+        "/api/v2/auth/token-info",
+        tags=["authentication"],
+        summary="Get token information",
+        response_model=TokenInfoResponse,
+        dependencies=[Depends(auth_deps.require_auth)] if auth_deps else [],
+    )
+    async def get_token_info() -> TokenInfoResponse:
+        """
+        Get information about the current authentication token.
+
+        This endpoint requires authentication and returns metadata about
+        the token (issuance time, expiration, etc.). Useful for debugging.
+
+        Returns:
+            Token information
+        """
+        if not auth_manager:
+            return TokenInfoResponse(
+                issued_at="N/A",
+                expires_at="N/A",
+                subject="N/A",
+                is_valid=False,
+            )
+
+        info = auth_manager.get_token_info()
+        return TokenInfoResponse(**info)
 
     # ========================================================================
     # Error Handlers
@@ -312,13 +385,6 @@ def create_development_app() -> FastAPI:
         IEventBus,
         ILogger,
     )
-    from codetoreum.adapters.secondary.in_memory_api_key_repository import (
-        InMemoryAPIKeyRepository,
-    )
-    from codetoreum.adapters.secondary.in_memory_user_repository import (
-        InMemoryUserRepository,
-    )
-    from codetoreum.application.authentication_service import AuthenticationService
     from codetoreum.ports.input.config_command import (
         IConfigurationCommandPort,
         ConfigurationCommandResult,
@@ -631,17 +697,6 @@ def create_development_app() -> FastAPI:
                 changes_applied={},
             )
 
-    # Create authentication service with in-memory repositories
-    user_repo = InMemoryUserRepository()
-    api_key_repo = InMemoryAPIKeyRepository()
-    auth_service = AuthenticationService(
-        user_repository=user_repo,
-        api_key_repository=api_key_repo,
-        secret_key=os.getenv("JWT_SECRET_KEY", "development-secret-key-change-in-production"),
-        access_token_expire_minutes=30,
-        refresh_token_expire_days=7,
-    )
-
     return create_app(
         workflow_command_port=MockWorkflowCommandPort(),
         task_query_port=MockTaskQueryPort(),
@@ -649,7 +704,11 @@ def create_development_app() -> FastAPI:
         event_bus=MockEventBus(),
         config_service=MockConfigService(),
         logger=MockLogger(),
-        auth_service=auth_service,
+        auth_secret_key=os.getenv(
+            "CODETOREUM_AUTH_SECRET",
+            "development-secret-key-change-in-production"
+        ),
+        disable_auth=os.getenv("CODETOREUM_DISABLE_AUTH", "false").lower() == "true",
         cors_origins=["*"],
     )
 
