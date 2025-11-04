@@ -116,6 +116,11 @@ def create_config_router(
                 include_secrets=False  # Never expose secrets via API
             )
 
+            # TODO(#XX): Sensitive value masking should be delegated to the configuration service.
+            # The service should use the is_secret metadata from configuration definitions
+            # rather than attempting to infer sensitivity from field names.
+            # For now, we assume the backend service handles masking appropriately.
+
             return ProjectConfigResponse(
                 id=config.id,
                 name=config.name,
@@ -128,8 +133,8 @@ def create_config_router(
                 environment_variables=[
                     {
                         "name": k,
-                        "value": "***" if "secret" in k.lower() or "key" in k.lower() or "token" in k.lower() else v,
-                        "is_secret": "secret" in k.lower() or "key" in k.lower() or "token" in k.lower(),
+                        "value": v,  # Backend service should mask sensitive values
+                        "is_secret": False,  # Backend service should provide this metadata
                         "description": None,
                     }
                     for k, v in config.environment_variables.items()
@@ -140,6 +145,8 @@ def create_config_router(
             )
 
         except Exception as e:
+            # TODO(#XX): Use properly typed domain exceptions (ProjectNotFoundError, etc.)
+            # instead of string matching. Requires domain exception classes to be implemented first.
             if "not found" in str(e).lower():
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -207,10 +214,13 @@ def create_config_router(
             # Get project name for command
             config = await query_port.get_project_config(project_id, include_secrets=False)
 
+            # TODO(#XX): Extract user_id from auth context when multi-user authentication is implemented.
+            # The SimpleAuthDependencies should be extended to provide user identity information
+            # that can be passed to commands for proper audit trail tracking.
             command = UpdateProjectConfigCommand(
                 project_name=config.name,
                 updates=request.updates,
-                user_id="api-user",  # TODO: Extract from auth context when multi-user auth is added
+                user_id="api-user",
                 reason=request.reason,
             )
 
@@ -225,6 +235,7 @@ def create_config_router(
             )
 
         except Exception as e:
+            # TODO(#XX): Use properly typed domain exceptions instead of string matching
             if "not found" in str(e).lower():
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,

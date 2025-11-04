@@ -12,7 +12,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
 from codetoreum.adapters.primary.workspace_dtos import (
+    MountedFileInfo,
     ResourceUsageSummaryResponse,
+    ResourceUsageInfo,
+    WorkspaceListItemResponse,
     WorkspaceLogsResponse,
     WorkspaceListResponse,
     WorkspaceResponse,
@@ -131,17 +134,17 @@ def create_workspace_router(
 
             return WorkspaceListResponse(
                 workspaces=[
-                    {
-                        "workspace_id": w.workspace_id,
-                        "execution_id": w.execution_id,
-                        "agent_name": w.agent_name,
-                        "work_item_id": w.work_item_id,
-                        "status": w.status.value,
-                        "cpu_percent": w.cpu_percent,
-                        "memory_mb": w.memory_mb,
-                        "created_at": w.created_at,
-                        "last_activity": w.last_activity,
-                    }
+                    WorkspaceListItemResponse(
+                        workspace_id=w.workspace_id,
+                        execution_id=w.execution_id,
+                        agent_name=w.agent_name,
+                        work_item_id=w.work_item_id,
+                        status=w.status.value,
+                        cpu_percent=w.cpu_percent,
+                        memory_mb=w.memory_mb,
+                        created_at=w.created_at,
+                        last_activity=w.last_activity,
+                    )
                     for w in result.workspaces
                 ],
                 total_count=result.total_count,
@@ -192,17 +195,17 @@ def create_workspace_router(
 
             return WorkspaceListResponse(
                 workspaces=[
-                    {
-                        "workspace_id": w.workspace_id,
-                        "execution_id": w.execution_id,
-                        "agent_name": w.agent_name,
-                        "work_item_id": w.work_item_id,
-                        "status": w.status.value,
-                        "cpu_percent": w.cpu_percent,
-                        "memory_mb": w.memory_mb,
-                        "created_at": w.created_at,
-                        "last_activity": w.last_activity,
-                    }
+                    WorkspaceListItemResponse(
+                        workspace_id=w.workspace_id,
+                        execution_id=w.execution_id,
+                        agent_name=w.agent_name,
+                        work_item_id=w.work_item_id,
+                        status=w.status.value,
+                        cpu_percent=w.cpu_percent,
+                        memory_mb=w.memory_mb,
+                        created_at=w.created_at,
+                        last_activity=w.last_activity,
+                    )
                     for w in result.workspaces
                 ],
                 total_count=result.total_count,
@@ -290,23 +293,23 @@ def create_workspace_router(
                 container_name=workspace.container_name,
                 image_name=workspace.image_name,
                 status=workspace.status.value,
-                resource_usage={
-                    "cpu_percent": workspace.resource_usage.cpu_percent,
-                    "memory_mb": workspace.resource_usage.memory_mb,
-                    "memory_limit_mb": workspace.resource_usage.memory_limit_mb,
-                    "memory_percent": workspace.resource_usage.memory_percent,
-                    "disk_usage_mb": workspace.resource_usage.disk_usage_mb,
-                    "disk_limit_mb": workspace.resource_usage.disk_limit_mb,
-                    "network_rx_bytes": workspace.resource_usage.network_rx_bytes,
-                    "network_tx_bytes": workspace.resource_usage.network_tx_bytes,
-                } if workspace.resource_usage else None,
+                resource_usage=ResourceUsageInfo(
+                    cpu_percent=workspace.resource_usage.cpu_percent,
+                    memory_mb=workspace.resource_usage.memory_mb,
+                    memory_limit_mb=workspace.resource_usage.memory_limit_mb,
+                    memory_percent=workspace.resource_usage.memory_percent,
+                    disk_usage_mb=workspace.resource_usage.disk_usage_mb,
+                    disk_limit_mb=workspace.resource_usage.disk_limit_mb,
+                    network_rx_bytes=workspace.resource_usage.network_rx_bytes,
+                    network_tx_bytes=workspace.resource_usage.network_tx_bytes,
+                ) if workspace.resource_usage else None,
                 mounted_files=[
-                    {
-                        "source_path": f.source_path,
-                        "container_path": f.container_path,
-                        "read_only": f.read_only,
-                        "size_bytes": f.size_bytes,
-                    }
+                    MountedFileInfo(
+                        source_path=f.source_path,
+                        container_path=f.container_path,
+                        read_only=f.read_only,
+                        size_bytes=f.size_bytes,
+                    )
                     for f in workspace.mounted_files
                 ],
                 context_path=workspace.context_path,
@@ -321,6 +324,8 @@ def create_workspace_router(
             )
 
         except Exception as e:
+            # TODO(#XX): Use properly typed domain exceptions (WorkspaceNotFoundError, etc.)
+            # instead of string matching. Requires domain exception classes to be implemented first.
             if "not found" in str(e).lower():
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -459,6 +464,7 @@ def create_workspace_router(
             )
 
         except Exception as e:
+            # TODO(#XX): Use properly typed domain exceptions instead of string matching
             if "not found" in str(e).lower():
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
