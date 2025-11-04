@@ -259,7 +259,14 @@ def create_app(
         auth_dependencies=auth_deps,
     )
 
-    websocket_adapter = WebSocketAdapter()
+    # Create WebSocket adapter with auth manager
+    websocket_adapter = WebSocketAdapter(
+        auth_manager=auth_manager if not disable_auth else None
+    )
+
+    # Register WebSocket adapter with event bus for real-time streaming
+    # Subscribe to all events and broadcast to connected WebSocket clients
+    event_bus.subscribe(None, websocket_adapter.broadcast_event)
 
     # ========================================================================
     # Webhook Endpoints
@@ -366,25 +373,41 @@ def create_app(
     # WebSocket Endpoints
     # ========================================================================
 
-    @app.websocket("/ws/events")
-    async def websocket_events(websocket: WebSocket):
+    @app.websocket("/api/v2/events/stream")
+    async def websocket_events(
+        websocket: WebSocket,
+        token: Optional[str] = Query(None),
+    ):
         """
         WebSocket endpoint for real-time event streaming.
 
-        Connect to this endpoint to receive real-time updates about
-        workflow and execution events.
+        **Authentication:**
+        Provide the authentication token via query parameter: `?token=YOUR_TOKEN`
 
-        **Message Types:**
+        **Connection Messages:**
+
+        On successful connection, server sends:
+        ```json
+        {
+            "type": "connected",
+            "client_id": "ws-123",
+            "message": "Connected to Codetoreum event stream",
+            "timestamp": "2025-11-04T10:00:00Z"
+        }
+        ```
+
+        **Client Message Types:**
 
         Subscribe to events:
         ```json
         {
             "type": "subscribe",
-            "subscription_type": "workflow_events",
-            "workflow_run_id": "optional-workflow-id",
-            "execution_id": "optional-execution-id",
-            "project_name": "optional-project-name",
-            "event_types": ["optional", "list", "of", "event", "types"]
+            "subscription_type": "all_events",
+            "event_types": ["ExecutionStarted", "ExecutionCompleted"],
+            "work_item_id": "optional",
+            "workflow_id": "optional",
+            "agent_id": "optional",
+            "project_name": "optional"
         }
         ```
 
@@ -402,13 +425,59 @@ def create_app(
         }
         ```
 
+        **Server Message Types:**
+
+        Event message:
+        ```json
+        {
+            "type": "event",
+            "event_id": "evt-123",
+            "event_type": "ExecutionStarted",
+            "data": {...},
+            "timestamp": "2025-11-04T10:00:00Z"
+        }
+        ```
+
+        Flow control warning:
+        ```json
+        {
+            "type": "flow_control",
+            "buffer_usage": 0.85,
+            "buffer_size": 850,
+            "max_buffer_size": 1000,
+            "message": "Warning: Buffer at 85% capacity...",
+            "timestamp": "2025-11-04T10:00:00Z"
+        }
+        ```
+
         **Subscription Types:**
-        - all_events: Receive all events
-        - workflow_events: Receive workflow-related events
-        - execution_events: Receive execution-related events
-        - logs: Receive log messages
+        - `all_events`: Receive all events
+        - `workflow_events`: Receive workflow-related events only
+        - `execution_events`: Receive execution-related events only
+
+        **Filtering:**
+        - `event_types`: List of event types (OR logic)
+        - `work_item_id`, `workflow_id`, `agent_id`: Filter by IDs (AND logic)
+
+        **Backpressure Handling:**
+        - Buffer limit: 1000 events per client
+        - Flow control warning at 80% capacity
+        - Automatic disconnection on buffer overflow
+
+        **Heartbeat:**
+        - Server sends ping every 30 seconds
+        - Client timeout after 90 seconds of inactivity
         """
-        await websocket_adapter.handle_websocket(websocket)
+        await websocket_adapter.handle_websocket(websocket, token=token)
+
+    # Legacy WebSocket endpoint for backward compatibility
+    @app.websocket("/ws/events")
+    async def websocket_events_legacy(
+        websocket: WebSocket,
+        token: Optional[str] = Query(None),
+    ):
+        """Legacy WebSocket endpoint. Use /api/v2/events/stream instead."""
+        await websocket_adapter.handle_websocket(websocket, token=token)
 
     # ========================================================================
     # Health Check Endpoints (Unauthenticated)
