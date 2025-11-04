@@ -120,7 +120,7 @@ class SimpleTokenAuthManager:
         Get the authentication URL to print in server logs.
 
         This URL includes the token as a query parameter, allowing users to
-        click it and automatically authenticate.
+        click it and automatically authenticate via cookie.
 
         Args:
             base_url: Base URL of the server (e.g., "http://localhost:8000")
@@ -129,6 +129,35 @@ class SimpleTokenAuthManager:
             Complete URL with token query parameter
         """
         return f"{base_url}/?token={self.server_token}"
+
+    def create_cookie_response_headers(
+        self,
+        token: str,
+        secure: bool = True,
+        max_age: int = 86400 * 365  # 1 year default
+    ) -> dict:
+        """
+        Create cookie headers for httpOnly token storage.
+
+        Args:
+            token: The JWT token to store in the cookie
+            secure: Whether to set Secure flag (HTTPS only)
+            max_age: Cookie max age in seconds (default: 1 year)
+
+        Returns:
+            Dictionary of cookie headers to set on response
+        """
+        cookie_value = (
+            f"codetoreum_token={token}; "
+            f"HttpOnly; "
+            f"SameSite=Strict; "
+            f"Path=/; "
+            f"Max-Age={max_age}"
+        )
+        if secure:
+            cookie_value += "; Secure"
+
+        return {"Set-Cookie": cookie_value}
 
     def validate_token(self, token: str) -> bool:
         """

@@ -9,7 +9,7 @@ import { Card } from '../components/ui/card'
 import type { WorkItemStatus, ExecutionStatus } from '../types'
 
 export default function DashboardPage() {
-  const { token } = useAuth()
+  const { isAuthenticated } = useAuth()
 
   // Fetch work items
   const { data: workItems = [], isLoading: loadingWorkItems } = useQuery({
@@ -23,8 +23,8 @@ export default function DashboardPage() {
     queryFn: () => executionsApi.list({ limit: 10 }),
   })
 
-  // WebSocket for real-time events
-  const { events, isConnected, subscribe } = useWebSocket(token)
+  // WebSocket for real-time events (uses httpOnly cookies for auth)
+  const { events, isConnected, subscribe } = useWebSocket(isAuthenticated)
 
   // Subscribe to execution events on mount
   React.useEffect(() => {

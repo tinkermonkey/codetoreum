@@ -26,6 +26,7 @@ const API_BASE_URL =
 // Create axios instance with proper configuration
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true, // Send httpOnly cookies with requests
   headers: {
     'Content-Type': 'application/json',
   },
@@ -38,9 +39,8 @@ api.interceptors.response.use(
   (error: AxiosError<ApiError>) => {
     // Enhanced error handling with structured error types
     if (error.response) {
-      // Handle 401 Unauthorized - clear token and redirect to auth
+      // Handle 401 Unauthorized - trigger auth event (cookie will be cleared by server)
       if (error.response.status === 401) {
-        localStorage.removeItem('codetoreum_token')
         // Trigger a custom event that the auth context can listen to
         window.dispatchEvent(new CustomEvent('auth:unauthorized'))
       }
@@ -74,14 +74,12 @@ api.interceptors.response.use(
   }
 )
 
-// Request interceptor for adding auth tokens
+// Request interceptor - no longer needed for cookie-based auth
+// Cookies are sent automatically by the browser via withCredentials: true
 api.interceptors.request.use(
   (config) => {
-    // Add authentication token if available
-    const token = localStorage.getItem('codetoreum_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
+    // httpOnly cookies are sent automatically by the browser
+    // No need to manually add Authorization header for cookie-based auth
     return config
   },
   (error) => Promise.reject(error)
@@ -351,6 +349,13 @@ export const executionsApi = {
   getLogs: async (id: string): Promise<string[]> => {
     const response = await api.get<{ logs: string[] }>(`/executions/${id}/logs`)
     return response.data.logs
+  },
+}
+
+// Authentication API
+export const authApi = {
+  logout: async (): Promise<void> => {
+    await api.post('/v2/auth/logout')
   },
 }
 

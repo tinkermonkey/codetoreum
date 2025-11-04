@@ -1,70 +1,91 @@
 /**
  * Authentication Hook
  *
- * Provides simplified token-based authentication (JupyterLab-style).
+ * Provides simplified httpOnly cookie-based authentication (secure, XSS-protected).
  *
  * Flow:
  * 1. On first load, check for token in URL query parameter
- * 2. If found, store in localStorage and remove from URL
- * 3. If not found in URL, check localStorage
- * 4. If no token found, show "Authentication Required" page
- * 5. All API requests include token in Authorization header
- * 6. On 401 response, clear token and redirect to auth required page
+ * 2. If found, make API call to set httpOnly cookie and remove from URL
+ * 3. Check authentication status via API call (cookie is sent automatically)
+ * 4. If no authentication found, show "Authentication Required" page
+ * 5. All API requests include httpOnly cookie automatically (browser handles this)
+ * 6. On 401 response, clear auth state and redirect to auth required page
+ *
+ * Security improvements:
+ * - No localStorage usage (prevents XSS token theft)
+ * - httpOnly cookies (inaccessible to JavaScript)
+ * - SameSite=Strict (CSRF protection)
+ * - Secure flag in production (HTTPS only)
  */
 
 import { useState, useEffect } from 'react'
+import api, { authApi } from '../api/client'
 
 export interface AuthState {
-  token: string | null
   isAuthenticated: boolean
   isLoading: boolean
 }
 
 export function useAuth() {
   const [authState, setAuthState] = useState<AuthState>({
-    token: null,
     isAuthenticated: false,
     isLoading: true,
   })
 
   useEffect(() => {
-    // Check for token in URL query parameter
-    const urlParams = new URLSearchParams(window.location.search)
-    const urlToken = urlParams.get('token')
+    const initializeAuth = async () => {
+      // Check for token in URL query parameter
+      const urlParams = new URLSearchParams(window.location.search)
+      const urlToken = urlParams.get('token')
 
-    if (urlToken) {
-      // Store token and clean URL
-      localStorage.setItem('codetoreum_token', urlToken)
-      // Remove token from URL for security
-      window.history.replaceState({}, document.title, window.location.pathname)
-      setAuthState({
-        token: urlToken,
-        isAuthenticated: true,
-        isLoading: false,
-      })
-      return
+      if (urlToken) {
+        try {
+          // Make a request with the token to set the httpOnly cookie
+          // The backend will set the cookie when it validates the token
+          await api.get('/v2/health', {
+            params: { token: urlToken }
+          })
+
+          // Remove token from URL for security
+          window.history.replaceState({}, document.title, window.location.pathname)
+
+          setAuthState({
+            isAuthenticated: true,
+            isLoading: false,
+          })
+          return
+        } catch (error) {
+          console.error('Failed to authenticate with URL token:', error)
+          setAuthState({
+            isAuthenticated: false,
+            isLoading: false,
+          })
+          return
+        }
+      }
+
+      // Check if we're already authenticated by making an API call
+      // The browser will automatically send the httpOnly cookie
+      try {
+        await api.get('/v2/auth/token-info')
+        setAuthState({
+          isAuthenticated: true,
+          isLoading: false,
+        })
+      } catch (error) {
+        // Not authenticated
+        setAuthState({
+          isAuthenticated: false,
+          isLoading: false,
+        })
+      }
     }
 
-    // Check for token in localStorage
-    const storedToken = localStorage.getItem('codetoreum_token')
-    if (storedToken) {
-      setAuthState({
-        token: storedToken,
-        isAuthenticated: true,
-        isLoading: false,
-      })
-    } else {
-      setAuthState({
-        token: null,
-        isAuthenticated: false,
-        isLoading: false,
-      })
-    }
+    initializeAuth()
 
     // Listen for unauthorized events from API interceptor
     const handleUnauthorized = () => {
       setAuthState({
-        token: null,
         isAuthenticated: false,
         isLoading: false,
       })
@@ -76,13 +97,19 @@ export function useAuth() {
     }
   }, [])
 
-  const logout = () => {
-    localStorage.removeItem('codetoreum_token')
-    setAuthState({
-      token: null,
-      isAuthenticated: false,
-      isLoading: false,
-    })
+  const logout = async () => {
+    try {
+      // Call logout endpoint to clear httpOnly cookie
+      await authApi.logout()
+    } catch (error) {
+      console.error('Logout failed:', error)
+    } finally {
+      // Update local state regardless of API call result
+      setAuthState({
+        isAuthenticated: false,
+        isLoading: false,
+      })
+    }
   }
 
   return {

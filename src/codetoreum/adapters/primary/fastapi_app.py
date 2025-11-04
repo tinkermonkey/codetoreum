@@ -255,9 +255,10 @@ def create_app(
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cors_origins,
-        allow_credentials=not allow_all,  # Can't use credentials with allow_origins=*
+        allow_credentials=not allow_all,  # Can't use credentials with allow_origins=*, needed for httpOnly cookies
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"] if not allow_all else ["*"],
         allow_headers=["Authorization", "Content-Type"] if not allow_all else ["*"],
+        expose_headers=["Set-Cookie"] if not allow_all else ["*"],  # Allow browser to see Set-Cookie header
     )
 
     # Create adapters
@@ -598,6 +599,30 @@ def create_app(
 
         info = auth_manager.get_token_info()
         return TokenInfoResponse(**info)
+
+    @app.post(
+        "/api/v2/auth/logout",
+        tags=["authentication"],
+        summary="Logout and clear authentication cookie",
+        dependencies=[Depends(auth_deps.require_auth)] if auth_deps else [],
+    )
+    async def logout(response: Response) -> Dict[str, Any]:
+        """
+        Logout by clearing the httpOnly authentication cookie.
+
+        This endpoint requires authentication and will clear the httpOnly cookie,
+        effectively logging the user out. The token itself remains valid until
+        expiration, but the browser will no longer send it automatically.
+
+        Returns:
+            Success message
+        """
+        if auth_deps:
+            await auth_deps.logout(response)
+        return {
+            "message": "Logged out successfully",
+            "detail": "Authentication cookie has been cleared"
+        }
 
     # ========================================================================
     # Error Handlers

@@ -9,8 +9,19 @@ test.describe('Authentication', () => {
     await expect(page.getByText('How to get your authentication token')).toBeVisible()
   })
 
-  test('should extract token from URL and store in localStorage', async ({ page }) => {
+  test('should extract token from URL and set httpOnly cookie', async ({ page, context }) => {
     const mockToken = 'test-token-123'
+
+    // Mock the token validation endpoint to set cookie
+    await page.route('**/api/v2/health*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: {
+          'Set-Cookie': `codetoreum_token=${mockToken}; HttpOnly; Path=/; SameSite=Strict`,
+        },
+        body: JSON.stringify({ status: 'healthy' }),
+      })
+    })
 
     // Visit with token in URL
     await page.goto(`/?token=${mockToken}`)
@@ -18,21 +29,30 @@ test.describe('Authentication', () => {
     // Wait for redirect (URL should be cleaned)
     await page.waitForURL('/')
 
-    // Check that token is stored in localStorage
-    const storedToken = await page.evaluate(() => localStorage.getItem('codetoreum_token'))
-    expect(storedToken).toBe(mockToken)
-
     // URL should no longer contain token
     expect(page.url()).not.toContain('token=')
+
+    // Check that httpOnly cookie is set
+    const cookies = await context.cookies()
+    const authCookie = cookies.find((c) => c.name === 'codetoreum_token')
+    expect(authCookie).toBeDefined()
+    expect(authCookie?.value).toBe(mockToken)
+    expect(authCookie?.httpOnly).toBe(true)
   })
 
-  test('should clear token on 401 response', async ({ page, context }) => {
-    const mockToken = 'invalid-token'
-
-    // Set invalid token in localStorage
-    await context.addInitScript((token) => {
-      localStorage.setItem('codetoreum_token', token)
-    }, mockToken)
+  test('should handle 401 response and show auth required', async ({ page, context }) => {
+    // Set invalid httpOnly cookie
+    await context.addCookies([
+      {
+        name: 'codetoreum_token',
+        value: 'invalid-token',
+        domain: 'localhost',
+        path: '/',
+        httpOnly: true,
+        secure: false,
+        sameSite: 'Strict',
+      },
+    ])
 
     // Mock API to return 401
     await page.route('**/api/**', (route) => {
@@ -48,32 +68,43 @@ test.describe('Authentication', () => {
     await expect(page.getByText('Authentication Required')).toBeVisible({
       timeout: 10000,
     })
-
-    // Token should be cleared from localStorage
-    const storedToken = await page.evaluate(() => localStorage.getItem('codetoreum_token'))
-    expect(storedToken).toBeNull()
   })
 
-  test('should send token in Authorization header', async ({ page, context }) => {
+  test('should send httpOnly cookie with requests', async ({ page, context }) => {
     const mockToken = 'valid-token-456'
 
-    // Set token in localStorage
-    await context.addInitScript((token) => {
-      localStorage.setItem('codetoreum_token', token)
-    }, mockToken)
+    // Set httpOnly cookie
+    await context.addCookies([
+      {
+        name: 'codetoreum_token',
+        value: mockToken,
+        domain: 'localhost',
+        path: '/',
+        httpOnly: true,
+        secure: false,
+        sameSite: 'Strict',
+      },
+    ])
 
-    // Track API requests
-    const requests: string[] = []
+    // Track cookie headers in requests
+    const cookieHeaders: string[] = []
     page.on('request', (request) => {
       if (request.url().includes('/api/')) {
-        const authHeader = request.headers()['authorization']
-        if (authHeader) {
-          requests.push(authHeader)
+        const cookieHeader = request.headers()['cookie']
+        if (cookieHeader) {
+          cookieHeaders.push(cookieHeader)
         }
       }
     })
 
     // Mock successful API responses
+    await page.route('**/api/v2/auth/token-info', (route) => {
+      route.fulfill({
+        status: 200,
+        body: JSON.stringify({ is_valid: true }),
+      })
+    })
+
     await page.route('**/api/v1/work-items*', (route) => {
       route.fulfill({
         status: 200,
@@ -93,18 +124,34 @@ test.describe('Authentication', () => {
     // Wait for page to load
     await expect(page.getByText('Dashboard')).toBeVisible()
 
-    // Check that requests included Authorization header
+    // Check that requests included cookie header
     await page.waitForTimeout(1000) // Give time for API calls
-    expect(requests.length).toBeGreaterThan(0)
-    expect(requests[0]).toBe(`Bearer ${mockToken}`)
+    expect(cookieHeaders.length).toBeGreaterThan(0)
+    expect(cookieHeaders[0]).toContain('codetoreum_token=' + mockToken)
   })
 })
 
 test.describe('Dashboard', () => {
   test.beforeEach(async ({ page, context }) => {
-    // Set valid token
-    await context.addInitScript(() => {
-      localStorage.setItem('codetoreum_token', 'valid-token')
+    // Set valid httpOnly cookie
+    await context.addCookies([
+      {
+        name: 'codetoreum_token',
+        value: 'valid-token',
+        domain: 'localhost',
+        path: '/',
+        httpOnly: true,
+        secure: false,
+        sameSite: 'Strict',
+      },
+    ])
+
+    // Mock token validation
+    await page.route('**/api/v2/auth/token-info', (route) => {
+      route.fulfill({
+        status: 200,
+        body: JSON.stringify({ is_valid: true }),
+      })
     })
 
     // Mock API responses

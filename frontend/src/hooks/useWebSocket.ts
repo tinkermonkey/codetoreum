@@ -4,11 +4,15 @@
  * Provides real-time event streaming from the backend with automatic reconnection.
  *
  * Features:
- * - Automatic connection with token authentication
+ * - Automatic connection with cookie-based authentication
  * - Exponential backoff reconnection (up to 10 attempts)
  * - Close code 4001 (Unauthorized) prevents reconnection
  * - Event filtering and subscription management
  * - Connection status tracking
+ *
+ * Security improvements:
+ * - Uses httpOnly cookies for authentication (no token in URL)
+ * - No localStorage usage (prevents XSS token theft)
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
@@ -41,7 +45,7 @@ const DEFAULT_CONFIG: Required<WebSocketConfig> = {
   maxReconnectDelay: 30000, // 30 seconds
 }
 
-export function useWebSocket(token: string | null, config: WebSocketConfig = {}) {
+export function useWebSocket(isAuthenticated: boolean, config: WebSocketConfig = {}) {
   const fullConfig = { ...DEFAULT_CONFIG, ...config }
   const [state, setState] = useState<WebSocketState>({
     isConnected: false,
@@ -69,11 +73,11 @@ export function useWebSocket(token: string | null, config: WebSocketConfig = {})
   )
 
   const connect = useCallback(() => {
-    if (!token) {
+    if (!isAuthenticated) {
       setState((prev) => ({
         ...prev,
         isConnecting: false,
-        error: 'No authentication token available',
+        error: 'Not authenticated',
       }))
       return
     }
@@ -85,9 +89,9 @@ export function useWebSocket(token: string | null, config: WebSocketConfig = {})
     setState((prev) => ({ ...prev, isConnecting: true, error: null }))
 
     try {
-      // Add token as query parameter for WebSocket authentication
-      const wsUrl = `${fullConfig.url}?token=${token}`
-      const ws = new WebSocket(wsUrl)
+      // WebSocket will use cookies for authentication (browser sends them automatically)
+      // No need to include token in URL - more secure this way
+      const ws = new WebSocket(fullConfig.url)
 
       ws.onopen = () => {
         console.log('[WebSocket] Connected')
@@ -167,10 +171,9 @@ export function useWebSocket(token: string | null, config: WebSocketConfig = {})
           shouldReconnectRef.current = false
           setState((prev) => ({
             ...prev,
-            error: 'Unauthorized - invalid token',
+            error: 'Unauthorized - authentication required',
           }))
-          // Trigger auth event to clear token
-          localStorage.removeItem('codetoreum_token')
+          // Trigger auth event to update auth state
           window.dispatchEvent(new CustomEvent('auth:unauthorized'))
           return
         }
@@ -205,7 +208,7 @@ export function useWebSocket(token: string | null, config: WebSocketConfig = {})
         error: err instanceof Error ? err.message : 'Unknown error',
       }))
     }
-  }, [token, fullConfig.url, fullConfig.reconnectAttempts, calculateReconnectDelay, state.reconnectAttempt])
+  }, [isAuthenticated, fullConfig.url, fullConfig.reconnectAttempts, calculateReconnectDelay, state.reconnectAttempt])
 
   const disconnect = useCallback(() => {
     shouldReconnectRef.current = false
@@ -264,17 +267,20 @@ export function useWebSocket(token: string | null, config: WebSocketConfig = {})
     setState((prev) => ({ ...prev, events: [] }))
   }, [])
 
-  // Connect on mount if token is available
+  // Connect on mount if authenticated
   useEffect(() => {
-    if (token) {
+    if (isAuthenticated) {
       shouldReconnectRef.current = true
       connect()
+    } else {
+      // Disconnect if no longer authenticated
+      disconnect()
     }
 
     return () => {
       disconnect()
     }
-  }, [token, connect, disconnect])
+  }, [isAuthenticated, connect, disconnect])
 
   return {
     ...state,

@@ -6,7 +6,7 @@ Provides FastAPI dependencies for the simplified JupyterLab-style token authenti
 
 from typing import Optional
 
-from fastapi import Depends, HTTPException, Header, Query, status
+from fastapi import Depends, HTTPException, Header, Query, Cookie, Response, status
 
 from codetoreum.infrastructure.auth import SimpleTokenAuthManager
 
@@ -56,21 +56,28 @@ class SimpleAuthDependencies:
 
     async def require_auth(
         self,
+        response: Response,
+        codetoreum_token: Optional[str] = Cookie(None),
         authorization: Optional[str] = Header(None),
         token: Optional[str] = Query(None),
     ) -> bool:
         """
         Require authentication for the endpoint.
 
-        Checks for token in two places (in order):
-        1. Query parameter: ?token=...
-        2. Authorization header: Bearer ...
+        Checks for token in three places (in order):
+        1. httpOnly cookie: codetoreum_token (primary, most secure)
+        2. Query parameter: ?token=... (for initial authentication only)
+        3. Authorization header: Bearer ... (for API clients)
+
+        When a query parameter token is provided, it will be set as an httpOnly cookie.
 
         This dependency can be used on any endpoint that requires authentication.
 
         Args:
+            response: FastAPI Response object for setting cookies
+            codetoreum_token: Token from httpOnly cookie (most secure)
             authorization: Authorization header (Bearer token)
-            token: Token from query parameter
+            token: Token from query parameter (for initial auth)
 
         Returns:
             True if authenticated
@@ -85,9 +92,28 @@ class SimpleAuthDependencies:
             ):
                 return {"message": "You are authenticated!"}
         """
-        # Try query parameter first (for initial web UI authentication)
+        # Try httpOnly cookie first (most secure, prevents XSS)
+        if codetoreum_token:
+            if not self._validate_token_format(codetoreum_token):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid authentication token format",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+
+            if self.auth_manager.validate_token(codetoreum_token):
+                return True
+            # Invalid cookie token - clear it
+            response.delete_cookie(key="codetoreum_token", path="/")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        # Try query parameter (for initial web UI authentication)
+        # If valid, set httpOnly cookie for future requests
         if token:
-            # Pre-validate token format
             if not self._validate_token_format(token):
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -96,6 +122,18 @@ class SimpleAuthDependencies:
                 )
 
             if self.auth_manager.validate_token(token):
+                # Set httpOnly cookie for future requests
+                import os
+                use_https = os.getenv("API_USE_HTTPS", "false").lower() == "true"
+                response.set_cookie(
+                    key="codetoreum_token",
+                    value=token,
+                    httponly=True,  # Prevents JavaScript access (XSS protection)
+                    secure=use_https,  # HTTPS only in production
+                    samesite="strict",  # CSRF protection
+                    max_age=86400 * 365,  # 1 year
+                    path="/",
+                )
                 return True
             # Invalid token provided
             raise HTTPException(
@@ -104,7 +142,7 @@ class SimpleAuthDependencies:
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        # Try Authorization header
+        # Try Authorization header (for API clients)
         if authorization:
             if not authorization.startswith("Bearer "):
                 raise HTTPException(
@@ -113,17 +151,16 @@ class SimpleAuthDependencies:
                     headers={"WWW-Authenticate": "Bearer"},
                 )
 
-            token = authorization[7:]  # Remove "Bearer " prefix
+            auth_token = authorization[7:]  # Remove "Bearer " prefix
 
-            # Pre-validate token format
-            if not self._validate_token_format(token):
+            if not self._validate_token_format(auth_token):
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid authentication token format",
                     headers={"WWW-Authenticate": "Bearer"},
                 )
 
-            if self.auth_manager.validate_token(token):
+            if self.auth_manager.validate_token(auth_token):
                 return True
 
             # Invalid token provided
@@ -136,12 +173,14 @@ class SimpleAuthDependencies:
         # No authentication provided
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required. Provide token via ?token=... or Authorization: Bearer header",
+            detail="Authentication required. Provide token via cookie, ?token=... or Authorization: Bearer header",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     async def optional_auth(
         self,
+        response: Response,
+        codetoreum_token: Optional[str] = Cookie(None),
         authorization: Optional[str] = Header(None),
         token: Optional[str] = Query(None),
     ) -> bool:
@@ -152,6 +191,8 @@ class SimpleAuthDependencies:
         if no valid token is provided.
 
         Args:
+            response: FastAPI Response object for setting cookies
+            codetoreum_token: Token from httpOnly cookie
             authorization: Authorization header (Bearer token)
             token: Token from query parameter
 
@@ -169,9 +210,27 @@ class SimpleAuthDependencies:
                     return {"message": "You are not authenticated"}
         """
         try:
-            return await self.require_auth(authorization, token)
+            return await self.require_auth(response, codetoreum_token, authorization, token)
         except HTTPException:
             return False
+
+    async def logout(self, response: Response) -> None:
+        """
+        Logout by clearing the httpOnly cookie.
+
+        Args:
+            response: FastAPI Response object for clearing cookies
+
+        Example:
+            @app.post("/logout")
+            async def logout_endpoint(
+                response: Response,
+                _: bool = Depends(auth_deps.require_auth)
+            ):
+                await auth_deps.logout(response)
+                return {"message": "Logged out successfully"}
+        """
+        response.delete_cookie(key="codetoreum_token", path="/")
 
 
 # Example usage in FastAPI app:
