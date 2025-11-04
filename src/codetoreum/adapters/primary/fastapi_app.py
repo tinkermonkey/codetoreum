@@ -46,8 +46,14 @@ from codetoreum.adapters.primary.routers.work_items import create_work_items_rou
 from codetoreum.adapters.primary.routers.workflows import create_workflows_router
 from codetoreum.adapters.primary.routers.orchestrator import create_orchestrator_router
 from codetoreum.adapters.primary.routers.scheduler import create_scheduler_router
+from codetoreum.adapters.primary.routers.agents import create_agents_router
+from codetoreum.adapters.primary.routers.executions import create_executions_router
 from codetoreum.infrastructure.auth import SimpleTokenAuthManager
+from codetoreum.ports.input.agent_command import IAgentCommandPort
+from codetoreum.ports.input.agent_query import IAgentQueryPort
 from codetoreum.ports.input.config_command import IConfigurationCommandPort
+from codetoreum.ports.input.execution_command import IExecutionCommandPort
+from codetoreum.ports.input.execution_query import IExecutionQueryPort
 from codetoreum.ports.input.task_query import ITaskQueryPort
 from codetoreum.ports.input.workflow_command import IWorkflowCommandPort
 from codetoreum.ports.input.workflow_query import IWorkflowQueryPort
@@ -141,6 +147,10 @@ def create_app(
     workflow_query_port: IWorkflowQueryPort,
     workflow_definition_command_port: IWorkflowDefinitionCommandPort,
     orchestration_command_port: IOrchestrationCommandPort,
+    agent_command_port: IAgentCommandPort,
+    agent_query_port: IAgentQueryPort,
+    execution_command_port: IExecutionCommandPort,
+    execution_query_port: IExecutionQueryPort,
     event_bus: IEventBus,
     config_service: IConfigurationService,
     logger: ILogger,
@@ -335,6 +345,22 @@ def create_app(
         auth_deps=auth_deps,
     )
     app.include_router(scheduler_router)
+
+    # Include Agents router
+    agents_router = create_agents_router(
+        command_port=agent_command_port,
+        query_port=agent_query_port,
+        auth_deps=auth_deps,
+    )
+    app.include_router(agents_router)
+
+    # Include Executions router
+    executions_router = create_executions_router(
+        command_port=execution_command_port,
+        query_port=execution_query_port,
+        auth_deps=auth_deps,
+    )
+    app.include_router(executions_router)
 
     # ========================================================================
     # WebSocket Endpoints
