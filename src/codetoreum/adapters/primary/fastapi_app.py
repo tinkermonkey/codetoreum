@@ -48,13 +48,19 @@ from codetoreum.adapters.primary.routers.orchestrator import create_orchestrator
 from codetoreum.adapters.primary.routers.scheduler import create_scheduler_router
 from codetoreum.adapters.primary.routers.agents import create_agents_router
 from codetoreum.adapters.primary.routers.executions import create_executions_router
+from codetoreum.adapters.primary.routers.config import create_config_router
+from codetoreum.adapters.primary.routers.metrics import create_metrics_router
+from codetoreum.adapters.primary.routers.workspace import create_workspace_router
 from codetoreum.infrastructure.auth import SimpleTokenAuthManager
 from codetoreum.ports.input.agent_command import IAgentCommandPort
 from codetoreum.ports.input.agent_query import IAgentQueryPort
 from codetoreum.ports.input.config_command import IConfigurationCommandPort
+from codetoreum.ports.input.config_query import IConfigurationQueryPort
 from codetoreum.ports.input.execution_command import IExecutionCommandPort
 from codetoreum.ports.input.execution_query import IExecutionQueryPort
+from codetoreum.ports.input.metrics_query import IMetricsQueryPort
 from codetoreum.ports.input.task_query import ITaskQueryPort
+from codetoreum.ports.input.workspace_query import IWorkspaceQueryPort
 from codetoreum.ports.input.workflow_command import IWorkflowCommandPort
 from codetoreum.ports.input.workflow_query import IWorkflowQueryPort
 from codetoreum.ports.input.workflow_definition_command import IWorkflowDefinitionCommandPort
@@ -142,6 +148,9 @@ def create_app(
     workflow_command_port: IWorkflowCommandPort,
     task_query_port: ITaskQueryPort,
     config_command_port: IConfigurationCommandPort,
+    config_query_port: IConfigurationQueryPort,
+    metrics_query_port: IMetricsQueryPort,
+    workspace_query_port: IWorkspaceQueryPort,
     work_item_command_port: IWorkItemCommandPort,
     work_item_query_port: IWorkItemQueryPort,
     workflow_query_port: IWorkflowQueryPort,
@@ -165,11 +174,18 @@ def create_app(
         workflow_command_port: Port for workflow commands (legacy, for compatibility)
         task_query_port: Port for task queries
         config_command_port: Port for configuration commands
+        config_query_port: Port for configuration queries
+        metrics_query_port: Port for metrics queries
+        workspace_query_port: Port for workspace queries
         work_item_command_port: Port for work item commands
         work_item_query_port: Port for work item queries
         workflow_query_port: Port for workflow definition queries
         workflow_definition_command_port: Port for workflow definition commands
         orchestration_command_port: Port for orchestration commands
+        agent_command_port: Port for agent commands
+        agent_query_port: Port for agent queries
+        execution_command_port: Port for execution commands
+        execution_query_port: Port for execution queries
         event_bus: Event bus for publishing events
         config_service: Configuration service
         logger: Logger instance
@@ -370,6 +386,28 @@ def create_app(
         auth_deps=auth_deps,
     )
     app.include_router(executions_router)
+
+    # Include Configuration router
+    config_router = create_config_router(
+        command_port=config_command_port,
+        query_port=config_query_port,
+        auth_deps=auth_deps,
+    )
+    app.include_router(config_router)
+
+    # Include Metrics router
+    metrics_router = create_metrics_router(
+        metrics_query_port=metrics_query_port,
+        auth_deps=auth_deps,
+    )
+    app.include_router(metrics_router)
+
+    # Include Workspace router
+    workspace_router = create_workspace_router(
+        query_port=workspace_query_port,
+        auth_deps=auth_deps,
+    )
+    app.include_router(workspace_router)
 
     # ========================================================================
     # WebSocket Endpoints
@@ -1639,10 +1677,284 @@ def create_development_app() -> FastAPI:
         async def count_executions(self, filters=None):
             return 1
 
+    class MockConfigurationQueryPort(IConfigurationQueryPort):
+        """Mock configuration query port for development."""
+
+        async def get_project_config(self, project_id: str, include_secrets: bool = False):
+            from codetoreum.ports.input.config_query import ProjectConfigInfo
+            return ProjectConfigInfo(
+                id=project_id,
+                name="mock-project",
+                description="Mock project for development",
+                github_org="mock-org",
+                github_repo="mock-repo",
+                version=1,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+                environment_variables={"DEBUG": "true"},
+                mounted_commands=[],
+                mounted_subagents=[],
+                metadata={},
+            )
+
+        async def get_project_config_by_name(self, project_name: str, include_secrets: bool = False):
+            return await self.get_project_config("proj-123", include_secrets)
+
+        async def get_agent_config(self, project_id: str, agent_name: str):
+            from codetoreum.ports.input.config_query import AgentConfigInfo
+            return AgentConfigInfo(
+                project_id=project_id,
+                agent_name=agent_name,
+                display_name="Mock Agent",
+                model="claude-3-sonnet",
+                timeout_seconds=300,
+                max_retries=3,
+                requires_docker=True,
+                requires_dev_container=False,
+                makes_code_changes=False,
+                filesystem_write_allowed=True,
+                version=1,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+                mcp_servers=[],
+                capabilities={},
+                metadata={},
+            )
+
+        async def get_pipeline_config(self, project_id: str, pipeline_name: str):
+            from codetoreum.ports.input.config_query import PipelineConfigInfo
+            return PipelineConfigInfo(
+                id=f"{project_id}-{pipeline_name}",
+                project_id=project_id,
+                name=pipeline_name,
+                description="Mock pipeline",
+                version=1,
+                stages=[],
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+                metadata={},
+            )
+
+        async def list_projects(self, pagination=None):
+            return []
+
+        async def list_agents(self, project_id: str, pagination=None):
+            return []
+
+        async def list_pipelines(self, project_id: str, pagination=None):
+            return []
+
+        async def search_configs(self, query: str, config_type=None, project_id=None, pagination=None):
+            from codetoreum.ports.input.config_query import ConfigSearchResults
+            return ConfigSearchResults(results=[], total_count=0, query=query, filters={})
+
+        async def get_config_version_history(self, config_id: str, config_type: str, limit: int = 10):
+            return []
+
+        async def get_config_version(self, config_id: str, config_type: str, version: int):
+            return {}
+
+        async def count_configs(self, config_type=None, project_id=None):
+            return 0
+
+    class MockMetricsQueryPort(IMetricsQueryPort):
+        """Mock metrics query port for development."""
+
+        async def get_system_health(self):
+            from codetoreum.ports.input.metrics_query import SystemHealthInfo, ComponentHealthInfo, ComponentHealth
+            return SystemHealthInfo(
+                status=ComponentHealth.HEALTHY,
+                components=[
+                    ComponentHealthInfo(
+                        component_name="event_store",
+                        status=ComponentHealth.HEALTHY,
+                        message="Connected",
+                        last_check=datetime.utcnow(),
+                        response_time_ms=5.0,
+                        details={},
+                    )
+                ],
+                checked_at=datetime.utcnow(),
+                uptime_seconds=3600.0,
+                version="2.0.0",
+            )
+
+        async def get_component_health(self, component_name: str):
+            from codetoreum.ports.input.metrics_query import ComponentHealthInfo, ComponentHealth
+            return ComponentHealthInfo(
+                component_name=component_name,
+                status=ComponentHealth.HEALTHY,
+                message="OK",
+                last_check=datetime.utcnow(),
+                response_time_ms=5.0,
+                details={},
+            )
+
+        async def get_performance_metrics(self, start_time, end_time, aggregation_window_seconds=60):
+            from codetoreum.ports.input.metrics_query import PerformanceMetrics
+            return PerformanceMetrics(
+                api_request_count=100,
+                api_error_count=2,
+                api_latency_p50_ms=50.0,
+                api_latency_p95_ms=150.0,
+                api_latency_p99_ms=200.0,
+                active_executions=5,
+                pending_executions=2,
+                completed_executions_total=50,
+                failed_executions_total=3,
+                avg_execution_duration_seconds=300.0,
+                active_containers=5,
+                container_cpu_usage_percent=25.0,
+                container_memory_usage_mb=512.0,
+                queue_depth=2,
+                queue_processing_rate=0.5,
+                start_time=start_time,
+                end_time=end_time,
+                aggregation_window_seconds=aggregation_window_seconds,
+            )
+
+        async def get_resilience_metrics(self, start_time, end_time):
+            from codetoreum.ports.input.metrics_query import ResilienceMetrics
+            return ResilienceMetrics(
+                circuit_breakers={},
+                rate_limiters={},
+                retry_attempts_total=10,
+                retry_successes_total=8,
+                retry_failures_total=2,
+                timeout_count=1,
+                avg_timeout_duration_ms=5000.0,
+                start_time=start_time,
+                end_time=end_time,
+            )
+
+        async def get_integration_status(self):
+            from codetoreum.ports.input.metrics_query import IntegrationStatus, ComponentHealth
+            return IntegrationStatus(
+                github_connected=True,
+                github_api_calls_remaining=5000,
+                github_rate_limit_reset=datetime.utcnow() + timedelta(hours=1),
+                github_webhook_health=ComponentHealth.HEALTHY,
+                docker_connected=True,
+                docker_version="24.0.7",
+                docker_containers_running=5,
+                event_store_connected=True,
+                event_store_latency_ms=5.0,
+                config_store_connected=True,
+                config_store_latency_ms=3.0,
+                checked_at=datetime.utcnow(),
+            )
+
+        async def get_simulation_mode_info(self):
+            from codetoreum.ports.input.metrics_query import SimulationModeInfo
+            return SimulationModeInfo(
+                enabled=False,
+                time_multiplier=1.0,
+                deterministic_responses=False,
+                mock_external_services=False,
+                event_replay_enabled=False,
+                current_simulation_time=None,
+                started_at=None,
+            )
+
+        async def get_metric_time_series(self, metric_name: str, start_time, end_time, labels=None, aggregation=None):
+            from codetoreum.ports.input.metrics_query import MetricTimeSeries
+            return MetricTimeSeries(
+                metric_name=metric_name,
+                data_points=[],
+                aggregation=aggregation,
+                start_time=start_time,
+                end_time=end_time,
+            )
+
+        async def list_metric_names(self, prefix=None):
+            return ["api.requests", "api.latency", "executions.completed", "executions.failed"]
+
+        async def get_api_endpoint_metrics(self, endpoint_path=None, start_time=None, end_time=None):
+            return {"endpoints": {}}
+
+        async def get_agent_execution_metrics(self, agent_name=None, start_time=None, end_time=None):
+            return {"agents": {}}
+
+    class MockWorkspaceQueryPort(IWorkspaceQueryPort):
+        """Mock workspace query port for development."""
+
+        async def get_workspace(self, workspace_id: str):
+            from codetoreum.ports.input.workspace_query import WorkspaceInfo, WorkspaceStatus, ResourceUsage
+            return WorkspaceInfo(
+                workspace_id=workspace_id,
+                execution_id="exec-123",
+                agent_id="agent-456",
+                agent_name="mock_agent",
+                work_item_id="wi-789",
+                project_id="proj-123",
+                container_id="container-abc",
+                container_name="codetoreum-mock",
+                image_name="codetoreum/agent:latest",
+                status=WorkspaceStatus.RUNNING,
+                resource_usage=ResourceUsage(
+                    cpu_percent=25.0,
+                    memory_mb=512.0,
+                    memory_limit_mb=2048.0,
+                    memory_percent=25.0,
+                    disk_usage_mb=1024.0,
+                    disk_limit_mb=10240.0,
+                    network_rx_bytes=1048576,
+                    network_tx_bytes=524288,
+                ),
+                mounted_files=[],
+                context_path="/context",
+                artifacts_path="/artifacts",
+                environment_variables={"DEBUG": "true"},
+                working_directory="/workspace",
+                created_at=datetime.utcnow(),
+                started_at=datetime.utcnow(),
+                stopped_at=None,
+                last_activity=datetime.utcnow(),
+                metadata={},
+            )
+
+        async def get_workspace_by_execution(self, execution_id: str):
+            return await self.get_workspace(f"ws-{execution_id}")
+
+        async def list_workspaces(self, filters=None, pagination=None):
+            from codetoreum.ports.input.workspace_query import WorkspaceListResult
+            return WorkspaceListResult(
+                workspaces=[],
+                total_count=0,
+                active_count=0,
+                total_cpu_percent=0.0,
+                total_memory_mb=0.0,
+            )
+
+        async def list_active_workspaces(self, pagination=None):
+            return await self.list_workspaces(None, pagination)
+
+        async def get_resource_usage_summary(self, project_id=None):
+            return {
+                "total_workspaces": 5,
+                "active_workspaces": 3,
+                "stopped_workspaces": 2,
+                "failed_workspaces": 0,
+                "total_cpu_percent": 75.0,
+                "total_memory_mb": 1536.0,
+                "total_disk_mb": 5120.0,
+                "avg_cpu_percent": 25.0,
+                "avg_memory_mb": 512.0,
+            }
+
+        async def count_workspaces(self, filters=None):
+            return 5
+
+        async def get_workspace_logs(self, workspace_id: str, tail=None, since=None):
+            return ["[Mock] Workspace log line 1", "[Mock] Workspace log line 2"]
+
     return create_app(
         workflow_command_port=MockWorkflowCommandPort(),
         task_query_port=MockTaskQueryPort(),
         config_command_port=MockConfigCommandPort(),
+        config_query_port=MockConfigurationQueryPort(),
+        metrics_query_port=MockMetricsQueryPort(),
+        workspace_query_port=MockWorkspaceQueryPort(),
         work_item_command_port=MockWorkItemCommandPort(),
         work_item_query_port=MockWorkItemQueryPort(),
         workflow_query_port=MockWorkflowQueryPort(),
