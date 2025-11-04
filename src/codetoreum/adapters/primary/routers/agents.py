@@ -74,6 +74,11 @@ def create_agents_router(
         response_model=AgentListResponse,
         summary="List agents with filtering and pagination",
         response_description="List of agents in registry",
+        responses={
+            200: {"description": "List of agents with pagination metadata"},
+            400: {"description": "Bad Request - Invalid filter parameters", "content": {"application/json": {"example": {"detail": "Invalid agent type: invalid_type"}}}},
+            401: {"description": "Unauthorized - Authentication required", "content": {"application/json": {"example": {"detail": "Not authenticated"}}}},
+        },
     )
     async def list_agents(
         capability: Optional[str] = Query(None, description="Filter by capability/skill"),
@@ -165,7 +170,8 @@ def create_agents_router(
 
         except HTTPException:
             raise
-        except Exception as e:
+        except (ValueError, KeyError, AttributeError) as e:
+            # Known validation or attribute errors
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Failed to list agents: {str(e)}",
@@ -180,6 +186,11 @@ def create_agents_router(
         response_model=AgentResponse,
         summary="Get agent details",
         response_description="Agent details including capabilities and execution statistics",
+        responses={
+            200: {"description": "Agent details with capabilities and optional stats"},
+            401: {"description": "Unauthorized - Authentication required", "content": {"application/json": {"example": {"detail": "Not authenticated"}}}},
+            404: {"description": "Not Found - Agent not found", "content": {"application/json": {"example": {"detail": "Agent not found: agent with ID 'agent-123' not found"}}}},
+        },
     )
     async def get_agent(
         agent_id: str,
@@ -217,7 +228,7 @@ def create_agents_router(
 
             return response
 
-        except Exception as e:
+        except (ValueError, KeyError, AttributeError) as e:
             if "not found" in str(e).lower():
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -238,6 +249,11 @@ def create_agents_router(
         status_code=status.HTTP_201_CREATED,
         summary="Create a new agent",
         response_description="Created agent",
+        responses={
+            201: {"description": "Agent created successfully"},
+            400: {"description": "Bad Request - Invalid parameters or agent already exists", "content": {"application/json": {"example": {"detail": "Agent with name 'test-agent' already exists"}}}},
+            401: {"description": "Unauthorized - Authentication required", "content": {"application/json": {"example": {"detail": "Not authenticated"}}}},
+        },
     )
     async def create_agent(request: CreateAgentRequest) -> AgentResponse:
         """
@@ -281,14 +297,8 @@ def create_agents_router(
             # Convert to response DTO
             return AgentMapper.to_response(agent_info)
 
-        except ValueError as e:
+        except (ValueError, KeyError, AttributeError) as e:
             # Invalid enum values or validation errors
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid request: {str(e)}",
-            )
-        except Exception as e:
-            # Domain errors (agent already exists, etc.)
             if "already exists" in str(e).lower():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -296,7 +306,7 @@ def create_agents_router(
                 )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to create agent: {str(e)}",
+                detail=f"Invalid request: {str(e)}",
             )
 
     # ========================================================================
@@ -354,14 +364,8 @@ def create_agents_router(
             # Convert to response DTO
             return AgentMapper.to_response(agent_info)
 
-        except ValueError as e:
-            # Invalid enum values or validation errors
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid request: {str(e)}",
-            )
-        except Exception as e:
-            # Domain errors
+        except (ValueError, KeyError, AttributeError) as e:
+            # Invalid enum values, validation errors, or domain errors
             if "not found" in str(e).lower():
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -422,7 +426,7 @@ def create_agents_router(
 
             return AgentMapper.to_response(agent_info)
 
-        except Exception as e:
+        except (ValueError, KeyError, AttributeError) as e:
             if "not found" in str(e).lower():
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -477,7 +481,7 @@ def create_agents_router(
 
             return AgentMapper.to_response(agent_info)
 
-        except Exception as e:
+        except (ValueError, KeyError, AttributeError) as e:
             if "not found" in str(e).lower():
                 if "agent" in str(e).lower():
                     raise HTTPException(
@@ -541,7 +545,7 @@ def create_agents_router(
 
             return AgentMapper.to_response(agent_info)
 
-        except Exception as e:
+        except (ValueError, KeyError, AttributeError) as e:
             if "not found" in str(e).lower():
                 if "agent" in str(e).lower():
                     raise HTTPException(
@@ -601,7 +605,7 @@ def create_agents_router(
 
             return AgentMapper.to_response(agent_info)
 
-        except Exception as e:
+        except (ValueError, KeyError, AttributeError) as e:
             if "not found" in str(e).lower():
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -654,7 +658,7 @@ def create_agents_router(
 
             return AgentMapper.to_response(agent_info)
 
-        except Exception as e:
+        except (ValueError, KeyError, AttributeError) as e:
             if "not found" in str(e).lower():
                 if "agent" in str(e).lower():
                     raise HTTPException(
@@ -705,7 +709,7 @@ def create_agents_router(
             # Convert to response DTO
             return AgentMapper.to_command_result(result)
 
-        except Exception as e:
+        except (ValueError, KeyError, AttributeError) as e:
             if "not found" in str(e).lower():
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,

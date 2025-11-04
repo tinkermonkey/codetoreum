@@ -70,6 +70,11 @@ def create_executions_router(
         response_model=ExecutionListResponse,
         summary="List execution history with filtering",
         response_description="List of executions",
+        responses={
+            200: {"description": "List of executions with pagination metadata"},
+            400: {"description": "Bad Request - Invalid filter parameters", "content": {"application/json": {"example": {"detail": "Invalid status: invalid_status. Must be one of: pending, initialized, running, completed, failed, timeout, cancelled"}}}},
+            401: {"description": "Unauthorized - Authentication required", "content": {"application/json": {"example": {"detail": "Not authenticated"}}}},
+        },
     )
     async def list_executions(
         status: Optional[str] = Query(None, description="Filter by status (pending, initialized, running, completed, failed, timeout, cancelled)"),
@@ -145,6 +150,13 @@ def create_executions_router(
                         detail=f"Invalid end_date format: {end_date}. Use ISO 8601 format (e.g., '2025-01-31' or '2025-01-31T23:59:59Z')",
                     )
 
+            # Validate date range
+            if start_date_dt and end_date_dt and start_date_dt >= end_date_dt:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid date range: start_date must be before end_date",
+                )
+
             # Parse filters
             filters = ExecutionFilters(
                 status=status_enum,
@@ -193,7 +205,8 @@ def create_executions_router(
 
         except HTTPException:
             raise
-        except Exception as e:
+        except (ValueError, KeyError, AttributeError) as e:
+            # Known validation or attribute errors
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Failed to list executions: {str(e)}",
@@ -208,6 +221,11 @@ def create_executions_router(
         response_model=ExecutionResponse,
         summary="Get execution status and details",
         response_description="Execution status with error details if applicable",
+        responses={
+            200: {"description": "Execution status with comprehensive error details"},
+            401: {"description": "Unauthorized - Authentication required", "content": {"application/json": {"example": {"detail": "Not authenticated"}}}},
+            404: {"description": "Not Found - Execution not found", "content": {"application/json": {"example": {"detail": "Execution not found: execution with ID 'exec-123' not found"}}}},
+        },
     )
     async def get_execution(execution_id: str) -> ExecutionResponse:
         """
@@ -281,7 +299,7 @@ def create_executions_router(
             # Convert to response DTO (includes error detail mapping)
             return ExecutionMapper.to_response(execution_info)
 
-        except Exception as e:
+        except (ValueError, KeyError, AttributeError) as e:
             if "not found" in str(e).lower():
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -301,6 +319,11 @@ def create_executions_router(
         response_model=ExecutionLogsResponse,
         summary="Get execution logs",
         response_description="Container logs with timestamps and stage context",
+        responses={
+            200: {"description": "Execution logs with timestamps"},
+            401: {"description": "Unauthorized - Authentication required", "content": {"application/json": {"example": {"detail": "Not authenticated"}}}},
+            404: {"description": "Not Found - Execution not found", "content": {"application/json": {"example": {"detail": "Execution not found: execution with ID 'exec-123' not found"}}}},
+        },
     )
     async def get_execution_logs(
         execution_id: str,
@@ -349,7 +372,7 @@ def create_executions_router(
             # Convert to response DTO
             return ExecutionMapper.to_logs_response(logs)
 
-        except Exception as e:
+        except (ValueError, KeyError, AttributeError) as e:
             if "not found" in str(e).lower():
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -369,6 +392,11 @@ def create_executions_router(
         response_model=ExecutionHistoryResponse,
         summary="Get execution event history",
         response_description="Timeline of execution events",
+        responses={
+            200: {"description": "Execution event history with timeline"},
+            401: {"description": "Unauthorized - Authentication required", "content": {"application/json": {"example": {"detail": "Not authenticated"}}}},
+            404: {"description": "Not Found - Execution not found", "content": {"application/json": {"example": {"detail": "Execution not found: execution with ID 'exec-123' not found"}}}},
+        },
     )
     async def get_execution_history(
         execution_id: str,
@@ -414,7 +442,7 @@ def create_executions_router(
             # Convert to response DTO
             return ExecutionMapper.to_history_response(history)
 
-        except Exception as e:
+        except (ValueError, KeyError, AttributeError) as e:
             if "not found" in str(e).lower():
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -434,6 +462,12 @@ def create_executions_router(
         response_model=ExecutionCommandResult,
         summary="Terminate running execution",
         response_description="Termination result",
+        responses={
+            200: {"description": "Execution terminated successfully"},
+            401: {"description": "Unauthorized - Authentication required", "content": {"application/json": {"example": {"detail": "Not authenticated"}}}},
+            404: {"description": "Not Found - Execution not found", "content": {"application/json": {"example": {"detail": "Execution not found: execution with ID 'exec-123' not found"}}}},
+            409: {"description": "Conflict - Execution already completed", "content": {"application/json": {"example": {"detail": "Cannot terminate execution: execution already completed"}}}},
+        },
     )
     async def terminate_execution(
         execution_id: str,
@@ -478,7 +512,7 @@ def create_executions_router(
             # Convert to response DTO
             return ExecutionMapper.to_command_result(result)
 
-        except Exception as e:
+        except (ValueError, KeyError, AttributeError) as e:
             error_lower = str(e).lower()
 
             if "not found" in error_lower:
