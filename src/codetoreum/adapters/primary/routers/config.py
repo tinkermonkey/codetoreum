@@ -9,6 +9,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from codetoreum.adapters.primary.exception_mapper import map_exception_to_http
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
 from codetoreum.adapters.primary.config_dtos import (
     AddEnvironmentVariableRequest,
@@ -26,6 +27,9 @@ from codetoreum.adapters.primary.config_dtos import (
     UpdatePipelineConfigRequest,
     UpdateProjectConfigRequest,
 )
+from codetoreum.domain.exceptions import DomainError
+from codetoreum.ports.exceptions import PortError
+from codetoreum.ports.input.exceptions import PortException
 from codetoreum.ports.input.config_command import (
     AddEnvironmentVariableCommand,
     IConfigurationCommandPort,
@@ -144,14 +148,11 @@ def create_config_router(
                 metadata=config.metadata,
             )
 
+        except (DomainError, PortError, PortException) as e:
+            # Map domain, port, and input port exceptions to HTTP exceptions
+            raise map_exception_to_http(e)
         except Exception as e:
-            # TODO(#XX): Use properly typed domain exceptions (ProjectNotFoundError, etc.)
-            # instead of string matching. Requires domain exception classes to be implemented first.
-            if "not found" in str(e).lower():
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Project {project_id} not found",
-                )
+            # Fallback for unexpected exceptions
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to retrieve project config: {str(e)}",
@@ -234,15 +235,13 @@ def create_config_router(
                 errors=result.errors,
             )
 
+        except (DomainError, PortError, PortException) as e:
+            # Map domain, port, and input port exceptions to HTTP exceptions
+            raise map_exception_to_http(e)
         except Exception as e:
-            # TODO(#XX): Use properly typed domain exceptions instead of string matching
-            if "not found" in str(e).lower():
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Project {project_id} not found",
-                )
+            # Fallback for unexpected exceptions
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to update project config: {str(e)}",
             )
 
@@ -354,12 +353,9 @@ def create_config_router(
                 metadata=config.metadata,
             )
 
+        except (DomainError, PortError, PortException) as e:
+            raise map_exception_to_http(e)
         except Exception as e:
-            if "not found" in str(e).lower():
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Agent {agent_name} not found in project {project_id}",
-                )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to retrieve agent config: {str(e)}",
@@ -415,14 +411,11 @@ def create_config_router(
                 errors=result.errors,
             )
 
+        except (DomainError, PortError, PortException) as e:
+            raise map_exception_to_http(e)
         except Exception as e:
-            if "not found" in str(e).lower():
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Agent {agent_name} or project {project_id} not found",
-                )
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to update agent config: {str(e)}",
             )
 
@@ -487,12 +480,9 @@ def create_config_router(
 
             return AgentListResponse(agents=agents, total_count=total)
 
+        except (DomainError, PortError, PortException) as e:
+            raise map_exception_to_http(e)
         except Exception as e:
-            if "not found" in str(e).lower():
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Project {project_id} not found",
-                )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to list agents: {str(e)}",
@@ -542,12 +532,9 @@ def create_config_router(
                 metadata=config.metadata,
             )
 
+        except (DomainError, PortError, PortException) as e:
+            raise map_exception_to_http(e)
         except Exception as e:
-            if "not found" in str(e).lower():
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Pipeline {pipeline_name} not found",
-                )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to retrieve pipeline config: {str(e)}",
@@ -603,14 +590,11 @@ def create_config_router(
                 errors=result.errors,
             )
 
+        except (DomainError, PortError, PortException) as e:
+            raise map_exception_to_http(e)
         except Exception as e:
-            if "not found" in str(e).lower():
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Pipeline {pipeline_name} or project {project_id} not found",
-                )
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to update pipeline config: {str(e)}",
             )
 
@@ -668,12 +652,9 @@ def create_config_router(
 
             return PipelineListResponse(pipelines=pipelines, total_count=total)
 
+        except (DomainError, PortError, PortException) as e:
+            raise map_exception_to_http(e)
         except Exception as e:
-            if "not found" in str(e).lower():
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Project {project_id} not found",
-                )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to list pipelines: {str(e)}",
@@ -748,14 +729,11 @@ def create_config_router(
                 errors=result.errors,
             )
 
+        except (DomainError, PortError, PortException) as e:
+            raise map_exception_to_http(e)
         except Exception as e:
-            if "not found" in str(e).lower():
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Project {project_id} not found",
-                )
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to add environment variable: {str(e)}",
             )
 
@@ -801,14 +779,11 @@ def create_config_router(
                 errors=result.errors,
             )
 
+        except (DomainError, PortError, PortException) as e:
+            raise map_exception_to_http(e)
         except Exception as e:
-            if "not found" in str(e).lower():
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Project {project_id} or variable {variable_name} not found",
-                )
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to remove environment variable: {str(e)}",
             )
 
@@ -960,12 +935,9 @@ def create_config_router(
                 total_versions=len(history),
             )
 
+        except (DomainError, PortError, PortException) as e:
+            raise map_exception_to_http(e)
         except Exception as e:
-            if "not found" in str(e).lower():
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Project {project_id} not found",
-                )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to retrieve version history: {str(e)}",

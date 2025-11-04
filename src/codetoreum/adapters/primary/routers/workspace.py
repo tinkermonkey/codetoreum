@@ -10,6 +10,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from codetoreum.adapters.primary.exception_mapper import map_exception_to_http
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
 from codetoreum.adapters.primary.workspace_dtos import (
     MountedFileInfo,
@@ -20,6 +21,9 @@ from codetoreum.adapters.primary.workspace_dtos import (
     WorkspaceListResponse,
     WorkspaceResponse,
 )
+from codetoreum.domain.exceptions import DomainError
+from codetoreum.ports.exceptions import PortError
+from codetoreum.ports.input.exceptions import PortException
 from codetoreum.ports.input.workspace_query import (
     IWorkspaceQueryPort,
     PaginationParams,
@@ -323,14 +327,11 @@ def create_workspace_router(
                 metadata=workspace.metadata,
             )
 
+        except (DomainError, PortError, PortException) as e:
+            # Map domain, port, and input port exceptions to HTTP exceptions
+            raise map_exception_to_http(e)
         except Exception as e:
-            # TODO(#XX): Use properly typed domain exceptions (WorkspaceNotFoundError, etc.)
-            # instead of string matching. Requires domain exception classes to be implemented first.
-            if "not found" in str(e).lower():
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Workspace {workspace_id} not found",
-                )
+            # Fallback for unexpected exceptions
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to retrieve workspace: {str(e)}",
@@ -463,13 +464,11 @@ def create_workspace_router(
                 truncated=truncated,
             )
 
+        except (DomainError, PortError, PortException) as e:
+            # Map domain, port, and input port exceptions to HTTP exceptions
+            raise map_exception_to_http(e)
         except Exception as e:
-            # TODO(#XX): Use properly typed domain exceptions instead of string matching
-            if "not found" in str(e).lower():
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Workspace {workspace_id} not found",
-                )
+            # Fallback for unexpected exceptions
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to retrieve workspace logs: {str(e)}",
