@@ -158,7 +158,7 @@ def create_executions_router(
 
             # Parse pagination
             try:
-                sort_field = ExecutionSortField(sort_by.upper())
+                sort_field = ExecutionSortField(sort_by.lower())
             except ValueError:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,

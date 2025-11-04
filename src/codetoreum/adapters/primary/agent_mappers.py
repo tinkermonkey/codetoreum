@@ -4,6 +4,8 @@ Agent Mappers
 Converts between domain models and API DTOs for agents.
 """
 
+from typing import Dict, Optional
+
 from codetoreum.adapters.primary.agent_dtos import (
     AgentCapabilityDTO,
     AgentCommandResult,
@@ -25,6 +27,38 @@ from codetoreum.ports.input.agent_query import AgentInfo, AgentListResult
 
 class AgentMapper:
     """Maps between Agent domain models and API DTOs."""
+
+    # Sensitive key patterns that should be masked
+    SENSITIVE_PATTERNS = [
+        "key", "token", "secret", "password", "credential", "auth", "api_key"
+    ]
+
+    @staticmethod
+    def _mask_sensitive_values(env_vars: Optional[Dict[str, str]]) -> Optional[Dict[str, str]]:
+        """
+        Mask sensitive environment variable values.
+
+        Args:
+            env_vars: Environment variables dict
+
+        Returns:
+            Dict with sensitive values masked
+        """
+        if not env_vars:
+            return None
+
+        masked = {}
+        for key, value in env_vars.items():
+            # Check if key contains sensitive patterns
+            key_lower = key.lower()
+            is_sensitive = any(pattern in key_lower for pattern in AgentMapper.SENSITIVE_PATTERNS)
+
+            if is_sensitive:
+                masked[key] = "***"
+            else:
+                masked[key] = value
+
+        return masked
 
     @staticmethod
     def to_response(agent_info: AgentInfo) -> AgentResponse:
@@ -49,6 +83,11 @@ class AgentMapper:
                 last_execution_at=agent_info.execution_stats.last_execution_at,
             )
 
+        # Mask sensitive environment variable values
+        masked_env_vars = AgentMapper._mask_sensitive_values(
+            agent_info.environment_variables
+        )
+
         return AgentResponse(
             id=agent_info.id,
             name=agent_info.name,
@@ -64,6 +103,7 @@ class AgentMapper:
             filesystem_write_allowed=agent_info.filesystem_write_allowed,
             mcp_servers=agent_info.mcp_servers,
             capabilities=agent_info.capabilities,  # Already dict[str, float]
+            environment_variables=masked_env_vars,
             created_at=agent_info.created_at,
             updated_at=agent_info.updated_at,
             execution_stats=execution_stats,

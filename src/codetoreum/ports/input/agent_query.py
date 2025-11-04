@@ -96,6 +96,9 @@ class AgentInfo:
     # Capabilities (skill -> proficiency mapping)
     capabilities: dict  # Dict[str, float]
 
+    # Environment variables (optional)
+    environment_variables: Optional[dict] = None  # Dict[str, str]
+
     # Execution stats (optional - may not be loaded for list queries)
     execution_stats: Optional[AgentExecutionStats] = None
 

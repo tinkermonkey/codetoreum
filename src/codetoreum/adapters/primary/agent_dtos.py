@@ -161,6 +161,9 @@ class AgentResponse(BaseModel):
     filesystem_write_allowed: bool
     mcp_servers: List[str]
     capabilities: Dict[str, float]  # skill -> proficiency mapping
+    environment_variables: Optional[Dict[str, str]] = Field(
+        None, description="Environment variables (sensitive values masked)"
+    )
     created_at: datetime
     updated_at: datetime
     execution_stats: Optional[AgentExecutionStatsDTO] = None

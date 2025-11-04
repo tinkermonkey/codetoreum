@@ -215,12 +215,6 @@ def create_agents_router(
             # Convert to response DTO (mapper handles sensitive field masking)
             response = AgentMapper.to_response(agent_info)
 
-            # TODO: Mask sensitive environment variable values in metadata
-            # This should be handled in the query service layer or here
-            # For now, we'll add a simple masking function
-            if hasattr(response, 'metadata') and isinstance(response.metadata, dict):
-                response.metadata = _mask_sensitive_values(response.metadata)
-
             return response
 
         except Exception as e:
@@ -728,32 +722,4 @@ def create_agents_router(
 # ============================================================================
 # Helper Functions
 # ============================================================================
-
-
-def _mask_sensitive_values(metadata: dict) -> dict:
-    """
-    Mask sensitive values in metadata dictionary.
-
-    Args:
-        metadata: Metadata dictionary
-
-    Returns:
-        Metadata with sensitive values masked
-    """
-    sensitive_keys = [
-        "api_key",
-        "apikey",
-        "token",
-        "password",
-        "secret",
-        "credential",
-        "auth",
-    ]
-
-    masked = metadata.copy()
-    for key in masked:
-        key_lower = key.lower()
-        if any(sensitive in key_lower for sensitive in sensitive_keys):
-            masked[key] = "***"
-
-    return masked
+# (No helper functions needed - masking is handled in the mapper)

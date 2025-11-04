@@ -20,6 +20,7 @@ from codetoreum.ports.input.execution_command import (
     ExecutionCommandResult as PortExecutionCommandResult,
 )
 from codetoreum.ports.input.execution_query import (
+    ErrorType,
     ExecutionHistory,
     ExecutionInfo,
     ExecutionListResult,
@@ -53,8 +54,15 @@ class ExecutionMapper:
                     exit_code=execution_info.error_detail.container_status.exit_code,
                 )
 
+            # Handle error_type as either string or enum
+            error_type_value = (
+                execution_info.error_detail.error_type.value
+                if hasattr(execution_info.error_detail.error_type, "value")
+                else execution_info.error_detail.error_type
+            )
+
             error_detail = ExecutionErrorDetailDTO(
-                error_type=execution_info.error_detail.error_type.value,
+                error_type=error_type_value,
                 message=execution_info.error_detail.message,
                 container_status=container_status,
                 partial_logs_available=execution_info.error_detail.partial_logs_available,
@@ -97,7 +105,12 @@ class ExecutionMapper:
         """
         error_type = None
         if execution_info.error_detail:
-            error_type = execution_info.error_detail.error_type.value
+            # Handle error_type as either string or enum
+            error_type = (
+                execution_info.error_detail.error_type.value
+                if hasattr(execution_info.error_detail.error_type, "value")
+                else execution_info.error_detail.error_type
+            )
 
         return ExecutionSummaryResponse(
             id=execution_info.id,
