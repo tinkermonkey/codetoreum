@@ -66,8 +66,8 @@ class WorkflowDefinitionCommandResult:
     """Result of executing a workflow definition command"""
     success: bool
     workflow_id: str
-    version: Optional[int] = None  # New version number for updates
     message: str
+    version: Optional[int] = None  # New version number for updates
     errors: Optional[List[str]] = field(default=None)
 
 
