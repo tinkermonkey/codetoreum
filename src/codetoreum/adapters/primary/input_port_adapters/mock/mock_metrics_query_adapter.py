@@ -1,0 +1,332 @@
+"""
+Mock Metrics Query Adapter
+
+In-memory implementation of IMetricsQueryPort for development and testing.
+"""
+
+from datetime import datetime, timezone, timedelta
+from typing import Any, Dict, List, Optional
+from threading import RLock
+
+from codetoreum.ports.input.metrics_query import (
+    ComponentHealth,
+    ComponentHealthInfo,
+    IMetricsQueryPort,
+    IntegrationStatus,
+    MetricTimeSeries,
+    MetricTimeSeriesPoint,
+    PerformanceMetrics,
+    ResilienceMetrics,
+    SimulationModeInfo,
+    SystemHealthInfo,
+)
+
+
+class MockMetricsQueryAdapter(IMetricsQueryPort):
+    """
+    Mock implementation of IMetricsQueryPort using in-memory storage.
+    """
+
+    def __init__(self):
+        self._component_health: Dict[str, ComponentHealthInfo] = {}
+        self._metrics_data: Dict[str, List[MetricTimeSeriesPoint]] = {}
+        self._integration_status: Optional[IntegrationStatus] = None
+        self._simulation_mode: Optional[SimulationModeInfo] = None
+        self._lock = RLock()
+        self._start_time = datetime.now(timezone.utc)
+
+    async def get_system_health(self) -> SystemHealthInfo:
+        """Get overall system health status."""
+        with self._lock:
+            components = list(self._component_health.values()) or self._default_components()
+
+            # Determine overall status
+            if any(c.status == ComponentHealth.UNHEALTHY for c in components):
+                overall_status = ComponentHealth.UNHEALTHY
+            elif any(c.status == ComponentHealth.DEGRADED for c in components):
+                overall_status = ComponentHealth.DEGRADED
+            else:
+                overall_status = ComponentHealth.HEALTHY
+
+            uptime = (datetime.now(timezone.utc) - self._start_time).total_seconds()
+
+            return SystemHealthInfo(
+                status=overall_status,
+                components=components,
+                checked_at=datetime.now(timezone.utc),
+                uptime_seconds=uptime,
+                version="1.0.0-dev",
+            )
+
+    async def get_component_health(self, component_name: str) -> ComponentHealthInfo:
+        """Get health status for a specific component."""
+        with self._lock:
+            if component_name in self._component_health:
+                return self._component_health[component_name]
+
+            # Return default healthy status
+            return ComponentHealthInfo(
+                component_name=component_name,
+                status=ComponentHealth.HEALTHY,
+                message=None,
+                last_check=datetime.now(timezone.utc),
+                response_time_ms=10.0,
+                details={},
+            )
+
+    async def get_performance_metrics(
+        self,
+        start_time: datetime,
+        end_time: datetime,
+        aggregation_window_seconds: int = 60,
+    ) -> PerformanceMetrics:
+        """Get performance metrics over a time range."""
+        # Return mock data
+        return PerformanceMetrics(
+            api_request_count=1000,
+            api_error_count=10,
+            api_latency_p50_ms=50.0,
+            api_latency_p95_ms=200.0,
+            api_latency_p99_ms=500.0,
+            active_executions=5,
+            pending_executions=10,
+            completed_executions_total=100,
+            failed_executions_total=5,
+            avg_execution_duration_seconds=120.0,
+            active_containers=5,
+            container_cpu_usage_percent=30.0,
+            container_memory_usage_mb=512.0,
+            queue_depth=10,
+            queue_processing_rate=2.5,
+            start_time=start_time,
+            end_time=end_time,
+            aggregation_window_seconds=aggregation_window_seconds,
+        )
+
+    async def get_resilience_metrics(
+        self, start_time: datetime, end_time: datetime
+    ) -> ResilienceMetrics:
+        """Get resilience infrastructure metrics."""
+        return ResilienceMetrics(
+            circuit_breakers={
+                "github_api": {"state": "closed", "failure_count": 0},
+                "llm_provider": {"state": "closed", "failure_count": 0},
+            },
+            rate_limiters={
+                "github_api": {"requests": 100, "limit": 5000, "utilization": 0.02},
+                "llm_provider": {"requests": 50, "limit": 600, "utilization": 0.083},
+            },
+            retry_attempts_total=25,
+            retry_successes_total=20,
+            retry_failures_total=5,
+            timeout_count=2,
+            avg_timeout_duration_ms=30000.0,
+            start_time=start_time,
+            end_time=end_time,
+        )
+
+    async def get_integration_status(self) -> IntegrationStatus:
+        """Get status of external system integrations."""
+        if self._integration_status:
+            return self._integration_status
+
+        # Return default healthy status
+        return IntegrationStatus(
+            github_connected=True,
+            github_api_calls_remaining=4500,
+            github_rate_limit_reset=datetime.now(timezone.utc) + timedelta(hours=1),
+            github_webhook_health=ComponentHealth.HEALTHY,
+            docker_connected=True,
+            docker_version="20.10.0",
+            docker_containers_running=5,
+            event_store_connected=True,
+            event_store_latency_ms=5.0,
+            config_store_connected=True,
+            config_store_latency_ms=3.0,
+            checked_at=datetime.now(timezone.utc),
+        )
+
+    async def get_simulation_mode_info(self) -> SimulationModeInfo:
+        """Get simulation mode status and configuration."""
+        if self._simulation_mode:
+            return self._simulation_mode
+
+        # Return default (simulation disabled)
+        return SimulationModeInfo(
+            enabled=False,
+            time_multiplier=1.0,
+            deterministic_responses=False,
+            mock_external_services=False,
+            event_replay_enabled=False,
+            current_simulation_time=None,
+            started_at=None,
+        )
+
+    async def get_metric_time_series(
+        self,
+        metric_name: str,
+        start_time: datetime,
+        end_time: datetime,
+        labels: Optional[Dict[str, str]] = None,
+        aggregation: Optional[str] = None,
+    ) -> MetricTimeSeries:
+        """Get time series data for a specific metric."""
+        with self._lock:
+            data_points = self._metrics_data.get(metric_name, [])
+
+            # Filter by time range
+            data_points = [
+                dp for dp in data_points if start_time <= dp.timestamp <= end_time
+            ]
+
+            # Filter by labels if provided
+            if labels:
+                data_points = [
+                    dp
+                    for dp in data_points
+                    if all(dp.labels.get(k) == v for k, v in labels.items())
+                ]
+
+            return MetricTimeSeries(
+                metric_name=metric_name,
+                data_points=data_points,
+                aggregation=aggregation,
+                start_time=start_time,
+                end_time=end_time,
+            )
+
+    async def list_metric_names(self, prefix: Optional[str] = None) -> List[str]:
+        """List available metric names."""
+        with self._lock:
+            metric_names = list(self._metrics_data.keys())
+
+            if prefix:
+                metric_names = [m for m in metric_names if m.startswith(prefix)]
+
+            return sorted(metric_names)
+
+    async def get_api_endpoint_metrics(
+        self,
+        endpoint_path: Optional[str] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+    ) -> Dict[str, Any]:
+        """Get per-endpoint API metrics."""
+        return {
+            "/api/v1/agents": {
+                "request_count": 100,
+                "error_count": 2,
+                "p50_latency_ms": 25.0,
+                "p95_latency_ms": 100.0,
+                "p99_latency_ms": 250.0,
+            },
+            "/api/v1/executions": {
+                "request_count": 200,
+                "error_count": 5,
+                "p50_latency_ms": 50.0,
+                "p95_latency_ms": 200.0,
+                "p99_latency_ms": 500.0,
+            },
+        }
+
+    async def get_agent_execution_metrics(
+        self,
+        agent_name: Optional[str] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+    ) -> Dict[str, Any]:
+        """Get agent execution metrics."""
+        return {
+            "developer_agent": {
+                "total_executions": 50,
+                "successful_executions": 45,
+                "failed_executions": 5,
+                "average_duration_seconds": 180.0,
+                "success_rate": 0.9,
+            },
+            "reviewer_agent": {
+                "total_executions": 30,
+                "successful_executions": 28,
+                "failed_executions": 2,
+                "average_duration_seconds": 120.0,
+                "success_rate": 0.933,
+            },
+        }
+
+    def set_component_health(self, component_name: str, health_info: ComponentHealthInfo):
+        """Helper method to set component health (for testing)."""
+        with self._lock:
+            self._component_health[component_name] = health_info
+
+    def record_metric(
+        self,
+        metric_name: str,
+        value: float,
+        timestamp: datetime,
+        labels: Optional[Dict[str, str]] = None,
+    ):
+        """Helper method to record a metric data point (for testing)."""
+        with self._lock:
+            if metric_name not in self._metrics_data:
+                self._metrics_data[metric_name] = []
+
+            data_point = MetricTimeSeriesPoint(
+                timestamp=timestamp, value=value, labels=labels or {}
+            )
+            self._metrics_data[metric_name].append(data_point)
+
+    def set_integration_status(self, status: IntegrationStatus):
+        """Helper method to set integration status (for testing)."""
+        with self._lock:
+            self._integration_status = status
+
+    def set_simulation_mode(self, mode_info: SimulationModeInfo):
+        """Helper method to set simulation mode (for testing)."""
+        with self._lock:
+            self._simulation_mode = mode_info
+
+    def clear(self):
+        """Clear all data (useful for testing)."""
+        with self._lock:
+            self._component_health.clear()
+            self._metrics_data.clear()
+            self._integration_status = None
+            self._simulation_mode = None
+
+    def _default_components(self) -> List[ComponentHealthInfo]:
+        """Return default component health info."""
+        now = datetime.now(timezone.utc)
+        return [
+            ComponentHealthInfo(
+                component_name="event_store",
+                status=ComponentHealth.HEALTHY,
+                message=None,
+                last_check=now,
+                response_time_ms=5.0,
+                details={},
+            ),
+            ComponentHealthInfo(
+                component_name="config_store",
+                status=ComponentHealth.HEALTHY,
+                message=None,
+                last_check=now,
+                response_time_ms=3.0,
+                details={},
+            ),
+            ComponentHealthInfo(
+                component_name="github_api",
+                status=ComponentHealth.HEALTHY,
+                message=None,
+                last_check=now,
+                response_time_ms=100.0,
+                details={},
+            ),
+            ComponentHealthInfo(
+                component_name="docker_runtime",
+                status=ComponentHealth.HEALTHY,
+                message=None,
+                last_check=now,
+                response_time_ms=10.0,
+                details={},
+            ),
+        ]
