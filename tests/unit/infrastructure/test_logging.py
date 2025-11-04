@@ -196,6 +196,123 @@ class TestSensitiveDataFilter:
         assert result is True
         assert record.msg == original_msg
 
+    def test_scrubs_jwt_tokens(self):
+        """Test that JWT tokens are scrubbed from log messages."""
+        filter_obj = SensitiveDataFilter()
+        record = logging.LogRecord(
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U",
+            args=(),
+            exc_info=None,
+        )
+
+        result = filter_obj.filter(record)
+
+        assert result is True
+        assert "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" not in record.msg
+        assert "***REDACTED***" in record.msg
+
+    def test_scrubs_database_connection_strings(self):
+        """Test that database connection strings are scrubbed."""
+        filter_obj = SensitiveDataFilter()
+        record = logging.LogRecord(
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="Connecting to postgres://admin:secret_password@localhost:5432/mydb",
+            args=(),
+            exc_info=None,
+        )
+
+        result = filter_obj.filter(record)
+
+        assert result is True
+        assert "secret_password" not in record.msg
+        assert "postgres://user:***REDACTED***@" in record.msg
+
+    def test_scrubs_private_keys(self):
+        """Test that private keys are scrubbed."""
+        filter_obj = SensitiveDataFilter()
+        record = logging.LogRecord(
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="Private key: -----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA...\n-----END RSA PRIVATE KEY-----",
+            args=(),
+            exc_info=None,
+        )
+
+        result = filter_obj.filter(record)
+
+        assert result is True
+        assert "BEGIN RSA PRIVATE KEY" not in record.msg or "***REDACTED_PRIVATE_KEY***" in record.msg
+
+    def test_scrubs_slack_webhooks(self):
+        """Test that Slack webhooks are scrubbed."""
+        filter_obj = SensitiveDataFilter()
+        record = logging.LogRecord(
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="Webhook URL: https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXX",
+            args=(),
+            exc_info=None,
+        )
+
+        result = filter_obj.filter(record)
+
+        assert result is True
+        assert "T00000000/B00000000" not in record.msg
+        assert "***REDACTED_SLACK_WEBHOOK***" in record.msg
+
+    def test_scrubs_discord_webhooks(self):
+        """Test that Discord webhooks are scrubbed."""
+        filter_obj = SensitiveDataFilter()
+        record = logging.LogRecord(
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="Discord: https://discord.com/api/webhooks/123456789012345678/abcdefghijklmnopqrstuvwxyz123456",
+            args=(),
+            exc_info=None,
+        )
+
+        result = filter_obj.filter(record)
+
+        assert result is True
+        assert "123456789012345678" not in record.msg or "***REDACTED_DISCORD_WEBHOOK***" in record.msg
+
+    def test_custom_patterns(self):
+        """Test that custom patterns can be added."""
+        import re
+
+        custom_patterns = [
+            (re.compile(r'customer_id=(\d+)'), r'customer_id=***'),
+        ]
+        filter_obj = SensitiveDataFilter(custom_patterns=custom_patterns)
+        record = logging.LogRecord(
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="Processing order for customer_id=12345",
+            args=(),
+            exc_info=None,
+        )
+
+        result = filter_obj.filter(record)
+
+        assert result is True
+        assert "customer_id=12345" not in record.msg
+        assert "customer_id=***" in record.msg
+
 
 class TestJSONFormatter:
     """Tests for JSON log formatting."""

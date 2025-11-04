@@ -45,6 +45,30 @@ if IS_PRODUCTION and os.getenv("CODETOREUM_DEBUG", "").lower() == "true":
     )
 
 
+def create_error_response(
+    status_code: int,
+    error_response: ErrorResponse,
+    correlation_id: str,
+) -> JSONResponse:
+    """
+    Create error JSON response with correlation ID header.
+
+    Args:
+        status_code: HTTP status code
+        error_response: Error response model
+        correlation_id: Correlation ID for tracking
+
+    Returns:
+        JSONResponse with correlation ID header
+    """
+    response = JSONResponse(
+        status_code=status_code,
+        content=error_response.dict(),
+    )
+    response.headers["X-Correlation-ID"] = correlation_id
+    return response
+
+
 async def error_handling_middleware(request: Request, call_next: Callable):
     """
     Error handling middleware for FastAPI.
@@ -65,16 +89,33 @@ async def error_handling_middleware(request: Request, call_next: Callable):
     Returns:
         Response (either successful or error)
     """
-    # Generate correlation ID for this request
-    correlation_id = str(uuid4())
+    # Extract correlation ID from request headers or generate new one
+    correlation_id = (
+        request.headers.get("X-Correlation-ID") or
+        request.headers.get("X-Request-ID") or
+        str(uuid4())
+    )
     request.state.correlation_id = correlation_id
 
     # Set correlation ID in logging context
     set_correlation_id(correlation_id)
 
+    logger.debug(
+        f"Processing request {request.method} {request.url.path}",
+        extra={
+            "method": request.method,
+            "path": str(request.url.path),
+            "correlation_id": correlation_id,
+        }
+    )
+
     try:
         # Call next middleware/handler
         response = await call_next(request)
+
+        # Add correlation ID to response headers
+        response.headers["X-Correlation-ID"] = correlation_id
+
         return response
 
     except PydanticValidationError as exc:
@@ -99,9 +140,10 @@ async def error_handling_middleware(request: Request, call_next: Callable):
             path=str(request.url.path),
         )
 
-        return JSONResponse(
+        return create_error_response(
             status_code=status.HTTP_400_BAD_REQUEST,
-            content=error_response.dict(),
+            error_response=error_response,
+            correlation_id=correlation_id,
         )
 
     except ValueError as exc:
@@ -118,9 +160,10 @@ async def error_handling_middleware(request: Request, call_next: Callable):
             path=str(request.url.path),
         )
 
-        return JSONResponse(
+        return create_error_response(
             status_code=status.HTTP_400_BAD_REQUEST,
-            content=error_response.dict(),
+            error_response=error_response,
+            correlation_id=correlation_id,
         )
 
     except PermissionError as exc:
@@ -137,9 +180,10 @@ async def error_handling_middleware(request: Request, call_next: Callable):
             path=str(request.url.path),
         )
 
-        return JSONResponse(
+        return create_error_response(
             status_code=status.HTTP_403_FORBIDDEN,
-            content=error_response.dict(),
+            error_response=error_response,
+            correlation_id=correlation_id,
         )
 
     except FileNotFoundError as exc:
@@ -156,9 +200,10 @@ async def error_handling_middleware(request: Request, call_next: Callable):
             path=str(request.url.path),
         )
 
-        return JSONResponse(
+        return create_error_response(
             status_code=status.HTTP_404_NOT_FOUND,
-            content=error_response.dict(),
+            error_response=error_response,
+            correlation_id=correlation_id,
         )
 
     except TimeoutError as exc:
@@ -175,9 +220,10 @@ async def error_handling_middleware(request: Request, call_next: Callable):
             path=str(request.url.path),
         )
 
-        return JSONResponse(
+        return create_error_response(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            content=error_response.dict(),
+            error_response=error_response,
+            correlation_id=correlation_id,
         )
 
     except Exception as exc:
@@ -219,28 +265,11 @@ async def error_handling_middleware(request: Request, call_next: Callable):
                 path=str(request.url.path),
             )
 
-        return JSONResponse(
+        return create_error_response(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content=error_response.dict(),
+            error_response=error_response,
+            correlation_id=correlation_id,
         )
-
-
-def add_correlation_id_header(request: Request, response):
-    """
-    Add correlation ID to response headers.
-
-    This allows clients to reference the correlation ID when reporting issues.
-
-    Args:
-        request: FastAPI request
-        response: Response to add header to
-
-    Returns:
-        Response with X-Correlation-ID header
-    """
-    if hasattr(request.state, "correlation_id"):
-        response.headers["X-Correlation-ID"] = request.state.correlation_id
-    return response
 
 
 # Example usage in FastAPI app:

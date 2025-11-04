@@ -28,13 +28,18 @@ class SensitiveDataFilter(logging.Filter):
     - Email addresses (partially masked)
     - Credit card numbers
     - Social security numbers
-    - IP addresses (partially masked)
+    - JWT tokens
+    - Database connection strings
+    - Private keys
+    - Webhook URLs
     """
 
-    # Patterns for sensitive data
-    PATTERNS = [
+    # Default patterns for sensitive data
+    DEFAULT_PATTERNS = [
         # API keys, tokens, secrets (various formats)
         (re.compile(r'(?i)(api[_-]?key|token|secret|password|passwd|pwd)[\s:=]+["\']?([^\s"\']+)["\']?'), r'\1=***REDACTED***'),
+        # JWT tokens (starts with eyJ)
+        (re.compile(r'\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b'), r'***REDACTED_JWT***'),
         # Bearer tokens
         (re.compile(r'(?i)bearer\s+([^\s]+)'), r'Bearer ***REDACTED***'),
         # Basic auth
@@ -49,9 +54,29 @@ class SensitiveDataFilter(logging.Filter):
         (re.compile(r'(?i)(AKIA|A3T|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}'), r'***REDACTED_AWS_KEY***'),
         # GitHub tokens
         (re.compile(r'ghp_[a-zA-Z0-9]{36}'), r'***REDACTED_GITHUB_TOKEN***'),
+        # Database connection strings
+        (re.compile(r'(?i)(postgres|mysql|mongodb|redis)://[^:]+:([^@]+)@'), r'\1://user:***REDACTED***@'),
+        # Private keys
+        (re.compile(r'-----BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY-----[^-]+-----END\s+(?:RSA\s+)?PRIVATE\s+KEY-----'), r'***REDACTED_PRIVATE_KEY***'),
+        # Slack webhooks
+        (re.compile(r'https://hooks\.slack\.com/services/[A-Z0-9/]+'), r'***REDACTED_SLACK_WEBHOOK***'),
+        # Discord webhooks
+        (re.compile(r'https://discord(?:app)?\.com/api/webhooks/\d+/[A-Za-z0-9_-]+'), r'***REDACTED_DISCORD_WEBHOOK***'),
         # Generic tokens
         (re.compile(r'(?i)(key|token|secret)["\']\s*:\s*["\']([^"\']{8,})["\']'), r'\1": "***REDACTED***"'),
     ]
+
+    def __init__(self, custom_patterns: Optional[list] = None):
+        """
+        Initialize filter with optional custom patterns.
+
+        Args:
+            custom_patterns: Additional patterns to use for scrubbing (list of tuples: pattern, replacement)
+        """
+        super().__init__()
+        self.patterns = self.DEFAULT_PATTERNS.copy()
+        if custom_patterns:
+            self.patterns.extend(custom_patterns)
 
     def filter(self, record: logging.LogRecord) -> bool:
         """
@@ -86,7 +111,7 @@ class SensitiveDataFilter(logging.Filter):
         Returns:
             Scrubbed text
         """
-        for pattern, replacement in self.PATTERNS:
+        for pattern, replacement in self.patterns:
             text = pattern.sub(replacement, text)
         return text
 
@@ -161,6 +186,7 @@ def configure_logging(
     level: Optional[int] = None,
     json_format: bool = False,
     scrub_sensitive: bool = True,
+    custom_patterns: Optional[list] = None,
 ) -> None:
     """
     Configure application logging with security best practices.
@@ -169,50 +195,60 @@ def configure_logging(
         level: Logging level (defaults to INFO in production, DEBUG in development)
         json_format: Use JSON formatting for structured logs (recommended for production)
         scrub_sensitive: Enable sensitive data scrubbing (should always be True)
+        custom_patterns: Additional patterns for sensitive data scrubbing (list of tuples: pattern, replacement)
     """
-    # Determine environment
-    env = os.getenv("CODETOREUM_ENV", "development")
-    is_production = env == "production"
+    try:
+        # Determine environment
+        env = os.getenv("CODETOREUM_ENV", "development")
+        is_production = env == "production"
 
-    # Set default level based on environment
-    if level is None:
-        level = logging.INFO if is_production else logging.DEBUG
+        # Set default level based on environment
+        if level is None:
+            level = logging.INFO if is_production else logging.DEBUG
 
-    # Configure root logger
-    root_logger = logging.getLogger()
-    root_logger.setLevel(level)
+        # Configure root logger
+        root_logger = logging.getLogger()
+        root_logger.setLevel(level)
 
-    # Remove existing handlers
-    root_logger.handlers.clear()
+        # Remove existing handlers
+        root_logger.handlers.clear()
 
-    # Create console handler
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(level)
+        # Create console handler
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(level)
 
-    # Set formatter
-    if json_format:
-        formatter = JSONFormatter()
-    else:
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - [%(correlation_id)s] - %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
+        # Set formatter
+        if json_format:
+            formatter = JSONFormatter()
+        else:
+            formatter = logging.Formatter(
+                "%(asctime)s - %(name)s - %(levelname)s - [%(correlation_id)s] - %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
+            )
+
+        console_handler.setFormatter(formatter)
+
+        # Add filters
+        if scrub_sensitive:
+            console_handler.addFilter(SensitiveDataFilter(custom_patterns=custom_patterns))
+
+        console_handler.addFilter(CorrelationIdFilter())
+
+        # Add handler to root logger
+        root_logger.addHandler(console_handler)
+
+        # Configure third-party loggers to be less verbose
+        logging.getLogger("uvicorn").setLevel(logging.WARNING)
+        logging.getLogger("fastapi").setLevel(logging.WARNING)
+        logging.getLogger("sqlalchemy").setLevel(logging.WARNING)
+
+    except Exception as e:
+        # Fallback to basic configuration if structured logging fails
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         )
-
-    console_handler.setFormatter(formatter)
-
-    # Add filters
-    if scrub_sensitive:
-        console_handler.addFilter(SensitiveDataFilter())
-
-    console_handler.addFilter(CorrelationIdFilter())
-
-    # Add handler to root logger
-    root_logger.addHandler(console_handler)
-
-    # Configure third-party loggers to be less verbose
-    logging.getLogger("uvicorn").setLevel(logging.WARNING)
-    logging.getLogger("fastapi").setLevel(logging.WARNING)
-    logging.getLogger("sqlalchemy").setLevel(logging.WARNING)
+        logging.error(f"Failed to configure structured logging, using basic config: {e}")
 
 
 def set_correlation_id(correlation_id: str) -> None:
