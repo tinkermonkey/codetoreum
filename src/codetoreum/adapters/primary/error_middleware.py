@@ -63,7 +63,7 @@ def create_error_response(
     """
     response = JSONResponse(
         status_code=status_code,
-        content=error_response.dict(),
+        content=error_response.model_dump(mode='json'),
     )
     response.headers["X-Correlation-ID"] = correlation_id
     return response

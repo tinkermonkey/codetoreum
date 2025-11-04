@@ -71,9 +71,13 @@ class TestErrorMiddlewareCorrelationId:
         request.state = MagicMock()
         request.method = "GET"
         request.url.path = "/test"
+        # Mock headers.get() to return None so a UUID is generated
+        request.headers.get = MagicMock(return_value=None)
 
         async def call_next(req):
-            return MagicMock(headers={})
+            response = MagicMock()
+            response.headers = {}
+            return response
 
         await error_handling_middleware(request, call_next)
 
@@ -88,14 +92,18 @@ class TestErrorMiddlewareCorrelationId:
         request1.state = MagicMock()
         request1.method = "GET"
         request1.url.path = "/test1"
+        request1.headers.get = MagicMock(return_value=None)
 
         request2 = MagicMock(spec=Request)
         request2.state = MagicMock()
         request2.method = "GET"
         request2.url.path = "/test2"
+        request2.headers.get = MagicMock(return_value=None)
 
         async def call_next(req):
-            return MagicMock(headers={})
+            response = MagicMock()
+            response.headers = {}
+            return response
 
         await error_handling_middleware(request1, call_next)
         await error_handling_middleware(request2, call_next)
@@ -114,6 +122,7 @@ class TestErrorMiddlewareStackTraces:
         request.state = MagicMock()
         request.method = "GET"
         request.url.path = "/test"
+        request.headers.get = MagicMock(return_value=None)
 
         async def call_next(req):
             raise Exception("Internal error with sensitive data: api_key=secret123")
@@ -134,13 +143,13 @@ class TestErrorMiddlewareStackTraces:
 
     @pytest.mark.asyncio
     @patch.dict(os.environ, {"CODETOREUM_ENV": "development", "CODETOREUM_DEBUG": "true"})
-    @patch("codetoreum.adapters.primary.error_middleware.logger")
-    async def test_stack_traces_logged_in_development(self, mock_logger):
+    async def test_stack_traces_logged_in_development(self):
         """Test that stack traces are logged even in development."""
         request = MagicMock(spec=Request)
         request.state = MagicMock()
         request.method = "GET"
         request.url.path = "/test"
+        request.headers.get = MagicMock(return_value=None)
 
         test_exception = Exception("Test error")
 
@@ -152,12 +161,14 @@ class TestErrorMiddlewareStackTraces:
         from codetoreum.adapters.primary import error_middleware
         importlib.reload(error_middleware)
 
-        await error_middleware.error_handling_middleware(request, call_next)
+        # Patch the logger after reload
+        with patch.object(error_middleware, 'logger') as mock_logger:
+            await error_middleware.error_handling_middleware(request, call_next)
 
-        # Verify that logger.error was called with exc_info=True
-        mock_logger.error.assert_called_once()
-        call_kwargs = mock_logger.error.call_args[1]
-        assert call_kwargs.get("exc_info") is True
+            # Verify that logger.error was called with exc_info=True
+            mock_logger.error.assert_called_once()
+            call_kwargs = mock_logger.error.call_args[1]
+            assert call_kwargs.get("exc_info") is True
 
     @pytest.mark.asyncio
     @patch.dict(os.environ, {"CODETOREUM_ENV": "development", "CODETOREUM_DEBUG": "true"})
@@ -167,6 +178,7 @@ class TestErrorMiddlewareStackTraces:
         request.state = MagicMock()
         request.method = "GET"
         request.url.path = "/test"
+        request.headers.get = MagicMock(return_value=None)
 
         async def call_next(req):
             raise ValueError("Test validation error")
@@ -198,10 +210,12 @@ class TestErrorMiddlewareLogging:
         request.state = MagicMock()
         request.method = "POST"
         request.url.path = "/api/test"
+        request.headers.get = MagicMock(return_value=None)
 
+        # Use Pydantic V2 error type format: "missing" instead of "value_error.missing"
         validation_error = PydanticValidationError.from_exception_data(
             "ValidationError",
-            [{"loc": ("body", "field"), "msg": "field required", "type": "value_error.missing"}]
+            [{"loc": ("body", "field"), "msg": "field required", "type": "missing"}]
         )
 
         async def call_next(req):
@@ -223,6 +237,7 @@ class TestErrorMiddlewareLogging:
         request.state = MagicMock()
         request.method = "GET"
         request.url.path = "/api/protected"
+        request.headers.get = MagicMock(return_value=None)
 
         async def call_next(req):
             raise PermissionError("Access denied")
@@ -243,6 +258,7 @@ class TestErrorMiddlewareLogging:
         request.state = MagicMock()
         request.method = "GET"
         request.url.path = "/api/test"
+        request.headers.get = MagicMock(return_value=None)
 
         async def call_next(req):
             raise RuntimeError("Unexpected error")
@@ -270,6 +286,7 @@ class TestErrorMiddlewareResponseFormat:
         request.state = MagicMock()
         request.method = "GET"
         request.url.path = "/test"
+        request.headers.get = MagicMock(return_value=None)
 
         async def call_next(req):
             raise ValueError("Test error")
@@ -287,6 +304,7 @@ class TestErrorMiddlewareResponseFormat:
         request.state = MagicMock()
         request.method = "POST"
         request.url.path = "/api/test/endpoint"
+        request.headers.get = MagicMock(return_value=None)
 
         async def call_next(req):
             raise ValueError("Test error")
@@ -304,6 +322,7 @@ class TestErrorMiddlewareResponseFormat:
         request.state = MagicMock()
         request.method = "GET"
         request.url.path = "/test"
+        request.headers.get = MagicMock(return_value=None)
 
         async def call_next(req):
             raise RuntimeError("Internal error with DB connection string: postgresql://user:pass@host/db")
