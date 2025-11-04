@@ -43,10 +43,16 @@ from codetoreum.adapters.primary.rest_api_adapter import RestAPIAdapter
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
 from codetoreum.adapters.primary.websocket_adapter import WebSocketAdapter
 from codetoreum.adapters.primary.routers.work_items import create_work_items_router
+from codetoreum.adapters.primary.routers.workflows import create_workflows_router
+from codetoreum.adapters.primary.routers.orchestrator import create_orchestrator_router
+from codetoreum.adapters.primary.routers.scheduler import create_scheduler_router
 from codetoreum.infrastructure.auth import SimpleTokenAuthManager
 from codetoreum.ports.input.config_command import IConfigurationCommandPort
 from codetoreum.ports.input.task_query import ITaskQueryPort
 from codetoreum.ports.input.workflow_command import IWorkflowCommandPort
+from codetoreum.ports.input.workflow_query import IWorkflowQueryPort
+from codetoreum.ports.input.workflow_definition_command import IWorkflowDefinitionCommandPort
+from codetoreum.ports.input.orchestration_command import IOrchestrationCommandPort
 from codetoreum.ports.input.work_item_command import IWorkItemCommandPort
 from codetoreum.ports.input.work_item_query import IWorkItemQueryPort
 
@@ -132,6 +138,9 @@ def create_app(
     config_command_port: IConfigurationCommandPort,
     work_item_command_port: IWorkItemCommandPort,
     work_item_query_port: IWorkItemQueryPort,
+    workflow_query_port: IWorkflowQueryPort,
+    workflow_definition_command_port: IWorkflowDefinitionCommandPort,
+    orchestration_command_port: IOrchestrationCommandPort,
     event_bus: IEventBus,
     config_service: IConfigurationService,
     logger: ILogger,
@@ -143,11 +152,14 @@ def create_app(
     Create and configure FastAPI application.
 
     Args:
-        workflow_command_port: Port for workflow commands
+        workflow_command_port: Port for workflow commands (legacy, for compatibility)
         task_query_port: Port for task queries
         config_command_port: Port for configuration commands
         work_item_command_port: Port for work item commands
         work_item_query_port: Port for work item queries
+        workflow_query_port: Port for workflow definition queries
+        workflow_definition_command_port: Port for workflow definition commands
+        orchestration_command_port: Port for orchestration commands
         event_bus: Event bus for publishing events
         config_service: Configuration service
         logger: Logger instance
@@ -301,6 +313,28 @@ def create_app(
         auth_deps=auth_deps,
     )
     app.include_router(work_items_router)
+
+    # Include Workflows router
+    workflows_router = create_workflows_router(
+        definition_command_port=workflow_definition_command_port,
+        query_port=workflow_query_port,
+        auth_deps=auth_deps,
+    )
+    app.include_router(workflows_router)
+
+    # Include Orchestrator router
+    orchestrator_router = create_orchestrator_router(
+        orchestration_command_port=orchestration_command_port,
+        auth_deps=auth_deps,
+    )
+    app.include_router(orchestrator_router)
+
+    # Include Scheduler router
+    scheduler_router = create_scheduler_router(
+        task_query_port=task_query_port,
+        auth_deps=auth_deps,
+    )
+    app.include_router(scheduler_router)
 
     # ========================================================================
     # WebSocket Endpoints
@@ -1030,12 +1064,198 @@ def create_development_app() -> FastAPI:
                 changes_applied={},
             )
 
+    class MockWorkflowQueryPort(IWorkflowQueryPort):
+        """Mock workflow query port for development."""
+
+        async def get_workflow(self, workflow_id: str, version=None):
+            from codetoreum.ports.input.workflow_query import WorkflowDefinitionInfo, StageInfo, StageTransitionInfo
+            return WorkflowDefinitionInfo(
+                id=workflow_id,
+                name="mock-workflow",
+                description="Mock workflow for development",
+                project_id="proj-123",
+                version=1,
+                stages=[
+                    StageInfo(
+                        name="development",
+                        agent_name="software_engineer",
+                        timeout_seconds=1800,
+                        retry_count=2,
+                        entry_conditions=[],
+                        metadata={},
+                    )
+                ],
+                transitions=[],
+                work_item_types=["issue"],
+                is_template=False,
+                is_active=True,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+                metadata={},
+            )
+
+        async def list_workflows(self, filters=None, pagination=None):
+            from codetoreum.ports.input.workflow_query import WorkflowListResult, WorkflowSummaryInfo
+            summary = WorkflowSummaryInfo(
+                id="wf-mock-123",
+                name="mock-workflow",
+                description="Mock workflow",
+                project_id="proj-123",
+                version=1,
+                stage_count=1,
+                work_item_types=["issue"],
+                is_template=False,
+                is_active=True,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+            )
+            return WorkflowListResult(
+                workflows=[summary],
+                total_count=1,
+                offset=0,
+                limit=20,
+                has_next=False,
+            )
+
+        async def get_workflow_versions(self, workflow_id: str, limit=10):
+            from codetoreum.ports.input.workflow_query import WorkflowVersionHistoryResult, WorkflowVersionInfo
+            return WorkflowVersionHistoryResult(
+                workflow_id=workflow_id,
+                versions=[
+                    WorkflowVersionInfo(
+                        version=1,
+                        created_at=datetime.utcnow(),
+                        created_by=None,
+                        changes_summary="Initial version",
+                    )
+                ],
+                total_count=1,
+            )
+
+        async def validate_workflow(self, workflow_id: str, version=None):
+            from codetoreum.ports.input.workflow_query import WorkflowValidationResult
+            return WorkflowValidationResult(
+                is_valid=True,
+                errors=[],
+                warnings=[],
+            )
+
+        async def get_workflows_for_work_item_type(self, work_item_type: str, project_id=None):
+            return []
+
+        async def count_active_executions(self, workflow_id: str):
+            return 0
+
+    class MockWorkflowDefinitionCommandPort(IWorkflowDefinitionCommandPort):
+        """Mock workflow definition command port for development."""
+
+        async def create_workflow_definition(self, command):
+            from codetoreum.ports.input.workflow_definition_command import WorkflowDefinitionCommandResult
+            return WorkflowDefinitionCommandResult(
+                success=True,
+                workflow_id="wf-mock-123",
+                version=1,
+                message="Workflow created (mock)",
+            )
+
+        async def update_workflow_definition(self, command):
+            from codetoreum.ports.input.workflow_definition_command import WorkflowDefinitionCommandResult
+            return WorkflowDefinitionCommandResult(
+                success=True,
+                workflow_id=command.workflow_id,
+                version=2,
+                message="Workflow updated (mock)",
+            )
+
+        async def delete_workflow_definition(self, command):
+            from codetoreum.ports.input.workflow_definition_command import WorkflowDefinitionCommandResult
+            return WorkflowDefinitionCommandResult(
+                success=True,
+                workflow_id=command.workflow_id,
+                version=None,
+                message="Workflow deleted (mock)",
+            )
+
+        async def activate_workflow_definition(self, workflow_id: str):
+            from codetoreum.ports.input.workflow_definition_command import WorkflowDefinitionCommandResult
+            return WorkflowDefinitionCommandResult(
+                success=True,
+                workflow_id=workflow_id,
+                version=None,
+                message="Workflow activated (mock)",
+            )
+
+        async def deactivate_workflow_definition(self, workflow_id: str):
+            from codetoreum.ports.input.workflow_definition_command import WorkflowDefinitionCommandResult
+            return WorkflowDefinitionCommandResult(
+                success=True,
+                workflow_id=workflow_id,
+                version=None,
+                message="Workflow deactivated (mock)",
+            )
+
+    class MockOrchestrationCommandPort(IOrchestrationCommandPort):
+        """Mock orchestration command port for development."""
+
+        async def start_execution(self, command):
+            from codetoreum.ports.input.orchestration_command import OrchestrationCommandResult
+            return OrchestrationCommandResult(
+                success=True,
+                execution_id="exec-mock-123",
+                workflow_run_id="wr-mock-123",
+                status="ACCEPTED",
+                message="Execution started (mock)",
+                started_at=datetime.utcnow(),
+            )
+
+        async def cancel_execution(self, command):
+            from codetoreum.ports.input.orchestration_command import OrchestrationCommandResult
+            return OrchestrationCommandResult(
+                success=True,
+                execution_id="exec-mock-123",
+                workflow_run_id=command.workflow_run_id,
+                status="CANCELLED",
+                message="Execution cancelled (mock)",
+            )
+
+        async def pause_execution(self, command):
+            from codetoreum.ports.input.orchestration_command import OrchestrationCommandResult
+            return OrchestrationCommandResult(
+                success=True,
+                execution_id="exec-mock-123",
+                workflow_run_id=command.workflow_run_id,
+                status="PAUSED",
+                message="Execution paused (mock)",
+            )
+
+        async def resume_execution(self, command):
+            from codetoreum.ports.input.orchestration_command import OrchestrationCommandResult
+            return OrchestrationCommandResult(
+                success=True,
+                execution_id="exec-mock-123",
+                workflow_run_id=command.workflow_run_id,
+                status="RESUMED",
+                message="Execution resumed (mock)",
+            )
+
+        async def check_entry_conditions(self, work_item_id: str, workflow_id: str, stage_name=None):
+            from codetoreum.ports.input.orchestration_command import EntryConditionCheckResult
+            return EntryConditionCheckResult(
+                can_start=True,
+                stage_name=stage_name or "development",
+                blocking_conditions=[],
+                condition_details=[],
+            )
+
     return create_app(
         workflow_command_port=MockWorkflowCommandPort(),
         task_query_port=MockTaskQueryPort(),
         config_command_port=MockConfigCommandPort(),
         work_item_command_port=MockWorkItemCommandPort(),
         work_item_query_port=MockWorkItemQueryPort(),
+        workflow_query_port=MockWorkflowQueryPort(),
+        workflow_definition_command_port=MockWorkflowDefinitionCommandPort(),
+        orchestration_command_port=MockOrchestrationCommandPort(),
         event_bus=MockEventBus(),
         config_service=MockConfigService(),
         logger=MockLogger(),
