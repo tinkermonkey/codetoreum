@@ -47,6 +47,9 @@ class WebSocketConfig:
     heartbeat_timeout: int = 90  # Time after which to consider connection dead
     rate_limit_messages: int = 100  # Max messages per client per time window
     rate_limit_window: int = 60  # Rate limit window in seconds
+    max_connections: int = 1000  # Maximum concurrent connections per instance
+    enable_redis_pubsub: bool = True  # Enable Redis pub/sub for horizontal scaling
+    enable_connection_persistence: bool = True  # Enable connection state persistence
 
     @classmethod
     def from_env(cls) -> "WebSocketConfig":
@@ -61,6 +64,9 @@ class WebSocketConfig:
         - CODETOREUM_WS_HEARTBEAT_TIMEOUT: Heartbeat timeout in seconds (default: 90)
         - CODETOREUM_WS_RATE_LIMIT_MESSAGES: Max messages per window (default: 100)
         - CODETOREUM_WS_RATE_LIMIT_WINDOW: Rate limit window in seconds (default: 60)
+        - CODETOREUM_WS_MAX_CONNECTIONS: Max concurrent connections per instance (default: 1000)
+        - CODETOREUM_WS_ENABLE_REDIS_PUBSUB: Enable Redis pub/sub for scaling (default: true)
+        - CODETOREUM_WS_ENABLE_CONNECTION_PERSISTENCE: Enable connection persistence (default: true)
 
         Returns:
             WebSocketConfig with values from environment or defaults
@@ -73,6 +79,9 @@ class WebSocketConfig:
             heartbeat_timeout=int(os.getenv("CODETOREUM_WS_HEARTBEAT_TIMEOUT", "90")),
             rate_limit_messages=int(os.getenv("CODETOREUM_WS_RATE_LIMIT_MESSAGES", "100")),
             rate_limit_window=int(os.getenv("CODETOREUM_WS_RATE_LIMIT_WINDOW", "60")),
+            max_connections=int(os.getenv("CODETOREUM_WS_MAX_CONNECTIONS", "1000")),
+            enable_redis_pubsub=os.getenv("CODETOREUM_WS_ENABLE_REDIS_PUBSUB", "true").lower() == "true",
+            enable_connection_persistence=os.getenv("CODETOREUM_WS_ENABLE_CONNECTION_PERSISTENCE", "true").lower() == "true",
         )
 
 
@@ -263,16 +272,28 @@ class ConnectionManager:
     - Flow control warnings at buffer threshold
     - Automatic disconnection on buffer overflow
     - Heartbeat/ping-pong for connection health
+    - Connection pooling with max connections limit
+    - Redis pub/sub for horizontal scaling across multiple instances
+    - Connection state persistence for crash recovery
     """
 
-    def __init__(self, config: Optional[WebSocketConfig] = None):
+    def __init__(
+        self,
+        config: Optional[WebSocketConfig] = None,
+        redis_pubsub: Optional[Any] = None,
+        redis_client: Optional[Any] = None,
+    ):
         """
         Initialize connection manager.
 
         Args:
             config: WebSocket configuration (uses defaults if None)
+            redis_pubsub: Redis pub/sub adapter for message distribution (optional)
+            redis_client: Redis client for connection state persistence (optional)
         """
         self.config = config or WebSocketConfig()
+        self.redis_pubsub = redis_pubsub
+        self.redis_client = redis_client
 
         # Active connections: connection_id -> ConnectionState
         self.connections: Dict[str, ConnectionState] = {}
@@ -298,19 +319,71 @@ class ConnectionManager:
         # Statistics
         self.stats = {
             "total_connections": 0,
+            "current_connections": 0,
             "messages_sent": 0,
             "flow_control_warnings": 0,
             "disconnections_due_to_overflow": 0,
+            "connection_rejections": 0,
         }
 
-    async def connect(self, websocket: WebSocket, connection_id: str):
+        # Register Redis pub/sub callback if enabled
+        if self.redis_pubsub and self.config.enable_redis_pubsub:
+            asyncio.create_task(self._setup_redis_pubsub())
+
+    async def _setup_redis_pubsub(self) -> None:
         """
-        Accept a new WebSocket connection.
+        Set up Redis pub/sub subscriptions for message distribution.
+
+        This is called automatically if Redis pub/sub is enabled.
+        """
+        try:
+            if self.redis_pubsub:
+                await self.redis_pubsub.initialize()
+                await self.redis_pubsub.subscribe(
+                    "websocket:events", self._handle_redis_event
+                )
+                logger.info("Redis pub/sub set up for WebSocket message distribution")
+        except Exception as e:
+            logger.error(f"Failed to setup Redis pub/sub: {e}")
+
+    async def _handle_redis_event(self, message: Dict[str, Any]) -> None:
+        """
+        Handle event received from Redis pub/sub.
+
+        This is called when another server instance publishes an event.
+
+        Args:
+            message: Message from Redis pub/sub
+        """
+        try:
+            if message.get("type") == "event":
+                event_dict = message.get("event", {})
+                # Broadcast to local connections only (not back to Redis)
+                await self._broadcast_event_local(event_dict)
+        except Exception as e:
+            logger.error(f"Error handling Redis event: {e}")
+
+    async def connect(self, websocket: WebSocket, connection_id: str) -> bool:
+        """
+        Accept a new WebSocket connection with connection pooling.
 
         Args:
             websocket: WebSocket connection
             connection_id: Unique connection identifier
+
+        Returns:
+            True if connection accepted, False if rejected (max connections reached)
         """
+        # Check connection limit
+        if len(self.connections) >= self.config.max_connections:
+            logger.warning(
+                f"Connection limit reached ({self.config.max_connections}), "
+                f"rejecting connection {connection_id}"
+            )
+            await websocket.close(code=1008, reason="Max connections reached")
+            self.stats["connection_rejections"] += 1
+            return False
+
         await websocket.accept()
         self.connections[connection_id] = ConnectionState(
             websocket=websocket,
@@ -326,6 +399,71 @@ class ConnectionManager:
             ),
         )
         self.stats["total_connections"] += 1
+        self.stats["current_connections"] = len(self.connections)
+
+        # Persist connection state if enabled
+        if self.config.enable_connection_persistence and self.redis_client:
+            await self._persist_connection_state(connection_id)
+
+        return True
+
+    async def _persist_connection_state(self, connection_id: str) -> None:
+        """
+        Persist connection state to Redis for crash recovery.
+
+        Args:
+            connection_id: Connection identifier
+        """
+        try:
+            if not self.redis_client or connection_id not in self.connections:
+                return
+
+            conn_state = self.connections[connection_id]
+
+            # Store connection metadata
+            connection_data = {
+                "connection_id": connection_id,
+                "subscriptions": [
+                    {
+                        "subscription_type": f.subscription_type.value,
+                        "workflow_run_id": f.workflow_run_id,
+                        "execution_id": f.execution_id,
+                        "work_item_id": f.work_item_id,
+                        "workflow_id": f.workflow_id,
+                        "agent_id": f.agent_id,
+                        "project_name": f.project_name,
+                        "event_types": f.event_types,
+                    }
+                    for f in conn_state.subscriptions
+                ],
+                "last_heartbeat": conn_state.last_heartbeat,
+                "connected_at": time.time(),
+            }
+
+            # Store in Redis with expiration (2x heartbeat timeout)
+            key = f"websocket:connection:{connection_id}"
+            await self.redis_client.setex(
+                key,
+                self.config.heartbeat_timeout * 2,
+                json.dumps(connection_data),
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to persist connection state: {e}")
+
+    async def _remove_persisted_connection_state(self, connection_id: str) -> None:
+        """
+        Remove persisted connection state from Redis.
+
+        Args:
+            connection_id: Connection identifier
+        """
+        try:
+            if self.redis_client:
+                key = f"websocket:connection:{connection_id}"
+                await self.redis_client.delete(key)
+        except Exception as e:
+            logger.error(f"Failed to remove persisted connection state: {e}")
 
     def disconnect(self, connection_id: str):
         """
@@ -395,6 +533,11 @@ class ConnectionManager:
 
         # Remove connection
         del self.connections[connection_id]
+        self.stats["current_connections"] = len(self.connections)
+
+        # Remove persisted state
+        if self.config.enable_connection_persistence and self.redis_client:
+            asyncio.create_task(self._remove_persisted_connection_state(connection_id))
 
     def subscribe(self, connection_id: str, filter: EventFilter):
         """
@@ -570,21 +713,18 @@ class ConnectionManager:
             "project_name": event_dict.get("project_name") or payload.get("project_name"),
         }
 
-    async def broadcast_event(self, event: DomainEvent) -> None:
+    async def _broadcast_event_local(self, event_dict: Dict[str, Any]) -> None:
         """
-        Broadcast event to all subscribed connections with filtering.
+        Broadcast event to local connections only (not via Redis).
 
-        Uses reverse indices for fast lookup with set operations for efficiency.
+        This is used when receiving events from Redis pub/sub to avoid loops.
 
         Args:
-            event: Domain event to broadcast
+            event_dict: Event as dictionary
         """
-        # Get event attributes for filtering
-        event_type = type(event).__name__
-        event_dict = event.to_dict() if hasattr(event, "to_dict") else event.__dict__
-
         # Extract attributes using helper method
         attributes = self._extract_event_attributes(event_dict)
+        event_type = event_dict.get("event_type", "UnknownEvent")
 
         # Start with all connections, then intersect with relevant indices
         relevant_connections: Optional[Set[str]] = None
@@ -625,7 +765,7 @@ class ConnectionManager:
 
             conn_state = self.connections[connection_id]
             for filter in conn_state.subscriptions:
-                if self._event_matches_filter(event, event_dict, filter):
+                if self._event_matches_filter_dict(event_type, event_dict, filter):
                     recipient_ids.add(connection_id)
                     break  # No need to check other filters for this connection
 
@@ -642,6 +782,106 @@ class ConnectionManager:
         # Send to all recipients (with backpressure handling)
         for connection_id in recipient_ids:
             await self.send_personal_message(message_dict, connection_id)
+
+    async def broadcast_event(self, event: DomainEvent) -> None:
+        """
+        Broadcast event to all subscribed connections with filtering.
+
+        If Redis pub/sub is enabled, publishes to Redis for distribution
+        across all server instances. Otherwise, broadcasts locally only.
+
+        Args:
+            event: Domain event to broadcast
+        """
+        # Get event attributes for filtering
+        event_dict = event.to_dict() if hasattr(event, "to_dict") else event.__dict__
+
+        # If Redis pub/sub is enabled, publish to Redis
+        # (all instances including this one will receive it)
+        if self.redis_pubsub and self.config.enable_redis_pubsub:
+            try:
+                await self.redis_pubsub.publish_event(event)
+            except Exception as e:
+                logger.error(f"Failed to publish event to Redis: {e}")
+                # Fall back to local broadcast
+                await self._broadcast_event_local(event_dict)
+        else:
+            # No Redis, broadcast locally only
+            await self._broadcast_event_local(event_dict)
+
+    def _event_matches_filter_dict(
+        self, event_type: str, event_dict: Dict[str, Any], filter: EventFilter
+    ) -> bool:
+        """
+        Check if event matches filter criteria (dictionary version).
+
+        Args:
+            event_type: Event type name
+            event_dict: Event as dictionary
+            filter: Event filter
+
+        Returns:
+            True if event matches filter
+        """
+        # Check subscription type
+        if filter.subscription_type == SubscriptionType.ALL_EVENTS:
+            pass  # Match all types
+        elif filter.subscription_type == SubscriptionType.WORKFLOW_EVENTS:
+            if "workflow" not in event_type.lower():
+                return False
+        elif filter.subscription_type == SubscriptionType.EXECUTION_EVENTS:
+            if "execution" not in event_type.lower():
+                return False
+
+        # Check event types (OR logic - any type can match)
+        if filter.event_types:
+            if event_type not in filter.event_types:
+                return False
+
+        # Check specific ID filters (AND logic - all must match if specified)
+        if filter.workflow_run_id:
+            workflow_run_id = event_dict.get("workflow_run_id") or event_dict.get(
+                "payload", {}
+            ).get("workflow_run_id")
+            if workflow_run_id != filter.workflow_run_id:
+                return False
+
+        if filter.execution_id:
+            execution_id = event_dict.get("execution_id") or event_dict.get(
+                "payload", {}
+            ).get("execution_id")
+            if execution_id != filter.execution_id:
+                return False
+
+        if filter.work_item_id:
+            work_item_id = event_dict.get("work_item_id") or event_dict.get(
+                "payload", {}
+            ).get("work_item_id")
+            if work_item_id != filter.work_item_id:
+                return False
+
+        if filter.workflow_id:
+            workflow_id = event_dict.get("workflow_id") or event_dict.get(
+                "payload", {}
+            ).get("workflow_id")
+            if workflow_id != filter.workflow_id:
+                return False
+
+        if filter.agent_id:
+            agent_id = event_dict.get("agent_id") or event_dict.get("payload", {}).get(
+                "agent_id"
+            )
+            if agent_id != filter.agent_id:
+                return False
+
+        if filter.project_name:
+            project_name = event_dict.get("project_name") or event_dict.get(
+                "payload", {}
+            ).get("project_name")
+            if project_name != filter.project_name:
+                return False
+
+        return True
 
     def _event_matches_filter(
         self, event: DomainEvent, event_dict: Dict[str, Any], filter: EventFilter
@@ -733,12 +973,21 @@ class WebSocketAdapter:
 
     Provides WebSocket endpoints for subscribing to workflow and execution
     events in real-time with authentication, filtering, and backpressure handling.
+
+    Features:
+    - Connection pooling with max connections limit
+    - Redis pub/sub for horizontal scaling across multiple server instances
+    - Connection state persistence for crash recovery
+    - Backpressure handling and flow control
+    - Heartbeat/ping-pong for connection health monitoring
     """
 
     def __init__(
         self,
         config: Optional[WebSocketConfig] = None,
         auth_manager: Optional[Any] = None,
+        redis_pubsub: Optional[Any] = None,
+        redis_client: Optional[Any] = None,
     ):
         """
         Initialize WebSocket adapter.
@@ -746,8 +995,10 @@ class WebSocketAdapter:
         Args:
             config: WebSocket configuration (defaults if None)
             auth_manager: Authentication manager for token validation
+            redis_pubsub: Redis pub/sub adapter for horizontal scaling (optional)
+            redis_client: Redis client for connection persistence (optional)
         """
-        self.manager = ConnectionManager(config)
+        self.manager = ConnectionManager(config, redis_pubsub, redis_client)
         self.auth_manager = auth_manager
         self._connection_counter = 0
         self._heartbeat_task: Optional[asyncio.Task] = None
