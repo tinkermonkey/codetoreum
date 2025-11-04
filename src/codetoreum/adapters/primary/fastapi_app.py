@@ -41,7 +41,7 @@ from codetoreum.adapters.primary.github_webhook_adapter import (
 )
 from codetoreum.adapters.primary.rest_api_adapter import RestAPIAdapter
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
-from codetoreum.adapters.primary.websocket_adapter import WebSocketAdapter
+from codetoreum.adapters.primary.websocket_adapter import WebSocketAdapter, WebSocketConfig
 from codetoreum.adapters.primary.routers.work_items import create_work_items_router
 from codetoreum.adapters.primary.routers.workflows import create_workflows_router
 from codetoreum.adapters.primary.routers.orchestrator import create_orchestrator_router
@@ -259,9 +259,11 @@ def create_app(
         auth_dependencies=auth_deps,
     )
 
-    # Create WebSocket adapter with auth manager
+    # Create WebSocket adapter with configuration from environment and auth manager
+    websocket_config = WebSocketConfig.from_env()
     websocket_adapter = WebSocketAdapter(
-        auth_manager=auth_manager if not disable_auth else None
+        config=websocket_config,
+        auth_manager=auth_manager if not disable_auth else None,
     )
 
     # Register WebSocket adapter with event bus for real-time streaming

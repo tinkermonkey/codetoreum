@@ -4,6 +4,7 @@ Events REST API Router
 Provides REST endpoints for historical event queries and event replay.
 """
 
+import uuid
 from datetime import datetime
 from typing import List, Optional
 
@@ -251,43 +252,11 @@ def create_events_router(
 
         **Note**: This is an async operation. The replay happens in the background.
         """
-        try:
-            # Generate replay ID
-            import uuid
-
-            replay_id = f"replay-{uuid.uuid4()}"
-
-            # Estimate event count
-            if request.stream_id:
-                version = await event_store.get_stream_version(request.stream_id)
-                estimated_count = version - request.from_version
-            else:
-                # Rough estimate for all events
-                estimated_count = 1000  # Placeholder
-
-            # TODO: Trigger actual replay in background task
-            # This would typically:
-            # 1. Create a background task/job
-            # 2. Use event_store.replay_events() to iterate events
-            # 3. Re-publish each event to the event bus
-            # 4. Track progress and completion
-
-            return EventReplayResponse(
-                replay_id=replay_id,
-                status="accepted",
-                stream_id=request.stream_id,
-                from_version=request.from_version,
-                to_version=request.to_version,
-                estimated_event_count=estimated_count,
-                message=f"Event replay accepted. Replay ID: {replay_id}. "
-                f"Estimated {estimated_count} events will be replayed.",
-            )
-
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to trigger event replay: {str(e)}",
-            )
+        # Event replay is not yet implemented
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Event replay not yet implemented",
+        )
 
     @router.get(
         "/statistics",
@@ -305,21 +274,10 @@ def create_events_router(
         - Event type distribution
         - Oldest and newest event timestamps
         """
-        try:
-            stats = await event_store.get_statistics()
-
-            return EventStatisticsResponse(
-                total_events=stats.get("total_events", 0),
-                total_streams=stats.get("total_streams", 0),
-                event_types=stats.get("event_types", {}),
-                oldest_event=stats.get("oldest_event"),
-                newest_event=stats.get("newest_event"),
-            )
-
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to get event store statistics: {str(e)}",
-            )
+        # Statistics method not yet defined in IEventStore interface
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Event statistics not yet implemented",
+        )
 
     return router

@@ -16,6 +16,7 @@ Features:
 import asyncio
 import json
 import logging
+import os
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -37,13 +38,42 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class WebSocketConfig:
-    """Configuration for WebSocket adapter"""
+    """Configuration for WebSocket adapter with environment variable support"""
 
     max_buffer_size: int = 1000  # Max events buffered per client
     flow_control_threshold: float = 0.8  # Warn at 80% capacity
     disconnect_on_overflow: bool = True  # Disconnect overloaded clients
     heartbeat_interval: int = 30  # Heartbeat interval in seconds
     heartbeat_timeout: int = 90  # Time after which to consider connection dead
+    rate_limit_messages: int = 100  # Max messages per client per time window
+    rate_limit_window: int = 60  # Rate limit window in seconds
+
+    @classmethod
+    def from_env(cls) -> "WebSocketConfig":
+        """
+        Create WebSocketConfig from environment variables.
+
+        Environment variables:
+        - CODETOREUM_WS_MAX_BUFFER_SIZE: Max events buffered per client (default: 1000)
+        - CODETOREUM_WS_FLOW_CONTROL_THRESHOLD: Buffer warning threshold 0-1 (default: 0.8)
+        - CODETOREUM_WS_DISCONNECT_ON_OVERFLOW: Disconnect on buffer overflow (default: true)
+        - CODETOREUM_WS_HEARTBEAT_INTERVAL: Heartbeat interval in seconds (default: 30)
+        - CODETOREUM_WS_HEARTBEAT_TIMEOUT: Heartbeat timeout in seconds (default: 90)
+        - CODETOREUM_WS_RATE_LIMIT_MESSAGES: Max messages per window (default: 100)
+        - CODETOREUM_WS_RATE_LIMIT_WINDOW: Rate limit window in seconds (default: 60)
+
+        Returns:
+            WebSocketConfig with values from environment or defaults
+        """
+        return cls(
+            max_buffer_size=int(os.getenv("CODETOREUM_WS_MAX_BUFFER_SIZE", "1000")),
+            flow_control_threshold=float(os.getenv("CODETOREUM_WS_FLOW_CONTROL_THRESHOLD", "0.8")),
+            disconnect_on_overflow=os.getenv("CODETOREUM_WS_DISCONNECT_ON_OVERFLOW", "true").lower() == "true",
+            heartbeat_interval=int(os.getenv("CODETOREUM_WS_HEARTBEAT_INTERVAL", "30")),
+            heartbeat_timeout=int(os.getenv("CODETOREUM_WS_HEARTBEAT_TIMEOUT", "90")),
+            rate_limit_messages=int(os.getenv("CODETOREUM_WS_RATE_LIMIT_MESSAGES", "100")),
+            rate_limit_window=int(os.getenv("CODETOREUM_WS_RATE_LIMIT_WINDOW", "60")),
+        )
 
 
 class SubscriptionType(Enum):
@@ -176,6 +206,40 @@ class ConnectedMessage(BaseModel):
 
 
 @dataclass
+class RateLimiter:
+    """Token bucket rate limiter for per-client message rate limiting"""
+
+    max_tokens: int  # Maximum number of tokens
+    tokens: float  # Current number of tokens
+    window: int  # Time window in seconds
+    last_update: float  # Last token refill timestamp
+
+    def try_consume(self, tokens: int = 1) -> bool:
+        """
+        Try to consume tokens. Returns True if successful, False if rate limit exceeded.
+
+        Args:
+            tokens: Number of tokens to consume (default: 1)
+
+        Returns:
+            True if tokens consumed, False if rate limit exceeded
+        """
+        now = time.time()
+        time_passed = now - self.last_update
+
+        # Refill tokens based on time passed
+        tokens_to_add = (time_passed / self.window) * self.max_tokens
+        self.tokens = min(self.max_tokens, self.tokens + tokens_to_add)
+        self.last_update = now
+
+        # Try to consume
+        if self.tokens >= tokens:
+            self.tokens -= tokens
+            return True
+        return False
+
+
+@dataclass
 class ConnectionState:
     """State for a single WebSocket connection"""
 
@@ -184,6 +248,7 @@ class ConnectionState:
     buffer: List[Dict[str, Any]]  # Buffered messages
     last_heartbeat: float  # Timestamp of last heartbeat
     authenticated: bool = True  # Authentication status
+    rate_limiter: Optional[RateLimiter] = None  # Rate limiter for incoming messages
 
 
 class ConnectionManager:
@@ -253,6 +318,12 @@ class ConnectionManager:
             buffer=[],
             last_heartbeat=time.time(),
             authenticated=True,
+            rate_limiter=RateLimiter(
+                max_tokens=self.config.rate_limit_messages,
+                tokens=self.config.rate_limit_messages,
+                window=self.config.rate_limit_window,
+                last_update=time.time(),
+            ),
         )
         self.stats["total_connections"] += 1
 
@@ -275,34 +346,52 @@ class ConnectionManager:
                     self.workflow_subscribers[filter.workflow_run_id].discard(
                         connection_id
                     )
+                    # Remove empty sets to prevent memory leaks
+                    if not self.workflow_subscribers[filter.workflow_run_id]:
+                        del self.workflow_subscribers[filter.workflow_run_id]
 
             if filter.execution_id:
                 if filter.execution_id in self.execution_subscribers:
                     self.execution_subscribers[filter.execution_id].discard(
                         connection_id
                     )
+                    # Remove empty sets to prevent memory leaks
+                    if not self.execution_subscribers[filter.execution_id]:
+                        del self.execution_subscribers[filter.execution_id]
 
             if filter.work_item_id:
                 if filter.work_item_id in self.work_item_subscribers:
                     self.work_item_subscribers[filter.work_item_id].discard(
                         connection_id
                     )
+                    # Remove empty sets to prevent memory leaks
+                    if not self.work_item_subscribers[filter.work_item_id]:
+                        del self.work_item_subscribers[filter.work_item_id]
 
             if filter.workflow_id:
                 if filter.workflow_id in self.workflow_definition_subscribers:
                     self.workflow_definition_subscribers[filter.workflow_id].discard(
                         connection_id
                     )
+                    # Remove empty sets to prevent memory leaks
+                    if not self.workflow_definition_subscribers[filter.workflow_id]:
+                        del self.workflow_definition_subscribers[filter.workflow_id]
 
             if filter.agent_id:
                 if filter.agent_id in self.agent_subscribers:
                     self.agent_subscribers[filter.agent_id].discard(connection_id)
+                    # Remove empty sets to prevent memory leaks
+                    if not self.agent_subscribers[filter.agent_id]:
+                        del self.agent_subscribers[filter.agent_id]
 
             if filter.project_name:
                 if filter.project_name in self.project_subscribers:
                     self.project_subscribers[filter.project_name].discard(
                         connection_id
                     )
+                    # Remove empty sets to prevent memory leaks
+                    if not self.project_subscribers[filter.project_name]:
+                        del self.project_subscribers[filter.project_name]
 
         # Remove connection
         del self.connections[connection_id]
@@ -353,7 +442,7 @@ class ConnectionManager:
 
     async def send_personal_message(
         self, message: Dict[str, Any], connection_id: str
-    ):
+    ) -> bool:
         """
         Send a message to a specific connection with backpressure handling.
 
@@ -410,7 +499,7 @@ class ConnectionManager:
             self.disconnect(connection_id)
             return False
 
-    async def _send_flow_control_warning(self, connection_id: str):
+    async def _send_flow_control_warning(self, connection_id: str) -> None:
         """Send flow control warning to client."""
         if connection_id not in self.connections:
             return
@@ -435,7 +524,7 @@ class ConnectionManager:
 
     async def _send_error_and_close(
         self, connection_id: str, code: int, reason: str
-    ):
+    ) -> None:
         """Send error message and close connection."""
         if connection_id not in self.connections:
             return
@@ -460,66 +549,85 @@ class ConnectionManager:
 
         self.disconnect(connection_id)
 
-    async def broadcast_event(self, event: DomainEvent):
+    def _extract_event_attributes(self, event_dict: Dict[str, Any]) -> Dict[str, Optional[str]]:
+        """
+        Extract standard attributes from event data with consistent fallbacks.
+
+        Args:
+            event_dict: Event as dictionary
+
+        Returns:
+            Dictionary with extracted attributes
+        """
+        payload = event_dict.get("payload", {})
+
+        return {
+            "workflow_run_id": event_dict.get("workflow_run_id") or payload.get("workflow_run_id"),
+            "execution_id": event_dict.get("execution_id") or payload.get("execution_id"),
+            "work_item_id": event_dict.get("work_item_id") or payload.get("work_item_id"),
+            "workflow_id": event_dict.get("workflow_id") or payload.get("workflow_id"),
+            "agent_id": event_dict.get("agent_id") or payload.get("agent_id"),
+            "project_name": event_dict.get("project_name") or payload.get("project_name"),
+        }
+
+    async def broadcast_event(self, event: DomainEvent) -> None:
         """
         Broadcast event to all subscribed connections with filtering.
 
-        Uses reverse indices for fast lookup, then applies detailed filter matching.
+        Uses reverse indices for fast lookup with set operations for efficiency.
 
         Args:
             event: Domain event to broadcast
         """
-        # Determine which connections should receive this event
-        recipient_ids: Set[str] = set()
-
         # Get event attributes for filtering
         event_type = type(event).__name__
         event_dict = event.to_dict() if hasattr(event, "to_dict") else event.__dict__
 
-        # Extract potential filter values from event
-        workflow_run_id = event_dict.get("workflow_run_id") or event_dict.get(
-            "payload", {}
-        ).get("workflow_run_id")
-        execution_id = event_dict.get("execution_id") or event_dict.get(
-            "payload", {}
-        ).get("execution_id")
-        work_item_id = event_dict.get("work_item_id") or event_dict.get(
-            "payload", {}
-        ).get("work_item_id")
-        workflow_id = event_dict.get("workflow_id") or event_dict.get("payload", {}).get(
-            "workflow_id"
-        )
-        agent_id = event_dict.get("agent_id") or event_dict.get("payload", {}).get(
-            "agent_id"
-        )
-        project_name = event_dict.get("project_name") or event_dict.get(
-            "payload", {}
-        ).get("project_name")
+        # Extract attributes using helper method
+        attributes = self._extract_event_attributes(event_dict)
 
-        # Find subscribers using reverse indices (fast lookup)
-        if workflow_run_id and workflow_run_id in self.workflow_subscribers:
-            recipient_ids.update(self.workflow_subscribers[workflow_run_id])
+        # Start with all connections, then intersect with relevant indices
+        relevant_connections: Optional[Set[str]] = None
 
-        if execution_id and execution_id in self.execution_subscribers:
-            recipient_ids.update(self.execution_subscribers[execution_id])
+        # Find subscribers using reverse indices (fast set operations)
+        if attributes["workflow_run_id"] and attributes["workflow_run_id"] in self.workflow_subscribers:
+            candidate_set = self.workflow_subscribers[attributes["workflow_run_id"]]
+            relevant_connections = candidate_set.copy() if relevant_connections is None else relevant_connections & candidate_set
 
-        if work_item_id and work_item_id in self.work_item_subscribers:
-            recipient_ids.update(self.work_item_subscribers[work_item_id])
+        if attributes["execution_id"] and attributes["execution_id"] in self.execution_subscribers:
+            candidate_set = self.execution_subscribers[attributes["execution_id"]]
+            relevant_connections = candidate_set.copy() if relevant_connections is None else relevant_connections & candidate_set
 
-        if workflow_id and workflow_id in self.workflow_definition_subscribers:
-            recipient_ids.update(self.workflow_definition_subscribers[workflow_id])
+        if attributes["work_item_id"] and attributes["work_item_id"] in self.work_item_subscribers:
+            candidate_set = self.work_item_subscribers[attributes["work_item_id"]]
+            relevant_connections = candidate_set.copy() if relevant_connections is None else relevant_connections & candidate_set
 
-        if agent_id and agent_id in self.agent_subscribers:
-            recipient_ids.update(self.agent_subscribers[agent_id])
+        if attributes["workflow_id"] and attributes["workflow_id"] in self.workflow_definition_subscribers:
+            candidate_set = self.workflow_definition_subscribers[attributes["workflow_id"]]
+            relevant_connections = candidate_set.copy() if relevant_connections is None else relevant_connections & candidate_set
 
-        if project_name and project_name in self.project_subscribers:
-            recipient_ids.update(self.project_subscribers[project_name])
+        if attributes["agent_id"] and attributes["agent_id"] in self.agent_subscribers:
+            candidate_set = self.agent_subscribers[attributes["agent_id"]]
+            relevant_connections = candidate_set.copy() if relevant_connections is None else relevant_connections & candidate_set
 
-        # Check all connections for filter matches (for complex filters)
-        for connection_id, conn_state in self.connections.items():
+        if attributes["project_name"] and attributes["project_name"] in self.project_subscribers:
+            candidate_set = self.project_subscribers[attributes["project_name"]]
+            relevant_connections = candidate_set.copy() if relevant_connections is None else relevant_connections & candidate_set
+
+        # If no index-based matches, check all connections with complex filters
+        connections_to_check = relevant_connections if relevant_connections is not None else set(self.connections.keys())
+
+        # Determine final recipients by applying detailed filter matching
+        recipient_ids: Set[str] = set()
+        for connection_id in connections_to_check:
+            if connection_id not in self.connections:
+                continue
+
+            conn_state = self.connections[connection_id]
             for filter in conn_state.subscriptions:
                 if self._event_matches_filter(event, event_dict, filter):
                     recipient_ids.add(connection_id)
+                    break  # No need to check other filters for this connection
 
         # Send event to all recipients
         event_message = EventMessage(
@@ -654,7 +762,7 @@ class WebSocketAdapter:
         self._connection_counter += 1
         return f"ws-{self._connection_counter}"
 
-    async def handle_websocket(self, websocket: WebSocket, token: Optional[str] = None):
+    async def handle_websocket(self, websocket: WebSocket, token: Optional[str] = None) -> None:
         """
         Handle WebSocket connection with authentication.
 
@@ -698,9 +806,26 @@ class WebSocketAdapter:
                 data = await websocket.receive_text()
                 message = json.loads(data)
 
-                # Update last heartbeat timestamp
+                # Check rate limit
                 if connection_id in self.manager.connections:
-                    self.manager.connections[connection_id].last_heartbeat = time.time()
+                    conn_state = self.manager.connections[connection_id]
+
+                    # Update last heartbeat timestamp
+                    conn_state.last_heartbeat = time.time()
+
+                    # Apply rate limiting
+                    if conn_state.rate_limiter and not conn_state.rate_limiter.try_consume():
+                        logger.warning(f"Rate limit exceeded for connection {connection_id}")
+                        await self.manager.send_personal_message(
+                            ErrorMessage(
+                                code="rate_limit_exceeded",
+                                message="Rate limit exceeded. Slow down message rate.",
+                                timestamp=datetime.utcnow(),
+                            ).model_dump(mode="json"),
+                            connection_id,
+                        )
+                        # Don't disconnect, just skip processing this message
+                        continue
 
                 # Handle message based on type
                 message_type = message.get("type")
@@ -726,9 +851,41 @@ class WebSocketAdapter:
             # Client disconnected
             logger.info(f"WebSocket client {connection_id} disconnected")
             self.manager.disconnect(connection_id)
+        except ValueError as e:
+            # Invalid message format or data
+            logger.error(f"ValueError in WebSocket handler for {connection_id}: {e}", exc_info=True)
+            try:
+                await self.manager.send_personal_message(
+                    ErrorMessage(
+                        code="invalid_message",
+                        message=f"Invalid message: {str(e)}",
+                        timestamp=datetime.utcnow(),
+                    ).model_dump(mode="json"),
+                    connection_id,
+                )
+            except Exception:
+                pass
+            finally:
+                self.manager.disconnect(connection_id)
+        except json.JSONDecodeError as e:
+            # JSON parsing error
+            logger.error(f"JSON decode error for {connection_id}: {e}", exc_info=True)
+            try:
+                await self.manager.send_personal_message(
+                    ErrorMessage(
+                        code="json_error",
+                        message=f"Invalid JSON: {str(e)}",
+                        timestamp=datetime.utcnow(),
+                    ).model_dump(mode="json"),
+                    connection_id,
+                )
+            except Exception:
+                pass
+            finally:
+                self.manager.disconnect(connection_id)
         except Exception as e:
-            # Error occurred
-            logger.error(f"WebSocket error for client {connection_id}: {e}")
+            # Unexpected error
+            logger.error(f"Unexpected WebSocket error for client {connection_id}: {e}", exc_info=True)
             try:
                 await self.manager.send_personal_message(
                     ErrorMessage(
@@ -738,7 +895,7 @@ class WebSocketAdapter:
                     ).model_dump(mode="json"),
                     connection_id,
                 )
-            except:
+            except Exception:
                 pass
             finally:
                 self.manager.disconnect(connection_id)
@@ -747,7 +904,7 @@ class WebSocketAdapter:
             if heartbeat_task:
                 heartbeat_task.cancel()
 
-    async def _heartbeat_monitor(self, connection_id: str):
+    async def _heartbeat_monitor(self, connection_id: str) -> None:
         """
         Monitor heartbeat for a connection and disconnect if timeout occurs.
 
@@ -790,7 +947,7 @@ class WebSocketAdapter:
             # Task cancelled, connection closing
             pass
 
-    async def _handle_subscribe(self, connection_id: str, message: Dict[str, Any]):
+    async def _handle_subscribe(self, connection_id: str, message: Dict[str, Any]) -> None:
         """
         Handle subscribe message with extended filtering support.
 
@@ -849,7 +1006,7 @@ class WebSocketAdapter:
                 connection_id,
             )
 
-    async def _handle_unsubscribe(self, connection_id: str, message: Dict[str, Any]):
+    async def _handle_unsubscribe(self, connection_id: str, message: Dict[str, Any]) -> None:
         """
         Handle unsubscribe message.
 
@@ -867,7 +1024,7 @@ class WebSocketAdapter:
             connection_id,
         )
 
-    async def _handle_ping(self, connection_id: str):
+    async def _handle_ping(self, connection_id: str) -> None:
         """
         Handle ping message (keepalive).
 
