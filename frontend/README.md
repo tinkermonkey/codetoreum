@@ -1,6 +1,6 @@
-# Codetoreum Configuration UI
+# Codetoreum Web Dashboard
 
-Modern React-based web interface for managing Codetoreum Gen 2 configuration.
+Modern React-based web interface for the Codetoreum AI Agent Orchestration Platform. Provides real-time monitoring, configuration management, and agent execution dashboards.
 
 ## Tech Stack
 
@@ -90,6 +90,19 @@ src/
 
 ### Implemented ✅
 
+- **Authentication**
+  - Simplified token-based auth (JupyterLab-style)
+  - Token extraction from URL
+  - Automatic token storage and header injection
+  - 401 handling with auto-logout
+
+- **Dashboard (Real-time)**
+  - Active work items display
+  - Recent executions monitoring
+  - WebSocket integration for live events
+  - Execution status tracking
+  - Connection status indicator
+
 - **Project Configuration Management**
   - Environment variables (add, edit, delete)
   - Secret encryption support
@@ -114,6 +127,68 @@ src/
   - Change log
   - Diff viewer
   - Rollback functionality
+
+## Authentication
+
+The web dashboard uses a simplified JupyterLab-style authentication system:
+
+1. **Server Startup**: The API server generates a secure token on launch
+2. **Authentication URL**: An access URL with the embedded token is printed to server logs
+3. **Token Extraction**: Click the URL or paste it in your browser
+4. **Automatic Storage**: The token is extracted from the URL and stored in localStorage
+5. **Clean URL**: The URL is cleaned (token removed) for security
+6. **API Requests**: All requests automatically include `Authorization: Bearer {token}` header
+7. **401 Handling**: On unauthorized response, token is cleared and auth page is shown
+
+### Authentication Flow
+
+```typescript
+// Token extraction from URL
+/?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+// Automatically stored in localStorage
+localStorage.setItem('codetoreum_token', token)
+
+// URL cleaned
+→ /
+
+// All API requests include header
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+// On 401 response
+→ Clear token
+→ Show "Authentication Required" page
+```
+
+## Real-time Updates
+
+The dashboard uses WebSocket for real-time event streaming:
+
+- **Automatic Connection**: Connects to `/api/v2/events/stream` with token authentication
+- **Event Subscription**: Subscribe to specific event types (ExecutionStarted, ExecutionCompleted, etc.)
+- **Auto-Reconnection**: Exponential backoff reconnection (up to 10 attempts)
+- **Flow Control**: Server sends warnings when buffer nears capacity
+- **Unauthorized Handling**: Close code 4001 prevents reconnection and clears token
+
+### WebSocket Usage
+
+```typescript
+import { useWebSocket } from './hooks/useWebSocket'
+
+const { events, isConnected, subscribe } = useWebSocket(token)
+
+// Subscribe to events
+subscribe('ExecutionStarted')
+subscribe('ExecutionCompleted')
+subscribe('ExecutionFailed')
+
+// Display events in real-time
+events.map(event => (
+  <div key={event.timestamp}>
+    {event.type}: {JSON.stringify(event.data)}
+  </div>
+))
+```
 
 ## API Integration
 

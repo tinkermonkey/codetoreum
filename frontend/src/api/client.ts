@@ -11,6 +11,12 @@ import type {
   MountSubAgentRequest,
   ConfigurationHistory,
   ApiError,
+  WorkItem,
+  CreateWorkItemRequest,
+  UpdateWorkItemRequest,
+  Execution,
+  ExecutionSummary,
+  StartExecutionRequest,
 } from '../types'
 
 // Environment-aware API base URL
@@ -32,6 +38,13 @@ api.interceptors.response.use(
   (error: AxiosError<ApiError>) => {
     // Enhanced error handling with structured error types
     if (error.response) {
+      // Handle 401 Unauthorized - clear token and redirect to auth
+      if (error.response.status === 401) {
+        localStorage.removeItem('codetoreum_token')
+        // Trigger a custom event that the auth context can listen to
+        window.dispatchEvent(new CustomEvent('auth:unauthorized'))
+      }
+
       // Server responded with error status
       const apiError: ApiError = {
         message: error.response.data?.message || error.message,
@@ -61,14 +74,14 @@ api.interceptors.response.use(
   }
 )
 
-// Request interceptor for adding auth tokens (if needed in future)
+// Request interceptor for adding auth tokens
 api.interceptors.request.use(
   (config) => {
-    // Future: Add authentication token here
-    // const token = localStorage.getItem('auth_token')
-    // if (token) {
-    //   config.headers.Authorization = `Bearer ${token}`
-    // }
+    // Add authentication token if available
+    const token = localStorage.getItem('codetoreum_token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
     return config
   },
   (error) => Promise.reject(error)
@@ -258,6 +271,86 @@ export const configHistoryApi = {
       }
     )
     return response.data
+  },
+}
+
+// Work Items API
+export const workItemsApi = {
+  list: async (filters?: {
+    status?: string
+    assignee?: string
+    limit?: number
+    offset?: number
+  }): Promise<WorkItem[]> => {
+    const response = await api.get<WorkItem[]>('/work-items', {
+      params: {
+        status: filters?.status,
+        assignee: filters?.assignee,
+        limit: filters?.limit || 50,
+        offset: filters?.offset || 0,
+      },
+    })
+    return response.data
+  },
+
+  get: async (id: string): Promise<WorkItem> => {
+    const response = await api.get<WorkItem>(`/work-items/${id}`)
+    return response.data
+  },
+
+  create: async (request: CreateWorkItemRequest): Promise<WorkItem> => {
+    const response = await api.post<WorkItem>('/work-items', request)
+    return response.data
+  },
+
+  update: async (id: string, request: UpdateWorkItemRequest): Promise<WorkItem> => {
+    const response = await api.patch<WorkItem>(`/work-items/${id}`, request)
+    return response.data
+  },
+
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/work-items/${id}`)
+  },
+}
+
+// Executions API
+export const executionsApi = {
+  list: async (filters?: {
+    work_item_id?: string
+    agent_name?: string
+    status?: string
+    limit?: number
+    offset?: number
+  }): Promise<ExecutionSummary[]> => {
+    const response = await api.get<ExecutionSummary[]>('/executions', {
+      params: {
+        work_item_id: filters?.work_item_id,
+        agent_name: filters?.agent_name,
+        status: filters?.status,
+        limit: filters?.limit || 50,
+        offset: filters?.offset || 0,
+      },
+    })
+    return response.data
+  },
+
+  get: async (id: string): Promise<Execution> => {
+    const response = await api.get<Execution>(`/executions/${id}`)
+    return response.data
+  },
+
+  start: async (request: StartExecutionRequest): Promise<Execution> => {
+    const response = await api.post<Execution>('/executions', request)
+    return response.data
+  },
+
+  cancel: async (id: string): Promise<void> => {
+    await api.post(`/executions/${id}/cancel`)
+  },
+
+  getLogs: async (id: string): Promise<string[]> => {
+    const response = await api.get<{ logs: string[] }>(`/executions/${id}/logs`)
+    return response.data.logs
   },
 }
 
