@@ -3,13 +3,22 @@ Orchestration Data Transfer Objects (DTOs)
 
 DTOs for orchestration and scheduler REST API endpoints.
 """
-
 from datetime import datetime
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
 from codetoreum.adapters.primary.api_models import PaginatedResponse
+
+
+class ExecutionPriority(str, Enum):
+    """Execution priority levels"""
+
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
 
 
 # ============================================================================
@@ -20,10 +29,10 @@ from codetoreum.adapters.primary.api_models import PaginatedResponse
 class StartWorkflowExecutionRequest(BaseModel):
     """Request to start workflow execution for a work item"""
 
-    work_item_id: str = Field(..., description="Work item ID to execute workflow for")
-    workflow_id: str = Field(..., description="Workflow definition ID to use")
-    stage_name: Optional[str] = Field(None, description="Stage to start from (optional, defaults to first stage)")
-    priority: str = Field("MEDIUM", description="Execution priority: LOW, MEDIUM, HIGH, CRITICAL")
+    work_item_id: str = Field(..., description="Work item ID to execute workflow for", min_length=1, max_length=100)
+    workflow_id: str = Field(..., description="Workflow definition ID to use", min_length=1, max_length=100)
+    stage_name: Optional[str] = Field(None, description="Stage to start from (optional, defaults to first stage)", max_length=100)
+    priority: ExecutionPriority = Field(ExecutionPriority.MEDIUM, description="Execution priority")
     context: Dict[str, Any] = Field(default_factory=dict, description="Additional execution context")
 
     class Config:
@@ -46,7 +55,7 @@ class StartWorkflowExecutionRequest(BaseModel):
 class CancelWorkflowExecutionRequest(BaseModel):
     """Request to cancel a workflow execution"""
 
-    reason: str = Field(..., description="Reason for cancellation")
+    reason: str = Field(..., description="Reason for cancellation", min_length=1, max_length=500)
     force: bool = Field(False, description="Force immediate cancellation without cleanup")
 
     class Config:
@@ -63,7 +72,7 @@ class CancelWorkflowExecutionRequest(BaseModel):
 class PauseWorkflowExecutionRequest(BaseModel):
     """Request to pause a workflow execution"""
 
-    reason: str = Field(..., description="Reason for pausing")
+    reason: str = Field(..., description="Reason for pausing", min_length=1, max_length=500)
 
     class Config:
         """Pydantic configuration"""
@@ -78,7 +87,7 @@ class PauseWorkflowExecutionRequest(BaseModel):
 class ResumeWorkflowExecutionRequest(BaseModel):
     """Request to resume a paused workflow execution"""
 
-    from_stage: Optional[str] = Field(None, description="Stage to resume from (defaults to paused stage)")
+    from_stage: Optional[str] = Field(None, description="Stage to resume from (defaults to paused stage)", max_length=100)
 
     class Config:
         """Pydantic configuration"""
@@ -247,9 +256,9 @@ class ExecutionQueueResponse(PaginatedResponse):
 class EntryConditionValidationRequest(BaseModel):
     """Request to validate workflow entry conditions"""
 
-    work_item_id: str = Field(..., description="Work item ID to validate")
-    workflow_id: str = Field(..., description="Workflow ID to validate against")
-    stage_name: Optional[str] = Field(None, description="Specific stage to validate (optional)")
+    work_item_id: str = Field(..., description="Work item ID to validate", min_length=1, max_length=100)
+    workflow_id: str = Field(..., description="Workflow ID to validate against", min_length=1, max_length=100)
+    stage_name: Optional[str] = Field(None, description="Specific stage to validate (optional)", max_length=100)
 
     class Config:
         """Pydantic configuration"""
@@ -266,9 +275,9 @@ class EntryConditionValidationRequest(BaseModel):
 class ConditionValidationResult(BaseModel):
     """Result of validating a single condition"""
 
-    condition_type: str = Field(..., description="Type of condition")
+    condition_type: str = Field(..., description="Type of condition", max_length=100)
     is_met: bool = Field(..., description="Whether condition is met")
-    message: str = Field(..., description="Validation message")
+    message: str = Field(..., description="Validation message", max_length=500)
     details: Dict[str, Any] = Field(default_factory=dict, description="Additional details")
 
     class Config:
