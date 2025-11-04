@@ -42,10 +42,13 @@ from codetoreum.adapters.primary.github_webhook_adapter import (
 from codetoreum.adapters.primary.rest_api_adapter import RestAPIAdapter
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
 from codetoreum.adapters.primary.websocket_adapter import WebSocketAdapter
+from codetoreum.adapters.primary.routers.work_items import create_work_items_router
 from codetoreum.infrastructure.auth import SimpleTokenAuthManager
 from codetoreum.ports.input.config_command import IConfigurationCommandPort
 from codetoreum.ports.input.task_query import ITaskQueryPort
 from codetoreum.ports.input.workflow_command import IWorkflowCommandPort
+from codetoreum.ports.input.work_item_command import IWorkItemCommandPort
+from codetoreum.ports.input.work_item_query import IWorkItemQueryPort
 
 
 # ============================================================================
@@ -127,6 +130,8 @@ def create_app(
     workflow_command_port: IWorkflowCommandPort,
     task_query_port: ITaskQueryPort,
     config_command_port: IConfigurationCommandPort,
+    work_item_command_port: IWorkItemCommandPort,
+    work_item_query_port: IWorkItemQueryPort,
     event_bus: IEventBus,
     config_service: IConfigurationService,
     logger: ILogger,
@@ -141,6 +146,8 @@ def create_app(
         workflow_command_port: Port for workflow commands
         task_query_port: Port for task queries
         config_command_port: Port for configuration commands
+        work_item_command_port: Port for work item commands
+        work_item_query_port: Port for work item queries
         event_bus: Event bus for publishing events
         config_service: Configuration service
         logger: Logger instance
@@ -286,6 +293,14 @@ def create_app(
 
     # Include REST API router
     app.include_router(rest_api_adapter.router)
+
+    # Include Work Items router
+    work_items_router = create_work_items_router(
+        command_port=work_item_command_port,
+        query_port=work_item_query_port,
+        auth_deps=auth_deps,
+    )
+    app.include_router(work_items_router)
 
     # ========================================================================
     # WebSocket Endpoints
@@ -474,6 +489,20 @@ def create_development_app() -> FastAPI:
         StartWorkflowCommand,
         WorkflowCommandResult,
     )
+    from codetoreum.ports.input.work_item_command import (
+        IWorkItemCommandPort,
+        CreateWorkItemCommand,
+        UpdateWorkItemCommand,
+        WorkItemCommandResult,
+    )
+    from codetoreum.ports.input.work_item_query import (
+        IWorkItemQueryPort,
+        WorkItemFilters,
+        PaginationParams as WIPaginationParams,
+        WorkItemListResult,
+        WorkItemHistory,
+    )
+    from codetoreum.domain.work_item import WorkItem, WorkItemStatus, WorkItemPriority
 
     # Mock implementations for development
     class MockWorkflowCommandPort(IWorkflowCommandPort):
@@ -691,6 +720,239 @@ def create_development_app() -> FastAPI:
                 has_next=False,
             )
 
+    class MockWorkItemCommandPort(IWorkItemCommandPort):
+        """Mock work item command port for development."""
+
+        async def create_work_item(self, command: CreateWorkItemCommand) -> WorkItem:
+            from datetime import datetime, timezone
+            return WorkItem(
+                id="wi-mock-123",
+                project_id=command.project_id,
+                title=command.title,
+                description=command.description,
+                status=WorkItemStatus.NEW,
+                priority=command.priority,
+                labels=command.labels or [],
+                external_id=command.external_id,
+                external_url=command.external_url,
+                assigned_agent_id=None,
+                assigned_at=None,
+                current_workflow_id=None,
+                current_stage=None,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+                completed_at=None,
+            )
+
+        async def update_work_item(self, command: UpdateWorkItemCommand) -> WorkItem:
+            from datetime import datetime, timezone
+            return WorkItem(
+                id=command.work_item_id,
+                project_id="proj-123",
+                title=command.title or "Mock Work Item",
+                description=command.description or "Mock description",
+                status=WorkItemStatus.IN_PROGRESS,
+                priority=command.priority or WorkItemPriority.MEDIUM,
+                labels=command.labels or [],
+                external_id=None,
+                external_url=None,
+                assigned_agent_id="agent-123",
+                assigned_at=datetime.now(timezone.utc),
+                current_workflow_id=None,
+                current_stage=None,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+                completed_at=None,
+            )
+
+        async def delete_work_item(self, work_item_id: str) -> WorkItemCommandResult:
+            return WorkItemCommandResult(
+                success=True,
+                work_item_id=work_item_id,
+                message="Work item deleted (mock)",
+            )
+
+        async def assign_agent(self, command):
+            from datetime import datetime, timezone
+            return WorkItem(
+                id=command.work_item_id,
+                project_id="proj-123",
+                title="Mock Work Item",
+                description="Mock description",
+                status=WorkItemStatus.ASSIGNED,
+                priority=WorkItemPriority.MEDIUM,
+                labels=[],
+                external_id=None,
+                external_url=None,
+                assigned_agent_id=command.agent_id,
+                assigned_at=datetime.now(timezone.utc),
+                current_workflow_id=None,
+                current_stage=None,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+                completed_at=None,
+            )
+
+        async def update_labels(self, command):
+            from datetime import datetime, timezone
+            return WorkItem(
+                id=command.work_item_id,
+                project_id="proj-123",
+                title="Mock Work Item",
+                description="Mock description",
+                status=WorkItemStatus.IN_PROGRESS,
+                priority=WorkItemPriority.MEDIUM,
+                labels=command.labels,
+                external_id=None,
+                external_url=None,
+                assigned_agent_id="agent-123",
+                assigned_at=datetime.now(timezone.utc),
+                current_workflow_id=None,
+                current_stage=None,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+                completed_at=None,
+            )
+
+        async def update_priority(self, command):
+            from datetime import datetime, timezone
+            return WorkItem(
+                id=command.work_item_id,
+                project_id="proj-123",
+                title="Mock Work Item",
+                description="Mock description",
+                status=WorkItemStatus.IN_PROGRESS,
+                priority=command.priority,
+                labels=[],
+                external_id=None,
+                external_url=None,
+                assigned_agent_id="agent-123",
+                assigned_at=datetime.now(timezone.utc),
+                current_workflow_id=None,
+                current_stage=None,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+                completed_at=None,
+            )
+
+        async def attach_workflow(self, command):
+            from datetime import datetime, timezone
+            return WorkItem(
+                id=command.work_item_id,
+                project_id="proj-123",
+                title="Mock Work Item",
+                description="Mock description",
+                status=WorkItemStatus.IN_PROGRESS,
+                priority=WorkItemPriority.MEDIUM,
+                labels=[],
+                external_id=None,
+                external_url=None,
+                assigned_agent_id="agent-123",
+                assigned_at=datetime.now(timezone.utc),
+                current_workflow_id=command.workflow_id,
+                current_stage=None,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+                completed_at=None,
+            )
+
+        async def update_stage(self, command):
+            from datetime import datetime, timezone
+            return WorkItem(
+                id=command.work_item_id,
+                project_id="proj-123",
+                title="Mock Work Item",
+                description="Mock description",
+                status=WorkItemStatus.IN_PROGRESS,
+                priority=WorkItemPriority.MEDIUM,
+                labels=[],
+                external_id=None,
+                external_url=None,
+                assigned_agent_id="agent-123",
+                assigned_at=datetime.now(timezone.utc),
+                current_workflow_id="wf-123",
+                current_stage=command.stage,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+                completed_at=None,
+            )
+
+    class MockWorkItemQueryPort(IWorkItemQueryPort):
+        """Mock work item query port for development."""
+
+        async def get_work_item(self, work_item_id: str) -> WorkItem:
+            from datetime import datetime, timezone
+            return WorkItem(
+                id=work_item_id,
+                project_id="proj-123",
+                title="Mock Work Item",
+                description="This is a mock work item for development",
+                status=WorkItemStatus.IN_PROGRESS,
+                priority=WorkItemPriority.MEDIUM,
+                labels=["mock", "test"],
+                external_id="42",
+                external_url="https://github.com/org/repo/issues/42",
+                assigned_agent_id="agent-123",
+                assigned_at=datetime.now(timezone.utc),
+                current_workflow_id="wf-123",
+                current_stage="development",
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+                completed_at=None,
+            )
+
+        async def list_work_items(
+            self, filters=None, pagination=None
+        ) -> WorkItemListResult:
+            from datetime import datetime, timezone
+            work_item = WorkItem(
+                id="wi-mock-123",
+                project_id="proj-123",
+                title="Mock Work Item 1",
+                description="This is a mock work item",
+                status=WorkItemStatus.IN_PROGRESS,
+                priority=WorkItemPriority.HIGH,
+                labels=["mock", "test"],
+                external_id="42",
+                external_url="https://github.com/org/repo/issues/42",
+                assigned_agent_id="agent-123",
+                assigned_at=datetime.now(timezone.utc),
+                current_workflow_id="wf-123",
+                current_stage="development",
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+                completed_at=None,
+            )
+            return WorkItemListResult(
+                work_items=[work_item],
+                total_count=1,
+                offset=0,
+                limit=20,
+                has_next=False,
+            )
+
+        async def search_work_items(self, search_params) -> WorkItemListResult:
+            return await self.list_work_items()
+
+        async def get_work_item_history(
+            self, work_item_id: str, limit=None
+        ) -> WorkItemHistory:
+            work_item = await self.get_work_item(work_item_id)
+            return WorkItemHistory(
+                work_item=work_item,
+                events=[
+                    {
+                        "event_type": "WorkItemCreated",
+                        "occurred_at": "2025-11-03T09:00:00Z",
+                        "payload": {"title": "Mock Work Item"},
+                    }
+                ],
+                total_events=1,
+            )
+
+        async def count_work_items(self, filters=None) -> int:
+            return 1
+
     class MockConfigCommandPort(IConfigurationCommandPort):
         async def update_project_config(self, command) -> ConfigurationCommandResult:
             return ConfigurationCommandResult(
@@ -772,6 +1034,8 @@ def create_development_app() -> FastAPI:
         workflow_command_port=MockWorkflowCommandPort(),
         task_query_port=MockTaskQueryPort(),
         config_command_port=MockConfigCommandPort(),
+        work_item_command_port=MockWorkItemCommandPort(),
+        work_item_query_port=MockWorkItemQueryPort(),
         event_bus=MockEventBus(),
         config_service=MockConfigService(),
         logger=MockLogger(),
