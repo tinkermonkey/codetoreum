@@ -39,27 +39,24 @@ class MockExecutionCommandAdapter(IExecutionCommandPort):
         """Terminate a running execution."""
         with self._lock:
             if command.execution_id not in self._executions:
-                raise ExecutionNotFoundError(
-                    f"Execution with ID {command.execution_id} not found"
-                )
+                raise ExecutionNotFoundError(command.execution_id)
 
             execution = self._executions[command.execution_id]
 
-            # Check if execution is already completed
-            if execution.status in [ExecutionStatus.COMPLETED, ExecutionStatus.FAILED]:
+            # Check if execution is already in a terminal state
+            if execution.is_terminal():
                 raise InvalidStateError(
                     f"Execution {command.execution_id} is already {execution.status.value}"
                 )
 
-            # Simulate termination
-            execution._status = ExecutionStatus.TERMINATED
-            execution._completed_at = datetime.now(timezone.utc)
+            # Use domain method to cancel execution
+            execution.cancel(command.reason)
 
             return ExecutionCommandResult(
                 success=True,
                 execution_id=command.execution_id,
                 message=f"Execution terminated: {command.reason or 'No reason provided'}",
-                new_status=ExecutionStatus.TERMINATED.value,
+                new_status=execution.status.value,
                 errors=None,
             )
 
@@ -69,26 +66,21 @@ class MockExecutionCommandAdapter(IExecutionCommandPort):
         """Pause a running execution."""
         with self._lock:
             if command.execution_id not in self._executions:
-                raise ExecutionNotFoundError(
-                    f"Execution with ID {command.execution_id} not found"
-                )
+                raise ExecutionNotFoundError(command.execution_id)
 
             execution = self._executions[command.execution_id]
 
-            # Check if execution can be paused
-            if execution.status != ExecutionStatus.RUNNING:
-                raise InvalidStateError(
-                    f"Execution {command.execution_id} cannot be paused (current status: {execution.status.value})"
-                )
-
-            # Simulate pause
-            execution._status = ExecutionStatus.PAUSED
+            # Use domain method to pause execution (it handles validation)
+            try:
+                execution.pause(command.reason)
+            except Exception as e:
+                raise InvalidStateError(str(e))
 
             return ExecutionCommandResult(
                 success=True,
                 execution_id=command.execution_id,
                 message="Execution paused successfully",
-                new_status=ExecutionStatus.PAUSED.value,
+                new_status=execution.status.value,
                 errors=None,
             )
 
@@ -98,26 +90,21 @@ class MockExecutionCommandAdapter(IExecutionCommandPort):
         """Resume a paused execution."""
         with self._lock:
             if command.execution_id not in self._executions:
-                raise ExecutionNotFoundError(
-                    f"Execution with ID {command.execution_id} not found"
-                )
+                raise ExecutionNotFoundError(command.execution_id)
 
             execution = self._executions[command.execution_id]
 
-            # Check if execution is paused
-            if execution.status != ExecutionStatus.PAUSED:
-                raise InvalidStateError(
-                    f"Execution {command.execution_id} is not paused (current status: {execution.status.value})"
-                )
-
-            # Simulate resume
-            execution._status = ExecutionStatus.RUNNING
+            # Use domain method to resume execution (it handles validation)
+            try:
+                execution.resume()
+            except Exception as e:
+                raise InvalidStateError(str(e))
 
             return ExecutionCommandResult(
                 success=True,
                 execution_id=command.execution_id,
                 message="Execution resumed successfully",
-                new_status=ExecutionStatus.RUNNING.value,
+                new_status=execution.status.value,
                 errors=None,
             )
 
@@ -125,7 +112,7 @@ class MockExecutionCommandAdapter(IExecutionCommandPort):
         """Helper method to get an execution (for testing)."""
         with self._lock:
             if execution_id not in self._executions:
-                raise ExecutionNotFoundError(f"Execution with ID {execution_id} not found")
+                raise ExecutionNotFoundError(execution_id)
             return self._executions[execution_id]
 
     def clear(self):

@@ -79,7 +79,7 @@ class MockAgentCommandAdapter(IAgentCommandPort):
         """Update an existing agent."""
         with self._lock:
             if command.agent_id not in self._agents:
-                raise AgentNotFoundError(f"Agent with ID {command.agent_id} not found")
+                raise AgentNotFoundError(command.agent_id)
 
             agent = self._agents[command.agent_id]
 
@@ -119,7 +119,7 @@ class MockAgentCommandAdapter(IAgentCommandPort):
         """Add a capability to an agent."""
         with self._lock:
             if command.agent_id not in self._agents:
-                raise AgentNotFoundError(f"Agent with ID {command.agent_id} not found")
+                raise AgentNotFoundError(command.agent_id)
 
             agent = self._agents[command.agent_id]
 
@@ -139,7 +139,7 @@ class MockAgentCommandAdapter(IAgentCommandPort):
         """Remove a capability from an agent."""
         with self._lock:
             if command.agent_id not in self._agents:
-                raise AgentNotFoundError(f"Agent with ID {command.agent_id} not found")
+                raise AgentNotFoundError(command.agent_id)
 
             agent = self._agents[command.agent_id]
 
@@ -165,7 +165,7 @@ class MockAgentCommandAdapter(IAgentCommandPort):
         """Update capability proficiency."""
         with self._lock:
             if command.agent_id not in self._agents:
-                raise AgentNotFoundError(f"Agent with ID {command.agent_id} not found")
+                raise AgentNotFoundError(command.agent_id)
 
             agent = self._agents[command.agent_id]
 
@@ -194,7 +194,7 @@ class MockAgentCommandAdapter(IAgentCommandPort):
         """Add an MCP server to agent configuration."""
         with self._lock:
             if command.agent_id not in self._agents:
-                raise AgentNotFoundError(f"Agent with ID {command.agent_id} not found")
+                raise AgentNotFoundError(command.agent_id)
 
             agent = self._agents[command.agent_id]
 
@@ -214,7 +214,7 @@ class MockAgentCommandAdapter(IAgentCommandPort):
         """Remove an MCP server from agent configuration."""
         with self._lock:
             if command.agent_id not in self._agents:
-                raise AgentNotFoundError(f"Agent with ID {command.agent_id} not found")
+                raise AgentNotFoundError(command.agent_id)
 
             agent = self._agents[command.agent_id]
 
@@ -234,7 +234,7 @@ class MockAgentCommandAdapter(IAgentCommandPort):
         """Delete an agent (soft delete)."""
         with self._lock:
             if agent_id not in self._agents:
-                raise AgentNotFoundError(f"Agent with ID {agent_id} not found")
+                raise AgentNotFoundError(agent_id)
 
             agent = self._agents[agent_id]
 
@@ -265,7 +265,7 @@ class MockAgentCommandAdapter(IAgentCommandPort):
         """
         with self._lock:
             if agent_id not in self._agents:
-                raise AgentNotFoundError(f"Agent with ID {agent_id} not found")
+                raise AgentNotFoundError(agent_id)
             return self._agents[agent_id]
 
     def clear(self):

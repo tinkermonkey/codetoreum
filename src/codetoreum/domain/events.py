@@ -677,6 +677,63 @@ class ExecutionTimeout(DomainEvent):
         )
 
 
+class ExecutionCancelled(DomainEvent):
+    """Emitted when execution is cancelled."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize ExecutionCancelled event.
+
+        Required payload fields:
+        - cancelled_at: str (ISO format)
+        - reason: Optional[str]
+        - duration_seconds: Optional[float]
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="AgentExecution",
+            payload=payload,
+            **kwargs
+        )
+
+
+class ExecutionPaused(DomainEvent):
+    """Emitted when execution is paused."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize ExecutionPaused event.
+
+        Required payload fields:
+        - paused_at: str (ISO format)
+        - reason: Optional[str]
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="AgentExecution",
+            payload=payload,
+            **kwargs
+        )
+
+
+class ExecutionResumed(DomainEvent):
+    """Emitted when execution is resumed."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize ExecutionResumed event.
+
+        Required payload fields:
+        - resumed_at: str (ISO format)
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="AgentExecution",
+            payload=payload,
+            **kwargs
+        )
+
+
 # =============================================================================
 # Workflow Events
 # =============================================================================
