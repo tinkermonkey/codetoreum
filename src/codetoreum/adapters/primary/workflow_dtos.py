@@ -8,7 +8,7 @@ contracts from the internal domain models, allowing independent evolution.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from codetoreum.adapters.primary.api_models import PaginatedResponse
 
@@ -25,16 +25,15 @@ class StageTransition(BaseModel):
     to_stage: str = Field(..., description="Target stage name", min_length=1, max_length=100)
     condition: Optional[str] = Field(None, description="Transition condition (optional)", max_length=500)
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "from_stage": "development",
                 "to_stage": "code_review",
                 "condition": "tests_passed"
             }
         }
+    )
 
 
 class StageEntryCondition(BaseModel):
@@ -43,15 +42,14 @@ class StageEntryCondition(BaseModel):
     condition_type: str = Field(..., description="Type of condition (status, label, approval, etc.)", min_length=1, max_length=100)
     parameters: Dict[str, Any] = Field(default_factory=dict, description="Condition parameters")
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "condition_type": "work_item_status",
                 "parameters": {"status": "in_progress"}
             }
         }
+    )
 
 
 class WorkflowStageResponse(BaseModel):
@@ -67,10 +65,8 @@ class WorkflowStageResponse(BaseModel):
     )
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional stage metadata")
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "name": "development",
                 "agent_name": "software_engineer",
@@ -88,6 +84,7 @@ class WorkflowStageResponse(BaseModel):
                 }
             }
         }
+    )
 
 
 class WorkflowStageRequest(BaseModel):
@@ -100,10 +97,8 @@ class WorkflowStageRequest(BaseModel):
     entry_conditions: List[StageEntryCondition] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "name": "development",
                 "agent_name": "software_engineer",
@@ -113,6 +108,7 @@ class WorkflowStageRequest(BaseModel):
                 "metadata": {}
             }
         }
+    )
 
 
 # ============================================================================
@@ -135,10 +131,8 @@ class CreateWorkflowRequest(BaseModel):
     is_template: bool = Field(False, description="Whether this is a reusable template")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional workflow metadata")
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "name": "feature-development",
                 "description": "Standard workflow for feature development",
@@ -169,6 +163,7 @@ class CreateWorkflowRequest(BaseModel):
                 "metadata": {}
             }
         }
+    )
 
 
 class UpdateWorkflowRequest(BaseModel):
@@ -181,10 +176,8 @@ class UpdateWorkflowRequest(BaseModel):
     work_item_types: Optional[List[str]] = Field(None, description="Updated work item types")
     metadata: Optional[Dict[str, Any]] = Field(None, description="Updated metadata")
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "name": "feature-development-v2",
                 "description": "Updated feature development workflow",
@@ -198,6 +191,7 @@ class UpdateWorkflowRequest(BaseModel):
                 ]
             }
         }
+    )
 
 
 class WorkflowResponse(BaseModel):
@@ -217,11 +211,8 @@ class WorkflowResponse(BaseModel):
     updated_at: datetime = Field(..., description="Last update timestamp")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_encoders = {datetime: lambda v: v.isoformat()}
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "id": "wf-123",
                 "name": "feature-development",
@@ -253,6 +244,7 @@ class WorkflowResponse(BaseModel):
                 "metadata": {}
             }
         }
+    )
 
 
 class WorkflowSummaryResponse(BaseModel):
@@ -270,10 +262,7 @@ class WorkflowSummaryResponse(BaseModel):
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_encoders = {datetime: lambda v: v.isoformat()}
+    model_config = ConfigDict()
 
 
 class WorkflowListResponse(PaginatedResponse):
@@ -281,10 +270,7 @@ class WorkflowListResponse(PaginatedResponse):
 
     workflows: List[WorkflowSummaryResponse] = Field(..., description="List of workflows")
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_encoders = {datetime: lambda v: v.isoformat()}
+    model_config = ConfigDict()
 
 
 class WorkflowVersionResponse(BaseModel):
@@ -295,10 +281,7 @@ class WorkflowVersionResponse(BaseModel):
     created_by: Optional[str] = Field(None, description="Who created this version")
     changes_summary: str = Field(..., description="Summary of changes in this version")
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_encoders = {datetime: lambda v: v.isoformat()}
+    model_config = ConfigDict()
 
 
 class WorkflowVersionListResponse(BaseModel):
@@ -308,10 +291,7 @@ class WorkflowVersionListResponse(BaseModel):
     versions: List[WorkflowVersionResponse] = Field(..., description="Version history")
     total_count: int = Field(..., description="Total version count")
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_encoders = {datetime: lambda v: v.isoformat()}
+    model_config = ConfigDict()
 
 
 class WorkflowCommandResult(BaseModel):
@@ -323,10 +303,8 @@ class WorkflowCommandResult(BaseModel):
     message: str = Field(..., description="Result message")
     errors: Optional[List[str]] = Field(None, description="Error messages if any")
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "success": True,
                 "workflow_id": "wf-123",
@@ -335,6 +313,7 @@ class WorkflowCommandResult(BaseModel):
                 "errors": None
             }
         }
+    )
 
 
 # ============================================================================
@@ -350,10 +329,8 @@ class WorkflowValidationError(BaseModel):
     stage_name: Optional[str] = Field(None, description="Stage that caused the error", max_length=100)
     details: Dict[str, Any] = Field(default_factory=dict, description="Additional error details")
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "error_type": "circular_dependency",
                 "message": "Circular dependency detected in stage transitions",
@@ -363,6 +340,7 @@ class WorkflowValidationError(BaseModel):
                 }
             }
         }
+    )
 
 
 class WorkflowValidationResponse(BaseModel):
@@ -372,10 +350,8 @@ class WorkflowValidationResponse(BaseModel):
     errors: List[WorkflowValidationError] = Field(default_factory=list, description="Validation errors")
     warnings: List[str] = Field(default_factory=list, description="Validation warnings (non-blocking)")
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "is_valid": False,
                 "errors": [
@@ -389,3 +365,4 @@ class WorkflowValidationResponse(BaseModel):
                 "warnings": ["Stage 'testing' has no retry configured"]
             }
         }
+    )

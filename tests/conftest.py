@@ -12,8 +12,11 @@ def is_docker_available() -> bool:
     """
     try:
         client = docker.from_env()
-        client.ping()
-        return True
+        try:
+            client.ping()
+            return True
+        finally:
+            client.close()
     except (docker.errors.DockerException, Exception):
         return False
 

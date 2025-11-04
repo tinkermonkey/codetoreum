@@ -119,7 +119,8 @@ def app(mock_command_port, mock_query_port):
 @pytest.fixture
 def client(app):
     """Fixture providing test client."""
-    return TestClient(app)
+    with TestClient(app) as test_client:
+        yield test_client
 
 
 @pytest.fixture

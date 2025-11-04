@@ -3,12 +3,15 @@ Work Item Data Transfer Objects (DTOs)
 
 DTOs for Work Item REST API endpoints. These decouple the external API
 contracts from the internal domain models, allowing independent evolution.
+
+Note: Pydantic v2 automatically serializes datetime objects to ISO 8601 format,
+so explicit json_encoders configuration is no longer needed.
 """
 
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from codetoreum.adapters.primary.api_models import AuditFields, PaginatedResponse
 
@@ -29,10 +32,8 @@ class CreateWorkItemRequest(BaseModel):
     external_id: Optional[str] = Field(None, description="External system ID (e.g., GitHub issue #)")
     external_url: Optional[str] = Field(None, description="External system URL")
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "project_id": "proj-123",
                 "title": "Implement user authentication",
@@ -43,6 +44,7 @@ class CreateWorkItemRequest(BaseModel):
                 "external_url": "https://github.com/org/repo/issues/42"
             }
         }
+    )
 
 
 class UpdateWorkItemRequest(BaseModel):
@@ -53,16 +55,15 @@ class UpdateWorkItemRequest(BaseModel):
     labels: Optional[List[str]] = Field(None, description="Updated labels")
     priority: Optional[str] = Field(None, description="Updated priority: LOW, MEDIUM, HIGH, CRITICAL")
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "title": "Implement user authentication (updated)",
                 "labels": ["feature", "security", "high-priority"],
                 "priority": "CRITICAL"
             }
         }
+    )
 
 
 # ============================================================================
@@ -90,11 +91,8 @@ class WorkItemResponse(BaseModel):
     updated_at: datetime = Field(..., description="Last update timestamp")
     completed_at: Optional[datetime] = Field(None, description="Completion timestamp")
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_encoders = {datetime: lambda v: v.isoformat()}
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "id": "wi-123",
                 "project_id": "proj-123",
@@ -114,6 +112,7 @@ class WorkItemResponse(BaseModel):
                 "completed_at": None
             }
         }
+    )
 
 
 class WorkItemDetailResponse(WorkItemResponse):
@@ -122,11 +121,8 @@ class WorkItemDetailResponse(WorkItemResponse):
     history_event_count: int = Field(..., description="Number of historical events")
     recent_events: List[dict] = Field(default_factory=list, description="Recent domain events")
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_encoders = {datetime: lambda v: v.isoformat()}
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "id": "wi-123",
                 "project_id": "proj-123",
@@ -154,6 +150,7 @@ class WorkItemDetailResponse(WorkItemResponse):
                 ]
             }
         }
+    )
 
 
 class WorkItemListResponse(PaginatedResponse):
@@ -161,10 +158,7 @@ class WorkItemListResponse(PaginatedResponse):
 
     work_items: List[WorkItemResponse] = Field(..., description="List of work items")
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_encoders = {datetime: lambda v: v.isoformat()}
+    model_config = ConfigDict()
 
 
 class WorkItemCommandResult(BaseModel):
@@ -175,10 +169,8 @@ class WorkItemCommandResult(BaseModel):
     message: str = Field(..., description="Result message")
     errors: Optional[List[str]] = Field(None, description="Error messages if any")
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "success": True,
                 "work_item_id": "wi-123",
@@ -186,3 +178,4 @@ class WorkItemCommandResult(BaseModel):
                 "errors": None
             }
         }
+    )

@@ -18,7 +18,8 @@ from codetoreum.adapters.primary.fastapi_app import create_development_app
 def client():
     """Create test client with development app"""
     app = create_development_app()
-    return TestClient(app)
+    with TestClient(app) as test_client:
+        yield test_client
 
 
 class TestHealthEndpoints:

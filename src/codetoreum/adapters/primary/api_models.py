@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 
 # ============================================================================
@@ -20,11 +20,7 @@ from pydantic import BaseModel, Field
 class BaseResponse(BaseModel):
     """Base class for all API responses"""
 
-    class Config:
-        """Pydantic configuration"""
-
-        # Allow datetime serialization
-        json_encoders = {datetime: lambda v: v.isoformat()}
+    model_config = ConfigDict()
 
 
 class SuccessResponse(BaseResponse):
@@ -34,6 +30,8 @@ class SuccessResponse(BaseResponse):
     message: str = Field(..., description="Success message")
     data: Optional[Dict[str, Any]] = Field(None, description="Optional response data")
 
+    model_config = ConfigDict()
+
 
 class ErrorDetail(BaseModel):
     """Detailed error information"""
@@ -41,6 +39,8 @@ class ErrorDetail(BaseModel):
     field: Optional[str] = Field(None, description="Field that caused the error")
     message: str = Field(..., description="Error message")
     code: Optional[str] = Field(None, description="Error code")
+
+    model_config = ConfigDict()
 
 
 class ErrorResponse(BaseResponse):
@@ -59,10 +59,8 @@ class ErrorResponse(BaseResponse):
     )
     path: Optional[str] = Field(None, description="Request path that caused the error")
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "error": "VALIDATION_ERROR",
                 "message": "Invalid request parameters",
@@ -78,6 +76,7 @@ class ErrorResponse(BaseResponse):
                 "path": "/api/v2/workflows",
             }
         }
+    )
 
 
 # ============================================================================
@@ -95,6 +94,8 @@ class HealthCheckResponse(BaseResponse):
         default_factory=datetime.utcnow, description="Check timestamp"
     )
 
+    model_config = ConfigDict()
+
 
 class ReadinessCheckResponse(BaseResponse):
     """Readiness check response"""
@@ -107,6 +108,8 @@ class ReadinessCheckResponse(BaseResponse):
     timestamp: datetime = Field(
         default_factory=datetime.utcnow, description="Check timestamp"
     )
+
+    model_config = ConfigDict()
 
 
 # ============================================================================
@@ -122,6 +125,8 @@ class TokenInfoResponse(BaseResponse):
     subject: str = Field(..., description="Token subject")
     is_valid: bool = Field(..., description="Whether token is currently valid")
 
+    model_config = ConfigDict()
+
 
 # ============================================================================
 # Pagination Models
@@ -134,6 +139,8 @@ class PaginationParams(BaseModel):
     page: int = Field(1, ge=1, description="Page number (1-indexed)")
     page_size: int = Field(50, ge=1, le=100, description="Items per page (max: 100)")
 
+    model_config = ConfigDict()
+
 
 class PaginatedResponse(BaseResponse):
     """Base class for paginated responses"""
@@ -142,6 +149,8 @@ class PaginatedResponse(BaseResponse):
     page: int = Field(..., description="Current page number")
     page_size: int = Field(..., description="Items per page")
     has_next: bool = Field(..., description="Whether there are more pages")
+
+    model_config = ConfigDict()
 
 
 # ============================================================================
@@ -155,12 +164,16 @@ class TimestampFields(BaseModel):
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
+    model_config = ConfigDict()
+
 
 class AuditFields(TimestampFields):
     """Common audit fields"""
 
     created_by: Optional[str] = Field(None, description="Creator identifier")
     updated_by: Optional[str] = Field(None, description="Last updater identifier")
+
+    model_config = ConfigDict()
 
 
 # ============================================================================

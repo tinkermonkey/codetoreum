@@ -55,7 +55,8 @@ def test_app(auth_deps):
 @pytest.fixture
 def client(test_app):
     """Create test client"""
-    return TestClient(test_app)
+    with TestClient(test_app) as test_client:
+        yield test_client
 
 
 class TestPublicEndpoints:

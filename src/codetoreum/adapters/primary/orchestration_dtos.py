@@ -7,7 +7,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from codetoreum.adapters.primary.api_models import PaginatedResponse
 
@@ -35,10 +35,8 @@ class StartWorkflowExecutionRequest(BaseModel):
     priority: ExecutionPriority = Field(ExecutionPriority.MEDIUM, description="Execution priority")
     context: Dict[str, Any] = Field(default_factory=dict, description="Additional execution context")
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "work_item_id": "wi-123",
                 "workflow_id": "wf-456",
@@ -50,6 +48,7 @@ class StartWorkflowExecutionRequest(BaseModel):
                 }
             }
         }
+    )
 
 
 class CancelWorkflowExecutionRequest(BaseModel):
@@ -58,15 +57,14 @@ class CancelWorkflowExecutionRequest(BaseModel):
     reason: str = Field(..., description="Reason for cancellation", min_length=1, max_length=500)
     force: bool = Field(False, description="Force immediate cancellation without cleanup")
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "reason": "User requested cancellation",
                 "force": False
             }
         }
+    )
 
 
 class PauseWorkflowExecutionRequest(BaseModel):
@@ -74,14 +72,13 @@ class PauseWorkflowExecutionRequest(BaseModel):
 
     reason: str = Field(..., description="Reason for pausing", min_length=1, max_length=500)
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "reason": "Waiting for external dependency"
             }
         }
+    )
 
 
 class ResumeWorkflowExecutionRequest(BaseModel):
@@ -89,14 +86,13 @@ class ResumeWorkflowExecutionRequest(BaseModel):
 
     from_stage: Optional[str] = Field(None, description="Stage to resume from (defaults to paused stage)", max_length=100)
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "from_stage": None
             }
         }
+    )
 
 
 # ============================================================================
@@ -116,11 +112,8 @@ class WorkflowExecutionResponse(BaseModel):
     started_at: Optional[datetime] = Field(None, description="Execution start time")
     message: str = Field(..., description="Status message")
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_encoders = {datetime: lambda v: v.isoformat()}
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "execution_id": "exec-789",
                 "workflow_run_id": "wr-123",
@@ -132,6 +125,7 @@ class WorkflowExecutionResponse(BaseModel):
                 "message": "Workflow execution started successfully"
             }
         }
+    )
 
 
 class StartWorkflowExecutionResponse(BaseModel):
@@ -143,11 +137,8 @@ class StartWorkflowExecutionResponse(BaseModel):
     message: str = Field(..., description="Response message")
     started_at: datetime = Field(..., description="Start timestamp")
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_encoders = {datetime: lambda v: v.isoformat()}
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "execution_id": "exec-789",
                 "workflow_run_id": "wr-123",
@@ -156,6 +147,7 @@ class StartWorkflowExecutionResponse(BaseModel):
                 "started_at": "2025-11-03T10:30:00Z"
             }
         }
+    )
 
 
 # ============================================================================
@@ -179,11 +171,8 @@ class QueuedExecutionInfo(BaseModel):
     started_at: Optional[datetime] = Field(None, description="When execution started (if running)")
     estimated_duration_seconds: Optional[int] = Field(None, description="Estimated duration")
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_encoders = {datetime: lambda v: v.isoformat()}
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "execution_id": "exec-789",
                 "workflow_run_id": "wr-123",
@@ -199,6 +188,7 @@ class QueuedExecutionInfo(BaseModel):
                 "estimated_duration_seconds": 1800
             }
         }
+    )
 
 
 class ExecutionQueueResponse(PaginatedResponse):
@@ -210,11 +200,8 @@ class ExecutionQueueResponse(PaginatedResponse):
         description="Queue statistics (total_queued, total_running, by_priority, etc.)"
     )
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_encoders = {datetime: lambda v: v.isoformat()}
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "executions": [
                     {
@@ -246,6 +233,7 @@ class ExecutionQueueResponse(PaginatedResponse):
                 }
             }
         }
+    )
 
 
 # ============================================================================
@@ -260,16 +248,15 @@ class EntryConditionValidationRequest(BaseModel):
     workflow_id: str = Field(..., description="Workflow ID to validate against", min_length=1, max_length=100)
     stage_name: Optional[str] = Field(None, description="Specific stage to validate (optional)", max_length=100)
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "work_item_id": "wi-123",
                 "workflow_id": "wf-456",
                 "stage_name": "development"
             }
         }
+    )
 
 
 class ConditionValidationResult(BaseModel):
@@ -280,10 +267,8 @@ class ConditionValidationResult(BaseModel):
     message: str = Field(..., description="Validation message", max_length=500)
     details: Dict[str, Any] = Field(default_factory=dict, description="Additional details")
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "condition_type": "work_item_status",
                 "is_met": True,
@@ -291,6 +276,7 @@ class ConditionValidationResult(BaseModel):
                 "details": {"expected": "in_progress", "actual": "in_progress"}
             }
         }
+    )
 
 
 class EntryConditionValidationResponse(BaseModel):
@@ -301,10 +287,8 @@ class EntryConditionValidationResponse(BaseModel):
     condition_results: List[ConditionValidationResult] = Field(..., description="Results for each condition")
     blocking_conditions: List[str] = Field(default_factory=list, description="Conditions that are not met")
 
-    class Config:
-        """Pydantic configuration"""
-
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "can_start": True,
                 "stage_name": "development",
@@ -319,3 +303,4 @@ class EntryConditionValidationResponse(BaseModel):
                 "blocking_conditions": []
             }
         }
+    )

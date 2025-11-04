@@ -55,7 +55,8 @@ def test_app(
 @pytest.fixture
 def client(test_app: FastAPI) -> TestClient:
     """Create test client for making HTTP requests."""
-    return TestClient(test_app)
+    with TestClient(test_app) as test_client:
+        yield test_client
 
 
 # ============================================================================

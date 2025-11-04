@@ -17,7 +17,8 @@ def client():
     os.environ["CODETOREUM_DISABLE_AUTH"] = "true"
     try:
         app = create_development_app()
-        return TestClient(app)
+        with TestClient(app) as test_client:
+            yield test_client
     finally:
         # Clean up environment variable
         os.environ.pop("CODETOREUM_DISABLE_AUTH", None)
