@@ -1273,6 +1273,301 @@ def create_development_app() -> FastAPI:
                 condition_details=[],
             )
 
+    class MockAgentCommandPort(IAgentCommandPort):
+        """Mock agent command port for development."""
+
+        async def create_agent(self, command):
+            from codetoreum.domain.agent import Agent
+            return Agent(
+                agent_id="agent-mock-123",
+                name=command.name,
+                display_name=command.display_name,
+                agent_type=command.agent_type,
+                role_description=command.role_description,
+                model=command.model,
+                capabilities=command.capabilities,
+            )
+
+        async def update_agent(self, command):
+            from codetoreum.domain.agent import Agent, AgentType
+            return Agent(
+                agent_id=command.agent_id,
+                name="mock_agent",
+                display_name="Mock Agent",
+                agent_type=AgentType.CODE_REVIEWER,
+                role_description="Mock agent",
+                model="claude-3-sonnet",
+                capabilities={},
+            )
+
+        async def add_capability(self, command):
+            from codetoreum.domain.agent import Agent, AgentType
+            return Agent(
+                agent_id=command.agent_id,
+                name="mock_agent",
+                display_name="Mock Agent",
+                agent_type=AgentType.CODE_REVIEWER,
+                role_description="Mock agent",
+                model="claude-3-sonnet",
+                capabilities={},
+            )
+
+        async def remove_capability(self, command):
+            from codetoreum.domain.agent import Agent, AgentType
+            return Agent(
+                agent_id=command.agent_id,
+                name="mock_agent",
+                display_name="Mock Agent",
+                agent_type=AgentType.CODE_REVIEWER,
+                role_description="Mock agent",
+                model="claude-3-sonnet",
+                capabilities={},
+            )
+
+        async def update_capability(self, command):
+            from codetoreum.domain.agent import Agent, AgentType
+            return Agent(
+                agent_id=command.agent_id,
+                name="mock_agent",
+                display_name="Mock Agent",
+                agent_type=AgentType.CODE_REVIEWER,
+                role_description="Mock agent",
+                model="claude-3-sonnet",
+                capabilities={},
+            )
+
+        async def add_mcp_server(self, command):
+            from codetoreum.domain.agent import Agent, AgentType
+            return Agent(
+                agent_id=command.agent_id,
+                name="mock_agent",
+                display_name="Mock Agent",
+                agent_type=AgentType.CODE_REVIEWER,
+                role_description="Mock agent",
+                model="claude-3-sonnet",
+                capabilities={},
+            )
+
+        async def remove_mcp_server(self, command):
+            from codetoreum.domain.agent import Agent, AgentType
+            return Agent(
+                agent_id=command.agent_id,
+                name="mock_agent",
+                display_name="Mock Agent",
+                agent_type=AgentType.CODE_REVIEWER,
+                role_description="Mock agent",
+                model="claude-3-sonnet",
+                capabilities={},
+            )
+
+        async def delete_agent(self, agent_id: str):
+            from codetoreum.ports.input.agent_command import AgentCommandResult
+            return AgentCommandResult(
+                success=True,
+                agent_id=agent_id,
+                message="Agent deleted (mock)",
+                version=1,
+            )
+
+    class MockAgentQueryPort(IAgentQueryPort):
+        """Mock agent query port for development."""
+
+        async def get_agent(self, agent_id: str, include_stats: bool = False):
+            from codetoreum.ports.input.agent_query import AgentInfo
+            return AgentInfo(
+                id=agent_id,
+                name="mock_agent",
+                display_name="Mock Agent",
+                agent_type="CODE_REVIEWER",
+                role_description="Mock agent for testing",
+                model="claude-3-sonnet",
+                timeout_seconds=300,
+                max_retries=3,
+                requires_docker=True,
+                requires_dev_container=False,
+                makes_code_changes=False,
+                filesystem_write_allowed=True,
+                mcp_servers=[],
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+                capabilities={},
+            )
+
+        async def get_agent_by_name(self, name: str, include_stats: bool = False):
+            from codetoreum.ports.input.agent_query import AgentInfo
+            return AgentInfo(
+                id="agent-mock-123",
+                name=name,
+                display_name="Mock Agent",
+                agent_type="CODE_REVIEWER",
+                role_description="Mock agent for testing",
+                model="claude-3-sonnet",
+                timeout_seconds=300,
+                max_retries=3,
+                requires_docker=True,
+                requires_dev_container=False,
+                makes_code_changes=False,
+                filesystem_write_allowed=True,
+                mcp_servers=[],
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+                capabilities={},
+            )
+
+        async def list_agents(self, filters=None, pagination=None):
+            from codetoreum.ports.input.agent_query import AgentInfo, AgentListResult
+            return AgentListResult(
+                agents=[
+                    AgentInfo(
+                        id="agent-mock-1",
+                        name="mock_agent_1",
+                        display_name="Mock Agent 1",
+                        agent_type="CODE_REVIEWER",
+                        role_description="Mock agent for testing",
+                        model="claude-3-sonnet",
+                        timeout_seconds=300,
+                        max_retries=3,
+                        requires_docker=True,
+                        requires_dev_container=False,
+                        makes_code_changes=False,
+                        filesystem_write_allowed=True,
+                        mcp_servers=[],
+                        created_at=datetime.utcnow(),
+                        updated_at=datetime.utcnow(),
+                        capabilities={},
+                    )
+                ],
+                total_count=1,
+                offset=0,
+                limit=20,
+                has_next=False,
+            )
+
+        async def list_agents_by_capability(self, capability: str, min_proficiency: float = 0.0, pagination=None):
+            from codetoreum.ports.input.agent_query import AgentListResult
+            return AgentListResult(
+                agents=[],
+                total_count=0,
+                offset=0,
+                limit=20,
+                has_next=False,
+            )
+
+        async def count_agents(self, filters=None):
+            return 1
+
+    class MockExecutionCommandPort(IExecutionCommandPort):
+        """Mock execution command port for development."""
+
+        async def terminate_execution(self, command):
+            from codetoreum.ports.input.execution_command import ExecutionCommandResult
+            return ExecutionCommandResult(
+                success=True,
+                execution_id=command.execution_id,
+                message="Execution terminated (mock)",
+                new_status="TERMINATED",
+            )
+
+        async def pause_execution(self, command):
+            from codetoreum.ports.input.execution_command import ExecutionCommandResult
+            return ExecutionCommandResult(
+                success=True,
+                execution_id=command.execution_id,
+                message="Execution paused (mock)",
+                new_status="PAUSED",
+            )
+
+        async def resume_execution(self, command):
+            from codetoreum.ports.input.execution_command import ExecutionCommandResult
+            return ExecutionCommandResult(
+                success=True,
+                execution_id=command.execution_id,
+                message="Execution resumed (mock)",
+                new_status="RUNNING",
+            )
+
+    class MockExecutionQueryPort(IExecutionQueryPort):
+        """Mock execution query port for development."""
+
+        async def get_execution(self, execution_id: str):
+            from codetoreum.ports.input.execution_query import ExecutionInfo
+            from codetoreum.domain.agent_execution import ExecutionStatus
+            return ExecutionInfo(
+                id=execution_id,
+                agent_id="agent-mock-123",
+                agent_name="mock_agent",
+                work_item_id="wi-mock-123",
+                workflow_id="wf-mock-123",
+                stage_name="development",
+                status=ExecutionStatus.RUNNING,
+                container_name=None,
+                container_id=None,
+                output=None,
+                error_message=None,
+                error_detail=None,
+                exit_code=None,
+                input_tokens=0,
+                output_tokens=0,
+                duration_seconds=None,
+                initialized_at=datetime.utcnow(),
+                started_at=datetime.utcnow(),
+                completed_at=None,
+            )
+
+        async def list_executions(self, filters=None, pagination=None):
+            from codetoreum.ports.input.execution_query import ExecutionInfo, ExecutionListResult
+            from codetoreum.domain.agent_execution import ExecutionStatus
+            return ExecutionListResult(
+                executions=[
+                    ExecutionInfo(
+                        id="exec-mock-1",
+                        agent_id="agent-mock-123",
+                        agent_name="mock_agent",
+                        work_item_id="wi-mock-123",
+                        workflow_id="wf-mock-123",
+                        stage_name="development",
+                        status=ExecutionStatus.RUNNING,
+                        container_name=None,
+                        container_id=None,
+                        output=None,
+                        error_message=None,
+                        error_detail=None,
+                        exit_code=None,
+                        input_tokens=0,
+                        output_tokens=0,
+                        duration_seconds=None,
+                        initialized_at=datetime.utcnow(),
+                        started_at=datetime.utcnow(),
+                        completed_at=None,
+                    )
+                ],
+                total_count=1,
+                offset=0,
+                limit=20,
+                has_next=False,
+            )
+
+        async def get_execution_logs(self, execution_id: str, stage=None, tail=None):
+            from codetoreum.ports.input.execution_query import ExecutionLogs
+            return ExecutionLogs(
+                execution_id=execution_id,
+                logs=[],
+                total_lines=0,
+                stage=stage,
+                has_more=False,
+            )
+
+        async def get_execution_history(self, execution_id: str, limit=None):
+            from codetoreum.ports.input.execution_query import ExecutionHistory
+            return ExecutionHistory(
+                execution_id=execution_id,
+                events=[],
+                total_events=0,
+            )
+
+        async def count_executions(self, filters=None):
+            return 1
+
     return create_app(
         workflow_command_port=MockWorkflowCommandPort(),
         task_query_port=MockTaskQueryPort(),
@@ -1282,6 +1577,10 @@ def create_development_app() -> FastAPI:
         workflow_query_port=MockWorkflowQueryPort(),
         workflow_definition_command_port=MockWorkflowDefinitionCommandPort(),
         orchestration_command_port=MockOrchestrationCommandPort(),
+        agent_command_port=MockAgentCommandPort(),
+        agent_query_port=MockAgentQueryPort(),
+        execution_command_port=MockExecutionCommandPort(),
+        execution_query_port=MockExecutionQueryPort(),
         event_bus=MockEventBus(),
         config_service=MockConfigService(),
         logger=MockLogger(),
