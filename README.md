@@ -101,6 +101,30 @@ codetoreum/
    poetry run pytest
    ```
 
+### Configuration
+
+1. **Copy environment configuration**:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. **Configure environment variables**:
+
+   Edit `.env` and set the required values:
+
+   **IMPORTANT for Production**: Generate a secure secret key for JWT authentication:
+   ```bash
+   python -c 'import secrets; print(secrets.token_urlsafe(64))'
+   ```
+
+   Then set in your `.env` file:
+   ```bash
+   CODETOREUM_SECRET_KEY=<generated-secret-key>
+   CODETOREUM_ENV=production
+   ```
+
+   Without a persistent secret key in production, all JWT tokens will be invalidated on server restart.
+
 ### Development Setup
 
 1. **Activate virtual environment**:

@@ -16,11 +16,15 @@ full JWT-based system with user accounts. The API surface (token validation
 dependency) will remain similar, making the migration straightforward.
 """
 
+import logging
+import os
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional
 
 from jose import JWTError, jwt
+
+logger = logging.getLogger(__name__)
 
 
 class SimpleTokenAuthManager:
@@ -48,8 +52,35 @@ class SimpleTokenAuthManager:
             secret_key: Optional secret key. If not provided, one will be generated.
                        For production, provide a persistent secret key via environment variable.
             token_expiry_days: How long the token is valid (default: 365 days, configurable via CODETOREUM_TOKEN_EXPIRATION_DAYS)
+
+        Raises:
+            ValueError: If secret_key is not provided in production mode
+
+        Note:
+            In production (CODETOREUM_ENV=production), a secret key MUST be provided
+            via the CODETOREUM_SECRET_KEY environment variable. Otherwise, tokens will
+            be invalidated on every server restart.
+
+            To generate a secret key, run:
+                python -c 'import secrets; print(secrets.token_urlsafe(64))'
         """
-        import os
+        # Check if running in production mode
+        is_production = os.getenv("CODETOREUM_ENV", "development") == "production"
+
+        # In production, require explicit secret key
+        if is_production and (not secret_key or not secret_key.strip()):
+            raise ValueError(
+                "CODETOREUM_SECRET_KEY environment variable is required in production. "
+                "All tokens will be invalidated on server restart without a persistent secret key. "
+                "Generate one with: python -c 'import secrets; print(secrets.token_urlsafe(64))'"
+            )
+
+        # In development, warn about auto-generated secret
+        if not secret_key:
+            logger.warning(
+                "Using auto-generated secret key. All tokens will be invalidated on restart. "
+                "Set CODETOREUM_SECRET_KEY environment variable for persistent tokens."
+            )
 
         # Generate or use provided secret key (64 bytes for long-lived tokens)
         self.secret_key = secret_key or secrets.token_urlsafe(64)

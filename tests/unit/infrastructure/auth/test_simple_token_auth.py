@@ -4,10 +4,12 @@ Unit tests for Simple Token Authentication
 Tests the JupyterLab-style token generation, validation, and security properties.
 """
 
+import os
 import pytest
 import secrets
 from datetime import datetime, timedelta
 from jose import jwt
+from unittest.mock import patch
 
 from codetoreum.infrastructure.auth import SimpleTokenAuthManager
 
@@ -277,6 +279,134 @@ class TestSimpleTokenAuthManager:
 
         for token in malformed_tokens:
             assert manager.validate_token(token) is False
+
+
+class TestSecretKeyValidation:
+    """Test suite for secret key validation and environment handling"""
+
+    @patch.dict(os.environ, {"CODETOREUM_ENV": "production"}, clear=False)
+    def test_production_requires_secret_key(self):
+        """Test that production mode requires explicit secret key"""
+        with pytest.raises(ValueError) as exc_info:
+            SimpleTokenAuthManager()
+
+        error_msg = str(exc_info.value)
+        assert "CODETOREUM_SECRET_KEY" in error_msg
+        assert "production" in error_msg
+        assert "secrets.token_urlsafe(64)" in error_msg
+
+    @patch.dict(os.environ, {"CODETOREUM_ENV": "production"}, clear=False)
+    def test_production_accepts_explicit_secret_key(self):
+        """Test that production mode works with explicit secret key"""
+        secret_key = "my-production-secret-key"
+        manager = SimpleTokenAuthManager(secret_key=secret_key)
+
+        assert manager.secret_key == secret_key
+        assert manager.server_token
+        assert manager.validate_token(manager.server_token) is True
+
+    @patch.dict(os.environ, {"CODETOREUM_ENV": "development"}, clear=False)
+    def test_development_allows_auto_generated_secret(self, caplog):
+        """Test that development mode allows auto-generated secret key"""
+        import logging
+        caplog.set_level(logging.WARNING)
+
+        manager = SimpleTokenAuthManager()
+
+        # Should generate a secret key
+        assert manager.secret_key
+        assert len(manager.secret_key) > 20
+
+        # Should log a warning
+        assert any("auto-generated secret key" in record.message.lower()
+                   for record in caplog.records)
+        assert any("CODETOREUM_SECRET_KEY" in record.message
+                   for record in caplog.records)
+
+    @patch.dict(os.environ, {"CODETOREUM_ENV": "development"}, clear=False)
+    def test_development_accepts_explicit_secret_key(self, caplog):
+        """Test that development mode works with explicit secret key"""
+        import logging
+        caplog.set_level(logging.WARNING)
+
+        secret_key = "my-dev-secret-key"
+        manager = SimpleTokenAuthManager(secret_key=secret_key)
+
+        assert manager.secret_key == secret_key
+
+        # Should NOT log a warning when explicit key is provided
+        assert not any("auto-generated" in record.message.lower()
+                       for record in caplog.records)
+
+    @patch.dict(os.environ, {}, clear=False)
+    def test_default_environment_is_development(self, caplog):
+        """Test that default environment (no CODETOREUM_ENV) behaves as development"""
+        import logging
+        caplog.set_level(logging.WARNING)
+
+        # Remove CODETOREUM_ENV if it exists
+        os.environ.pop("CODETOREUM_ENV", None)
+
+        manager = SimpleTokenAuthManager()
+
+        # Should work (not raise ValueError)
+        assert manager.secret_key
+        assert manager.server_token
+
+        # Should log warning about auto-generated key
+        assert any("auto-generated" in record.message.lower()
+                   for record in caplog.records)
+
+    @patch.dict(os.environ, {"CODETOREUM_ENV": "staging"}, clear=False)
+    def test_non_production_environment_allows_auto_generated_secret(self, caplog):
+        """Test that non-production environments (staging, test, etc.) allow auto-generated secrets"""
+        import logging
+        caplog.set_level(logging.WARNING)
+
+        manager = SimpleTokenAuthManager()
+
+        # Should work (staging is not production)
+        assert manager.secret_key
+        assert manager.server_token
+
+        # Should log warning
+        assert any("auto-generated" in record.message.lower()
+                   for record in caplog.records)
+
+    def test_error_message_includes_generation_instructions(self):
+        """Test that production error message includes instructions for generating secret key"""
+        with patch.dict(os.environ, {"CODETOREUM_ENV": "production"}, clear=False):
+            with pytest.raises(ValueError) as exc_info:
+                SimpleTokenAuthManager()
+
+            error_msg = str(exc_info.value)
+            # Should include the python command to generate a key
+            assert "python -c" in error_msg
+            assert "secrets.token_urlsafe(64)" in error_msg
+
+    @patch.dict(os.environ, {"CODETOREUM_ENV": "production"}, clear=False)
+    def test_production_with_empty_string_secret_key_fails(self):
+        """Test that production mode rejects empty string as secret key"""
+        with pytest.raises(ValueError) as exc_info:
+            SimpleTokenAuthManager(secret_key="")
+
+        assert "CODETOREUM_SECRET_KEY" in str(exc_info.value)
+
+    @patch.dict(os.environ, {"CODETOREUM_ENV": "production"}, clear=False)
+    def test_production_with_whitespace_secret_key_fails(self):
+        """Test that production mode rejects whitespace-only secret key"""
+        with pytest.raises(ValueError) as exc_info:
+            SimpleTokenAuthManager(secret_key="   ")
+
+        assert "CODETOREUM_SECRET_KEY" in str(exc_info.value)
+
+    @patch.dict(os.environ, {"CODETOREUM_ENV": "production"}, clear=False)
+    def test_production_with_none_secret_key_fails(self):
+        """Test that production mode rejects None as secret key"""
+        with pytest.raises(ValueError) as exc_info:
+            SimpleTokenAuthManager(secret_key=None)
+
+        assert "CODETOREUM_SECRET_KEY" in str(exc_info.value)
 
 
 if __name__ == "__main__":
