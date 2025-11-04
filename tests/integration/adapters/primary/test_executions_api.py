@@ -628,7 +628,7 @@ class TestGetExecutionLogs:
             ],
             total_lines=3,
             has_more=False,
-            stage_filter=None,
+            stage=None,
         )
 
         # Act
@@ -662,7 +662,7 @@ class TestGetExecutionLogs:
             ],
             total_lines=1,
             has_more=True,
-            stage_filter=None,
+            stage=None,
         )
 
         # Act
@@ -676,8 +676,9 @@ class TestGetExecutionLogs:
 
         # Verify tail was applied
         mock_query_port._get_execution_logs.assert_called_once()
-        call_kwargs = mock_query_port._get_execution_logs.call_args[1]
-        assert call_kwargs["tail"] == 1
+        call_args = mock_query_port._get_execution_logs.call_args[0]
+        # Args are: execution_id, stage, tail
+        assert call_args[2] == 1
 
     def test_get_execution_logs_with_stage_filter(self, client, mock_query_port):
         """Test execution logs retrieval with stage filter."""
@@ -697,7 +698,7 @@ class TestGetExecutionLogs:
             ],
             total_lines=1,
             has_more=False,
-            stage_filter="development",
+            stage="development",
         )
 
         # Act
@@ -711,8 +712,9 @@ class TestGetExecutionLogs:
 
         # Verify stage filter was applied
         mock_query_port._get_execution_logs.assert_called_once()
-        call_kwargs = mock_query_port._get_execution_logs.call_args[1]
-        assert call_kwargs["stage"] == "development"
+        call_args = mock_query_port._get_execution_logs.call_args[0]
+        # Args are: execution_id, stage, tail
+        assert call_args[1] == "development"
 
     def test_get_execution_logs_not_found(self, client, mock_query_port):
         """Test execution logs retrieval when execution not found."""
@@ -736,27 +738,27 @@ class TestGetExecutionHistory:
     def test_get_execution_history_success(self, client, mock_query_port):
         """Test successful execution history retrieval."""
         # Arrange
-        from codetoreum.ports.input.execution_query import ExecutionHistory
+        from codetoreum.ports.input.execution_query import ExecutionHistory, ExecutionHistoryEntry
 
         now = datetime.now(timezone.utc)
         mock_query_port._get_execution_history.return_value = ExecutionHistory(
             execution_id="exec-123",
             events=[
-                {
-                    "event_type": "ExecutionInitialized",
-                    "occurred_at": now.isoformat(),
-                    "payload": {"agent_id": "agent-123"},
-                },
-                {
-                    "event_type": "ExecutionStarted",
-                    "occurred_at": now.isoformat(),
-                    "payload": {"container_id": "container-123"},
-                },
-                {
-                    "event_type": "ExecutionCompleted",
-                    "occurred_at": now.isoformat(),
-                    "payload": {"duration_seconds": 120.5},
-                },
+                ExecutionHistoryEntry(
+                    event_type="ExecutionInitialized",
+                    occurred_at=now,
+                    payload={"agent_id": "agent-123"},
+                ),
+                ExecutionHistoryEntry(
+                    event_type="ExecutionStarted",
+                    occurred_at=now,
+                    payload={"container_id": "container-123"},
+                ),
+                ExecutionHistoryEntry(
+                    event_type="ExecutionCompleted",
+                    occurred_at=now,
+                    payload={"duration_seconds": 120.5},
+                ),
             ],
             total_events=3,
         )
@@ -777,17 +779,17 @@ class TestGetExecutionHistory:
     def test_get_execution_history_with_limit(self, client, mock_query_port):
         """Test execution history retrieval with limit."""
         # Arrange
-        from codetoreum.ports.input.execution_query import ExecutionHistory
+        from codetoreum.ports.input.execution_query import ExecutionHistory, ExecutionHistoryEntry
 
         now = datetime.now(timezone.utc)
         mock_query_port._get_execution_history.return_value = ExecutionHistory(
             execution_id="exec-123",
             events=[
-                {
-                    "event_type": "ExecutionCompleted",
-                    "occurred_at": now.isoformat(),
-                    "payload": {"duration_seconds": 120.5},
-                },
+                ExecutionHistoryEntry(
+                    event_type="ExecutionCompleted",
+                    occurred_at=now,
+                    payload={"duration_seconds": 120.5},
+                ),
             ],
             total_events=10,
         )
@@ -803,8 +805,9 @@ class TestGetExecutionHistory:
 
         # Verify limit was applied
         mock_query_port._get_execution_history.assert_called_once()
-        call_kwargs = mock_query_port._get_execution_history.call_args[1]
-        assert call_kwargs["limit"] == 1
+        call_args = mock_query_port._get_execution_history.call_args[0]
+        # Args are: execution_id, limit
+        assert call_args[1] == 1
 
     def test_get_execution_history_not_found(self, client, mock_query_port):
         """Test execution history retrieval when execution not found."""

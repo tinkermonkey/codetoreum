@@ -78,14 +78,22 @@ class MockAgentQueryPort(IAgentQueryPort):
 
     def __init__(self):
         self._get_agent = AsyncMock()
+        self._get_agent_by_name = AsyncMock()
         self._list_agents = AsyncMock()
+        self._list_agents_by_capability = AsyncMock()
         self._count_agents = AsyncMock()
 
     async def get_agent(self, agent_id, include_stats=False):
         return await self._get_agent(agent_id, include_stats)
 
+    async def get_agent_by_name(self, name, include_stats=False):
+        return await self._get_agent_by_name(name, include_stats)
+
     async def list_agents(self, filters=None, pagination=None):
         return await self._list_agents(filters, pagination)
+
+    async def list_agents_by_capability(self, capability, min_proficiency=0.0, pagination=None):
+        return await self._list_agents_by_capability(capability, min_proficiency, pagination)
 
     async def count_agents(self, filters=None):
         return await self._count_agents(filters)
@@ -136,7 +144,7 @@ def sample_agent():
     now = datetime.now(timezone.utc)
     return Agent(
         id="agent-123",
-        name="test-agent",
+        name="test_agent",
         display_name="Test Agent",
         agent_type=AgentType.MAKER,
         role_description="A test agent for testing",
@@ -160,9 +168,9 @@ def sample_agent():
         makes_code_changes=True,
         filesystem_write_allowed=True,
         mcp_servers=["artifacts", "logging"],
+        metadata={},
         created_at=now,
         updated_at=now,
-        version=1,
     )
 
 
@@ -232,7 +240,7 @@ class TestListAgents:
         assert data["total_count"] == 1
         assert len(data["agents"]) == 1
         assert data["agents"][0]["id"] == "agent-123"
-        assert data["agents"][0]["name"] == "test-agent"
+        assert data["agents"][0]["name"] == "test_agent"
         assert data["has_next"] is False
 
     def test_list_agents_with_capability_filter(
@@ -359,7 +367,7 @@ class TestListAgents:
         data = response.json()
         assert data["total_count"] == 100
         assert data["page"] == 1  # (offset=20 / limit=50) + 1 = 1
-        assert data["page_size"] == 50
+        assert data["limit"] == 50
         assert data["has_next"] is True
 
     def test_list_agents_with_sorting(self, client, mock_query_port, sample_agent_info):
@@ -436,11 +444,11 @@ class TestGetAgent:
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == "agent-123"
-        assert data["name"] == "test-agent"
+        assert data["name"] == "test_agent"
         assert data["display_name"] == "Test Agent"
         assert data["agent_type"] == "maker"
         assert "code_review" in data["capabilities"]
-        assert data["capabilities"]["code_review"]["proficiency"] == 0.9
+        assert data["capabilities"]["code_review"] == 0.9
 
     def test_get_agent_with_stats(self, client, mock_query_port, sample_agent_info):
         """Test agent retrieval with execution stats."""
@@ -520,7 +528,7 @@ class TestCreateAgent:
         mock_query_port._get_agent.return_value = sample_agent_info
 
         request_data = {
-            "name": "test-agent",
+            "name": "test_agent",
             "display_name": "Test Agent",
             "agent_type": "maker",
             "role_description": "A test agent for testing",
@@ -551,14 +559,14 @@ class TestCreateAgent:
         assert response.status_code == 201
         data = response.json()
         assert data["id"] == "agent-123"
-        assert data["name"] == "test-agent"
+        assert data["name"] == "test_agent"
         assert data["agent_type"] == "maker"
 
         # Verify command port was called
         mock_command_port._create_agent.assert_called_once()
         call_args = mock_command_port._create_agent.call_args[0][0]
         assert isinstance(call_args, CreateAgentCommand)
-        assert call_args.name == "test-agent"
+        assert call_args.name == "test_agent"
 
     def test_create_agent_with_defaults(
         self, client, mock_command_port, mock_query_port, sample_agent, sample_agent_info
@@ -569,7 +577,7 @@ class TestCreateAgent:
         mock_query_port._get_agent.return_value = sample_agent_info
 
         request_data = {
-            "name": "test-agent",
+            "name": "test_agent",
             "display_name": "Test Agent",
             "agent_type": "maker",
             "role_description": "A test agent for testing",
@@ -588,7 +596,7 @@ class TestCreateAgent:
         # Assert
         assert response.status_code == 201
         data = response.json()
-        assert data["name"] == "test-agent"
+        assert data["name"] == "test_agent"
 
     def test_create_agent_validation_error_invalid_name(self, client):
         """Test agent creation with invalid name."""
@@ -617,7 +625,7 @@ class TestCreateAgent:
         """Test agent creation with invalid agent type."""
         # Arrange
         request_data = {
-            "name": "test-agent",
+            "name": "test_agent",
             "display_name": "Test Agent",
             "agent_type": "invalid_type",
             "role_description": "A test agent for testing",
@@ -642,11 +650,11 @@ class TestCreateAgent:
         """Test agent creation when name already exists."""
         # Arrange
         mock_command_port._create_agent.side_effect = ValueError(
-            "Agent with name 'test-agent' already exists"
+            "Agent with name 'test_agent_existing' already exists"
         )
 
         request_data = {
-            "name": "test-agent",
+            "name": "test_agent_existing",
             "display_name": "Test Agent",
             "agent_type": "maker",
             "role_description": "A test agent for testing",
@@ -671,7 +679,7 @@ class TestCreateAgent:
         """Test agent creation with invalid proficiency level."""
         # Arrange
         request_data = {
-            "name": "test-agent",
+            "name": "test_agent",
             "display_name": "Test Agent",
             "agent_type": "maker",
             "role_description": "A test agent for testing",
@@ -1015,6 +1023,7 @@ class TestDeleteAgent:
             success=True,
             agent_id="agent-123",
             message="Agent deleted successfully",
+            version=1,
         )
 
         # Act

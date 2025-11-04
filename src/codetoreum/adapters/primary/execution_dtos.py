@@ -102,6 +102,7 @@ class ExecutionListResponse(BaseModel):
     offset: int
     limit: int
     page: int = 1
+    page_size: int = 20
     has_next: bool
 
 

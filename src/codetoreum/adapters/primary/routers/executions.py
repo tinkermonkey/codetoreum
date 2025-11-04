@@ -9,7 +9,8 @@ crashes, timeouts, and agent failures.
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import status as http_status
 
 from codetoreum.adapters.primary.execution_dtos import (
     ExecutionCommandResult,
@@ -125,7 +126,7 @@ def create_executions_router(
                     status_enum = ExecutionStatus(status.lower())
                 except ValueError:
                     raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
+                        status_code=http_status.HTTP_400_BAD_REQUEST,
                         detail=f"Invalid status: {status}. Must be one of: pending, initialized, running, completed, failed, timeout, cancelled",
                     )
 
@@ -137,7 +138,7 @@ def create_executions_router(
                     start_date_dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
                 except ValueError:
                     raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
+                        status_code=http_status.HTTP_400_BAD_REQUEST,
                         detail=f"Invalid start_date format: {start_date}. Use ISO 8601 format (e.g., '2025-01-01' or '2025-01-01T10:30:00Z')",
                     )
 
@@ -146,14 +147,14 @@ def create_executions_router(
                     end_date_dt = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
                 except ValueError:
                     raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
+                        status_code=http_status.HTTP_400_BAD_REQUEST,
                         detail=f"Invalid end_date format: {end_date}. Use ISO 8601 format (e.g., '2025-01-31' or '2025-01-31T23:59:59Z')",
                     )
 
             # Validate date range
             if start_date_dt and end_date_dt and start_date_dt >= end_date_dt:
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
+                    status_code=http_status.HTTP_400_BAD_REQUEST,
                     detail=f"Invalid date range: start_date must be before end_date",
                 )
 
@@ -173,7 +174,7 @@ def create_executions_router(
                 sort_field = ExecutionSortField(sort_by.lower())
             except ValueError:
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
+                    status_code=http_status.HTTP_400_BAD_REQUEST,
                     detail=f"Invalid sort field: {sort_by}. Must be one of: initialized_at, started_at, completed_at, duration_seconds, status",
                 )
 
@@ -181,7 +182,7 @@ def create_executions_router(
                 sort_order_enum = SortOrder(sort_order.lower())
             except ValueError:
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
+                    status_code=http_status.HTTP_400_BAD_REQUEST,
                     detail=f"Invalid sort order: {sort_order}. Must be asc or desc",
                 )
 
@@ -198,8 +199,9 @@ def create_executions_router(
             # Convert to response DTO
             response = ExecutionMapper.to_list_response(result)
 
-            # Calculate page number from offset/limit
+            # Calculate page number from offset/limit and set page_size
             response.page = (offset // limit) + 1 if limit > 0 else 1
+            response.page_size = limit
 
             return response
 
@@ -208,7 +210,7 @@ def create_executions_router(
         except (ValueError, KeyError, AttributeError) as e:
             # Known validation or attribute errors
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=http_status.HTTP_400_BAD_REQUEST,
                 detail=f"Failed to list executions: {str(e)}",
             )
 
@@ -302,11 +304,11 @@ def create_executions_router(
         except (ValueError, KeyError, AttributeError) as e:
             if "not found" in str(e).lower():
                 raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
+                    status_code=http_status.HTTP_404_NOT_FOUND,
                     detail=f"Execution not found: {str(e)}",
                 )
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=http_status.HTTP_400_BAD_REQUEST,
                 detail=f"Failed to get execution: {str(e)}",
             )
 
@@ -375,11 +377,11 @@ def create_executions_router(
         except (ValueError, KeyError, AttributeError) as e:
             if "not found" in str(e).lower():
                 raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
+                    status_code=http_status.HTTP_404_NOT_FOUND,
                     detail=f"Execution not found: {str(e)}",
                 )
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=http_status.HTTP_400_BAD_REQUEST,
                 detail=f"Failed to get execution logs: {str(e)}",
             )
 
@@ -445,11 +447,11 @@ def create_executions_router(
         except (ValueError, KeyError, AttributeError) as e:
             if "not found" in str(e).lower():
                 raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
+                    status_code=http_status.HTTP_404_NOT_FOUND,
                     detail=f"Execution not found: {str(e)}",
                 )
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=http_status.HTTP_400_BAD_REQUEST,
                 detail=f"Failed to get execution history: {str(e)}",
             )
 
@@ -517,16 +519,16 @@ def create_executions_router(
 
             if "not found" in error_lower:
                 raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
+                    status_code=http_status.HTTP_404_NOT_FOUND,
                     detail=f"Execution not found: {str(e)}",
                 )
             elif "already completed" in error_lower or "invalid state" in error_lower:
                 raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
+                    status_code=http_status.HTTP_409_CONFLICT,
                     detail=f"Cannot terminate execution: {str(e)}",
                 )
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=http_status.HTTP_400_BAD_REQUEST,
                 detail=f"Failed to terminate execution: {str(e)}",
             )
 
