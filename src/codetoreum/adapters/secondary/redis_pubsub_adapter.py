@@ -21,7 +21,7 @@ from typing import Any, Callable, Dict, List, Optional, Set
 from redis import asyncio as aioredis
 
 from codetoreum.domain.events import DomainEvent
-from codetoreum.infrastructure.event_serialization import EventSerializer
+from codetoreum.ports.output.message_broker import IMessageBroker
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +32,11 @@ class RedisPubSubError(Exception):
     pass
 
 
-class RedisPubSubAdapter:
+class RedisPubSubAdapter(IMessageBroker):
     """
     Redis pub/sub adapter for WebSocket message distribution across instances.
+
+    Implements the IMessageBroker port interface for horizontal scalability.
 
     Features:
     - Multi-instance message distribution
@@ -133,10 +135,8 @@ class RedisPubSubAdapter:
                         channel = message["channel"].decode("utf-8")
                         data = message["data"]
 
-                        # Dispatch to callbacks
+                        # Dispatch to callbacks (stats tracked in _dispatch_message)
                         await self._dispatch_message(channel, data)
-
-                        self._stats["messages_received"] += 1
 
                 except asyncio.TimeoutError:
                     # No message received, continue
@@ -168,7 +168,8 @@ class RedisPubSubAdapter:
             async with self._callbacks_lock:
                 callbacks = self._callbacks.get(channel, [])
 
-            # Call all callbacks
+            # Call all callbacks and track successful dispatches
+            dispatched = 0
             for callback in callbacks:
                 try:
                     # Check if callback is async or sync
@@ -176,13 +177,20 @@ class RedisPubSubAdapter:
                         await callback(message_dict)
                     else:
                         callback(message_dict)
+                    dispatched += 1
                 except Exception as e:
                     logger.error(f"Error in pub/sub callback: {e}")
 
+            # Track messages that were successfully dispatched to at least one callback
+            if dispatched > 0:
+                self._stats["messages_received"] += 1
+
         except json.JSONDecodeError as e:
             logger.error(f"Failed to decode message: {e}")
+            self._stats["receive_errors"] += 1
         except Exception as e:
             logger.error(f"Error dispatching message: {e}")
+            self._stats["receive_errors"] += 1
 
     async def publish_event(self, event: DomainEvent) -> None:
         """

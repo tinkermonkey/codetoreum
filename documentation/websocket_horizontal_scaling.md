@@ -4,6 +4,8 @@
 
 This document describes the horizontal scaling architecture for the Codetoreum WebSocket system, including Redis pub/sub message distribution, connection pooling, and crash recovery.
 
+**Architecture Pattern:** Follows hexagonal architecture with `IMessageBroker` port interface for clean separation between core and infrastructure layers.
+
 ## Architecture
 
 ### Single Instance (Before)
@@ -118,6 +120,8 @@ export CODETOREUM_WS_ENABLE_CONNECTION_PERSISTENCE=true  # Enable persistence (d
       "event_types": ["WorkflowStarted", "WorkflowCompleted"]
     }
   ],
+  "buffer_size": 0,
+  "rate_limiter_tokens": 100.0,
   "last_heartbeat": 1699564800.123,
   "connected_at": 1699564500.456
 }
@@ -221,10 +225,7 @@ from codetoreum.adapters.primary.websocket_adapter import (
 from codetoreum.adapters.secondary.redis_pubsub_adapter import RedisPubSubAdapter
 from redis import asyncio as aioredis
 
-# Load from environment
-config = WebSocketConfig.from_env()
-
-# Or configure manually
+# Configure via WebSocketConfig dataclass
 config = WebSocketConfig(
     max_connections=1000,
     max_buffer_size=1000,
@@ -234,14 +235,14 @@ config = WebSocketConfig(
     enable_connection_persistence=True,
 )
 
-# Initialize Redis
+# Initialize Redis (implements IMessageBroker port)
 redis_client = await aioredis.from_url("redis://localhost:6379")
 redis_pubsub = RedisPubSubAdapter(redis_client)
 
-# Create WebSocket adapter
+# Create WebSocket adapter with dependency injection
 ws_adapter = WebSocketAdapter(
     config=config,
-    redis_pubsub=redis_pubsub,
+    redis_pubsub=redis_pubsub,  # IMessageBroker implementation
     redis_client=redis_client,
 )
 ```
@@ -513,16 +514,71 @@ watch -n 1 'redis-cli KEYS "websocket:connection:*" | wc -l'
    - Track connection distribution across instances
    - Monitor message delivery latency
 
+## Architecture Improvements (Revision 1)
+
+### Hexagonal Architecture Compliance
+
+The implementation now follows the project's hexagonal architecture pattern:
+
+1. **Port Interface:** `IMessageBroker` (at `src/codetoreum/ports/output/message_broker.py`)
+   - Defines the contract for message broker implementations
+   - Enables swapping implementations without changing core code
+   - Supports testing with mock implementations
+
+2. **Adapter:** `RedisPubSubAdapter` implements `IMessageBroker`
+   - Clean separation between core and Redis-specific code
+   - All Redis operations isolated to the adapter
+   - Follows dependency injection pattern
+
+3. **Configuration:** Removed `from_env()` pattern
+   - Configuration now passed via dependency injection
+   - Aligns with established patterns in `fastapi_app.py` and other adapters
+   - Configuration loaded at application startup, not in adapter code
+
+### Error Handling Improvements
+
+All Redis operations now have comprehensive error handling:
+
+- **Connection State Persistence:** Try-catch blocks around `setex` and `delete` operations
+- **Pub/Sub Operations:** Graceful fallback when Redis pub/sub fails
+- **Logging:** Detailed error messages with context for debugging
+
+### Performance Optimizations
+
+1. **Connection Cleanup:** Batch processing of empty set removal
+   - Reduced time complexity from O(n²) to O(n)
+   - Prevents memory leaks more efficiently
+
+2. **Redis Initialization:** Fixed race condition
+   - Redis pub/sub initialized with `await` instead of `create_task`
+   - Ensures pub/sub is ready before accepting connections
+
+### State Persistence Enhancements
+
+Connection state now includes:
+- **Buffer size:** For monitoring backpressure
+- **Rate limiter tokens:** For tracking rate limit state
+- Enables better observability and future recovery features
+
+### Statistics Tracking
+
+Fixed inconsistency in message statistics:
+- Messages now counted only when successfully dispatched to callbacks
+- Separate error counters for JSON decode errors and dispatch errors
+- More accurate representation of actual message processing
+
 ## Future Enhancements
 
 1. **Sticky Sessions:** Route reconnecting clients to same instance
-2. **Subscription Replay:** Restore subscriptions on reconnection
+2. **Subscription Replay:** Restore subscriptions on reconnection using persisted state
 3. **Message Persistence:** Queue messages for offline clients
 4. **Geographic Distribution:** Multi-region Redis pub/sub
 5. **WebSocket Compression:** Reduce bandwidth usage
+6. **Alternative Message Brokers:** RabbitMQ or Kafka adapters implementing `IMessageBroker`
 
 ## References
 
 - [FastAPI WebSocket Documentation](https://fastapi.tiangolo.com/advanced/websockets/)
 - [Redis Pub/Sub Documentation](https://redis.io/docs/manual/pubsub/)
 - [WebSocket Protocol RFC 6455](https://tools.ietf.org/html/rfc6455)
+- [Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/)

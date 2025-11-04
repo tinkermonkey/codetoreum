@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class WebSocketConfig:
-    """Configuration for WebSocket adapter with environment variable support"""
+    """Configuration for WebSocket adapter"""
 
     max_buffer_size: int = 1000  # Max events buffered per client
     flow_control_threshold: float = 0.8  # Warn at 80% capacity
@@ -50,39 +50,6 @@ class WebSocketConfig:
     max_connections: int = 1000  # Maximum concurrent connections per instance
     enable_redis_pubsub: bool = True  # Enable Redis pub/sub for horizontal scaling
     enable_connection_persistence: bool = True  # Enable connection state persistence
-
-    @classmethod
-    def from_env(cls) -> "WebSocketConfig":
-        """
-        Create WebSocketConfig from environment variables.
-
-        Environment variables:
-        - CODETOREUM_WS_MAX_BUFFER_SIZE: Max events buffered per client (default: 1000)
-        - CODETOREUM_WS_FLOW_CONTROL_THRESHOLD: Buffer warning threshold 0-1 (default: 0.8)
-        - CODETOREUM_WS_DISCONNECT_ON_OVERFLOW: Disconnect on buffer overflow (default: true)
-        - CODETOREUM_WS_HEARTBEAT_INTERVAL: Heartbeat interval in seconds (default: 30)
-        - CODETOREUM_WS_HEARTBEAT_TIMEOUT: Heartbeat timeout in seconds (default: 90)
-        - CODETOREUM_WS_RATE_LIMIT_MESSAGES: Max messages per window (default: 100)
-        - CODETOREUM_WS_RATE_LIMIT_WINDOW: Rate limit window in seconds (default: 60)
-        - CODETOREUM_WS_MAX_CONNECTIONS: Max concurrent connections per instance (default: 1000)
-        - CODETOREUM_WS_ENABLE_REDIS_PUBSUB: Enable Redis pub/sub for scaling (default: true)
-        - CODETOREUM_WS_ENABLE_CONNECTION_PERSISTENCE: Enable connection persistence (default: true)
-
-        Returns:
-            WebSocketConfig with values from environment or defaults
-        """
-        return cls(
-            max_buffer_size=int(os.getenv("CODETOREUM_WS_MAX_BUFFER_SIZE", "1000")),
-            flow_control_threshold=float(os.getenv("CODETOREUM_WS_FLOW_CONTROL_THRESHOLD", "0.8")),
-            disconnect_on_overflow=os.getenv("CODETOREUM_WS_DISCONNECT_ON_OVERFLOW", "true").lower() == "true",
-            heartbeat_interval=int(os.getenv("CODETOREUM_WS_HEARTBEAT_INTERVAL", "30")),
-            heartbeat_timeout=int(os.getenv("CODETOREUM_WS_HEARTBEAT_TIMEOUT", "90")),
-            rate_limit_messages=int(os.getenv("CODETOREUM_WS_RATE_LIMIT_MESSAGES", "100")),
-            rate_limit_window=int(os.getenv("CODETOREUM_WS_RATE_LIMIT_WINDOW", "60")),
-            max_connections=int(os.getenv("CODETOREUM_WS_MAX_CONNECTIONS", "1000")),
-            enable_redis_pubsub=os.getenv("CODETOREUM_WS_ENABLE_REDIS_PUBSUB", "true").lower() == "true",
-            enable_connection_persistence=os.getenv("CODETOREUM_WS_ENABLE_CONNECTION_PERSISTENCE", "true").lower() == "true",
-        )
 
 
 class SubscriptionType(Enum):
@@ -326,9 +293,8 @@ class ConnectionManager:
             "connection_rejections": 0,
         }
 
-        # Register Redis pub/sub callback if enabled
-        if self.redis_pubsub and self.config.enable_redis_pubsub:
-            asyncio.create_task(self._setup_redis_pubsub())
+        # Redis pub/sub will be initialized on first connection
+        self._redis_initialized = False
 
     async def _setup_redis_pubsub(self) -> None:
         """
@@ -336,12 +302,16 @@ class ConnectionManager:
 
         This is called automatically if Redis pub/sub is enabled.
         """
+        if self._redis_initialized:
+            return
+
         try:
-            if self.redis_pubsub:
+            if self.redis_pubsub and self.config.enable_redis_pubsub:
                 await self.redis_pubsub.initialize()
                 await self.redis_pubsub.subscribe(
                     "websocket:events", self._handle_redis_event
                 )
+                self._redis_initialized = True
                 logger.info("Redis pub/sub set up for WebSocket message distribution")
         except Exception as e:
             logger.error(f"Failed to setup Redis pub/sub: {e}")
@@ -374,6 +344,9 @@ class ConnectionManager:
         Returns:
             True if connection accepted, False if rejected (max connections reached)
         """
+        # Initialize Redis pub/sub if needed (once only)
+        await self._setup_redis_pubsub()
+
         # Check connection limit
         if len(self.connections) >= self.config.max_connections:
             logger.warning(
@@ -420,7 +393,7 @@ class ConnectionManager:
 
             conn_state = self.connections[connection_id]
 
-            # Store connection metadata
+            # Store connection metadata including buffer and rate limiter state
             connection_data = {
                 "connection_id": connection_id,
                 "subscriptions": [
@@ -436,20 +409,26 @@ class ConnectionManager:
                     }
                     for f in conn_state.subscriptions
                 ],
+                "buffer_size": len(conn_state.buffer),
+                "rate_limiter_tokens": conn_state.rate_limiter.tokens if conn_state.rate_limiter else None,
                 "last_heartbeat": conn_state.last_heartbeat,
                 "connected_at": time.time(),
             }
 
             # Store in Redis with expiration (2x heartbeat timeout)
             key = f"websocket:connection:{connection_id}"
-            await self.redis_client.setex(
-                key,
-                self.config.heartbeat_timeout * 2,
-                json.dumps(connection_data),
-            )
+            try:
+                await self.redis_client.setex(
+                    key,
+                    self.config.heartbeat_timeout * 2,
+                    json.dumps(connection_data),
+                )
+            except Exception as redis_error:
+                logger.error(f"Redis setex operation failed for connection {connection_id}: {redis_error}")
+                raise
 
         except Exception as e:
-            logger.error(f"Failed to persist connection state: {e}")
+            logger.error(f"Failed to persist connection state for {connection_id}: {e}")
 
     async def _remove_persisted_connection_state(self, connection_id: str) -> None:
         """
@@ -461,9 +440,13 @@ class ConnectionManager:
         try:
             if self.redis_client:
                 key = f"websocket:connection:{connection_id}"
-                await self.redis_client.delete(key)
+                try:
+                    await self.redis_client.delete(key)
+                except Exception as redis_error:
+                    logger.error(f"Redis delete operation failed for connection {connection_id}: {redis_error}")
+                    # Don't raise - this is cleanup, best effort
         except Exception as e:
-            logger.error(f"Failed to remove persisted connection state: {e}")
+            logger.error(f"Failed to remove persisted connection state for {connection_id}: {e}")
 
     def disconnect(self, connection_id: str):
         """
@@ -477,59 +460,59 @@ class ConnectionManager:
 
         conn_state = self.connections[connection_id]
 
+        # Track indices to clean up (batch cleanup for efficiency)
+        empty_workflow_runs = []
+        empty_executions = []
+        empty_work_items = []
+        empty_workflows = []
+        empty_agents = []
+        empty_projects = []
+
         # Clean up reverse indices
         for filter in conn_state.subscriptions:
-            if filter.workflow_run_id:
-                if filter.workflow_run_id in self.workflow_subscribers:
-                    self.workflow_subscribers[filter.workflow_run_id].discard(
-                        connection_id
-                    )
-                    # Remove empty sets to prevent memory leaks
-                    if not self.workflow_subscribers[filter.workflow_run_id]:
-                        del self.workflow_subscribers[filter.workflow_run_id]
+            if filter.workflow_run_id and filter.workflow_run_id in self.workflow_subscribers:
+                self.workflow_subscribers[filter.workflow_run_id].discard(connection_id)
+                if not self.workflow_subscribers[filter.workflow_run_id]:
+                    empty_workflow_runs.append(filter.workflow_run_id)
 
-            if filter.execution_id:
-                if filter.execution_id in self.execution_subscribers:
-                    self.execution_subscribers[filter.execution_id].discard(
-                        connection_id
-                    )
-                    # Remove empty sets to prevent memory leaks
-                    if not self.execution_subscribers[filter.execution_id]:
-                        del self.execution_subscribers[filter.execution_id]
+            if filter.execution_id and filter.execution_id in self.execution_subscribers:
+                self.execution_subscribers[filter.execution_id].discard(connection_id)
+                if not self.execution_subscribers[filter.execution_id]:
+                    empty_executions.append(filter.execution_id)
 
-            if filter.work_item_id:
-                if filter.work_item_id in self.work_item_subscribers:
-                    self.work_item_subscribers[filter.work_item_id].discard(
-                        connection_id
-                    )
-                    # Remove empty sets to prevent memory leaks
-                    if not self.work_item_subscribers[filter.work_item_id]:
-                        del self.work_item_subscribers[filter.work_item_id]
+            if filter.work_item_id and filter.work_item_id in self.work_item_subscribers:
+                self.work_item_subscribers[filter.work_item_id].discard(connection_id)
+                if not self.work_item_subscribers[filter.work_item_id]:
+                    empty_work_items.append(filter.work_item_id)
 
-            if filter.workflow_id:
-                if filter.workflow_id in self.workflow_definition_subscribers:
-                    self.workflow_definition_subscribers[filter.workflow_id].discard(
-                        connection_id
-                    )
-                    # Remove empty sets to prevent memory leaks
-                    if not self.workflow_definition_subscribers[filter.workflow_id]:
-                        del self.workflow_definition_subscribers[filter.workflow_id]
+            if filter.workflow_id and filter.workflow_id in self.workflow_definition_subscribers:
+                self.workflow_definition_subscribers[filter.workflow_id].discard(connection_id)
+                if not self.workflow_definition_subscribers[filter.workflow_id]:
+                    empty_workflows.append(filter.workflow_id)
 
-            if filter.agent_id:
-                if filter.agent_id in self.agent_subscribers:
-                    self.agent_subscribers[filter.agent_id].discard(connection_id)
-                    # Remove empty sets to prevent memory leaks
-                    if not self.agent_subscribers[filter.agent_id]:
-                        del self.agent_subscribers[filter.agent_id]
+            if filter.agent_id and filter.agent_id in self.agent_subscribers:
+                self.agent_subscribers[filter.agent_id].discard(connection_id)
+                if not self.agent_subscribers[filter.agent_id]:
+                    empty_agents.append(filter.agent_id)
 
-            if filter.project_name:
-                if filter.project_name in self.project_subscribers:
-                    self.project_subscribers[filter.project_name].discard(
-                        connection_id
-                    )
-                    # Remove empty sets to prevent memory leaks
-                    if not self.project_subscribers[filter.project_name]:
-                        del self.project_subscribers[filter.project_name]
+            if filter.project_name and filter.project_name in self.project_subscribers:
+                self.project_subscribers[filter.project_name].discard(connection_id)
+                if not self.project_subscribers[filter.project_name]:
+                    empty_projects.append(filter.project_name)
+
+        # Batch cleanup of empty sets to prevent memory leaks
+        for workflow_run_id in empty_workflow_runs:
+            del self.workflow_subscribers[workflow_run_id]
+        for execution_id in empty_executions:
+            del self.execution_subscribers[execution_id]
+        for work_item_id in empty_work_items:
+            del self.work_item_subscribers[work_item_id]
+        for workflow_id in empty_workflows:
+            del self.workflow_definition_subscribers[workflow_id]
+        for agent_id in empty_agents:
+            del self.agent_subscribers[agent_id]
+        for project_name in empty_projects:
+            del self.project_subscribers[project_name]
 
         # Remove connection
         del self.connections[connection_id]
