@@ -3,6 +3,7 @@ Integration tests for WebSocket Adapter
 """
 
 import json
+import os
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,10 +15,16 @@ from codetoreum.domain.events import DomainEvent
 
 @pytest.fixture(scope="function")
 def client():
-    """Create test client with development app"""
-    app = create_development_app()
-    with TestClient(app) as test_client:
-        yield test_client
+    """Create test client with development app (authentication disabled for testing)"""
+    # Disable authentication for integration tests
+    os.environ["CODETOREUM_DISABLE_AUTH"] = "true"
+    try:
+        app = create_development_app()
+        with TestClient(app) as test_client:
+            yield test_client
+    finally:
+        # Clean up environment variable
+        os.environ.pop("CODETOREUM_DISABLE_AUTH", None)
 
 
 class TestWebSocketConnection:
@@ -29,7 +36,7 @@ class TestWebSocketConnection:
             # Receive welcome message
             data = websocket.receive_json()
             assert data["type"] == "connected"
-            assert "connection_id" in data
+            assert "client_id" in data
             assert "message" in data
 
     def test_websocket_ping_pong(self, client):
@@ -228,7 +235,7 @@ class TestWebSocketMultipleConnections:
                 assert data2["type"] == "connected"
 
                 # Connection IDs should be different
-                assert data1["connection_id"] != data2["connection_id"]
+                assert data1["client_id"] != data2["client_id"]
 
     @pytest.mark.timeout(10)
     def test_multiple_subscriptions_per_connection(self, client):
