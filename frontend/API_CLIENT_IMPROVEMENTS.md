@@ -2,220 +2,397 @@
 
 ## Overview
 
-The frontend API client has been enhanced with robust error handling, retry logic, circuit breaker pattern, request cancellation, and comprehensive logging capabilities.
+The API client has been refactored to follow hexagonal architecture principles with resilience patterns extracted to the infrastructure layer. This implementation provides robust error handling, automatic retries, circuit breaker protection, and comprehensive request management.
 
-## Key Improvements
+## Architecture
+
+### Hexagonal Architecture Alignment
+
+The implementation follows the project's hexagonal architecture:
+
+- **Primary Adapter**: `APIClient` class (`client.ts`) - Clean HTTP adapter without embedded resilience logic
+- **Infrastructure Layer**: Resilience decorators (`infrastructure/resilience/`) - Centralized retry, circuit breaker, and resilience patterns
+- **Configuration**: Environment-based configuration (`config/api.config.ts`) - Externalized settings
+- **Types**: Unified error types (`types/errors.ts`) - Consistent with backend error structures
+- **Events**: Type-safe event system (`infrastructure/events.ts`) - Decoupled communication
+
+### Key Files
+
+```
+frontend/src/
+├── api/
+│   └── client.ts                          # Primary HTTP adapter
+├── config/
+│   └── api.config.ts                      # Environment configuration
+├── infrastructure/
+│   ├── events.ts                          # Event system
+│   └── resilience/
+│       ├── circuitBreaker.ts              # Circuit breaker implementation
+│       ├── retryPolicy.ts                 # Retry logic
+│       ├── resilienceDecorator.ts         # Decorator infrastructure
+│       ├── index.ts                       # Exports
+│       └── __tests__/
+│           └── circuitBreaker.test.ts     # Unit tests
+└── types/
+    └── errors.ts                          # Unified error types
+```
+
+## Features
 
 ### 1. Request Timeouts
-- Default timeout: 30 seconds (configurable via `API_TIMEOUT` constant)
-- Prevents requests from hanging indefinitely
-- Configured at the axios instance level
+
+- **Default**: 30 seconds (configurable via `VITE_API_TIMEOUT`)
+- **Per-Environment**: Different timeouts for dev/staging/production
+- **Configurable**: Set via environment variables
+
+```bash
+# .env
+VITE_API_TIMEOUT=30000  # 30 seconds
+```
 
 ### 2. Retry Logic with Exponential Backoff
-- **Library**: axios-retry
-- **Max Retries**: 3 attempts (configurable via `MAX_RETRIES`)
-- **Backoff Strategy**: Exponential with jitter (30% randomization)
-- **Retry Conditions**:
-  - Network errors (no response received)
-  - Server errors (5xx status codes)
-  - Request timeout (408)
-  - Rate limiting (429) - respects `Retry-After` header
-- **Delay Calculation**: Base 1s, max 30s with exponential growth
-- **Logging**: Each retry attempt is logged with details
+
+Handled by `RetryPolicy` in infrastructure layer:
+
+- **Max Retries**: 3 (configurable via `VITE_API_MAX_RETRIES`)
+- **Strategy**: Exponential backoff with jitter
+- **Base Delay**: 1 second
+- **Max Delay**: 30 seconds
+- **Jitter**: 30% to prevent thundering herd
+- **Retry-After Header**: Automatically respected for rate limiting
+
+**Retryable Conditions**:
+- Network errors (ECONNRESET, ETIMEDOUT, etc.)
+- HTTP 408 (Request Timeout)
+- HTTP 429 (Too Many Requests)
+- HTTP 5xx (Server Errors)
+
+```bash
+# .env
+VITE_API_MAX_RETRIES=3
+VITE_API_RETRY_BASE_DELAY=1000
+VITE_API_RETRY_MAX_DELAY=30000
+VITE_API_RETRY_JITTER=0.3
+```
 
 ### 3. Circuit Breaker Pattern
-- **Implementation**: Custom `CircuitBreaker` class in `api/circuitBreaker.ts`
-- **Failure Threshold**: 5 consecutive failures
-- **Reset Timeout**: 60 seconds
-- **States**:
-  - `CLOSED`: Normal operation, requests pass through
-  - `OPEN`: Too many failures, requests fail immediately
-  - `HALF_OPEN`: Testing recovery, limited requests allowed
-- **Benefits**: Prevents cascading failures and gives failing services time to recover
-- **User Notification**: Shows error toast when circuit opens
+
+Handled by `CircuitBreaker` in infrastructure layer:
+
+- **Failure Threshold**: 5 consecutive failures (configurable)
+- **Reset Timeout**: 60 seconds (configurable)
+- **States**: CLOSED → OPEN → HALF_OPEN → CLOSED
+- **Events**: Dispatches events on state changes
+- **User Notifications**: Toast messages when circuit opens
+
+**States**:
+- **CLOSED**: Normal operation, all requests pass through
+- **OPEN**: Service unavailable, requests fail immediately
+- **HALF_OPEN**: Testing recovery, limited requests allowed
+
+```bash
+# .env
+VITE_API_CB_FAILURE_THRESHOLD=5
+VITE_API_CB_RESET_TIMEOUT=60000  # 1 minute
+```
 
 ### 4. Enhanced Error Handling
-- **Structured Error Types**: All errors converted to `ApiError` interface
-- **Status Code Mapping**: Specific handling for 401, 403, 404, 429, 5xx
-- **User-Friendly Messages**: Formatted error messages via `formatErrorMessage()`
-- **Auth Events**: 401 errors trigger `auth:unauthorized` event
-- **Rate Limiting**: 429 errors show user notification
+
+Unified error handling with backend-aligned types:
+
+- **Structured Errors**: `ApiError` interface matches backend
+- **Error Codes**: Enum-based error classification
+- **User-Friendly Messages**: Contextual error messages
+- **Status Code Mapping**: Automatic mapping to error codes
+- **Error Events**: Dispatches events for specific errors (401, 429, etc.)
+
+**Special Handling**:
+- **401 Unauthorized**: Dispatches auth event, shows sign-in message
+- **403 Forbidden**: Permission error message
+- **404 Not Found**: Resource not found message
+- **429 Rate Limited**: Respects Retry-After, shows wait message
+- **5xx Server Errors**: Generic server error message
 
 ### 5. Request/Response Interceptors
-**Request Interceptor**:
-- Adds correlation ID (`X-Correlation-ID` header) for request tracking
-- Logs outgoing requests in development mode
-- Automatically includes httpOnly cookies
 
-**Response Interceptor**:
-- Logs successful responses in development mode
-- Comprehensive error logging with correlation IDs
-- Special handling for 401 (auth) and 429 (rate limit)
-- Structured error transformation
+- **Request Interceptor**:
+  - Adds correlation IDs (format: `timestamp-random`)
+  - Development logging (method, URL, correlation ID)
+
+- **Response Interceptor**:
+  - Success logging in development
+  - Error logging with correlation ID
+  - Special error handling (auth, rate limiting)
 
 ### 6. Request Cancellation Support
-- **AbortController**: Native browser API for request cancellation
-- **Cancel Keys**: Unique identifiers for tracking requests
-- **Automatic Cleanup**: Controllers removed after request completion
-- **Duplicate Prevention**: Cancels previous request with same key
-- **API Functions**:
-  - `cancelRequest(key)`: Cancel specific request
-  - `cancelAllRequests()`: Cancel all active requests
-- **Use Cases**:
-  - User navigates away from page
-  - User initiates new search before previous completes
-  - Component unmount cleanup
 
-### 7. Correlation IDs
-- **Format**: `timestamp-random` (e.g., `1z2x3c4v-a8b7c6d5`)
-- **Purpose**: Track requests across frontend and backend
-- **Usage**: Included in all request headers as `X-Correlation-ID`
-- **Benefits**: Debugging, logging, distributed tracing
+Improved with automatic cleanup:
 
-## File Structure
-
-```
-frontend/src/api/
-├── client.ts           # Main API client with all integrations
-├── circuitBreaker.ts   # Circuit breaker implementation
-└── utils.ts           # Utility functions (correlation ID, retry logic, etc.)
-```
-
-## API Wrapper Functions
-
-All API calls now use wrapper functions with circuit breaker protection:
+- **AbortController-based**: Standard Web API
+- **Automatic Cleanup**: WeakMap for garbage collection
+- **Timeout-based Cleanup**: Auto-cleanup after request timeout
+- **Duplicate Prevention**: Cancels existing request with same key
 
 ```typescript
-// GET request with cancellation support
-await apiGet<Type>('/endpoint', {
-  cancelKey: 'unique-key',
-  params: { ... }
-})
-
-// POST request
-await apiPost<Type>('/endpoint', requestBody, {
+// Usage
+await apiClient.get<Data>('/endpoint', {
   cancelKey: 'unique-key'
 })
 
-// PATCH request
-await apiPatch<Type>('/endpoint', requestBody)
+// Cancel specific request
+apiClient.cancelRequest('unique-key')
 
-// DELETE request
-await apiDelete<Type>('/endpoint', { params: { ... } })
+// Cancel all requests
+apiClient.cancelAllRequests()
 ```
 
-## Configuration Constants
+### 7. Correlation IDs
 
-Located in `frontend/src/api/client.ts`:
+- **Format**: `${timestamp}-${random}`
+- **Header**: `X-Correlation-ID`
+- **Purpose**: Track requests across frontend and backend
+- **Logging**: Included in all log messages
+
+### 8. Event System
+
+Type-safe event system for decoupled communication:
+
+- **Auth Events**: `AUTH_UNAUTHORIZED`, `AUTH_TOKEN_EXPIRED`, etc.
+- **API Events**: `API_RATE_LIMITED`, `API_CIRCUIT_BREAKER_OPEN`, etc.
+- **Network Events**: `NETWORK_ONLINE`, `NETWORK_OFFLINE`
 
 ```typescript
-const API_TIMEOUT = 30000                        // 30 seconds
-const MAX_RETRIES = 3                            // 3 retry attempts
-const CIRCUIT_BREAKER_THRESHOLD = 5              // 5 failures before opening
-const CIRCUIT_BREAKER_RESET_TIMEOUT = 60000      // 1 minute reset time
+import { subscribeToEvent, AppEventType } from './infrastructure/events'
+
+// Subscribe to events
+subscribeToEvent(AppEventType.AUTH_UNAUTHORIZED, ({ message }) => {
+  router.push('/login')
+})
+
+subscribeToEvent(AppEventType.API_CIRCUIT_BREAKER_OPEN, ({ failureCount }) => {
+  toast.error('Service temporarily unavailable')
+})
 ```
 
-## Usage Examples
+### 9. Toast Notifications
 
-### Request Cancellation
+Integrated `react-hot-toast` for user feedback:
 
-```typescript
-// In a React component
-useEffect(() => {
-  const fetchData = async () => {
-    try {
-      const data = await projectConfigApi.get('my-project')
-      // Use data...
-    } catch (error) {
-      // Handle error...
-    }
-  }
+- **Error Messages**: User-friendly error notifications
+- **Rate Limiting**: Notification when rate limited
+- **Circuit Breaker**: Notification when service unavailable
+- **Auth Events**: Sign-in prompt on unauthorized
 
-  fetchData()
+## Configuration
 
-  // Cancel request on unmount
-  return () => {
-    cancelRequest('project-config-my-project')
-  }
-}, [])
+### Environment Variables
+
+Create `.env` file:
+
+```bash
+# API Configuration
+VITE_API_BASE_URL=http://localhost:8000
+VITE_API_TIMEOUT=30000
+
+# Retry Configuration
+VITE_API_MAX_RETRIES=3
+VITE_API_RETRY_BASE_DELAY=1000
+VITE_API_RETRY_MAX_DELAY=30000
+VITE_API_RETRY_JITTER=0.3
+
+# Circuit Breaker Configuration
+VITE_API_CB_FAILURE_THRESHOLD=5
+VITE_API_CB_RESET_TIMEOUT=60000
+
+# Feature Flags
+VITE_API_ENABLE_LOGGING=true
+VITE_API_ENABLE_RETRY=true
+VITE_API_ENABLE_CIRCUIT_BREAKER=true
 ```
 
-### Circuit Breaker Monitoring
+### Per-Environment Configuration
+
+```bash
+# .env.development
+VITE_API_BASE_URL=http://localhost:8000
+VITE_API_TIMEOUT=60000
+VITE_API_ENABLE_LOGGING=true
+
+# .env.production
+VITE_API_BASE_URL=https://api.codetoreum.com
+VITE_API_TIMEOUT=30000
+VITE_API_ENABLE_LOGGING=false
+```
+
+## Usage
+
+### Basic Usage
 
 ```typescript
-import { getCircuitBreakerStats, resetCircuitBreaker } from './api/client'
+import { workItemsApi } from './api/client'
 
-// Get current stats
-const stats = getCircuitBreakerStats()
-console.log('Circuit state:', stats.state)
-console.log('Failure count:', stats.failureCount)
+// Get all work items
+const workItems = await workItemsApi.getAll()
 
-// Manually reset (admin action)
-resetCircuitBreaker()
+// Create work item
+const newItem = await workItemsApi.create({
+  title: 'New Work Item',
+  description: 'Description',
+})
+```
+
+### With Request Cancellation
+
+```typescript
+import { apiClient } from './api/client'
+
+// Make request with cancellation key
+const data = await apiClient.get<Data>('/endpoint', {
+  cancelKey: 'fetch-data',
+  params: { page: 1 }
+})
+
+// Cancel if needed
+apiClient.cancelRequest('fetch-data')
 ```
 
 ### Error Handling
 
 ```typescript
+import { workItemsApi } from './api/client'
+import { ApiError, ErrorCode } from './types/errors'
+
 try {
-  const result = await workItemsApi.create(newItem)
-  // Success...
+  const item = await workItemsApi.getById('123')
 } catch (error) {
-  if (error.statusCode === 401) {
-    // Unauthorized - handled by interceptor
-  } else if (error.statusCode === 429) {
-    // Rate limited - user already notified
-  } else if (error instanceof CircuitBreakerError) {
-    // Circuit open - service unavailable
-    console.error('Service temporarily down', error.stats)
+  const apiError = error as ApiError
+
+  if (apiError.code === ErrorCode.NOT_FOUND) {
+    // Handle not found
+  } else if (apiError.code === ErrorCode.UNAUTHORIZED) {
+    // Handle unauthorized
   } else {
-    // Other error
-    console.error(error.message)
+    console.error(apiError.message, apiError.correlationId)
   }
 }
 ```
 
-## Logging
+### Listening to Events
 
-All API interactions are logged in development mode:
+```typescript
+import { subscribeToEvent, AppEventType } from './infrastructure/events'
 
+// Handle auth events
+subscribeToEvent(AppEventType.AUTH_UNAUTHORIZED, ({ message }) => {
+  console.log('User needs to sign in:', message)
+  router.push('/login')
+})
+
+// Handle circuit breaker events
+subscribeToEvent(AppEventType.API_CIRCUIT_BREAKER_OPEN, ({ failureCount }) => {
+  console.warn(`Circuit breaker opened after ${failureCount} failures`)
+})
 ```
-[API] GET /configurations/projects/my-project {correlationId: '...'}
-[API] 200 /configurations/projects/my-project {correlationId: '...', data: {...}}
-[API] Retrying request (1/3): {url: '...', method: 'GET', error: '...'}
-[API] Circuit breaker open - 5 failures detected
+
+### Circuit Breaker Stats
+
+```typescript
+import { apiClient } from './api/client'
+
+// Get current stats
+const stats = apiClient.getCircuitBreakerStats()
+console.log('Circuit breaker state:', stats?.state)
+console.log('Failure count:', stats?.failureCount)
+
+// Reset circuit breaker (admin/testing)
+apiClient.resetCircuitBreaker()
 ```
 
-## Testing Recommendations
+## Testing
 
-1. **Unit Tests**: Test circuit breaker state transitions
-2. **Integration Tests**: Test retry logic with mock server
-3. **E2E Tests**: Test request cancellation on navigation
-4. **Load Tests**: Verify circuit breaker under high failure rate
-5. **Network Tests**: Simulate network errors and timeouts
+### Unit Tests
+
+Run the circuit breaker tests:
+
+```bash
+cd frontend
+npm test src/infrastructure/resilience/__tests__/circuitBreaker.test.ts
+```
+
+### Test Coverage
+
+- ✅ Circuit breaker state transitions
+- ✅ Failure threshold detection
+- ✅ Reset timeout behavior
+- ✅ Statistics tracking
+- ✅ Error handling
+
+## Benefits
+
+1. **Reliability**: Automatic retries handle transient failures
+2. **Resilience**: Circuit breaker prevents cascading failures
+3. **User Experience**: Clear error messages and toast notifications
+4. **Debugging**: Correlation IDs track requests end-to-end
+5. **Performance**: Request cancellation prevents wasted resources
+6. **Maintainability**: Centralized resilience logic in infrastructure layer
+7. **Testability**: Pure adapter with mockable resilience decorators
+8. **Observability**: Comprehensive logging and event system
+9. **Flexibility**: Environment-based configuration
+10. **Architecture**: Follows hexagonal architecture principles
+
+## Troubleshooting
+
+### Circuit Breaker Frequently Opening
+
+- Increase `VITE_API_CB_FAILURE_THRESHOLD` (e.g., to 10)
+- Increase `VITE_API_CB_RESET_TIMEOUT` (e.g., to 120000 for 2 minutes)
+- Check backend health
+
+### Requests Timing Out
+
+- Increase `VITE_API_TIMEOUT`
+- Check network connectivity
+- Optimize backend endpoints
+
+### Too Many Retries
+
+- Reduce `VITE_API_MAX_RETRIES`
+- Disable retries with `VITE_API_ENABLE_RETRY=false`
+
+### Disable Features
+
+```bash
+VITE_API_ENABLE_CIRCUIT_BREAKER=false
+VITE_API_ENABLE_RETRY=false
+VITE_API_ENABLE_LOGGING=false
+```
 
 ## Migration Notes
 
-- All existing API calls automatically benefit from retry logic and circuit breaker
-- No changes needed to existing API usage
-- Request cancellation is opt-in via `cancelKey` parameter
-- Circuit breaker is global across all API calls
+### Breaking Changes
+
+- `axios-retry` removed - replaced with infrastructure `RetryPolicy`
+- Circuit breaker moved to `infrastructure/resilience/`
+- Error types now in `types/errors.ts`
+- Toast notifications now use `react-hot-toast`
+
+### Migration Steps
+
+1. Install dependencies: `npm install react-hot-toast`
+2. Update imports to use infrastructure layer components
+3. Update error handling to use unified `ApiError` type
+4. Subscribe to events instead of using global event dispatching
 
 ## Future Enhancements
 
-1. **Per-Endpoint Circuit Breakers**: Individual breakers for different services
-2. **Adaptive Timeouts**: Dynamic timeout based on historical response times
-3. **Request Queuing**: Queue requests when circuit is open, retry when closed
-4. **Metrics Dashboard**: Visualize retry rates, circuit breaker state, error rates
-5. **Request Deduplication**: Prevent duplicate requests with same parameters
+- Request deduplication
+- Response caching with TTL
+- Request queue with priority
+- Metrics collection
+- Admin dashboard for circuit breaker monitoring
+- Adaptive timeout based on endpoint performance
+- Bulkhead pattern for request isolation
 
-## Dependencies
+---
 
-- `axios`: ^1.6.2 (HTTP client)
-- `axios-retry`: ^4.5.0 (Retry logic)
-
-## References
-
-- Circuit Breaker Pattern: https://martinfowler.com/bliki/CircuitBreaker.html
-- Exponential Backoff: https://en.wikipedia.org/wiki/Exponential_backoff
-- axios-retry: https://github.com/softonic/axios-retry
+*Architecture: Hexagonal with infrastructure-layer resilience patterns*

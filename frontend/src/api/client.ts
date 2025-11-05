@@ -1,5 +1,12 @@
-import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios'
-import axiosRetry from 'axios-retry'
+/**
+ * API Client
+ *
+ * Primary adapter for HTTP communication with backend services.
+ * Wrapped with infrastructure-layer resilience patterns.
+ */
+
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosError } from 'axios'
+import toast from 'react-hot-toast'
 import type {
   ProjectConfig,
   AgentConfig,
@@ -11,7 +18,6 @@ import type {
   MountCommandRequest,
   MountSubAgentRequest,
   ConfigurationHistory,
-  ApiError,
   WorkItem,
   CreateWorkItemRequest,
   UpdateWorkItemRequest,
@@ -19,647 +25,484 @@ import type {
   ExecutionSummary,
   StartExecutionRequest,
 } from '../types'
-import { CircuitBreaker, CircuitBreakerError } from './circuitBreaker'
-import {
-  generateCorrelationId,
-  isRetriableError,
-  parseRetryAfter,
-  formatErrorMessage,
-} from './utils'
+import { ApiError, createApiError, ErrorCode } from '../types/errors'
+import { apiConfig } from '../config/api.config'
+import { createResilienceDecoratorFromConfig } from '../infrastructure/resilience'
+import { dispatchEvent, AppEventType } from '../infrastructure/events'
 
-// Configuration constants
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || window.location.origin + '/api/v1'
-const API_TIMEOUT = 30000 // 30 seconds
-const MAX_RETRIES = 3
-const CIRCUIT_BREAKER_THRESHOLD = 5
-const CIRCUIT_BREAKER_RESET_TIMEOUT = 60000 // 1 minute
+/**
+ * Request cancellation management
+ * Using WeakMap for automatic garbage collection
+ */
+class RequestCancellation {
+  private controllers = new Map<string, AbortController>()
+  private timeouts = new WeakMap<AbortController, number>()
 
-// Global circuit breaker for API
-const circuitBreaker = new CircuitBreaker({
-  failureThreshold: CIRCUIT_BREAKER_THRESHOLD,
-  resetTimeout: CIRCUIT_BREAKER_RESET_TIMEOUT,
-})
+  /**
+   * Get or create an AbortController for a request
+   */
+  getController(key: string): AbortController {
+    // Cancel existing request with same key
+    this.cancel(key)
 
-// Create axios instance with proper configuration
-const api: AxiosInstance = axios.create({
-  baseURL: API_BASE_URL,
-  withCredentials: true, // Send httpOnly cookies with requests
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  timeout: API_TIMEOUT,
-})
+    const controller = new AbortController()
+    this.controllers.set(key, controller)
 
-// Configure retry logic with exponential backoff
-axiosRetry(api, {
-  retries: MAX_RETRIES,
-  retryDelay: (retryCount, error) => {
-    // Check for Retry-After header
-    const retryAfter = error.response?.headers['retry-after']
-    const retryDelay = parseRetryAfter(retryAfter)
-    if (retryDelay !== null) {
-      console.info(`[API] Respecting Retry-After header: ${retryDelay}ms`)
-      return retryDelay
-    }
+    // Auto-cleanup after timeout
+    const timeout = setTimeout(() => {
+      this.cancel(key)
+    }, apiConfig.timeout + 5000) // Cleanup 5s after timeout
 
-    // Exponential backoff with jitter
-    const baseDelay = 1000 // 1 second
-    const exponentialDelay = baseDelay * Math.pow(2, retryCount - 1)
-    const jitter = Math.random() * 0.3 * exponentialDelay
-    const delay = Math.min(exponentialDelay + jitter, 30000) // Max 30s
+    this.timeouts.set(controller, timeout)
 
-    console.info(`[API] Retry attempt ${retryCount}/${MAX_RETRIES} after ${delay}ms`)
-    return delay
-  },
-  retryCondition: (error) => {
-    // Use custom retry logic
-    const shouldRetry = isRetriableError(error)
-
-    if (shouldRetry) {
-      console.warn(`[API] Retrying failed request: ${error.config?.url}`, {
-        status: error.response?.status,
-        message: error.message,
-      })
-    }
-
-    return shouldRetry
-  },
-  onRetry: (retryCount, error, requestConfig) => {
-    console.info(`[API] Retrying request (${retryCount}/${MAX_RETRIES}):`, {
-      url: requestConfig.url,
-      method: requestConfig.method,
-      error: error.message,
-    })
-  },
-})
-
-// Request interceptor for logging and correlation IDs
-api.interceptors.request.use(
-  (config) => {
-    // Add correlation ID for request tracking
-    const correlationId = generateCorrelationId()
-    config.headers['X-Correlation-ID'] = correlationId
-
-    // Log outgoing request (in development)
-    if (import.meta.env.DEV) {
-      console.debug(`[API] ${config.method?.toUpperCase()} ${config.url}`, {
-        correlationId,
-        params: config.params,
-        data: config.data,
-      })
-    }
-
-    // httpOnly cookies are sent automatically by the browser
-    // No need to manually add Authorization header for cookie-based auth
-    return config
-  },
-  (error) => {
-    console.error('[API] Request setup error:', error)
-    return Promise.reject(error)
+    return controller
   }
-)
 
-// Response interceptor for error handling and logging
-api.interceptors.response.use(
-  (response) => {
-    // Log successful response (in development)
-    if (import.meta.env.DEV) {
-      console.debug(`[API] ${response.status} ${response.config.url}`, {
-        correlationId: response.config.headers['X-Correlation-ID'],
-        data: response.data,
-      })
-    }
-
-    return response
-  },
-  (error: AxiosError<ApiError>) => {
-    // Log error response
-    const correlationId = error.config?.headers?.['X-Correlation-ID']
-    console.error(`[API] Request failed: ${error.config?.url}`, {
-      correlationId,
-      status: error.response?.status,
-      message: error.message,
-      response: error.response?.data,
-    })
-
-    // Enhanced error handling with structured error types
-    if (error.response) {
-      // Handle 401 Unauthorized - trigger auth event (cookie will be cleared by server)
-      if (error.response.status === 401) {
-        console.warn('[API] Unauthorized - triggering auth event')
-        window.dispatchEvent(new CustomEvent('auth:unauthorized'))
+  /**
+   * Cancel a specific request
+   */
+  cancel(key: string): void {
+    const controller = this.controllers.get(key)
+    if (controller) {
+      // Clear timeout
+      const timeout = this.timeouts.get(controller)
+      if (timeout) {
+        clearTimeout(timeout)
       }
 
-      // Handle 429 Rate Limiting
-      if (error.response.status === 429) {
-        const retryAfter = error.response.headers['retry-after']
-        console.warn('[API] Rate limited', { retryAfter })
+      controller.abort()
+      this.controllers.delete(key)
+    }
+  }
 
-        // Show user notification if toast exists
-        if (typeof window !== 'undefined' && (window as any).toast) {
-          ;(window as any).toast.error(
-            'Too many requests. Please wait a moment and try again.'
+  /**
+   * Cancel all active requests
+   */
+  cancelAll(): void {
+    for (const [key] of this.controllers) {
+      this.cancel(key)
+    }
+  }
+
+  /**
+   * Cleanup after request completion
+   */
+  cleanup(key: string): void {
+    const controller = this.controllers.get(key)
+    if (controller) {
+      const timeout = this.timeouts.get(controller)
+      if (timeout) {
+        clearTimeout(timeout)
+      }
+      this.controllers.delete(key)
+    }
+  }
+}
+
+/**
+ * Generate correlation ID for request tracking
+ */
+function generateCorrelationId(): string {
+  return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+}
+
+/**
+ * API Client class
+ */
+class APIClient {
+  private client: AxiosInstance
+  private resilience: ReturnType<typeof createResilienceDecoratorFromConfig>
+  private cancellation = new RequestCancellation()
+
+  constructor() {
+    // Create axios instance
+    this.client = axios.create({
+      baseURL: apiConfig.baseURL,
+      withCredentials: true, // Send httpOnly cookies with requests
+      timeout: apiConfig.timeout,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    // Create resilience decorator with config
+    this.resilience = createResilienceDecoratorFromConfig(apiConfig)
+
+    // Setup interceptors
+    this.setupInterceptors()
+  }
+
+  /**
+   * Setup request and response interceptors
+   */
+  private setupInterceptors(): void {
+    // Request interceptor
+    this.client.interceptors.request.use(
+      (config) => {
+        // Add correlation ID for request tracking
+        const correlationId = generateCorrelationId()
+        config.headers['X-Correlation-ID'] = correlationId
+
+        // Log request in development
+        if (apiConfig.features.enableLogging && import.meta.env.DEV) {
+          console.info('[API Request]', {
+            method: config.method?.toUpperCase(),
+            url: config.url,
+            correlationId,
+          })
+        }
+
+        return config
+      },
+      (error) => Promise.reject(error)
+    )
+
+    // Response interceptor
+    this.client.interceptors.response.use(
+      (response) => {
+        // Log response in development
+        if (apiConfig.features.enableLogging && import.meta.env.DEV) {
+          console.info('[API Response]', {
+            status: response.status,
+            url: response.config.url,
+            correlationId: response.config.headers['X-Correlation-ID'],
+          })
+        }
+
+        return response
+      },
+      async (error: AxiosError) => {
+        // Log error in development
+        if (apiConfig.features.enableLogging && import.meta.env.DEV) {
+          console.error('[API Error]', {
+            status: error.response?.status,
+            url: error.config?.url,
+            correlationId: error.config?.headers?.['X-Correlation-ID'],
+            message: error.message,
+          })
+        }
+
+        // Handle specific error cases
+        await this.handleErrorResponse(error)
+
+        return Promise.reject(error)
+      }
+    )
+  }
+
+  /**
+   * Handle specific error responses
+   */
+  private async handleErrorResponse(error: AxiosError): Promise<void> {
+    const status = error.response?.status
+
+    if (status === 401) {
+      // Unauthorized - dispatch event for auth handling
+      await dispatchEvent(AppEventType.AUTH_UNAUTHORIZED, {
+        message: 'Authentication required',
+        statusCode: 401,
+      })
+      toast.error('You need to sign in to continue')
+    } else if (status === 429) {
+      // Rate limited
+      const retryAfter = error.response?.headers['retry-after']
+      await dispatchEvent(AppEventType.API_RATE_LIMITED, {
+        retryAfter: retryAfter ? parseInt(retryAfter, 10) : undefined,
+        message: 'Too many requests',
+      })
+      toast.error('Too many requests. Please wait a moment.')
+    } else if (status && status >= 500) {
+      // Server error
+      toast.error('Server error. Please try again later.')
+    }
+  }
+
+  /**
+   * Generic request wrapper with resilience
+   */
+  private async request<T>(
+    config: AxiosRequestConfig,
+    cancelKey?: string
+  ): Promise<T> {
+    // Setup cancellation if key provided
+    if (cancelKey) {
+      config.signal = this.cancellation.getController(cancelKey).signal
+    }
+
+    try {
+      // Execute request with resilience decorator
+      const response = await this.resilience.execute(
+        () => this.client.request<T>(config),
+        (context) => {
+          // Log retry attempts
+          console.info(
+            `[API] Retrying request (${context.attempt}/${context.maxAttempts}) after ${context.nextDelay}ms`
           )
         }
-      }
+      )
 
-      // Server responded with error status
-      const apiError: ApiError = {
-        message: error.response.data?.message || formatErrorMessage(error),
-        statusCode: error.response.status,
-        details: error.response.data?.details,
-        timestamp: new Date().toISOString(),
-      }
-      return Promise.reject(apiError)
-    } else if (error.request) {
-      // Request made but no response received (network error)
-      const apiError: ApiError = {
-        message: 'Network error: Unable to reach server',
-        statusCode: 0,
-        details: { originalError: error.message },
-        timestamp: new Date().toISOString(),
-      }
-      return Promise.reject(apiError)
-    } else {
-      // Error in request setup
-      const apiError: ApiError = {
-        message: error.message || 'Unknown error occurred',
-        statusCode: 500,
-        timestamp: new Date().toISOString(),
-      }
-      return Promise.reject(apiError)
-    }
-  }
-)
-
-/**
- * Request cancellation support
- * Store active requests by key for cancellation
- */
-const activeRequests = new Map<string, AbortController>()
-
-/**
- * Create a cancellable request
- */
-function createCancellableRequest(key: string): AbortController {
-  // Cancel existing request with same key
-  const existingController = activeRequests.get(key)
-  if (existingController) {
-    existingController.abort()
-    activeRequests.delete(key)
-  }
-
-  // Create new controller
-  const controller = new AbortController()
-  activeRequests.set(key, controller)
-
-  return controller
-}
-
-/**
- * Remove request from active requests
- */
-function removeActiveRequest(key: string): void {
-  activeRequests.delete(key)
-}
-
-/**
- * Cancel a specific request by key
- */
-export function cancelRequest(key: string): void {
-  const controller = activeRequests.get(key)
-  if (controller) {
-    controller.abort()
-    activeRequests.delete(key)
-    console.info(`[API] Cancelled request: ${key}`)
-  }
-}
-
-/**
- * Cancel all active requests
- */
-export function cancelAllRequests(): void {
-  console.info(`[API] Cancelling ${activeRequests.size} active requests`)
-  activeRequests.forEach((controller) => controller.abort())
-  activeRequests.clear()
-}
-
-/**
- * Wrapper for API calls with circuit breaker protection
- */
-async function withCircuitBreaker<T>(
-  fn: () => Promise<T>,
-  operationName: string
-): Promise<T> {
-  try {
-    return await circuitBreaker.execute(fn)
-  } catch (error) {
-    if (error instanceof CircuitBreakerError) {
-      console.error(`[API] Circuit breaker open for: ${operationName}`, error.stats)
-
-      // Notify user of service unavailability
-      if (typeof window !== 'undefined' && (window as any).toast) {
-        ;(window as any).toast.error(
-          'Service temporarily unavailable. Please try again in a moment.'
-        )
+      return response.data
+    } catch (error) {
+      throw createApiError(error)
+    } finally {
+      // Cleanup cancellation
+      if (cancelKey) {
+        this.cancellation.cleanup(cancelKey)
       }
     }
-    throw error
+  }
+
+  /**
+   * GET request
+   */
+  async get<T>(url: string, config?: AxiosRequestConfig & { cancelKey?: string }): Promise<T> {
+    const { cancelKey, ...axiosConfig } = config || {}
+    return this.request<T>({ ...axiosConfig, method: 'GET', url }, cancelKey)
+  }
+
+  /**
+   * POST request
+   */
+  async post<T>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig & { cancelKey?: string }
+  ): Promise<T> {
+    const { cancelKey, ...axiosConfig } = config || {}
+    return this.request<T>({ ...axiosConfig, method: 'POST', url, data }, cancelKey)
+  }
+
+  /**
+   * PUT request
+   */
+  async put<T>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig & { cancelKey?: string }
+  ): Promise<T> {
+    const { cancelKey, ...axiosConfig } = config || {}
+    return this.request<T>({ ...axiosConfig, method: 'PUT', url, data }, cancelKey)
+  }
+
+  /**
+   * PATCH request
+   */
+  async patch<T>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig & { cancelKey?: string }
+  ): Promise<T> {
+    const { cancelKey, ...axiosConfig } = config || {}
+    return this.request<T>({ ...axiosConfig, method: 'PATCH', url, data }, cancelKey)
+  }
+
+  /**
+   * DELETE request
+   */
+  async delete<T>(url: string, config?: AxiosRequestConfig & { cancelKey?: string }): Promise<T> {
+    const { cancelKey, ...axiosConfig } = config || {}
+    return this.request<T>({ ...axiosConfig, method: 'DELETE', url }, cancelKey)
+  }
+
+  /**
+   * Cancel a specific request
+   */
+  cancelRequest(key: string): void {
+    this.cancellation.cancel(key)
+  }
+
+  /**
+   * Cancel all pending requests
+   */
+  cancelAllRequests(): void {
+    this.cancellation.cancelAll()
+  }
+
+  /**
+   * Get circuit breaker stats
+   */
+  getCircuitBreakerStats() {
+    return this.resilience.getCircuitBreakerStats()
+  }
+
+  /**
+   * Reset circuit breaker
+   */
+  resetCircuitBreaker(): void {
+    this.resilience.resetCircuitBreaker()
   }
 }
 
-/**
- * Enhanced API wrapper with cancellation support
- */
-interface CancellableRequestConfig extends AxiosRequestConfig {
-  cancelKey?: string // Unique key for request cancellation
-}
+// Create singleton instance
+const apiClient = new APIClient()
 
-/**
- * Make a GET request with circuit breaker and cancellation support
- */
-async function apiGet<T>(
-  url: string,
-  config?: CancellableRequestConfig
-): Promise<T> {
-  const { cancelKey, ...axiosConfig } = config || {}
-
-  let controller: AbortController | undefined
-  if (cancelKey) {
-    controller = createCancellableRequest(cancelKey)
-    axiosConfig.signal = controller.signal
-  }
-
-  try {
-    const response = await withCircuitBreaker(
-      () => api.get<T>(url, axiosConfig),
-      `GET ${url}`
-    )
-    return response.data
-  } finally {
-    if (cancelKey) {
-      removeActiveRequest(cancelKey)
-    }
-  }
-}
-
-/**
- * Make a POST request with circuit breaker and cancellation support
- */
-async function apiPost<T>(
-  url: string,
-  data?: any,
-  config?: CancellableRequestConfig
-): Promise<T> {
-  const { cancelKey, ...axiosConfig } = config || {}
-
-  let controller: AbortController | undefined
-  if (cancelKey) {
-    controller = createCancellableRequest(cancelKey)
-    axiosConfig.signal = controller.signal
-  }
-
-  try {
-    const response = await withCircuitBreaker(
-      () => api.post<T>(url, data, axiosConfig),
-      `POST ${url}`
-    )
-    return response.data
-  } finally {
-    if (cancelKey) {
-      removeActiveRequest(cancelKey)
-    }
-  }
-}
-
-/**
- * Make a PATCH request with circuit breaker and cancellation support
- */
-async function apiPatch<T>(
-  url: string,
-  data?: any,
-  config?: CancellableRequestConfig
-): Promise<T> {
-  const { cancelKey, ...axiosConfig } = config || {}
-
-  let controller: AbortController | undefined
-  if (cancelKey) {
-    controller = createCancellableRequest(cancelKey)
-    axiosConfig.signal = controller.signal
-  }
-
-  try {
-    const response = await withCircuitBreaker(
-      () => api.patch<T>(url, data, axiosConfig),
-      `PATCH ${url}`
-    )
-    return response.data
-  } finally {
-    if (cancelKey) {
-      removeActiveRequest(cancelKey)
-    }
-  }
-}
-
-/**
- * Make a DELETE request with circuit breaker and cancellation support
- */
-async function apiDelete<T>(
-  url: string,
-  config?: CancellableRequestConfig
-): Promise<T> {
-  const { cancelKey, ...axiosConfig } = config || {}
-
-  let controller: AbortController | undefined
-  if (cancelKey) {
-    controller = createCancellableRequest(cancelKey)
-    axiosConfig.signal = controller.signal
-  }
-
-  try {
-    const response = await withCircuitBreaker(
-      () => api.delete<T>(url, axiosConfig),
-      `DELETE ${url}`
-    )
-    return response.data
-  } finally {
-    if (cancelKey) {
-      removeActiveRequest(cancelKey)
-    }
-  }
-}
-
-/**
- * Get circuit breaker statistics (for monitoring/debugging)
- */
-export function getCircuitBreakerStats() {
-  return circuitBreaker.getStats()
-}
-
-/**
- * Manually reset circuit breaker (for admin/testing purposes)
- */
-export function resetCircuitBreaker() {
-  circuitBreaker.reset()
-  console.info('[API] Circuit breaker manually reset')
-}
-
+// =============================================================================
 // Project Configuration API
+// =============================================================================
+
 export const projectConfigApi = {
-  get: async (projectName: string): Promise<ProjectConfig> => {
-    return apiGet<ProjectConfig>(
-      `/configurations/projects/${projectName}`,
-      { cancelKey: `project-config-${projectName}` }
-    )
-  },
+  getAll: () => apiClient.get<ProjectConfig[]>('/config/projects'),
 
-  update: async (
-    projectName: string,
-    request: UpdateProjectConfigRequest
-  ): Promise<ConfigurationCommandResult> => {
-    return apiPatch<ConfigurationCommandResult>(
-      `/configurations/projects/${projectName}`,
+  getByName: (projectName: string) =>
+    apiClient.get<ProjectConfig>(`/config/projects/${projectName}`),
+
+  create: (config: ProjectConfig) =>
+    apiClient.post<ProjectConfig>('/config/projects', config),
+
+  update: (projectName: string, config: UpdateProjectConfigRequest) =>
+    apiClient.put<ProjectConfig>(`/config/projects/${projectName}`, config),
+
+  delete: (projectName: string) =>
+    apiClient.delete<void>(`/config/projects/${projectName}`),
+
+  getHistory: (projectName: string) =>
+    apiClient.get<ConfigurationHistory[]>(`/config/projects/${projectName}/history`),
+
+  addEnvironmentVariable: (projectName: string, request: AddEnvironmentVariableRequest) =>
+    apiClient.post<ProjectConfig>(
+      `/config/projects/${projectName}/environment-variables`,
       request
-    )
-  },
+    ),
 
-  addEnvironmentVariable: async (
-    projectName: string,
-    request: AddEnvironmentVariableRequest
-  ): Promise<ConfigurationCommandResult> => {
-    return apiPost<ConfigurationCommandResult>(
-      `/configurations/projects/${projectName}/environment`,
-      request
-    )
-  },
+  removeEnvironmentVariable: (projectName: string, key: string) =>
+    apiClient.delete<ProjectConfig>(
+      `/config/projects/${projectName}/environment-variables/${key}`
+    ),
 
-  removeEnvironmentVariable: async (
-    projectName: string,
-    variableName: string,
-    userId: string
-  ): Promise<ConfigurationCommandResult> => {
-    return apiDelete<ConfigurationCommandResult>(
-      `/configurations/projects/${projectName}/environment/${variableName}`,
-      { params: { user_id: userId } }
-    )
-  },
+  addMountCommand: (projectName: string, request: MountCommandRequest) =>
+    apiClient.post<ProjectConfig>(`/config/projects/${projectName}/mount-commands`, request),
 
-  mountCommand: async (
-    projectName: string,
-    request: MountCommandRequest
-  ): Promise<ConfigurationCommandResult> => {
-    return apiPost<ConfigurationCommandResult>(
-      `/configurations/projects/${projectName}/commands`,
-      request
-    )
-  },
-
-  unmountCommand: async (
-    projectName: string,
-    commandName: string,
-    userId: string
-  ): Promise<ConfigurationCommandResult> => {
-    return apiDelete<ConfigurationCommandResult>(
-      `/configurations/projects/${projectName}/commands/${commandName}`,
-      { params: { user_id: userId } }
-    )
-  },
-
-  mountSubAgent: async (
-    projectName: string,
-    request: MountSubAgentRequest
-  ): Promise<ConfigurationCommandResult> => {
-    return apiPost<ConfigurationCommandResult>(
-      `/configurations/projects/${projectName}/subagents`,
-      request
-    )
-  },
-
-  unmountSubAgent: async (
-    projectName: string,
-    subagentName: string,
-    userId: string
-  ): Promise<ConfigurationCommandResult> => {
-    return apiDelete<ConfigurationCommandResult>(
-      `/configurations/projects/${projectName}/subagents/${subagentName}`,
-      { params: { user_id: userId } }
-    )
-  },
+  removeMountCommand: (projectName: string, commandId: string) =>
+    apiClient.delete<ProjectConfig>(
+      `/config/projects/${projectName}/mount-commands/${commandId}`
+    ),
 }
 
+// =============================================================================
 // Agent Configuration API
+// =============================================================================
+
 export const agentConfigApi = {
-  list: async (projectName?: string): Promise<AgentConfig[]> => {
-    return apiGet<AgentConfig[]>('/configurations/agents', {
-      params: { project_name: projectName },
-      cancelKey: 'agent-config-list',
-    })
-  },
+  getAll: () => apiClient.get<AgentConfig[]>('/config/agents'),
 
-  get: async (agentName: string): Promise<AgentConfig> => {
-    return apiGet<AgentConfig>(
-      `/configurations/agents/${agentName}`,
-      { cancelKey: `agent-config-${agentName}` }
-    )
-  },
+  getByName: (agentName: string) => apiClient.get<AgentConfig>(`/config/agents/${agentName}`),
 
-  update: async (
-    agentName: string,
-    request: UpdateAgentConfigRequest
-  ): Promise<ConfigurationCommandResult> => {
-    return apiPatch<ConfigurationCommandResult>(
-      `/configurations/agents/${agentName}`,
-      request
-    )
-  },
+  create: (config: AgentConfig) => apiClient.post<AgentConfig>('/config/agents', config),
+
+  update: (agentName: string, config: UpdateAgentConfigRequest) =>
+    apiClient.put<AgentConfig>(`/config/agents/${agentName}`, config),
+
+  delete: (agentName: string) => apiClient.delete<void>(`/config/agents/${agentName}`),
+
+  getHistory: (agentName: string) =>
+    apiClient.get<ConfigurationHistory[]>(`/config/agents/${agentName}/history`),
+
+  addMountCommand: (agentName: string, request: MountCommandRequest) =>
+    apiClient.post<AgentConfig>(`/config/agents/${agentName}/mount-commands`, request),
+
+  removeMountCommand: (agentName: string, commandId: string) =>
+    apiClient.delete<AgentConfig>(`/config/agents/${agentName}/mount-commands/${commandId}`),
+
+  addSubAgent: (agentName: string, request: MountSubAgentRequest) =>
+    apiClient.post<AgentConfig>(`/config/agents/${agentName}/sub-agents`, request),
+
+  removeSubAgent: (agentName: string, subAgentId: string) =>
+    apiClient.delete<AgentConfig>(`/config/agents/${agentName}/sub-agents/${subAgentId}`),
 }
 
+// =============================================================================
 // Pipeline Configuration API
+// =============================================================================
+
 export const pipelineConfigApi = {
-  list: async (projectName?: string): Promise<PipelineConfig[]> => {
-    return apiGet<PipelineConfig[]>('/configurations/pipelines', {
-      params: { project_name: projectName },
-      cancelKey: 'pipeline-config-list',
-    })
-  },
+  getAll: () => apiClient.get<PipelineConfig[]>('/config/pipelines'),
 
-  get: async (pipelineName: string): Promise<PipelineConfig> => {
-    return apiGet<PipelineConfig>(
-      `/configurations/pipelines/${pipelineName}`,
-      { cancelKey: `pipeline-config-${pipelineName}` }
-    )
-  },
+  getByName: (pipelineName: string) =>
+    apiClient.get<PipelineConfig>(`/config/pipelines/${pipelineName}`),
 
-  update: async (
-    pipelineName: string,
-    request: UpdateAgentConfigRequest
-  ): Promise<ConfigurationCommandResult> => {
-    return apiPatch<ConfigurationCommandResult>(
-      `/configurations/pipelines/${pipelineName}`,
-      request
-    )
-  },
+  create: (config: PipelineConfig) =>
+    apiClient.post<PipelineConfig>('/config/pipelines', config),
+
+  update: (pipelineName: string, config: Partial<PipelineConfig>) =>
+    apiClient.put<PipelineConfig>(`/config/pipelines/${pipelineName}`, config),
+
+  delete: (pipelineName: string) => apiClient.delete<void>(`/config/pipelines/${pipelineName}`),
+
+  getHistory: (pipelineName: string) =>
+    apiClient.get<ConfigurationHistory[]>(`/config/pipelines/${pipelineName}/history`),
 }
 
-// Configuration History API
-export const configHistoryApi = {
-  list: async (filters?: {
-    projectName?: string
-    configType?: 'project' | 'agent' | 'pipeline'
-    limit?: number
-    offset?: number
-  }): Promise<ConfigurationHistory[]> => {
-    return apiGet<ConfigurationHistory[]>('/configurations/history', {
-      params: {
-        project_name: filters?.projectName,
-        config_type: filters?.configType,
-        limit: filters?.limit || 50,
-        offset: filters?.offset || 0,
-      },
-      cancelKey: 'config-history-list',
-    })
-  },
+// =============================================================================
+// Configuration Commands API
+// =============================================================================
 
-  rollback: async (
-    changeId: string,
-    userId: string,
-    reason?: string
-  ): Promise<ConfigurationCommandResult> => {
-    return apiPost<ConfigurationCommandResult>(
-      `/configurations/rollback/${changeId}`,
-      null,
-      { params: { user_id: userId, reason } }
-    )
-  },
+export const configurationCommandsApi = {
+  validate: (config: ProjectConfig | AgentConfig | PipelineConfig) =>
+    apiClient.post<ConfigurationCommandResult>('/config/commands/validate', config),
+
+  deploy: (configType: 'project' | 'agent' | 'pipeline', configName: string) =>
+    apiClient.post<ConfigurationCommandResult>(`/config/commands/deploy`, {
+      configType,
+      configName,
+    }),
+
+  rollback: (configType: 'project' | 'agent' | 'pipeline', configName: string, version: number) =>
+    apiClient.post<ConfigurationCommandResult>(`/config/commands/rollback`, {
+      configType,
+      configName,
+      version,
+    }),
 }
 
+// =============================================================================
 // Work Items API
+// =============================================================================
+
 export const workItemsApi = {
-  list: async (filters?: {
-    status?: string
-    assignee?: string
-    limit?: number
-    offset?: number
-  }): Promise<WorkItem[]> => {
-    return apiGet<WorkItem[]>('/work-items', {
-      params: {
-        status: filters?.status,
-        assignee: filters?.assignee,
-        limit: filters?.limit || 50,
-        offset: filters?.offset || 0,
-      },
-      cancelKey: 'work-items-list',
-    })
-  },
+  getAll: (projectId?: string) =>
+    apiClient.get<WorkItem[]>('/work-items', {
+      params: projectId ? { projectId } : undefined,
+    }),
 
-  get: async (id: string): Promise<WorkItem> => {
-    return apiGet<WorkItem>(`/work-items/${id}`, {
-      cancelKey: `work-item-${id}`,
-    })
-  },
+  getById: (workItemId: string) => apiClient.get<WorkItem>(`/work-items/${workItemId}`),
 
-  create: async (request: CreateWorkItemRequest): Promise<WorkItem> => {
-    return apiPost<WorkItem>('/work-items', request)
-  },
+  create: (request: CreateWorkItemRequest) =>
+    apiClient.post<WorkItem>('/work-items', request),
 
-  update: async (id: string, request: UpdateWorkItemRequest): Promise<WorkItem> => {
-    return apiPatch<WorkItem>(`/work-items/${id}`, request)
-  },
+  update: (workItemId: string, request: UpdateWorkItemRequest) =>
+    apiClient.put<WorkItem>(`/work-items/${workItemId}`, request),
 
-  delete: async (id: string): Promise<void> => {
-    await apiDelete<void>(`/work-items/${id}`)
-  },
+  delete: (workItemId: string) => apiClient.delete<void>(`/work-items/${workItemId}`),
+
+  sync: (projectId: string) =>
+    apiClient.post<{ synced: number; created: number; updated: number }>(
+      `/work-items/sync/${projectId}`
+    ),
 }
 
+// =============================================================================
 // Executions API
+// =============================================================================
+
 export const executionsApi = {
-  list: async (filters?: {
-    work_item_id?: string
-    agent_name?: string
-    status?: string
-    limit?: number
-    offset?: number
-  }): Promise<ExecutionSummary[]> => {
-    return apiGet<ExecutionSummary[]>('/executions', {
-      params: {
-        work_item_id: filters?.work_item_id,
-        agent_name: filters?.agent_name,
-        status: filters?.status,
-        limit: filters?.limit || 50,
-        offset: filters?.offset || 0,
-      },
-      cancelKey: 'executions-list',
-    })
-  },
+  getAll: (workItemId?: string) =>
+    apiClient.get<ExecutionSummary[]>('/executions', {
+      params: workItemId ? { workItemId } : undefined,
+    }),
 
-  get: async (id: string): Promise<Execution> => {
-    return apiGet<Execution>(`/executions/${id}`, {
-      cancelKey: `execution-${id}`,
-    })
-  },
+  getById: (executionId: string) => apiClient.get<Execution>(`/executions/${executionId}`),
 
-  start: async (request: StartExecutionRequest): Promise<Execution> => {
-    return apiPost<Execution>('/executions', request)
-  },
+  start: (request: StartExecutionRequest) =>
+    apiClient.post<Execution>('/executions', request),
 
-  cancel: async (id: string): Promise<void> => {
-    await apiPost<void>(`/executions/${id}/cancel`)
-  },
+  cancel: (executionId: string) => apiClient.post<void>(`/executions/${executionId}/cancel`),
 
-  getLogs: async (id: string): Promise<string[]> => {
-    const result = await apiGet<{ logs: string[] }>(`/executions/${id}/logs`, {
-      cancelKey: `execution-logs-${id}`,
-    })
-    return result.logs
-  },
+  retry: (executionId: string) => apiClient.post<Execution>(`/executions/${executionId}/retry`),
+
+  getOutput: (executionId: string) =>
+    apiClient.get<{ output: string; logs: string[] }>(`/executions/${executionId}/output`),
 }
 
-// Authentication API
-export const authApi = {
-  logout: async (): Promise<void> => {
-    await apiPost<void>('/v2/auth/logout')
-  },
-}
-
-export default api
+// Export client for advanced usage
+export { apiClient }
+export type { ApiError }

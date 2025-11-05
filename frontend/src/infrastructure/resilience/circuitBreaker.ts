@@ -1,9 +1,12 @@
 /**
  * Circuit Breaker Pattern Implementation
  *
+ * Infrastructure layer component for resilience patterns.
  * Prevents cascading failures by stopping requests to failing services
  * and giving them time to recover.
  */
+
+import { dispatchEvent, AppEventType } from '../events'
 
 export interface CircuitBreakerConfig {
   failureThreshold: number  // Number of failures before opening circuit
@@ -115,6 +118,11 @@ export class CircuitBreaker {
     this.successCount = 0
     this.lastStateChange = Date.now()
     console.info('[CircuitBreaker] Transitioned to CLOSED state - service healthy')
+
+    // Dispatch event
+    dispatchEvent(AppEventType.API_CIRCUIT_BREAKER_CLOSED, {
+      recoveryTime: Date.now() - this.lastStateChange,
+    }).catch(console.error)
   }
 
   /**
@@ -126,6 +134,11 @@ export class CircuitBreaker {
     console.warn(
       `[CircuitBreaker] Transitioned to OPEN state - ${this.failureCount} failures detected`
     )
+
+    // Dispatch event
+    dispatchEvent(AppEventType.API_CIRCUIT_BREAKER_OPEN, {
+      failureCount: this.failureCount,
+    }).catch(console.error)
   }
 
   /**
