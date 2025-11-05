@@ -416,7 +416,7 @@ curl -H "Authorization: Bearer $TOKEN" \
    - Added mock implementations
 
 ### Documentation Files (1)
-1. `CONFIG_METRICS_API_IMPLEMENTATION.md` - This document
+1. `documentation/api/config_metrics_implementation.md` - This document
 
 ## Conclusion
 
