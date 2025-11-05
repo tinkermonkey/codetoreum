@@ -51,6 +51,22 @@ class WebSocketConfig:
     enable_redis_pubsub: bool = True  # Enable Redis pub/sub for horizontal scaling
     enable_connection_persistence: bool = True  # Enable connection state persistence
 
+    @classmethod
+    def from_env(cls) -> "WebSocketConfig":
+        """Create WebSocketConfig from environment variables."""
+        return cls(
+            max_buffer_size=int(os.getenv("WEBSOCKET_MAX_BUFFER_SIZE", "1000")),
+            flow_control_threshold=float(os.getenv("WEBSOCKET_FLOW_CONTROL_THRESHOLD", "0.8")),
+            disconnect_on_overflow=os.getenv("WEBSOCKET_DISCONNECT_ON_OVERFLOW", "true").lower() == "true",
+            heartbeat_interval=int(os.getenv("WEBSOCKET_HEARTBEAT_INTERVAL", "30")),
+            heartbeat_timeout=int(os.getenv("WEBSOCKET_HEARTBEAT_TIMEOUT", "90")),
+            rate_limit_messages=int(os.getenv("WEBSOCKET_RATE_LIMIT_MESSAGES", "100")),
+            rate_limit_window=int(os.getenv("WEBSOCKET_RATE_LIMIT_WINDOW", "60")),
+            max_connections=int(os.getenv("WEBSOCKET_MAX_CONNECTIONS", "1000")),
+            enable_redis_pubsub=os.getenv("WEBSOCKET_ENABLE_REDIS_PUBSUB", "true").lower() == "true",
+            enable_connection_persistence=os.getenv("WEBSOCKET_ENABLE_CONNECTION_PERSISTENCE", "true").lower() == "true",
+        )
+
 
 class SubscriptionType(Enum):
     """Type of subscription"""
