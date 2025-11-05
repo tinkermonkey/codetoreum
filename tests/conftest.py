@@ -1,5 +1,7 @@
 """Test configuration and shared fixtures."""
 
+from typing import Generator
+
 import docker
 import pytest
 
@@ -26,6 +28,26 @@ docker_available = pytest.mark.skipif(
     not is_docker_available(),
     reason="Docker is not available or not running"
 )
+
+
+@pytest.fixture(scope="session")
+def docker_client() -> Generator[docker.DockerClient, None, None]:
+    """Shared Docker client for all tests in the session.
+
+    This fixture creates a single Docker client that is reused across all tests
+    in the session, reducing resource consumption and connection overhead.
+
+    Yields:
+        docker.DockerClient: Docker client instance
+    """
+    if not is_docker_available():
+        pytest.skip("Docker is not available or not running")
+
+    client = docker.from_env()
+    try:
+        yield client
+    finally:
+        client.close()
 
 
 @pytest.fixture

@@ -33,8 +33,10 @@ pytestmark = docker_available
 
 @pytest.fixture(scope="module")
 def redis_container():
-    """Create Redis testcontainer."""
+    """Create Redis testcontainer with resource limits."""
     container = RedisContainer("redis:7-alpine")
+    # Redis is lightweight but we still set a reasonable limit
+    container.with_kwargs(mem_limit="128m")
     container.start()
 
     yield container
@@ -44,10 +46,12 @@ def redis_container():
 
 @pytest.fixture(scope="module")
 def elasticsearch_container():
-    """Create Elasticsearch testcontainer."""
+    """Create Elasticsearch testcontainer with resource limits."""
     container = ElasticSearchContainer("elasticsearch:8.11.0")
     container.with_env("xpack.security.enabled", "false")
     container.with_env("discovery.type", "single-node")
+    # Add resource limits to prevent memory exhaustion
+    container.with_env("ES_JAVA_OPTS", "-Xms512m -Xmx512m")  # Limit ES heap to 512MB
     container.start()
 
     yield container
