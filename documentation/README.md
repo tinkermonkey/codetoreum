@@ -99,15 +99,15 @@ This directory contains all documentation for the Codetoreum AI Agent Orchestrat
 
 ### Implementation Guides
 
-#### Phase Summaries
-- [Phase 1: Domain Models](implementation/phase1_summary.md)
-- [Phase 4: Application Services](implementation/phase4_summary.md)
-- [Phase 5: Ports Implementation](implementation/phase5_summary.md)
-- [Phase 7: Web Dashboard](implementation/phase7_summary.md)
+#### Implementation Summaries
+- [Domain Models Implementation](implementation/domain_models_summary.md)
+- [Integration Implementation](implementation/integration_summary.md)
+- [Resilience Patterns Implementation](implementation/resilience_patterns_summary.md)
+- [Web Dashboard Implementation](implementation/web_dashboard_summary.md)
 - [Revision Complete](implementation/revision_complete.md)
 
 #### API Documentation
-- [Phase 6: REST API Overview](api/phase6_overview.md)
+- [REST API Overview](api/rest_api_overview.md)
 - [Config & Metrics API Implementation](api/config_metrics_implementation.md)
 - [API Usage Examples](api/usage_examples.md)
 - [API Authentication](API_AUTHENTICATION.md)
@@ -168,7 +168,7 @@ Frontend application documentation including:
 - Development guides
 
 ### `/documentation/implementation/`
-Phase-by-phase implementation summaries documenting the development progress and key decisions made during each implementation phase.
+Implementation summaries documenting the development progress and key decisions made during different implementation stages of the project.
 
 ### `/documentation/task_reports/`
 Detailed task completion reports and implementation summaries for specific features and improvements.
