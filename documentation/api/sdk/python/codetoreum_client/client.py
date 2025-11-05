@@ -121,8 +121,9 @@ class CodetoreumClient:
                 try:
                     error_data = response.json()
                     error_message = error_data.get("detail", response.text)
-                except ValueError:
-                    error_message = response.text
+                except (ValueError, requests.exceptions.JSONDecodeError):
+                    # Handle non-JSON error responses
+                    error_message = response.text or f"HTTP {response.status_code} error"
 
                 raise CodetoreumError(
                     f"API error ({response.status_code}): {error_message}",
@@ -132,6 +133,10 @@ class CodetoreumClient:
 
             return response
 
+        except requests.exceptions.Timeout as e:
+            raise CodetoreumError(f"Request timeout after {timeout}s: {str(e)}") from e
+        except requests.exceptions.ConnectionError as e:
+            raise CodetoreumError(f"Connection failed: {str(e)}") from e
         except requests.exceptions.RequestException as e:
             raise CodetoreumError(f"Request failed: {str(e)}") from e
 

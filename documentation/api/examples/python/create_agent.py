@@ -99,52 +99,72 @@ def add_mcp_server(agent_id: str, mcp_config: Dict[str, Any]) -> Dict[str, Any]:
 
 def main():
     """Example usage."""
-    # Example 1: Create a backend development agent
-    backend_agent = create_agent(
-        name="backend-specialist",
-        description="Python backend development specialist",
-        agent_type="claude_code",
-        capabilities=["python", "fastapi", "sqlalchemy", "postgresql", "docker"],
-        configuration={
-            "model": "claude-sonnet-4",
-            "temperature": 0.7,
-            "max_tokens": 8000,
-            "timeout_minutes": 120
-        },
-        mcp_servers=[
-            {
-                "name": "filesystem",
-                "command": "npx",
-                "args": ["-y", "@modelcontextprotocol/server-filesystem", "/workspace"],
-                "env": {}
+    try:
+        # Example 1: Create a backend development agent
+        print("Creating backend specialist agent...")
+        backend_agent = create_agent(
+            name="backend-specialist",
+            description="Python backend development specialist",
+            agent_type="claude_code",
+            capabilities=["python", "fastapi", "sqlalchemy", "postgresql", "docker"],
+            configuration={
+                "model": "claude-sonnet-4",
+                "temperature": 0.7,
+                "max_tokens": 8000,
+                "timeout_minutes": 120
             },
-            {
-                "name": "git",
-                "command": "npx",
-                "args": ["-y", "@modelcontextprotocol/server-git"],
-                "env": {}
+            mcp_servers=[
+                {
+                    "name": "filesystem",
+                    "command": "npx",
+                    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/workspace"],
+                    "env": {}
+                },
+                {
+                    "name": "git",
+                    "command": "npx",
+                    "args": ["-y", "@modelcontextprotocol/server-git"],
+                    "env": {}
+                }
+            ]
+        )
+
+        print(f"\nAgent ID: {backend_agent['id']}")
+        print(f"Name: {backend_agent['name']}")
+        print(f"Capabilities: {', '.join(backend_agent['capabilities'])}")
+
+        # Example 2: Create a frontend development agent
+        print("\nCreating frontend specialist agent...")
+        frontend_agent = create_agent(
+            name="frontend-specialist",
+            description="React and TypeScript frontend specialist",
+            agent_type="claude_code",
+            capabilities=["typescript", "react", "tailwind", "vite"],
+            configuration={
+                "model": "claude-sonnet-4",
+                "temperature": 0.8,
+                "max_tokens": 6000
             }
-        ]
-    )
+        )
 
-    print(f"\nAgent ID: {backend_agent['id']}")
-    print(f"Name: {backend_agent['name']}")
-    print(f"Capabilities: {', '.join(backend_agent['capabilities'])}")
+        print(f"\n✓ Created {2} agents successfully")
 
-    # Example 2: Create a frontend development agent
-    frontend_agent = create_agent(
-        name="frontend-specialist",
-        description="React and TypeScript frontend specialist",
-        agent_type="claude_code",
-        capabilities=["typescript", "react", "tailwind", "vite"],
-        configuration={
-            "model": "claude-sonnet-4",
-            "temperature": 0.8,
-            "max_tokens": 6000
-        }
-    )
-
-    print(f"\n✓ Created {2} agents successfully")
+    except requests.exceptions.HTTPError as e:
+        print(f"\n✗ API Error: {e.response.status_code}")
+        try:
+            error_detail = e.response.json()
+            print(f"  Detail: {error_detail.get('detail', 'No details provided')}")
+        except ValueError:
+            print(f"  Detail: {e.response.text}")
+    except requests.exceptions.ConnectionError as e:
+        print(f"\n✗ Connection Error: Unable to connect to {BASE_URL}")
+        print("  Ensure the API server is running")
+    except requests.exceptions.Timeout as e:
+        print(f"\n✗ Timeout Error: Request took too long")
+    except requests.exceptions.RequestException as e:
+        print(f"\n✗ Request Error: {str(e)}")
+    except Exception as e:
+        print(f"\n✗ Unexpected Error: {type(e).__name__}: {str(e)}")
 
 
 if __name__ == "__main__":

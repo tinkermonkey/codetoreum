@@ -93,10 +93,19 @@ class CodetoreumEventStream:
                     for handler in self.handlers["*"]:
                         await handler(event)
 
-        except websockets.exceptions.ConnectionClosed:
-            print("Connection closed")
+        except websockets.exceptions.ConnectionClosed as e:
+            print(f"Connection closed: {e.code} - {e.reason}")
+        except websockets.exceptions.WebSocketException as e:
+            print(f"WebSocket error: {e}")
+            raise
+        except json.JSONDecodeError as e:
+            print(f"Failed to parse event JSON: {e}")
+            raise
+        except KeyError as e:
+            print(f"Missing expected field in event: {e}")
+            raise
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"Unexpected error: {type(e).__name__}: {e}")
             raise
 
 

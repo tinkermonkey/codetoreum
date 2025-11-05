@@ -188,61 +188,88 @@ def wait_for_execution(
 
 def main():
     """Example usage."""
-    print("=== Listing Running Executions ===\n")
+    try:
+        print("=== Listing Running Executions ===\n")
 
-    # List all running executions
-    running = list_executions(status="running")
-    print(f"Found {running['total']} running execution(s)")
+        # List all running executions
+        running = list_executions(status="running")
+        print(f"Found {running['total']} running execution(s)")
 
-    for execution in running["items"]:
-        print(f"\n  ID: {execution['id']}")
-        print(f"  Agent: {execution['agent_id']}")
-        print(f"  Work Item: {execution['work_item_id']}")
-        print(f"  Status: {execution['status']}")
-        print(f"  Started: {execution['started_at']}")
+        for execution in running["items"]:
+            print(f"\n  ID: {execution['id']}")
+            print(f"  Agent: {execution['agent_id']}")
+            print(f"  Work Item: {execution['work_item_id']}")
+            print(f"  Status: {execution['status']}")
+            print(f"  Started: {execution['started_at']}")
 
-    # List recent completed executions
-    print("\n\n=== Recent Completed Executions ===\n")
-    completed = list_executions(status="completed", limit=5)
-    print(f"Found {completed['total']} completed execution(s)")
+        # List recent completed executions
+        print("\n\n=== Recent Completed Executions ===\n")
+        completed = list_executions(status="completed", limit=5)
+        print(f"Found {completed['total']} completed execution(s)")
 
-    for execution in completed["items"]:
-        print(f"\n  ID: {execution['id']}")
-        print(f"  Status: {execution['status']}")
-        print(f"  Duration: {execution.get('duration_seconds', 'N/A')}s")
+        for execution in completed["items"]:
+            print(f"\n  ID: {execution['id']}")
+            print(f"  Status: {execution['status']}")
+            print(f"  Duration: {execution.get('duration_seconds', 'N/A')}s")
 
-    # Monitor a specific execution (if any running)
-    if running["items"]:
-        execution_id = running["items"][0]["id"]
-        print(f"\n\n=== Monitoring Execution {execution_id} ===\n")
+        # Monitor a specific execution (if any running)
+        if running["items"]:
+            execution_id = running["items"][0]["id"]
+            print(f"\n\n=== Monitoring Execution {execution_id} ===\n")
 
+            try:
+                final_status = wait_for_execution(
+                    execution_id,
+                    check_interval=5,
+                    timeout=300,  # 5 minutes
+                    print_logs=True
+                )
+                print(f"\n✓ Execution completed with status: {final_status['status']}")
+            except TimeoutError as e:
+                print(f"\n⚠ {e}")
+            except requests.exceptions.HTTPError as e:
+                print(f"\n✗ Failed to monitor execution: HTTP {e.response.status_code}")
+            except KeyError as e:
+                print(f"\n✗ Unexpected response format: missing field {e}")
+
+        # List failed executions for debugging
+        print("\n\n=== Recent Failed Executions ===\n")
+        failed = list_executions(status="failed", limit=5)
+        print(f"Found {failed['total']} failed execution(s)")
+
+        for execution in failed["items"]:
+            print(f"\n  ID: {execution['id']}")
+            print(f"  Agent: {execution['agent_id']}")
+            print(f"  Failed at: {execution.get('completed_at', 'N/A')}")
+
+            # Get last 10 lines of logs
+            try:
+                logs = get_execution_logs(execution['id'], tail=10)
+                if logs:
+                    print("  Last logs:")
+                    for log in logs[-5:]:  # Show last 5 lines
+                        print(f"    {log}")
+            except requests.exceptions.HTTPError:
+                print("  (Unable to retrieve logs)")
+
+    except requests.exceptions.HTTPError as e:
+        print(f"\n✗ API Error: {e.response.status_code}")
         try:
-            final_status = wait_for_execution(
-                execution_id,
-                check_interval=5,
-                timeout=300,  # 5 minutes
-                print_logs=True
-            )
-            print(f"\n✓ Execution completed with status: {final_status['status']}")
-        except TimeoutError as e:
-            print(f"\n⚠ {e}")
-
-    # List failed executions for debugging
-    print("\n\n=== Recent Failed Executions ===\n")
-    failed = list_executions(status="failed", limit=5)
-    print(f"Found {failed['total']} failed execution(s)")
-
-    for execution in failed["items"]:
-        print(f"\n  ID: {execution['id']}")
-        print(f"  Agent: {execution['agent_id']}")
-        print(f"  Failed at: {execution.get('completed_at', 'N/A')}")
-
-        # Get last 10 lines of logs
-        logs = get_execution_logs(execution['id'], tail=10)
-        if logs:
-            print("  Last logs:")
-            for log in logs[-5:]:  # Show last 5 lines
-                print(f"    {log}")
+            error_detail = e.response.json()
+            print(f"  Detail: {error_detail.get('detail', 'No details provided')}")
+        except (ValueError, requests.exceptions.JSONDecodeError):
+            print(f"  Detail: {e.response.text}")
+    except requests.exceptions.ConnectionError:
+        print(f"\n✗ Connection Error: Unable to connect to {BASE_URL}")
+        print("  Ensure the API server is running")
+    except requests.exceptions.Timeout:
+        print(f"\n✗ Timeout Error: Request took too long")
+    except requests.exceptions.RequestException as e:
+        print(f"\n✗ Request Error: {str(e)}")
+    except KeyError as e:
+        print(f"\n✗ Data Error: Missing expected field {e} in API response")
+    except Exception as e:
+        print(f"\n✗ Unexpected Error: {type(e).__name__}: {str(e)}")
 
 
 if __name__ == "__main__":

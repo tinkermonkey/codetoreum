@@ -9,6 +9,7 @@ Comprehensive API documentation, examples, and SDK clients for the Codetoreum AI
 - [SDK Clients](#sdk-clients)
 - [Postman Collection](#postman-collection)
 - [Authentication](#authentication)
+- [Security Best Practices](#security-best-practices)
 - [Quick Start](#quick-start)
 
 ## OpenAPI Specification
@@ -196,6 +197,56 @@ Codetoreum API/
 │   ├── List Work Items
 │   ├── Get Work Item
 │   └── ...
+```
+
+## Security Best Practices
+
+**IMPORTANT**: Before using the API in production, read the comprehensive security guide:
+
+**📖 [SECURITY.md](SECURITY.md)** - Complete security best practices including:
+
+- **Token Management**: Secure storage, rotation strategies, and lifecycle management
+- **Secret Storage**: Environment variables, AWS Secrets Manager, HashiCorp Vault, Azure Key Vault
+- **Production Deployment**: Kubernetes secrets, Docker secrets, monitoring, and incident response
+- **Network Security**: SSL/TLS verification, rate limiting, timeout configuration
+- **Environment Configuration**: Development vs staging vs production setup
+
+### Quick Security Checklist
+
+- ✅ Never commit API tokens to version control
+- ✅ Use environment variables or secret management services
+- ✅ Enable SSL/TLS verification in production
+- ✅ Implement token rotation (recommended: 90-day cycle)
+- ✅ Use least-privilege token scopes
+- ✅ Configure appropriate request timeouts
+- ✅ Implement rate limiting and retry logic
+- ✅ Never log tokens or sensitive data
+- ✅ Revoke compromised tokens immediately
+
+**Example - Secure Token Loading**:
+
+```python
+# ✅ GOOD: Load from environment
+import os
+from codetoreum_client import CodetoreumClient
+
+client = CodetoreumClient(
+    api_token=os.getenv("CODETOREUM_API_TOKEN"),
+    base_url=os.getenv("CODETOREUM_API_URL", "http://localhost:8000"),
+    verify_ssl=True,  # Always True in production
+    timeout=30
+)
+```
+
+```python
+# ❌ BAD: Hardcoded token
+client = CodetoreumClient(api_token="ct_live_abc123...")  # NEVER DO THIS
+```
+
+### Postman Collection Organization
+
+```
+Codetoreum API/
 ├── Agents
 │   ├── Create Agent
 │   ├── List Agents

@@ -204,62 +204,85 @@ def cancel_workflow(workflow_run_id: str) -> Dict[str, Any]:
 
 def main():
     """Example usage."""
-    # Example 1: Create work item and start workflow
-    print("=== Creating Work Item ===\n")
+    try:
+        # Example 1: Create work item and start workflow
+        print("=== Creating Work Item ===\n")
 
-    work_item = create_work_item(
-        title="Add user profile API endpoint",
-        description="""
-        Implement a new API endpoint for user profile management:
-        - GET /api/v2/users/{user_id}/profile
-        - PUT /api/v2/users/{user_id}/profile
-        - Include authentication and validation
-        - Write tests
-        """,
-        project_id="my-api-project",
-        labels=["feature", "api", "backend"],
-        priority="high",
-        external_id="GH-456"
-    )
+        work_item = create_work_item(
+            title="Add user profile API endpoint",
+            description="""
+            Implement a new API endpoint for user profile management:
+            - GET /api/v2/users/{user_id}/profile
+            - PUT /api/v2/users/{user_id}/profile
+            - Include authentication and validation
+            - Write tests
+            """,
+            project_id="my-api-project",
+            labels=["feature", "api", "backend"],
+            priority="high",
+            external_id="GH-456"
+        )
 
-    print(f"\nWork Item ID: {work_item['id']}")
-    print(f"Title: {work_item['title']}")
-    print(f"Status: {work_item['status']}")
+        print(f"\nWork Item ID: {work_item['id']}")
+        print(f"Title: {work_item['title']}")
+        print(f"Status: {work_item['status']}")
 
-    # Check entry conditions (optional)
-    print("\n=== Checking Entry Conditions ===\n")
-    conditions = check_entry_conditions(work_item['id'], "development")
-    print(f"Conditions met: {conditions['conditions_met']}")
+        # Check entry conditions (optional)
+        print("\n=== Checking Entry Conditions ===\n")
+        try:
+            conditions = check_entry_conditions(work_item['id'], "development")
+            print(f"Conditions met: {conditions['conditions_met']}")
+        except requests.exceptions.HTTPError as e:
+            print(f"Warning: Could not check entry conditions (HTTP {e.response.status_code})")
 
-    # Start workflow
-    print("\n=== Starting Workflow ===\n")
-    workflow_run = start_workflow(work_item['id'])
+        # Start workflow
+        print("\n=== Starting Workflow ===\n")
+        workflow_run = start_workflow(work_item['id'])
 
-    print(f"\nWorkflow Run ID: {workflow_run['workflow_run_id']}")
-    print(f"Workflow: {workflow_run.get('workflow_name', 'auto-selected')}")
-    print(f"Current Stage: {workflow_run['current_stage']}")
-    print(f"Status: {workflow_run['status']}")
+        print(f"\nWorkflow Run ID: {workflow_run['workflow_run_id']}")
+        print(f"Workflow: {workflow_run.get('workflow_name', 'auto-selected')}")
+        print(f"Current Stage: {workflow_run['current_stage']}")
+        print(f"Status: {workflow_run['status']}")
 
-    # Example 2: Workflow control (pause/resume)
-    print("\n=== Workflow Control Example ===\n")
+        # Example 2: Workflow control (pause/resume)
+        print("\n=== Workflow Control Example ===\n")
 
-    # Simulate pausing workflow
-    print("Pausing workflow...")
-    # pause_workflow(workflow_run['workflow_run_id'])
+        # Simulate pausing workflow
+        print("Pausing workflow...")
+        # pause_workflow(workflow_run['workflow_run_id'])
 
-    # Wait for some condition...
-    # time.sleep(30)
+        # Wait for some condition...
+        # time.sleep(30)
 
-    # Resume workflow
-    print("Resuming workflow...")
-    # resume_workflow(workflow_run['workflow_run_id'])
+        # Resume workflow
+        print("Resuming workflow...")
+        # resume_workflow(workflow_run['workflow_run_id'])
 
-    # Example 3: Cancel workflow (if needed)
-    # cancel_workflow(workflow_run['workflow_run_id'])
+        # Example 3: Cancel workflow (if needed)
+        # cancel_workflow(workflow_run['workflow_run_id'])
 
-    print("\n✓ Workflow started successfully")
-    print(f"  Monitor at: {BASE_URL}/api/docs")
-    print(f"  Or use WebSocket: ws://localhost:8000/api/v2/events/stream?token={API_TOKEN[:20]}...")
+        print("\n✓ Workflow started successfully")
+        print(f"  Monitor at: {BASE_URL}/api/docs")
+        print(f"  Or use WebSocket: ws://localhost:8000/api/v2/events/stream?token={API_TOKEN[:20]}...")
+
+    except requests.exceptions.HTTPError as e:
+        print(f"\n✗ API Error: {e.response.status_code}")
+        try:
+            error_detail = e.response.json()
+            print(f"  Detail: {error_detail.get('detail', 'No details provided')}")
+        except (ValueError, requests.exceptions.JSONDecodeError):
+            print(f"  Detail: {e.response.text}")
+    except requests.exceptions.ConnectionError:
+        print(f"\n✗ Connection Error: Unable to connect to {BASE_URL}")
+        print("  Ensure the API server is running")
+    except requests.exceptions.Timeout:
+        print(f"\n✗ Timeout Error: Request took too long")
+    except requests.exceptions.RequestException as e:
+        print(f"\n✗ Request Error: {str(e)}")
+    except KeyError as e:
+        print(f"\n✗ Data Error: Missing expected field {e} in API response")
+    except Exception as e:
+        print(f"\n✗ Unexpected Error: {type(e).__name__}: {str(e)}")
 
 
 if __name__ == "__main__":
