@@ -2,6 +2,7 @@
  * Authentication Hook
  *
  * Provides simplified httpOnly cookie-based authentication (secure, XSS-protected).
+ * Now uses Zustand for centralized state management.
  *
  * Flow:
  * 1. On first load, check for token in URL query parameter
@@ -16,24 +17,38 @@
  * - httpOnly cookies (inaccessible to JavaScript)
  * - SameSite=Strict (CSRF protection)
  * - Secure flag in production (HTTPS only)
+ *
+ * State Management:
+ * - Uses Zustand store for global state
+ * - Persists authentication status in sessionStorage
+ * - Automatically syncs across components
  */
 
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
 import api, { authApi } from '../api/client'
+import { useAuthStore } from '../store/authStore'
 
 export interface AuthState {
   isAuthenticated: boolean
   isLoading: boolean
+  error: string | null
 }
 
 export function useAuth() {
-  const [authState, setAuthState] = useState<AuthState>({
-    isAuthenticated: false,
-    isLoading: true,
-  })
+  const {
+    isAuthenticated,
+    isLoading,
+    error,
+    setAuthenticated,
+    setLoading,
+    setError,
+    clearAuth,
+  } = useAuthStore()
 
   useEffect(() => {
     const initializeAuth = async () => {
+      setLoading(true)
+
       // Check for token in URL query parameter
       const urlParams = new URLSearchParams(window.location.search)
       const urlToken = urlParams.get('token')
@@ -49,17 +64,13 @@ export function useAuth() {
           // Remove token from URL for security
           window.history.replaceState({}, document.title, window.location.pathname)
 
-          setAuthState({
-            isAuthenticated: true,
-            isLoading: false,
-          })
+          setAuthenticated(true)
+          setLoading(false)
           return
         } catch (error) {
           console.error('Failed to authenticate with URL token:', error)
-          setAuthState({
-            isAuthenticated: false,
-            isLoading: false,
-          })
+          setError(error instanceof Error ? error.message : 'Authentication failed')
+          setLoading(false)
           return
         }
       }
@@ -68,34 +79,22 @@ export function useAuth() {
       // The browser will automatically send the httpOnly cookie
       try {
         await api.get('/v2/auth/token-info')
-        setAuthState({
-          isAuthenticated: true,
-          isLoading: false,
-        })
+        setAuthenticated(true)
+        setLoading(false)
       } catch (error) {
         // Not authenticated
-        setAuthState({
-          isAuthenticated: false,
-          isLoading: false,
-        })
+        setAuthenticated(false)
+        setLoading(false)
       }
     }
 
-    initializeAuth()
-
-    // Listen for unauthorized events from API interceptor
-    const handleUnauthorized = () => {
-      setAuthState({
-        isAuthenticated: false,
-        isLoading: false,
-      })
+    // Only initialize if not already authenticated
+    if (!isAuthenticated) {
+      initializeAuth()
+    } else {
+      setLoading(false)
     }
-
-    window.addEventListener('auth:unauthorized', handleUnauthorized)
-    return () => {
-      window.removeEventListener('auth:unauthorized', handleUnauthorized)
-    }
-  }, [])
+  }, [isAuthenticated, setAuthenticated, setLoading, setError])
 
   const logout = async () => {
     try {
@@ -104,16 +103,15 @@ export function useAuth() {
     } catch (error) {
       console.error('Logout failed:', error)
     } finally {
-      // Update local state regardless of API call result
-      setAuthState({
-        isAuthenticated: false,
-        isLoading: false,
-      })
+      // Clear authentication state
+      clearAuth()
     }
   }
 
   return {
-    ...authState,
+    isAuthenticated,
+    isLoading,
+    error,
     logout,
   }
 }
