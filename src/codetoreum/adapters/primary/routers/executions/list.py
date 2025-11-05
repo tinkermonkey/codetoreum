@@ -8,7 +8,11 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
+
+from codetoreum.config import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, DEFAULT_OFFSET
 from fastapi import status as http_status
+
+from codetoreum.config import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, DEFAULT_OFFSET
 
 from codetoreum.adapters.primary.execution_dtos import ExecutionListResponse
 from codetoreum.adapters.primary.execution_mappers import ExecutionMapper
@@ -47,8 +51,8 @@ def register_list_endpoints(
         stage_name: Optional[str] = Query(None, description="Filter by stage name"),
         start_date: Optional[str] = Query(None, description="Filter by start date (ISO 8601 format)"),
         end_date: Optional[str] = Query(None, description="Filter by end date (ISO 8601 format)"),
-        offset: int = Query(0, ge=0, description="Offset for pagination"),
-        limit: int = Query(20, ge=1, le=100, description="Limit for pagination (max 100)"),
+        offset: int = Query(DEFAULT_OFFSET, ge=0, description="Offset for pagination"),
+        limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description=f"Limit for pagination (max {MAX_PAGE_SIZE})"),
         sort_by: str = Query("initialized_at", description="Sort field (initialized_at, started_at, completed_at, duration_seconds, status)"),
         sort_order: str = Query("desc", description="Sort order (asc, desc)"),
     ) -> ExecutionListResponse:

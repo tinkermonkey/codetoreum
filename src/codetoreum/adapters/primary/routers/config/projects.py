@@ -8,6 +8,14 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, status
 
+from codetoreum.config import (
+    DEFAULT_PAGE_SIZE,
+    MAX_PAGE_SIZE,
+    DEFAULT_OFFSET,
+    VERSIONS_DEFAULT_LIMIT,
+    VERSIONS_MAX_LIMIT,
+)
+
 from codetoreum.adapters.primary.config_dtos import (
     AddEnvironmentVariableRequest,
     ConfigurationCommandResponse,
@@ -161,8 +169,8 @@ def register_project_endpoints(
         response_description="List of projects",
     )
     async def list_projects(
-        offset: int = Query(0, ge=0, description="Pagination offset"),
-        limit: int = Query(20, ge=1, le=100, description="Pagination limit"),
+        offset: int = Query(DEFAULT_OFFSET, ge=0, description="Pagination offset"),
+        limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description=f"Pagination limit (max {MAX_PAGE_SIZE})"),
     ) -> ProjectListResponse:
         """
         List all projects with pagination.
@@ -219,7 +227,7 @@ def register_project_endpoints(
     )
     async def get_project_config_history(
         project_id: str,
-        limit: int = Query(10, ge=1, le=50, description="Maximum versions to return"),
+        limit: int = Query(VERSIONS_DEFAULT_LIMIT, ge=1, le=VERSIONS_MAX_LIMIT, description=f"Maximum versions to return (max {VERSIONS_MAX_LIMIT})"),
     ) -> ConfigVersionHistoryResponse:
         """
         Get version history for project configuration.

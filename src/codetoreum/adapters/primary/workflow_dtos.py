@@ -10,6 +10,22 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from codetoreum.config import (
+    MAX_WORKFLOW_NAME_LENGTH,
+    MAX_DESCRIPTION_LENGTH,
+    MAX_PROJECT_ID_LENGTH,
+    MAX_STAGE_NAME_LENGTH,
+    MAX_ERROR_TYPE_LENGTH,
+    MAX_ERROR_MESSAGE_LENGTH,
+    MAX_CONDITION_TYPE_LENGTH,
+    MAX_VALIDATION_MESSAGE_LENGTH,
+    MAX_WORK_ITEM_ID_LENGTH,
+    MAX_WORKFLOW_ID_LENGTH,
+    MAX_REASON_LENGTH,
+    MIN_STAGES_COUNT,
+    MIN_FIELD_LENGTH,
+)
+
 from codetoreum.adapters.primary.api_models import PaginatedResponse
 
 
@@ -21,9 +37,9 @@ from codetoreum.adapters.primary.api_models import PaginatedResponse
 class StageTransition(BaseModel):
     """Transition between workflow stages"""
 
-    from_stage: str = Field(..., description="Source stage name", min_length=1, max_length=100)
-    to_stage: str = Field(..., description="Target stage name", min_length=1, max_length=100)
-    condition: Optional[str] = Field(None, description="Transition condition (optional)", max_length=500)
+    from_stage: str = Field(..., description="Source stage name", min_length=MIN_FIELD_LENGTH, max_length=MAX_STAGE_NAME_LENGTH)
+    to_stage: str = Field(..., description="Target stage name", min_length=MIN_FIELD_LENGTH, max_length=MAX_STAGE_NAME_LENGTH)
+    condition: Optional[str] = Field(None, description="Transition condition (optional)", max_length=MAX_ERROR_MESSAGE_LENGTH)
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -39,7 +55,7 @@ class StageTransition(BaseModel):
 class StageEntryCondition(BaseModel):
     """Entry condition for a workflow stage"""
 
-    condition_type: str = Field(..., description="Type of condition (status, label, approval, etc.)", min_length=1, max_length=100)
+    condition_type: str = Field(..., description="Type of condition (status, label, approval, etc.)", min_length=MIN_FIELD_LENGTH, max_length=MAX_STAGE_NAME_LENGTH)
     parameters: Dict[str, Any] = Field(default_factory=dict, description="Condition parameters")
 
     model_config = ConfigDict(
@@ -55,8 +71,8 @@ class StageEntryCondition(BaseModel):
 class WorkflowStageResponse(BaseModel):
     """Workflow stage information"""
 
-    name: str = Field(..., description="Stage name (unique within workflow)", max_length=100)
-    agent_name: str = Field(..., description="Agent to execute this stage", max_length=100)
+    name: str = Field(..., description="Stage name (unique within workflow)", max_length=MAX_STAGE_NAME_LENGTH)
+    agent_name: str = Field(..., description="Agent to execute this stage", max_length=MAX_STAGE_NAME_LENGTH)
     timeout_seconds: Optional[int] = Field(None, description="Stage timeout in seconds", ge=1)
     retry_count: int = Field(0, description="Number of retries on failure", ge=0)
     entry_conditions: List[StageEntryCondition] = Field(
@@ -90,8 +106,8 @@ class WorkflowStageResponse(BaseModel):
 class WorkflowStageRequest(BaseModel):
     """Request to create/update a workflow stage"""
 
-    name: str = Field(..., description="Stage name", min_length=1, max_length=100)
-    agent_name: str = Field(..., description="Agent to execute this stage", min_length=1)
+    name: str = Field(..., description="Stage name", min_length=MIN_FIELD_LENGTH, max_length=MAX_STAGE_NAME_LENGTH)
+    agent_name: str = Field(..., description="Agent to execute this stage", min_length=MIN_FIELD_LENGTH)
     timeout_seconds: Optional[int] = Field(None, ge=1, le=7200, description="Stage timeout (max 2 hours)")
     retry_count: int = Field(0, ge=0, le=5, description="Retry count (max 5)")
     entry_conditions: List[StageEntryCondition] = Field(default_factory=list)
@@ -119,10 +135,10 @@ class WorkflowStageRequest(BaseModel):
 class CreateWorkflowRequest(BaseModel):
     """Request to create a new workflow definition"""
 
-    name: str = Field(..., description="Workflow name", min_length=1, max_length=200)
-    description: str = Field(..., description="Workflow description", max_length=2000)
-    project_id: str = Field(..., description="Project ID this workflow belongs to", min_length=1, max_length=100)
-    stages: List[WorkflowStageRequest] = Field(..., description="Workflow stages", min_length=1)
+    name: str = Field(..., description="Workflow name", min_length=MIN_FIELD_LENGTH, max_length=MAX_WORKFLOW_NAME_LENGTH)
+    description: str = Field(..., description="Workflow description", max_length=MAX_DESCRIPTION_LENGTH)
+    project_id: str = Field(..., description="Project ID this workflow belongs to", min_length=MIN_FIELD_LENGTH, max_length=MAX_STAGE_NAME_LENGTH)
+    stages: List[WorkflowStageRequest] = Field(..., description="Workflow stages", min_length=MIN_FIELD_LENGTH)
     transitions: List[StageTransition] = Field(default_factory=list, description="Stage transitions")
     work_item_types: Optional[List[str]] = Field(
         None,
@@ -169,9 +185,9 @@ class CreateWorkflowRequest(BaseModel):
 class UpdateWorkflowRequest(BaseModel):
     """Request to update an existing workflow definition"""
 
-    name: Optional[str] = Field(None, description="Updated workflow name", min_length=1, max_length=200)
-    description: Optional[str] = Field(None, description="Updated description", max_length=2000)
-    stages: Optional[List[WorkflowStageRequest]] = Field(None, description="Updated stages", min_length=1)
+    name: Optional[str] = Field(None, description="Updated workflow name", min_length=MIN_FIELD_LENGTH, max_length=MAX_WORKFLOW_NAME_LENGTH)
+    description: Optional[str] = Field(None, description="Updated description", max_length=MAX_DESCRIPTION_LENGTH)
+    stages: Optional[List[WorkflowStageRequest]] = Field(None, description="Updated stages", min_length=MIN_FIELD_LENGTH)
     transitions: Optional[List[StageTransition]] = Field(None, description="Updated transitions")
     work_item_types: Optional[List[str]] = Field(None, description="Updated work item types")
     metadata: Optional[Dict[str, Any]] = Field(None, description="Updated metadata")
@@ -324,9 +340,9 @@ class WorkflowCommandResult(BaseModel):
 class WorkflowValidationError(BaseModel):
     """Workflow validation error"""
 
-    error_type: str = Field(..., description="Error type (circular_dependency, invalid_agent, etc.)", max_length=100)
-    message: str = Field(..., description="Error message", max_length=500)
-    stage_name: Optional[str] = Field(None, description="Stage that caused the error", max_length=100)
+    error_type: str = Field(..., description="Error type (circular_dependency, invalid_agent, etc.)", max_length=MAX_STAGE_NAME_LENGTH)
+    message: str = Field(..., description="Error message", max_length=MAX_ERROR_MESSAGE_LENGTH)
+    stage_name: Optional[str] = Field(None, description="Stage that caused the error", max_length=MAX_STAGE_NAME_LENGTH)
     details: Dict[str, Any] = Field(default_factory=dict, description="Additional error details")
 
     model_config = ConfigDict(

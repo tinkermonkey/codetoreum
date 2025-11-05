@@ -9,6 +9,8 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from codetoreum.config import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, DEFAULT_OFFSET
+
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
 from codetoreum.adapters.primary.work_item_dtos import (
     CreateWorkItemRequest,
@@ -141,8 +143,8 @@ def create_work_items_router(
         workflow_stage: Optional[str] = Query(None, description="Filter by workflow stage"),
         priority: Optional[str] = Query(None, description="Filter by priority (LOW, MEDIUM, HIGH, CRITICAL)"),
         search: Optional[str] = Query(None, description="Search in title and description"),
-        offset: int = Query(0, ge=0, description="Offset for pagination"),
-        limit: int = Query(20, ge=1, le=100, description="Limit for pagination (max 100)"),
+        offset: int = Query(DEFAULT_OFFSET, ge=0, description="Offset for pagination"),
+        limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description=f"Limit for pagination (max {MAX_PAGE_SIZE})"),
         sort_by: str = Query("updated_at", description="Sort field (created_at, updated_at, priority, title, status)"),
         sort_order: str = Query("desc", description="Sort order (asc, desc)"),
     ) -> WorkItemListResponse:

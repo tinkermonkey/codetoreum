@@ -26,6 +26,14 @@ from typing import Any, Dict, List, Optional, Set
 from fastapi import WebSocket, WebSocketDisconnect, Query
 from pydantic import BaseModel
 
+from codetoreum.config import (
+    DEFAULT_WS_HEARTBEAT_INTERVAL,
+    DEFAULT_WS_HEARTBEAT_TIMEOUT,
+    DEFAULT_WS_MAX_CONNECTIONS,
+    DEFAULT_WS_MESSAGE_QUEUE_SIZE,
+    DEFAULT_WS_RATE_LIMIT_MESSAGES,
+    DEFAULT_WS_RATE_LIMIT_WINDOW,
+)
 from codetoreum.domain.events import DomainEvent
 
 logger = logging.getLogger(__name__)
@@ -40,14 +48,14 @@ logger = logging.getLogger(__name__)
 class WebSocketConfig:
     """Configuration for WebSocket adapter"""
 
-    max_buffer_size: int = 1000  # Max events buffered per client
+    max_buffer_size: int = DEFAULT_WS_MESSAGE_QUEUE_SIZE  # Max events buffered per client
     flow_control_threshold: float = 0.8  # Warn at 80% capacity
     disconnect_on_overflow: bool = True  # Disconnect overloaded clients
-    heartbeat_interval: int = 30  # Heartbeat interval in seconds
-    heartbeat_timeout: int = 90  # Time after which to consider connection dead
-    rate_limit_messages: int = 100  # Max messages per client per time window
-    rate_limit_window: int = 60  # Rate limit window in seconds
-    max_connections: int = 1000  # Maximum concurrent connections per instance
+    heartbeat_interval: int = DEFAULT_WS_HEARTBEAT_INTERVAL  # Heartbeat interval in seconds
+    heartbeat_timeout: int = DEFAULT_WS_HEARTBEAT_TIMEOUT  # Time after which to consider connection dead
+    rate_limit_messages: int = DEFAULT_WS_RATE_LIMIT_MESSAGES  # Max messages per client per time window
+    rate_limit_window: int = DEFAULT_WS_RATE_LIMIT_WINDOW  # Rate limit window in seconds
+    max_connections: int = DEFAULT_WS_MAX_CONNECTIONS  # Maximum concurrent connections per instance
     enable_redis_pubsub: bool = True  # Enable Redis pub/sub for horizontal scaling
     enable_connection_persistence: bool = True  # Enable connection state persistence
 
@@ -55,14 +63,14 @@ class WebSocketConfig:
     def from_env(cls) -> "WebSocketConfig":
         """Create WebSocketConfig from environment variables."""
         return cls(
-            max_buffer_size=int(os.getenv("WEBSOCKET_MAX_BUFFER_SIZE", "1000")),
+            max_buffer_size=int(os.getenv("WEBSOCKET_MAX_BUFFER_SIZE", str(DEFAULT_WS_MESSAGE_QUEUE_SIZE))),
             flow_control_threshold=float(os.getenv("WEBSOCKET_FLOW_CONTROL_THRESHOLD", "0.8")),
             disconnect_on_overflow=os.getenv("WEBSOCKET_DISCONNECT_ON_OVERFLOW", "true").lower() == "true",
-            heartbeat_interval=int(os.getenv("WEBSOCKET_HEARTBEAT_INTERVAL", "30")),
-            heartbeat_timeout=int(os.getenv("WEBSOCKET_HEARTBEAT_TIMEOUT", "90")),
-            rate_limit_messages=int(os.getenv("WEBSOCKET_RATE_LIMIT_MESSAGES", "100")),
-            rate_limit_window=int(os.getenv("WEBSOCKET_RATE_LIMIT_WINDOW", "60")),
-            max_connections=int(os.getenv("WEBSOCKET_MAX_CONNECTIONS", "1000")),
+            heartbeat_interval=int(os.getenv("WEBSOCKET_HEARTBEAT_INTERVAL", str(DEFAULT_WS_HEARTBEAT_INTERVAL))),
+            heartbeat_timeout=int(os.getenv("WEBSOCKET_HEARTBEAT_TIMEOUT", str(DEFAULT_WS_HEARTBEAT_TIMEOUT))),
+            rate_limit_messages=int(os.getenv("WEBSOCKET_RATE_LIMIT_MESSAGES", str(DEFAULT_WS_RATE_LIMIT_MESSAGES))),
+            rate_limit_window=int(os.getenv("WEBSOCKET_RATE_LIMIT_WINDOW", str(DEFAULT_WS_RATE_LIMIT_WINDOW))),
+            max_connections=int(os.getenv("WEBSOCKET_MAX_CONNECTIONS", str(DEFAULT_WS_MAX_CONNECTIONS))),
             enable_redis_pubsub=os.getenv("WEBSOCKET_ENABLE_REDIS_PUBSUB", "true").lower() == "true",
             enable_connection_persistence=os.getenv("WEBSOCKET_ENABLE_CONNECTION_PERSISTENCE", "true").lower() == "true",
         )

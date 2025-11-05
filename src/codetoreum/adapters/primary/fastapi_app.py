@@ -27,6 +27,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from codetoreum.config import DEFAULT_RATE_LIMIT, DEFAULT_API_PORT
 from codetoreum.adapters.primary.api_models import (
     HealthCheckResponse,
     ReadinessCheckResponse,
@@ -129,7 +130,7 @@ async def lifespan(app: FastAPI):
     if hasattr(app.state, "auth_manager"):
         auth_manager: SimpleTokenAuthManager = app.state.auth_manager
         host = os.getenv("API_HOST", "localhost")
-        port = int(os.getenv("API_PORT", "8000"))
+        port = int(os.getenv("API_PORT", str(DEFAULT_API_PORT)))
         use_https = os.getenv("API_USE_HTTPS", "false").lower() == "true"
         auth_manager.print_auth_info(host=host, port=port, use_https=use_https)
 
@@ -198,7 +199,7 @@ def create_app(
     """
     # Get configuration from environment
     max_request_size = int(os.getenv("CODETOREUM_MAX_REQUEST_SIZE", str(10 * 1024 * 1024)))  # 10MB default
-    rate_limit = os.getenv("CODETOREUM_RATE_LIMIT", "100/minute")
+    rate_limit = os.getenv("CODETOREUM_RATE_LIMIT", DEFAULT_RATE_LIMIT)
 
     # Create FastAPI app
     app = FastAPI(

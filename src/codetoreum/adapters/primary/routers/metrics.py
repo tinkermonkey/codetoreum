@@ -10,6 +10,11 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from codetoreum.config import (
+    DEFAULT_METRICS_AGGREGATION_WINDOW_SECONDS,
+    MIN_METRICS_AGGREGATION_WINDOW_SECONDS,
+    MAX_METRICS_AGGREGATION_WINDOW_SECONDS,
+)
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
 from codetoreum.adapters.primary.metrics_dtos import (
     AgentExecutionMetricsResponse,
@@ -148,7 +153,12 @@ def create_metrics_router(
     async def get_performance_metrics(
         start_time: Optional[datetime] = Query(None, description="Start of time range (default: last hour)"),
         end_time: Optional[datetime] = Query(None, description="End of time range (default: now)"),
-        aggregation_window_seconds: int = Query(60, ge=1, le=3600, description="Aggregation window in seconds"),
+        aggregation_window_seconds: int = Query(
+            DEFAULT_METRICS_AGGREGATION_WINDOW_SECONDS,
+            ge=MIN_METRICS_AGGREGATION_WINDOW_SECONDS,
+            le=MAX_METRICS_AGGREGATION_WINDOW_SECONDS,
+            description=f"Aggregation window in seconds (min {MIN_METRICS_AGGREGATION_WINDOW_SECONDS}, max {MAX_METRICS_AGGREGATION_WINDOW_SECONDS})"
+        ),
     ) -> PerformanceMetricsResponse:
         """
         Get performance metrics over a time range.

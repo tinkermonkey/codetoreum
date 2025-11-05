@@ -10,6 +10,11 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from codetoreum.config import (
+    WORKSPACE_DEFAULT_PAGE_SIZE,
+    WORKSPACE_MAX_PAGE_SIZE,
+    DEFAULT_OFFSET,
+)
 from codetoreum.adapters.primary.exception_mapper import map_exception_to_http
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
 from codetoreum.adapters.primary.workspace_dtos import (
@@ -72,8 +77,8 @@ def create_workspace_router(
         work_item_id: Optional[str] = Query(None, description="Filter by work item ID"),
         project_id: Optional[str] = Query(None, description="Filter by project ID"),
         status: Optional[str] = Query(None, description="Filter by status (running, stopped, etc.)"),
-        offset: int = Query(0, ge=0, description="Pagination offset"),
-        limit: int = Query(50, ge=1, le=100, description="Pagination limit"),
+        offset: int = Query(DEFAULT_OFFSET, ge=0, description="Pagination offset"),
+        limit: int = Query(WORKSPACE_DEFAULT_PAGE_SIZE, ge=1, le=WORKSPACE_MAX_PAGE_SIZE, description=f"Pagination limit (max {WORKSPACE_MAX_PAGE_SIZE})"),
     ) -> WorkspaceListResponse:
         """
         List all workspaces with optional filtering.
@@ -176,8 +181,8 @@ def create_workspace_router(
         response_description="List of running and initializing workspaces",
     )
     async def list_active_workspaces(
-        offset: int = Query(0, ge=0),
-        limit: int = Query(50, ge=1, le=100),
+        offset: int = Query(DEFAULT_OFFSET, ge=0),
+        limit: int = Query(WORKSPACE_DEFAULT_PAGE_SIZE, ge=1, le=WORKSPACE_MAX_PAGE_SIZE),
     ) -> WorkspaceListResponse:
         """
         List all active workspaces (running or initializing).

@@ -10,6 +10,12 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
+
+from codetoreum.config import (
+    SCHEDULER_DEFAULT_PAGE_SIZE,
+    SCHEDULER_MAX_PAGE_SIZE,
+    WORKSPACE_DEFAULT_PAGE_SIZE,
+)
 from pydantic import BaseModel, Field
 
 from codetoreum.ports.input.config_command import (
@@ -477,7 +483,7 @@ class RestAPIAdapter:
             project_name: Optional[str] = Query(None),
             status: Optional[str] = Query(None),
             page: int = Query(1, ge=1),
-            page_size: int = Query(50, ge=1, le=100),
+            page_size: int = Query(SCHEDULER_DEFAULT_PAGE_SIZE, ge=1, le=SCHEDULER_MAX_PAGE_SIZE),
         ) -> ExecutionListResponse:
             """
             Lists executions matching the specified criteria.
@@ -882,7 +888,7 @@ class RestAPIAdapter:
             config_type: Optional[str] = Query(
                 None, description="Filter by type: project, agent, pipeline"
             ),
-            limit: int = Query(50, ge=1, le=500),
+            limit: int = Query(WORKSPACE_DEFAULT_PAGE_SIZE, ge=1, le=500),
             offset: int = Query(0, ge=0),
         ) -> List[Dict[str, Any]]:
             """

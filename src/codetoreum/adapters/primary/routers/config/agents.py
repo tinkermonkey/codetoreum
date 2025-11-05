@@ -6,6 +6,8 @@ Handles CRUD operations for agent configurations.
 
 from fastapi import APIRouter, HTTPException, Query, status
 
+from codetoreum.config import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, DEFAULT_OFFSET
+
 from codetoreum.adapters.primary.config_dtos import (
     AgentConfigResponse,
     AgentListResponse,
@@ -154,8 +156,8 @@ def register_agent_endpoints(
     )
     async def list_agents(
         project_id: str,
-        offset: int = Query(0, ge=0),
-        limit: int = Query(20, ge=1, le=100),
+        offset: int = Query(DEFAULT_OFFSET, ge=0),
+        limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
     ) -> AgentListResponse:
         """
         List all agents for a project.

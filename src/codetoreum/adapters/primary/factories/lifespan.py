@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from codetoreum.config import DEFAULT_API_PORT
 from codetoreum.infrastructure.auth import SimpleTokenAuthManager
 
 
@@ -39,7 +40,7 @@ def create_lifespan(app: FastAPI):
         if hasattr(app.state, "auth_manager"):
             auth_manager: SimpleTokenAuthManager = app.state.auth_manager
             host = os.getenv("API_HOST", "localhost")
-            port = int(os.getenv("API_PORT", "8000"))
+            port = int(os.getenv("API_PORT", str(DEFAULT_API_PORT)))
             use_https = os.getenv("API_USE_HTTPS", "false").lower() == "true"
             auth_manager.print_auth_info(host=host, port=port, use_https=use_https)
 

@@ -9,6 +9,14 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from codetoreum.config import (
+    MAX_WORK_ITEM_ID_LENGTH,
+    MAX_WORKFLOW_ID_LENGTH,
+    MAX_STAGE_NAME_LENGTH,
+    MAX_REASON_LENGTH,
+    MIN_FIELD_LENGTH,
+)
+
 from codetoreum.adapters.primary.api_models import PaginatedResponse
 
 
@@ -29,8 +37,8 @@ class ExecutionPriority(str, Enum):
 class StartWorkflowExecutionRequest(BaseModel):
     """Request to start workflow execution for a work item"""
 
-    work_item_id: str = Field(..., description="Work item ID to execute workflow for", min_length=1, max_length=100)
-    workflow_id: str = Field(..., description="Workflow definition ID to use", min_length=1, max_length=100)
+    work_item_id: str = Field(..., description="Work item ID to execute workflow for", min_length=MIN_FIELD_LENGTH, max_length=MAX_WORK_ITEM_ID_LENGTH)
+    workflow_id: str = Field(..., description="Workflow definition ID to use", min_length=MIN_FIELD_LENGTH, max_length=MAX_WORK_ITEM_ID_LENGTH)
     stage_name: Optional[str] = Field(None, description="Stage to start from (optional, defaults to first stage)", max_length=100)
     priority: ExecutionPriority = Field(ExecutionPriority.MEDIUM, description="Execution priority")
     context: Dict[str, Any] = Field(default_factory=dict, description="Additional execution context")
@@ -54,7 +62,7 @@ class StartWorkflowExecutionRequest(BaseModel):
 class CancelWorkflowExecutionRequest(BaseModel):
     """Request to cancel a workflow execution"""
 
-    reason: str = Field(..., description="Reason for cancellation", min_length=1, max_length=500)
+    reason: str = Field(..., description="Reason for cancellation", min_length=MIN_FIELD_LENGTH, max_length=MAX_REASON_LENGTH)
     force: bool = Field(False, description="Force immediate cancellation without cleanup")
 
     model_config = ConfigDict(
@@ -70,7 +78,7 @@ class CancelWorkflowExecutionRequest(BaseModel):
 class PauseWorkflowExecutionRequest(BaseModel):
     """Request to pause a workflow execution"""
 
-    reason: str = Field(..., description="Reason for pausing", min_length=1, max_length=500)
+    reason: str = Field(..., description="Reason for pausing", min_length=MIN_FIELD_LENGTH, max_length=MAX_REASON_LENGTH)
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -244,8 +252,8 @@ class ExecutionQueueResponse(PaginatedResponse):
 class EntryConditionValidationRequest(BaseModel):
     """Request to validate workflow entry conditions"""
 
-    work_item_id: str = Field(..., description="Work item ID to validate", min_length=1, max_length=100)
-    workflow_id: str = Field(..., description="Workflow ID to validate against", min_length=1, max_length=100)
+    work_item_id: str = Field(..., description="Work item ID to validate", min_length=MIN_FIELD_LENGTH, max_length=MAX_WORK_ITEM_ID_LENGTH)
+    workflow_id: str = Field(..., description="Workflow ID to validate against", min_length=MIN_FIELD_LENGTH, max_length=MAX_WORK_ITEM_ID_LENGTH)
     stage_name: Optional[str] = Field(None, description="Specific stage to validate (optional)", max_length=100)
 
     model_config = ConfigDict(

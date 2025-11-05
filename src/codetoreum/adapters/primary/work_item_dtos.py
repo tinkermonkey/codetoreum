@@ -13,6 +13,12 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from codetoreum.config import (
+    MAX_PROJECT_ID_LENGTH,
+    MAX_TITLE_LENGTH,
+    MIN_FIELD_LENGTH,
+)
+
 from codetoreum.adapters.primary.api_models import AuditFields, PaginatedResponse
 
 
@@ -24,8 +30,8 @@ from codetoreum.adapters.primary.api_models import AuditFields, PaginatedRespons
 class CreateWorkItemRequest(BaseModel):
     """Request to create a new work item"""
 
-    project_id: str = Field(..., description="Project ID this work item belongs to", min_length=1, max_length=255)
-    title: str = Field(..., description="Work item title", min_length=1, max_length=500)
+    project_id: str = Field(..., description="Project ID this work item belongs to", min_length=MIN_FIELD_LENGTH, max_length=MAX_PROJECT_ID_LENGTH)
+    title: str = Field(..., description="Work item title", min_length=MIN_FIELD_LENGTH, max_length=MAX_TITLE_LENGTH)
     description: str = Field(..., description="Work item description")
     labels: Optional[List[str]] = Field(None, description="List of labels/tags")
     priority: str = Field("MEDIUM", description="Priority: LOW, MEDIUM, HIGH, CRITICAL")
@@ -50,7 +56,7 @@ class CreateWorkItemRequest(BaseModel):
 class UpdateWorkItemRequest(BaseModel):
     """Request to update an existing work item"""
 
-    title: Optional[str] = Field(None, description="Updated title", min_length=1, max_length=500)
+    title: Optional[str] = Field(None, description="Updated title", min_length=MIN_FIELD_LENGTH, max_length=MAX_TITLE_LENGTH)
     description: Optional[str] = Field(None, description="Updated description")
     labels: Optional[List[str]] = Field(None, description="Updated labels")
     priority: Optional[str] = Field(None, description="Updated priority: LOW, MEDIUM, HIGH, CRITICAL")

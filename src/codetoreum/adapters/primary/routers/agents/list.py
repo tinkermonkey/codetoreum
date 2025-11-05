@@ -8,6 +8,8 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, status
 
+from codetoreum.config import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, DEFAULT_OFFSET
+
 from codetoreum.adapters.primary.agent_dtos import AgentListResponse
 from codetoreum.adapters.primary.agent_mappers import AgentMapper
 from codetoreum.domain.agent import AgentType
@@ -45,8 +47,8 @@ def register_list_endpoints(router: APIRouter, query_port: IAgentQueryPort) -> N
         agent_type: Optional[str] = Query(None, description="Filter by agent type (maker, reviewer, etc.)"),
         requires_docker: Optional[bool] = Query(None, description="Filter by Docker requirement"),
         makes_code_changes: Optional[bool] = Query(None, description="Filter by code modification capability"),
-        offset: int = Query(0, ge=0, description="Offset for pagination"),
-        limit: int = Query(20, ge=1, le=100, description="Limit for pagination (max 100)"),
+        offset: int = Query(DEFAULT_OFFSET, ge=0, description="Offset for pagination"),
+        limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description=f"Limit for pagination (max {MAX_PAGE_SIZE})"),
         sort_by: str = Query("updated_at", description="Sort field (name, display_name, agent_type, created_at, updated_at)"),
         sort_order: str = Query("desc", description="Sort order (asc, desc)"),
     ) -> AgentListResponse:

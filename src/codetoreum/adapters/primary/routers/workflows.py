@@ -10,6 +10,13 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
+from codetoreum.config import (
+    DEFAULT_PAGE_SIZE,
+    MAX_PAGE_SIZE,
+    DEFAULT_OFFSET,
+    VERSIONS_DEFAULT_LIMIT,
+    VERSIONS_MAX_LIMIT,
+)
 from codetoreum.adapters.primary.workflow_dtos import (
     CreateWorkflowRequest,
     UpdateWorkflowRequest,
@@ -157,8 +164,8 @@ def create_workflows_router(
         is_active: Optional[bool] = Query(None, description="Filter by active status"),
         work_item_type: Optional[str] = Query(None, description="Filter by applicable work item type"),
         name_contains: Optional[str] = Query(None, description="Filter by partial name match"),
-        offset: int = Query(0, ge=0, description="Offset for pagination"),
-        limit: int = Query(20, ge=1, le=100, description="Limit for pagination (max 100)"),
+        offset: int = Query(DEFAULT_OFFSET, ge=0, description="Offset for pagination"),
+        limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description=f"Limit for pagination (max {MAX_PAGE_SIZE})"),
         sort_by: str = Query("updated_at", description="Sort field (name, created_at, updated_at, version)"),
         sort_order: str = Query("desc", description="Sort order (asc, desc)"),
     ) -> WorkflowListResponse:
@@ -460,7 +467,7 @@ def create_workflows_router(
     )
     async def get_workflow_versions(
         workflow_id: str,
-        limit: int = Query(10, ge=1, le=100, description="Maximum number of versions to return")
+        limit: int = Query(VERSIONS_DEFAULT_LIMIT, ge=1, le=VERSIONS_MAX_LIMIT, description=f"Maximum number of versions to return (max {VERSIONS_MAX_LIMIT})")
     ) -> WorkflowVersionListResponse:
         """
         Get version history for a workflow.

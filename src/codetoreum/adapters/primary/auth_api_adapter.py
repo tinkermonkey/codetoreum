@@ -11,6 +11,14 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
 
+from codetoreum.config import (
+    MIN_USERNAME_LENGTH,
+    MAX_USERNAME_LENGTH,
+    MIN_PASSWORD_LENGTH,
+    MIN_API_KEY_NAME_LENGTH,
+    MAX_API_KEY_NAME_LENGTH,
+)
+
 from codetoreum.adapters.primary.auth_dependencies import AuthDependencies
 from codetoreum.domain.user import AuthContext, Permission, UserRole
 from codetoreum.ports.input.authentication import (
@@ -56,9 +64,9 @@ class RefreshTokenRequest(BaseModel):
 class CreateUserRequest(BaseModel):
     """Create user request model."""
 
-    username: str = Field(..., min_length=3, max_length=50, description="Username")
+    username: str = Field(..., min_length=MIN_USERNAME_LENGTH, max_length=MAX_USERNAME_LENGTH, description="Username")
     email: EmailStr = Field(..., description="Email address")
-    password: str = Field(..., min_length=8, description="Password")
+    password: str = Field(..., min_length=MIN_PASSWORD_LENGTH, description="Password")
     roles: list[UserRole] = Field(default=[UserRole.VIEWER], description="User roles")
 
 
@@ -66,7 +74,7 @@ class UpdateUserRequest(BaseModel):
     """Update user request model."""
 
     email: Optional[EmailStr] = Field(None, description="Email address")
-    password: Optional[str] = Field(None, min_length=8, description="Password")
+    password: Optional[str] = Field(None, min_length=MIN_PASSWORD_LENGTH, description="Password")
     roles: Optional[list[UserRole]] = Field(None, description="User roles")
     is_active: Optional[bool] = Field(None, description="Active status")
 
@@ -87,7 +95,7 @@ class UserResponse(BaseModel):
 class CreateAPIKeyRequest(BaseModel):
     """Create API key request model."""
 
-    name: str = Field(..., min_length=1, max_length=100, description="API key name")
+    name: str = Field(..., min_length=MIN_API_KEY_NAME_LENGTH, max_length=MAX_API_KEY_NAME_LENGTH, description="API key name")
     roles: list[UserRole] = Field(
         default=[UserRole.SERVICE_ACCOUNT], description="API key roles"
     )

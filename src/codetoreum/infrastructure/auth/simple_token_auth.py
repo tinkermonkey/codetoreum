@@ -24,6 +24,8 @@ from typing import Optional
 
 from jose import JWTError, jwt
 
+from codetoreum.config import DEFAULT_TOKEN_EXPIRY_DAYS, DEFAULT_COOKIE_MAX_AGE_SECONDS
+
 logger = logging.getLogger(__name__)
 
 
@@ -87,7 +89,9 @@ class SimpleTokenAuthManager:
 
         # Get expiration from env var or use provided value or default
         if token_expiry_days is None:
-            token_expiry_days = int(os.getenv("CODETOREUM_TOKEN_EXPIRATION_DAYS", "365"))
+            token_expiry_days = int(
+                os.getenv("CODETOREUM_TOKEN_EXPIRATION_DAYS", str(DEFAULT_TOKEN_EXPIRY_DAYS))
+            )
 
         # Generate the server token
         self.server_start_time = datetime.utcnow()
@@ -134,7 +138,7 @@ class SimpleTokenAuthManager:
         self,
         token: str,
         secure: bool = True,
-        max_age: int = 86400 * 365  # 1 year default
+        max_age: int = DEFAULT_COOKIE_MAX_AGE_SECONDS
     ) -> dict:
         """
         Create cookie headers for httpOnly token storage.
@@ -227,7 +231,7 @@ class SimpleTokenAuthManager:
         ws_protocol = "wss" if use_https else "ws"
         print(f"   {ws_protocol}://{host}:{port}/ws/events?token={self.server_token}")
         print("\n⚠️  Important:")
-        print("   - This token is valid for 365 days")
+        print(f"   - This token is valid for {self.token_expiry_days} days")
         print("   - Anyone with this token has full access to the API")
         print("   - Restart the server to generate a new token")
         print("   - Use HTTPS in production to protect the token")

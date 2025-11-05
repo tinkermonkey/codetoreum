@@ -9,6 +9,12 @@ from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+
+from codetoreum.config import (
+    EVENTS_DEFAULT_PAGE_SIZE,
+    EVENTS_MAX_PAGE_SIZE,
+    DEFAULT_OFFSET,
+)
 from pydantic import BaseModel, Field
 
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
@@ -123,8 +129,8 @@ def create_events_router(
         end_time: Optional[datetime] = Query(
             None, description="Filter events before this timestamp"
         ),
-        offset: int = Query(0, ge=0, description="Number of events to skip"),
-        limit: int = Query(50, ge=1, le=1000, description="Maximum events to return"),
+        offset: int = Query(DEFAULT_OFFSET, ge=0, description="Number of events to skip"),
+        limit: int = Query(EVENTS_DEFAULT_PAGE_SIZE, ge=1, le=EVENTS_MAX_PAGE_SIZE, description=f"Maximum events to return (max {EVENTS_MAX_PAGE_SIZE})"),
     ) -> EventListResponse:
         """
         Get historical events with filtering and pagination.

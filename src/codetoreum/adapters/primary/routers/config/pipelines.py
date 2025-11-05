@@ -6,6 +6,8 @@ Handles CRUD operations for pipeline configurations.
 
 from fastapi import APIRouter, HTTPException, Query, status
 
+from codetoreum.config import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, DEFAULT_OFFSET
+
 from codetoreum.adapters.primary.config_dtos import (
     ConfigurationCommandResponse,
     PipelineConfigResponse,
@@ -147,8 +149,8 @@ def register_pipeline_endpoints(
     )
     async def list_pipelines(
         project_id: str,
-        offset: int = Query(0, ge=0),
-        limit: int = Query(20, ge=1, le=100),
+        offset: int = Query(DEFAULT_OFFSET, ge=0),
+        limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
     ) -> PipelineListResponse:
         """
         List all pipelines for a project.

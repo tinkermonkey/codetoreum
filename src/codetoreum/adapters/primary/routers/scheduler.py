@@ -9,6 +9,8 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from codetoreum.config import SCHEDULER_DEFAULT_PAGE_SIZE, SCHEDULER_MAX_PAGE_SIZE
+
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
 from codetoreum.adapters.primary.orchestration_dtos import ExecutionQueueResponse
 from codetoreum.adapters.primary.workflow_mappers import OrchestrationMapper
@@ -59,7 +61,7 @@ def create_scheduler_router(
         work_item_id: Optional[str] = Query(None, description="Filter by work item ID"),
         project_name: Optional[str] = Query(None, description="Filter by project name"),
         page: int = Query(1, ge=1, description="Page number (1-indexed)"),
-        page_size: int = Query(50, ge=1, le=100, description="Items per page (max 100)"),
+        page_size: int = Query(SCHEDULER_DEFAULT_PAGE_SIZE, ge=1, le=SCHEDULER_MAX_PAGE_SIZE, description=f"Items per page (max {SCHEDULER_MAX_PAGE_SIZE})"),
     ) -> ExecutionQueueResponse:
         """
         Get the current execution queue and scheduling status.
