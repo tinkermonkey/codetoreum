@@ -99,15 +99,27 @@ async def security_headers_middleware(request: Request, call_next):
             "max-age=31536000; includeSubDomains"
         )
 
-    # Content Security Policy
-    response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline'; "
-        "style-src 'self' 'unsafe-inline'; "
-        "img-src 'self' data:; "
-        "font-src 'self'; "
-        "connect-src 'self'"
-    )
+    # Content Security Policy - Strict policy for production
+    # Note: For development with hot-reload, you may need to add 'unsafe-eval' to script-src
+    csp_directives = [
+        "default-src 'self'",
+        "script-src 'self'",  # Removed 'unsafe-inline' - use nonces or hashes instead
+        "style-src 'self'",   # Removed 'unsafe-inline' - use nonces or hashes instead
+        "img-src 'self' data: https:",  # Allow HTTPS images and data URIs
+        "font-src 'self'",
+        "connect-src 'self'",  # WebSocket and API connections
+        "frame-ancestors 'none'",  # Equivalent to X-Frame-Options: DENY
+        "base-uri 'self'",  # Restrict <base> tag
+        "form-action 'self'",  # Restrict form submissions
+        "upgrade-insecure-requests",  # Auto-upgrade HTTP to HTTPS
+    ]
+
+    # In development, allow unsafe-inline for easier debugging
+    if os.getenv("CODETOREUM_ENV", "development").lower() == "development":
+        csp_directives[1] = "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+        csp_directives[2] = "style-src 'self' 'unsafe-inline'"
+
+    response.headers["Content-Security-Policy"] = "; ".join(csp_directives)
 
     return response
 
@@ -245,11 +257,44 @@ def create_app(
     if cors_origins is None:
         # Get from environment or use restrictive defaults
         cors_origins_env = os.getenv("CODETOREUM_ALLOWED_ORIGINS", "")
+
+        # Check if we're in production mode
+        is_production = os.getenv("CODETOREUM_ENV", "development").lower() == "production"
+
         if cors_origins_env:
-            cors_origins = [origin.strip() for origin in cors_origins_env.split(",")]
+            # Parse and validate origins
+            origins = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
+
+            # Validate each origin
+            validated_origins = []
+            for origin in origins:
+                # Allow wildcard only in non-production
+                if origin == "*":
+                    if is_production:
+                        raise ValueError(
+                            "CORS wildcard (*) is not allowed in production. "
+                            "Set CODETOREUM_ALLOWED_ORIGINS to specific origins."
+                        )
+                    validated_origins.append(origin)
+                else:
+                    # Validate origin format (must be http:// or https://)
+                    if not (origin.startswith("http://") or origin.startswith("https://")):
+                        raise ValueError(
+                            f"Invalid CORS origin '{origin}'. Must start with http:// or https://"
+                        )
+                    validated_origins.append(origin)
+
+            cors_origins = validated_origins if validated_origins else ["http://localhost:3000"]
         else:
-            # Development default - allows all origins
-            cors_origins = ["*"]
+            # No environment variable set
+            if is_production:
+                raise ValueError(
+                    "CODETOREUM_ALLOWED_ORIGINS must be set in production. "
+                    "Example: CODETOREUM_ALLOWED_ORIGINS=https://app.example.com,https://admin.example.com"
+                )
+            else:
+                # Development default - localhost only
+                cors_origins = ["http://localhost:3000", "http://localhost:8000"]
 
     # In production, be more restrictive with CORS
     allow_all = "*" in cors_origins

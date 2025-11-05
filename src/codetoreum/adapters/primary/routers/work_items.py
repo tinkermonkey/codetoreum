@@ -22,6 +22,7 @@ from codetoreum.adapters.primary.work_item_dtos import (
 )
 from codetoreum.adapters.primary.work_item_mappers import WorkItemMapper
 from codetoreum.domain.work_item import WorkItemStatus, WorkItemPriority
+from codetoreum.infrastructure.security import sanitize_search_query, InvalidInputError
 from codetoreum.ports.input.work_item_command import IWorkItemCommandPort
 from codetoreum.ports.input.work_item_query import (
     IWorkItemQueryPort,
@@ -177,6 +178,32 @@ def create_work_items_router(
         - Paginate: `GET /api/v2/work-items?offset=20&limit=50`
         """
         try:
+            # Sanitize search query to prevent injection attacks
+            sanitized_search = None
+            if search:
+                try:
+                    sanitized_search = sanitize_search_query(search, max_length=500)
+                except InvalidInputError as e:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Invalid search query: {str(e)}"
+                    )
+
+            # Validate sort_by field to prevent injection
+            valid_sort_fields = ["created_at", "updated_at", "priority", "title", "status"]
+            if sort_by.lower() not in valid_sort_fields:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid sort field. Must be one of: {', '.join(valid_sort_fields)}"
+                )
+
+            # Validate sort_order to prevent injection
+            if sort_order.lower() not in ["asc", "desc"]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid sort order. Must be 'asc' or 'desc'"
+                )
+
             # Parse filters
             filters = WorkItemFilters(
                 project_id=project_id,
@@ -196,10 +223,10 @@ def create_work_items_router(
             )
 
             # Execute query via port
-            if search:
-                # Use search endpoint
+            if sanitized_search:
+                # Use search endpoint with sanitized query
                 search_params = WorkItemSearchParams(
-                    query=search,
+                    query=sanitized_search,
                     filters=filters,
                     pagination=pagination,
                 )

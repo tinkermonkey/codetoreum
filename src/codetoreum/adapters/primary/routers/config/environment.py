@@ -12,6 +12,7 @@ from codetoreum.adapters.primary.config_dtos import (
 )
 from codetoreum.adapters.primary.exception_mapper import map_exception_to_http
 from codetoreum.domain.exceptions import DomainError
+from codetoreum.infrastructure.security import validate_env_var_name, InvalidInputError
 from codetoreum.ports.exceptions import PortError
 from codetoreum.ports.input.config_command import (
     AddEnvironmentVariableCommand,
@@ -115,12 +116,21 @@ def register_environment_endpoints(
         - 404 Not Found: Project or variable not found
         """
         try:
+            # Validate variable name from path parameter
+            try:
+                validated_name = validate_env_var_name(variable_name)
+            except InvalidInputError as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=str(e)
+                )
+
             # Get project name
             project_config = await query_port.get_project_config(project_id, include_secrets=False)
 
             command = RemoveEnvironmentVariableCommand(
                 project_name=project_config.name,
-                variable_name=variable_name.upper(),
+                variable_name=validated_name,
                 user_id="api-user",
             )
 

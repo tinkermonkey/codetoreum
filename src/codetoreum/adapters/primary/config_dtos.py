@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
+from codetoreum.infrastructure.security import validate_env_var_name, InvalidInputError
+
 
 # ============================================================================
 # Request DTOs
@@ -57,19 +59,37 @@ class UpdatePipelineConfigRequest(BaseModel):
 class AddEnvironmentVariableRequest(BaseModel):
     """Request to add/update environment variable"""
     variable_name: str = Field(..., min_length=1, max_length=255, description="Variable name")
-    variable_value: str = Field(..., description="Variable value")
+    variable_value: str = Field(..., max_length=10000, description="Variable value")  # Added max length
     is_secret: bool = Field(False, description="Whether this is a secret (will be encrypted)")
     description: Optional[str] = Field(None, max_length=500, description="Variable description")
 
     @field_validator("variable_name")
     @classmethod
     def validate_variable_name(cls, v):
-        # Environment variable names must be valid
-        if not v.replace("_", "").isalnum():
-            raise ValueError("Variable name must be alphanumeric (underscore allowed)")
-        if v[0].isdigit():
-            raise ValueError("Variable name cannot start with a digit")
-        return v.upper()  # Normalize to uppercase
+        # Use centralized validation for environment variable names
+        try:
+            return validate_env_var_name(v)
+        except InvalidInputError as e:
+            raise ValueError(str(e))
+
+    @field_validator("variable_value")
+    @classmethod
+    def validate_variable_value(cls, v):
+        # Sanitize value - strip leading/trailing whitespace
+        # Don't allow null bytes or other control characters except tabs and newlines
+        if '\x00' in v:
+            raise ValueError("Variable value cannot contain null bytes")
+
+        # Check for suspicious patterns that might indicate injection attempts
+        suspicious_patterns = ['$(', '`', '${', '\r']
+        for pattern in suspicious_patterns:
+            if pattern in v:
+                raise ValueError(
+                    f"Variable value contains potentially unsafe pattern: '{pattern}'. "
+                    "If this is intentional, please escape properly."
+                )
+
+        return v
 
 
 class SearchConfigsRequest(BaseModel):

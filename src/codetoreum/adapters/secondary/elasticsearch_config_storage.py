@@ -841,7 +841,7 @@ class ElasticsearchConfigStorage(IConfigStore):
         self, query: str, config_type: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
-        Search configurations using full-text search.
+        Search configurations using full-text search with injection protection.
 
         Args:
             query: Search query string (space-separated terms for AND search)
@@ -849,11 +849,33 @@ class ElasticsearchConfigStorage(IConfigStore):
 
         Returns:
             List of matching configurations
+
+        Raises:
+            ValueError: If query or config_type contain invalid characters
         """
         if not self._initialized:
             await self.initialize()
 
         try:
+            # Sanitize and validate query to prevent injection attacks
+            from codetoreum.infrastructure.security import sanitize_search_query, InvalidInputError
+
+            try:
+                sanitized_query = sanitize_search_query(query, max_length=500)
+            except InvalidInputError as e:
+                raise ValueError(f"Invalid search query: {e}")
+
+            if not sanitized_query:
+                return []  # Empty query returns no results
+
+            # Validate config_type to prevent injection
+            valid_config_types = ["project", "agent", "pipeline", "workflow", None]
+            if config_type not in valid_config_types:
+                raise ValueError(
+                    f"Invalid config_type '{config_type}'. "
+                    f"Must be one of: {', '.join([t for t in valid_config_types if t is not None])}"
+                )
+
             # Determine which indices to search
             if config_type == "project":
                 indices = [self.INDEX_PROJECTS]
@@ -871,8 +893,8 @@ class ElasticsearchConfigStorage(IConfigStore):
                     self.INDEX_WORKFLOWS,
                 ]
 
-            # Split query into terms for AND search
-            terms = query.strip().split()
+            # Split sanitized query into terms for AND search
+            terms = sanitized_query.strip().split()
 
             # Build query
             if len(terms) == 1:

@@ -10,6 +10,13 @@ from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
+from codetoreum.infrastructure.security import (
+    validate_agent_name,
+    validate_integer_range,
+    validate_float_range,
+    InvalidInputError,
+)
+
 
 # ============================================================================
 # Request Models
@@ -63,6 +70,15 @@ class CreateAgentRequest(BaseModel):
         None, description="Optional list of MCP server names"
     )
 
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v):
+        """Validate agent name using centralized validation."""
+        try:
+            return validate_agent_name(v)
+        except InvalidInputError as e:
+            raise ValueError(str(e))
+
     @field_validator("agent_type")
     @classmethod
     def validate_agent_type(cls, v):
@@ -80,6 +96,26 @@ class CreateAgentRequest(BaseModel):
         if v.lower() not in valid_types:
             raise ValueError(f"Agent type must be one of: {', '.join(valid_types)}")
         return v.lower()
+
+    @field_validator("role_description")
+    @classmethod
+    def validate_role_description(cls, v):
+        """Validate role description length."""
+        if len(v) > 2000:
+            raise ValueError("Role description too long (max 2000 characters)")
+        if len(v.strip()) == 0:
+            raise ValueError("Role description cannot be empty")
+        return v.strip()
+
+    @field_validator("capabilities")
+    @classmethod
+    def validate_capabilities(cls, v):
+        """Validate capabilities dictionary."""
+        if not v:
+            raise ValueError("At least one capability is required")
+        if len(v) > 50:
+            raise ValueError("Too many capabilities (max 50)")
+        return v
 
 
 class UpdateAgentRequest(BaseModel):
