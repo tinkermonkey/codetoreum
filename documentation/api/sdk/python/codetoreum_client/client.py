@@ -1,0 +1,182 @@
+"""
+Main Codetoreum client class
+"""
+import requests
+from typing import Optional
+from urllib.parse import urljoin
+
+from .resources.work_items import WorkItemsResource
+from .resources.agents import AgentsResource
+from .resources.workflows import WorkflowsResource
+from .resources.orchestrator import OrchestratorResource
+from .resources.executions import ExecutionsResource
+from .resources.config import ConfigurationResource
+from .resources.metrics import MetricsResource
+from .resources.workspaces import WorkspacesResource
+from .resources.events import EventsResource
+from .exceptions import CodetoreumError, AuthenticationError, RateLimitError
+
+
+class CodetoreumClient:
+    """
+    Main client for interacting with the Codetoreum API.
+
+    Args:
+        base_url: Base URL of the Codetoreum API (default: http://localhost:8000)
+        api_token: Authentication token (required)
+        timeout: Request timeout in seconds (default: 30)
+        verify_ssl: Verify SSL certificates (default: True)
+
+    Example:
+        >>> client = CodetoreumClient(
+        ...     base_url="http://localhost:8000",
+        ...     api_token="your_token_here"
+        ... )
+        >>> work_items = client.work_items.list(status="pending")
+    """
+
+    def __init__(
+        self,
+        api_token: str,
+        base_url: str = "http://localhost:8000",
+        timeout: int = 30,
+        verify_ssl: bool = True,
+    ):
+        if not api_token:
+            raise ValueError("api_token is required")
+
+        self.base_url = base_url.rstrip("/")
+        self.api_token = api_token
+        self.timeout = timeout
+        self.verify_ssl = verify_ssl
+
+        # Create session with default headers
+        self.session = requests.Session()
+        self.session.headers.update({
+            "Authorization": f"Bearer {api_token}",
+            "Content-Type": "application/json",
+            "User-Agent": f"codetoreum-python-sdk/2.0.0",
+        })
+        self.session.verify = verify_ssl
+
+        # Initialize resource clients
+        self.work_items = WorkItemsResource(self)
+        self.agents = AgentsResource(self)
+        self.workflows = WorkflowsResource(self)
+        self.orchestrator = OrchestratorResource(self)
+        self.executions = ExecutionsResource(self)
+        self.config = ConfigurationResource(self)
+        self.metrics = MetricsResource(self)
+        self.workspaces = WorkspacesResource(self)
+        self.events = EventsResource(self)
+
+    def _build_url(self, path: str) -> str:
+        """Build full URL from path."""
+        return urljoin(self.base_url, path)
+
+    def _request(
+        self,
+        method: str,
+        path: str,
+        params: Optional[dict] = None,
+        json: Optional[dict] = None,
+        timeout: Optional[int] = None,
+    ) -> requests.Response:
+        """
+        Make HTTP request to API.
+
+        Args:
+            method: HTTP method (GET, POST, PUT, DELETE, PATCH)
+            path: API path (e.g., /api/v2/work-items/)
+            params: Query parameters
+            json: JSON body
+            timeout: Request timeout (overrides default)
+
+        Returns:
+            Response object
+
+        Raises:
+            CodetoreumError: On API error
+            AuthenticationError: On authentication error
+            RateLimitError: On rate limit error
+        """
+        url = self._build_url(path)
+        timeout = timeout or self.timeout
+
+        try:
+            response = self.session.request(
+                method=method,
+                url=url,
+                params=params,
+                json=json,
+                timeout=timeout,
+            )
+
+            # Handle errors
+            if response.status_code == 401:
+                raise AuthenticationError("Invalid or expired authentication token")
+            elif response.status_code == 429:
+                raise RateLimitError("Rate limit exceeded")
+            elif response.status_code >= 400:
+                try:
+                    error_data = response.json()
+                    error_message = error_data.get("detail", response.text)
+                except ValueError:
+                    error_message = response.text
+
+                raise CodetoreumError(
+                    f"API error ({response.status_code}): {error_message}",
+                    status_code=response.status_code,
+                    response=response,
+                )
+
+            return response
+
+        except requests.exceptions.RequestException as e:
+            raise CodetoreumError(f"Request failed: {str(e)}") from e
+
+    def get(self, path: str, params: Optional[dict] = None, **kwargs) -> dict:
+        """Make GET request and return JSON response."""
+        response = self._request("GET", path, params=params, **kwargs)
+        return response.json()
+
+    def post(self, path: str, json: Optional[dict] = None, **kwargs) -> dict:
+        """Make POST request and return JSON response."""
+        response = self._request("POST", path, json=json, **kwargs)
+        return response.json() if response.text else {}
+
+    def put(self, path: str, json: Optional[dict] = None, **kwargs) -> dict:
+        """Make PUT request and return JSON response."""
+        response = self._request("PUT", path, json=json, **kwargs)
+        return response.json()
+
+    def patch(self, path: str, json: Optional[dict] = None, **kwargs) -> dict:
+        """Make PATCH request and return JSON response."""
+        response = self._request("PATCH", path, json=json, **kwargs)
+        return response.json()
+
+    def delete(self, path: str, **kwargs) -> dict:
+        """Make DELETE request and return JSON response."""
+        response = self._request("DELETE", path, **kwargs)
+        return response.json() if response.text else {}
+
+    def health_check(self) -> dict:
+        """
+        Check API health status.
+
+        Returns:
+            Health status information
+        """
+        return self.get("/api/v2/health")
+
+    def close(self):
+        """Close the session."""
+        self.session.close()
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit."""
+        self.close()
