@@ -55,13 +55,22 @@ export function useAuth() {
 
       if (urlToken) {
         try {
+          // SECURITY NOTE: Token in URL is acceptable here because:
+          // 1. It's immediately removed from URL after use
+          // 2. It's only used to exchange for httpOnly cookie
+          // 3. This is the initial authentication handshake
+          // 4. Alternative would require separate auth page/flow
+
           // Make a request with the token to set the httpOnly cookie
           // The backend will set the cookie when it validates the token
           await api.get('/v2/health', {
             params: { token: urlToken }
           })
 
-          // Remove token from URL for security
+          // CRITICAL: Remove token from URL immediately to prevent:
+          // - Browser history exposure
+          // - Accidental sharing of URL with token
+          // - Session hijacking via URL
           window.history.replaceState({}, document.title, window.location.pathname)
 
           setAuthenticated(true)
@@ -69,7 +78,16 @@ export function useAuth() {
           return
         } catch (error) {
           console.error('Failed to authenticate with URL token:', error)
-          setError(error instanceof Error ? error.message : 'Authentication failed')
+
+          // Remove token from URL even on error
+          window.history.replaceState({}, document.title, window.location.pathname)
+
+          // Set user-facing error message
+          const errorMessage = error instanceof Error
+            ? error.message
+            : 'Authentication failed. Please check your token and try again.'
+
+          setError(errorMessage)
           setLoading(false)
           return
         }

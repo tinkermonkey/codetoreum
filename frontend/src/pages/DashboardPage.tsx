@@ -210,9 +210,9 @@ export default function DashboardPage() {
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <span className="font-medium">{event.type}</span>
-                    {event.data && (
+                    {event.data != null && (
                       <pre className="text-xs text-muted-foreground mt-1 overflow-x-auto">
-                        {JSON.stringify(event.data, null, 2)}
+                        {typeof event.data === 'string' ? event.data : JSON.stringify(event.data, null, 2)}
                       </pre>
                     )}
                   </div>

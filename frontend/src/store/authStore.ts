@@ -96,8 +96,29 @@ export const useAuthStore = create<AuthState>()(
  * Setup global event listener for 401 unauthorized responses
  * This allows the API client to notify the auth store when authentication fails
  */
+let unauthorizedHandler: ((event: Event) => void) | null = null
+
 if (typeof window !== 'undefined') {
-  window.addEventListener('auth:unauthorized', () => {
+  unauthorizedHandler = () => {
     useAuthStore.getState().clearAuth()
+  }
+  window.addEventListener('auth:unauthorized', unauthorizedHandler)
+
+  // Cleanup on page unload
+  window.addEventListener('beforeunload', () => {
+    if (unauthorizedHandler) {
+      window.removeEventListener('auth:unauthorized', unauthorizedHandler)
+    }
   })
+}
+
+/**
+ * Cleanup function for testing or manual cleanup
+ * Call this to remove the event listener when needed
+ */
+export const cleanupAuthStore = () => {
+  if (typeof window !== 'undefined' && unauthorizedHandler) {
+    window.removeEventListener('auth:unauthorized', unauthorizedHandler)
+    unauthorizedHandler = null
+  }
 }

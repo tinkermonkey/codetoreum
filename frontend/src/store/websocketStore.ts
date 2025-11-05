@@ -1,11 +1,23 @@
 import { create } from 'zustand'
+import { useAuthStore } from './authStore'
+
+/**
+ * WebSocket Message Types
+ */
+export interface WebSocketMessage {
+  type: string
+  data?: unknown
+  timestamp?: string
+  message?: string
+  event_type?: string
+}
 
 /**
  * WebSocket Event Interface
  */
 export interface WebSocketEvent {
   type: string
-  data: any
+  data: unknown
   timestamp: string
 }
 
@@ -126,8 +138,14 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
       return
     }
 
-    // Don't connect if already connected
-    if (state.ws?.readyState === WebSocket.OPEN) {
+    // Close existing connection if any (prevents resource leak)
+    if (state.ws) {
+      console.log('[WebSocket] Closing existing connection before reconnect')
+      state.ws.close()
+    }
+
+    // Don't connect if already connecting
+    if (state.isConnecting) {
       return
     }
 
@@ -160,7 +178,7 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
 
       ws.onmessage = (event) => {
         try {
-          const message = JSON.parse(event.data)
+          const message: WebSocketMessage = JSON.parse(event.data)
 
           // Handle connected message
           if (message.type === 'connected') {
@@ -171,6 +189,13 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
           // Handle flow control warnings
           if (message.type === 'flow_control') {
             console.warn('[WebSocket] Flow control warning:', message.message)
+            return
+          }
+
+          // Handle authentication errors
+          if (message.type === 'error' && message.message?.includes('auth')) {
+            console.error('[WebSocket] Authentication error:', message.message)
+            ws.close(4001, 'Authentication failed')
             return
           }
 
@@ -230,9 +255,18 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
             clearTimeout(reconnectTimeout)
           }
 
-          // Schedule reconnection
+          // Schedule reconnection - CRITICAL: Use get() to access current auth state (not closure)
           reconnectTimeout = setTimeout(() => {
-            get().connect(isAuthenticated)
+            // Check if user is still authenticated at reconnection time
+            // This prevents race condition where user logged out during reconnection delay
+            const isStillAuthenticated = useAuthStore.getState().isAuthenticated
+
+            if (isStillAuthenticated) {
+              const stateAtReconnect = get()
+              stateAtReconnect.connect(true)
+            } else {
+              console.log('[WebSocket] User logged out during reconnection delay, aborting reconnect')
+            }
           }, delay)
         } else {
           set({ error: 'Max reconnection attempts reached' })
@@ -258,7 +292,16 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
 
     const state = get()
     if (state.ws) {
-      state.ws.close()
+      // Remove all event handlers before closing to prevent memory leaks
+      state.ws.onopen = null
+      state.ws.onmessage = null
+      state.ws.onerror = null
+      state.ws.onclose = null
+
+      // Close the connection
+      if (state.ws.readyState === WebSocket.OPEN || state.ws.readyState === WebSocket.CONNECTING) {
+        state.ws.close()
+      }
     }
 
     set({

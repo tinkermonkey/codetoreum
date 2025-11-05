@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Link, Navigate } from 'react-router-dom'
 import { Settings, GitBranch, Users, Activity, History, Loader2 } from 'lucide-react'
 import { useAuth } from './hooks/useAuth'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import DashboardPage from './pages/DashboardPage'
 import ProjectConfigPage from './pages/ProjectConfigPage'
 import WorkflowConfigPage from './pages/WorkflowConfigPage'
@@ -75,11 +76,46 @@ function App() {
 
         <main className="container mx-auto px-4 py-8">
           <Routes>
-            <Route path="/" element={<DashboardPage />} />
-            <Route path="/config" element={<ProjectConfigPage />} />
-            <Route path="/workflows" element={<WorkflowConfigPage />} />
-            <Route path="/agents" element={<AgentConfigPage />} />
-            <Route path="/history" element={<ConfigHistoryPage />} />
+            <Route
+              path="/"
+              element={
+                <ErrorBoundary>
+                  <DashboardPage />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/config"
+              element={
+                <ErrorBoundary>
+                  <ProjectConfigPage />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/workflows"
+              element={
+                <ErrorBoundary>
+                  <WorkflowConfigPage />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/agents"
+              element={
+                <ErrorBoundary>
+                  <AgentConfigPage />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/history"
+              element={
+                <ErrorBoundary>
+                  <ConfigHistoryPage />
+                </ErrorBoundary>
+              }
+            />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
