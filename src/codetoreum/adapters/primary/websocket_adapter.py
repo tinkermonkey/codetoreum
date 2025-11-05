@@ -1062,7 +1062,47 @@ class WebSocketAdapter:
             while True:
                 # Receive message from client
                 data = await websocket.receive_text()
+
+                # Validate message size (prevent memory exhaustion)
+                MAX_MESSAGE_SIZE = 10_000  # 10KB max message size
+                if len(data) > MAX_MESSAGE_SIZE:
+                    logger.warning(f"Message too large from connection {connection_id}: {len(data)} bytes")
+                    await self.manager.send_personal_message(
+                        ErrorMessage(
+                            code="message_too_large",
+                            message=f"Message size {len(data)} bytes exceeds maximum {MAX_MESSAGE_SIZE} bytes",
+                            timestamp=datetime.utcnow(),
+                        ).model_dump(mode="json"),
+                        connection_id,
+                    )
+                    continue
+
                 message = json.loads(data)
+
+                # Validate message structure
+                if not isinstance(message, dict):
+                    logger.warning(f"Invalid message structure from connection {connection_id}: not a JSON object")
+                    await self.manager.send_personal_message(
+                        ErrorMessage(
+                            code="invalid_message",
+                            message="Message must be a JSON object",
+                            timestamp=datetime.utcnow(),
+                        ).model_dump(mode="json"),
+                        connection_id,
+                    )
+                    continue
+
+                if "type" not in message:
+                    logger.warning(f"Message missing 'type' field from connection {connection_id}")
+                    await self.manager.send_personal_message(
+                        ErrorMessage(
+                            code="invalid_message",
+                            message="Message must contain 'type' field",
+                            timestamp=datetime.utcnow(),
+                        ).model_dump(mode="json"),
+                        connection_id,
+                    )
+                    continue
 
                 # Check rate limit
                 if connection_id in self.manager.connections:

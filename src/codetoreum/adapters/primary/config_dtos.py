@@ -59,7 +59,8 @@ class UpdatePipelineConfigRequest(BaseModel):
 class AddEnvironmentVariableRequest(BaseModel):
     """Request to add/update environment variable"""
     variable_name: str = Field(..., min_length=1, max_length=255, description="Variable name")
-    variable_value: str = Field(..., max_length=10000, description="Variable value")  # Added max length
+    # Increased limit to 100k to accommodate base64-encoded certificates, JSON configs, and multi-line scripts
+    variable_value: str = Field(..., max_length=100000, description="Variable value")
     is_secret: bool = Field(False, description="Whether this is a secret (will be encrypted)")
     description: Optional[str] = Field(None, max_length=500, description="Variable description")
 

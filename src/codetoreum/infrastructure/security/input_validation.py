@@ -33,12 +33,12 @@ SAFE_AGENT_NAME_PATTERN = re.compile(r'^[a-z][a-z0-9_]*$')
 SAFE_LABEL_PATTERN = re.compile(r'^[a-zA-Z0-9_\-\.:/]+$')
 
 
-class PathTraversalError(ValueError):
+class PathTraversalError(Exception):
     """Raised when path traversal attempt is detected."""
     pass
 
 
-class InvalidInputError(ValueError):
+class InvalidInputError(Exception):
     """Raised when invalid input is detected."""
     pass
 
@@ -396,7 +396,9 @@ def validate_float_range(
 
 def sanitize_search_query(query: str, max_length: int = 500) -> str:
     """
-    Sanitize search query to prevent injection attacks.
+    Sanitize search query to prevent injection attacks while preserving search syntax.
+
+    Preserves common search operators: -, +, *, " for advanced search functionality.
 
     Args:
         query: Search query string
@@ -410,8 +412,14 @@ def sanitize_search_query(query: str, max_length: int = 500) -> str:
     """
     query = sanitize_string(query, max_length=max_length, allow_empty=True)
 
-    # Remove control characters
-    query = ''.join(char for char in query if ord(char) >= 32 or char in '\t\n\r')
+    # Remove control characters except allowed ones
+    # Keep tabs, newlines, carriage returns for readability
+    # Keep search operators: -, +, *, "
+    allowed_chars = set('\t\n\r-+*"')
+    query = ''.join(
+        char for char in query
+        if ord(char) >= 32 or char in allowed_chars
+    )
 
     # Remove multiple consecutive spaces
     query = re.sub(r'\s+', ' ', query)

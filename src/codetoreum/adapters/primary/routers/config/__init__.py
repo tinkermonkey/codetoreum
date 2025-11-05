@@ -19,6 +19,7 @@ from codetoreum.ports.input.config_query import IConfigurationQueryPort
 
 from .agents import register_agent_endpoints
 from .environment import register_environment_endpoints
+from .import_export import register_import_export_endpoints
 from .pipelines import register_pipeline_endpoints
 from .projects import register_project_endpoints
 from .search import register_search_endpoints
@@ -56,6 +57,7 @@ def create_config_router(
     register_pipeline_endpoints(router, command_port, query_port)
     register_environment_endpoints(router, command_port, query_port)
     register_search_endpoints(router, query_port)
+    register_import_export_endpoints(router)
 
     return router
 

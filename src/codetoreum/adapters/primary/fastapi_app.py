@@ -254,6 +254,12 @@ def create_app(
     app.add_middleware(BaseHTTPMiddleware, dispatch=error_handling_middleware)
 
     # Add CORS middleware - use environment variables for production
+    # Environment variables:
+    #   CODETOREUM_ALLOWED_ORIGINS - Comma-separated list of allowed origins (required in production)
+    #   CODETOREUM_ENV - Set to "production" to enable production mode (enforces CORS restrictions)
+    # Examples:
+    #   CODETOREUM_ALLOWED_ORIGINS="https://app.example.com,https://admin.example.com"
+    #   CODETOREUM_ENV="production"
     if cors_origins is None:
         # Get from environment or use restrictive defaults
         cors_origins_env = os.getenv("CODETOREUM_ALLOWED_ORIGINS", "")
