@@ -4,6 +4,8 @@ import pytest
 from datetime import datetime, timezone
 from typing import Generator
 
+from fastapi import FastAPI
+
 from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
 from codetoreum.adapters.testing.in_memory_metrics_adapter import (
     InMemoryMetricsAdapter,
@@ -14,6 +16,13 @@ from codetoreum.infrastructure.simulation import (
     SimulationClock,
     SimulationConfig,
     SimulationRunner,
+)
+from codetoreum.infrastructure.simulation.bootstrap import (
+    SimulationApplicationBootstrap,
+    SimulationAdapters,
+    SimulationServices,
+    SimulationPorts,
+    SimulationInfrastructure,
 )
 
 
@@ -149,6 +158,123 @@ def custom_simulation_runner():
         return SimulationRunner(config)
 
     return _create_runner
+
+
+# ====================================================================================
+# Phase 1 Bootstrap Fixtures (NEW)
+# ====================================================================================
+
+
+@pytest.fixture
+async def simulation_bootstrap(
+    fast_simulation_config: SimulationConfig,
+) -> Generator[SimulationApplicationBootstrap, None, None]:
+    """
+    Provide a fully set up simulation bootstrap.
+
+    Args:
+        fast_simulation_config: Fast simulation configuration fixture
+
+    Yields:
+        SimulationApplicationBootstrap instance with app ready for testing
+
+    Cleanup:
+        Tears down all resources after test
+    """
+    bootstrap = SimulationApplicationBootstrap(fast_simulation_config)
+    await bootstrap.setup()
+    yield bootstrap
+    await bootstrap.teardown()
+
+
+@pytest.fixture
+async def simulation_app(
+    simulation_bootstrap: SimulationApplicationBootstrap,
+) -> FastAPI:
+    """
+    Provide the FastAPI application from simulation bootstrap.
+
+    Args:
+        simulation_bootstrap: Bootstrap fixture
+
+    Returns:
+        FastAPI application ready for testing
+    """
+    if not simulation_bootstrap.app:
+        raise RuntimeError("Bootstrap app not initialized")
+    return simulation_bootstrap.app
+
+
+@pytest.fixture
+async def simulation_adapters(
+    simulation_bootstrap: SimulationApplicationBootstrap,
+) -> SimulationAdapters:
+    """
+    Provide all simulation adapters.
+
+    Args:
+        simulation_bootstrap: Bootstrap fixture
+
+    Returns:
+        SimulationAdapters container with all 9 mock adapters
+    """
+    if not simulation_bootstrap.adapters:
+        raise RuntimeError("Bootstrap adapters not initialized")
+    return simulation_bootstrap.adapters
+
+
+@pytest.fixture
+async def simulation_services(
+    simulation_bootstrap: SimulationApplicationBootstrap,
+) -> SimulationServices:
+    """
+    Provide all application services.
+
+    Args:
+        simulation_bootstrap: Bootstrap fixture
+
+    Returns:
+        SimulationServices container with all 8 application services
+    """
+    if not simulation_bootstrap.services:
+        raise RuntimeError("Bootstrap services not initialized")
+    return simulation_bootstrap.services
+
+
+@pytest.fixture
+async def simulation_ports(
+    simulation_bootstrap: SimulationApplicationBootstrap,
+) -> SimulationPorts:
+    """
+    Provide all input/output ports.
+
+    Args:
+        simulation_bootstrap: Bootstrap fixture
+
+    Returns:
+        SimulationPorts container with all port implementations
+    """
+    if not simulation_bootstrap.ports:
+        raise RuntimeError("Bootstrap ports not initialized")
+    return simulation_bootstrap.ports
+
+
+@pytest.fixture
+async def simulation_infrastructure(
+    simulation_bootstrap: SimulationApplicationBootstrap,
+) -> SimulationInfrastructure:
+    """
+    Provide infrastructure components.
+
+    Args:
+        simulation_bootstrap: Bootstrap fixture
+
+    Returns:
+        SimulationInfrastructure with event bus, clock, logger
+    """
+    if not simulation_bootstrap.infrastructure:
+        raise RuntimeError("Bootstrap infrastructure not initialized")
+    return simulation_bootstrap.infrastructure
 
 
 # Markers for categorizing simulation tests

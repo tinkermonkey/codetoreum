@@ -20,6 +20,13 @@ from .simulation_runner import (
     SimulationResult,
     SimulationRunner,
 )
+from .bootstrap import (
+    SimulationApplicationBootstrap,
+    SimulationAdapters,
+    SimulationServices,
+    SimulationPorts,
+    SimulationInfrastructure,
+)
 
 __all__ = [
     # Clock
@@ -39,4 +46,10 @@ __all__ = [
     "SimulationRunner",
     "SimulationResult",
     "AssertionResult",
+    # Bootstrap
+    "SimulationApplicationBootstrap",
+    "SimulationAdapters",
+    "SimulationServices",
+    "SimulationPorts",
+    "SimulationInfrastructure",
 ]
