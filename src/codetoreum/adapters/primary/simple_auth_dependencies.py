@@ -9,6 +9,7 @@ from typing import Optional
 from fastapi import Depends, HTTPException, Header, Query, Cookie, Response, status
 
 from codetoreum.infrastructure.auth import SimpleTokenAuthManager
+from codetoreum.infrastructure.audit import AuditLogger, AuditEventType, get_audit_logger
 
 
 class SimpleAuthDependencies:
@@ -22,14 +23,20 @@ class SimpleAuthDependencies:
         auth_manager: Simple token authentication manager
     """
 
-    def __init__(self, auth_manager: SimpleTokenAuthManager):
+    def __init__(
+        self,
+        auth_manager: SimpleTokenAuthManager,
+        audit_logger: Optional[AuditLogger] = None,
+    ):
         """
         Initialize auth dependencies.
 
         Args:
             auth_manager: Simple token authentication manager
+            audit_logger: Optional audit logger for authentication events
         """
         self.auth_manager = auth_manager
+        self.audit_logger = audit_logger or get_audit_logger()
 
     def _validate_token_format(self, token: str) -> bool:
         """
@@ -95,6 +102,15 @@ class SimpleAuthDependencies:
         # Try httpOnly cookie first (most secure, prevents XSS)
         if codetoreum_token:
             if not self._validate_token_format(codetoreum_token):
+                self.audit_logger.log_event(
+                    event_type=AuditEventType.AUTH_TOKEN_INVALID,
+                    resource_type="auth",
+                    resource_id="cookie",
+                    action="validate",
+                    success=False,
+                    error_message="Invalid token format",
+                    metadata={"source": "cookie"},
+                )
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid authentication token format",
@@ -102,9 +118,26 @@ class SimpleAuthDependencies:
                 )
 
             if self.auth_manager.validate_token(codetoreum_token):
+                self.audit_logger.log_event(
+                    event_type=AuditEventType.AUTH_TOKEN_VALIDATED,
+                    resource_type="auth",
+                    resource_id="cookie",
+                    action="validate",
+                    success=True,
+                    metadata={"source": "cookie"},
+                )
                 return True
             # Invalid cookie token - clear it
             response.delete_cookie(key="codetoreum_token", path="/")
+            self.audit_logger.log_event(
+                event_type=AuditEventType.AUTH_FAILURE,
+                resource_type="auth",
+                resource_id="cookie",
+                action="authenticate",
+                success=False,
+                error_message="Invalid token",
+                metadata={"source": "cookie"},
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid authentication token",
@@ -115,6 +148,15 @@ class SimpleAuthDependencies:
         # If valid, set httpOnly cookie for future requests
         if token:
             if not self._validate_token_format(token):
+                self.audit_logger.log_event(
+                    event_type=AuditEventType.AUTH_TOKEN_INVALID,
+                    resource_type="auth",
+                    resource_id="query",
+                    action="validate",
+                    success=False,
+                    error_message="Invalid token format",
+                    metadata={"source": "query_parameter"},
+                )
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid authentication token format",
@@ -134,8 +176,25 @@ class SimpleAuthDependencies:
                     max_age=86400 * 365,  # 1 year
                     path="/",
                 )
+                self.audit_logger.log_event(
+                    event_type=AuditEventType.AUTH_SUCCESS,
+                    resource_type="auth",
+                    resource_id="query",
+                    action="authenticate",
+                    success=True,
+                    metadata={"source": "query_parameter", "cookie_set": True},
+                )
                 return True
             # Invalid token provided
+            self.audit_logger.log_event(
+                event_type=AuditEventType.AUTH_FAILURE,
+                resource_type="auth",
+                resource_id="query",
+                action="authenticate",
+                success=False,
+                error_message="Invalid token",
+                metadata={"source": "query_parameter"},
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid authentication token",
@@ -145,6 +204,15 @@ class SimpleAuthDependencies:
         # Try Authorization header (for API clients)
         if authorization:
             if not authorization.startswith("Bearer "):
+                self.audit_logger.log_event(
+                    event_type=AuditEventType.AUTH_TOKEN_INVALID,
+                    resource_type="auth",
+                    resource_id="header",
+                    action="validate",
+                    success=False,
+                    error_message="Invalid authorization header format",
+                    metadata={"source": "authorization_header"},
+                )
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid authorization header format. Expected: Bearer <token>",
@@ -154,6 +222,15 @@ class SimpleAuthDependencies:
             auth_token = authorization[7:]  # Remove "Bearer " prefix
 
             if not self._validate_token_format(auth_token):
+                self.audit_logger.log_event(
+                    event_type=AuditEventType.AUTH_TOKEN_INVALID,
+                    resource_type="auth",
+                    resource_id="header",
+                    action="validate",
+                    success=False,
+                    error_message="Invalid token format",
+                    metadata={"source": "authorization_header"},
+                )
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid authentication token format",
@@ -161,9 +238,26 @@ class SimpleAuthDependencies:
                 )
 
             if self.auth_manager.validate_token(auth_token):
+                self.audit_logger.log_event(
+                    event_type=AuditEventType.AUTH_TOKEN_VALIDATED,
+                    resource_type="auth",
+                    resource_id="header",
+                    action="validate",
+                    success=True,
+                    metadata={"source": "authorization_header"},
+                )
                 return True
 
             # Invalid token provided
+            self.audit_logger.log_event(
+                event_type=AuditEventType.AUTH_FAILURE,
+                resource_type="auth",
+                resource_id="header",
+                action="authenticate",
+                success=False,
+                error_message="Invalid token",
+                metadata={"source": "authorization_header"},
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid authentication token",
@@ -171,6 +265,15 @@ class SimpleAuthDependencies:
             )
 
         # No authentication provided
+        self.audit_logger.log_event(
+            event_type=AuditEventType.AUTH_FAILURE,
+            resource_type="auth",
+            resource_id="none",
+            action="authenticate",
+            success=False,
+            error_message="No authentication provided",
+            metadata={"source": "none"},
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required. Provide token via cookie, ?token=... or Authorization: Bearer header",

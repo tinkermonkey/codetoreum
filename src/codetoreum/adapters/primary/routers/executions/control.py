@@ -12,6 +12,7 @@ from codetoreum.adapters.primary.execution_dtos import (
     TerminateExecutionRequest,
 )
 from codetoreum.adapters.primary.execution_mappers import ExecutionMapper
+from codetoreum.infrastructure.audit import get_audit_logger
 from codetoreum.ports.input.execution_command import (
     IExecutionCommandPort,
     TerminateExecutionCommand,
@@ -66,6 +67,8 @@ def register_control_endpoints(
         - Partial output may be available in logs
         - Event history preserved for audit trail
         """
+        audit_logger = get_audit_logger()
+
         try:
             # Create command
             command = TerminateExecutionCommand(
@@ -76,11 +79,27 @@ def register_control_endpoints(
             # Execute command via port
             result = await command_port.terminate_execution(command)
 
+            # Log successful execution termination
+            audit_logger.log_execution_terminated(
+                execution_id=execution_id,
+                user_id="api-user",
+                reason=request.reason,
+                success=True,
+            )
+
             # Convert to response DTO
             return ExecutionMapper.to_command_result(result)
 
         except (ValueError, KeyError, AttributeError) as e:
             error_lower = str(e).lower()
+
+            # Log failed execution termination
+            audit_logger.log_execution_terminated(
+                execution_id=execution_id,
+                user_id="api-user",
+                reason=request.reason,
+                success=False,
+            )
 
             if "not found" in error_lower:
                 raise HTTPException(

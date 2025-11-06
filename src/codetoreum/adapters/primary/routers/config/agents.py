@@ -16,6 +16,7 @@ from codetoreum.adapters.primary.config_dtos import (
 )
 from codetoreum.adapters.primary.exception_mapper import map_exception_to_http
 from codetoreum.domain.exceptions import DomainError
+from codetoreum.infrastructure.audit import get_audit_logger, AuditEventType
 from codetoreum.ports.exceptions import PortError
 from codetoreum.ports.input.config_command import (
     IConfigurationCommandPort,
@@ -118,6 +119,8 @@ def register_agent_endpoints(
         - 401 Unauthorized: Authentication required
         - 404 Not Found: Agent not found
         """
+        audit_logger = get_audit_logger()
+
         try:
             # Get project name
             project_config = await query_port.get_project_config(project_id, include_secrets=False)
@@ -132,6 +135,22 @@ def register_agent_endpoints(
 
             result = await command_port.update_agent_config(command)
 
+            # Log successful configuration change
+            audit_logger.log_event(
+                event_type=AuditEventType.CONFIG_AGENT_UPDATED,
+                resource_type="agent_config",
+                resource_id=f"{project_id}/{agent_name}",
+                action="update",
+                user_id="api-user",
+                success=True,
+                metadata={
+                    "project_id": project_id,
+                    "agent_name": agent_name,
+                    "changes": result.changes_applied,
+                    "reason": request.reason or "No reason provided",
+                },
+            )
+
             return ConfigurationCommandResponse(
                 success=result.success,
                 config_version=result.config_version,
@@ -141,8 +160,38 @@ def register_agent_endpoints(
             )
 
         except (DomainError, PortError, PortException) as e:
+            # Log failed configuration change
+            audit_logger.log_event(
+                event_type=AuditEventType.CONFIG_AGENT_UPDATED,
+                resource_type="agent_config",
+                resource_id=f"{project_id}/{agent_name}",
+                action="update",
+                user_id="api-user",
+                success=False,
+                error_message=str(e),
+                metadata={
+                    "project_id": project_id,
+                    "agent_name": agent_name,
+                    "attempted_changes": request.updates,
+                },
+            )
             raise map_exception_to_http(e)
         except Exception as e:
+            # Log unexpected error
+            audit_logger.log_event(
+                event_type=AuditEventType.CONFIG_AGENT_UPDATED,
+                resource_type="agent_config",
+                resource_id=f"{project_id}/{agent_name}",
+                action="update",
+                user_id="api-user",
+                success=False,
+                error_message=str(e),
+                metadata={
+                    "project_id": project_id,
+                    "agent_name": agent_name,
+                    "error_type": "unexpected",
+                },
+            )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to update agent config: {str(e)}",

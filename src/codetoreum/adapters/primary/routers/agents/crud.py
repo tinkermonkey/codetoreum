@@ -13,6 +13,7 @@ from codetoreum.adapters.primary.agent_dtos import (
     AgentCommandResult,
 )
 from codetoreum.adapters.primary.agent_mappers import AgentMapper
+from codetoreum.infrastructure.audit import get_audit_logger
 from codetoreum.ports.input.agent_command import IAgentCommandPort
 from codetoreum.ports.input.agent_query import IAgentQueryPort
 
@@ -72,6 +73,8 @@ def register_crud_endpoints(
         - At least one capability required
         - Proficiency levels must be between 0.0 and 1.0
         """
+        audit_logger = get_audit_logger()
+
         try:
             # Convert DTO to command
             command = AgentMapper.to_create_command(request)
@@ -82,10 +85,35 @@ def register_crud_endpoints(
             # Retrieve created agent with stats
             agent_info = await query_port.get_agent(agent.id, include_stats=True)
 
+            # Log successful agent creation
+            audit_logger.log_agent_created(
+                agent_id=agent.id,
+                user_id="api-user",
+                metadata={
+                    "agent_name": request.name,
+                    "display_name": request.display_name,
+                    "agent_type": str(request.agent_type),
+                    "model": request.model,
+                    "capabilities": list(request.capabilities.keys()),
+                },
+            )
+
             # Convert to response DTO
             return AgentMapper.to_response(agent_info)
 
         except (ValueError, KeyError, AttributeError) as e:
+            # Log failed agent creation
+            audit_logger.log_event(
+                event_type="agent_creation_failed",
+                resource_type="agent",
+                resource_id=request.name,
+                action="create",
+                user_id="api-user",
+                success=False,
+                error_message=str(e),
+                metadata={"agent_name": request.name},
+            )
+
             # Invalid enum values or validation errors
             if "already exists" in str(e).lower():
                 raise HTTPException(
@@ -135,6 +163,8 @@ def register_crud_endpoints(
         - Emits domain event for audit trail
         - Increments agent version
         """
+        audit_logger = get_audit_logger()
+
         try:
             # Convert DTO to command
             command = AgentMapper.to_update_command(agent_id, request)
@@ -145,10 +175,41 @@ def register_crud_endpoints(
             # Retrieve updated agent with stats
             agent_info = await query_port.get_agent(agent.id, include_stats=True)
 
+            # Build changes dict for audit log
+            changes = {}
+            if request.display_name is not None:
+                changes["display_name"] = request.display_name
+            if request.role_description is not None:
+                changes["role_description"] = request.role_description
+            if request.model is not None:
+                changes["model"] = request.model
+            if request.timeout_seconds is not None:
+                changes["timeout_seconds"] = request.timeout_seconds
+            if request.max_retries is not None:
+                changes["max_retries"] = request.max_retries
+
+            # Log successful agent update
+            audit_logger.log_agent_updated(
+                agent_id=agent_id,
+                user_id="api-user",
+                changes=changes,
+            )
+
             # Convert to response DTO
             return AgentMapper.to_response(agent_info)
 
         except (ValueError, KeyError, AttributeError) as e:
+            # Log failed agent update
+            audit_logger.log_event(
+                event_type="agent_update_failed",
+                resource_type="agent",
+                resource_id=agent_id,
+                action="update",
+                user_id="api-user",
+                success=False,
+                error_message=str(e),
+            )
+
             # Invalid enum values, validation errors, or domain errors
             if "not found" in str(e).lower():
                 raise HTTPException(
@@ -183,14 +244,31 @@ def register_crud_endpoints(
         - Agent will not appear in list queries after deletion
         - Event history is preserved for audit trail
         """
+        audit_logger = get_audit_logger()
+
         try:
             # Execute command via port
             result = await command_port.delete_agent(agent_id)
+
+            # Log successful agent deletion
+            audit_logger.log_agent_deleted(
+                agent_id=agent_id,
+                user_id="api-user",
+                success=True,
+            )
 
             # Convert to response DTO
             return AgentMapper.to_command_result(result)
 
         except (ValueError, KeyError, AttributeError) as e:
+            # Log failed agent deletion
+            audit_logger.log_agent_deleted(
+                agent_id=agent_id,
+                user_id="api-user",
+                success=False,
+                error_message=str(e),
+            )
+
             if "not found" in str(e).lower():
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
