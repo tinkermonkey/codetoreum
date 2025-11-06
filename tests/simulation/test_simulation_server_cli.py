@@ -9,20 +9,27 @@ Tests:
 """
 
 import asyncio
+import os
+import tempfile
 import time
 from pathlib import Path
 from typing import AsyncGenerator
 
+import click
 import httpx
 import pytest
+import yaml
 from click.testing import CliRunner
 from fastapi.testclient import TestClient
 
 from codetoreum.cli.simulation_server import (
-    SimulationServerConfig,
     bootstrap_application,
     seed_data,
     get_scenario_file_path,
+    validate_port,
+    validate_speed_multiplier,
+    validate_yaml_file,
+    main,
 )
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
 
@@ -33,16 +40,11 @@ class TestSimulationServerCLI:
     @pytest.fixture
     async def bootstrap(self) -> AsyncGenerator[SimulationApplicationBootstrap, None]:
         """Create and setup a bootstrap instance for testing."""
-        config = SimulationServerConfig(
-            host="localhost",
-            port=8000,
+        bootstrap = await bootstrap_application(
             scenario="default",
+            scenario_file=None,
             speed_multiplier=10.0,
-            no_seed=False,
-            debug=False,
         )
-
-        bootstrap = await bootstrap_application(config)
         yield bootstrap
         await bootstrap.teardown()
 
@@ -71,15 +73,12 @@ class TestSimulationServerCLI:
     @pytest.mark.asyncio
     async def test_bootstrap_application(self):
         """Test application bootstrap process."""
-        config = SimulationServerConfig(
-            host="localhost",
-            port=8000,
+        start_time = time.time()
+        bootstrap = await bootstrap_application(
             scenario="default",
+            scenario_file=None,
             speed_multiplier=10.0,
         )
-
-        start_time = time.time()
-        bootstrap = await bootstrap_application(config)
         elapsed = time.time() - start_time
 
         try:
@@ -138,14 +137,11 @@ work_items:
         scenario_file = tmp_path / "custom.yaml"
         scenario_file.write_text(scenario_content)
 
-        config = SimulationServerConfig(
-            host="localhost",
-            port=8000,
+        bootstrap = await bootstrap_application(
+            scenario="default",  # Ignored when scenario_file is provided
             scenario_file=scenario_file,
             speed_multiplier=100.0,  # Should override file's 5.0
         )
-
-        bootstrap = await bootstrap_application(config)
 
         try:
             assert bootstrap is not None
@@ -159,16 +155,19 @@ work_items:
     @pytest.mark.asyncio
     async def test_seed_data_default_scenario(self):
         """Test data seeding with default scenario."""
-        config = SimulationServerConfig(
-            host="localhost",
-            port=8000,
+        bootstrap = await bootstrap_application(
             scenario="default",
+            scenario_file=None,
+            speed_multiplier=10.0,
         )
 
-        bootstrap = await bootstrap_application(config)
-
         try:
-            seeded_data = await seed_data(bootstrap, config)
+            seeded_data = await seed_data(
+                bootstrap,
+                scenario="default",
+                scenario_file=None,
+                no_seed=False,
+            )
 
             # Verify data was seeded
             assert seeded_data["projects"] > 0
@@ -186,17 +185,19 @@ work_items:
     @pytest.mark.asyncio
     async def test_seed_data_no_seed_flag(self):
         """Test that --no-seed flag skips data seeding."""
-        config = SimulationServerConfig(
-            host="localhost",
-            port=8000,
+        bootstrap = await bootstrap_application(
             scenario="default",
-            no_seed=True,
+            scenario_file=None,
+            speed_multiplier=10.0,
         )
 
-        bootstrap = await bootstrap_application(config)
-
         try:
-            seeded_data = await seed_data(bootstrap, config)
+            seeded_data = await seed_data(
+                bootstrap,
+                scenario="default",
+                scenario_file=None,
+                no_seed=True,
+            )
 
             # Verify no data was seeded
             assert seeded_data["projects"] == 0
@@ -222,8 +223,12 @@ work_items:
     async def test_http_create_work_item(self, bootstrap):
         """Test creating a work item via HTTP API."""
         # First seed some data to have a project
-        config = SimulationServerConfig(scenario="default")
-        await seed_data(bootstrap, config)
+        await seed_data(
+            bootstrap,
+            scenario="default",
+            scenario_file=None,
+            no_seed=False,
+        )
 
         client = TestClient(bootstrap.app)
 
@@ -272,13 +277,11 @@ work_items:
     @pytest.mark.asyncio
     async def test_graceful_shutdown(self):
         """Test graceful shutdown and cleanup."""
-        config = SimulationServerConfig(
-            host="localhost",
-            port=8000,
+        bootstrap = await bootstrap_application(
             scenario="default",
+            scenario_file=None,
+            speed_multiplier=10.0,
         )
-
-        bootstrap = await bootstrap_application(config)
 
         # Verify setup
         assert bootstrap._is_setup is True
@@ -296,8 +299,12 @@ work_items:
     async def test_multiple_requests(self, bootstrap):
         """Test handling multiple concurrent requests."""
         # Seed data first
-        config = SimulationServerConfig(scenario="default")
-        await seed_data(bootstrap, config)
+        await seed_data(
+            bootstrap,
+            scenario="default",
+            scenario_file=None,
+            no_seed=False,
+        )
 
         client = TestClient(bootstrap.app)
 
@@ -314,17 +321,19 @@ work_items:
     @pytest.mark.asyncio
     async def test_scenario_stress_test(self):
         """Test loading stress test scenario."""
-        config = SimulationServerConfig(
-            host="localhost",
-            port=8000,
+        bootstrap = await bootstrap_application(
             scenario="stress_test",
-            speed_multiplier=100.0,  # Very fast for testing
+            scenario_file=None,
+            speed_multiplier=100.0,
         )
 
-        bootstrap = await bootstrap_application(config)
-
         try:
-            seeded_data = await seed_data(bootstrap, config)
+            seeded_data = await seed_data(
+                bootstrap,
+                scenario="stress_test",
+                scenario_file=None,
+                no_seed=False,
+            )
 
             # Stress test scenario should have many work items
             assert seeded_data["work_items"] >= 10
@@ -336,14 +345,11 @@ work_items:
     async def test_different_speed_multipliers(self):
         """Test different speed multiplier configurations."""
         for speed in [1.0, 10.0, 100.0]:
-            config = SimulationServerConfig(
-                host="localhost",
-                port=8000,
+            bootstrap = await bootstrap_application(
                 scenario="default",
+                scenario_file=None,
                 speed_multiplier=speed,
             )
-
-            bootstrap = await bootstrap_application(config)
 
             try:
                 # Verify speed multiplier is set correctly
@@ -388,20 +394,22 @@ class TestSimulationServerPerformance:
     @pytest.mark.asyncio
     async def test_startup_time(self):
         """Test that server starts in under 2 seconds."""
-        config = SimulationServerConfig(
-            host="localhost",
-            port=8000,
-            scenario="default",
-            speed_multiplier=100.0,
-        )
-
         start_time = time.time()
 
         # Bootstrap
-        bootstrap = await bootstrap_application(config)
+        bootstrap = await bootstrap_application(
+            scenario="default",
+            scenario_file=None,
+            speed_multiplier=100.0,
+        )
 
         # Seed data
-        await seed_data(bootstrap, config)
+        await seed_data(
+            bootstrap,
+            scenario="default",
+            scenario_file=None,
+            no_seed=False,
+        )
 
         elapsed = time.time() - start_time
 
@@ -415,18 +423,20 @@ class TestSimulationServerPerformance:
     @pytest.mark.asyncio
     async def test_seed_100_work_items(self):
         """Test seeding 100 work items in under 500ms."""
-        config = SimulationServerConfig(
-            host="localhost",
-            port=8000,
+        bootstrap = await bootstrap_application(
             scenario="stress_test",  # Should have 100 work items
+            scenario_file=None,
             speed_multiplier=100.0,
         )
 
-        bootstrap = await bootstrap_application(config)
-
         try:
             start_time = time.time()
-            seeded_data = await seed_data(bootstrap, config)
+            seeded_data = await seed_data(
+                bootstrap,
+                scenario="stress_test",
+                scenario_file=None,
+                no_seed=False,
+            )
             elapsed = time.time() - start_time
 
             # Should seed in under 500ms
@@ -434,6 +444,146 @@ class TestSimulationServerPerformance:
             # but seeding should still be fast
             assert elapsed < 0.5, f"Seeding took {elapsed:.2f}s, expected <0.5s"
 
+        finally:
+            await bootstrap.teardown()
+
+
+class TestInputValidation:
+    """Test input validation for security and error handling."""
+
+    def test_validate_port_valid(self):
+        """Test valid port numbers."""
+        validate_port(80)
+        validate_port(8000)
+        validate_port(65535)
+
+    def test_validate_port_too_low(self):
+        """Test port number below minimum."""
+        with pytest.raises(click.BadParameter, match="Port must be between 1 and 65535"):
+            validate_port(0)
+
+    def test_validate_port_too_high(self):
+        """Test port number above maximum."""
+        with pytest.raises(click.BadParameter, match="Port must be between 1 and 65535"):
+            validate_port(70000)
+
+    def test_validate_port_negative(self):
+        """Test negative port number."""
+        with pytest.raises(click.BadParameter, match="Port must be between 1 and 65535"):
+            validate_port(-1)
+
+    def test_validate_speed_multiplier_valid(self):
+        """Test valid speed multipliers."""
+        validate_speed_multiplier(0.1)
+        validate_speed_multiplier(1.0)
+        validate_speed_multiplier(100.0)
+
+    def test_validate_speed_multiplier_zero(self):
+        """Test speed multiplier of zero."""
+        with pytest.raises(click.BadParameter, match="Speed multiplier must be positive"):
+            validate_speed_multiplier(0.0)
+
+    def test_validate_speed_multiplier_negative(self):
+        """Test negative speed multiplier."""
+        with pytest.raises(click.BadParameter, match="Speed multiplier must be positive"):
+            validate_speed_multiplier(-5.0)
+
+    def test_validate_yaml_file_valid(self, tmp_path):
+        """Test validation of valid YAML file."""
+        yaml_file = tmp_path / "test.yaml"
+        yaml_file.write_text("name: test\nvalue: 123")
+
+        validate_yaml_file(yaml_file)  # Should not raise
+
+    def test_validate_yaml_file_too_large(self, tmp_path):
+        """Test validation fails for files exceeding size limit."""
+        yaml_file = tmp_path / "large.yaml"
+        # Create a file larger than 10MB
+        large_content = "x: " + ("a" * (11 * 1024 * 1024))
+        yaml_file.write_text(large_content)
+
+        with pytest.raises(click.FileError, match="File too large"):
+            validate_yaml_file(yaml_file)
+
+    def test_validate_yaml_file_invalid_yaml(self, tmp_path):
+        """Test validation fails for malformed YAML."""
+        yaml_file = tmp_path / "invalid.yaml"
+        yaml_file.write_text("invalid: [\nbroken yaml")
+
+        with pytest.raises(click.FileError, match="Invalid YAML"):
+            validate_yaml_file(yaml_file)
+
+    def test_validate_yaml_file_deep_nesting(self, tmp_path):
+        """Test validation fails for deeply nested YAML (YAML bomb protection)."""
+        yaml_file = tmp_path / "deep.yaml"
+        # Create deeply nested structure exceeding MAX_YAML_DEPTH (50)
+        # Build nested structure: a: {b: {c: {d: ... }}}
+        content = "root:\n"
+        for i in range(60):
+            content += "  " * (i + 1) + f"level{i}:\n"
+        yaml_file.write_text(content)
+
+        with pytest.raises(click.FileError, match="depth exceeds"):
+            validate_yaml_file(yaml_file)
+
+    def test_validate_yaml_file_too_many_nodes(self, tmp_path):
+        """Test validation fails for too many nodes (YAML bomb protection)."""
+        yaml_file = tmp_path / "many_nodes.yaml"
+        # Create structure with too many nodes (> 10000)
+        large_list = "items:\n" + "".join(f"  - item{i}\n" for i in range(15000))
+        yaml_file.write_text(large_list)
+
+        with pytest.raises(click.FileError, match="node count exceeds"):
+            validate_yaml_file(yaml_file)
+
+    def test_validate_yaml_file_permission_denied(self, tmp_path):
+        """Test validation handles permission errors."""
+        yaml_file = tmp_path / "readonly.yaml"
+        yaml_file.write_text("test: value")
+        # Make file unreadable
+        yaml_file.chmod(0o000)
+
+        try:
+            with pytest.raises(click.FileError, match="Error reading file"):
+                validate_yaml_file(yaml_file)
+        finally:
+            # Restore permissions for cleanup
+            yaml_file.chmod(0o644)
+
+
+class TestErrorHandling:
+    """Test error handling for edge cases."""
+
+    @pytest.mark.asyncio
+    async def test_bootstrap_invalid_scenario_file(self, tmp_path):
+        """Test bootstrap with invalid scenario file."""
+        yaml_file = tmp_path / "invalid.yaml"
+        yaml_file.write_text("invalid: [\nbroken")
+
+        with pytest.raises((RuntimeError, click.FileError)):
+            await bootstrap_application(
+                scenario="default",
+                scenario_file=yaml_file,
+                speed_multiplier=1.0,
+            )
+
+    @pytest.mark.asyncio
+    async def test_seed_data_nonexistent_scenario(self):
+        """Test seeding with nonexistent scenario name."""
+        bootstrap = await bootstrap_application(
+            scenario="default",
+            scenario_file=None,
+            speed_multiplier=10.0,
+        )
+
+        try:
+            with pytest.raises((FileNotFoundError, RuntimeError)):
+                await seed_data(
+                    bootstrap,
+                    scenario="nonexistent_scenario_xyz",
+                    scenario_file=None,
+                    no_seed=False,
+                )
         finally:
             await bootstrap.teardown()
 

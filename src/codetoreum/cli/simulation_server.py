@@ -19,6 +19,7 @@ from typing import Optional
 
 import click
 import uvicorn
+import yaml
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
@@ -30,31 +31,97 @@ from codetoreum.infrastructure.simulation.simulation_config import SimulationCon
 console = Console()
 logger = logging.getLogger(__name__)
 
+# Constants for validation
+MAX_PORT = 65535
+MIN_PORT = 1
+MAX_YAML_FILE_SIZE_MB = 10
+MAX_YAML_DEPTH = 50
+MAX_YAML_NODES = 10000
 
-# Global reference for graceful shutdown
-_bootstrap: Optional[SimulationApplicationBootstrap] = None
+
+def validate_port(port: int) -> None:
+    """
+    Validate port number.
+
+    Args:
+        port: Port number to validate
+
+    Raises:
+        click.BadParameter: If port is invalid
+    """
+    if not (MIN_PORT <= port <= MAX_PORT):
+        raise click.BadParameter(
+            f"Port must be between {MIN_PORT} and {MAX_PORT}, got {port}"
+        )
 
 
-class SimulationServerConfig:
-    """Configuration for simulation server."""
+def validate_speed_multiplier(speed: float) -> None:
+    """
+    Validate speed multiplier.
 
-    def __init__(
-        self,
-        host: str = "localhost",
-        port: int = 8000,
-        scenario: str = "default",
-        scenario_file: Optional[Path] = None,
-        speed_multiplier: float = 1.0,
-        no_seed: bool = False,
-        debug: bool = False,
-    ):
-        self.host = host
-        self.port = port
-        self.scenario = scenario
-        self.scenario_file = scenario_file
-        self.speed_multiplier = speed_multiplier
-        self.no_seed = no_seed
-        self.debug = debug
+    Args:
+        speed: Speed multiplier to validate
+
+    Raises:
+        click.BadParameter: If speed multiplier is invalid
+    """
+    if speed <= 0:
+        raise click.BadParameter(
+            f"Speed multiplier must be positive, got {speed}"
+        )
+
+
+def validate_yaml_file(file_path: Path) -> None:
+    """
+    Validate YAML file before parsing.
+
+    Args:
+        file_path: Path to YAML file
+
+    Raises:
+        click.FileError: If file is invalid
+    """
+    # Check file size
+    file_size_mb = file_path.stat().st_size / (1024 * 1024)
+    if file_size_mb > MAX_YAML_FILE_SIZE_MB:
+        raise click.FileError(
+            str(file_path),
+            f"File too large ({file_size_mb:.1f}MB). Maximum allowed: {MAX_YAML_FILE_SIZE_MB}MB"
+        )
+
+    # Validate YAML structure
+    try:
+        with open(file_path, 'r') as f:
+            # Use safe_load with limits
+            yaml_content = yaml.safe_load(f)
+
+            # Check depth and node count
+            def count_depth_and_nodes(obj, depth=0):
+                """Count depth and number of nodes in YAML structure."""
+                if depth > MAX_YAML_DEPTH:
+                    raise ValueError(f"YAML depth exceeds maximum of {MAX_YAML_DEPTH}")
+
+                node_count = 1
+                if isinstance(obj, dict):
+                    for value in obj.values():
+                        node_count += count_depth_and_nodes(value, depth + 1)
+                elif isinstance(obj, list):
+                    for item in obj:
+                        node_count += count_depth_and_nodes(item, depth + 1)
+
+                if node_count > MAX_YAML_NODES:
+                    raise ValueError(f"YAML node count exceeds maximum of {MAX_YAML_NODES}")
+
+                return node_count
+
+            count_depth_and_nodes(yaml_content)
+
+    except yaml.YAMLError as e:
+        raise click.FileError(str(file_path), f"Invalid YAML: {e}")
+    except ValueError as e:
+        raise click.FileError(str(file_path), str(e))
+    except Exception as e:
+        raise click.FileError(str(file_path), f"Error reading file: {e}")
 
 
 def setup_logging(debug: bool = False) -> None:
@@ -101,39 +168,58 @@ def get_scenario_file_path(scenario: str) -> Path:
 
 
 async def bootstrap_application(
-    config: SimulationServerConfig,
+    scenario: str,
+    scenario_file: Optional[Path],
+    speed_multiplier: float,
 ) -> SimulationApplicationBootstrap:
     """
     Bootstrap the application in simulation mode.
 
     Args:
-        config: Server configuration
+        scenario: Scenario name
+        scenario_file: Optional custom scenario file path
+        speed_multiplier: Time speed multiplier
 
     Returns:
         Configured SimulationApplicationBootstrap instance
+
+    Raises:
+        click.FileError: If scenario file cannot be read
+        RuntimeError: If bootstrap fails
     """
-    console.print("\n[bold cyan]Phase 1: Bootstrap Application[/bold cyan]")
+    console.print("\n[bold cyan]Loading Configuration[/bold cyan]")
 
     # Create simulation config
-    if config.scenario_file:
-        console.print(f"Loading configuration from: {config.scenario_file}")
-        sim_config = SimulationConfig.from_yaml(config.scenario_file)
-        # Override speed multiplier if provided
-        if config.speed_multiplier != 1.0:
-            sim_config.time.speed_multiplier = config.speed_multiplier
-    else:
-        # Use built-in scenario (config-only)
-        console.print(f"Using built-in scenario: {config.scenario}")
-        sim_config = SimulationConfig.create_fast_config(
-            scenario_name=config.scenario,
-            speed_multiplier=config.speed_multiplier,
-        )
+    try:
+        if scenario_file:
+            console.print(f"Loading configuration from: {scenario_file}")
+            validate_yaml_file(scenario_file)
+            sim_config = SimulationConfig.from_yaml(scenario_file)
+            # Override speed multiplier if provided
+            if speed_multiplier != 1.0:
+                sim_config.time.speed_multiplier = speed_multiplier
+        else:
+            # Use built-in scenario (config-only)
+            console.print(f"Using built-in scenario: {scenario}")
+            sim_config = SimulationConfig.create_fast_config(
+                scenario_name=scenario,
+                speed_multiplier=speed_multiplier,
+            )
+    except PermissionError as e:
+        raise click.FileError(str(scenario_file), f"Permission denied: {e}")
+    except Exception as e:
+        raise RuntimeError(f"Failed to load configuration: {e}")
 
     console.print(f"[dim]Speed multiplier: {sim_config.time.speed_multiplier}x[/dim]")
 
+    console.print("\n[bold cyan]Bootstrapping Application[/bold cyan]")
+
     # Create and setup bootstrap
-    bootstrap = SimulationApplicationBootstrap(sim_config)
-    await bootstrap.setup()
+    try:
+        bootstrap = SimulationApplicationBootstrap(sim_config)
+        await bootstrap.setup()
+    except Exception as e:
+        raise RuntimeError(f"Bootstrap failed: {e}")
 
     console.print("[green]✓ Application bootstrapped successfully[/green]")
 
@@ -142,21 +228,29 @@ async def bootstrap_application(
 
 async def seed_data(
     bootstrap: SimulationApplicationBootstrap,
-    config: SimulationServerConfig,
+    scenario: str,
+    scenario_file: Optional[Path],
+    no_seed: bool,
 ) -> dict:
     """
     Seed simulation data from scenario.
 
     Args:
         bootstrap: Configured bootstrap instance
-        config: Server configuration
+        scenario: Scenario name
+        scenario_file: Optional custom scenario file path
+        no_seed: Skip seeding if True
 
     Returns:
         Dictionary with seeded data counts
-    """
-    console.print("\n[bold cyan]Phase 2: Seed Data[/bold cyan]")
 
-    if config.no_seed:
+    Raises:
+        click.FileError: If scenario file cannot be read
+        RuntimeError: If seeding fails
+    """
+    console.print("\n[bold cyan]Seeding Test Data[/bold cyan]")
+
+    if no_seed:
         console.print("[yellow]Skipping data seeding (--no-seed flag)[/yellow]")
         return {
             "projects": 0,
@@ -168,15 +262,21 @@ async def seed_data(
     seeder = SimulationDataSeeder(bootstrap)
 
     # Determine which scenario to seed
-    if config.scenario_file:
-        # Load from custom YAML file
-        console.print(f"Seeding from file: {config.scenario_file}")
-        await seeder.seed_from_yaml(config.scenario_file)
-    else:
-        # Use built-in scenario by name
-        scenario_file = get_scenario_file_path(config.scenario)
-        console.print(f"Seeding from built-in scenario: {config.scenario}")
-        await seeder.seed_from_yaml(scenario_file)
+    try:
+        if scenario_file:
+            # Load from custom YAML file
+            console.print(f"Seeding from file: {scenario_file}")
+            validate_yaml_file(scenario_file)
+            await seeder.seed_from_yaml(scenario_file)
+        else:
+            # Use built-in scenario by name
+            file_path = get_scenario_file_path(scenario)
+            console.print(f"Seeding from built-in scenario: {scenario}")
+            await seeder.seed_from_yaml(file_path)
+    except PermissionError as e:
+        raise click.FileError(str(scenario_file or scenario), f"Permission denied: {e}")
+    except Exception as e:
+        raise RuntimeError(f"Seeding failed: {e}")
 
     # Get seeded data counts
     created = seeder.get_created_items()
@@ -197,14 +297,24 @@ async def seed_data(
 
 
 def display_startup_info(
-    config: SimulationServerConfig,
+    host: str,
+    port: int,
+    scenario: str,
+    scenario_file: Optional[Path],
+    speed_multiplier: float,
+    debug: bool,
     seeded_data: dict,
 ) -> None:
     """
     Display startup information.
 
     Args:
-        config: Server configuration
+        host: Server host
+        port: Server port
+        scenario: Scenario name
+        scenario_file: Optional custom scenario file
+        speed_multiplier: Time speed multiplier
+        debug: Debug mode enabled
         seeded_data: Seeded data counts
     """
     console.print("\n")
@@ -214,11 +324,11 @@ def display_startup_info(
     table.add_column("Item", style="bold cyan")
     table.add_column("Value", style="white")
 
-    table.add_row("Host", config.host)
-    table.add_row("Port", str(config.port))
-    table.add_row("Scenario", config.scenario if not config.scenario_file else str(config.scenario_file))
-    table.add_row("Speed Multiplier", f"{config.speed_multiplier}x")
-    table.add_row("Debug Mode", "Enabled" if config.debug else "Disabled")
+    table.add_row("Host", host)
+    table.add_row("Port", str(port))
+    table.add_row("Scenario", scenario if not scenario_file else str(scenario_file))
+    table.add_row("Speed Multiplier", f"{speed_multiplier}x")
+    table.add_row("Debug Mode", "Enabled" if debug else "Disabled")
 
     # Add seeded data counts
     table.add_row("", "")
@@ -238,9 +348,9 @@ def display_startup_info(
 
     # Display URLs
     console.print("\n[bold cyan]URLs:[/bold cyan]")
-    console.print(f"  API Docs:      http://{config.host}:{config.port}/docs")
-    console.print(f"  Health Check:  http://{config.host}:{config.port}/api/health")
-    console.print(f"  WebSocket:     ws://{config.host}:{config.port}/ws")
+    console.print(f"  API Docs:      http://{host}:{port}/docs")
+    console.print(f"  Health Check:  http://{host}:{port}/api/health")
+    console.print(f"  WebSocket:     ws://{host}:{port}/ws")
 
     console.print("\n[bold yellow]NOTE:[/bold yellow] Server running in SIMULATION MODE")
     console.print("[dim]All data is in-memory and will be lost on shutdown[/dim]\n")
@@ -248,97 +358,132 @@ def display_startup_info(
 
 async def run_server(
     bootstrap: SimulationApplicationBootstrap,
-    config: SimulationServerConfig,
+    host: str,
+    port: int,
+    debug: bool,
 ) -> None:
     """
     Run the Uvicorn server.
 
     Args:
         bootstrap: Configured bootstrap instance
-        config: Server configuration
+        host: Server host
+        port: Server port
+        debug: Debug mode enabled
+
+    Raises:
+        OSError: If port is already in use
+        RuntimeError: If server fails to start
     """
-    console.print("[bold cyan]Phase 3: Starting Server[/bold cyan]")
+    console.print("\n[bold cyan]Starting Server[/bold cyan]")
 
     # Configure Uvicorn
-    uvicorn_config = uvicorn.Config(
-        app=bootstrap.app,
-        host=config.host,
-        port=config.port,
-        log_level="debug" if config.debug else "info",
-        access_log=config.debug,
-    )
+    try:
+        uvicorn_config = uvicorn.Config(
+            app=bootstrap.app,
+            host=host,
+            port=port,
+            log_level="debug" if debug else "info",
+            access_log=debug,
+        )
 
-    server = uvicorn.Server(uvicorn_config)
+        server = uvicorn.Server(uvicorn_config)
 
-    # Run server (blocking)
-    await server.serve()
+        # Run server (blocking)
+        await server.serve()
 
-
-async def shutdown_handler(signal_num: int) -> None:
-    """
-    Handle shutdown signals gracefully.
-
-    Args:
-        signal_num: Signal number
-    """
-    global _bootstrap
-
-    signal_name = signal.Signals(signal_num).name
-    console.print(f"\n\n[yellow]Received {signal_name}, shutting down gracefully...[/yellow]")
-
-    if _bootstrap:
-        try:
-            await _bootstrap.teardown()
-            console.print("[green]✓ Cleanup completed successfully[/green]")
-        except Exception as e:
-            console.print(f"[red]Error during cleanup: {e}[/red]")
-            logger.exception("Error during shutdown")
-
-    sys.exit(0)
+    except OSError as e:
+        if "Address already in use" in str(e) or e.errno == 98:
+            raise OSError(f"Port {port} is already in use. Try a different port with --port")
+        elif "Permission denied" in str(e) or e.errno == 13:
+            raise OSError(f"Permission denied to bind to port {port}. Try a port > 1024 or run with elevated privileges")
+        else:
+            raise
+    except Exception as e:
+        raise RuntimeError(f"Server failed to start: {e}")
 
 
-async def main_async(config: SimulationServerConfig) -> None:
+async def main_async(
+    host: str,
+    port: int,
+    scenario: str,
+    scenario_file: Optional[Path],
+    speed_multiplier: float,
+    no_seed: bool,
+    debug: bool,
+) -> None:
     """
     Main async entry point for simulation server.
 
     Args:
-        config: Server configuration
+        host: Server host
+        port: Server port
+        scenario: Scenario name
+        scenario_file: Optional custom scenario file
+        speed_multiplier: Time speed multiplier
+        no_seed: Skip seeding if True
+        debug: Debug mode enabled
     """
-    global _bootstrap
+    bootstrap = None
+    shutdown_requested = False
+
+    def shutdown_handler_sync(signum, frame):
+        """Synchronous signal handler."""
+        nonlocal shutdown_requested
+        shutdown_requested = True
+        signal_name = signal.Signals(signum).name
+        console.print(f"\n\n[yellow]Received {signal_name}, shutting down gracefully...[/yellow]")
+
+    # Setup signal handlers (synchronous)
+    signal.signal(signal.SIGINT, shutdown_handler_sync)
+    signal.signal(signal.SIGTERM, shutdown_handler_sync)
 
     try:
-        # Setup signal handlers
-        loop = asyncio.get_event_loop()
-        for sig in (signal.SIGINT, signal.SIGTERM):
-            loop.add_signal_handler(
-                sig,
-                lambda s=sig: asyncio.create_task(shutdown_handler(s))
-            )
-
         # Bootstrap application
-        _bootstrap = await bootstrap_application(config)
+        bootstrap = await bootstrap_application(scenario, scenario_file, speed_multiplier)
+
+        if shutdown_requested:
+            return
 
         # Seed data
-        seeded_data = await seed_data(_bootstrap, config)
+        seeded_data = await seed_data(bootstrap, scenario, scenario_file, no_seed)
+
+        if shutdown_requested:
+            return
 
         # Display startup info
-        display_startup_info(config, seeded_data)
+        display_startup_info(host, port, scenario, scenario_file, speed_multiplier, debug, seeded_data)
 
         # Run server (blocking)
-        await run_server(_bootstrap, config)
+        await run_server(bootstrap, host, port, debug)
 
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted by user[/yellow]")
+    except click.FileError as e:
+        console.print(f"\n[bold red]File error:[/bold red] {e}")
+        logger.error(f"File error: {e}")
+        sys.exit(1)
+    except OSError as e:
+        console.print(f"\n[bold red]Server error:[/bold red] {e}")
+        logger.error(f"Server error: {e}")
+        sys.exit(1)
+    except RuntimeError as e:
+        console.print(f"\n[bold red]Runtime error:[/bold red] {e}")
+        logger.exception("Runtime error in simulation server")
+        sys.exit(1)
     except Exception as e:
-        console.print(f"\n[bold red]Error starting server:[/bold red] {e}")
-        logger.exception("Error starting simulation server")
+        console.print(f"\n[bold red]Unexpected error:[/bold red] {e}")
+        logger.exception("Unexpected error in simulation server")
         sys.exit(1)
     finally:
         # Cleanup
-        if _bootstrap:
+        if bootstrap:
             try:
-                await _bootstrap.teardown()
+                console.print("\n[dim]Cleaning up resources...[/dim]")
+                await bootstrap.teardown()
+                console.print("[green]✓ Cleanup completed successfully[/green]")
             except Exception as e:
+                console.print(f"[red]Error during cleanup: {e}[/red]")
                 logger.error(f"Error during cleanup: {e}")
 
 
@@ -353,7 +498,7 @@ async def main_async(config: SimulationServerConfig) -> None:
     "--port",
     default=8000,
     type=int,
-    help="Server port",
+    help="Server port (1-65535)",
     show_default=True,
 )
 @click.option(
@@ -371,7 +516,7 @@ async def main_async(config: SimulationServerConfig) -> None:
     "--speed-multiplier",
     default=1.0,
     type=float,
-    help="Time speed multiplier (e.g., 10 = 10x faster)",
+    help="Time speed multiplier (must be positive, e.g., 10 = 10x faster)",
     show_default=True,
 )
 @click.option(
@@ -416,6 +561,16 @@ def main(
         # Start without seeding data
         python -m codetoreum.cli.simulation_server --no-seed
     """
+    # Validate inputs
+    try:
+        validate_port(port)
+        validate_speed_multiplier(speed_multiplier)
+        if scenario_file:
+            validate_yaml_file(scenario_file)
+    except (click.BadParameter, click.FileError) as e:
+        console.print(f"\n[bold red]Validation error:[/bold red] {e}")
+        sys.exit(1)
+
     # Setup logging
     setup_logging(debug)
 
@@ -424,20 +579,9 @@ def main(
     console.print("[bold cyan]   Codetoreum Simulation Server   [/bold cyan]")
     console.print("[bold cyan]═══════════════════════════════════════════[/bold cyan]\n")
 
-    # Create config
-    config = SimulationServerConfig(
-        host=host,
-        port=port,
-        scenario=scenario,
-        scenario_file=scenario_file,
-        speed_multiplier=speed_multiplier,
-        no_seed=no_seed,
-        debug=debug,
-    )
-
     # Run async main
     try:
-        asyncio.run(main_async(config))
+        asyncio.run(main_async(host, port, scenario, scenario_file, speed_multiplier, no_seed, debug))
     except KeyboardInterrupt:
         console.print("\n[yellow]Server stopped by user[/yellow]")
     except Exception as e:
