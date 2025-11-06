@@ -23,20 +23,37 @@ def mock_redis():
 
 
 @pytest.fixture
-def adapter(mock_redis):
+def mock_pubsub():
+    """Create mock pubsub with get_message configured to prevent hanging."""
+
+    async def mock_get_message(ignore_subscribe_messages=True, timeout=1.0):
+        """Mock get_message that sleeps to simulate timeout behavior."""
+        await asyncio.sleep(0.01)  # Small delay to prevent tight loop
+        return None
+
+    pubsub = AsyncMock()
+    # Mock get_message to sleep before returning None to prevent tight loop
+    pubsub.get_message = mock_get_message
+    return pubsub
+
+
+@pytest.fixture
+async def adapter(mock_redis):
     """Create Redis pub/sub adapter with mock Redis."""
-    return RedisPubSubAdapter(
+    adapter = RedisPubSubAdapter(
         redis_client=mock_redis,
         event_channel="test:events",
         control_channel="test:control",
     )
+    yield adapter
+    # Cleanup: close the adapter to stop background tasks
+    await adapter.close()
 
 
 @pytest.mark.asyncio
-async def test_initialize(adapter, mock_redis):
+async def test_initialize(adapter, mock_redis, mock_pubsub):
     """Test adapter initialization."""
     # Setup mock pubsub
-    mock_pubsub = AsyncMock()
     mock_redis.pubsub.return_value = mock_pubsub
 
     # Initialize
@@ -50,10 +67,9 @@ async def test_initialize(adapter, mock_redis):
 
 
 @pytest.mark.asyncio
-async def test_initialize_idempotent(adapter, mock_redis):
+async def test_initialize_idempotent(adapter, mock_redis, mock_pubsub):
     """Test that initialize can be called multiple times safely."""
     # Setup mock pubsub
-    mock_pubsub = AsyncMock()
     mock_redis.pubsub.return_value = mock_pubsub
 
     # Initialize twice
@@ -65,23 +81,16 @@ async def test_initialize_idempotent(adapter, mock_redis):
 
 
 @pytest.mark.asyncio
-async def test_publish_event(adapter, mock_redis):
+async def test_publish_event(adapter, mock_redis, mock_pubsub):
     """Test publishing domain event to Redis."""
     # Setup mock pubsub
-    mock_pubsub = AsyncMock()
     mock_redis.pubsub.return_value = mock_pubsub
 
     # Create test event
     event = DomainEvent(
-        event_type="TestEvent",
         aggregate_id="test-123",
         aggregate_type="Test",
     )
-    event.to_dict = lambda: {
-        "event_id": "evt-123",
-        "event_type": "TestEvent",
-        "aggregate_id": "test-123",
-    }
 
     # Publish event
     await adapter.publish_event(event)
@@ -94,8 +103,8 @@ async def test_publish_event(adapter, mock_redis):
     # Verify message structure
     message = json.loads(call_args[0][1])
     assert message["type"] == "event"
-    assert message["event_type"] == "TestEvent"
-    assert message["event"]["event_id"] == "evt-123"
+    assert message["event_type"] == "DomainEvent"
+    assert "event_id" in message["event"]
 
     # Verify stats
     stats = adapter.get_stats()
@@ -103,10 +112,9 @@ async def test_publish_event(adapter, mock_redis):
 
 
 @pytest.mark.asyncio
-async def test_publish_control_message(adapter, mock_redis):
+async def test_publish_control_message(adapter, mock_redis, mock_pubsub):
     """Test publishing control message to Redis."""
     # Setup mock pubsub
-    mock_pubsub = AsyncMock()
     mock_redis.pubsub.return_value = mock_pubsub
 
     # Publish control message
@@ -130,10 +138,9 @@ async def test_publish_control_message(adapter, mock_redis):
 
 
 @pytest.mark.asyncio
-async def test_subscribe_callback(adapter, mock_redis):
+async def test_subscribe_callback(adapter, mock_redis, mock_pubsub):
     """Test subscribing to channel with callback."""
     # Setup mock pubsub
-    mock_pubsub = AsyncMock()
     mock_redis.pubsub.return_value = mock_pubsub
 
     # Create callback
@@ -154,10 +161,9 @@ async def test_subscribe_callback(adapter, mock_redis):
 
 
 @pytest.mark.asyncio
-async def test_unsubscribe_callback(adapter, mock_redis):
+async def test_unsubscribe_callback(adapter, mock_redis, mock_pubsub):
     """Test unsubscribing callback from channel."""
     # Setup mock pubsub
-    mock_pubsub = AsyncMock()
     mock_redis.pubsub.return_value = mock_pubsub
 
     # Create and subscribe callback
@@ -174,10 +180,9 @@ async def test_unsubscribe_callback(adapter, mock_redis):
 
 
 @pytest.mark.asyncio
-async def test_message_dispatch(adapter, mock_redis):
+async def test_message_dispatch(adapter, mock_redis, mock_pubsub):
     """Test message dispatch to callbacks."""
     # Setup mock pubsub
-    mock_pubsub = AsyncMock()
     mock_redis.pubsub.return_value = mock_pubsub
 
     # Create callback
@@ -201,10 +206,9 @@ async def test_message_dispatch(adapter, mock_redis):
 
 
 @pytest.mark.asyncio
-async def test_multiple_callbacks(adapter, mock_redis):
+async def test_multiple_callbacks(adapter, mock_redis, mock_pubsub):
     """Test multiple callbacks on same channel."""
     # Setup mock pubsub
-    mock_pubsub = AsyncMock()
     mock_redis.pubsub.return_value = mock_pubsub
 
     # Create callbacks
@@ -233,10 +237,9 @@ async def test_multiple_callbacks(adapter, mock_redis):
 
 
 @pytest.mark.asyncio
-async def test_sync_callback(adapter, mock_redis):
+async def test_sync_callback(adapter, mock_redis, mock_pubsub):
     """Test synchronous callback (non-async)."""
     # Setup mock pubsub
-    mock_pubsub = AsyncMock()
     mock_redis.pubsub.return_value = mock_pubsub
 
     # Create sync callback
@@ -259,10 +262,9 @@ async def test_sync_callback(adapter, mock_redis):
 
 
 @pytest.mark.asyncio
-async def test_callback_error_handling(adapter, mock_redis):
+async def test_callback_error_handling(adapter, mock_redis, mock_pubsub):
     """Test that errors in callbacks don't crash the adapter."""
     # Setup mock pubsub
-    mock_pubsub = AsyncMock()
     mock_redis.pubsub.return_value = mock_pubsub
 
     # Create callback that raises error
@@ -291,10 +293,9 @@ async def test_callback_error_handling(adapter, mock_redis):
 
 
 @pytest.mark.asyncio
-async def test_invalid_json_handling(adapter, mock_redis):
+async def test_invalid_json_handling(adapter, mock_redis, mock_pubsub):
     """Test handling of invalid JSON in messages."""
     # Setup mock pubsub
-    mock_pubsub = AsyncMock()
     mock_redis.pubsub.return_value = mock_pubsub
 
     # Create callback
@@ -317,19 +318,16 @@ async def test_invalid_json_handling(adapter, mock_redis):
 
 
 @pytest.mark.asyncio
-async def test_get_stats(adapter, mock_redis):
+async def test_get_stats(adapter, mock_redis, mock_pubsub):
     """Test getting statistics."""
     # Setup mock pubsub
-    mock_pubsub = AsyncMock()
     mock_redis.pubsub.return_value = mock_pubsub
 
     # Publish some messages
     event = DomainEvent(
-        event_type="TestEvent",
         aggregate_id="test-123",
         aggregate_type="Test",
     )
-    event.to_dict = lambda: {"event_id": "evt-123"}
 
     await adapter.publish_event(event)
     await adapter.publish_control_message("test", {})
@@ -360,10 +358,9 @@ async def test_reset_stats(adapter):
 
 
 @pytest.mark.asyncio
-async def test_close(adapter, mock_redis):
+async def test_close(adapter, mock_redis, mock_pubsub):
     """Test closing the adapter."""
     # Setup mock pubsub
-    mock_pubsub = AsyncMock()
     mock_redis.pubsub.return_value = mock_pubsub
 
     # Initialize
@@ -380,10 +377,9 @@ async def test_close(adapter, mock_redis):
 
 
 @pytest.mark.asyncio
-async def test_publish_error_handling(adapter, mock_redis):
+async def test_publish_error_handling(adapter, mock_redis, mock_pubsub):
     """Test error handling in publish."""
     # Setup mock pubsub
-    mock_pubsub = AsyncMock()
     mock_redis.pubsub.return_value = mock_pubsub
 
     # Make publish fail
@@ -391,11 +387,9 @@ async def test_publish_error_handling(adapter, mock_redis):
 
     # Create event
     event = DomainEvent(
-        event_type="TestEvent",
         aggregate_id="test-123",
         aggregate_type="Test",
     )
-    event.to_dict = lambda: {"event_id": "evt-123"}
 
     # Publish should raise error
     with pytest.raises(RedisPubSubError):

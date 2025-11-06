@@ -110,7 +110,9 @@ def mock_scheduling_events():
 
 @pytest.fixture
 def mock_event_store():
-    return InMemoryEventStore()
+    store = InMemoryEventStore()
+    yield store
+    store.clear()
 
 
 @pytest.fixture

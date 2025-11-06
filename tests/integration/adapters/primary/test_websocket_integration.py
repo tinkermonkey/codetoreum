@@ -53,7 +53,15 @@ def websocket_adapter(websocket_config):
 @pytest.fixture
 def event_bus():
     """Create event bus for testing."""
-    return EventBus()
+    bus = EventBus()
+    yield bus
+    # Cleanup handlers
+    for handlers in list(bus._handlers.values()):
+        for handler in list(handlers):
+            bus.unregister_handler(handler)
+    for handler in list(bus._wildcard_handlers):
+        bus.unregister_handler(handler)
+    bus.reset_statistics()
 
 
 @pytest.fixture

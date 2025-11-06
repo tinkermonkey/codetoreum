@@ -33,15 +33,15 @@ update: ## Update dependencies
 
 test: ## Run all tests
 	@echo "$(BLUE)Running tests...$(NC)"
-	poetry run pytest -n 4
+	poetry run pytest -n 2
 
 test-unit: ## Run unit tests only
 	@echo "$(BLUE)Running unit tests...$(NC)"
-	poetry run pytest -m unit -n auto
+	poetry run pytest -m unit -n 2
 
 test-integration: ## Run integration tests only
 	@echo "$(BLUE)Running integration tests...$(NC)"
-	poetry run pytest -m integration -n 2
+	poetry run pytest -m integration -n 1
 
 test-simulation: ## Run simulation tests only
 	@echo "$(BLUE)Running simulation tests...$(NC)"
@@ -49,7 +49,7 @@ test-simulation: ## Run simulation tests only
 
 test-cov: ## Run tests with coverage report
 	@echo "$(BLUE)Running tests with coverage...$(NC)"
-	poetry run pytest -n 2 --cov=src --cov-report=html --cov-report=term-missing
+	poetry run pytest -n 1 --cov=src --cov-report=html --cov-report=term-missing
 	@echo "$(GREEN)Coverage report generated in htmlcov/index.html$(NC)"
 
 lint: ## Run all linters

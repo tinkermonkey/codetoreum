@@ -42,31 +42,42 @@ from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorag
 @pytest.fixture
 def event_store():
     """Create in-memory event store."""
-    return InMemoryEventStore()
+    store = InMemoryEventStore()
+    yield store
+    store.clear()
 
 
 @pytest.fixture
 def ticket_system():
     """Create in-memory ticket system."""
-    return InMemoryTicketAdapter()
+    adapter = InMemoryTicketAdapter()
+    yield adapter
+    adapter.clear()
 
 
 @pytest.fixture
 def llm_provider():
     """Create mock LLM provider."""
-    return MockLLMAdapter()
+    adapter = MockLLMAdapter()
+    yield adapter
+    adapter.clear_conversations()
+    adapter.reset_stats()
 
 
 @pytest.fixture
 def container():
     """Create fake container adapter."""
-    return FakeContainerAdapter()
+    adapter = FakeContainerAdapter()
+    yield adapter
+    adapter.clear()
 
 
 @pytest.fixture
 def storage():
     """Create in-memory storage adapter."""
-    return InMemoryStorageAdapter()
+    adapter = InMemoryStorageAdapter()
+    yield adapter
+    adapter.clear()
 
 
 @pytest.fixture
@@ -191,7 +202,15 @@ def workflow_orchestrator(event_store, ticket_system):
 @pytest.fixture
 def event_bus():
     """Create event bus with fast retry for testing."""
-    return EventBus(max_retries=3, retry_delay_seconds=0.1)
+    bus = EventBus(max_retries=3, retry_delay_seconds=0.1)
+    yield bus
+    # Unregister all handlers to prevent memory leaks
+    for handlers in list(bus._handlers.values()):
+        for handler in list(handlers):
+            bus.unregister_handler(handler)
+    for handler in list(bus._wildcard_handlers):
+        bus.unregister_handler(handler)
+    bus.reset_statistics()
 
 
 @pytest.fixture

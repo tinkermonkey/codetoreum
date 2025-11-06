@@ -56,7 +56,7 @@ class TestSimpleTokenAuthManager:
 
         # Check expiration is approximately correct (within 1 second tolerance)
         expected_exp = manager.server_start_time + timedelta(days=expiry_days)
-        actual_exp = datetime.fromtimestamp(payload["exp"])
+        actual_exp = datetime.utcfromtimestamp(payload["exp"])
         time_diff = abs((actual_exp - expected_exp).total_seconds())
 
         assert time_diff < 1, f"Expiration time differs by {time_diff} seconds"

@@ -13,7 +13,7 @@ from codetoreum.adapters.primary.agent_dtos import (
     AgentCommandResult,
 )
 from codetoreum.adapters.primary.agent_mappers import AgentMapper
-from codetoreum.infrastructure.audit import get_audit_logger
+from codetoreum.infrastructure.audit import get_audit_logger, AuditEventType
 from codetoreum.ports.input.agent_command import IAgentCommandPort
 from codetoreum.ports.input.agent_query import IAgentQueryPort
 
@@ -104,7 +104,7 @@ def register_crud_endpoints(
         except (ValueError, KeyError, AttributeError) as e:
             # Log failed agent creation
             audit_logger.log_event(
-                event_type="agent_creation_failed",
+                event_type=AuditEventType.AGENT_CREATION_FAILED,
                 resource_type="agent",
                 resource_id=request.name,
                 action="create",
@@ -201,7 +201,7 @@ def register_crud_endpoints(
         except (ValueError, KeyError, AttributeError) as e:
             # Log failed agent update
             audit_logger.log_event(
-                event_type="agent_update_failed",
+                event_type=AuditEventType.AGENT_UPDATE_FAILED,
                 resource_type="agent",
                 resource_id=agent_id,
                 action="update",

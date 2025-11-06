@@ -177,37 +177,52 @@ class MockProjectsAPI(IProjectsAPI):
 
 @pytest.fixture
 def mock_task_queue():
-    return MockTaskQueue()
+    queue = MockTaskQueue()
+    yield queue
+    queue.tasks.clear()
 
 
 @pytest.fixture
 def mock_config():
-    return MockProjectConfiguration()
+    config = MockProjectConfiguration()
+    yield config
 
 
 @pytest.fixture
 def mock_workflow_state():
-    return MockWorkflowStateManager()
+    state = MockWorkflowStateManager()
+    yield state
+    state.states.clear()
 
 
 @pytest.fixture
 def mock_decision_events():
-    return MockDecisionEvents()
+    events = MockDecisionEvents()
+    yield events
+    events.routing_decisions.clear()
+    events.progression_decisions.clear()
 
 
 @pytest.fixture
 def mock_event_store():
-    return InMemoryEventStore()
+    store = InMemoryEventStore()
+    yield store
+    store.clear()
 
 
 @pytest.fixture
 def mock_ticket_system():
-    return InMemoryTicketAdapter()
+    adapter = InMemoryTicketAdapter()
+    yield adapter
+    adapter.clear()
 
 
 @pytest.fixture
 def mock_projects_api():
-    return MockProjectsAPI()
+    api = MockProjectsAPI()
+    yield api
+    api.card_movements.clear()
+    api.labels_added.clear()
 
 
 @pytest.fixture

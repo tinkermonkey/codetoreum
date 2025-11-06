@@ -29,7 +29,9 @@ class AuditEventType(str, Enum):
 
     # Agent events
     AGENT_CREATED = "agent_created"
+    AGENT_CREATION_FAILED = "agent_creation_failed"
     AGENT_UPDATED = "agent_updated"
+    AGENT_UPDATE_FAILED = "agent_update_failed"
     AGENT_DELETED = "agent_deleted"
     AGENT_CAPABILITY_MODIFIED = "agent_capability_modified"
     AGENT_MCP_SERVER_ADDED = "agent_mcp_server_added"
