@@ -7,10 +7,12 @@ storage backends.
 
 import json
 import logging
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from uuid import uuid4
+
+import aiofiles
 
 from codetoreum.infrastructure.audit.interfaces import IAuditStore, AuditQueryFilters
 
@@ -21,7 +23,7 @@ class InMemoryAuditStore(IAuditStore):
     """
     In-memory audit store for development and testing.
 
-    This store keeps all events in memory and provides fast querying.
+    This store keeps all events in memory and provides fast querying with LRU eviction.
     It's suitable for:
     - Unit tests
     - Integration tests
@@ -29,12 +31,21 @@ class InMemoryAuditStore(IAuditStore):
     - Local development
 
     NOT suitable for production (events lost on restart, no persistence).
+
+    Features size limits with LRU eviction to prevent unbounded memory growth.
     """
 
-    def __init__(self):
-        """Initialize in-memory storage."""
-        self._events: List[Dict[str, Any]] = []
-        self._events_by_id: Dict[str, Dict[str, Any]] = {}
+    def __init__(self, max_events: int = 10000):
+        """
+        Initialize in-memory storage.
+
+        Args:
+            max_events: Maximum number of events to keep in memory.
+                       Oldest events are evicted when limit is reached.
+                       Default: 10000 events
+        """
+        self.max_events = max_events
+        self._events: OrderedDict[str, Dict[str, Any]] = OrderedDict()
         self._index_by_type: Dict[str, List[str]] = defaultdict(list)
         self._index_by_resource: Dict[str, List[str]] = defaultdict(list)
         self._index_by_user: Dict[str, List[str]] = defaultdict(list)
@@ -52,7 +63,7 @@ class InMemoryAuditStore(IAuditStore):
         success: bool,
         error_message: Optional[str] = None,
     ) -> str:
-        """Store an audit event in memory."""
+        """Store an audit event in memory with LRU eviction."""
         event_id = str(uuid4())
 
         event = {
@@ -69,9 +80,16 @@ class InMemoryAuditStore(IAuditStore):
             "error_message": error_message,
         }
 
+        # LRU eviction: Remove oldest event if at max capacity
+        if len(self._events) >= self.max_events:
+            oldest_event_id, oldest_event = self._events.popitem(last=False)
+            self._remove_from_indexes(oldest_event_id, oldest_event)
+            logger.debug(
+                f"Evicted oldest audit event {oldest_event_id} to maintain max_events={self.max_events}"
+            )
+
         # Store event
-        self._events.append(event)
-        self._events_by_id[event_id] = event
+        self._events[event_id] = event
 
         # Update indexes for fast querying
         self._index_by_type[event_type].append(event_id)
@@ -81,12 +99,26 @@ class InMemoryAuditStore(IAuditStore):
 
         return event_id
 
+    def _remove_from_indexes(self, event_id: str, event: Dict[str, Any]) -> None:
+        """Remove event from all indexes."""
+        event_type = event["event_type"]
+        if event_id in self._index_by_type[event_type]:
+            self._index_by_type[event_type].remove(event_id)
+
+        resource_key = f"{event['resource_type']}:{event['resource_id']}"
+        if event_id in self._index_by_resource[resource_key]:
+            self._index_by_resource[resource_key].remove(event_id)
+
+        user_id = event["user_id"]
+        if event_id in self._index_by_user[user_id]:
+            self._index_by_user[user_id].remove(event_id)
+
     async def query_events(
         self, filters: AuditQueryFilters
     ) -> List[Dict[str, Any]]:
         """Query audit events with filters."""
         # Start with all events
-        matching_events = list(self._events)
+        matching_events = list(self._events.values())
 
         # Apply filters
         if filters.event_type:
@@ -162,41 +194,29 @@ class InMemoryAuditStore(IAuditStore):
         cutoff_date = datetime.utcnow() - timedelta(days=retention_days)
 
         # Find old events
-        old_events = [e for e in self._events if e["timestamp"] < cutoff_date]
-        deleted_count = len(old_events)
+        old_event_ids = [
+            event_id
+            for event_id, event in self._events.items()
+            if event["timestamp"] < cutoff_date
+        ]
+        deleted_count = len(old_event_ids)
 
-        # Remove from main list
-        self._events = [e for e in self._events if e["timestamp"] >= cutoff_date]
-
-        # Remove from indexes
-        for event in old_events:
-            event_id = event["id"]
-            del self._events_by_id[event_id]
-
-            # Clean up indexes
-            event_type = event["event_type"]
-            if event_id in self._index_by_type[event_type]:
-                self._index_by_type[event_type].remove(event_id)
-
-            resource_key = f"{event['resource_type']}:{event['resource_id']}"
-            if event_id in self._index_by_resource[resource_key]:
-                self._index_by_resource[resource_key].remove(event_id)
-
-            user_id = event["user_id"]
-            if event_id in self._index_by_user[user_id]:
-                self._index_by_user[user_id].remove(event_id)
+        # Remove from main storage and indexes
+        for event_id in old_event_ids:
+            event = self._events[event_id]
+            del self._events[event_id]
+            self._remove_from_indexes(event_id, event)
 
         logger.info(f"Cleaned up {deleted_count} old audit events")
         return deleted_count
 
     async def get_event_by_id(self, event_id: str) -> Optional[Dict[str, Any]]:
         """Retrieve a specific audit event by ID."""
-        return self._events_by_id.get(event_id)
+        return self._events.get(event_id)
 
     def clear(self) -> None:
         """Clear all events (for testing)."""
         self._events.clear()
-        self._events_by_id.clear()
         self._index_by_type.clear()
         self._index_by_resource.clear()
         self._index_by_user.clear()
@@ -205,6 +225,7 @@ class InMemoryAuditStore(IAuditStore):
         """Get statistics about stored events."""
         return {
             "total_events": len(self._events),
+            "max_events": self.max_events,
             "events_by_type": {
                 event_type: len(event_ids)
                 for event_type, event_ids in self._index_by_type.items()
@@ -234,12 +255,11 @@ class FileAuditStore(IAuditStore):
             file_path: Path to audit log file
         """
         self.file_path = file_path
-        self._ensure_file_exists()
 
-    def _ensure_file_exists(self) -> None:
+    async def _ensure_file_exists(self) -> None:
         """Ensure the audit log file exists."""
         try:
-            with open(self.file_path, "a"):
+            async with aiofiles.open(self.file_path, "a"):
                 pass
         except Exception as e:
             logger.error(f"Failed to create audit log file: {e}")
@@ -257,7 +277,9 @@ class FileAuditStore(IAuditStore):
         success: bool,
         error_message: Optional[str] = None,
     ) -> str:
-        """Store an audit event to file."""
+        """Store an audit event to file using async I/O."""
+        await self._ensure_file_exists()
+
         event_id = str(uuid4())
 
         event = {
@@ -275,8 +297,8 @@ class FileAuditStore(IAuditStore):
         }
 
         try:
-            with open(self.file_path, "a") as f:
-                f.write(json.dumps(event) + "\n")
+            async with aiofiles.open(self.file_path, "a") as f:
+                await f.write(json.dumps(event) + "\n")
         except Exception as e:
             logger.error(f"Failed to write audit event to file: {e}")
             # Don't raise - audit failures shouldn't break the application
@@ -287,7 +309,7 @@ class FileAuditStore(IAuditStore):
         self, filters: AuditQueryFilters
     ) -> List[Dict[str, Any]]:
         """
-        Query audit events from file.
+        Query audit events from file using async I/O.
 
         Note: This reads the entire file and filters in memory.
         For large audit logs, use a database backend.
@@ -295,8 +317,8 @@ class FileAuditStore(IAuditStore):
         matching_events = []
 
         try:
-            with open(self.file_path, "r") as f:
-                for line in f:
+            async with aiofiles.open(self.file_path, "r") as f:
+                async for line in f:
                     if not line.strip():
                         continue
 
@@ -369,7 +391,7 @@ class FileAuditStore(IAuditStore):
 
     async def cleanup_old_events(self, retention_days: int) -> int:
         """
-        Delete audit events older than retention period.
+        Delete audit events older than retention period using async I/O.
 
         Note: This rewrites the entire file. For production,
         use a database backend with efficient deletion.
@@ -380,8 +402,8 @@ class FileAuditStore(IAuditStore):
 
         try:
             # Read all events
-            with open(self.file_path, "r") as f:
-                for line in f:
+            async with aiofiles.open(self.file_path, "r") as f:
+                async for line in f:
                     if not line.strip():
                         continue
 
@@ -394,9 +416,9 @@ class FileAuditStore(IAuditStore):
                         deleted_count += 1
 
             # Rewrite file with kept events
-            with open(self.file_path, "w") as f:
+            async with aiofiles.open(self.file_path, "w") as f:
                 for line in kept_events:
-                    f.write(line)
+                    await f.write(line)
 
             logger.info(f"Cleaned up {deleted_count} old audit events")
 
@@ -406,10 +428,10 @@ class FileAuditStore(IAuditStore):
         return deleted_count
 
     async def get_event_by_id(self, event_id: str) -> Optional[Dict[str, Any]]:
-        """Retrieve a specific audit event by ID."""
+        """Retrieve a specific audit event by ID using async I/O."""
         try:
-            with open(self.file_path, "r") as f:
-                for line in f:
+            async with aiofiles.open(self.file_path, "r") as f:
+                async for line in f:
                     if not line.strip():
                         continue
 
@@ -424,5 +446,321 @@ class FileAuditStore(IAuditStore):
         return None
 
 
-# TODO: Add PostgreSQLAuditStore for production use
+class PostgreSQLAuditStore(IAuditStore):
+    """
+    PostgreSQL-backed audit store for production use.
+
+    Provides:
+    - Durable persistent storage
+    - Indexed queries for fast lookups
+    - Efficient pagination
+    - Transaction support
+    - Suitable for high-volume production environments
+
+    Requires:
+    - asyncpg driver
+    - PostgreSQL 12+ database
+
+    Table schema:
+        CREATE TABLE audit_events (
+            id UUID PRIMARY KEY,
+            timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+            event_type VARCHAR(100) NOT NULL,
+            resource_type VARCHAR(100) NOT NULL,
+            resource_id VARCHAR(255) NOT NULL,
+            action VARCHAR(50) NOT NULL,
+            user_id VARCHAR(255) NOT NULL,
+            correlation_id UUID,
+            metadata JSONB,
+            success BOOLEAN NOT NULL,
+            error_message TEXT,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+
+        -- Indexes for common query patterns
+        CREATE INDEX idx_audit_timestamp ON audit_events(timestamp DESC);
+        CREATE INDEX idx_audit_event_type ON audit_events(event_type);
+        CREATE INDEX idx_audit_resource ON audit_events(resource_type, resource_id);
+        CREATE INDEX idx_audit_user ON audit_events(user_id);
+        CREATE INDEX idx_audit_correlation ON audit_events(correlation_id);
+    """
+
+    def __init__(self, connection_string: str):
+        """
+        Initialize PostgreSQL audit store.
+
+        Args:
+            connection_string: PostgreSQL connection string
+                              (e.g., "postgresql+asyncpg://user:pass@host/db")
+        """
+        from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+        from sqlalchemy.orm import sessionmaker
+
+        self.engine = create_async_engine(connection_string, echo=False)
+        self.async_session = sessionmaker(
+            self.engine, class_=AsyncSession, expire_on_commit=False
+        )
+
+    async def store_event(
+        self,
+        timestamp: datetime,
+        event_type: str,
+        resource_type: str,
+        resource_id: str,
+        action: str,
+        user_id: str,
+        correlation_id: Optional[str],
+        metadata: Dict[str, Any],
+        success: bool,
+        error_message: Optional[str] = None,
+    ) -> str:
+        """Store an audit event in PostgreSQL."""
+        from sqlalchemy import text
+
+        event_id = str(uuid4())
+
+        async with self.async_session() as session:
+            try:
+                await session.execute(
+                    text(
+                        """
+                        INSERT INTO audit_events (
+                            id, timestamp, event_type, resource_type, resource_id,
+                            action, user_id, correlation_id, metadata, success, error_message
+                        ) VALUES (
+                            :id, :timestamp, :event_type, :resource_type, :resource_id,
+                            :action, :user_id, :correlation_id, :metadata::jsonb, :success, :error_message
+                        )
+                        """
+                    ),
+                    {
+                        "id": event_id,
+                        "timestamp": timestamp,
+                        "event_type": event_type,
+                        "resource_type": resource_type,
+                        "resource_id": resource_id,
+                        "action": action,
+                        "user_id": user_id,
+                        "correlation_id": correlation_id,
+                        "metadata": json.dumps(metadata),
+                        "success": success,
+                        "error_message": error_message,
+                    },
+                )
+                await session.commit()
+            except Exception as e:
+                logger.error(f"Failed to store audit event in PostgreSQL: {e}")
+                await session.rollback()
+                # Don't raise - audit failures shouldn't break the application
+
+        return event_id
+
+    async def query_events(
+        self, filters: AuditQueryFilters
+    ) -> List[Dict[str, Any]]:
+        """Query audit events from PostgreSQL with efficient indexed lookups."""
+        from sqlalchemy import text
+
+        # Build WHERE clause dynamically based on filters
+        where_clauses = []
+        params = {}
+
+        if filters.event_type:
+            where_clauses.append("event_type = :event_type")
+            params["event_type"] = filters.event_type
+
+        if filters.resource_type:
+            where_clauses.append("resource_type = :resource_type")
+            params["resource_type"] = filters.resource_type
+
+        if filters.resource_id:
+            where_clauses.append("resource_id = :resource_id")
+            params["resource_id"] = filters.resource_id
+
+        if filters.user_id:
+            where_clauses.append("user_id = :user_id")
+            params["user_id"] = filters.user_id
+
+        if filters.action:
+            where_clauses.append("action = :action")
+            params["action"] = filters.action
+
+        if filters.success is not None:
+            where_clauses.append("success = :success")
+            params["success"] = filters.success
+
+        if filters.start_time:
+            where_clauses.append("timestamp >= :start_time")
+            params["start_time"] = filters.start_time
+
+        if filters.end_time:
+            where_clauses.append("timestamp <= :end_time")
+            params["end_time"] = filters.end_time
+
+        where_sql = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
+
+        params["limit"] = filters.limit
+        params["offset"] = filters.offset
+
+        query = f"""
+            SELECT
+                id, timestamp, event_type, resource_type, resource_id,
+                action, user_id, correlation_id, metadata, success, error_message
+            FROM audit_events
+            {where_sql}
+            ORDER BY timestamp DESC
+            LIMIT :limit OFFSET :offset
+        """
+
+        async with self.async_session() as session:
+            try:
+                result = await session.execute(text(query), params)
+                rows = result.fetchall()
+
+                events = []
+                for row in rows:
+                    events.append({
+                        "id": str(row[0]),
+                        "timestamp": row[1],
+                        "event_type": row[2],
+                        "resource_type": row[3],
+                        "resource_id": row[4],
+                        "action": row[5],
+                        "user_id": row[6],
+                        "correlation_id": str(row[7]) if row[7] else None,
+                        "metadata": row[8],
+                        "success": row[9],
+                        "error_message": row[10],
+                    })
+
+                return events
+
+            except Exception as e:
+                logger.error(f"Failed to query audit events from PostgreSQL: {e}")
+                return []
+
+    async def count_events(self, filters: AuditQueryFilters) -> int:
+        """Count audit events matching filters."""
+        from sqlalchemy import text
+
+        # Build WHERE clause (same as query_events)
+        where_clauses = []
+        params = {}
+
+        if filters.event_type:
+            where_clauses.append("event_type = :event_type")
+            params["event_type"] = filters.event_type
+
+        if filters.resource_type:
+            where_clauses.append("resource_type = :resource_type")
+            params["resource_type"] = filters.resource_type
+
+        if filters.resource_id:
+            where_clauses.append("resource_id = :resource_id")
+            params["resource_id"] = filters.resource_id
+
+        if filters.user_id:
+            where_clauses.append("user_id = :user_id")
+            params["user_id"] = filters.user_id
+
+        if filters.action:
+            where_clauses.append("action = :action")
+            params["action"] = filters.action
+
+        if filters.success is not None:
+            where_clauses.append("success = :success")
+            params["success"] = filters.success
+
+        if filters.start_time:
+            where_clauses.append("timestamp >= :start_time")
+            params["start_time"] = filters.start_time
+
+        if filters.end_time:
+            where_clauses.append("timestamp <= :end_time")
+            params["end_time"] = filters.end_time
+
+        where_sql = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
+
+        query = f"""
+            SELECT COUNT(*) FROM audit_events {where_sql}
+        """
+
+        async with self.async_session() as session:
+            try:
+                result = await session.execute(text(query), params)
+                count = result.scalar()
+                return count or 0
+            except Exception as e:
+                logger.error(f"Failed to count audit events in PostgreSQL: {e}")
+                return 0
+
+    async def cleanup_old_events(self, retention_days: int) -> int:
+        """Delete audit events older than retention period efficiently."""
+        from sqlalchemy import text
+
+        cutoff_date = datetime.utcnow() - timedelta(days=retention_days)
+
+        async with self.async_session() as session:
+            try:
+                result = await session.execute(
+                    text("DELETE FROM audit_events WHERE timestamp < :cutoff"),
+                    {"cutoff": cutoff_date},
+                )
+                deleted_count = result.rowcount
+                await session.commit()
+
+                logger.info(f"Cleaned up {deleted_count} old audit events from PostgreSQL")
+                return deleted_count
+
+            except Exception as e:
+                logger.error(f"Failed to cleanup old audit events in PostgreSQL: {e}")
+                await session.rollback()
+                return 0
+
+    async def get_event_by_id(self, event_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieve a specific audit event by ID."""
+        from sqlalchemy import text
+
+        async with self.async_session() as session:
+            try:
+                result = await session.execute(
+                    text(
+                        """
+                        SELECT
+                            id, timestamp, event_type, resource_type, resource_id,
+                            action, user_id, correlation_id, metadata, success, error_message
+                        FROM audit_events
+                        WHERE id = :id
+                        """
+                    ),
+                    {"id": event_id},
+                )
+                row = result.fetchone()
+
+                if not row:
+                    return None
+
+                return {
+                    "id": str(row[0]),
+                    "timestamp": row[1],
+                    "event_type": row[2],
+                    "resource_type": row[3],
+                    "resource_id": row[4],
+                    "action": row[5],
+                    "user_id": row[6],
+                    "correlation_id": str(row[7]) if row[7] else None,
+                    "metadata": row[8],
+                    "success": row[9],
+                    "error_message": row[10],
+                }
+
+            except Exception as e:
+                logger.error(f"Failed to retrieve audit event from PostgreSQL: {e}")
+                return None
+
+    async def close(self) -> None:
+        """Close database connection."""
+        await self.engine.dispose()
+
+
 # TODO: Add ElasticsearchAuditStore for advanced search/analytics

@@ -329,6 +329,85 @@ class TestInMemoryAuditStore:
         events = await store.query_events(filters)
         assert len(events) == 5
 
+    async def test_lru_eviction(self):
+        """Test LRU eviction when max_events is reached."""
+        # Create store with small max_events limit
+        store = InMemoryAuditStore(max_events=5)
+
+        # Store events up to the limit
+        event_ids = []
+        for i in range(5):
+            event_id = await store.store_event(
+                timestamp=datetime.utcnow(),
+                event_type="agent_created",
+                resource_type="agent",
+                resource_id=f"agent-{i}",
+                action="create",
+                user_id="user-1",
+                correlation_id=None,
+                metadata={"index": i},
+                success=True,
+            )
+            event_ids.append(event_id)
+
+        # Verify all 5 events are present
+        filters = AuditQueryFilters(limit=100)
+        events = await store.query_events(filters)
+        assert len(events) == 5
+
+        # Add one more event, should evict oldest (first) event
+        new_event_id = await store.store_event(
+            timestamp=datetime.utcnow(),
+            event_type="agent_created",
+            resource_type="agent",
+            resource_id="agent-5",
+            action="create",
+            user_id="user-1",
+            correlation_id=None,
+            metadata={"index": 5},
+            success=True,
+        )
+
+        # Should still have exactly 5 events
+        events = await store.query_events(filters)
+        assert len(events) == 5
+
+        # First event should be evicted
+        first_event = await store.get_event_by_id(event_ids[0])
+        assert first_event is None
+
+        # New event should be present
+        new_event = await store.get_event_by_id(new_event_id)
+        assert new_event is not None
+        assert new_event["resource_id"] == "agent-5"
+
+        # Other events should still be present
+        for i in range(1, 5):
+            event = await store.get_event_by_id(event_ids[i])
+            assert event is not None
+
+    async def test_lru_eviction_stats(self):
+        """Test stats are accurate with LRU eviction."""
+        store = InMemoryAuditStore(max_events=3)
+
+        # Add 5 events (should keep only last 3)
+        for i in range(5):
+            await store.store_event(
+                timestamp=datetime.utcnow(),
+                event_type="agent_created",
+                resource_type="agent",
+                resource_id=f"agent-{i}",
+                action="create",
+                user_id=f"user-{i % 2}",  # Alternate between user-0 and user-1
+                correlation_id=None,
+                metadata={},
+                success=True,
+            )
+
+        stats = store.get_stats()
+        assert stats["total_events"] == 3
+        assert stats["max_events"] == 3
+
 
 @pytest.mark.asyncio
 class TestFileAuditStore:

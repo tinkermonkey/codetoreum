@@ -43,9 +43,9 @@ The audit logging system serves several key purposes:
 │                        │                                         │
 │  ┌─────────────────────▼──────────────────────────────────────┐ │
 │  │ Store Implementations                                       │ │
-│  │ - InMemoryAuditStore (dev/testing)                         │ │
-│  │ - FileAuditStore (simple persistent storage)               │ │
-│  │ - PostgreSQLAuditStore (production - TODO)                 │ │
+│  │ - InMemoryAuditStore (dev/testing, LRU eviction)          │ │
+│  │ - FileAuditStore (simple persistent, async I/O)           │ │
+│  │ - PostgreSQLAuditStore (production, indexed queries)      │ │
 │  │ - ElasticsearchAuditStore (advanced search - TODO)         │ │
 │  └────────────────────────────────────────────────────────────┘ │
 │                                                                  │
@@ -143,15 +143,74 @@ The system tracks the following categories of events:
 - **Format**: Newline-delimited JSON (NDJSON)
 - **Features**: Full querying (in-memory), filtering, cleanup
 
-### PostgreSQLAuditStore (TODO)
-- **Use Case**: Production deployments
-- **Pros**: Scalable, indexed, ACID compliant
-- **Cons**: Requires database setup
+### PostgreSQLAuditStore ✅ Implemented
+- **Use Case**: Production deployments requiring durability and scale
+- **Pros**: Scalable, indexed, ACID compliant, battle-tested
+- **Cons**: Requires PostgreSQL 12+ server setup
 - **Features**:
-  - Separate audit database (isolate from main DB)
-  - Indexed for fast querying
-  - Support for retention policies
-  - Full transaction support
+  - ✅ Separate audit database (isolate from main DB)
+  - ✅ Indexed for fast querying (6 indexes on common query patterns)
+  - ✅ Support for retention policies with efficient bulk deletion
+  - ✅ Full transaction support with proper rollback
+  - ✅ Async I/O using SQLAlchemy async engine
+  - ✅ JSONB metadata for flexible querying
+
+**Database Schema**:
+```sql
+CREATE TABLE audit_events (
+    id UUID PRIMARY KEY,
+    timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+    event_type VARCHAR(100) NOT NULL,
+    resource_type VARCHAR(100) NOT NULL,
+    resource_id VARCHAR(255) NOT NULL,
+    action VARCHAR(50) NOT NULL,
+    user_id VARCHAR(255) NOT NULL,
+    correlation_id UUID,
+    metadata JSONB,
+    success BOOLEAN NOT NULL,
+    error_message TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Performance indexes
+CREATE INDEX idx_audit_timestamp ON audit_events(timestamp DESC);
+CREATE INDEX idx_audit_event_type ON audit_events(event_type);
+CREATE INDEX idx_audit_resource ON audit_events(resource_type, resource_id);
+CREATE INDEX idx_audit_user ON audit_events(user_id);
+CREATE INDEX idx_audit_correlation ON audit_events(correlation_id);
+CREATE INDEX idx_audit_success ON audit_events(success);
+```
+
+**Migration Support** (see `migrations.py`):
+```python
+from codetoreum.infrastructure.audit.migrations import (
+    run_migrations, rollback_migrations, verify_schema
+)
+
+# Create schema
+await run_migrations("postgresql+asyncpg://user:pass@localhost/audit_db")
+
+# Verify setup
+is_valid = await verify_schema("postgresql+asyncpg://user:pass@localhost/audit_db")
+
+# Drop schema (WARNING: destroys all audit data)
+await rollback_migrations("postgresql+asyncpg://user:pass@localhost/audit_db")
+```
+
+**Usage Example**:
+```python
+from codetoreum.infrastructure.audit.stores import PostgreSQLAuditStore
+from codetoreum.infrastructure.audit import AuditLogger
+
+# Create store
+store = PostgreSQLAuditStore("postgresql+asyncpg://user:pass@localhost/audit_db")
+
+# Use with AuditLogger
+audit_logger = AuditLogger(store=store)
+
+# Remember to close when done
+await store.close()
+```
 
 ### ElasticsearchAuditStore (TODO)
 - **Use Case**: Advanced search and analytics
@@ -453,13 +512,35 @@ python -m codetoreum.infrastructure.audit.cli get <event-id>
 2. **Rotation**: Rotate log files to prevent unbounded growth
 3. **Archival**: Archive old logs to cheaper storage (S3, etc.)
 
-## Future Enhancements
+## Recent Improvements (Issue #57)
 
-### PostgreSQL Store
-- Separate audit database
-- Full indexing for fast queries
-- Transaction support
-- Bulk insert optimization
+### PostgreSQL Store (Implemented)
+- ✅ Separate audit database with schema migrations
+- ✅ Full indexing for fast queries (timestamp, event_type, resource, user, correlation)
+- ✅ Transaction support with proper error handling
+- ✅ Async I/O using SQLAlchemy async engine
+- ✅ Efficient indexed lookups and pagination
+- ✅ Production-ready with proper error handling
+
+### InMemoryAuditStore Improvements (Implemented)
+- ✅ LRU eviction to prevent unbounded memory growth
+- ✅ Configurable max_events limit (default: 10,000)
+- ✅ Automatic eviction of oldest events when limit is reached
+- ✅ Proper index cleanup on eviction
+
+### FileAuditStore Improvements (Implemented)
+- ✅ Async I/O using aiofiles library
+- ✅ Non-blocking file operations
+- ✅ Proper async context managers
+- ✅ Better performance for high-throughput scenarios
+
+### Error Handling Improvements (Implemented)
+- ✅ Comprehensive audit logging in all routers
+- ✅ Success and failure tracking for all operations
+- ✅ Detailed error metadata for troubleshooting
+- ✅ Non-breaking audit failures (degraded gracefully)
+
+## Future Enhancements
 
 ### Elasticsearch Integration
 - Full-text search
