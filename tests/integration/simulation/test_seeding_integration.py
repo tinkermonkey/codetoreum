@@ -34,16 +34,13 @@ class TestSeedingBootstrapIntegration:
     @pytest.mark.asyncio
     async def test_seeder_works_with_bootstrap(self, seeder):
         """Test seeder integrates correctly with bootstrap."""
-        # Create complete scenario
-        await (
-            seeder
-            .create_project("integration-project")
-            .create_workflow("integration-workflow")
-            .create_agents([
-                {"name": "test-agent", "capabilities": ["code_generation"]}
-            ])
-            .create_work_items(count=5)
-        )
+        # Create complete scenario with proper async chaining
+        result = await seeder.create_project("integration-project")
+        result = await result.create_workflow("integration-workflow")
+        result = await result.create_agents([
+            {"name": "test-agent", "capabilities": ["code_generation"]}
+        ])
+        result = await result.create_work_items(count=5)
 
         # Verify all data is accessible through adapters
         assert len(seeder.created_items.projects) == 1
@@ -112,16 +109,16 @@ class TestSeedingBootstrapIntegration:
     @pytest.mark.asyncio
     async def test_all_prebuilt_scenarios_work(self, seeder):
         """Test all pre-built scenarios complete successfully."""
-        # Test each scenario
-        scenarios = [
-            seeder.seed_default_scenario,
-            seeder.seed_simple_workflow,
-            seeder.seed_parallel_workflow,
-            seeder.seed_review_cycle,
-            seeder.seed_failure_scenario,
+        # Test each scenario - using method names instead of bound methods
+        scenario_names = [
+            "seed_default_scenario",
+            "seed_simple_workflow",
+            "seed_parallel_workflow",
+            "seed_review_cycle",
+            "seed_failure_scenario",
         ]
 
-        for i, scenario_method in enumerate(scenarios):
+        for i, scenario_name in enumerate(scenario_names):
             # Create fresh seeder for each scenario
             config = SimulationConfig.create_fast_config(f"scenario-{i}")
             bootstrap = SimulationApplicationBootstrap(config)
@@ -129,6 +126,8 @@ class TestSeedingBootstrapIntegration:
 
             try:
                 scenario_seeder = SimulationDataSeeder(bootstrap)
+                # Call the scenario method on the correct seeder instance
+                scenario_method = getattr(scenario_seeder, scenario_name)
                 await scenario_method()
 
                 # Verify data was created

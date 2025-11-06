@@ -312,9 +312,9 @@ class SimulationDataSeeder:
             await self._config_store.save_agent_config(agent_config)
 
             if self.track_items:
-                self.created_items.agents.append(agent_config.id)
+                self.created_items.agents.append(agent_name)
 
-            logger.debug(f"Created agent: {agent_name} ({agent_config.id})")
+            logger.debug(f"Created agent: {agent_name}")
 
         logger.info(f"Created {len(agent_definitions)} agents")
         return self

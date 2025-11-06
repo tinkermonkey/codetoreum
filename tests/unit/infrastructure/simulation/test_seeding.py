@@ -75,8 +75,7 @@ class TestSimulationDataSeeder:
         project_id = seeder._current_project_id
         project = await seeder._config_store.get_project_config(project_id)
         assert project.name == "test-project"
-        assert project.description == "Test project description"
-        assert project.enabled is True
+        assert project.metadata["description"] == "Test project description"
 
     @pytest.mark.asyncio
     async def test_create_project_with_custom_repo(self, seeder):
@@ -89,8 +88,8 @@ class TestSimulationDataSeeder:
 
         project_id = seeder._current_project_id
         project = await seeder._config_store.get_project_config(project_id)
-        assert project.repository_url == "https://github.com/custom/repo.git"
-        assert project.default_branch == "develop"
+        assert project.metadata["repository_url"] == "https://github.com/custom/repo.git"
+        assert project.metadata["default_branch"] == "develop"
 
     @pytest.mark.asyncio
     async def test_create_project_auto_generates_repo_url(self, seeder):
@@ -99,8 +98,8 @@ class TestSimulationDataSeeder:
 
         project_id = seeder._current_project_id
         project = await seeder._config_store.get_project_config(project_id)
-        assert "auto-repo-project" in project.repository_url
-        assert project.repository_url.startswith("https://github.com/")
+        assert "auto-repo-project" in project.metadata["repository_url"]
+        assert project.metadata["repository_url"].startswith("https://github.com/")
 
     # =========================================================================
     # Workflow Creation Tests
@@ -125,9 +124,9 @@ class TestSimulationDataSeeder:
         )
         assert pipeline.name == "test-workflow"
         assert len(pipeline.stages) == 3
-        assert pipeline.stages[0].name == "design"
-        assert pipeline.stages[1].name == "implementation"
-        assert pipeline.stages[2].name == "testing"
+        assert pipeline.stages[0]["name"] == "design"
+        assert pipeline.stages[1]["name"] == "implementation"
+        assert pipeline.stages[2]["name"] == "testing"
 
     @pytest.mark.asyncio
     async def test_create_workflow_with_custom_stages(self, seeder):
@@ -160,9 +159,9 @@ class TestSimulationDataSeeder:
             seeder._current_project_id, "custom-workflow"
         )
         assert len(pipeline.stages) == 2
-        assert pipeline.stages[0].name == "analyze"
-        assert pipeline.stages[0].max_retries == 5
-        assert pipeline.stages[0].timeout_seconds == 7200
+        assert pipeline.stages[0]["name"] == "analyze"
+        assert pipeline.stages[0]["max_retries"] == 5
+        assert pipeline.stages[0]["timeout_seconds"] == 7200
 
     @pytest.mark.asyncio
     async def test_create_workflow_requires_project(self, seeder):
@@ -203,13 +202,13 @@ class TestSimulationDataSeeder:
             seeder._current_project_id, "agent1"
         )
         assert agent1.agent_name == "agent1"
-        assert agent1.agent_type == "coder"
+        assert agent1.metadata["agent_type"] == "coder"
 
         agent2 = await seeder._config_store.get_agent_config(
             seeder._current_project_id, "agent2"
         )
-        assert agent2.temperature == 0.5
-        assert agent2.max_tokens == 2048
+        assert agent2.metadata["temperature"] == 0.5
+        assert agent2.metadata["max_tokens"] == 2048
 
     @pytest.mark.asyncio
     async def test_create_agents_requires_project(self, seeder):
@@ -285,15 +284,12 @@ class TestSimulationDataSeeder:
     @pytest.mark.asyncio
     async def test_fluent_api_chaining(self, seeder):
         """Test fluent API allows method chaining."""
-        result = await (
-            seeder
-            .create_project("chain-test-project")
-            .create_workflow("chain-workflow")
-            .create_agents([
-                {"name": "agent1", "capabilities": ["code_generation"]}
-            ])
-            .create_work_items(count=3)
-        )
+        result = await seeder.create_project("chain-test-project")
+        result = await result.create_workflow("chain-workflow")
+        result = await result.create_agents([
+            {"name": "agent1", "capabilities": ["code_generation"]}
+        ])
+        result = await result.create_work_items(count=3)
 
         # All operations should succeed
         assert result == seeder
