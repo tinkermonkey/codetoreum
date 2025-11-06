@@ -566,7 +566,11 @@ class SimulationApplicationBootstrap:
         execution_command = MockExecutionCommandAdapter()
         execution_query = MockExecutionQueryAdapter()
         config_query = MockConfigQueryAdapter()
-        metrics_query = MockMetricsQueryAdapter()
+        metrics_query = MockMetricsQueryAdapter(
+            metrics_adapter=self.adapters.metrics,
+            event_store=self.adapters.event_store,
+            clock=self.infrastructure.clock,
+        )
         workspace_query = MockWorkspaceQueryAdapter()
         workflow_command = MockWorkflowCommandAdapter()
         workflow_query = MockWorkflowQueryAdapter()
@@ -632,6 +636,7 @@ class SimulationApplicationBootstrap:
             agent_query_port=self.ports.agent_query,
             execution_command_port=self.ports.execution_command,
             execution_query_port=self.ports.execution_query,
+            event_store=self.adapters.event_store,
             event_bus=self.infrastructure.event_bus,
             config_service=config_service_interface,
             logger=logger_interface,

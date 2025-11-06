@@ -367,5 +367,6 @@ async def e2e_client(
 
     client = SimulationE2EClient(simulation_app, simulation_bootstrap)
     yield client
-    # Cleanup
-    client.client.__exit__(None, None, None)
+    # Cleanup - close() is the proper method for TestClient
+    if hasattr(client.client, 'close'):
+        client.client.close()

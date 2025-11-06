@@ -450,7 +450,7 @@ class SimulationE2EClient:
             WebSocketEventCollector for receiving events
         """
         # Build WebSocket path with query params
-        path = "/api/v2/ws"
+        path = "/api/v2/events/stream"
 
         # Connect WebSocket
         websocket = self.client.websocket_connect(path)
@@ -482,6 +482,15 @@ class SimulationE2EClient:
             delta: Time delta to advance
         """
         self.clock.advance(delta)
+
+    def advance_minutes(self, minutes: int):
+        """
+        Advance simulation clock by minutes.
+
+        Args:
+            minutes: Number of minutes to advance
+        """
+        self.clock.advance(timedelta(minutes=minutes))
 
     # ========================================================================
     # Helper Methods for Test Assertions
