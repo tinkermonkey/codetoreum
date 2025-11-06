@@ -88,6 +88,8 @@ from codetoreum.adapters.primary.input_port_adapters.mock import (
     MockWorkflowDefinitionCommandAdapter,
     MockConfigCommandAdapter,
     MockTaskQueryAdapter,
+    MockConfigServiceAdapter,
+    MockLoggerAdapter,
 )
 
 logger = logging.getLogger(__name__)
@@ -315,6 +317,11 @@ class SimulationApplicationBootstrap:
         storage = InMemoryStorageAdapter()
         config_store = InMemoryConfigStore()
         notifier = MockNotifierAdapter()
+
+        # Note: SimpleEncryptionAdapter is created directly (not via AdapterFactory)
+        # because it's a simple utility service, not a main output port adapter.
+        # AdapterFactory is specifically for the 5 main output ports:
+        # ticket_system, llm_provider, container, repository, and event_store.
         encryption = SimpleEncryptionAdapter()
 
         logger.info("Created 9 simulation adapters")
@@ -421,18 +428,109 @@ class SimulationApplicationBootstrap:
             event_store=self.adapters.event_store,
         )
 
-        # Agent Scheduler - stubbed (complex dependencies)
-        agent_scheduler = None  # type: ignore
+        # Agent Scheduler - create with simulation dependencies
+        # Import mock implementations from agent_scheduler module
+        from codetoreum.application.agent_scheduler import (
+            InMemoryTaskQueue,
+            MockResourceMonitor,
+            MockRateLimiter,
+            MockProjectConfiguration,
+            MockSchedulingEvents,
+        )
 
-        # Workflow Orchestrator - stubbed (complex dependencies)
-        workflow_orchestrator = None  # type: ignore
+        task_queue = InMemoryTaskQueue()
+        resource_monitor = MockResourceMonitor()
+        rate_limiter = MockRateLimiter()
+        project_config = MockProjectConfiguration()
+        scheduling_events = MockSchedulingEvents()
+
+        agent_scheduler = AgentScheduler(
+            task_queue=task_queue,
+            resource_monitor=resource_monitor,
+            rate_limiter=rate_limiter,
+            config=project_config,
+            scheduling_events=scheduling_events,
+            event_store=self.adapters.event_store,
+        )
+
+        # Workflow Orchestrator - create with simulation dependencies
+        # Create mock implementations for workflow orchestrator dependencies
+        class SimulationWorkflowStateManager:
+            """Mock workflow state manager for simulation."""
+
+            def __init__(self):
+                self._states = {}
+
+            async def get_workflow_state(self, issue_id: str):
+                from codetoreum.application.workflow_orchestrator import WorkflowState
+
+                if issue_id not in self._states:
+                    self._states[issue_id] = WorkflowState(
+                        in_progress_tasks={}, current_column=None, current_agent=None
+                    )
+                return self._states[issue_id]
+
+            async def update_workflow_state(self, issue_id: str, state) -> None:
+                self._states[issue_id] = state
+
+        class SimulationDecisionEvents:
+            """Mock decision events for simulation."""
+
+            def __init__(self):
+                self.routing_decisions = []
+                self.progression_decisions = []
+
+            async def emit_routing_decision(self, decision) -> None:
+                self.routing_decisions.append(decision)
+
+            async def emit_progression_decision(self, decision) -> None:
+                self.progression_decisions.append(decision)
+
+        class SimulationProjectsAPI:
+            """Mock projects API for simulation."""
+
+            def __init__(self):
+                self.card_movements = []
+                self.labels_added = []
+
+            async def move_card_to_column(
+                self, project: str, issue_number: int, column_name: str
+            ) -> None:
+                self.card_movements.append(
+                    {
+                        "project": project,
+                        "issue_number": issue_number,
+                        "column_name": column_name,
+                    }
+                )
+
+            async def add_label(
+                self, project: str, issue_number: int, label: str
+            ) -> None:
+                self.labels_added.append(
+                    {"project": project, "issue_number": issue_number, "label": label}
+                )
+
+        workflow_state_manager = SimulationWorkflowStateManager()
+        decision_events = SimulationDecisionEvents()
+        projects_api = SimulationProjectsAPI()
+
+        workflow_orchestrator = WorkflowOrchestrator(
+            task_queue=task_queue,  # Reuse same task queue
+            config=project_config,  # Reuse same config
+            workflow_state=workflow_state_manager,
+            decision_events=decision_events,
+            event_store=self.adapters.event_store,
+            ticket_system=self.adapters.ticket_system,
+            projects_api=projects_api,
+        )
 
         # Work Item Service
         work_item_service = WorkItemService(
             event_store=self.adapters.event_store,
         )
 
-        logger.info("Created 9 application service slots (2 stubbed for simulation)")
+        logger.info("Created all 9 application services with simulation dependencies")
 
         return SimulationServices(
             workflow_orchestrator=workflow_orchestrator,
@@ -511,57 +609,11 @@ class SimulationApplicationBootstrap:
         if not self.ports or not self.infrastructure or not self.services:
             raise RuntimeError("Ports and infrastructure must be created first")
 
-        # Create mock config service interface for FastAPI
-        # (FastAPI expects a specific interface, not the application service directly)
-        class MockConfigServiceInterface:
-            """Mock configuration service interface for FastAPI."""
+        # Create adapter for config service (wraps application service for FastAPI interface)
+        config_service_interface = MockConfigServiceAdapter(self.services.configuration_service)
 
-            def __init__(self, config_service):
-                self._config_service = config_service
-
-            async def get_project_config(self, project_id: str):
-                return await self._config_service.get_project_config(project_id)
-
-            async def get_project_config_by_name(self, project_name: str):
-                return await self._config_service.get_project_config_by_name(project_name)
-
-            async def save_project_config(self, config) -> None:
-                await self._config_service.save_project_config(config)
-
-            async def get_agent_config(self, project_id: str, agent_name: str):
-                return await self._config_service.get_agent_config(project_id, agent_name)
-
-            async def save_agent_config(self, config) -> None:
-                await self._config_service.save_agent_config(config)
-
-            async def get_pipeline_config(self, project_id: str, pipeline_name: str):
-                return await self._config_service.get_pipeline_config(project_id, pipeline_name)
-
-            async def save_pipeline_config(self, config) -> None:
-                await self._config_service.save_pipeline_config(config)
-
-            async def exists(self, project_id: str) -> bool:
-                return await self._config_service.exists(project_id)
-
-        config_service_interface = MockConfigServiceInterface(self.services.configuration_service)
-
-        # Create mock logger interface
-        class MockLoggerInterface:
-            """Mock logger interface for FastAPI."""
-
-            def info(self, message: str) -> None:
-                logger.info(message)
-
-            def warning(self, message: str) -> None:
-                logger.warning(message)
-
-            def error(self, message: str) -> None:
-                logger.error(message)
-
-            def debug(self, message: str) -> None:
-                logger.debug(message)
-
-        logger_interface = MockLoggerInterface()
+        # Create logger adapter for FastAPI
+        logger_interface = MockLoggerAdapter()
 
         # Create FastAPI app using factory (ADR-003: disable auth, enable CORS wildcard in simulation)
         app = create_app(

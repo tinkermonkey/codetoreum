@@ -21,6 +21,8 @@ from .mock_orchestration_command_adapter import MockOrchestrationCommandAdapter
 from .mock_workflow_definition_command_adapter import MockWorkflowDefinitionCommandAdapter
 from .mock_config_command_adapter import MockConfigCommandAdapter
 from .mock_task_query_adapter import MockTaskQueryAdapter
+from .mock_config_service_adapter import MockConfigServiceAdapter
+from .mock_logger_adapter import MockLoggerAdapter
 
 __all__ = [
     "MockAgentQueryAdapter",
@@ -38,4 +40,6 @@ __all__ = [
     "MockWorkflowDefinitionCommandAdapter",
     "MockConfigCommandAdapter",
     "MockTaskQueryAdapter",
+    "MockConfigServiceAdapter",
+    "MockLoggerAdapter",
 ]

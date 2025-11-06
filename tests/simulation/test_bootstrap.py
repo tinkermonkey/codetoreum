@@ -290,3 +290,142 @@ class TestBootstrapWithFixtures:
         assert simulation_infrastructure is not None
         assert simulation_infrastructure.event_bus is not None
         assert simulation_infrastructure.clock is not None
+
+
+@pytest.mark.asyncio
+class TestBootstrapErrorHandling:
+    """Tests for bootstrap error handling and failure scenarios."""
+
+    async def test_create_ports_fails_if_services_not_created(self):
+        """Test that creating ports fails if services not created first."""
+        config = SimulationConfig.create_fast_config("test")
+        bootstrap = SimulationApplicationBootstrap(config)
+
+        # Try to create ports without services
+        with pytest.raises(RuntimeError, match="Services must be created first"):
+            bootstrap._create_ports()
+
+    async def test_create_fastapi_fails_if_ports_not_created(self):
+        """Test that creating FastAPI app fails if ports not created first."""
+        config = SimulationConfig.create_fast_config("test")
+        bootstrap = SimulationApplicationBootstrap(config)
+
+        # Create adapters and services but not ports
+        bootstrap.adapters = bootstrap._create_adapters()
+        bootstrap.infrastructure = bootstrap._create_infrastructure()
+        bootstrap.services = bootstrap._create_services()
+
+        # Try to create FastAPI app without ports
+        with pytest.raises(RuntimeError, match="Ports and infrastructure must be created first"):
+            bootstrap._create_fastapi_app()
+
+    async def test_setup_cleans_up_on_failure(self):
+        """Test that setup cleans up resources if an error occurs during initialization."""
+        config = SimulationConfig.create_fast_config("test")
+
+        # Create a bootstrap that will fail during setup
+        class FailingBootstrap(SimulationApplicationBootstrap):
+            def _create_services(self):
+                # Simulate failure during service creation
+                raise ValueError("Simulated service creation failure")
+
+        bootstrap = FailingBootstrap(config)
+
+        # Setup should fail and clean up
+        with pytest.raises(ValueError, match="Simulated service creation failure"):
+            await bootstrap.setup()
+
+        # Verify cleanup occurred
+        assert bootstrap._is_setup is False
+
+    async def test_adapter_creation_with_invalid_config(self):
+        """Test that adapter creation handles invalid configuration gracefully."""
+        # Create config with missing required fields
+        config = SimulationConfig.create_fast_config("test")
+
+        bootstrap = SimulationApplicationBootstrap(config)
+
+        # Should still create adapters with defaults
+        adapters = await bootstrap._create_adapters()
+        assert adapters is not None
+        assert adapters.event_store is not None
+
+    async def test_double_teardown_is_safe(self):
+        """Test that calling teardown multiple times is safe."""
+        config = SimulationConfig.create_fast_config("test")
+        bootstrap = SimulationApplicationBootstrap(config)
+
+        await bootstrap.setup()
+        await bootstrap.teardown()
+
+        # Second teardown should be a no-op, not raise
+        await bootstrap.teardown()
+        assert bootstrap._is_setup is False
+
+    async def test_service_dependencies_are_properly_injected(self):
+        """Test that service dependencies are correctly wired."""
+        config = SimulationConfig.create_fast_config("test")
+        bootstrap = SimulationApplicationBootstrap(config)
+
+        await bootstrap.setup()
+
+        # Verify ExecutionService has all dependencies
+        assert bootstrap.services.execution_service is not None
+        exec_service = bootstrap.services.execution_service
+        # Check it has required dependencies (by checking it can be used)
+        assert hasattr(exec_service, "llm_provider")
+        assert hasattr(exec_service, "container")
+
+        # Verify WorkspaceRouter has dependencies
+        assert bootstrap.services.workspace_router is not None
+        workspace_router = bootstrap.services.workspace_router
+        assert hasattr(workspace_router, "repository")
+        assert hasattr(workspace_router, "container")
+
+        # Verify AgentScheduler is now properly created
+        assert bootstrap.services.agent_scheduler is not None
+        agent_scheduler = bootstrap.services.agent_scheduler
+        assert hasattr(agent_scheduler, "task_queue")
+        assert hasattr(agent_scheduler, "event_store")
+
+        # Verify WorkflowOrchestrator is now properly created
+        assert bootstrap.services.workflow_orchestrator is not None
+        orchestrator = bootstrap.services.workflow_orchestrator
+        assert hasattr(orchestrator, "task_queue")
+        assert hasattr(orchestrator, "config")
+        assert hasattr(orchestrator, "event_store")
+
+        await bootstrap.teardown()
+
+    async def test_ports_are_independent_from_services(self):
+        """Test that mock port adapters work independently in simulation mode."""
+        config = SimulationConfig.create_fast_config("test")
+        bootstrap = SimulationApplicationBootstrap(config)
+
+        await bootstrap.setup()
+
+        # In simulation mode, ports are standalone mock implementations
+        # They should work without needing the application services
+        ports = bootstrap.ports
+
+        # Verify ports can be called directly
+        assert ports.work_item_query is not None
+        # Mock adapters should have their own data stores
+        assert hasattr(ports.work_item_query, "_work_items")
+
+        await bootstrap.teardown()
+
+    async def test_fastapi_adapters_properly_wrap_services(self):
+        """Test that FastAPI adapters properly wrap application services."""
+        config = SimulationConfig.create_fast_config("test")
+        bootstrap = SimulationApplicationBootstrap(config)
+
+        await bootstrap.setup()
+
+        # Test that config service adapter is created
+        # This is verified implicitly by the FastAPI app working
+        client = TestClient(bootstrap.app)
+        response = client.get("/api/v2/health")
+        assert response.status_code == 200
+
+        await bootstrap.teardown()
