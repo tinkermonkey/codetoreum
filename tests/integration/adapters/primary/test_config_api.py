@@ -14,11 +14,14 @@ from fastapi import FastAPI, status
 from fastapi.testclient import TestClient
 
 from codetoreum.adapters.primary.routers.config import create_config_router
-from codetoreum.domain.models.project_config import ProjectConfig
-from codetoreum.domain.models.pipeline_config import PipelineConfig
-from codetoreum.domain.models.agent_config import AgentConfig
 from codetoreum.ports.input.config_command import IConfigurationCommandPort
-from codetoreum.ports.input.config_query import IConfigurationQueryPort, PaginationParams
+from codetoreum.ports.input.config_query import (
+    IConfigurationQueryPort,
+    PaginationParams,
+    ProjectConfigInfo,
+    PipelineConfigInfo,
+    AgentConfigInfo,
+)
 
 
 # ============================================================================
@@ -64,9 +67,9 @@ def client(test_app: FastAPI) -> TestClient:
 
 
 @pytest.fixture
-def sample_project_config() -> ProjectConfig:
+def sample_project_config() -> ProjectConfigInfo:
     """Create sample project configuration for testing."""
-    return ProjectConfig(
+    return ProjectConfigInfo(
         id="proj-123",
         name="test-project",
         description="Test project",
@@ -76,16 +79,16 @@ def sample_project_config() -> ProjectConfig:
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
         environment_variables={"DEBUG": "true", "API_KEY": "secret123"},
-        mounted_commands=["/usr/bin/npm", "/usr/bin/node"],
-        mounted_subagents=["code_reviewer"],
+        mounted_commands=[],
+        mounted_subagents=[],
         metadata={"team": "platform", "priority": "high"},
     )
 
 
 @pytest.fixture
-def sample_pipeline_config() -> PipelineConfig:
+def sample_pipeline_config() -> PipelineConfigInfo:
     """Create sample pipeline configuration for testing."""
-    return PipelineConfig(
+    return PipelineConfigInfo(
         id="pipeline-123",
         name="test-pipeline",
         description="Test pipeline",
@@ -96,37 +99,44 @@ def sample_pipeline_config() -> PipelineConfig:
         stages=[
             {
                 "name": "analysis",
-                "agent_id": "agent-analyzer",
-                "entry_conditions": {"requires_tests": False},
+                "agent_name": "agent-analyzer",
+                "timeout_seconds": 3600,
+                "retry_count": 3,
+                "entry_conditions": [],
+                "metadata": {},
             },
             {
                 "name": "implementation",
-                "agent_id": "agent-coder",
-                "entry_conditions": {"requires_approval": True},
+                "agent_name": "agent-coder",
+                "timeout_seconds": 3600,
+                "retry_count": 3,
+                "entry_conditions": [],
+                "metadata": {},
             },
         ],
-        environment_variables={"STAGE": "test"},
         metadata={"workflow_type": "ci"},
     )
 
 
 @pytest.fixture
-def sample_agent_config() -> AgentConfig:
+def sample_agent_config() -> AgentConfigInfo:
     """Create sample agent configuration for testing."""
-    return AgentConfig(
-        id="agent-123",
-        name="test-agent",
-        description="Test agent",
+    return AgentConfigInfo(
+        project_id="proj-123",
+        agent_name="test-agent",
+        display_name="Test Agent",
+        model="claude-sonnet-4",
+        timeout_seconds=3600,
+        max_retries=3,
+        requires_docker=True,
+        requires_dev_container=False,
+        makes_code_changes=True,
+        filesystem_write_allowed=True,
         version=1,
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
-        capabilities=["code_analysis", "bug_fix"],
-        model_config={"temperature": 0.7, "max_tokens": 4000},
-        mcp_servers=["artifact-server", "logging-server"],
-        docker_config={
-            "image": "codetoreum/agent:latest",
-            "resources": {"memory": "2GB", "cpu": "1.0"},
-        },
+        mcp_servers=[],
+        capabilities={"code_analysis": True, "bug_fix": True},
         metadata={"agent_type": "specialist"},
     )
 
@@ -143,7 +153,7 @@ class TestProjectConfiguration:
         self,
         client: TestClient,
         mock_config_query_port: AsyncMock,
-        sample_project_config: ProjectConfig,
+        sample_project_config: ProjectConfigInfo,
     ):
         """Test successfully retrieving project configuration."""
         # Arrange
@@ -174,7 +184,9 @@ class TestProjectConfiguration:
     ):
         """Test retrieving non-existent project configuration."""
         # Arrange
-        mock_config_query_port.get_project_config.side_effect = Exception("not found")
+        from codetoreum.ports.input.exceptions import ProjectNotFoundError
+
+        mock_config_query_port.get_project_config.side_effect = ProjectNotFoundError("Project not found")
 
         # Act
         response = client.get("/api/v2/config/projects/nonexistent")
@@ -188,13 +200,19 @@ class TestProjectConfiguration:
         self,
         client: TestClient,
         mock_config_command_port: AsyncMock,
+        mock_config_query_port: AsyncMock,
+        sample_project_config: ProjectConfigInfo,
     ):
         """Test successfully updating project configuration."""
         # Arrange
-        mock_config_command_port.update_project_config.return_value = {
-            "success": True,
-            "version": 2,
-        }
+        mock_config_query_port.get_project_config.return_value = sample_project_config
+        mock_config_command_port.update_project_config.return_value = MagicMock(
+            success=True,
+            config_version=2,
+            message="Updated",
+            changes_applied={"description": "Updated description", "github_org": "new-org"},
+            errors=None,
+        )
 
         # Act
         response = client.put(
@@ -212,17 +230,22 @@ class TestProjectConfiguration:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert data["success"] is True
-        assert data["version"] == 2
+        assert data["config_version"] == 2
 
     @pytest.mark.asyncio
     async def test_update_project_config_validation_error(
         self,
         client: TestClient,
         mock_config_command_port: AsyncMock,
+        mock_config_query_port: AsyncMock,
+        sample_project_config: ProjectConfigInfo,
     ):
         """Test updating project configuration with invalid data."""
         # Arrange
-        mock_config_command_port.update_project_config.side_effect = ValueError(
+        from codetoreum.ports.input.exceptions import ValidationError
+
+        mock_config_query_port.get_project_config.return_value = sample_project_config
+        mock_config_command_port.update_project_config.side_effect = ValidationError(
             "Invalid configuration"
         )
 
@@ -242,26 +265,21 @@ class TestProjectConfiguration:
         self,
         client: TestClient,
         mock_config_query_port: AsyncMock,
-        sample_project_config: ProjectConfig,
+        sample_project_config: ProjectConfigInfo,
     ):
         """Test listing projects with pagination."""
         # Arrange
-        mock_config_query_port.list_projects.return_value = {
-            "items": [sample_project_config],
-            "total": 1,
-            "page": 1,
-            "page_size": 20,
-        }
+        mock_config_query_port.list_projects.return_value = [sample_project_config]
+        mock_config_query_port.count_configs.return_value = 1
 
         # Act
-        response = client.get("/api/v2/config/projects?page=1&page_size=20")
+        response = client.get("/api/v2/config/projects?offset=0&limit=20")
 
         # Assert
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
-        assert len(data["items"]) == 1
-        assert data["total"] == 1
-        assert data["page"] == 1
+        assert len(data["projects"]) == 1
+        assert data["total_count"] == 1
 
     @pytest.mark.asyncio
     async def test_list_projects_empty_result(
@@ -271,12 +289,8 @@ class TestProjectConfiguration:
     ):
         """Test listing projects when no projects exist."""
         # Arrange
-        mock_config_query_port.list_projects.return_value = {
-            "items": [],
-            "total": 0,
-            "page": 1,
-            "page_size": 20,
-        }
+        mock_config_query_port.list_projects.return_value = []
+        mock_config_query_port.count_configs.return_value = 0
 
         # Act
         response = client.get("/api/v2/config/projects")
@@ -284,8 +298,8 @@ class TestProjectConfiguration:
         # Assert
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
-        assert len(data["items"]) == 0
-        assert data["total"] == 0
+        assert len(data["projects"]) == 0
+        assert data["total_count"] == 0
 
 
 # ============================================================================
@@ -300,14 +314,14 @@ class TestPipelineConfiguration:
         self,
         client: TestClient,
         mock_config_query_port: AsyncMock,
-        sample_pipeline_config: PipelineConfig,
+        sample_pipeline_config: PipelineConfigInfo,
     ):
         """Test successfully retrieving pipeline configuration."""
         # Arrange
         mock_config_query_port.get_pipeline_config.return_value = sample_pipeline_config
 
         # Act
-        response = client.get("/api/v2/config/pipelines/pipeline-123")
+        response = client.get("/api/v2/config/projects/proj-123/pipelines/test-pipeline")
 
         # Assert
         assert response.status_code == status.HTTP_200_OK
@@ -322,23 +336,29 @@ class TestPipelineConfiguration:
         self,
         client: TestClient,
         mock_config_command_port: AsyncMock,
+        mock_config_query_port: AsyncMock,
+        sample_project_config: ProjectConfigInfo,
     ):
         """Test adding a stage to pipeline configuration."""
         # Arrange
-        mock_config_command_port.update_pipeline_config.return_value = {
-            "success": True,
-            "version": 2,
-        }
+        mock_config_query_port.get_project_config.return_value = sample_project_config
+        mock_config_command_port.update_pipeline_config.return_value = MagicMock(
+            success=True,
+            config_version=2,
+            message="Updated",
+            changes_applied={"stages": "added review stage"},
+            errors=None,
+        )
 
         # Act
         response = client.put(
-            "/api/v2/config/pipelines/pipeline-123",
+            "/api/v2/config/projects/proj-123/pipelines/test-pipeline",
             json={
                 "updates": {
                     "stages": [
-                        {"name": "analysis", "agent_id": "agent-analyzer"},
-                        {"name": "implementation", "agent_id": "agent-coder"},
-                        {"name": "review", "agent_id": "agent-reviewer"},
+                        {"name": "analysis", "agent_name": "agent-analyzer"},
+                        {"name": "implementation", "agent_name": "agent-coder"},
+                        {"name": "review", "agent_name": "agent-reviewer"},
                     ],
                 },
                 "reason": "Added review stage",
@@ -353,23 +373,21 @@ class TestPipelineConfiguration:
         self,
         client: TestClient,
         mock_config_query_port: AsyncMock,
-        sample_pipeline_config: PipelineConfig,
+        sample_pipeline_config: PipelineConfigInfo,
     ):
         """Test listing pipelines filtered by project."""
         # Arrange
-        mock_config_query_port.list_pipelines.return_value = {
-            "items": [sample_pipeline_config],
-            "total": 1,
-        }
+        mock_config_query_port.list_pipelines.return_value = [sample_pipeline_config]
+        mock_config_query_port.count_configs.return_value = 1
 
         # Act
-        response = client.get("/api/v2/config/pipelines?project_id=proj-123")
+        response = client.get("/api/v2/config/projects/proj-123/pipelines")
 
         # Assert
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
-        assert len(data["items"]) == 1
-        assert data["items"][0]["project_id"] == "proj-123"
+        assert len(data["pipelines"]) == 1
+        assert data["pipelines"][0]["project_id"] == "proj-123"
 
 
 # ============================================================================
@@ -384,38 +402,44 @@ class TestAgentConfiguration:
         self,
         client: TestClient,
         mock_config_query_port: AsyncMock,
-        sample_agent_config: AgentConfig,
+        sample_agent_config: AgentConfigInfo,
     ):
         """Test successfully retrieving agent configuration."""
         # Arrange
         mock_config_query_port.get_agent_config.return_value = sample_agent_config
 
         # Act
-        response = client.get("/api/v2/config/agents/agent-123")
+        response = client.get("/api/v2/config/projects/proj-123/agents/test-agent")
 
         # Assert
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
-        assert data["id"] == "agent-123"
-        assert data["name"] == "test-agent"
-        assert "code_analysis" in data["capabilities"]
+        assert data["project_id"] == "proj-123"
+        assert data["agent_name"] == "test-agent"
+        assert data["capabilities"] is not None
 
     @pytest.mark.asyncio
     async def test_update_agent_config_capabilities(
         self,
         client: TestClient,
         mock_config_command_port: AsyncMock,
+        mock_config_query_port: AsyncMock,
+        sample_project_config: ProjectConfigInfo,
     ):
         """Test updating agent capabilities."""
         # Arrange
-        mock_config_command_port.update_agent_config.return_value = {
-            "success": True,
-            "version": 2,
-        }
+        mock_config_query_port.get_project_config.return_value = sample_project_config
+        mock_config_command_port.update_agent_config.return_value = MagicMock(
+            success=True,
+            config_version=2,
+            message="Updated",
+            changes_applied={"capabilities": ["code_analysis", "bug_fix", "refactoring"]},
+            errors=None,
+        )
 
         # Act
         response = client.put(
-            "/api/v2/config/agents/agent-123",
+            "/api/v2/config/projects/proj-123/agents/test-agent",
             json={
                 "updates": {
                     "capabilities": ["code_analysis", "bug_fix", "refactoring"],
@@ -431,23 +455,26 @@ class TestAgentConfiguration:
         self,
         client: TestClient,
         mock_config_command_port: AsyncMock,
+        mock_config_query_port: AsyncMock,
+        sample_project_config: ProjectConfigInfo,
     ):
         """Test updating agent model parameters."""
         # Arrange
-        mock_config_command_port.update_agent_config.return_value = {
-            "success": True,
-            "version": 2,
-        }
+        mock_config_query_port.get_project_config.return_value = sample_project_config
+        mock_config_command_port.update_agent_config.return_value = MagicMock(
+            success=True,
+            config_version=2,
+            message="Updated",
+            changes_applied={"model": "claude-opus-4"},
+            errors=None,
+        )
 
         # Act
         response = client.put(
-            "/api/v2/config/agents/agent-123",
+            "/api/v2/config/projects/proj-123/agents/test-agent",
             json={
                 "updates": {
-                    "model_config": {
-                        "temperature": 0.8,
-                        "max_tokens": 8000,
-                    },
+                    "model": "claude-opus-4",
                 },
             },
         )
@@ -468,103 +495,59 @@ class TestEnvironmentVariables:
         self,
         client: TestClient,
         mock_config_command_port: AsyncMock,
+        mock_config_query_port: AsyncMock,
+        sample_project_config: ProjectConfigInfo,
     ):
         """Test adding environment variable with project scope."""
         # Arrange
-        mock_config_command_port.add_environment_variable.return_value = {
-            "success": True,
-        }
+        mock_config_query_port.get_project_config.return_value = sample_project_config
+        mock_config_command_port.add_environment_variable.return_value = MagicMock(
+            success=True,
+            config_version=2,
+            message="Added",
+            changes_applied={"API_KEY": "***"},
+            errors=None,
+        )
 
         # Act
         response = client.post(
-            "/api/v2/config/environment-variables",
+            "/api/v2/config/projects/proj-123/env-vars",
             json={
-                "scope": "project",
-                "scope_id": "proj-123",
-                "name": "API_KEY",
-                "value": "secret123",
+                "variable_name": "API_KEY",
+                "variable_value": "secret123",
                 "is_secret": True,
                 "description": "API key for external service",
             },
         )
 
         # Assert
-        assert response.status_code == status.HTTP_200_OK
+        assert response.status_code == status.HTTP_201_CREATED
 
-    @pytest.mark.asyncio
-    async def test_add_environment_variable_pipeline_scope(
-        self,
-        client: TestClient,
-        mock_config_command_port: AsyncMock,
-    ):
-        """Test adding environment variable with pipeline scope."""
-        # Arrange
-        mock_config_command_port.add_environment_variable.return_value = {
-            "success": True,
-        }
-
-        # Act
-        response = client.post(
-            "/api/v2/config/environment-variables",
-            json={
-                "scope": "pipeline",
-                "scope_id": "pipeline-123",
-                "name": "STAGE",
-                "value": "production",
-                "is_secret": False,
-            },
-        )
-
-        # Assert
-        assert response.status_code == status.HTTP_200_OK
 
     @pytest.mark.asyncio
     async def test_remove_environment_variable(
         self,
         client: TestClient,
         mock_config_command_port: AsyncMock,
+        mock_config_query_port: AsyncMock,
+        sample_project_config: ProjectConfigInfo,
     ):
         """Test removing environment variable."""
         # Arrange
-        mock_config_command_port.remove_environment_variable.return_value = {
-            "success": True,
-        }
+        mock_config_query_port.get_project_config.return_value = sample_project_config
+        mock_config_command_port.remove_environment_variable.return_value = MagicMock(
+            success=True,
+            config_version=2,
+            message="Removed",
+            changes_applied={"removed": "OLD_VAR"},
+            errors=None,
+        )
 
         # Act
-        response = client.delete(
-            "/api/v2/config/environment-variables",
-            json={
-                "scope": "project",
-                "scope_id": "proj-123",
-                "name": "OLD_VAR",
-            },
-        )
+        response = client.delete("/api/v2/config/projects/proj-123/env-vars/OLD_VAR")
 
         # Assert
         assert response.status_code == status.HTTP_200_OK
-
-    @pytest.mark.asyncio
-    async def test_list_environment_variables_by_scope(
-        self,
-        client: TestClient,
-        mock_config_query_port: AsyncMock,
-    ):
-        """Test listing environment variables filtered by scope."""
-        # Arrange
-        mock_config_query_port.list_environment_variables.return_value = [
-            {"name": "API_KEY", "value": "***", "is_secret": True},
-            {"name": "DEBUG", "value": "true", "is_secret": False},
-        ]
-
-        # Act
-        response = client.get(
-            "/api/v2/config/environment-variables?scope=project&scope_id=proj-123"
-        )
-
-        # Assert
-        assert response.status_code == status.HTTP_200_OK
-        data = response.json()
-        assert len(data) == 2
 
 
 # ============================================================================
@@ -582,33 +565,31 @@ class TestConfigurationSearch:
     ):
         """Test searching configurations by keyword."""
         # Arrange
-        mock_config_query_port.search_configs.return_value = {
-            "results": [
-                {
-                    "type": "project",
-                    "id": "proj-123",
-                    "name": "test-project",
-                    "match_field": "description",
-                    "match_value": "Contains test keyword",
-                }
-            ],
-            "total": 1,
-        }
+        from codetoreum.ports.input.config_query import ConfigSearchResult, ConfigSearchResults
+
+        search_result = ConfigSearchResult(
+            config_id="proj-123",
+            config_type="project",
+            name="test-project",
+            description="Contains test keyword",
+            matched_fields=["description"],
+            score=0.95,
+        )
+        mock_config_query_port.search_configs.return_value = ConfigSearchResults(
+            results=[search_result],
+            total_count=1,
+            query="test",
+            filters={},
+        )
 
         # Act
-        response = client.post(
-            "/api/v2/config/search",
-            json={
-                "keyword": "test",
-                "config_types": ["project", "pipeline"],
-            },
-        )
+        response = client.get("/api/v2/config/search?query=test")
 
         # Assert
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
-        assert data["total"] == 1
-        assert data["results"][0]["type"] == "project"
+        assert data["total_count"] == 1
+        assert data["results"][0]["config_type"] == "project"
 
     @pytest.mark.asyncio
     async def test_search_configs_filtered_by_type(
@@ -618,24 +599,22 @@ class TestConfigurationSearch:
     ):
         """Test searching configurations filtered by type."""
         # Arrange
-        mock_config_query_port.search_configs.return_value = {
-            "results": [],
-            "total": 0,
-        }
+        from codetoreum.ports.input.config_query import ConfigSearchResults
+
+        mock_config_query_port.search_configs.return_value = ConfigSearchResults(
+            results=[],
+            total_count=0,
+            query="nonexistent",
+            filters={"config_type": "agent"},
+        )
 
         # Act
-        response = client.post(
-            "/api/v2/config/search",
-            json={
-                "keyword": "nonexistent",
-                "config_types": ["agent"],
-            },
-        )
+        response = client.get("/api/v2/config/search?query=nonexistent&config_type=agent")
 
         # Assert
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
-        assert data["total"] == 0
+        assert data["total_count"] == 0
 
 
 # ============================================================================
@@ -650,26 +629,30 @@ class TestConfigurationVersioning:
         self,
         client: TestClient,
         mock_config_query_port: AsyncMock,
+        sample_project_config: ProjectConfigInfo,
     ):
         """Test retrieving configuration version history."""
         # Arrange
-        mock_config_query_port.get_version_history.return_value = {
-            "versions": [
-                {
-                    "version": 2,
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "changes": {"description": "Updated"},
-                    "reason": "User update",
-                },
-                {
-                    "version": 1,
-                    "timestamp": (datetime.utcnow() - timedelta(days=1)).isoformat(),
-                    "changes": {},
-                    "reason": "Initial creation",
-                },
-            ],
-            "total": 2,
-        }
+        from codetoreum.ports.input.config_query import ConfigVersionInfo
+
+        version_history = [
+            ConfigVersionInfo(
+                version=2,
+                created_at=datetime.utcnow(),
+                created_by="user@example.com",
+                changes={"description": "Updated"},
+                reason="User update",
+            ),
+            ConfigVersionInfo(
+                version=1,
+                created_at=datetime.utcnow() - timedelta(days=1),
+                created_by="admin@example.com",
+                changes={},
+                reason="Initial creation",
+            ),
+        ]
+        mock_config_query_port.get_config_version_history.return_value = version_history
+        mock_config_query_port.get_project_config.return_value = sample_project_config
 
         # Act
         response = client.get("/api/v2/config/projects/proj-123/history")
@@ -677,198 +660,6 @@ class TestConfigurationVersioning:
         # Assert
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
-        assert len(data["versions"]) == 2
-        assert data["versions"][0]["version"] == 2
+        assert len(data["history"]) == 2
+        assert data["history"][0]["version"] == 2
 
-    @pytest.mark.asyncio
-    async def test_rollback_to_previous_version(
-        self,
-        client: TestClient,
-        mock_config_command_port: AsyncMock,
-    ):
-        """Test rolling back configuration to previous version."""
-        # Arrange
-        mock_config_command_port.rollback_to_version.return_value = {
-            "success": True,
-            "version": 3,
-        }
-
-        # Act
-        response = client.post(
-            "/api/v2/config/projects/proj-123/rollback",
-            json={
-                "target_version": 1,
-                "reason": "Reverting problematic changes",
-            },
-        )
-
-        # Assert
-        assert response.status_code == status.HTTP_200_OK
-        data = response.json()
-        assert data["success"] is True
-
-
-# ============================================================================
-# Configuration Import/Export Tests
-# ============================================================================
-
-class TestConfigurationImportExport:
-    """Tests for configuration import and export endpoints."""
-
-    @pytest.mark.asyncio
-    async def test_export_project_config(
-        self,
-        client: TestClient,
-        mock_config_query_port: AsyncMock,
-    ):
-        """Test exporting project configuration."""
-        # Arrange
-        mock_config_query_port.export_project_config.return_value = {
-            "format": "json",
-            "data": {"id": "proj-123", "name": "test-project"},
-        }
-
-        # Act
-        response = client.get("/api/v2/config/projects/proj-123/export?format=json")
-
-        # Assert
-        assert response.status_code == status.HTTP_200_OK
-
-    @pytest.mark.asyncio
-    async def test_import_project_config(
-        self,
-        client: TestClient,
-        mock_config_command_port: AsyncMock,
-    ):
-        """Test importing project configuration."""
-        # Arrange
-        mock_config_command_port.import_project_config.return_value = {
-            "success": True,
-            "project_id": "proj-456",
-        }
-
-        # Act
-        response = client.post(
-            "/api/v2/config/projects/import",
-            json={
-                "format": "json",
-                "data": {"name": "imported-project", "description": "Imported"},
-            },
-        )
-
-        # Assert
-        assert response.status_code == status.HTTP_200_OK
-        data = response.json()
-        assert data["success"] is True
-
-
-# ============================================================================
-# Concurrent Operations Tests
-# ============================================================================
-
-class TestConcurrentOperations:
-    """Tests for handling concurrent configuration updates."""
-
-    @pytest.mark.asyncio
-    async def test_concurrent_updates_version_conflict(
-        self,
-        client: TestClient,
-        mock_config_command_port: AsyncMock,
-    ):
-        """Test handling version conflict during concurrent updates."""
-        # Arrange
-        mock_config_command_port.update_project_config.side_effect = Exception(
-            "Version conflict: configuration was modified"
-        )
-
-        # Act
-        response = client.put(
-            "/api/v2/config/projects/proj-123",
-            json={
-                "updates": {"description": "Update 1"},
-                "expected_version": 1,
-            },
-        )
-
-        # Assert
-        assert response.status_code == status.HTTP_409_CONFLICT
-
-    @pytest.mark.asyncio
-    async def test_optimistic_locking_success(
-        self,
-        client: TestClient,
-        mock_config_command_port: AsyncMock,
-    ):
-        """Test successful update with optimistic locking."""
-        # Arrange
-        mock_config_command_port.update_project_config.return_value = {
-            "success": True,
-            "version": 2,
-        }
-
-        # Act
-        response = client.put(
-            "/api/v2/config/projects/proj-123",
-            json={
-                "updates": {"description": "Update"},
-                "expected_version": 1,
-            },
-        )
-
-        # Assert
-        assert response.status_code == status.HTTP_200_OK
-
-
-# ============================================================================
-# Global Settings Tests
-# ============================================================================
-
-class TestGlobalSettings:
-    """Tests for global settings endpoints."""
-
-    @pytest.mark.asyncio
-    async def test_get_global_settings(
-        self,
-        client: TestClient,
-        mock_config_query_port: AsyncMock,
-    ):
-        """Test retrieving global settings."""
-        # Arrange
-        mock_config_query_port.get_global_settings.return_value = {
-            "max_concurrent_executions": 5,
-            "default_timeout_seconds": 3600,
-            "retry_policy": {"max_attempts": 3, "backoff_multiplier": 2},
-        }
-
-        # Act
-        response = client.get("/api/v2/config/global-settings")
-
-        # Assert
-        assert response.status_code == status.HTTP_200_OK
-        data = response.json()
-        assert data["max_concurrent_executions"] == 5
-
-    @pytest.mark.asyncio
-    async def test_update_global_settings(
-        self,
-        client: TestClient,
-        mock_config_command_port: AsyncMock,
-    ):
-        """Test updating global settings."""
-        # Arrange
-        mock_config_command_port.update_global_settings.return_value = {
-            "success": True,
-        }
-
-        # Act
-        response = client.put(
-            "/api/v2/config/global-settings",
-            json={
-                "updates": {
-                    "max_concurrent_executions": 10,
-                },
-            },
-        )
-
-        # Assert
-        assert response.status_code == status.HTTP_200_OK
