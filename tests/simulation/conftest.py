@@ -314,3 +314,58 @@ def pytest_collection_modifyitems(config, items):
             # Mark slow simulations
             if "slow" in item.name or "realistic" in item.name:
                 item.add_marker(pytest.mark.slow_simulation)
+
+
+# ====================================================================================
+# Phase 3 E2E Test Fixtures (NEW)
+# ====================================================================================
+
+
+@pytest.fixture
+async def simulation_seeder(
+    simulation_bootstrap: SimulationApplicationBootstrap,
+):
+    """
+    Provide a simulation data seeder for E2E tests.
+
+    Args:
+        simulation_bootstrap: Bootstrap fixture
+
+    Yields:
+        SimulationDataSeeder instance ready for seeding test data
+
+    Cleanup:
+        Clears seeded data after test
+    """
+    from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
+
+    seeder = SimulationDataSeeder(simulation_bootstrap, track_items=True)
+    yield seeder
+    # Cleanup tracked items
+    seeder.created_items.clear()
+
+
+@pytest.fixture
+async def e2e_client(
+    simulation_app: FastAPI,
+    simulation_bootstrap: SimulationApplicationBootstrap,
+):
+    """
+    Provide an E2E test client for simulation testing.
+
+    Args:
+        simulation_app: FastAPI app fixture
+        simulation_bootstrap: Bootstrap fixture
+
+    Yields:
+        SimulationE2EClient instance ready for E2E testing
+
+    Cleanup:
+        Closes test client connections
+    """
+    from tests.simulation.e2e_client import SimulationE2EClient
+
+    client = SimulationE2EClient(simulation_app, simulation_bootstrap)
+    yield client
+    # Cleanup
+    client.client.__exit__(None, None, None)
