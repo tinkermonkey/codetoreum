@@ -31,7 +31,9 @@ from codetoreum.domain.events import (
 @pytest.fixture
 def mock_event_store():
     """Create in-memory event store."""
-    return InMemoryEventStore()
+    store = InMemoryEventStore()
+    yield store
+    store.clear()
 
 
 @pytest.fixture

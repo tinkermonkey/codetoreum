@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 
 from redis import asyncio as aioredis
 
+from codetoreum.config import DEFAULT_REDIS_STREAM_MAX_LENGTH
 from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.event_serialization import EventSerializer
 
@@ -42,7 +43,7 @@ class RedisEventBuffer:
         redis_client: aioredis.Redis,
         stream_name: str = "events:buffer",
         consumer_group: str = "elasticsearch-writers",
-        stream_max_length: int = 100000,
+        stream_max_length: int = DEFAULT_REDIS_STREAM_MAX_LENGTH,
         dead_letter_stream: str = "events:dead-letter",
     ):
         """

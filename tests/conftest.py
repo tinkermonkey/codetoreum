@@ -1,7 +1,16 @@
 """Test configuration and shared fixtures."""
 
+from typing import Generator
+
 import docker
 import pytest
+
+from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
+from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
+from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
+from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
+from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
+from codetoreum.infrastructure.event_bus import EventBus
 
 
 def is_docker_available() -> bool:
@@ -12,8 +21,11 @@ def is_docker_available() -> bool:
     """
     try:
         client = docker.from_env()
-        client.ping()
-        return True
+        try:
+            client.ping()
+            return True
+        finally:
+            client.close()
     except (docker.errors.DockerException, Exception):
         return False
 
@@ -23,6 +35,26 @@ docker_available = pytest.mark.skipif(
     not is_docker_available(),
     reason="Docker is not available or not running"
 )
+
+
+@pytest.fixture(scope="session")
+def docker_client() -> Generator[docker.DockerClient, None, None]:
+    """Shared Docker client for all tests in the session.
+
+    This fixture creates a single Docker client that is reused across all tests
+    in the session, reducing resource consumption and connection overhead.
+
+    Yields:
+        docker.DockerClient: Docker client instance
+    """
+    if not is_docker_available():
+        pytest.skip("Docker is not available or not running")
+
+    client = docker.from_env()
+    try:
+        yield client
+    finally:
+        client.close()
 
 
 @pytest.fixture
@@ -48,3 +80,94 @@ def mock_event_store() -> dict[str, list[dict]]:
         Dictionary simulating an in-memory event store.
     """
     return {}
+
+
+# Shared fixtures with automatic cleanup for memory management
+
+
+@pytest.fixture
+def event_store() -> Generator[InMemoryEventStore, None, None]:
+    """Create in-memory event store with automatic cleanup.
+
+    This fixture ensures that all events are cleared after each test
+    to prevent memory accumulation across test runs.
+
+    Yields:
+        InMemoryEventStore instance
+    """
+    store = InMemoryEventStore()
+    yield store
+    store.clear()
+
+
+@pytest.fixture
+def ticket_system() -> Generator[InMemoryTicketAdapter, None, None]:
+    """Create in-memory ticket system with automatic cleanup.
+
+    This fixture ensures that all work items, comments, and webhooks
+    are cleared after each test to prevent memory accumulation.
+
+    Yields:
+        InMemoryTicketAdapter instance
+    """
+    adapter = InMemoryTicketAdapter()
+    yield adapter
+    adapter.clear()
+
+
+@pytest.fixture
+def llm_provider() -> Generator[MockLLMAdapter, None, None]:
+    """Create mock LLM provider with automatic cleanup.
+
+    Yields:
+        MockLLMAdapter instance
+    """
+    adapter = MockLLMAdapter()
+    yield adapter
+    adapter.clear_conversations()
+    adapter.reset_stats()
+
+
+@pytest.fixture
+def container_adapter() -> Generator[FakeContainerAdapter, None, None]:
+    """Create fake container adapter with automatic cleanup.
+
+    Yields:
+        FakeContainerAdapter instance
+    """
+    adapter = FakeContainerAdapter()
+    yield adapter
+    adapter.clear()
+
+
+@pytest.fixture
+def storage_adapter() -> Generator[InMemoryStorageAdapter, None, None]:
+    """Create in-memory storage adapter with automatic cleanup.
+
+    Yields:
+        InMemoryStorageAdapter instance
+    """
+    adapter = InMemoryStorageAdapter()
+    yield adapter
+    adapter.clear()
+
+
+@pytest.fixture
+def event_bus() -> Generator[EventBus, None, None]:
+    """Create event bus with automatic cleanup.
+
+    This fixture ensures that all handlers are unregistered and
+    statistics are reset after each test.
+
+    Yields:
+        EventBus instance
+    """
+    bus = EventBus(max_retries=3, retry_delay_seconds=0.1)
+    yield bus
+    # Unregister all handlers to prevent memory leaks
+    for handlers in list(bus._handlers.values()):
+        for handler in list(handlers):
+            bus.unregister_handler(handler)
+    for handler in list(bus._wildcard_handlers):
+        bus.unregister_handler(handler)
+    bus.reset_statistics()

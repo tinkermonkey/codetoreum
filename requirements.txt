@@ -67,6 +67,10 @@ asyncio>=3.4.3
 aiofiles>=24.1.0
 email-validator>=2.1.0
 
+# Authentication (JWT) & Rate Limiting
+python-jose[cryptography]>=3.3.0
+slowapi>=0.1.9
+
 # Documentation
 mkdocs>=1.6.1
 mkdocs-material>=9.5.44

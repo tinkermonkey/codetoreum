@@ -363,25 +363,35 @@ class MockStorage:
 @pytest.fixture
 def mock_event_store():
     """Create mock event store."""
-    return MockEventStore()
+    store = MockEventStore()
+    yield store
+    store.events.clear()
 
 
 @pytest.fixture
 def mock_llm_provider():
     """Create mock LLM provider."""
-    return MockLLMProvider()
+    provider = MockLLMProvider()
+    yield provider
+    # Reset state
+    provider.execution_count = 0
+    provider.failure_count = 0
 
 
 @pytest.fixture
 def mock_container():
     """Create mock container adapter."""
-    return MockContainer()
+    container = MockContainer()
+    yield container
+    container.containers.clear()
 
 
 @pytest.fixture
 def mock_storage():
     """Create mock storage adapter."""
-    return MockStorage()
+    storage = MockStorage()
+    yield storage
+    storage.artifacts.clear()
 
 
 @pytest.fixture

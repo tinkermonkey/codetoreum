@@ -8,9 +8,12 @@ from uuid import uuid4
 
 from codetoreum.domain.events import (
     DomainEvent,
+    ExecutionCancelled,
     ExecutionCompleted,
     ExecutionFailed,
     ExecutionInitialized,
+    ExecutionPaused,
+    ExecutionResumed,
     ExecutionStarted,
     ExecutionTimeout,
 )
@@ -23,6 +26,7 @@ class ExecutionStatus(Enum):
     PENDING = "pending"  # Waiting to be started
     INITIALIZED = "initialized"  # Created but not yet running
     RUNNING = "running"
+    PAUSED = "paused"  # Execution paused by user/system
     COMPLETED = "completed"
     FAILED = "failed"
     TIMEOUT = "timeout"
@@ -289,6 +293,95 @@ class AgentExecution:
             payload={
                 "timeout_at": self.completed_at.isoformat(),
                 "duration_seconds": self.duration_seconds,
+            },
+        )
+        self._add_event(event)
+
+    def cancel(self, reason: Optional[str] = None) -> None:
+        """
+        Cancel execution.
+
+        Args:
+            reason: Optional reason for cancellation
+
+        Raises:
+            DomainError: If execution is not in INITIALIZED, RUNNING, or PAUSED status
+
+        Emits: ExecutionCancelled event
+        """
+        if self.status not in [
+            ExecutionStatus.INITIALIZED,
+            ExecutionStatus.RUNNING,
+            ExecutionStatus.PAUSED,
+        ]:
+            raise DomainError(
+                f"Cannot cancel execution in status {self.status.value}"
+            )
+
+        self.status = ExecutionStatus.CANCELLED
+        self.completed_at = datetime.now(timezone.utc)
+        self.error_message = reason or "Execution cancelled"
+        self.exit_code = -2
+
+        if self.started_at:
+            self.duration_seconds = (
+                self.completed_at - self.started_at
+            ).total_seconds()
+
+        event = ExecutionCancelled(
+            aggregate_id=self.id,
+            payload={
+                "cancelled_at": self.completed_at.isoformat(),
+                "reason": reason,
+                "duration_seconds": self.duration_seconds,
+            },
+        )
+        self._add_event(event)
+
+    def pause(self, reason: Optional[str] = None) -> None:
+        """
+        Pause execution.
+
+        Args:
+            reason: Optional reason for pausing
+
+        Raises:
+            DomainError: If execution is not in RUNNING status
+
+        Emits: ExecutionPaused event
+        """
+        if self.status != ExecutionStatus.RUNNING:
+            raise DomainError(f"Cannot pause execution in status {self.status.value}")
+
+        self.status = ExecutionStatus.PAUSED
+
+        event = ExecutionPaused(
+            aggregate_id=self.id,
+            payload={
+                "paused_at": datetime.now(timezone.utc).isoformat(),
+                "reason": reason,
+            },
+        )
+        self._add_event(event)
+
+    def resume(self) -> None:
+        """
+        Resume paused execution.
+
+        Raises:
+            DomainError: If execution is not in PAUSED status
+
+        Emits: ExecutionResumed event
+        """
+        if self.status != ExecutionStatus.PAUSED:
+            raise DomainError(f"Cannot resume execution in status {self.status.value}")
+
+        self.status = ExecutionStatus.RUNNING
+
+        event = ExecutionResumed(
+            aggregate_id=self.id,
+            payload={
+                "resumed_at": datetime.now(timezone.utc).isoformat(),
             },
         )
         self._add_event(event)

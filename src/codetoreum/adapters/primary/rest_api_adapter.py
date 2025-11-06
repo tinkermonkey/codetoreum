@@ -10,6 +10,12 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
+
+from codetoreum.config import (
+    SCHEDULER_DEFAULT_PAGE_SIZE,
+    SCHEDULER_MAX_PAGE_SIZE,
+    WORKSPACE_DEFAULT_PAGE_SIZE,
+)
 from pydantic import BaseModel, Field
 
 from codetoreum.ports.input.config_command import (
@@ -223,6 +229,7 @@ class RestAPIAdapter:
         workflow_command_port: IWorkflowCommandPort,
         task_query_port: ITaskQueryPort,
         config_command_port: IConfigurationCommandPort,
+        auth_dependencies=None,
     ):
         """
         Initialize adapter with ports.
@@ -231,13 +238,24 @@ class RestAPIAdapter:
             workflow_command_port: Port for workflow commands
             task_query_port: Port for task queries
             config_command_port: Port for configuration commands
+            auth_dependencies: Optional authentication dependencies (for protected endpoints)
         """
         self.workflow_port = workflow_command_port
         self.task_port = task_query_port
         self.config_port = config_command_port
+        self.auth_dependencies = auth_dependencies
 
-        # Create API router
-        self.router = APIRouter(prefix="/api/v1", tags=["api"])
+        # Create API router with optional authentication
+        # All endpoints in this router will require authentication if auth_dependencies is provided
+        router_kwargs = {
+            "prefix": "/api/v1",
+            "tags": ["api"],
+        }
+        if auth_dependencies:
+            from fastapi import Depends
+            router_kwargs["dependencies"] = [Depends(auth_dependencies.require_auth)]
+
+        self.router = APIRouter(**router_kwargs)
         self._register_routes()
 
     def _register_routes(self):
@@ -465,7 +483,7 @@ class RestAPIAdapter:
             project_name: Optional[str] = Query(None),
             status: Optional[str] = Query(None),
             page: int = Query(1, ge=1),
-            page_size: int = Query(50, ge=1, le=100),
+            page_size: int = Query(SCHEDULER_DEFAULT_PAGE_SIZE, ge=1, le=SCHEDULER_MAX_PAGE_SIZE),
         ) -> ExecutionListResponse:
             """
             Lists executions matching the specified criteria.
@@ -870,7 +888,7 @@ class RestAPIAdapter:
             config_type: Optional[str] = Query(
                 None, description="Filter by type: project, agent, pipeline"
             ),
-            limit: int = Query(50, ge=1, le=500),
+            limit: int = Query(WORKSPACE_DEFAULT_PAGE_SIZE, ge=1, le=500),
             offset: int = Query(0, ge=0),
         ) -> List[Dict[str, Any]]:
             """

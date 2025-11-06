@@ -58,7 +58,9 @@ def mock_container():
 @pytest.fixture
 def mock_event_store():
     """Create mock event store."""
-    return InMemoryEventStore()
+    store = InMemoryEventStore()
+    yield store
+    store.clear()
 
 
 @pytest.fixture

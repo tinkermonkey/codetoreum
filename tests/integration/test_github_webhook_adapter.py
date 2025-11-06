@@ -18,7 +18,8 @@ from codetoreum.adapters.primary.fastapi_app import create_development_app
 def client():
     """Create test client with development app"""
     app = create_development_app()
-    return TestClient(app)
+    with TestClient(app) as test_client:
+        yield test_client
 
 
 class TestHealthEndpoints:
@@ -26,7 +27,7 @@ class TestHealthEndpoints:
 
     def test_health_check(self, client):
         """Test basic health check endpoint"""
-        response = client.get("/health")
+        response = client.get("/api/v2/health")
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "healthy"
@@ -35,7 +36,7 @@ class TestHealthEndpoints:
 
     def test_readiness_check(self, client):
         """Test readiness check endpoint"""
-        response = client.get("/health/ready")
+        response = client.get("/api/v2/health/ready")
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "ready"

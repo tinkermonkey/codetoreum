@@ -29,11 +29,13 @@ pytestmark = docker_available
 
 @pytest.fixture(scope="module")
 def elasticsearch_container():
-    """Create Elasticsearch testcontainer."""
+    """Create Elasticsearch testcontainer with resource limits."""
     # Use Elasticsearch 8.x
     container = ElasticSearchContainer("elasticsearch:8.11.0")
     container.with_env("xpack.security.enabled", "false")
     container.with_env("discovery.type", "single-node")
+    # Add resource limits to prevent memory exhaustion
+    container.with_env("ES_JAVA_OPTS", "-Xms512m -Xmx512m")  # Limit ES heap to 512MB
     container.start()
 
     yield container

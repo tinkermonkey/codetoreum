@@ -2,6 +2,7 @@
 Integration tests for REST API Adapter
 """
 
+import os
 import pytest
 from fastapi.testclient import TestClient
 
@@ -11,9 +12,16 @@ from codetoreum.adapters.primary.fastapi_app import create_development_app
 
 @pytest.fixture
 def client():
-    """Create test client with development app"""
-    app = create_development_app()
-    return TestClient(app)
+    """Create test client with development app (authentication disabled for testing)"""
+    # Disable authentication for integration tests
+    os.environ["CODETOREUM_DISABLE_AUTH"] = "true"
+    try:
+        app = create_development_app()
+        with TestClient(app) as test_client:
+            yield test_client
+    finally:
+        # Clean up environment variable
+        os.environ.pop("CODETOREUM_DISABLE_AUTH", None)
 
 
 class TestWorkflowEndpoints:

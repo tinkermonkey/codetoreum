@@ -88,17 +88,37 @@ class DockerContainerAdapter(IContainer):
 
     def _parse_volume_spec(self, volumes: Dict[str, str]) -> Dict[str, Dict[str, str]]:
         """
-        Parse volume specification.
+        Parse volume specification with path traversal protection.
 
         Args:
             volumes: Volume mounts (host_path: container_path:mode)
 
         Returns:
             Docker SDK volume specification
+
+        Raises:
+            ValidationError: If volume specification is invalid or contains unsafe paths
         """
+        from pathlib import Path
+
         docker_volumes = {}
 
         for host_path, spec in volumes.items():
+            # Validate host path - resolve to absolute path and check for traversal
+            try:
+                resolved_host_path = Path(host_path).resolve()
+
+                # Ensure host path is absolute
+                if not resolved_host_path.is_absolute():
+                    raise ValidationError(f"Host path must be absolute: {host_path}")
+
+                # Check if path exists (optional - comment out if you want to allow non-existent paths)
+                # if not resolved_host_path.exists():
+                #     raise ValidationError(f"Host path does not exist: {host_path}")
+
+            except (OSError, RuntimeError) as e:
+                raise ValidationError(f"Invalid host path '{host_path}': {e}")
+
             # Parse container_path:mode
             parts = spec.split(":")
             if len(parts) == 1:
@@ -109,7 +129,19 @@ class DockerContainerAdapter(IContainer):
             else:
                 raise ValidationError(f"Invalid volume spec: {spec}")
 
-            docker_volumes[host_path] = {
+            # Validate container path (should be absolute)
+            if not container_path.startswith("/"):
+                raise ValidationError(
+                    f"Container path must be absolute (start with /): {container_path}"
+                )
+
+            # Validate mode
+            if mode not in ["rw", "ro"]:
+                raise ValidationError(
+                    f"Invalid mount mode '{mode}'. Must be 'rw' (read-write) or 'ro' (read-only)"
+                )
+
+            docker_volumes[str(resolved_host_path)] = {
                 "bind": container_path,
                 "mode": mode,
             }

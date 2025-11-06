@@ -10,6 +10,115 @@ export interface ApiError {
 }
 
 // ============================================================================
+// Work Item Types
+// ============================================================================
+
+export type WorkItemStatus = 'open' | 'in_progress' | 'completed' | 'failed' | 'cancelled'
+
+export interface WorkItem {
+  id: string
+  title: string
+  description: string
+  status: WorkItemStatus
+  assignee?: string
+  labels: string[]
+  url: string
+  created_at: string
+  updated_at: string
+  current_stage?: string
+  current_execution_id?: string
+  metadata: Record<string, any>
+}
+
+export interface CreateWorkItemRequest {
+  title: string
+  description: string
+  assignee?: string
+  labels?: string[]
+  metadata?: Record<string, any>
+}
+
+export interface UpdateWorkItemRequest {
+  title?: string
+  description?: string
+  status?: WorkItemStatus
+  assignee?: string
+  labels?: string[]
+  metadata?: Record<string, any>
+}
+
+// ============================================================================
+// Execution Types
+// ============================================================================
+
+export type ExecutionStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'timeout'
+
+export interface Execution {
+  id: string
+  work_item_id: string
+  agent_name: string
+  status: ExecutionStatus
+  started_at?: string
+  completed_at?: string
+  duration_seconds?: number
+  exit_code?: number
+  container_id?: string
+  error_message?: string
+  logs?: string[]
+  metadata: Record<string, any>
+}
+
+export interface ExecutionSummary {
+  id: string
+  work_item_id: string
+  work_item_title: string
+  agent_name: string
+  status: ExecutionStatus
+  started_at?: string
+  duration_seconds?: number
+}
+
+export interface StartExecutionRequest {
+  work_item_id: string
+  workflow_id?: string
+  agent_name?: string
+}
+
+// ============================================================================
+// Event Types
+// ============================================================================
+
+export interface WebSocketEvent {
+  type: string
+  data: any
+  timestamp: string
+}
+
+export interface ExecutionStartedEvent {
+  execution_id: string
+  work_item_id: string
+  agent_name: string
+  started_at: string
+}
+
+export interface ExecutionCompletedEvent {
+  execution_id: string
+  work_item_id: string
+  agent_name: string
+  status: ExecutionStatus
+  duration_seconds: number
+  exit_code?: number
+}
+
+export interface ExecutionFailedEvent {
+  execution_id: string
+  work_item_id: string
+  agent_name: string
+  error_message: string
+  error_type: 'container_crashed' | 'execution_timeout' | 'agent_logic_failure' | 'unknown'
+}
+
+// ============================================================================
 // Configuration Types
 // ============================================================================
 

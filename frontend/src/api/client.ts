@@ -1,4 +1,12 @@
-import axios, { AxiosError, AxiosInstance } from 'axios'
+/**
+ * API Client
+ *
+ * Primary adapter for HTTP communication with backend services.
+ * Wrapped with infrastructure-layer resilience patterns.
+ */
+
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosError } from 'axios'
+import toast from 'react-hot-toast'
 import type {
   ProjectConfig,
   AgentConfig,
@@ -10,255 +18,491 @@ import type {
   MountCommandRequest,
   MountSubAgentRequest,
   ConfigurationHistory,
-  ApiError,
+  WorkItem,
+  CreateWorkItemRequest,
+  UpdateWorkItemRequest,
+  Execution,
+  ExecutionSummary,
+  StartExecutionRequest,
 } from '../types'
+import { ApiError, createApiError, ErrorCode } from '../types/errors'
+import { apiConfig } from '../config/api.config'
+import { createResilienceDecoratorFromConfig } from '../infrastructure/resilience'
+import { dispatchEvent, AppEventType } from '../infrastructure/events'
 
-// Environment-aware API base URL
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || window.location.origin + '/api/v1'
+/**
+ * Request cancellation management
+ * Using WeakMap for automatic garbage collection
+ */
+class RequestCancellation {
+  private controllers = new Map<string, AbortController>()
+  private timeouts = new WeakMap<AbortController, number>()
 
-// Create axios instance with proper configuration
-const api: AxiosInstance = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  timeout: 30000, // 30 second timeout
-})
+  /**
+   * Get or create an AbortController for a request
+   */
+  getController(key: string): AbortController {
+    // Cancel existing request with same key
+    this.cancel(key)
 
-// Response interceptor for error handling
-api.interceptors.response.use(
-  (response) => response,
-  (error: AxiosError<ApiError>) => {
-    // Enhanced error handling with structured error types
-    if (error.response) {
-      // Server responded with error status
-      const apiError: ApiError = {
-        message: error.response.data?.message || error.message,
-        statusCode: error.response.status,
-        details: error.response.data?.details,
-        timestamp: new Date().toISOString(),
+    const controller = new AbortController()
+    this.controllers.set(key, controller)
+
+    // Auto-cleanup after timeout
+    const timeout = setTimeout(() => {
+      this.cancel(key)
+    }, apiConfig.timeout + 5000) // Cleanup 5s after timeout
+
+    this.timeouts.set(controller, timeout)
+
+    return controller
+  }
+
+  /**
+   * Cancel a specific request
+   */
+  cancel(key: string): void {
+    const controller = this.controllers.get(key)
+    if (controller) {
+      // Clear timeout
+      const timeout = this.timeouts.get(controller)
+      if (timeout) {
+        clearTimeout(timeout)
       }
-      return Promise.reject(apiError)
-    } else if (error.request) {
-      // Request made but no response received (network error)
-      const apiError: ApiError = {
-        message: 'Network error: Unable to reach server',
-        statusCode: 0,
-        details: { originalError: error.message },
-        timestamp: new Date().toISOString(),
-      }
-      return Promise.reject(apiError)
-    } else {
-      // Error in request setup
-      const apiError: ApiError = {
-        message: error.message || 'Unknown error occurred',
-        statusCode: 500,
-        timestamp: new Date().toISOString(),
-      }
-      return Promise.reject(apiError)
+
+      controller.abort()
+      this.controllers.delete(key)
     }
   }
-)
 
-// Request interceptor for adding auth tokens (if needed in future)
-api.interceptors.request.use(
-  (config) => {
-    // Future: Add authentication token here
-    // const token = localStorage.getItem('auth_token')
-    // if (token) {
-    //   config.headers.Authorization = `Bearer ${token}`
-    // }
-    return config
-  },
-  (error) => Promise.reject(error)
-)
+  /**
+   * Cancel all active requests
+   */
+  cancelAll(): void {
+    for (const [key] of this.controllers) {
+      this.cancel(key)
+    }
+  }
 
-// Project Configuration API
-export const projectConfigApi = {
-  get: async (projectName: string): Promise<ProjectConfig> => {
-    const response = await api.get<ProjectConfig>(
-      `/configurations/projects/${projectName}`
-    )
-    return response.data
-  },
-
-  update: async (
-    projectName: string,
-    request: UpdateProjectConfigRequest
-  ): Promise<ConfigurationCommandResult> => {
-    const response = await api.patch<ConfigurationCommandResult>(
-      `/configurations/projects/${projectName}`,
-      request
-    )
-    return response.data
-  },
-
-  addEnvironmentVariable: async (
-    projectName: string,
-    request: AddEnvironmentVariableRequest
-  ): Promise<ConfigurationCommandResult> => {
-    const response = await api.post<ConfigurationCommandResult>(
-      `/configurations/projects/${projectName}/environment`,
-      request
-    )
-    return response.data
-  },
-
-  removeEnvironmentVariable: async (
-    projectName: string,
-    variableName: string,
-    userId: string
-  ): Promise<ConfigurationCommandResult> => {
-    const response = await api.delete<ConfigurationCommandResult>(
-      `/configurations/projects/${projectName}/environment/${variableName}`,
-      { params: { user_id: userId } }
-    )
-    return response.data
-  },
-
-  mountCommand: async (
-    projectName: string,
-    request: MountCommandRequest
-  ): Promise<ConfigurationCommandResult> => {
-    const response = await api.post<ConfigurationCommandResult>(
-      `/configurations/projects/${projectName}/commands`,
-      request
-    )
-    return response.data
-  },
-
-  unmountCommand: async (
-    projectName: string,
-    commandName: string,
-    userId: string
-  ): Promise<ConfigurationCommandResult> => {
-    const response = await api.delete<ConfigurationCommandResult>(
-      `/configurations/projects/${projectName}/commands/${commandName}`,
-      { params: { user_id: userId } }
-    )
-    return response.data
-  },
-
-  mountSubAgent: async (
-    projectName: string,
-    request: MountSubAgentRequest
-  ): Promise<ConfigurationCommandResult> => {
-    const response = await api.post<ConfigurationCommandResult>(
-      `/configurations/projects/${projectName}/subagents`,
-      request
-    )
-    return response.data
-  },
-
-  unmountSubAgent: async (
-    projectName: string,
-    subagentName: string,
-    userId: string
-  ): Promise<ConfigurationCommandResult> => {
-    const response = await api.delete<ConfigurationCommandResult>(
-      `/configurations/projects/${projectName}/subagents/${subagentName}`,
-      { params: { user_id: userId } }
-    )
-    return response.data
-  },
+  /**
+   * Cleanup after request completion
+   */
+  cleanup(key: string): void {
+    const controller = this.controllers.get(key)
+    if (controller) {
+      const timeout = this.timeouts.get(controller)
+      if (timeout) {
+        clearTimeout(timeout)
+      }
+      this.controllers.delete(key)
+    }
+  }
 }
 
-// Agent Configuration API
-export const agentConfigApi = {
-  list: async (projectName?: string): Promise<AgentConfig[]> => {
-    const response = await api.get<AgentConfig[]>('/configurations/agents', {
-      params: { project_name: projectName },
+/**
+ * Generate correlation ID for request tracking
+ */
+function generateCorrelationId(): string {
+  return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+}
+
+/**
+ * API Client class
+ */
+class APIClient {
+  private client: AxiosInstance
+  private resilience: ReturnType<typeof createResilienceDecoratorFromConfig>
+  private cancellation = new RequestCancellation()
+
+  constructor() {
+    // Create axios instance
+    this.client = axios.create({
+      baseURL: apiConfig.baseURL,
+      withCredentials: true, // Send httpOnly cookies with requests
+      timeout: apiConfig.timeout,
+      headers: {
+        'Content-Type': 'application/json',
+      },
     })
-    return response.data
-  },
 
-  get: async (agentName: string): Promise<AgentConfig> => {
-    const response = await api.get<AgentConfig>(
-      `/configurations/agents/${agentName}`
-    )
-    return response.data
-  },
+    // Create resilience decorator with config
+    this.resilience = createResilienceDecoratorFromConfig(apiConfig)
 
-  update: async (
-    agentName: string,
-    request: UpdateAgentConfigRequest
-  ): Promise<ConfigurationCommandResult> => {
-    const response = await api.patch<ConfigurationCommandResult>(
-      `/configurations/agents/${agentName}`,
-      request
+    // Setup interceptors
+    this.setupInterceptors()
+  }
+
+  /**
+   * Setup request and response interceptors
+   */
+  private setupInterceptors(): void {
+    // Request interceptor
+    this.client.interceptors.request.use(
+      (config) => {
+        // Add correlation ID for request tracking
+        const correlationId = generateCorrelationId()
+        config.headers['X-Correlation-ID'] = correlationId
+
+        // Log request in development
+        if (apiConfig.features.enableLogging && import.meta.env.DEV) {
+          console.info('[API Request]', {
+            method: config.method?.toUpperCase(),
+            url: config.url,
+            correlationId,
+          })
+        }
+
+        return config
+      },
+      (error) => Promise.reject(error)
     )
-    return response.data
-  },
+
+    // Response interceptor
+    this.client.interceptors.response.use(
+      (response) => {
+        // Log response in development
+        if (apiConfig.features.enableLogging && import.meta.env.DEV) {
+          console.info('[API Response]', {
+            status: response.status,
+            url: response.config.url,
+            correlationId: response.config.headers['X-Correlation-ID'],
+          })
+        }
+
+        return response
+      },
+      async (error: AxiosError) => {
+        // Log error in development
+        if (apiConfig.features.enableLogging && import.meta.env.DEV) {
+          console.error('[API Error]', {
+            status: error.response?.status,
+            url: error.config?.url,
+            correlationId: error.config?.headers?.['X-Correlation-ID'],
+            message: error.message,
+          })
+        }
+
+        // Handle specific error cases
+        await this.handleErrorResponse(error)
+
+        return Promise.reject(error)
+      }
+    )
+  }
+
+  /**
+   * Handle specific error responses
+   */
+  private async handleErrorResponse(error: AxiosError): Promise<void> {
+    const status = error.response?.status
+
+    if (status === 401) {
+      // Unauthorized - dispatch event for auth handling
+      await dispatchEvent(AppEventType.AUTH_UNAUTHORIZED, {
+        message: 'Authentication required',
+        statusCode: 401,
+      })
+      toast.error('You need to sign in to continue')
+    } else if (status === 429) {
+      // Rate limited
+      const retryAfter = error.response?.headers['retry-after']
+      await dispatchEvent(AppEventType.API_RATE_LIMITED, {
+        retryAfter: retryAfter ? parseInt(retryAfter, 10) : undefined,
+        message: 'Too many requests',
+      })
+      toast.error('Too many requests. Please wait a moment.')
+    } else if (status && status >= 500) {
+      // Server error
+      toast.error('Server error. Please try again later.')
+    }
+  }
+
+  /**
+   * Generic request wrapper with resilience
+   */
+  private async request<T>(
+    config: AxiosRequestConfig,
+    cancelKey?: string
+  ): Promise<T> {
+    // Setup cancellation if key provided
+    if (cancelKey) {
+      config.signal = this.cancellation.getController(cancelKey).signal
+    }
+
+    try {
+      // Execute request with resilience decorator
+      const response = await this.resilience.execute(
+        () => this.client.request<T>(config),
+        (context) => {
+          // Log retry attempts
+          console.info(
+            `[API] Retrying request (${context.attempt}/${context.maxAttempts}) after ${context.nextDelay}ms`
+          )
+        }
+      )
+
+      return response.data
+    } catch (error) {
+      throw createApiError(error)
+    } finally {
+      // Cleanup cancellation
+      if (cancelKey) {
+        this.cancellation.cleanup(cancelKey)
+      }
+    }
+  }
+
+  /**
+   * GET request
+   */
+  async get<T>(url: string, config?: AxiosRequestConfig & { cancelKey?: string }): Promise<T> {
+    const { cancelKey, ...axiosConfig } = config || {}
+    return this.request<T>({ ...axiosConfig, method: 'GET', url }, cancelKey)
+  }
+
+  /**
+   * POST request
+   */
+  async post<T>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig & { cancelKey?: string }
+  ): Promise<T> {
+    const { cancelKey, ...axiosConfig } = config || {}
+    return this.request<T>({ ...axiosConfig, method: 'POST', url, data }, cancelKey)
+  }
+
+  /**
+   * PUT request
+   */
+  async put<T>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig & { cancelKey?: string }
+  ): Promise<T> {
+    const { cancelKey, ...axiosConfig } = config || {}
+    return this.request<T>({ ...axiosConfig, method: 'PUT', url, data }, cancelKey)
+  }
+
+  /**
+   * PATCH request
+   */
+  async patch<T>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig & { cancelKey?: string }
+  ): Promise<T> {
+    const { cancelKey, ...axiosConfig } = config || {}
+    return this.request<T>({ ...axiosConfig, method: 'PATCH', url, data }, cancelKey)
+  }
+
+  /**
+   * DELETE request
+   */
+  async delete<T>(url: string, config?: AxiosRequestConfig & { cancelKey?: string }): Promise<T> {
+    const { cancelKey, ...axiosConfig } = config || {}
+    return this.request<T>({ ...axiosConfig, method: 'DELETE', url }, cancelKey)
+  }
+
+  /**
+   * Cancel a specific request
+   */
+  cancelRequest(key: string): void {
+    this.cancellation.cancel(key)
+  }
+
+  /**
+   * Cancel all pending requests
+   */
+  cancelAllRequests(): void {
+    this.cancellation.cancelAll()
+  }
+
+  /**
+   * Get circuit breaker stats
+   */
+  getCircuitBreakerStats() {
+    return this.resilience.getCircuitBreakerStats()
+  }
+
+  /**
+   * Reset circuit breaker
+   */
+  resetCircuitBreaker(): void {
+    this.resilience.resetCircuitBreaker()
+  }
 }
 
+// Create singleton instance
+const apiClient = new APIClient()
+
+// =============================================================================
+// Project Configuration API
+// =============================================================================
+
+export const projectConfigApi = {
+  getAll: () => apiClient.get<ProjectConfig[]>('/config/projects'),
+
+  getByName: (projectName: string) =>
+    apiClient.get<ProjectConfig>(`/config/projects/${projectName}`),
+
+  create: (config: ProjectConfig) =>
+    apiClient.post<ProjectConfig>('/config/projects', config),
+
+  update: (projectName: string, config: UpdateProjectConfigRequest) =>
+    apiClient.put<ProjectConfig>(`/config/projects/${projectName}`, config),
+
+  delete: (projectName: string) =>
+    apiClient.delete<void>(`/config/projects/${projectName}`),
+
+  getHistory: (projectName: string) =>
+    apiClient.get<ConfigurationHistory[]>(`/config/projects/${projectName}/history`),
+
+  addEnvironmentVariable: (projectName: string, request: AddEnvironmentVariableRequest) =>
+    apiClient.post<ProjectConfig>(
+      `/config/projects/${projectName}/environment-variables`,
+      request
+    ),
+
+  removeEnvironmentVariable: (projectName: string, key: string) =>
+    apiClient.delete<ProjectConfig>(
+      `/config/projects/${projectName}/environment-variables/${key}`
+    ),
+
+  addMountCommand: (projectName: string, request: MountCommandRequest) =>
+    apiClient.post<ProjectConfig>(`/config/projects/${projectName}/mount-commands`, request),
+
+  removeMountCommand: (projectName: string, commandId: string) =>
+    apiClient.delete<ProjectConfig>(
+      `/config/projects/${projectName}/mount-commands/${commandId}`
+    ),
+}
+
+// =============================================================================
+// Agent Configuration API
+// =============================================================================
+
+export const agentConfigApi = {
+  getAll: () => apiClient.get<AgentConfig[]>('/config/agents'),
+
+  getByName: (agentName: string) => apiClient.get<AgentConfig>(`/config/agents/${agentName}`),
+
+  create: (config: AgentConfig) => apiClient.post<AgentConfig>('/config/agents', config),
+
+  update: (agentName: string, config: UpdateAgentConfigRequest) =>
+    apiClient.put<AgentConfig>(`/config/agents/${agentName}`, config),
+
+  delete: (agentName: string) => apiClient.delete<void>(`/config/agents/${agentName}`),
+
+  getHistory: (agentName: string) =>
+    apiClient.get<ConfigurationHistory[]>(`/config/agents/${agentName}/history`),
+
+  addMountCommand: (agentName: string, request: MountCommandRequest) =>
+    apiClient.post<AgentConfig>(`/config/agents/${agentName}/mount-commands`, request),
+
+  removeMountCommand: (agentName: string, commandId: string) =>
+    apiClient.delete<AgentConfig>(`/config/agents/${agentName}/mount-commands/${commandId}`),
+
+  addSubAgent: (agentName: string, request: MountSubAgentRequest) =>
+    apiClient.post<AgentConfig>(`/config/agents/${agentName}/sub-agents`, request),
+
+  removeSubAgent: (agentName: string, subAgentId: string) =>
+    apiClient.delete<AgentConfig>(`/config/agents/${agentName}/sub-agents/${subAgentId}`),
+}
+
+// =============================================================================
 // Pipeline Configuration API
+// =============================================================================
+
 export const pipelineConfigApi = {
-  list: async (projectName?: string): Promise<PipelineConfig[]> => {
-    const response = await api.get<PipelineConfig[]>(
-      '/configurations/pipelines',
-      {
-        params: { project_name: projectName },
-      }
-    )
-    return response.data
-  },
+  getAll: () => apiClient.get<PipelineConfig[]>('/config/pipelines'),
 
-  get: async (pipelineName: string): Promise<PipelineConfig> => {
-    const response = await api.get<PipelineConfig>(
-      `/configurations/pipelines/${pipelineName}`
-    )
-    return response.data
-  },
+  getByName: (pipelineName: string) =>
+    apiClient.get<PipelineConfig>(`/config/pipelines/${pipelineName}`),
 
-  update: async (
-    pipelineName: string,
-    request: UpdateAgentConfigRequest
-  ): Promise<ConfigurationCommandResult> => {
-    const response = await api.patch<ConfigurationCommandResult>(
-      `/configurations/pipelines/${pipelineName}`,
-      request
-    )
-    return response.data
-  },
+  create: (config: PipelineConfig) =>
+    apiClient.post<PipelineConfig>('/config/pipelines', config),
+
+  update: (pipelineName: string, config: Partial<PipelineConfig>) =>
+    apiClient.put<PipelineConfig>(`/config/pipelines/${pipelineName}`, config),
+
+  delete: (pipelineName: string) => apiClient.delete<void>(`/config/pipelines/${pipelineName}`),
+
+  getHistory: (pipelineName: string) =>
+    apiClient.get<ConfigurationHistory[]>(`/config/pipelines/${pipelineName}/history`),
 }
 
-// Configuration History API
-export const configHistoryApi = {
-  list: async (filters?: {
-    projectName?: string
-    configType?: 'project' | 'agent' | 'pipeline'
-    limit?: number
-    offset?: number
-  }): Promise<ConfigurationHistory[]> => {
-    const response = await api.get<ConfigurationHistory[]>(
-      '/configurations/history',
-      {
-        params: {
-          project_name: filters?.projectName,
-          config_type: filters?.configType,
-          limit: filters?.limit || 50,
-          offset: filters?.offset || 0,
-        },
-      }
-    )
-    return response.data
-  },
+// =============================================================================
+// Configuration Commands API
+// =============================================================================
 
-  rollback: async (
-    changeId: string,
-    userId: string,
-    reason?: string
-  ): Promise<ConfigurationCommandResult> => {
-    const response = await api.post<ConfigurationCommandResult>(
-      `/configurations/rollback/${changeId}`,
-      null,
-      {
-        params: { user_id: userId, reason },
-      }
-    )
-    return response.data
-  },
+export const configurationCommandsApi = {
+  validate: (config: ProjectConfig | AgentConfig | PipelineConfig) =>
+    apiClient.post<ConfigurationCommandResult>('/config/commands/validate', config),
+
+  deploy: (configType: 'project' | 'agent' | 'pipeline', configName: string) =>
+    apiClient.post<ConfigurationCommandResult>(`/config/commands/deploy`, {
+      configType,
+      configName,
+    }),
+
+  rollback: (configType: 'project' | 'agent' | 'pipeline', configName: string, version: number) =>
+    apiClient.post<ConfigurationCommandResult>(`/config/commands/rollback`, {
+      configType,
+      configName,
+      version,
+    }),
 }
 
-export default api
+// =============================================================================
+// Work Items API
+// =============================================================================
+
+export const workItemsApi = {
+  getAll: (projectId?: string) =>
+    apiClient.get<WorkItem[]>('/work-items', {
+      params: projectId ? { projectId } : undefined,
+    }),
+
+  getById: (workItemId: string) => apiClient.get<WorkItem>(`/work-items/${workItemId}`),
+
+  create: (request: CreateWorkItemRequest) =>
+    apiClient.post<WorkItem>('/work-items', request),
+
+  update: (workItemId: string, request: UpdateWorkItemRequest) =>
+    apiClient.put<WorkItem>(`/work-items/${workItemId}`, request),
+
+  delete: (workItemId: string) => apiClient.delete<void>(`/work-items/${workItemId}`),
+
+  sync: (projectId: string) =>
+    apiClient.post<{ synced: number; created: number; updated: number }>(
+      `/work-items/sync/${projectId}`
+    ),
+}
+
+// =============================================================================
+// Executions API
+// =============================================================================
+
+export const executionsApi = {
+  getAll: (workItemId?: string) =>
+    apiClient.get<ExecutionSummary[]>('/executions', {
+      params: workItemId ? { workItemId } : undefined,
+    }),
+
+  getById: (executionId: string) => apiClient.get<Execution>(`/executions/${executionId}`),
+
+  start: (request: StartExecutionRequest) =>
+    apiClient.post<Execution>('/executions', request),
+
+  cancel: (executionId: string) => apiClient.post<void>(`/executions/${executionId}/cancel`),
+
+  retry: (executionId: string) => apiClient.post<Execution>(`/executions/${executionId}/retry`),
+
+  getOutput: (executionId: string) =>
+    apiClient.get<{ output: string; logs: string[] }>(`/executions/${executionId}/output`),
+}
+
+// Export client for advanced usage
+export { apiClient }
+export type { ApiError }

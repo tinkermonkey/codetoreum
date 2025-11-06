@@ -26,10 +26,12 @@ pytestmark = pytest.mark.integration
 
 @pytest.fixture
 def docker_config():
-    """Create Docker configuration."""
+    """Create Docker configuration with resource limits to prevent memory exhaustion."""
     return DockerConfig(
         default_timeout=30,
         remove_on_completion=True,
+        memory_limit="256m",  # Limit test containers to 256MB RAM
+        cpu_limit=0.5,  # Limit to 0.5 CPU cores
     )
 
 

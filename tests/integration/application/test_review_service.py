@@ -41,7 +41,9 @@ class MockEventStore:
 @pytest.fixture
 def event_store():
     """Create mock event store."""
-    return MockEventStore()
+    store = MockEventStore()
+    yield store
+    store.events.clear()
 
 
 @pytest.fixture

@@ -37,11 +37,13 @@ pytest-asyncio = "^0.24.0"
 pytest-cov = "^6.0.0"
 pytest-mock = "^3.14.0"
 pytest-timeout = "^2.2.0"
+pytest-xdist = "^3.5.0"
 ruff = "^0.7.4"
 black = "^24.10.0"
 mypy = "^1.13.0"
 pre-commit = "^4.0.1"
 testcontainers = "^4.8.2"
+slowapi = "^0.1.9"
 
 [tool.poetry.group.docs.dependencies]
 mkdocs = "^1.6.1"
@@ -189,12 +191,8 @@ asyncio_default_fixture_loop_scope = "function"
 addopts = [
     "-v",
     "--strict-markers",
-    "--cov=src/codetoreum",
-    "--cov-report=term-missing",
-    "--cov-report=html",
-    "--cov-report=xml",
-    # Coverage requirement disabled until implementation begins
-    # "--cov-fail-under=80",
+    # Coverage collection removed from default runs to reduce memory usage
+    # Use 'make test-cov' or add --cov flags manually when coverage is needed
 ]
 markers = [
     "unit: Unit tests for isolated components",

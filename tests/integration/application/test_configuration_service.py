@@ -48,13 +48,17 @@ from codetoreum.ports.output.config_store import (
 @pytest.fixture
 async def config_store():
     """Create in-memory config store."""
-    return InMemoryConfigStore()
+    store = InMemoryConfigStore()
+    yield store
+    store.clear()
 
 
 @pytest.fixture
 async def event_store():
     """Create in-memory event store."""
-    return InMemoryEventStore()
+    store = InMemoryEventStore()
+    yield store
+    store.clear()
 
 
 @pytest.fixture
@@ -75,8 +79,17 @@ async def event_bus(event_store):
         def get_event_types(self):
             return []  # Wildcard handler - receives all events
 
-    bus.register_handler(EventStoreHandler(event_store))
-    return bus
+    handler = EventStoreHandler(event_store)
+    bus.register_handler(handler)
+    yield bus
+    # Cleanup: unregister all handlers
+    bus.unregister_handler(handler)
+    for handlers in list(bus._handlers.values()):
+        for h in list(handlers):
+            bus.unregister_handler(h)
+    for h in list(bus._wildcard_handlers):
+        bus.unregister_handler(h)
+    bus.reset_statistics()
 
 
 @pytest.fixture
