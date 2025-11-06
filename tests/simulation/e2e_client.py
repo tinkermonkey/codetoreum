@@ -57,6 +57,9 @@ class WebSocketEventCollector:
 
         Returns:
             Event data or None if timeout
+
+        Raises:
+            ConnectionError: If WebSocket is disconnected
         """
         try:
             # TestClient WebSocket is synchronous
@@ -68,6 +71,9 @@ class WebSocketEventCollector:
                 self._event_types.add(data.get("type", ""))
 
             return data
+        except ConnectionError as e:
+            logger.error(f"WebSocket connection lost: {e}")
+            raise ConnectionError(f"WebSocket disconnected while collecting events: {e}")
         except Exception as e:
             logger.debug(f"Failed to receive event: {e}")
             return None
@@ -97,7 +103,7 @@ class WebSocketEventCollector:
         event_type: str,
         timeout: float = 10.0,
         filter_fn: Optional[callable] = None,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any]:
         """
         Wait for specific event type with optional filtering.
 
@@ -107,7 +113,11 @@ class WebSocketEventCollector:
             filter_fn: Optional function to filter events
 
         Returns:
-            Matching event or None if timeout
+            Matching event
+
+        Raises:
+            TimeoutError: If event not received within timeout
+            ConnectionError: If WebSocket disconnects
         """
         # First check already received events
         for event in self.received_events:
@@ -115,13 +125,19 @@ class WebSocketEventCollector:
                 return event
 
         # Receive new events until match or timeout
-        start = asyncio.get_event_loop().time()
-        while (asyncio.get_event_loop().time() - start) < timeout:
+        import time
+        start = time.time()
+        while (time.time() - start) < timeout:
             event = self.collect_event(timeout=0.1)
             if event and self._matches_event(event, event_type, filter_fn):
                 return event
 
-        return None
+        # Timeout - provide clear error message
+        raise TimeoutError(
+            f"Event '{event_type}' not received within {timeout}s. "
+            f"Received {len(self.received_events)} events. "
+            f"Event types: {sorted(self._event_types)}"
+        )
 
     def assert_event_received(
         self,
@@ -467,14 +483,6 @@ class SimulationE2EClient:
         """
         self.clock.advance(delta)
 
-    def advance_seconds(self, seconds: float):
-        """Advance clock by seconds."""
-        self.advance_time(timedelta(seconds=seconds))
-
-    def advance_minutes(self, minutes: float):
-        """Advance clock by minutes."""
-        self.advance_time(timedelta(minutes=minutes))
-
     # ========================================================================
     # Helper Methods for Test Assertions
     # ========================================================================
@@ -501,18 +509,29 @@ class SimulationE2EClient:
         Raises:
             TimeoutError: If status not reached within timeout
         """
-        start = asyncio.get_event_loop().time()
-        while (asyncio.get_event_loop().time() - start) < timeout:
-            work_item = self.get_work_item(work_item_id)
-            if work_item["status"] == expected_status:
-                return work_item
+        import time
+        start = time.time()
+        last_status = None
+        while (time.time() - start) < timeout:
+            try:
+                work_item = self.get_work_item(work_item_id)
+                last_status = work_item["status"]
+                if last_status == expected_status:
+                    return work_item
+            except Exception as e:
+                logger.warning(f"Failed to fetch work item status: {e}")
             await asyncio.sleep(poll_interval)
 
         # Timeout - get final state for error message
-        work_item = self.get_work_item(work_item_id)
+        try:
+            work_item = self.get_work_item(work_item_id)
+            last_status = work_item["status"]
+        except Exception:
+            pass
+
         raise TimeoutError(
-            f"Work item {work_item_id} did not reach status {expected_status} "
-            f"within {timeout}s. Current status: {work_item['status']}"
+            f"Work item {work_item_id} did not reach status '{expected_status}' "
+            f"within {timeout}s. Last known status: '{last_status}'"
         )
 
     async def wait_for_execution_status(

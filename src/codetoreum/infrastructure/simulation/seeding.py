@@ -798,6 +798,162 @@ class SimulationDataSeeder:
         return self
 
     # =========================================================================
+    # Mock Adapter Configuration Methods
+    # =========================================================================
+
+    def configure_agent_behavior(
+        self,
+        agent_name: str,
+        response: Optional[str] = None,
+        delay_seconds: float = 0.0,
+        exit_code: int = 0,
+    ) -> "SimulationDataSeeder":
+        """
+        Configure mock adapter behavior for a specific agent.
+
+        Args:
+            agent_name: Agent name to configure
+            response: Mock LLM response (default: success message)
+            delay_seconds: Simulated delay before response
+            exit_code: Container exit code (0 = success)
+
+        Returns:
+            Self for chaining
+        """
+        from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
+
+        mock_llm: MockLLMAdapter = self.adapters.llm_provider
+
+        if response is None:
+            response = f"Mock response from {agent_name}: Task completed successfully"
+
+        # Set response for this agent
+        mock_llm.set_agent_response(agent_name, response)
+        mock_llm.set_delay(delay_seconds)
+
+        logger.debug(f"Configured agent behavior: {agent_name}, exit_code={exit_code}")
+        return self
+
+    def configure_agent_failure(
+        self,
+        agent_name: str,
+        failure_mode: str = "timeout",
+        failure_count: int = 1,
+        error_message: Optional[str] = None,
+    ) -> "SimulationDataSeeder":
+        """
+        Configure agent to fail in specific ways.
+
+        Args:
+            agent_name: Agent name to configure
+            failure_mode: Type of failure ("timeout", "error", "intermittent")
+            failure_count: Number of failures before success (0 = always fail)
+            error_message: Custom error message
+
+        Returns:
+            Self for chaining
+        """
+        from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
+
+        mock_llm: MockLLMAdapter = self.adapters.llm_provider
+
+        if error_message is None:
+            error_message = f"Mock failure from {agent_name}: {failure_mode}"
+
+        # Configure failure behavior
+        mock_llm.set_agent_failure(
+            agent_name=agent_name,
+            failure_mode=failure_mode,
+            failure_count=failure_count,
+            error_message=error_message,
+        )
+
+        logger.debug(
+            f"Configured agent failure: {agent_name}, mode={failure_mode}, count={failure_count}"
+        )
+        return self
+
+    def configure_review_behavior(
+        self,
+        reviewer_name: str,
+        approval_rate: float = 0.8,
+        feedback_template: Optional[str] = None,
+    ) -> "SimulationDataSeeder":
+        """
+        Configure mock review behavior for reviewer agents.
+
+        Args:
+            reviewer_name: Reviewer agent name
+            approval_rate: Probability of approval (0.0 - 1.0)
+            feedback_template: Template for review feedback
+
+        Returns:
+            Self for chaining
+        """
+        from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
+
+        mock_llm: MockLLMAdapter = self.adapters.llm_provider
+
+        if feedback_template is None:
+            feedback_template = (
+                "Code review feedback from {reviewer}: "
+                "Please address the following issues:\n"
+                "1. Add more error handling\n"
+                "2. Improve code documentation\n"
+                "3. Add unit tests"
+            )
+
+        # Set review responses based on approval rate
+        import random
+
+        random.seed(42)  # Deterministic for testing
+
+        def review_response_fn():
+            if random.random() < approval_rate:
+                return f"APPROVED: Code review passed by {reviewer_name}"
+            else:
+                return feedback_template.format(reviewer=reviewer_name)
+
+        mock_llm.set_agent_response_fn(reviewer_name, review_response_fn)
+
+        logger.debug(
+            f"Configured review behavior: {reviewer_name}, approval_rate={approval_rate}"
+        )
+        return self
+
+    def configure_container_output(
+        self,
+        exit_code: int = 0,
+        stdout: Optional[str] = None,
+        stderr: Optional[str] = None,
+    ) -> "SimulationDataSeeder":
+        """
+        Configure mock container execution output.
+
+        Args:
+            exit_code: Container exit code
+            stdout: Standard output
+            stderr: Standard error output
+
+        Returns:
+            Self for chaining
+        """
+        from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
+
+        fake_container: FakeContainerAdapter = self.adapters.container_runtime
+
+        fake_container.set_default_exit_code(exit_code)
+
+        if stdout:
+            fake_container.set_default_stdout(stdout)
+
+        if stderr:
+            fake_container.set_default_stderr(stderr)
+
+        logger.debug(f"Configured container output: exit_code={exit_code}")
+        return self
+
+    # =========================================================================
     # Cleanup Methods
     # =========================================================================
 
