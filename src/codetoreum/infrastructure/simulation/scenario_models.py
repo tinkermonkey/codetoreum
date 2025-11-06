@@ -6,7 +6,7 @@ These models define the schema for declarative scenario configuration files.
 
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ScenarioProjectModel(BaseModel):
@@ -233,10 +233,8 @@ class ScenarioModel(BaseModel):
 
         return v
 
-    class Config:
-        """Pydantic config."""
-
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "name": "Example Scenario",
                 "description": "An example scenario for testing",
@@ -275,3 +273,4 @@ class ScenarioModel(BaseModel):
                 ],
             }
         }
+    )
