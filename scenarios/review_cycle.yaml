@@ -1,0 +1,243 @@
+# Review Cycle Scenario
+#
+# Scenario demonstrating review feedback loops and iterative development.
+# Tests the maker-checker review process with feedback and revisions.
+
+name: "Review Cycle Scenario"
+description: "Scenario testing review feedback loops and iterative refinement"
+version: "1.0"
+
+# Simulation settings (moderate speed for observability)
+speed_multiplier: 10.0
+auto_advance: false
+
+# Projects
+projects:
+  - name: "review-cycle-project"
+    description: "Project demonstrating review and feedback workflows"
+    default_branch: "main"
+    metadata:
+      review_policy: "mandatory"
+      approval_required: true
+
+# Workflows
+workflows:
+  - name: "review-workflow"
+    description: "Workflow with multiple review stages"
+    stages:
+      - name: "implement"
+        agent_type: "coder"
+        description: "Initial implementation"
+        order: 1
+        max_retries: 3
+        timeout_seconds: 3600
+
+      - name: "peer-review"
+        agent_type: "peer_reviewer"
+        description: "Peer code review"
+        order: 2
+        max_retries: 2
+        timeout_seconds: 1800
+
+      - name: "revise"
+        agent_type: "coder"
+        description: "Address review feedback"
+        order: 3
+        max_retries: 3
+        timeout_seconds: 2400
+        entry_conditions:
+          requires_feedback: true
+
+      - name: "senior-review"
+        agent_type: "senior_reviewer"
+        description: "Senior engineer final review"
+        order: 4
+        max_retries: 1
+        timeout_seconds: 1800
+
+      - name: "final-revise"
+        agent_type: "coder"
+        description: "Address final feedback"
+        order: 5
+        max_retries: 2
+        timeout_seconds: 1800
+        entry_conditions:
+          requires_senior_approval: true
+
+# Agents
+agents:
+  - name: "coder"
+    agent_type: "coder"
+    description: "Developer implementing features and addressing feedback"
+    capabilities:
+      - "code_generation"
+    llm_model: "claude-3-5-sonnet-20241022"
+    temperature: 0.7
+    max_tokens: 6144
+    system_prompt: |
+      You are a developer implementing features. When you receive review feedback,
+      carefully address each point and explain your changes.
+    enabled: true
+    metadata:
+      review_mode: false
+      accepts_feedback: true
+
+  - name: "peer_reviewer"
+    agent_type: "peer_reviewer"
+    description: "Peer reviewer focusing on code quality"
+    capabilities:
+      - "code_review"
+    llm_model: "claude-3-5-sonnet-20241022"
+    temperature: 0.5
+    max_tokens: 4096
+    system_prompt: |
+      You are a peer reviewer. Provide constructive feedback on:
+      - Code quality and readability
+      - Test coverage
+      - Error handling
+      - Documentation
+    enabled: true
+    metadata:
+      review_style: "constructive"
+      strictness: "moderate"
+
+  - name: "senior_reviewer"
+    agent_type: "senior_reviewer"
+    description: "Senior engineer conducting final review"
+    capabilities:
+      - "code_review"
+    llm_model: "claude-3-5-sonnet-20241022"
+    temperature: 0.4
+    max_tokens: 4096
+    system_prompt: |
+      You are a senior engineer doing final review. Focus on:
+      - Architecture and design decisions
+      - Performance implications
+      - Security considerations
+      - Long-term maintainability
+    enabled: true
+    metadata:
+      review_style: "thorough"
+      strictness: "strict"
+      veto_power: true
+
+# Work Items
+work_items:
+  - title: "Implement user profile API"
+    description: |
+      Create REST API endpoints for user profile management.
+
+      Requirements:
+      - GET /api/users/{id}/profile
+      - PUT /api/users/{id}/profile
+      - Validation and error handling
+      - Unit and integration tests
+
+      This task will go through multiple review cycles.
+    labels:
+      - "feature"
+      - "api"
+      - "review-required"
+    priority: "high"
+    status: "new"
+    metadata:
+      requires_reviews: 2
+      estimated_review_cycles: 2
+
+  - title: "Add password reset functionality"
+    description: |
+      Implement secure password reset flow.
+
+      Requirements:
+      - Email-based reset token
+      - Token expiration
+      - Secure password validation
+      - Comprehensive tests
+
+      Expected to need feedback iterations.
+    labels:
+      - "feature"
+      - "security"
+      - "review-required"
+    priority: "high"
+    status: "new"
+    metadata:
+      requires_reviews: 2
+      security_sensitive: true
+
+  - title: "Create data export utility"
+    description: |
+      Build utility for exporting user data (GDPR compliance).
+
+      Requirements:
+      - Export to JSON/CSV formats
+      - Data filtering and pagination
+      - Privacy considerations
+      - Documentation
+
+      Will need careful review for data handling.
+    labels:
+      - "feature"
+      - "compliance"
+      - "review-required"
+    priority: "medium"
+    status: "new"
+    metadata:
+      requires_reviews: 2
+      compliance_requirement: "GDPR"
+
+  - title: "Optimize image upload pipeline"
+    description: |
+      Improve performance of image upload and processing.
+
+      Requirements:
+      - Async upload handling
+      - Image compression
+      - Thumbnail generation
+      - Progress tracking
+
+      Performance improvements require thorough review.
+    labels:
+      - "performance"
+      - "media"
+      - "review-required"
+    priority: "medium"
+    status: "new"
+    metadata:
+      requires_reviews: 2
+      performance_target: "< 2s upload time"
+
+  - title: "Refactor authentication middleware"
+    description: |
+      Clean up and improve authentication middleware.
+
+      - Simplify code structure
+      - Add better error messages
+      - Improve test coverage
+      - Update documentation
+
+      Refactoring requires careful review to avoid breaking changes.
+    labels:
+      - "refactoring"
+      - "authentication"
+      - "review-required"
+    priority: "medium"
+    status: "new"
+    metadata:
+      requires_reviews: 2
+      breaking_changes_risk: "low"
+
+# Additional metadata
+metadata:
+  scenario_type: "review_cycle"
+  author: "codetoreum-team"
+  review_rounds: "multiple"
+  feedback_enabled: true
+  tags:
+    - "review"
+    - "feedback"
+    - "iterative"
+    - "maker-checker"
+  notes: |
+    This scenario demonstrates the review and feedback loop functionality.
+    Each work item should go through at least one feedback-revision cycle.
