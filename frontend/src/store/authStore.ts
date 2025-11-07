@@ -55,7 +55,7 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       isAuthenticated: false,
-      isLoading: false,
+      isLoading: true, // Start as loading to prevent race conditions
       error: null,
       lastAuthTime: null,
 
