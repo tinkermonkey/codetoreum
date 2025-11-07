@@ -11,11 +11,12 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3000,
+    port: 3010,
     proxy: {
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,
+        ws: true, // Enable WebSocket proxying
       },
     },
   },

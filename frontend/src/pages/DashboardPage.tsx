@@ -9,7 +9,7 @@ import { Card } from '../components/ui/card'
 import type { WorkItemStatus, ExecutionStatus } from '../types'
 
 export default function DashboardPage() {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth()
 
   // Fetch work items
   const { data: workItems = [], isLoading: loadingWorkItems } = useQuery({
@@ -24,7 +24,8 @@ export default function DashboardPage() {
   })
 
   // WebSocket for real-time events (uses httpOnly cookies for auth)
-  const { events, isConnected, subscribe } = useWebSocket(isAuthenticated)
+  // Wait for auth to finish loading before connecting to prevent race condition
+  const { events, isConnected, subscribe } = useWebSocket(isAuthenticated, isAuthLoading)
 
   // Subscribe to execution events on mount
   React.useEffect(() => {
