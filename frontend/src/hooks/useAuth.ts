@@ -46,7 +46,10 @@ export function useAuth() {
   } = useAuthStore()
 
   useEffect(() => {
+    console.log('[useAuth] Effect running:', { isAuthenticated, isLoading })
+
     const initializeAuth = async () => {
+      console.log('[useAuth] initializeAuth starting, setting loading=true')
       setLoading(true)
 
       // Check for token in URL query parameter
@@ -96,23 +99,24 @@ export function useAuth() {
       // Check if we're already authenticated by making an API call
       // The browser will automatically send the httpOnly cookie
       try {
+        console.log('[useAuth] Checking token-info...')
         await api.get('/v2/auth/token-info')
+        console.log('[useAuth] Token valid, setting authenticated=true, loading=false')
         setAuthenticated(true)
         setLoading(false)
       } catch (error) {
         // Not authenticated
+        console.log('[useAuth] Token invalid, setting authenticated=false, loading=false')
         setAuthenticated(false)
         setLoading(false)
       }
     }
 
-    // Only initialize if not already authenticated
-    if (!isAuthenticated) {
-      initializeAuth()
-    } else {
-      setLoading(false)
-    }
-  }, [isAuthenticated, setAuthenticated, setLoading, setError])
+    // ALWAYS validate authentication, even if persisted state says authenticated
+    // This ensures the cookie is still valid
+    console.log('[useAuth] Calling initializeAuth() to validate cookie')
+    initializeAuth()
+  }, [setAuthenticated, setLoading, setError])
 
   const logout = async () => {
     try {

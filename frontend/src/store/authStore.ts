@@ -59,18 +59,24 @@ export const useAuthStore = create<AuthState>()(
       error: null,
       lastAuthTime: null,
 
-      setAuthenticated: (authenticated: boolean) =>
+      setAuthenticated: (authenticated: boolean) => {
+        console.log('[authStore] setAuthenticated:', authenticated)
         set({
           isAuthenticated: authenticated,
           error: null,
           lastAuthTime: authenticated ? Date.now() : null
-        }),
+        })
+      },
 
-      setLoading: (loading: boolean) =>
-        set({ isLoading: loading }),
+      setLoading: (loading: boolean) => {
+        console.log('[authStore] setLoading:', loading)
+        set({ isLoading: loading })
+      },
 
-      setError: (error: string | null) =>
-        set({ error, isLoading: false }),
+      setError: (error: string | null) => {
+        console.log('[authStore] setError:', error)
+        set({ error, isLoading: false })
+      },
 
       clearAuth: () =>
         set({

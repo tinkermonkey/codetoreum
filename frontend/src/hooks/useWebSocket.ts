@@ -91,14 +91,19 @@ export function useWebSocket(
   // Connect/disconnect based on authentication status
   // IMPORTANT: Wait for auth to finish loading before connecting
   useEffect(() => {
+    console.log('[useWebSocket] Effect running:', { isAuthenticated, isAuthLoading })
+
     // Don't connect while auth is loading (prevents race condition)
     if (isAuthLoading) {
+      console.log('[useWebSocket] Auth still loading, skipping connection')
       return
     }
 
     if (isAuthenticated) {
+      console.log('[useWebSocket] Calling connect')
       connect(isAuthenticated)
     } else {
+      console.log('[useWebSocket] Calling disconnect')
       disconnect()
     }
 
