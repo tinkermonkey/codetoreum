@@ -104,13 +104,19 @@ const EVENT_CONFIGS: Record<WorkflowEventType, EventConfig> = {
   },
 };
 
-export function EventIcon({ eventType, className }: EventIconProps) {
+export function EventIcon({ eventType, className }: EventIconProps): React.ReactElement {
   const config = EVENT_CONFIGS[eventType];
   const Icon = config.icon;
+  const label = getEventLabel(eventType);
 
   return (
-    <div className={cn('p-2 rounded-full', config.bgColor, className)}>
-      <Icon className={cn('w-4 h-4', config.color)} />
+    <div
+      className={cn('p-2 rounded-full', config.bgColor, className)}
+      role="img"
+      aria-label={label}
+      title={label}
+    >
+      <Icon className={cn('w-4 h-4', config.color)} aria-hidden="true" />
     </div>
   );
 }

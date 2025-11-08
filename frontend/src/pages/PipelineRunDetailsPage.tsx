@@ -7,13 +7,15 @@
 
 import React, { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+
 import { WorkflowRunSidebar } from '../components/workflow-runs/WorkflowRunSidebar';
 import { WorkflowRunDetails } from '../components/workflow-runs/WorkflowRunDetails';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { useWorkflowRunsUIStore } from '../store/workflowRunsUIStore';
 import { useWorkflowWebSocket } from '../hooks/useWorkflowWebSocket';
 import { useAuthStore } from '../store/authStore';
 
-export function PipelineRunDetailsPage() {
+export function PipelineRunDetailsPage(): React.ReactElement {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const { selectedWorkflowId, setSelectedWorkflow } = useWorkflowRunsUIStore();
@@ -22,35 +24,42 @@ export function PipelineRunDetailsPage() {
   // Enable real-time updates via WebSocket
   useWorkflowWebSocket(isAuthenticated, isAuthLoading);
 
-  // Sync URL param with store
+  // Sync URL param with store on mount and when URL changes
   useEffect(() => {
-    if (id && id !== selectedWorkflowId) {
+    // Direct navigation to /workflows/runs/123 should update store
+    if (id) {
       setSelectedWorkflow(id);
-    } else if (!id && selectedWorkflowId) {
-      setSelectedWorkflow(null);
     }
-  }, [id, selectedWorkflowId, setSelectedWorkflow]);
+  }, [id, setSelectedWorkflow]);
 
-  // Update URL when selection changes
+  // Update URL when selection changes from UI interaction
   useEffect(() => {
-    if (selectedWorkflowId && selectedWorkflowId !== id) {
-      navigate(`/workflows/runs/${selectedWorkflowId}`, { replace: true });
-    } else if (!selectedWorkflowId && id) {
-      navigate('/workflows/runs', { replace: true });
+    // Only navigate if there's a mismatch between store and URL
+    if (selectedWorkflowId !== id) {
+      if (selectedWorkflowId) {
+        navigate(`/workflows/runs/${selectedWorkflowId}`, { replace: true });
+      } else if (id) {
+        // User deselected, go back to list view
+        navigate('/workflows/runs', { replace: true });
+      }
     }
   }, [selectedWorkflowId, id, navigate]);
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
       {/* Sidebar */}
-      <div className="w-96 flex-shrink-0">
-        <WorkflowRunSidebar />
-      </div>
+      <ErrorBoundary>
+        <div className="w-96 flex-shrink-0">
+          <WorkflowRunSidebar />
+        </div>
+      </ErrorBoundary>
 
       {/* Main content */}
-      <div className="flex-1 overflow-hidden">
-        <WorkflowRunDetails workflowRunId={selectedWorkflowId} />
-      </div>
+      <ErrorBoundary>
+        <div className="flex-1 overflow-hidden">
+          <WorkflowRunDetails workflowRunId={selectedWorkflowId} />
+        </div>
+      </ErrorBoundary>
     </div>
   );
 }

@@ -20,6 +20,10 @@ export type WorkflowEventType =
   | 'ErrorOccurred'
   | 'StatusUpdate';
 
+export interface EventMetadata {
+  [key: string]: string | number | boolean | null;
+}
+
 export interface WorkflowEventData {
   executionId?: string;
   agentName?: string;
@@ -28,7 +32,7 @@ export interface WorkflowEventData {
   message?: string;
   errorMessage?: string;
   exitCode?: number;
-  metadata?: Record<string, any>;
+  metadata?: EventMetadata;
 }
 
 export interface WorkflowEvent {

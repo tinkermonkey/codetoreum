@@ -5,16 +5,17 @@
  */
 
 import React from 'react';
+import { Loader2, Inbox } from 'lucide-react';
+
 import { useWorkflowRunDetails } from '../../hooks/useWorkflowRunDetails';
 import { WorkflowHeader } from './WorkflowHeader';
 import { EventTimeline } from './EventTimeline';
-import { Loader2, Inbox } from 'lucide-react';
 
 interface WorkflowRunDetailsProps {
   workflowRunId: string | null;
 }
 
-export function WorkflowRunDetails({ workflowRunId }: WorkflowRunDetailsProps) {
+export function WorkflowRunDetails({ workflowRunId }: WorkflowRunDetailsProps): React.ReactElement {
   const { workflowRun, events, isLoading, error } = useWorkflowRunDetails(workflowRunId);
 
   if (!workflowRunId) {

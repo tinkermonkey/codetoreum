@@ -7,17 +7,23 @@
 
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+
 import { useWebSocket } from './useWebSocket';
+
+interface WorkflowWebSocketData {
+  workflowRunId?: string;
+  workflowId?: string;
+  status?: string;
+  eventType?: string;
+}
 
 interface WorkflowWebSocketMessage {
   type: string;
-  data: {
-    workflowRunId?: string;
-    workflowId?: string;
-    status?: string;
-    eventType?: string;
-    [key: string]: any;
-  };
+  data: WorkflowWebSocketData;
+}
+
+interface UseWorkflowWebSocketReturn {
+  isConnected: boolean;
 }
 
 /**
@@ -27,7 +33,7 @@ interface WorkflowWebSocketMessage {
 export function useWorkflowWebSocket(
   isAuthenticated: boolean,
   isAuthLoading: boolean
-) {
+): UseWorkflowWebSocketReturn {
   const queryClient = useQueryClient();
   const { isConnected, events, subscribe, unsubscribe } = useWebSocket(
     isAuthenticated,
@@ -37,7 +43,7 @@ export function useWorkflowWebSocket(
   // Subscribe to workflow-related events
   useEffect(() => {
     if (!isConnected) {
-      return;
+      return undefined;
     }
 
     // Subscribe to workflow execution events
@@ -58,6 +64,7 @@ export function useWorkflowWebSocket(
 
     eventTypes.forEach((eventType) => subscribe(eventType));
 
+    // Cleanup function to unsubscribe from all event types
     return () => {
       eventTypes.forEach((eventType) => unsubscribe(eventType));
     };

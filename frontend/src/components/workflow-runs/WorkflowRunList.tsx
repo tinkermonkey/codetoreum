@@ -5,9 +5,10 @@
  */
 
 import React from 'react';
+import { Inbox } from 'lucide-react';
+
 import { WorkflowRun } from '../../types/workflow-run';
-import { WorkflowRunCard } from './WorkflowRunCard';
-import { Loader2, Inbox } from 'lucide-react';
+import { WorkflowRunCard, WorkflowRunCardSkeleton } from './WorkflowRunCard';
 
 interface WorkflowRunListProps {
   runs: WorkflowRun[];
@@ -23,11 +24,13 @@ export function WorkflowRunList({
   onSelectRun,
   isLoading = false,
   emptyMessage = 'No workflow runs found',
-}: WorkflowRunListProps) {
+}: WorkflowRunListProps): React.ReactElement {
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+      <div className="space-y-2">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <WorkflowRunCardSkeleton key={i} />
+        ))}
       </div>
     );
   }

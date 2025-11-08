@@ -5,16 +5,17 @@
  */
 
 import React from 'react';
-import { WorkflowRun } from '../../types/workflow-run';
 import { format } from 'date-fns';
 import { Clock, User, Hash, GitBranch, Calendar } from 'lucide-react';
+
+import { WorkflowRun } from '../../types/workflow-run';
 import { cn } from '../../lib/utils';
 
 interface WorkflowHeaderProps {
   workflowRun: WorkflowRun;
 }
 
-export function WorkflowHeader({ workflowRun }: WorkflowHeaderProps) {
+export function WorkflowHeader({ workflowRun }: WorkflowHeaderProps): React.ReactElement {
   const statusConfig = {
     pending: {
       color: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
@@ -51,6 +52,8 @@ export function WorkflowHeader({ workflowRun }: WorkflowHeaderProps) {
             'px-3 py-1 rounded-full text-sm font-medium',
             statusConfig.color
           )}
+          role="status"
+          aria-label={`Workflow status: ${statusConfig.label}`}
         >
           {statusConfig.label}
         </span>

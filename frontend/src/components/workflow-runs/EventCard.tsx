@@ -5,17 +5,18 @@
  */
 
 import React from 'react';
-import { WorkflowEvent } from '../../types/workflow-event';
-import { EventIcon, getEventLabel } from './EventIcon';
 import { format } from 'date-fns';
 import { Terminal } from 'lucide-react';
+
+import { WorkflowEvent } from '../../types/workflow-event';
+import { EventIcon, getEventLabel } from './EventIcon';
 
 interface EventCardProps {
   event: WorkflowEvent;
   isLast?: boolean;
 }
 
-export function EventCard({ event, isLast = false }: EventCardProps) {
+export const EventCard = React.memo<EventCardProps>(({ event, isLast = false }) => {
   const timestamp = format(new Date(event.timestamp), 'HH:mm:ss');
 
   return (
@@ -95,4 +96,4 @@ export function EventCard({ event, isLast = false }: EventCardProps) {
       </div>
     </div>
   );
-}
+});

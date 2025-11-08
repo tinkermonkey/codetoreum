@@ -6,7 +6,7 @@
 
 export { WorkflowRunSidebar } from './WorkflowRunSidebar';
 export { WorkflowRunList } from './WorkflowRunList';
-export { WorkflowRunCard } from './WorkflowRunCard';
+export { WorkflowRunCard, WorkflowRunCardSkeleton } from './WorkflowRunCard';
 export { WorkflowRunDetails } from './WorkflowRunDetails';
 export { WorkflowHeader } from './WorkflowHeader';
 export { EventTimeline } from './EventTimeline';

@@ -6,12 +6,13 @@
 
 import React from 'react';
 import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
+
 import { useWorkflowRunsUIStore, WorkflowRunTab } from '../../store/workflowRunsUIStore';
 import { useActiveWorkflowRuns, useCompletedWorkflowRuns } from '../../hooks/useWorkflowRuns';
 import { WorkflowRunList } from './WorkflowRunList';
 import { cn } from '../../lib/utils';
 
-export function WorkflowRunSidebar() {
+export function WorkflowRunSidebar(): React.ReactElement {
   const {
     selectedTab,
     selectedWorkflowId,

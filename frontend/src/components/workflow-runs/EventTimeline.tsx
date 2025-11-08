@@ -1,20 +1,48 @@
 /**
  * EventTimeline Component
  *
- * Displays a chronological timeline of workflow events.
+ * Displays a chronological timeline of workflow events with pagination.
  */
 
-import React from 'react';
+import React, { useState, useMemo } from 'react';
+import { Loader2, Activity, ChevronDown } from 'lucide-react';
+
 import { WorkflowEvent } from '../../types/workflow-event';
 import { EventCard } from './EventCard';
-import { Loader2, Activity } from 'lucide-react';
+import { Button } from '../ui/button';
 
 interface EventTimelineProps {
   events: WorkflowEvent[];
   isLoading?: boolean;
+  initialPageSize?: number;
 }
 
-export function EventTimeline({ events, isLoading = false }: EventTimelineProps) {
+export function EventTimeline({
+  events,
+  isLoading = false,
+  initialPageSize = 20
+}: EventTimelineProps): React.ReactElement {
+  const [displayCount, setDisplayCount] = useState(initialPageSize);
+
+  // Sort events by timestamp (newest first) - memoized to avoid re-sorting
+  const sortedEvents = useMemo(() =>
+    [...events].sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    ),
+    [events]
+  );
+
+  const visibleEvents = useMemo(() =>
+    sortedEvents.slice(0, displayCount),
+    [sortedEvents, displayCount]
+  );
+
+  const hasMore = sortedEvents.length > displayCount;
+
+  const handleLoadMore = (): void => {
+    setDisplayCount(prev => Math.min(prev + initialPageSize, sortedEvents.length));
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -35,20 +63,31 @@ export function EventTimeline({ events, isLoading = false }: EventTimelineProps)
     );
   }
 
-  // Sort events by timestamp (newest first)
-  const sortedEvents = [...events].sort(
-    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-  );
-
   return (
     <div className="py-4">
-      {sortedEvents.map((event, index) => (
-        <EventCard
-          key={event.id}
-          event={event}
-          isLast={index === sortedEvents.length - 1}
-        />
-      ))}
+      <div className="transition-all duration-300">
+        {visibleEvents.map((event, index) => (
+          <EventCard
+            key={event.id}
+            event={event}
+            isLast={index === visibleEvents.length - 1 && !hasMore}
+          />
+        ))}
+      </div>
+
+      {hasMore && (
+        <div className="flex justify-center pt-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleLoadMore}
+            className="gap-2"
+          >
+            <ChevronDown className="w-4 h-4" />
+            Load More ({sortedEvents.length - displayCount} remaining)
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
