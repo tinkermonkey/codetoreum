@@ -57,7 +57,7 @@ describe('SystemStatusHeader', () => {
     )
 
     expect(screen.getByText('Active Agents')).toBeInTheDocument()
-    expect(screen.getByText('API Usage')).toBeInTheDocument()
+    expect(screen.getByText('Claude Usage')).toBeInTheDocument()
     expect(screen.getByText('Circuit Breakers')).toBeInTheDocument()
   })
 
