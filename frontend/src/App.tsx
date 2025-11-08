@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Link, Navigate } from 'react-router-dom'
 import { Settings, GitBranch, Users, Activity, History, Loader2 } from 'lucide-react'
 import { useAuth } from './hooks/useAuth'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { SystemStatusHeader } from './components/system-status'
 import DashboardPage from './pages/DashboardPage'
 import ProjectConfigPage from './pages/ProjectConfigPage'
 import WorkflowConfigPage from './pages/WorkflowConfigPage'
@@ -75,6 +76,11 @@ function App() {
         </nav>
 
         <main className="container mx-auto px-4 py-8">
+          {/* System Status Header */}
+          <div className="mb-6">
+            <SystemStatusHeader />
+          </div>
+
           <Routes>
             <Route
               path="/"
