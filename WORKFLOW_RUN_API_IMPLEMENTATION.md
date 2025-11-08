@@ -1,8 +1,8 @@
-# Phase 4 Backend APIs Implementation Summary
+# Workflow Run API Implementation Summary
 
 ## Overview
 
-This document summarizes the implementation of the Phase 4 backend APIs to support the new UX migration from `/legacy_ux` to `/frontend`.
+This document summarizes the implementation of backend APIs for workflow run querying and metrics to support the new UX migration from `/legacy_ux` to `/frontend`.
 
 ## Implemented Endpoints
 

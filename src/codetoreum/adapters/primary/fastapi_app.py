@@ -2068,32 +2068,49 @@ def create_development_app() -> FastAPI:
             return {"agents": {}}
 
         async def get_active_agents(self):
-            return {
-                "agents": [
-                    {
-                        "execution_id": "exec-mock-123",
-                        "agent_name": "developer_agent",
-                        "work_item_id": "wi-mock-456",
-                        "project": "codetoreum",
-                        "issue_number": 42,
-                        "status": "running",
-                        "started_at": datetime.utcnow(),
-                        "container_name": "claude-code-exec-123",
-                    }
-                ],
-            }
+            """Return mock active agents with proper DTO structure."""
+            from codetoreum.adapters.primary.metrics_dtos import ActiveAgentInfo
+            return [
+                ActiveAgentInfo(
+                    execution_id="exec-mock-123",
+                    agent_name="developer_agent",
+                    work_item_id="wi-mock-456",
+                    project="codetoreum",
+                    issue_number=42,
+                    status="running",
+                    started_at=datetime.utcnow(),
+                    container_name="claude-code-exec-123",
+                ),
+                ActiveAgentInfo(
+                    execution_id="exec-mock-124",
+                    agent_name="reviewer_agent",
+                    work_item_id="wi-mock-457",
+                    project="codetoreum",
+                    issue_number=43,
+                    status="running",
+                    started_at=datetime.utcnow() - timedelta(minutes=15),
+                    container_name="claude-code-exec-124",
+                ),
+            ]
 
         async def get_api_usage(self):
-            return {
-                "claude": {
-                    "available": True,
-                    "weekly_usage": 15000000,
-                    "weekly_quota": 50000000,
-                    "session_usage": 2000000,
-                    "session_quota": 10000000,
-                    "session_remaining_minutes": 45,
-                }
-            }
+            """Return mock API usage with calculated percentages."""
+            from codetoreum.adapters.primary.metrics_dtos import ClaudeApiUsageInfo
+            weekly_usage = 15000000
+            weekly_quota = 50000000
+            session_usage = 2000000
+            session_quota = 10000000
+
+            return ClaudeApiUsageInfo(
+                available=True,
+                weekly_usage=weekly_usage,
+                weekly_quota=weekly_quota,
+                weekly_usage_percent=round((weekly_usage / weekly_quota) * 100, 1),
+                session_usage=session_usage,
+                session_quota=session_quota,
+                session_usage_percent=round((session_usage / session_quota) * 100, 1),
+                session_remaining_minutes=45,
+            )
 
     class MockWorkspaceQueryPort(IWorkspaceQueryPort):
         """Mock workspace query port for development."""

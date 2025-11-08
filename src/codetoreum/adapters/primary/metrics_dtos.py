@@ -285,3 +285,38 @@ class AgentExecutionMetricsResponse(BaseModel):
     overall_success_rate_percent: float
     start_time: datetime
     end_time: datetime
+
+
+class ActiveAgentInfo(BaseModel):
+    """Information about an active agent execution"""
+    execution_id: str
+    agent_name: str
+    work_item_id: str
+    project: str
+    issue_number: int
+    status: str
+    started_at: datetime
+    container_name: str
+
+
+class ActiveAgentsResponse(BaseModel):
+    """List of currently active agents"""
+    agents: List[ActiveAgentInfo]
+    count: int
+
+
+class ClaudeApiUsageInfo(BaseModel):
+    """Claude API usage and quota information"""
+    available: bool
+    weekly_usage: int
+    weekly_quota: int
+    weekly_usage_percent: float
+    session_usage: int
+    session_quota: int
+    session_usage_percent: float
+    session_remaining_minutes: int
+
+
+class ApiUsageResponse(BaseModel):
+    """API usage information for all providers"""
+    claude: ClaudeApiUsageInfo
