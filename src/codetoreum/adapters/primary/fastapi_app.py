@@ -45,6 +45,7 @@ from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDepen
 from codetoreum.adapters.primary.websocket_adapter import WebSocketAdapter, WebSocketConfig
 from codetoreum.adapters.primary.routers.work_items import create_work_items_router
 from codetoreum.adapters.primary.routers.workflows import create_workflows_router
+from codetoreum.adapters.primary.routers.workflow_runs import create_workflow_runs_router
 from codetoreum.adapters.primary.routers.orchestrator import create_orchestrator_router
 from codetoreum.adapters.primary.routers.scheduler import create_scheduler_router
 from codetoreum.adapters.primary.routers.agents import create_agents_router
@@ -65,6 +66,7 @@ from codetoreum.ports.input.task_query import ITaskQueryPort
 from codetoreum.ports.input.workspace_query import IWorkspaceQueryPort
 from codetoreum.ports.input.workflow_command import IWorkflowCommandPort
 from codetoreum.ports.input.workflow_query import IWorkflowQueryPort
+from codetoreum.ports.input.workflow_run_query import IWorkflowRunQueryPort
 from codetoreum.ports.input.workflow_definition_command import IWorkflowDefinitionCommandPort
 from codetoreum.ports.input.orchestration_command import IOrchestrationCommandPort
 from codetoreum.ports.input.work_item_command import IWorkItemCommandPort
@@ -169,6 +171,7 @@ def create_app(
     work_item_command_port: IWorkItemCommandPort,
     work_item_query_port: IWorkItemQueryPort,
     workflow_query_port: IWorkflowQueryPort,
+    workflow_run_query_port: IWorkflowRunQueryPort,
     workflow_definition_command_port: IWorkflowDefinitionCommandPort,
     orchestration_command_port: IOrchestrationCommandPort,
     agent_command_port: IAgentCommandPort,
@@ -196,12 +199,14 @@ def create_app(
         work_item_command_port: Port for work item commands
         work_item_query_port: Port for work item queries
         workflow_query_port: Port for workflow definition queries
+        workflow_run_query_port: Port for workflow run queries
         workflow_definition_command_port: Port for workflow definition commands
         orchestration_command_port: Port for orchestration commands
         agent_command_port: Port for agent commands
         agent_query_port: Port for agent queries
         execution_command_port: Port for execution commands
         execution_query_port: Port for execution queries
+        event_store: Event store for events
         event_bus: Event bus for publishing events
         config_service: Configuration service
         logger: Logger instance
@@ -412,6 +417,13 @@ def create_app(
         auth_deps=auth_deps,
     )
     app.include_router(workflows_router)
+
+    # Include Workflow Runs router
+    workflow_runs_router = create_workflow_runs_router(
+        query_port=workflow_run_query_port,
+        auth_deps=auth_deps,
+    )
+    app.include_router(workflow_runs_router)
 
     # Include Orchestrator router
     orchestrator_router = create_orchestrator_router(
@@ -1286,6 +1298,99 @@ def create_development_app() -> FastAPI:
                 changes_applied={},
             )
 
+    class MockWorkflowRunQueryPort(IWorkflowRunQueryPort):
+        """Mock workflow run query port for development."""
+
+        async def get_workflow_run(self, workflow_run_id: str):
+            from codetoreum.ports.input.workflow_run_query import WorkflowRunInfo, WorkflowRunStatus, WorkflowRunStageInfo
+            return WorkflowRunInfo(
+                id=workflow_run_id,
+                work_item_id="wi-mock-123",
+                workflow_id="wf-mock-123",
+                project_id="proj-123",
+                status=WorkflowRunStatus.RUNNING,
+                current_stage_index=1,
+                current_stage_name="review",
+                stages=[
+                    WorkflowRunStageInfo(
+                        name="implementation",
+                        agent_name="developer_agent",
+                        status="completed",
+                        started_at=datetime.utcnow(),
+                        completed_at=datetime.utcnow(),
+                        execution_id="exec-111",
+                    ),
+                    WorkflowRunStageInfo(
+                        name="review",
+                        agent_name="reviewer_agent",
+                        status="running",
+                        started_at=datetime.utcnow(),
+                        completed_at=None,
+                        execution_id="exec-222",
+                    ),
+                ],
+                started_at=datetime.utcnow(),
+                completed_at=None,
+                duration=None,
+                issue_title="Fix authentication bug",
+                issue_number=42,
+                project="codetoreum",
+                triggered_by="github_webhook",
+                priority="high",
+                metadata={},
+            )
+
+        async def list_workflow_runs(self, filters=None, pagination=None):
+            from codetoreum.ports.input.workflow_run_query import WorkflowRunListResult, WorkflowRunSummary, WorkflowRunStatus
+            return WorkflowRunListResult(
+                runs=[
+                    WorkflowRunSummary(
+                        id="wfrun-mock-123",
+                        work_item_id="wi-mock-123",
+                        workflow_id="wf-mock-123",
+                        project_id="proj-123",
+                        status=WorkflowRunStatus.RUNNING,
+                        current_stage_index=1,
+                        current_stage_name="review",
+                        started_at=datetime.utcnow(),
+                        completed_at=None,
+                        duration=None,
+                        issue_title="Fix authentication bug",
+                        issue_number=42,
+                        project="codetoreum",
+                        triggered_by="github_webhook",
+                        priority="high",
+                    )
+                ],
+                total_count=1,
+                offset=0,
+                limit=20,
+                has_next=False,
+            )
+
+        async def get_workflow_run_events(self, workflow_run_id: str, offset=0, limit=50, event_types=None, since=None):
+            return {
+                "events": [
+                    {
+                        "id": "evt-mock-123",
+                        "event_type": "WorkflowStarted",
+                        "workflow_run_id": workflow_run_id,
+                        "timestamp": datetime.utcnow(),
+                        "agent_name": None,
+                        "stage_name": "implementation",
+                        "status": None,
+                        "data": {
+                            "work_item_id": "wi-mock-123",
+                            "triggered_by": "github_webhook",
+                        },
+                    }
+                ],
+                "totalCount": 1,
+                "offset": offset,
+                "limit": limit,
+                "hasNext": False,
+            }
+
     class MockWorkflowQueryPort(IWorkflowQueryPort):
         """Mock workflow query port for development."""
 
@@ -1962,6 +2067,34 @@ def create_development_app() -> FastAPI:
         async def get_agent_execution_metrics(self, agent_name=None, start_time=None, end_time=None):
             return {"agents": {}}
 
+        async def get_active_agents(self):
+            return {
+                "agents": [
+                    {
+                        "execution_id": "exec-mock-123",
+                        "agent_name": "developer_agent",
+                        "work_item_id": "wi-mock-456",
+                        "project": "codetoreum",
+                        "issue_number": 42,
+                        "status": "running",
+                        "started_at": datetime.utcnow(),
+                        "container_name": "claude-code-exec-123",
+                    }
+                ],
+            }
+
+        async def get_api_usage(self):
+            return {
+                "claude": {
+                    "available": True,
+                    "weekly_usage": 15000000,
+                    "weekly_quota": 50000000,
+                    "session_usage": 2000000,
+                    "session_quota": 10000000,
+                    "session_remaining_minutes": 45,
+                }
+            }
+
     class MockWorkspaceQueryPort(IWorkspaceQueryPort):
         """Mock workspace query port for development."""
 
@@ -2048,6 +2181,7 @@ def create_development_app() -> FastAPI:
         work_item_command_port=MockWorkItemCommandPort(),
         work_item_query_port=MockWorkItemQueryPort(),
         workflow_query_port=MockWorkflowQueryPort(),
+        workflow_run_query_port=MockWorkflowRunQueryPort(),
         workflow_definition_command_port=MockWorkflowDefinitionCommandPort(),
         orchestration_command_port=MockOrchestrationCommandPort(),
         agent_command_port=MockAgentCommandPort(),
