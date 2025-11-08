@@ -28,35 +28,39 @@ export function useFlowData(
         const agent = event.agent_name || event.agent || ''
         const taskId = event.task_id || event.event_id || ''
 
-        if (event.event_type === 'agent_initialized') {
+        const eventType = event.event_type || ''
+
+        if (eventType === 'AgentInitialized' || eventType === 'agent_initialized') {
           if (!execMap.has(agent)) {
             execMap.set(agent, [])
           }
           const isActive = !sortedEvents.some(
-            (e) =>
-              e.task_id === taskId &&
-              (e.event_type === 'agent_completed' || e.event_type === 'agent_failed')
+            (e) => {
+              const eTaskId = e.task_id || e.event_id || ''
+              const eType = e.event_type || ''
+              return eTaskId === taskId && (eType === 'AgentCompleted' || eType === 'agent_completed' || eType === 'AgentFailed' || eType === 'agent_failed')
+            }
           )
 
-          execMap.get(agent)!.push({
-            taskId,
-            startTime: event.timestamp,
-            startEvent: event,
-            endTime: null,
-            endEvent: null,
-            status: 'running',
-            isActive,
-          })
-        } else if (
-          event.event_type === 'agent_completed' ||
-          event.event_type === 'agent_failed'
-        ) {
+          const agentExecs = execMap.get(agent)
+          if (agentExecs) {
+            agentExecs.push({
+              taskId,
+              startTime: event.timestamp,
+              startEvent: event,
+              endTime: null,
+              endEvent: null,
+              status: 'running',
+              isActive,
+            })
+          }
+        } else if (eventType === 'AgentCompleted' || eventType === 'agent_completed' || eventType === 'AgentFailed' || eventType === 'agent_failed') {
           const executions = execMap.get(agent) || []
           const execution = executions.find((e) => e.taskId === taskId)
           if (execution) {
             execution.endTime = event.timestamp
             execution.endEvent = event
-            execution.status = event.event_type === 'agent_completed' ? 'completed' : 'failed'
+            execution.status = (eventType === 'AgentCompleted' || eventType === 'agent_completed') ? 'completed' : 'failed'
             execution.isActive = false
           }
         }
@@ -105,11 +109,15 @@ export function useFlowData(
     sortedEvents.forEach((event, idx) => {
       let currentNodeId: string | null = null
 
+      const eventCategory = event.event_category || ''
+      const eventType = event.event_type || ''
+
       // Decision events
-      if (event.event_category === 'decision') {
+      if (eventCategory === 'decision') {
         const nodeId = `decision-${idx}`
-        const decisionType = event.event_type || 'decision'
+        const decisionType = eventType || 'decision'
         const reason = event.reason || ''
+        const decisionCategory = event.decision_category
 
         newNodes.push({
           id: nodeId,
@@ -118,7 +126,7 @@ export function useFlowData(
           data: {
             label: decisionType.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()),
             decisionType,
-            category: event.decision_category,
+            category: decisionCategory,
             metadata: { reason },
             timestamp: event.timestamp,
           },
@@ -129,37 +137,36 @@ export function useFlowData(
       }
 
       // Agent execution starts
-      else if (
-        event.event_category === 'agent_lifecycle' &&
-        event.event_type === 'agent_initialized'
-      ) {
+      else if (eventCategory === 'agent_lifecycle' && (eventType === 'AgentInitialized' || eventType === 'agent_initialized')) {
         const agent = event.agent_name || event.agent || ''
         const taskId = event.task_id || event.event_id || ''
         const executions = agentExecutions.get(agent) || []
         const executionIndex = executions.findIndex((e) => e.taskId === taskId)
 
-        if (executionIndex >= 0) {
+        if (executionIndex >= 0 && executionIndex < executions.length) {
           const nodeId = `agent-${agent}-${executionIndex}`
           const execution = executions[executionIndex]
 
-          newNodes.push({
-            id: nodeId,
-            type: 'agent-execution',
-            position: { x: 0, y: 0 },
-            data: {
-              label: agent.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()),
-              agentName: agent,
-              status: execution.status,
-              isActive: execution.isActive,
-              metadata: {},
-              executionIndex,
-              taskId,
-            },
-            draggable: false,
-          })
+          if (execution) {
+            newNodes.push({
+              id: nodeId,
+              type: 'agent-execution',
+              position: { x: 0, y: 0 },
+              data: {
+                label: agent.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()),
+                agentName: agent,
+                status: execution.status,
+                isActive: execution.isActive,
+                metadata: {},
+                executionIndex,
+                taskId,
+              },
+              draggable: false,
+            })
 
-          currentNodeId = nodeId
-          processedAgents.add(agent)
+            currentNodeId = nodeId
+            processedAgents.add(agent)
+          }
         }
       }
 
@@ -181,7 +188,10 @@ export function useFlowData(
     })
 
     // Add workflow completed node if appropriate
-    const hasCompletedEvent = events.some((e) => e.event_type === 'WorkflowCompleted')
+    const hasCompletedEvent = events.some((e) => {
+      const eType = e.event_type || ''
+      return eType === 'WorkflowCompleted' || eType === 'workflow_completed'
+    })
     if (hasCompletedEvent) {
       newNodes.push({
         id: 'completed',

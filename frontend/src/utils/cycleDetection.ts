@@ -208,27 +208,63 @@ export function identifyCyclesSimple(
 }
 
 /**
- * Main cycle identification function with multi-tier detection strategy
+ * Main cycle identification function - optimized single-pass algorithm
+ * Combines decision event boundary detection with agent execution grouping in one pass
  */
 export function identifyCycles(
   events: WorkflowEvent[],
   agentExecutions: Map<string, AgentExecution[]>
 ): Map<string, Cycle> {
-  // Strategy 1: Use decision event boundaries (most accurate)
-  const boundaries = detectCycles(events)
+  const cycleMap = new Map<string, Cycle>()
 
-  if (boundaries.length > 0) {
-    const cycleMap = new Map<string, Cycle>()
+  // Sort events chronologically
+  const sortedEvents = [...events].sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  )
 
-    boundaries.forEach((boundary) => {
-      const cycleId = boundary.id
+  // Track open cycles by type
+  const openCycles: Record<string, {
+    cycle: Cycle
+    startTime: number
+  } | null> = {
+    review_cycle: null,
+    repair_cycle: null,
+    conversational_loop: null,
+  }
 
-      // Find all agent executions within this time range
-      const startTime = new Date(boundary.startTime).getTime()
-      const endTime = boundary.endTime
-        ? new Date(boundary.endTime).getTime()
-        : Date.now()
+  // Single pass through events
+  sortedEvents.forEach((event) => {
+    const eventCategory = event.event_category || ''
+    if (eventCategory !== 'decision') return
 
+    const eventType = event.event_type || ''
+    const eventTimestamp = new Date(event.timestamp).getTime()
+
+    // Review cycles
+    if (eventType === 'ReviewCycleStarted' || eventType === 'review_cycle_started') {
+      const cycleId = `review_cycle_${cycleMap.size + 1}`
+      openCycles.review_cycle = {
+        cycle: {
+          id: cycleId,
+          type: 'review',
+          events: [],
+          entryPoint: event.event_id || '',
+          exitPoint: '',
+          startTime: event.timestamp,
+          endTime: undefined,
+          iterations: 0,
+          isCollapsed: false,
+          agentExecutions: [],
+          decisionEvents: [],
+        },
+        startTime: eventTimestamp,
+      }
+    } else if ((eventType === 'ReviewCycleCompleted' || eventType === 'review_cycle_completed') && openCycles.review_cycle) {
+      const { cycle, startTime } = openCycles.review_cycle
+      cycle.endTime = event.timestamp
+      cycle.exitPoint = event.event_id || ''
+
+      // Collect agent executions in one iteration
       const cycleExecutions: Array<{
         agent: string
         taskId: string
@@ -238,8 +274,8 @@ export function identifyCycles(
 
       agentExecutions.forEach((executions, agent) => {
         executions.forEach((execution, index) => {
-          const executionTime = new Date(execution.startTime).getTime()
-          if (executionTime >= startTime && executionTime <= endTime) {
+          const execTime = new Date(execution.startTime).getTime()
+          if (execTime >= startTime && execTime <= eventTimestamp) {
             cycleExecutions.push({
               agent,
               taskId: execution.taskId,
@@ -250,19 +286,168 @@ export function identifyCycles(
         })
       })
 
-      cycleMap.set(cycleId, {
-        ...boundary,
-        agentExecutions: cycleExecutions,
-        iterations: cycleExecutions.length,
-        isCollapsed: false,
-      })
-    })
+      cycle.agentExecutions = cycleExecutions
+      cycle.iterations = cycleExecutions.length
+      cycleMap.set(cycle.id, cycle)
+      openCycles.review_cycle = null
+    }
 
-    return cycleMap
+    // Repair cycles
+    else if (
+      eventType === 'RepairCycleTestCycleStarted' || eventType === 'repair_cycle_test_cycle_started' ||
+      eventType === 'RepairCycleFixCycleStarted' || eventType === 'repair_cycle_fix_cycle_started'
+    ) {
+      const cycleId = `repair_cycle_${cycleMap.size + 1}`
+      openCycles.repair_cycle = {
+        cycle: {
+          id: cycleId,
+          type: 'repair',
+          events: [],
+          entryPoint: event.event_id || '',
+          exitPoint: '',
+          startTime: event.timestamp,
+          endTime: undefined,
+          iterations: 0,
+          isCollapsed: false,
+          agentExecutions: [],
+          decisionEvents: [],
+        },
+        startTime: eventTimestamp,
+      }
+    } else if (
+      (eventType === 'RepairCycleTestCycleCompleted' || eventType === 'repair_cycle_test_cycle_completed' ||
+        eventType === 'RepairCycleFixCycleCompleted' || eventType === 'repair_cycle_fix_cycle_completed') &&
+      openCycles.repair_cycle
+    ) {
+      const { cycle, startTime } = openCycles.repair_cycle
+      cycle.endTime = event.timestamp
+      cycle.exitPoint = event.event_id || ''
+
+      // Collect agent executions
+      const cycleExecutions: Array<{
+        agent: string
+        taskId: string
+        executionIndex: number
+        timestamp: string
+      }> = []
+
+      agentExecutions.forEach((executions, agent) => {
+        executions.forEach((execution, index) => {
+          const execTime = new Date(execution.startTime).getTime()
+          if (execTime >= startTime && execTime <= eventTimestamp) {
+            cycleExecutions.push({
+              agent,
+              taskId: execution.taskId,
+              executionIndex: index,
+              timestamp: execution.startTime,
+            })
+          }
+        })
+      })
+
+      cycle.agentExecutions = cycleExecutions
+      cycle.iterations = cycleExecutions.length
+      cycleMap.set(cycle.id, cycle)
+      openCycles.repair_cycle = null
+    }
+
+    // Conversational loops
+    else if (eventType === 'ConversationalLoopStarted' || eventType === 'conversational_loop_started') {
+      const cycleId = `conv_loop_${cycleMap.size + 1}`
+      openCycles.conversational_loop = {
+        cycle: {
+          id: cycleId,
+          type: 'conversation',
+          events: [],
+          entryPoint: event.event_id || '',
+          exitPoint: '',
+          startTime: event.timestamp,
+          endTime: undefined,
+          iterations: 0,
+          isCollapsed: false,
+          agentExecutions: [],
+          decisionEvents: [],
+        },
+        startTime: eventTimestamp,
+      }
+    } else if (
+      (eventType === 'ConversationalLoopCompleted' || eventType === 'conversational_loop_completed') &&
+      openCycles.conversational_loop
+    ) {
+      const { cycle, startTime } = openCycles.conversational_loop
+      cycle.endTime = event.timestamp
+      cycle.exitPoint = event.event_id || ''
+
+      // Collect agent executions
+      const cycleExecutions: Array<{
+        agent: string
+        taskId: string
+        executionIndex: number
+        timestamp: string
+      }> = []
+
+      agentExecutions.forEach((executions, agent) => {
+        executions.forEach((execution, index) => {
+          const execTime = new Date(execution.startTime).getTime()
+          if (execTime >= startTime && execTime <= eventTimestamp) {
+            cycleExecutions.push({
+              agent,
+              taskId: execution.taskId,
+              executionIndex: index,
+              timestamp: execution.startTime,
+            })
+          }
+        })
+      })
+
+      cycle.agentExecutions = cycleExecutions
+      cycle.iterations = cycleExecutions.length
+      cycleMap.set(cycle.id, cycle)
+      openCycles.conversational_loop = null
+    }
+  })
+
+  // Close any remaining open cycles (still in progress)
+  Object.values(openCycles).forEach((openCycle) => {
+    if (openCycle) {
+      const { cycle, startTime } = openCycle
+      const now = Date.now()
+      cycle.endTime = sortedEvents[sortedEvents.length - 1]?.timestamp
+
+      // Collect agent executions for incomplete cycles
+      const cycleExecutions: Array<{
+        agent: string
+        taskId: string
+        executionIndex: number
+        timestamp: string
+      }> = []
+
+      agentExecutions.forEach((executions, agent) => {
+        executions.forEach((execution, index) => {
+          const execTime = new Date(execution.startTime).getTime()
+          if (execTime >= startTime && execTime <= now) {
+            cycleExecutions.push({
+              agent,
+              taskId: execution.taskId,
+              executionIndex: index,
+              timestamp: execution.startTime,
+            })
+          }
+        })
+      })
+
+      cycle.agentExecutions = cycleExecutions
+      cycle.iterations = cycleExecutions.length
+      cycleMap.set(cycle.id, cycle)
+    }
+  })
+
+  // Fallback: If no cycles detected, use simple agent repeat counting
+  if (cycleMap.size === 0) {
+    return identifyCyclesSimple(agentExecutions)
   }
 
-  // Strategy 2: Simple agent repeat counting (fallback)
-  return identifyCyclesSimple(agentExecutions)
+  return cycleMap
 }
 
 /**

@@ -2,6 +2,7 @@ import { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { Activity, CheckCircle, XCircle, Clock } from 'lucide-react'
 import type { AgentExecutionNodeData, NodeStyleConfig } from '@/types/flow'
+import { formatMetadata } from '@/utils/formatMetadata'
 
 interface AgentExecutionNodeProps {
   data: AgentExecutionNodeData
@@ -41,6 +42,7 @@ const getNodeStyle = (status: string, isActive: boolean): NodeStyleConfig & { bo
 export const AgentExecutionNode = memo(({ data }: AgentExecutionNodeProps) => {
   const { label, status, isActive, metadata } = data
   const style = getNodeStyle(status, isActive)
+  const formattedMetadata = formatMetadata(metadata)
 
   const getIcon = () => {
     if (status === 'completed') return <CheckCircle className="w-4 h-4" />
@@ -82,9 +84,9 @@ export const AgentExecutionNode = memo(({ data }: AgentExecutionNodeProps) => {
         <div className="mt-0.5">{getIcon()}</div>
         <div className="flex-1">
           <div className="font-semibold text-sm">{label}</div>
-          {metadata && Object.keys(metadata).length > 0 && (
-            <div className="text-xs mt-1 opacity-90">
-              {typeof metadata === 'string' ? metadata : JSON.stringify(metadata)}
+          {formattedMetadata && (
+            <div className="text-xs mt-1 opacity-90 truncate">
+              {formattedMetadata}
             </div>
           )}
         </div>

@@ -7,13 +7,15 @@ import { useWorkflowRunDetails } from '@/hooks/useWorkflowRunDetails'
 import { useWorkflowEvents } from '@/hooks/useWorkflowEvents'
 import { useFlowData } from '@/hooks/useFlowData'
 import { toggleCycleCollapsed } from '@/utils/cycleDetection'
-import { updateEdgesForCycles } from '@/utils/flowLayout'
 
-export function PipelineFlowPage() {
+interface PipelineFlowPageProps {
+  chartHeight?: number
+}
+
+export function PipelineFlowPage({ chartHeight = 600 }: PipelineFlowPageProps = {}) {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [legendOpen, setLegendOpen] = useState(true)
-  const [chartHeight] = useState(600)
 
   // Fetch workflow run details and events
   const { workflowRun, events, isLoading: loadingDetails } = useWorkflowRunDetails(id || null)
@@ -57,17 +59,8 @@ export function PipelineFlowPage() {
     })
   }, [nodes, handleToggleCycle, collapsedCycles])
 
-  // Update edges for collapsed cycles
-  const updatedEdges = useMemo(() => {
-    const cyclesWithCollapse = new Map(cycles)
-    collapsedCycles.forEach((isCollapsed, cycleId) => {
-      const cycle = cyclesWithCollapse.get(cycleId)
-      if (cycle) {
-        cyclesWithCollapse.set(cycleId, { ...cycle, isCollapsed })
-      }
-    })
-    return updateEdgesForCycles(edges, cyclesWithCollapse)
-  }, [edges, cycles, collapsedCycles])
+  // Note: Edge routing for collapsed cycles is simplified for now
+  // Edges connect to the nearest visible nodes (not to collapsed cycle containers)
 
   const handleRefresh = useCallback(() => {
     refetch()
@@ -146,7 +139,7 @@ export function PipelineFlowPage() {
           {nodesWithHandlers.length > 0 ? (
             <FlowCanvas
               nodes={nodesWithHandlers}
-              edges={updatedEdges}
+              edges={edges}
               chartHeight={chartHeight}
             />
           ) : (

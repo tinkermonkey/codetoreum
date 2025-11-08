@@ -63,16 +63,6 @@ export interface DecisionNodeData extends Record<string, unknown> {
 }
 
 /**
- * Data for review cycle nodes
- */
-export interface ReviewNodeData extends Record<string, unknown> {
-  label: string
-  reviewType: string
-  metadata: Record<string, any>
-  timestamp?: string
-}
-
-/**
  * Data for cycle bounding nodes
  */
 export interface CycleBoundingNodeData extends Record<string, unknown> {
@@ -98,7 +88,6 @@ export type FlowNodeData =
   | WorkflowEventNodeData
   | AgentExecutionNodeData
   | DecisionNodeData
-  | ReviewNodeData
   | CycleBoundingNodeData
 
 /**

@@ -7,6 +7,8 @@ import {
   ReactFlowProvider,
   type NodeTypes,
   type EdgeTypes,
+  type NodeChange,
+  type EdgeChange,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
@@ -33,8 +35,8 @@ interface FlowCanvasProps {
   nodes: FlowNode[]
   edges: FlowEdge[]
   chartHeight: number
-  onNodesChange?: (changes: any) => void
-  onEdgesChange?: (changes: any) => void
+  onNodesChange?: (changes: NodeChange<FlowNode>[]) => void
+  onEdgesChange?: (changes: EdgeChange<FlowEdge>[]) => void
 }
 
 function FlowCanvasInner({
@@ -58,7 +60,7 @@ function FlowCanvasInner({
   }, [initialEdges, setEdges])
 
   const handleNodesChange = useCallback(
-    (changes: any) => {
+    (changes: NodeChange<FlowNode>[]) => {
       onNodesChange(changes)
       externalOnNodesChange?.(changes)
     },
@@ -66,7 +68,7 @@ function FlowCanvasInner({
   )
 
   const handleEdgesChange = useCallback(
-    (changes: any) => {
+    (changes: EdgeChange<FlowEdge>[]) => {
       onEdgesChange(changes)
       externalOnEdgesChange?.(changes)
     },

@@ -2,6 +2,7 @@ import { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { GitBranch } from 'lucide-react'
 import type { DecisionNodeData } from '@/types/flow'
+import { formatMetadata } from '@/utils/formatMetadata'
 
 interface DecisionNodeProps {
   data: DecisionNodeData
@@ -22,6 +23,7 @@ const DECISION_COLORS: Record<string, { bg: string; border: string }> = {
 export const DecisionNode = memo(({ data }: DecisionNodeProps) => {
   const { label, category, metadata } = data
   const colors = DECISION_COLORS[category || 'default'] || DECISION_COLORS.default
+  const formattedMetadata = formatMetadata(metadata)
 
   return (
     <div
@@ -44,9 +46,9 @@ export const DecisionNode = memo(({ data }: DecisionNodeProps) => {
         </div>
         <div className="flex-1">
           <div className="font-semibold text-sm">{label}</div>
-          {metadata && Object.keys(metadata).length > 0 && (
-            <div className="text-xs mt-1 opacity-90">
-              {typeof metadata === 'string' ? metadata : JSON.stringify(metadata)}
+          {formattedMetadata && (
+            <div className="text-xs mt-1 opacity-90 truncate">
+              {formattedMetadata}
             </div>
           )}
         </div>

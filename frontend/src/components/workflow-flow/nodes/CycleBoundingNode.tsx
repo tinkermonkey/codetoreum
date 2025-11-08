@@ -45,12 +45,14 @@ export const CycleBoundingNode = memo(({ data }: CycleBoundingNodeProps) => {
     iterationCount,
     isCollapsed,
     onToggleCollapse,
-    width,
-    height,
+    width = 400,
+    height = 180,
     cyclePadding = 40,
   } = data
 
   const style = CYCLE_STYLES[cycleType] || CYCLE_STYLES.unknown
+  const collapsedWidth = 280
+  const collapsedHeight = 100
 
   const handleToggle = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -62,8 +64,8 @@ export const CycleBoundingNode = memo(({ data }: CycleBoundingNodeProps) => {
   return (
     <div
       style={{
-        width: isCollapsed ? 280 : width,
-        height: isCollapsed ? 100 : height,
+        width: isCollapsed ? collapsedWidth : width,
+        height: isCollapsed ? collapsedHeight : height,
         border: '3px dashed',
         borderColor: style.borderColor,
         borderRadius: '12px',
