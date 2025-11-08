@@ -503,6 +503,22 @@ export const executionsApi = {
     apiClient.get<{ output: string; logs: string[] }>(`/executions/${executionId}/output`),
 }
 
+// =============================================================================
+// Authentication API
+// =============================================================================
+
+export const authApi = {
+  logout: () => apiClient.post<{ message: string }>('/api/v2/auth/logout'),
+
+  getTokenInfo: () => apiClient.get<{
+    issued_at: string
+    expires_at: string
+    subject: string
+    is_valid: boolean
+  }>('/api/v2/auth/token-info'),
+}
+
 // Export client for advanced usage
 export { apiClient }
+export default apiClient
 export type { ApiError }

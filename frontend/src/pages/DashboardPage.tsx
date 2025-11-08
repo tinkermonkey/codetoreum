@@ -29,10 +29,12 @@ export default function DashboardPage() {
 
   // Subscribe to execution events on mount
   React.useEffect(() => {
-    subscribe('ExecutionStarted')
-    subscribe('ExecutionCompleted')
-    subscribe('ExecutionFailed')
-  }, [subscribe])
+    if (isConnected) {
+      subscribe('ExecutionStarted')
+      subscribe('ExecutionCompleted')
+      subscribe('ExecutionFailed')
+    }
+  }, [isConnected, subscribe])
 
   const getStatusColor = (status: WorkItemStatus | ExecutionStatus) => {
     switch (status) {

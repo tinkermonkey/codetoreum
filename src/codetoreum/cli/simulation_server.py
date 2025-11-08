@@ -348,9 +348,9 @@ def display_startup_info(
 
     # Display URLs
     console.print("\n[bold cyan]URLs:[/bold cyan]")
-    console.print(f"  API Docs:      http://{host}:{port}/docs")
-    console.print(f"  Health Check:  http://{host}:{port}/api/health")
-    console.print(f"  WebSocket:     ws://{host}:{port}/ws")
+    console.print(f"  API Docs:      http://{host}:{port}/api/docs")
+    console.print(f"  Health Check:  http://{host}:{port}/api/v2/health")
+    console.print(f"  WebSocket:     ws://{host}:{port}/api/v2/events/stream")
 
     console.print("\n[bold yellow]NOTE:[/bold yellow] Server running in SIMULATION MODE")
     console.print("[dim]All data is in-memory and will be lost on shutdown[/dim]\n")
