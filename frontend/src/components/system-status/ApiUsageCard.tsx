@@ -5,9 +5,12 @@
  * Shows both weekly and session quotas with visual indicators.
  */
 
+import { AlertCircle } from 'lucide-react'
 import { Progress } from '../ui/progress'
+import { Skeleton } from '../ui/skeleton'
 import { StatusCard } from './StatusCard'
 import { useSystemStatusStore } from '../../store/systemStatusStore'
+import { useSystemStatus } from '../../hooks/useSystemStatus'
 
 /**
  * Format token count for display
@@ -29,9 +32,48 @@ function getQuotaColor(percent: number): string {
 
 export function ApiUsageCard() {
   const { apiUsage } = useSystemStatusStore()
+  const { isLoading, error } = useSystemStatus()
 
+  // Loading state with skeleton
+  if (isLoading) {
+    return (
+      <StatusCard title="Claude Usage">
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-1.5 w-full" />
+          </div>
+          <div className="space-y-1">
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-1.5 w-full" />
+          </div>
+        </div>
+      </StatusCard>
+    )
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <StatusCard title="Claude Usage">
+        <div className="flex items-start gap-2 text-sm text-red-600 dark:text-red-400">
+          <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium">Failed to load API usage</p>
+            <p className="text-xs mt-1">{error instanceof Error ? error.message : 'Unknown error'}</p>
+          </div>
+        </div>
+      </StatusCard>
+    )
+  }
+
+  // No usage data available
   if (!apiUsage) {
-    return null
+    return (
+      <StatusCard title="Claude Usage">
+        <p className="text-xs text-muted-foreground">Usage data unavailable</p>
+      </StatusCard>
+    )
   }
 
   const weeklyPercent = apiUsage.weeklyPercent || 0

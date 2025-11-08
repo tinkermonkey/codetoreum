@@ -3,6 +3,8 @@
  *
  * Zustand store for managing system status, health, and monitoring data.
  * Provides centralized state for real-time system information.
+ *
+ * Uses Map-based storage for efficient agent execution lookups and updates.
  */
 
 import { create } from 'zustand'
@@ -28,6 +30,32 @@ function calculateCircuitBreakerSummary(breakers: CircuitBreaker[]): CircuitBrea
     halfOpen: breakers.filter((b) => b.state === 'half_open').length,
     open: breakers.filter((b) => b.state === 'open').length,
   }
+}
+
+/**
+ * Internal state interface with Map for efficient agent lookups
+ */
+interface InternalSystemStatusState {
+  agentExecutionsMap: Map<string, AgentExecution>
+  activeAgents: AgentExecution[]
+  agentCount: number
+  apiUsage: ApiUsage | null
+  circuitBreakers: CircuitBreaker[]
+  circuitBreakerSummary: CircuitBreakerSummary
+  hasOpenBreakers: boolean
+  hasHalfOpenBreakers: boolean
+  systemHealth: SystemHealth | null
+  healthStatus: HealthStatus
+  unhealthyComponents: Array<[string, HealthCheck]>
+
+  // Actions
+  updateActiveAgents: (agents: AgentExecution[]) => void
+  updateAgentExecution: (agent: AgentExecution) => void
+  removeAgentExecution: (executionId: string) => void
+  updateApiUsage: (usage: ApiUsage | null) => void
+  updateCircuitBreakers: (breakers: CircuitBreaker[]) => void
+  updateSystemHealth: (health: SystemHealth) => void
+  reset: () => void
 }
 
 /**
@@ -75,10 +103,11 @@ function extractUnhealthyComponents(health: SystemHealth | null): Array<[string,
 }
 
 /**
- * System Status Store
+ * System Status Store with Map-based efficient updates
  */
-export const useSystemStatusStore = create<SystemStatusState>((set) => ({
+export const useSystemStatusStore = create<InternalSystemStatusState>((set, get) => ({
   // Initial state
+  agentExecutionsMap: new Map<string, AgentExecution>(),
   activeAgents: [],
   agentCount: 0,
   apiUsage: null,
@@ -96,11 +125,44 @@ export const useSystemStatusStore = create<SystemStatusState>((set) => ({
   unhealthyComponents: [],
 
   // Actions
-  updateActiveAgents: (agents: AgentExecution[]) =>
+  updateActiveAgents: (agents: AgentExecution[]) => {
+    const newMap = new Map<string, AgentExecution>()
+    agents.forEach((agent) => newMap.set(agent.id, agent))
+
     set({
+      agentExecutionsMap: newMap,
       activeAgents: agents,
       agentCount: agents.length,
-    }),
+    })
+  },
+
+  updateAgentExecution: (agent: AgentExecution) => {
+    const currentMap = get().agentExecutionsMap
+    const newMap = new Map(currentMap)
+    newMap.set(agent.id, agent)
+
+    const activeAgents = Array.from(newMap.values())
+
+    set({
+      agentExecutionsMap: newMap,
+      activeAgents,
+      agentCount: activeAgents.length,
+    })
+  },
+
+  removeAgentExecution: (executionId: string) => {
+    const currentMap = get().agentExecutionsMap
+    const newMap = new Map(currentMap)
+    newMap.delete(executionId)
+
+    const activeAgents = Array.from(newMap.values())
+
+    set({
+      agentExecutionsMap: newMap,
+      activeAgents,
+      agentCount: activeAgents.length,
+    })
+  },
 
   updateApiUsage: (usage: ApiUsage | null) =>
     set({
@@ -121,7 +183,6 @@ export const useSystemStatusStore = create<SystemStatusState>((set) => ({
     const healthStatus = determineHealthStatus(health)
     const unhealthyComponents = extractUnhealthyComponents(health)
     const apiUsage = extractApiUsage(health)
-    const breakers = health.circuitBreakers || health.orchestrator?.checks?.claude_usage ? [] : []
 
     set({
       systemHealth: health,
@@ -144,6 +205,7 @@ export const useSystemStatusStore = create<SystemStatusState>((set) => ({
 
   reset: () =>
     set({
+      agentExecutionsMap: new Map<string, AgentExecution>(),
       activeAgents: [],
       agentCount: 0,
       apiUsage: null,
@@ -161,3 +223,6 @@ export const useSystemStatusStore = create<SystemStatusState>((set) => ({
       unhealthyComponents: [],
     }),
 }))
+
+// Re-export public interface for external consumers
+export type { SystemStatusState }

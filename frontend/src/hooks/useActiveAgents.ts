@@ -13,6 +13,7 @@ import { apiClient } from '../api/client'
 import { useSystemStatusStore } from '../store/systemStatusStore'
 import type { AgentExecution } from '../types/system-status'
 import type { Execution } from '../types'
+import { POLLING_CONFIG, RETRY_CONFIG } from '../config/polling'
 
 /**
  * Active agents query key
@@ -49,27 +50,41 @@ async function fetchActiveAgents(): Promise<AgentExecution[]> {
 }
 
 /**
+ * Calculate retry delay with exponential backoff
+ */
+function calculateRetryDelay(attemptIndex: number): number {
+  return Math.min(
+    RETRY_CONFIG.BASE_DELAY * Math.pow(2, attemptIndex),
+    30000 // Max 30 seconds
+  )
+}
+
+/**
  * Hook for managing active agent executions
  *
  * Features:
- * - Polls API every 10 seconds
- * - Subscribes to real-time WebSocket events
- * - Automatically updates Zustand store
+ * - Configurable polling interval (default: 10 seconds)
+ * - Real-time WebSocket updates for ExecutionStarted/Completed/Failed events
+ * - Automatic retry with exponential backoff
+ * - Automatically updates Zustand store with efficient Map-based updates
  *
  * @returns Query result with active agents data
  */
 export function useActiveAgents() {
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth()
   const updateActiveAgents = useSystemStatusStore((state) => state.updateActiveAgents)
+  const updateAgentExecution = useSystemStatusStore((state) => state.updateAgentExecution)
+  const removeAgentExecution = useSystemStatusStore((state) => state.removeAgentExecution)
 
   // Poll API for active agents
   const query = useQuery({
     queryKey: activeAgentsQueryKey,
     queryFn: fetchActiveAgents,
     enabled: isAuthenticated && !isAuthLoading,
-    refetchInterval: 10000, // Poll every 10 seconds
-    staleTime: 8000,
-    retry: 2,
+    refetchInterval: POLLING_CONFIG.ACTIVE_AGENTS,
+    staleTime: POLLING_CONFIG.STALE_TIME,
+    retry: RETRY_CONFIG.MAX_ATTEMPTS,
+    retryDelay: calculateRetryDelay,
   })
 
   // Subscribe to WebSocket events for real-time updates
@@ -82,17 +97,30 @@ export function useActiveAgents() {
     }
   }, [query.data, updateActiveAgents])
 
-  // Handle WebSocket events
+  // Handle WebSocket events for real-time updates
   useEffect(() => {
     const relevantEvents = events.filter((event) =>
       ['ExecutionStarted', 'ExecutionCompleted', 'ExecutionFailed'].includes(event.type)
     )
 
-    if (relevantEvents.length > 0) {
-      // Refetch data when execution events occur
-      query.refetch()
-    }
-  }, [events, query])
+    relevantEvents.forEach((event) => {
+      // Event data contains the execution information
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data: any = event.data || {}
+
+      if (event.type === 'ExecutionStarted' && data.execution) {
+        // Add new execution to store
+        const execution = convertExecution(data.execution)
+        updateAgentExecution(execution)
+      } else if (event.type === 'ExecutionCompleted' && data.execution_id) {
+        // Remove completed execution from store
+        removeAgentExecution(data.execution_id)
+      } else if (event.type === 'ExecutionFailed' && data.execution_id) {
+        // Remove failed execution from store
+        removeAgentExecution(data.execution_id)
+      }
+    })
+  }, [events, updateAgentExecution, removeAgentExecution])
 
   return query
 }

@@ -5,20 +5,50 @@
  */
 
 import { useState } from 'react'
-import { Activity, ChevronDown, ChevronUp } from 'lucide-react'
+import { Activity, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react'
 import { StatusCard } from './StatusCard'
 import { Badge } from '../ui/badge'
+import { Skeleton } from '../ui/skeleton'
 import { useSystemStatusStore } from '../../store/systemStatusStore'
+import { useActiveAgents } from '../../hooks/useActiveAgents'
 import { formatRelativeTime } from '../../lib/utils'
 
 export function ActiveAgentsCard() {
   const [isExpanded, setIsExpanded] = useState(false)
   const { activeAgents, agentCount } = useSystemStatusStore()
+  const { isLoading, error } = useActiveAgents()
 
   const handleToggle = () => {
     if (agentCount > 0) {
       setIsExpanded(!isExpanded)
     }
+  }
+
+  // Loading state with skeleton
+  if (isLoading) {
+    return (
+      <StatusCard title="Active Agents">
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-3 w-32" />
+        </div>
+      </StatusCard>
+    )
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <StatusCard title="Active Agents">
+        <div className="flex items-start gap-2 text-sm text-red-600 dark:text-red-400">
+          <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium">Failed to load active agents</p>
+            <p className="text-xs mt-1">{error instanceof Error ? error.message : 'Unknown error'}</p>
+          </div>
+        </div>
+      </StatusCard>
+    )
   }
 
   return (

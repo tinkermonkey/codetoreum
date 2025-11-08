@@ -10,6 +10,7 @@ import { useEffect } from 'react'
 import { apiClient } from '../api/client'
 import { useSystemStatusStore } from '../store/systemStatusStore'
 import type { SystemHealth } from '../types/system-status'
+import { POLLING_CONFIG, RETRY_CONFIG } from '../config/polling'
 
 /**
  * System health query key
@@ -24,10 +25,21 @@ async function fetchSystemHealth(): Promise<SystemHealth> {
 }
 
 /**
+ * Calculate retry delay with exponential backoff
+ */
+function calculateRetryDelay(attemptIndex: number): number {
+  return Math.min(
+    RETRY_CONFIG.BASE_DELAY * Math.pow(2, attemptIndex),
+    30000 // Max 30 seconds
+  )
+}
+
+/**
  * Hook for fetching and managing system status
  *
  * Features:
- * - Polls health endpoint every 5 seconds
+ * - Configurable polling interval (default: 5 seconds)
+ * - Automatic retry with exponential backoff
  * - Automatically updates Zustand store
  * - Provides loading and error states
  *
@@ -39,10 +51,10 @@ export function useSystemStatus() {
   const query = useQuery({
     queryKey: systemHealthQueryKey,
     queryFn: fetchSystemHealth,
-    refetchInterval: 5000, // Poll every 5 seconds
-    staleTime: 4000, // Consider data stale after 4 seconds
-    retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
+    refetchInterval: POLLING_CONFIG.SYSTEM_HEALTH,
+    staleTime: POLLING_CONFIG.STALE_TIME,
+    retry: RETRY_CONFIG.MAX_ATTEMPTS,
+    retryDelay: calculateRetryDelay,
   })
 
   // Update Zustand store when data changes
