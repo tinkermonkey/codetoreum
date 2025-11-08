@@ -37,12 +37,20 @@ export interface WorkflowEventData {
 
 export interface WorkflowEvent {
   id: string;
+  event_id?: string; // Legacy field
   eventType: WorkflowEventType;
+  event_type?: string; // Legacy field
+  event_category?: string; // Legacy field for categorization
   workflowRunId: string;
   timestamp: string;
   agentName?: string;
+  agent?: string; // Legacy field
+  agent_name?: string; // Legacy field
   stageName?: string;
   status?: string;
+  task_id?: string; // Legacy field for task identification
+  reason?: string; // Legacy field for decision reason
+  decision_category?: string; // Legacy field for decision categorization
 
   // Event-specific data
   data: WorkflowEventData;

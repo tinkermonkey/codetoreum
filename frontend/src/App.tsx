@@ -10,6 +10,7 @@ import AgentConfigPage from './pages/AgentConfigPage'
 import ConfigHistoryPage from './pages/ConfigHistoryPage'
 import AuthRequiredPage from './pages/AuthRequiredPage'
 import { PipelineRunDetailsPage } from './pages/PipelineRunDetailsPage'
+import { PipelineFlowPage } from './pages/PipelineFlowPage'
 
 function App() {
   const { isAuthenticated, isLoading } = useAuth()
@@ -37,6 +38,16 @@ function App() {
           element={
             <ErrorBoundary>
               <PipelineRunDetailsPage />
+            </ErrorBoundary>
+          }
+        />
+
+        {/* Full-screen pipeline flow visualization (no nav/container) */}
+        <Route
+          path="/workflows/flow/:id?"
+          element={
+            <ErrorBoundary>
+              <PipelineFlowPage />
             </ErrorBoundary>
           }
         />
