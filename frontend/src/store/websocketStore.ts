@@ -170,7 +170,8 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
           ws.send(
             JSON.stringify({
               type: 'subscribe',
-              event_type: eventType,
+              subscription_type: 'all_events',
+              event_types: [eventType],  // Send as array, matching backend expectation
             })
           )
         })
@@ -317,6 +318,14 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
   subscribe: (eventType: string) => {
     set((state) => {
       const newSubscriptions = new Set(state.subscriptions)
+
+      // Prevent duplicate subscriptions
+      // This is especially important in development with React.StrictMode
+      // which intentionally double-invokes effects
+      if (newSubscriptions.has(eventType)) {
+        return { subscriptions: state.subscriptions }
+      }
+
       newSubscriptions.add(eventType)
 
       // If connected, send subscription immediately
@@ -324,7 +333,8 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
         state.ws.send(
           JSON.stringify({
             type: 'subscribe',
-            event_type: eventType,
+            subscription_type: 'all_events',
+            event_types: [eventType],  // Send as array, matching backend expectation
           })
         )
       }
@@ -343,7 +353,8 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
         state.ws.send(
           JSON.stringify({
             type: 'unsubscribe',
-            event_type: eventType,
+            subscription_type: 'all_events',
+            event_types: [eventType],  // Send as array, matching backend expectation
           })
         )
       }

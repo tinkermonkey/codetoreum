@@ -2,10 +2,11 @@
 Mock Metrics Query Adapter
 
 In-memory implementation of IMetricsQueryPort for development and testing.
+Integrates with InMemoryMetricsAdapter for actual metrics storage.
 """
 
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 from threading import RLock
 
 from codetoreum.ports.input.metrics_query import (
@@ -21,13 +22,39 @@ from codetoreum.ports.input.metrics_query import (
     SystemHealthInfo,
 )
 
+if TYPE_CHECKING:
+    from codetoreum.adapters.testing.in_memory_metrics_adapter import InMemoryMetricsAdapter
+    from codetoreum.ports.output.event_store import IEventStore
+    from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
+
 
 class MockMetricsQueryAdapter(IMetricsQueryPort):
     """
     Mock implementation of IMetricsQueryPort using in-memory storage.
+
+    Integrates with:
+    - InMemoryMetricsAdapter for metrics data
+    - IEventStore for event-based metrics
+    - SimulationClock for time-based queries
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        metrics_adapter: Optional["InMemoryMetricsAdapter"] = None,
+        event_store: Optional["IEventStore"] = None,
+        clock: Optional["SimulationClock"] = None,
+    ):
+        """
+        Initialize the mock metrics query adapter.
+
+        Args:
+            metrics_adapter: Optional metrics storage adapter
+            event_store: Optional event store for event-based metrics
+            clock: Optional simulation clock for time-based queries
+        """
+        self._metrics_adapter = metrics_adapter
+        self._event_store = event_store
+        self._clock = clock
         self._component_health: Dict[str, ComponentHealthInfo] = {}
         self._metrics_data: Dict[str, List[MetricTimeSeriesPoint]] = {}
         self._integration_status: Optional[IntegrationStatus] = None
@@ -148,6 +175,18 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
 
     async def get_simulation_mode_info(self) -> SimulationModeInfo:
         """Get simulation mode status and configuration."""
+        # If clock is available, return simulation mode info
+        if self._clock:
+            return SimulationModeInfo(
+                enabled=True,
+                time_multiplier=self._clock._speed_multiplier,
+                deterministic_responses=True,
+                mock_external_services=True,
+                event_replay_enabled=True,
+                current_simulation_time=self._clock.now(),
+                started_at=self._clock._current_time,
+            )
+
         if self._simulation_mode:
             return self._simulation_mode
 
@@ -171,6 +210,37 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
         aggregation: Optional[str] = None,
     ) -> MetricTimeSeries:
         """Get time series data for a specific metric."""
+        # If metrics adapter is available, query it directly
+        if self._metrics_adapter:
+            # Query metrics from the adapter
+            metrics = await self._metrics_adapter.query_metrics(
+                name=metric_name,
+                start_time=start_time,
+                end_time=end_time,
+                labels=labels,
+                aggregation=aggregation,
+            )
+
+            # Convert to MetricTimeSeriesPoint format
+            data_points = []
+            for metric in metrics:
+                data_points.append(
+                    MetricTimeSeriesPoint(
+                        timestamp=metric.timestamp,
+                        value=metric.value,
+                        labels=metric.labels or {},
+                    )
+                )
+
+            return MetricTimeSeries(
+                metric_name=metric_name,
+                data_points=data_points,
+                aggregation=aggregation,
+                start_time=start_time,
+                end_time=end_time,
+            )
+
+        # Fallback to local storage
         with self._lock:
             data_points = self._metrics_data.get(metric_name, [])
 
@@ -197,6 +267,12 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
 
     async def list_metric_names(self, prefix: Optional[str] = None) -> List[str]:
         """List available metric names."""
+        # If metrics adapter is available, query it
+        if self._metrics_adapter:
+            metric_names = await self._metrics_adapter.get_metric_names(prefix=prefix)
+            return sorted(metric_names)
+
+        # Fallback to local storage
         with self._lock:
             metric_names = list(self._metrics_data.keys())
 

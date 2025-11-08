@@ -34,6 +34,10 @@ export interface AuthState {
   error: string | null
 }
 
+// Global flag to ensure auth is only initialized once across all components
+let authInitialized = false
+let authInitializing = false
+
 export function useAuth() {
   const {
     isAuthenticated,
@@ -46,6 +50,14 @@ export function useAuth() {
   } = useAuthStore()
 
   useEffect(() => {
+    // Skip if already initialized or currently initializing
+    if (authInitialized || authInitializing) {
+      return
+    }
+
+    authInitializing = true
+
+    // Check authentication on mount by validating the httpOnly cookie
     const initializeAuth = async () => {
       setLoading(true)
 
@@ -93,36 +105,35 @@ export function useAuth() {
         }
       }
 
-      // Check if we're already authenticated by making an API call
-      // The browser will automatically send the httpOnly cookie
+      // Validate the httpOnly cookie
       try {
         await api.get('/v2/auth/token-info')
         setAuthenticated(true)
-        setLoading(false)
       } catch (error) {
-        // Not authenticated
         setAuthenticated(false)
+      } finally {
         setLoading(false)
+        authInitializing = false
+        authInitialized = true
       }
     }
 
-    // Only initialize if not already authenticated
-    if (!isAuthenticated) {
-      initializeAuth()
-    } else {
-      setLoading(false)
-    }
-  }, [isAuthenticated, setAuthenticated, setLoading, setError])
+    initializeAuth()
+
+    // Run once on mount - empty deps array
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const logout = async () => {
     try {
-      // Call logout endpoint to clear httpOnly cookie
       await authApi.logout()
     } catch (error) {
       console.error('Logout failed:', error)
     } finally {
-      // Clear authentication state
       clearAuth()
+      // Reset global flags so user can log back in
+      authInitialized = false
+      authInitializing = false
     }
   }
 

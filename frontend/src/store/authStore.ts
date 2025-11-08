@@ -51,46 +51,37 @@ interface AuthState {
  * - Store clears authentication state
  * - User redirected to AuthRequiredPage
  */
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set) => ({
+// No persistence needed - we validate the httpOnly cookie on every page load
+export const useAuthStore = create<AuthState>()((set) => ({
+  isAuthenticated: false,
+  isLoading: true, // Start as loading to prevent race conditions
+  error: null,
+  lastAuthTime: null,
+
+  setAuthenticated: (authenticated: boolean) => {
+    set({
+      isAuthenticated: authenticated,
+      error: null,
+      lastAuthTime: authenticated ? Date.now() : null
+    })
+  },
+
+  setLoading: (loading: boolean) => {
+    set({ isLoading: loading })
+  },
+
+  setError: (error: string | null) => {
+    set({ error, isLoading: false })
+  },
+
+  clearAuth: () =>
+    set({
       isAuthenticated: false,
       isLoading: false,
       error: null,
-      lastAuthTime: null,
-
-      setAuthenticated: (authenticated: boolean) =>
-        set({
-          isAuthenticated: authenticated,
-          error: null,
-          lastAuthTime: authenticated ? Date.now() : null
-        }),
-
-      setLoading: (loading: boolean) =>
-        set({ isLoading: loading }),
-
-      setError: (error: string | null) =>
-        set({ error, isLoading: false }),
-
-      clearAuth: () =>
-        set({
-          isAuthenticated: false,
-          isLoading: false,
-          error: null,
-          lastAuthTime: null
-        }),
+      lastAuthTime: null
     }),
-    {
-      name: 'auth-storage',
-      storage: createJSONStorage(() => sessionStorage), // Use sessionStorage for better security
-      partialize: (state) => ({
-        // Only persist authentication status, not loading/error states
-        isAuthenticated: state.isAuthenticated,
-        lastAuthTime: state.lastAuthTime,
-      }),
-    }
-  )
-)
+}))
 
 /**
  * Setup global event listener for 401 unauthorized responses

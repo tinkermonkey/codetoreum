@@ -54,12 +54,13 @@ export type { WebSocketEvent }
  * Connects to the WebSocket store and manages connection lifecycle.
  *
  * @param isAuthenticated - Whether the user is authenticated
+ * @param isAuthLoading - Whether authentication is still being validated
  * @param config - Optional WebSocket configuration (currently not used, store uses defaults)
  * @returns WebSocket state and control methods
  *
  * Example:
  * ```tsx
- * const { isConnected, events, subscribe, unsubscribe } = useWebSocket(isAuthenticated)
+ * const { isConnected, events, subscribe, unsubscribe } = useWebSocket(isAuthenticated, isAuthLoading)
  *
  * useEffect(() => {
  *   if (isConnected) {
@@ -69,7 +70,11 @@ export type { WebSocketEvent }
  * }, [isConnected, subscribe])
  * ```
  */
-export function useWebSocket(isAuthenticated: boolean, _config: WebSocketConfig = {}) {
+export function useWebSocket(
+  isAuthenticated: boolean,
+  isAuthLoading = false,
+  _config: WebSocketConfig = {}
+) {
   const {
     isConnected,
     isConnecting,
@@ -84,7 +89,13 @@ export function useWebSocket(isAuthenticated: boolean, _config: WebSocketConfig 
   } = useWebSocketStore()
 
   // Connect/disconnect based on authentication status
+  // IMPORTANT: Wait for auth to finish loading before connecting
   useEffect(() => {
+    // Don't connect while auth is loading (prevents race condition)
+    if (isAuthLoading) {
+      return
+    }
+
     if (isAuthenticated) {
       connect(isAuthenticated)
     } else {
@@ -96,7 +107,7 @@ export function useWebSocket(isAuthenticated: boolean, _config: WebSocketConfig 
       // Note: We don't disconnect on unmount because the store is shared
       // across all components. The store manages its own cleanup.
     }
-  }, [isAuthenticated, connect, disconnect])
+  }, [isAuthenticated, isAuthLoading, connect, disconnect])
 
   return {
     isConnected,

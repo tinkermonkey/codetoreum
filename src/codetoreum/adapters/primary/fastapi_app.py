@@ -52,6 +52,7 @@ from codetoreum.adapters.primary.routers.executions import create_executions_rou
 from codetoreum.adapters.primary.routers.config import create_config_router
 from codetoreum.adapters.primary.routers.metrics import create_metrics_router
 from codetoreum.adapters.primary.routers.workspace import create_workspace_router
+from codetoreum.adapters.primary.routers.events import create_events_router
 from codetoreum.infrastructure.auth import SimpleTokenAuthManager
 from codetoreum.ports.input.agent_command import IAgentCommandPort
 from codetoreum.ports.input.agent_query import IAgentQueryPort
@@ -68,6 +69,7 @@ from codetoreum.ports.input.workflow_definition_command import IWorkflowDefiniti
 from codetoreum.ports.input.orchestration_command import IOrchestrationCommandPort
 from codetoreum.ports.input.work_item_command import IWorkItemCommandPort
 from codetoreum.ports.input.work_item_query import IWorkItemQueryPort
+from codetoreum.ports.output.event_store import IEventStore
 
 
 # ============================================================================
@@ -173,6 +175,7 @@ def create_app(
     agent_query_port: IAgentQueryPort,
     execution_command_port: IExecutionCommandPort,
     execution_query_port: IExecutionQueryPort,
+    event_store: IEventStore,
     event_bus: IEventBus,
     config_service: IConfigurationService,
     logger: ILogger,
@@ -454,6 +457,13 @@ def create_app(
         auth_deps=auth_deps,
     )
     app.include_router(metrics_router)
+
+    # Include Events router
+    events_router = create_events_router(
+        event_store=event_store,
+        auth_deps=auth_deps,
+    )
+    app.include_router(events_router)
 
     # Include Workspace router
     workspace_router = create_workspace_router(
@@ -2025,6 +2035,9 @@ def create_development_app() -> FastAPI:
         async def get_workspace_logs(self, workspace_id: str, tail=None, since=None):
             return ["[Mock] Workspace log line 1", "[Mock] Workspace log line 2"]
 
+    # Create mock event store for development
+    from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
+
     return create_app(
         workflow_command_port=MockWorkflowCommandPort(),
         task_query_port=MockTaskQueryPort(),
@@ -2041,6 +2054,7 @@ def create_development_app() -> FastAPI:
         agent_query_port=MockAgentQueryPort(),
         execution_command_port=MockExecutionCommandPort(),
         execution_query_port=MockExecutionQueryPort(),
+        event_store=InMemoryEventStore(),
         event_bus=MockEventBus(),
         config_service=MockConfigService(),
         logger=MockLogger(),

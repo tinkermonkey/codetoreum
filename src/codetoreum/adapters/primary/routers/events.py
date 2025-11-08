@@ -172,11 +172,15 @@ def create_events_router(
                     stream_id=aggregate_id,
                 )
             else:
-                # Get all events (limited)
-                domain_events = await event_store.get_events_by_type(
-                    event_type="",
-                    limit=limit + offset,
-                )
+                # Get all events - need to get all stream IDs and iterate
+                all_stream_ids = await event_store.get_all_stream_ids()
+                domain_events = []
+                for stream_id in all_stream_ids:
+                    stream_events = await event_store.get_events(stream_id=stream_id, from_version=0)
+                    domain_events.extend(stream_events)
+
+                # Sort by timestamp
+                domain_events.sort(key=lambda e: e.occurred_at if hasattr(e, 'occurred_at') else e.timestamp)
 
             # Filter by aggregate type if specified
             if aggregate_type:

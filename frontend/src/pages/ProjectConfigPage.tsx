@@ -20,7 +20,7 @@ export default function ProjectConfigPage() {
 
   const { data: config, isLoading, error } = useQuery({
     queryKey: ['projectConfig', selectedProject],
-    queryFn: () => projectConfigApi.get(selectedProject),
+    queryFn: () => projectConfigApi.getByName(selectedProject),
     enabled: !!selectedProject,
   })
 
@@ -91,7 +91,7 @@ function EnvironmentVariablesSection({
 
   const removeVarMutation = useMutation({
     mutationFn: (varName: string) =>
-      projectConfigApi.removeEnvironmentVariable(config.name, varName, 'admin'),
+      projectConfigApi.removeEnvironmentVariable(config.name, varName),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projectConfig', config.name] })
     },
@@ -232,7 +232,7 @@ function MountedCommandsSection({
   const [newCommandDescription, setNewCommandDescription] = useState('')
 
   const mountCommandMutation = useMutation({
-    mutationFn: (data: any) => projectConfigApi.mountCommand(config.name, data),
+    mutationFn: (data: any) => projectConfigApi.addMountCommand(config.name, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projectConfig', config.name] })
       setNewCommandName('')
@@ -243,7 +243,7 @@ function MountedCommandsSection({
 
   const unmountCommandMutation = useMutation({
     mutationFn: (commandName: string) =>
-      projectConfigApi.unmountCommand(config.name, commandName, 'admin'),
+      projectConfigApi.removeMountCommand(config.name, commandName),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projectConfig', config.name] })
     },

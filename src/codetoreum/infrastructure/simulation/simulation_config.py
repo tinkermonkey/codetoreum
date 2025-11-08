@@ -2,7 +2,9 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
+import yaml
 
 
 @dataclass
@@ -328,3 +330,60 @@ class SimulationConfig:
             metrics=metrics,
             metadata=data.get("metadata", {}),
         )
+
+    @classmethod
+    def from_yaml(cls, file_path: Union[str, Path]) -> "SimulationConfig":
+        """
+        Load simulation configuration from YAML file.
+
+        This method loads a scenario configuration file and creates a SimulationConfig
+        object. The YAML file should contain simulation behavior settings (time, agents,
+        container, etc.) but NOT the data seeding definitions (projects, workflows, etc.)
+        which are handled by scenario_models.ScenarioModel.
+
+        Args:
+            file_path: Path to YAML scenario file
+
+        Returns:
+            SimulationConfig instance
+
+        Raises:
+            FileNotFoundError: If file doesn't exist
+            yaml.YAMLError: If YAML is malformed
+            ValueError: If required fields are missing
+        """
+        file_path = Path(file_path)
+
+        if not file_path.exists():
+            raise FileNotFoundError(f"Scenario file not found: {file_path}")
+
+        with open(file_path, "r") as f:
+            data = yaml.safe_load(f)
+
+        if not data:
+            raise ValueError(f"Empty YAML file: {file_path}")
+
+        # Extract scenario name (required)
+        scenario_name = data.get("name")
+        if not scenario_name:
+            raise ValueError("Scenario file must contain 'name' field")
+
+        # Build config using from_dict for consistency
+        config_dict = {
+            "scenario_name": scenario_name,
+            "scenario_description": data.get("description", ""),
+            "time": {
+                "speed_multiplier": data.get("speed_multiplier", 10.0),
+                "auto_advance": data.get("auto_advance", False),
+            },
+            "agents": {},
+            "container": data.get("container", {}),
+            "notifications": data.get("notifications", {}),
+            "metrics": data.get("metrics", {}),
+            "metadata": data.get("metadata", {}),
+        }
+
+        # Add YAML file path to metadata for reference
+        config_dict["metadata"]["yaml_file"] = str(file_path)
+
+        return cls.from_dict(config_dict)

@@ -19,7 +19,6 @@ from codetoreum.ports.input.config_query import (
     ProjectConfigInfo,
 )
 from codetoreum.domain.exceptions import (
-    ProjectNotFoundError,
     AgentNotFoundError,
     PipelineNotFoundError,
     ConfigNotFoundError,
@@ -45,7 +44,7 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
         """Get project configuration by ID."""
         with self._lock:
             if project_id not in self._projects:
-                raise ProjectNotFoundError(f"Project with ID {project_id} not found")
+                raise ConfigNotFoundError(f"Project with ID {project_id} not found")
             return self._projects[project_id]
 
     async def get_project_config_by_name(
@@ -54,7 +53,7 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
         """Get project configuration by name."""
         with self._lock:
             if project_name not in self._projects_by_name:
-                raise ProjectNotFoundError(f"Project with name '{project_name}' not found")
+                raise ConfigNotFoundError(f"Project with name '{project_name}' not found")
             project_id = self._projects_by_name[project_name]
             return self._projects[project_id]
 
@@ -64,7 +63,7 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
         """Get agent configuration."""
         with self._lock:
             if project_id not in self._agents:
-                raise ProjectNotFoundError(f"Project with ID {project_id} not found")
+                raise ConfigNotFoundError(f"Project with ID {project_id} not found")
             if agent_name not in self._agents[project_id]:
                 raise AgentNotFoundError(f"Agent '{agent_name}' not found in project")
             return self._agents[project_id][agent_name]
