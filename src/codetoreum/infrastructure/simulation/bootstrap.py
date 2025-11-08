@@ -61,6 +61,7 @@ from codetoreum.ports.input.workspace_query import IWorkspaceQueryPort
 from codetoreum.ports.input.work_item_command import IWorkItemCommandPort
 from codetoreum.ports.input.work_item_query import IWorkItemQueryPort
 from codetoreum.ports.input.workflow_query import IWorkflowQueryPort
+from codetoreum.ports.input.workflow_run_query import IWorkflowRunQueryPort
 from codetoreum.ports.input.workflow_definition_command import IWorkflowDefinitionCommandPort
 from codetoreum.ports.input.orchestration_command import IOrchestrationCommandPort
 from codetoreum.ports.input.agent_command import IAgentCommandPort
@@ -84,6 +85,7 @@ from codetoreum.adapters.primary.input_port_adapters.mock import (
     MockWorkspaceQueryAdapter,
     MockWorkflowCommandAdapter,
     MockWorkflowQueryAdapter,
+    MockWorkflowRunQueryAdapter,
     MockOrchestrationCommandAdapter,
     MockWorkflowDefinitionCommandAdapter,
     MockConfigCommandAdapter,
@@ -144,6 +146,7 @@ class SimulationPorts:
     task_query: ITaskQueryPort
     work_item_query: IWorkItemQueryPort
     workflow_query: IWorkflowQueryPort
+    workflow_run_query: IWorkflowRunQueryPort
     agent_query: IAgentQueryPort
     execution_query: IExecutionQueryPort
     config_query: IConfigurationQueryPort
@@ -574,6 +577,7 @@ class SimulationApplicationBootstrap:
         workspace_query = MockWorkspaceQueryAdapter()
         workflow_command = MockWorkflowCommandAdapter()
         workflow_query = MockWorkflowQueryAdapter()
+        workflow_run_query = MockWorkflowRunQueryAdapter()
         orchestration_command = MockOrchestrationCommandAdapter()
         workflow_definition_command = MockWorkflowDefinitionCommandAdapter()
         config_command = MockConfigCommandAdapter()
@@ -592,6 +596,7 @@ class SimulationApplicationBootstrap:
             task_query=task_query,
             work_item_query=work_item_query,
             workflow_query=workflow_query,
+            workflow_run_query=workflow_run_query,
             agent_query=agent_query,
             execution_query=execution_query,
             config_query=config_query,
@@ -631,6 +636,7 @@ class SimulationApplicationBootstrap:
             work_item_command_port=self.ports.work_item_command,
             work_item_query_port=self.ports.work_item_query,
             workflow_query_port=self.ports.workflow_query,
+            workflow_run_query_port=self.ports.workflow_run_query,
             workflow_definition_command_port=self.ports.workflow_definition_command,
             orchestration_command_port=self.ports.orchestration_command,
             agent_command_port=self.ports.agent_command,
