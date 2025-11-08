@@ -8,10 +8,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from codetoreum.adapters.primary.routers.metrics import create_metrics_router
-from codetoreum.adapters.primary.metrics_dtos import (
-    ActiveAgentInfo,
-    ClaudeApiUsageInfo,
-)
 from codetoreum.ports.input.metrics_query import IMetricsQueryPort
 
 
@@ -82,7 +78,7 @@ def app(mock_query_port):
 
     # Create and include metrics router (without auth for testing)
     router = create_metrics_router(
-        query_port=mock_query_port,
+        metrics_query_port=mock_query_port,
         auth_deps=None,  # Disable auth for testing
     )
     app.include_router(router)
@@ -104,28 +100,30 @@ class TestActiveAgents:
         """Test successful active agents retrieval."""
         # Arrange
         now = datetime.now(timezone.utc)
-        active_agents = [
-            ActiveAgentInfo(
-                execution_id="exec-123",
-                agent_name="developer_agent",
-                work_item_id="wi-456",
-                project="codetoreum",
-                issue_number=42,
-                status="running",
-                started_at=now,
-                container_name="claude-code-exec-123",
-            ),
-            ActiveAgentInfo(
-                execution_id="exec-124",
-                agent_name="reviewer_agent",
-                work_item_id="wi-457",
-                project="codetoreum",
-                issue_number=43,
-                status="running",
-                started_at=now,
-                container_name="claude-code-exec-124",
-            ),
-        ]
+        active_agents = {
+            "agents": [
+                {
+                    "execution_id": "exec-123",
+                    "agent_name": "developer_agent",
+                    "work_item_id": "wi-456",
+                    "project": "codetoreum",
+                    "issue_number": 42,
+                    "status": "running",
+                    "started_at": now,
+                    "container_name": "claude-code-exec-123",
+                },
+                {
+                    "execution_id": "exec-124",
+                    "agent_name": "reviewer_agent",
+                    "work_item_id": "wi-457",
+                    "project": "codetoreum",
+                    "issue_number": 43,
+                    "status": "running",
+                    "started_at": now,
+                    "container_name": "claude-code-exec-124",
+                },
+            ]
+        }
         mock_query_port._get_active_agents.return_value = active_agents
 
         # Act
@@ -147,7 +145,7 @@ class TestActiveAgents:
     def test_get_active_agents_empty(self, client, mock_query_port):
         """Test active agents retrieval with no active agents."""
         # Arrange
-        mock_query_port._get_active_agents.return_value = []
+        mock_query_port._get_active_agents.return_value = {"agents": []}
 
         # Act
         response = client.get("/api/v2/metrics/active-agents")
@@ -165,16 +163,16 @@ class TestApiUsage:
     def test_get_api_usage_success(self, client, mock_query_port):
         """Test successful API usage retrieval."""
         # Arrange
-        api_usage = ClaudeApiUsageInfo(
-            available=True,
-            weekly_usage=15000000,
-            weekly_quota=50000000,
-            weekly_usage_percent=30.0,
-            session_usage=2000000,
-            session_quota=10000000,
-            session_usage_percent=20.0,
-            session_remaining_minutes=45,
-        )
+        api_usage = {
+            "claude": {
+                "available": True,
+                "weekly_usage": 15000000,
+                "weekly_quota": 50000000,
+                "session_usage": 2000000,
+                "session_quota": 10000000,
+                "session_remaining_minutes": 45,
+            }
+        }
         mock_query_port._get_api_usage.return_value = api_usage
 
         # Act
@@ -198,16 +196,16 @@ class TestApiUsage:
     def test_get_api_usage_unavailable(self, client, mock_query_port):
         """Test API usage retrieval when API is unavailable."""
         # Arrange
-        api_usage = ClaudeApiUsageInfo(
-            available=False,
-            weekly_usage=0,
-            weekly_quota=50000000,
-            weekly_usage_percent=0.0,
-            session_usage=0,
-            session_quota=10000000,
-            session_usage_percent=0.0,
-            session_remaining_minutes=0,
-        )
+        api_usage = {
+            "claude": {
+                "available": False,
+                "weekly_usage": 0,
+                "weekly_quota": 50000000,
+                "session_usage": 0,
+                "session_quota": 10000000,
+                "session_remaining_minutes": 0,
+            }
+        }
         mock_query_port._get_api_usage.return_value = api_usage
 
         # Act
@@ -223,16 +221,16 @@ class TestApiUsage:
     def test_get_api_usage_high_usage(self, client, mock_query_port):
         """Test API usage retrieval with high usage percentage."""
         # Arrange
-        api_usage = ClaudeApiUsageInfo(
-            available=True,
-            weekly_usage=48000000,
-            weekly_quota=50000000,
-            weekly_usage_percent=96.0,
-            session_usage=9500000,
-            session_quota=10000000,
-            session_usage_percent=95.0,
-            session_remaining_minutes=5,
-        )
+        api_usage = {
+            "claude": {
+                "available": True,
+                "weekly_usage": 48000000,
+                "weekly_quota": 50000000,
+                "session_usage": 9500000,
+                "session_quota": 10000000,
+                "session_remaining_minutes": 5,
+            }
+        }
         mock_query_port._get_api_usage.return_value = api_usage
 
         # Act

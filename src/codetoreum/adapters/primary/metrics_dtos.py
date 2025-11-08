@@ -288,7 +288,7 @@ class AgentExecutionMetricsResponse(BaseModel):
 
 
 class ActiveAgentInfo(BaseModel):
-    """Information about an active agent execution"""
+    """Information about an active agent execution (internal use)"""
     execution_id: str
     agent_name: str
     work_item_id: str
@@ -299,14 +299,8 @@ class ActiveAgentInfo(BaseModel):
     container_name: str
 
 
-class ActiveAgentsResponse(BaseModel):
-    """List of currently active agents"""
-    agents: List[ActiveAgentInfo]
-    count: int
-
-
 class ClaudeApiUsageInfo(BaseModel):
-    """Claude API usage and quota information"""
+    """Claude API usage and quota information (internal use)"""
     available: bool
     weekly_usage: int
     weekly_quota: int
@@ -315,8 +309,3 @@ class ClaudeApiUsageInfo(BaseModel):
     session_quota: int
     session_usage_percent: float
     session_remaining_minutes: int
-
-
-class ApiUsageResponse(BaseModel):
-    """API usage information for all providers"""
-    claude: ClaudeApiUsageInfo

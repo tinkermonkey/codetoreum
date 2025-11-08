@@ -152,7 +152,7 @@ class TestListWorkflowRuns:
         # Assert
         assert response.status_code == 200
         data = response.json()
-        assert data["totalCount"] == 1
+        assert data["total_count"] == 1
         assert len(data["runs"]) == 1
         assert data["runs"][0]["id"] == "wfrun-123"
         assert data["runs"][0]["status"] == "running"
@@ -182,7 +182,7 @@ class TestListWorkflowRuns:
         # Assert
         assert response.status_code == 200
         data = response.json()
-        assert data["totalCount"] == 1
+        assert data["total_count"] == 1
 
         # Verify filters were passed
         mock_query_port._list_workflow_runs.assert_called_once()
@@ -221,9 +221,10 @@ class TestListWorkflowRuns:
         # Assert
         assert response.status_code == 200
         data = response.json()
-        assert data["offset"] == 20
-        assert data["limit"] == 10
-        assert data["hasNext"] is True
+        # offset=20, limit=10 -> page 3 (20/10 + 1)
+        assert data["page"] == 3
+        assert data["page_size"] == 10
+        assert data["has_next"] is True
 
 
 class TestGetWorkflowRun:
@@ -289,10 +290,10 @@ class TestGetWorkflowRunEvents:
                     "data": {"workItemId": "wi-456"},
                 }
             ],
-            "totalCount": 1,
+            "total_count": 1,
             "offset": 0,
             "limit": 50,
-            "hasNext": False,
+            "has_next": False,
         }
         mock_query_port._get_workflow_run_events.return_value = events_result
 
@@ -302,7 +303,7 @@ class TestGetWorkflowRunEvents:
         # Assert
         assert response.status_code == 200
         data = response.json()
-        assert data["totalCount"] == 1
+        assert data["total_count"] == 1
         assert len(data["events"]) == 1
         assert data["events"][0]["eventType"] == "WorkflowStarted"
 
@@ -314,10 +315,10 @@ class TestGetWorkflowRunEvents:
         # Arrange
         events_result = {
             "events": [],
-            "totalCount": 0,
+            "total_count": 0,
             "offset": 0,
             "limit": 50,
-            "hasNext": False,
+            "has_next": False,
         }
         mock_query_port._get_workflow_run_events.return_value = events_result
 

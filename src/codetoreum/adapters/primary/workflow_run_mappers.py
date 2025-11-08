@@ -108,10 +108,10 @@ class WorkflowRunMapper:
         """
         return WorkflowRunListResponse(
             runs=[WorkflowRunMapper.to_summary_response(run) for run in result.runs],
-            totalCount=result.total_count,
-            offset=result.offset,
-            limit=result.limit,
-            hasNext=result.has_next,
+            total_count=result.total_count,
+            page=(result.offset // result.limit) + 1 if result.limit > 0 else 1,
+            page_size=result.limit,
+            has_next=result.has_next,
         )
 
     @staticmethod
@@ -153,8 +153,8 @@ class WorkflowRunMapper:
         """
         return WorkflowEventsListResponse(
             events=[WorkflowRunMapper.to_event_response(event) for event in events],
-            totalCount=total_count,
-            offset=offset,
-            limit=limit,
-            hasNext=has_next,
+            total_count=total_count,
+            page=(offset // limit) + 1 if limit > 0 else 1,
+            page_size=limit,
+            has_next=has_next,
         )

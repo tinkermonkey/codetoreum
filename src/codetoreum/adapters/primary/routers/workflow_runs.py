@@ -7,7 +7,8 @@ Provides RESTful endpoints for querying workflow execution runs.
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import status as http_status
 
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
 from codetoreum.adapters.primary.workflow_run_dtos import (
@@ -106,7 +107,7 @@ def create_workflow_runs_router(
                     status_list = [WorkflowRunStatus(s.strip()) for s in status.split(",")]
                 except ValueError as e:
                     raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
+                        status_code=http_status.HTTP_400_BAD_REQUEST,
                         detail=f"Invalid status value: {str(e)}",
                     )
 
@@ -123,7 +124,7 @@ def create_workflow_runs_router(
                 sort_field = WorkflowRunSortField(sortBy)
             except ValueError:
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
+                    status_code=http_status.HTTP_400_BAD_REQUEST,
                     detail=f"Invalid sort field: {sortBy}. Must be one of: startedAt, completedAt, duration",
                 )
 
@@ -132,7 +133,7 @@ def create_workflow_runs_router(
                 sort_order_enum = SortOrder(sortOrder.lower())
             except ValueError:
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
+                    status_code=http_status.HTTP_400_BAD_REQUEST,
                     detail=f"Invalid sort order: {sortOrder}. Must be 'asc' or 'desc'",
                 )
 
@@ -154,7 +155,7 @@ def create_workflow_runs_router(
             raise
         except Exception as e:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=http_status.HTTP_400_BAD_REQUEST,
                 detail=str(e),
             )
 
@@ -198,11 +199,11 @@ def create_workflow_runs_router(
             error_msg = str(e).lower()
             if "not found" in error_msg:
                 raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
+                    status_code=http_status.HTTP_404_NOT_FOUND,
                     detail=f"Workflow run not found: {workflow_run_id}",
                 )
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=http_status.HTTP_400_BAD_REQUEST,
                 detail=str(e),
             )
 
@@ -263,21 +264,21 @@ def create_workflow_runs_router(
             # Convert to response DTO
             return WorkflowRunMapper.to_events_list_response(
                 events=result.get("events", []),
-                total_count=result.get("totalCount", 0),
+                total_count=result.get("total_count", 0),
                 offset=result.get("offset", offset),
                 limit=result.get("limit", limit),
-                has_next=result.get("hasNext", False),
+                has_next=result.get("has_next", False),
             )
 
         except Exception as e:
             error_msg = str(e).lower()
             if "not found" in error_msg:
                 raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
+                    status_code=http_status.HTTP_404_NOT_FOUND,
                     detail=f"Workflow run not found: {workflow_run_id}",
                 )
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=http_status.HTTP_400_BAD_REQUEST,
                 detail=str(e),
             )
 

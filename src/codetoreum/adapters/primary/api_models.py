@@ -150,7 +150,7 @@ class PaginatedResponse(BaseResponse):
     page_size: int = Field(..., description="Items per page")
     has_next: bool = Field(..., description="Whether there are more pages")
 
-    model_config = ConfigDict()
+    model_config = ConfigDict(populate_by_name=True)
 
 
 # ============================================================================
