@@ -13,16 +13,39 @@ import { WorkflowRunDetails } from '../components/workflow-runs/WorkflowRunDetai
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { useWorkflowRunsUIStore } from '../store/workflowRunsUIStore';
 import { useWorkflowWebSocket } from '../hooks/useWorkflowWebSocket';
+import { useWorkflowRunEvents } from '../hooks/useWorkflowRunEvents';
 import { useAuthStore } from '../store/authStore';
+import { useQueryClient } from '@tanstack/react-query';
 
 export function PipelineRunDetailsPage(): React.ReactElement {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const { selectedWorkflowId, setSelectedWorkflow } = useWorkflowRunsUIStore();
   const { isAuthenticated, isLoading: isAuthLoading } = useAuthStore();
+  const queryClient = useQueryClient();
 
-  // Enable real-time updates via WebSocket
+  // Enable real-time updates via WebSocket (global subscription)
   useWorkflowWebSocket(isAuthenticated, isAuthLoading);
+
+  // Subscribe to specific workflow run events for efficient filtering
+  const { workflowEvents } = useWorkflowRunEvents(
+    selectedWorkflowId,
+    isAuthenticated,
+    isAuthLoading
+  );
+
+  // Invalidate queries when workflow events are received
+  useEffect(() => {
+    if (workflowEvents.length > 0 && selectedWorkflowId) {
+      // Invalidate workflow run details and events to refresh UI
+      queryClient.invalidateQueries({
+        queryKey: ['workflow-runs', selectedWorkflowId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['workflow-events', selectedWorkflowId],
+      });
+    }
+  }, [workflowEvents, selectedWorkflowId, queryClient]);
 
   // Sync URL param with store on mount and when URL changes
   useEffect(() => {

@@ -257,3 +257,122 @@ class TestWebSocketMultipleConnections:
             )
             data2 = websocket.receive_json()
             assert data2["type"] == "subscribed"
+
+
+class TestWebSocketWorkflowFiltering:
+    """Tests for workflow run ID filtering"""
+
+    @pytest.mark.timeout(10)
+    def test_subscribe_to_specific_workflow_run(self, client):
+        """Test subscribing to events for a specific workflow run"""
+        with client.websocket_connect("/ws/events") as websocket:
+            # Receive welcome message
+            websocket.receive_json()
+
+            # Subscribe to specific workflow run
+            workflow_run_id = "workflow-run-123"
+            websocket.send_json(
+                {
+                    "type": "subscribe",
+                    "subscription_type": "workflow_events",
+                    "workflow_run_id": workflow_run_id,
+                }
+            )
+
+            # Receive subscription confirmation
+            data = websocket.receive_json()
+            assert data["type"] == "subscribed"
+            assert data["subscription_type"] == "workflow_events"
+            assert data["filters"]["workflow_run_id"] == workflow_run_id
+
+    @pytest.mark.timeout(10)
+    def test_subscribe_to_workflow_with_event_types(self, client):
+        """Test subscribing to specific workflow events with event type filtering"""
+        with client.websocket_connect("/ws/events") as websocket:
+            # Receive welcome message
+            websocket.receive_json()
+
+            # Subscribe to specific workflow run with event types
+            workflow_run_id = "workflow-run-456"
+            event_types = [
+                "WorkflowStarted",
+                "WorkflowCompleted",
+                "StageStarted",
+                "StageCompleted",
+            ]
+            websocket.send_json(
+                {
+                    "type": "subscribe",
+                    "subscription_type": "workflow_events",
+                    "workflow_run_id": workflow_run_id,
+                    "event_types": event_types,
+                }
+            )
+
+            # Receive subscription confirmation
+            data = websocket.receive_json()
+            assert data["type"] == "subscribed"
+            assert data["subscription_type"] == "workflow_events"
+            assert data["filters"]["workflow_run_id"] == workflow_run_id
+            assert data["filters"]["event_types"] == event_types
+
+    @pytest.mark.timeout(10)
+    def test_multiple_workflow_subscriptions(self, client):
+        """Test subscribing to multiple workflow runs simultaneously"""
+        with client.websocket_connect("/ws/events") as websocket:
+            # Receive welcome message
+            websocket.receive_json()
+
+            # Subscribe to first workflow run
+            websocket.send_json(
+                {
+                    "type": "subscribe",
+                    "subscription_type": "workflow_events",
+                    "workflow_run_id": "workflow-run-001",
+                }
+            )
+            data1 = websocket.receive_json()
+            assert data1["type"] == "subscribed"
+            assert data1["filters"]["workflow_run_id"] == "workflow-run-001"
+
+            # Subscribe to second workflow run
+            websocket.send_json(
+                {
+                    "type": "subscribe",
+                    "subscription_type": "workflow_events",
+                    "workflow_run_id": "workflow-run-002",
+                }
+            )
+            data2 = websocket.receive_json()
+            assert data2["type"] == "subscribed"
+            assert data2["filters"]["workflow_run_id"] == "workflow-run-002"
+
+    @pytest.mark.timeout(10)
+    def test_unsubscribe_from_workflow_run(self, client):
+        """Test unsubscribing from a specific workflow run"""
+        with client.websocket_connect("/ws/events") as websocket:
+            # Receive welcome message
+            websocket.receive_json()
+
+            # Subscribe to specific workflow run
+            workflow_run_id = "workflow-run-789"
+            websocket.send_json(
+                {
+                    "type": "subscribe",
+                    "subscription_type": "workflow_events",
+                    "workflow_run_id": workflow_run_id,
+                }
+            )
+            websocket.receive_json()  # subscription confirmation
+
+            # Unsubscribe from workflow run
+            websocket.send_json(
+                {
+                    "type": "unsubscribe",
+                    "workflow_run_id": workflow_run_id,
+                }
+            )
+
+            # Receive unsubscribe confirmation
+            data = websocket.receive_json()
+            assert data["type"] == "unsubscribed"
