@@ -344,3 +344,23 @@ class IMetricsQueryPort(ABC):
             Dict with execution counts, success rates, duration stats per agent
         """
         pass
+
+    @abstractmethod
+    async def get_active_agents(self) -> Dict[str, Any]:
+        """
+        Get currently active agent executions.
+
+        Returns:
+            Dict containing list of active agents with execution info
+        """
+        pass
+
+    @abstractmethod
+    async def get_api_usage(self) -> Dict[str, Any]:
+        """
+        Get API usage and quota information.
+
+        Returns:
+            Dict with usage statistics for external APIs (Claude, etc.)
+        """
+        pass

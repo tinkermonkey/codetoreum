@@ -289,20 +289,22 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
     ) -> Dict[str, Any]:
         """Get per-endpoint API metrics."""
         return {
-            "/api/v1/agents": {
-                "request_count": 100,
-                "error_count": 2,
-                "p50_latency_ms": 25.0,
-                "p95_latency_ms": 100.0,
-                "p99_latency_ms": 250.0,
-            },
-            "/api/v1/executions": {
-                "request_count": 200,
-                "error_count": 5,
-                "p50_latency_ms": 50.0,
-                "p95_latency_ms": 200.0,
-                "p99_latency_ms": 500.0,
-            },
+            "endpoints": {
+                "/api/v1/agents": {
+                    "request_count": 100,
+                    "error_count": 2,
+                    "latency_p50_ms": 25.0,
+                    "latency_p95_ms": 100.0,
+                    "latency_p99_ms": 250.0,
+                },
+                "/api/v1/executions": {
+                    "request_count": 200,
+                    "error_count": 5,
+                    "latency_p50_ms": 50.0,
+                    "latency_p95_ms": 200.0,
+                    "latency_p99_ms": 500.0,
+                },
+            }
         }
 
     async def get_agent_execution_metrics(
@@ -313,20 +315,54 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
     ) -> Dict[str, Any]:
         """Get agent execution metrics."""
         return {
-            "developer_agent": {
-                "total_executions": 50,
-                "successful_executions": 45,
-                "failed_executions": 5,
-                "average_duration_seconds": 180.0,
-                "success_rate": 0.9,
-            },
-            "reviewer_agent": {
-                "total_executions": 30,
-                "successful_executions": 28,
-                "failed_executions": 2,
-                "average_duration_seconds": 120.0,
-                "success_rate": 0.933,
-            },
+            "agents": {
+                "developer_agent": {
+                    "execution_count": 50,
+                    "success_count": 45,
+                    "failure_count": 5,
+                    "avg_duration_seconds": 180.0,
+                    "p95_duration_seconds": 300.0,
+                },
+                "reviewer_agent": {
+                    "execution_count": 30,
+                    "success_count": 28,
+                    "failure_count": 2,
+                    "avg_duration_seconds": 120.0,
+                    "p95_duration_seconds": 200.0,
+                },
+            }
+        }
+
+    async def get_active_agents(self) -> Dict[str, Any]:
+        """
+        Get currently active agent executions.
+
+        Returns:
+            Dict containing list of active agents with execution info
+        """
+        # Return empty list in mock implementation
+        # Real implementation would query execution tracking system
+        return {
+            "agents": []
+        }
+
+    async def get_api_usage(self) -> Dict[str, Any]:
+        """
+        Get API usage and quota information.
+
+        Returns:
+            Dict with usage statistics for external APIs (Claude, etc.)
+        """
+        # Return mock usage data
+        return {
+            "claude": {
+                "available": True,
+                "weekly_usage": 15000000,
+                "weekly_quota": 50000000,
+                "session_usage": 2000000,
+                "session_quota": 10000000,
+                "session_remaining_minutes": 45,
+            }
         }
 
     def set_component_health(self, component_name: str, health_info: ComponentHealthInfo):

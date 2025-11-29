@@ -6,7 +6,7 @@ import { workItemsApi, executionsApi } from '../api/client'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useAuth } from '../hooks/useAuth'
 import { Card } from '../components/ui/card'
-import type { WorkItemStatus, ExecutionStatus } from '../types'
+import type { WorkItemStatus, ExecutionStatus, WorkItem, ExecutionSummary } from '../types'
 
 export default function DashboardPage() {
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth()
@@ -14,13 +14,13 @@ export default function DashboardPage() {
   // Fetch work items
   const { data: workItems = [], isLoading: loadingWorkItems } = useQuery({
     queryKey: ['workItems'],
-    queryFn: () => workItemsApi.list({ limit: 20 }),
+    queryFn: () => workItemsApi.getAll(),
   })
 
   // Fetch recent executions
   const { data: executions = [], isLoading: loadingExecutions } = useQuery({
     queryKey: ['executions'],
-    queryFn: () => executionsApi.list({ limit: 10 }),
+    queryFn: () => executionsApi.getAll(),
   })
 
   // WebSocket for real-time events (uses httpOnly cookies for auth)
@@ -98,7 +98,7 @@ export default function DashboardPage() {
             <p className="text-center py-8 text-muted-foreground">No work items found</p>
           ) : (
             <div className="space-y-3">
-              {workItems.map((item) => (
+              {workItems.map((item: WorkItem) => (
                 <div
                   key={item.id}
                   className="border rounded-md p-4 hover:bg-accent/50 transition-colors"
@@ -128,7 +128,7 @@ export default function DashboardPage() {
                     <span>Updated {formatDistanceToNow(new Date(item.updated_at), { addSuffix: true })}</span>
                     {item.labels.length > 0 && (
                       <div className="flex items-center space-x-1">
-                        {item.labels.slice(0, 3).map((label) => (
+                        {item.labels.slice(0, 3).map((label: string) => (
                           <span key={label} className="px-2 py-0.5 rounded-full bg-muted">
                             {label}
                           </span>
@@ -153,7 +153,7 @@ export default function DashboardPage() {
             <p className="text-center py-8 text-muted-foreground">No executions found</p>
           ) : (
             <div className="space-y-3">
-              {executions.map((execution) => (
+              {executions.map((execution: ExecutionSummary) => (
                 <div
                   key={execution.id}
                   className="border rounded-md p-4 hover:bg-accent/50 transition-colors"

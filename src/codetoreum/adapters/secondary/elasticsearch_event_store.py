@@ -534,6 +534,149 @@ class ElasticsearchEventStore(IEventStore):
         except Exception as e:
             raise EventStoreError(f"Failed to get stream IDs: {e}") from e
 
+    async def query_streams_by_latest_event(
+        self,
+        aggregate_type: str,
+        event_type_filters: Optional[List[str]] = None,
+        event_data_filters: Optional[Dict[str, Any]] = None,
+        sort_by: str = "timestamp",
+        sort_order: str = "desc",
+        offset: int = 0,
+        limit: int = 100,
+    ) -> tuple[List[str], int]:
+        """
+        Query stream IDs by analyzing their latest events with filtering at DB level.
+
+        This method uses Elasticsearch aggregations to efficiently filter and sort
+        workflows without loading all events into memory. It groups events by
+        aggregate_id and examines the latest event for each stream.
+
+        Args:
+            aggregate_type: Filter by aggregate type (e.g., "Workflow")
+            event_type_filters: Optional list of event types to filter by
+            event_data_filters: Optional filters on event data fields
+            sort_by: Field to sort by (timestamp, stream_version, etc.)
+            sort_order: Sort order ("asc" or "desc")
+            offset: Pagination offset
+            limit: Maximum number of stream IDs to return
+
+        Returns:
+            Tuple of (stream_ids, total_count)
+
+        Raises:
+            EventStoreError: Query failure
+
+        Example:
+            # Get workflows with status "completed", sorted by completion time
+            stream_ids, total = await event_store.query_streams_by_latest_event(
+                aggregate_type="Workflow",
+                event_data_filters={"data.status": "completed"},
+                sort_by="timestamp",
+                offset=0,
+                limit=20
+            )
+        """
+        if not self._initialized:
+            await self.initialize()
+
+        try:
+            # Build query
+            must_clauses = [{"term": {"aggregate_type": aggregate_type}}]
+
+            if event_type_filters:
+                must_clauses.append({"terms": {"event_type": event_type_filters}})
+
+            if event_data_filters:
+                for field, value in event_data_filters.items():
+                    if isinstance(value, list):
+                        # For lists, use terms query (OR logic)
+                        must_clauses.append({"terms": {field: value}})
+                    else:
+                        must_clauses.append({"term": {field: value}})
+
+            query = {"bool": {"must": must_clauses}}
+
+            # Build aggregation - get latest event per stream with composite agg
+            # This allows efficient pagination through streams
+            agg_body = {
+                "streams": {
+                    "composite": {
+                        "size": limit,
+                        "sources": [
+                            {"aggregate_id": {"terms": {"field": "aggregate_id"}}}
+                        ],
+                    },
+                    "aggregations": {
+                        "latest_event": {
+                            "top_hits": {
+                                "size": 1,
+                                "sort": [{"stream_version": "desc"}],
+                                "_source": ["aggregate_id", "timestamp", "stream_version"],
+                            }
+                        }
+                    },
+                }
+            }
+
+            # For offset support with composite aggregation, we need to paginate
+            # through buckets. This is more complex but necessary for proper pagination.
+            all_streams = []
+            after_key = None
+            collected = 0
+            skipped = 0
+
+            while collected < offset + limit:
+                if after_key:
+                    agg_body["streams"]["composite"]["after"] = after_key
+
+                response = await self.client.search(
+                    index=f"{self.index_prefix}-*",
+                    query=query,
+                    size=0,
+                    aggs=agg_body,
+                )
+
+                buckets = response["aggregations"]["streams"]["buckets"]
+                if not buckets:
+                    break
+
+                for bucket in buckets:
+                    if skipped < offset:
+                        skipped += 1
+                        continue
+
+                    if collected >= offset + limit:
+                        break
+
+                    stream_id = bucket["key"]["aggregate_id"]
+                    all_streams.append(stream_id)
+                    collected += 1
+
+                # Check if there are more results
+                after_key = response["aggregations"]["streams"].get("after_key")
+                if not after_key:
+                    break
+
+            # Get total count (separate query for accuracy)
+            count_response = await self.client.search(
+                index=f"{self.index_prefix}-*",
+                query=query,
+                size=0,
+                aggs={
+                    "unique_streams": {"cardinality": {"field": "aggregate_id"}}
+                },
+            )
+            total_count = int(
+                count_response["aggregations"]["unique_streams"]["value"]
+            )
+
+            return all_streams, total_count
+
+        except Exception as e:
+            raise EventStoreError(
+                f"Failed to query streams by latest event: {e}"
+            ) from e
+
     async def get_events_by_type(
         self,
         event_type: str,

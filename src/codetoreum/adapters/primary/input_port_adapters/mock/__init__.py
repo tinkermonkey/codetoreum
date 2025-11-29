@@ -17,6 +17,7 @@ from .mock_config_query_adapter import MockConfigQueryAdapter
 from .mock_workspace_query_adapter import MockWorkspaceQueryAdapter
 from .mock_workflow_command_adapter import MockWorkflowCommandAdapter
 from .mock_workflow_query_adapter import MockWorkflowQueryAdapter
+from .mock_workflow_run_query_adapter import MockWorkflowRunQueryAdapter
 from .mock_orchestration_command_adapter import MockOrchestrationCommandAdapter
 from .mock_workflow_definition_command_adapter import MockWorkflowDefinitionCommandAdapter
 from .mock_config_command_adapter import MockConfigCommandAdapter
@@ -36,6 +37,7 @@ __all__ = [
     "MockWorkspaceQueryAdapter",
     "MockWorkflowCommandAdapter",
     "MockWorkflowQueryAdapter",
+    "MockWorkflowRunQueryAdapter",
     "MockOrchestrationCommandAdapter",
     "MockWorkflowDefinitionCommandAdapter",
     "MockConfigCommandAdapter",

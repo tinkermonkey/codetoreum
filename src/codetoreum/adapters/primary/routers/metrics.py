@@ -17,7 +17,11 @@ from codetoreum.config import (
 )
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
 from codetoreum.adapters.primary.metrics_dtos import (
+    ActiveAgentsResponse,
+    ActiveAgentResponse,
     AgentExecutionMetricsResponse,
+    ApiUsageResponse,
+    ApiUsageQuotaResponse,
     EndpointMetricsResponse,
     IntegrationStatusResponse,
     MetricNamesResponse,
@@ -619,6 +623,144 @@ def create_metrics_router(
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to list metric names: {str(e)}",
+            )
+
+    # ========================================================================
+    # Active Agents
+    # ========================================================================
+
+    @router.get(
+        "/active-agents",
+        response_model=ActiveAgentsResponse,
+        summary="Get currently active agents",
+        response_description="List of active agent executions",
+        dependencies=auth_dependency,
+    )
+    async def get_active_agents() -> ActiveAgentsResponse:
+        """
+        Get list of currently active agent executions.
+
+        Returns information about agents that are currently running,
+        including their execution ID, agent name, work item, and container.
+
+        **Returns:**
+        - 200 OK: List of active agents
+        - 401 Unauthorized: Authentication required
+
+        **Example Response:**
+        ```json
+        {
+          "agents": [
+            {
+              "executionId": "exec-123",
+              "agentName": "developer_agent",
+              "workItemId": "wi-456",
+              "project": "codetoreum",
+              "issueNumber": 42,
+              "status": "running",
+              "startedAt": "2025-11-08T10:00:00Z",
+              "containerName": "claude-code-exec-123"
+            }
+          ],
+          "count": 1
+        }
+        ```
+        """
+        try:
+            # Get active executions from metrics query port
+            # This would typically query the execution tracking system
+            active_agents_data = await metrics_query_port.get_active_agents()
+
+            agents = []
+            for agent_data in active_agents_data.get("agents", []):
+                agents.append(ActiveAgentResponse(
+                    executionId=agent_data.get("execution_id", ""),
+                    agentName=agent_data.get("agent_name", ""),
+                    workItemId=agent_data.get("work_item_id", ""),
+                    project=agent_data.get("project", ""),
+                    issueNumber=agent_data.get("issue_number"),
+                    status=agent_data.get("status", "unknown"),
+                    startedAt=agent_data.get("started_at", datetime.utcnow()),
+                    containerName=agent_data.get("container_name"),
+                ))
+
+            return ActiveAgentsResponse(
+                agents=agents,
+                count=len(agents),
+            )
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to retrieve active agents: {str(e)}",
+            )
+
+    # ========================================================================
+    # API Usage
+    # ========================================================================
+
+    @router.get(
+        "/api-usage",
+        response_model=ApiUsageResponse,
+        summary="Get API usage and quotas",
+        response_description="API usage information for Claude and other services",
+        dependencies=auth_dependency,
+    )
+    async def get_api_usage() -> ApiUsageResponse:
+        """
+        Get API usage and quota information.
+
+        Returns usage statistics for Claude API and other external services,
+        including weekly/session usage, quotas, and remaining time.
+
+        **Returns:**
+        - 200 OK: API usage information
+        - 401 Unauthorized: Authentication required
+
+        **Example Response:**
+        ```json
+        {
+          "claude": {
+            "available": true,
+            "weeklyUsage": 15000000,
+            "weeklyQuota": 50000000,
+            "weeklyUsagePercent": 30.0,
+            "sessionUsage": 2000000,
+            "sessionQuota": 10000000,
+            "sessionUsagePercent": 20.0,
+            "sessionRemainingMinutes": 45
+          }
+        }
+        ```
+        """
+        try:
+            # Get API usage from metrics query port
+            # This would typically query the Claude API usage tracking
+            usage_data = await metrics_query_port.get_api_usage()
+
+            claude_usage = usage_data.get("claude", {})
+            weekly_usage = claude_usage.get("weekly_usage", 0)
+            weekly_quota = claude_usage.get("weekly_quota", 1)
+            session_usage = claude_usage.get("session_usage", 0)
+            session_quota = claude_usage.get("session_quota", 1)
+
+            return ApiUsageResponse(
+                claude=ApiUsageQuotaResponse(
+                    available=claude_usage.get("available", False),
+                    weeklyUsage=weekly_usage,
+                    weeklyQuota=weekly_quota,
+                    weeklyUsagePercent=round((weekly_usage / weekly_quota) * 100, 1) if weekly_quota > 0 else 0.0,
+                    sessionUsage=session_usage,
+                    sessionQuota=session_quota,
+                    sessionUsagePercent=round((session_usage / session_quota) * 100, 1) if session_quota > 0 else 0.0,
+                    sessionRemainingMinutes=claude_usage.get("session_remaining_minutes"),
+                )
+            )
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to retrieve API usage: {str(e)}",
             )
 
     return router

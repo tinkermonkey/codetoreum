@@ -272,3 +272,40 @@ class TemplateNotFoundError(NotificationError):
     """Notification template doesn't exist."""
 
     pass
+
+
+# Metrics errors
+
+
+class MetricsError(PortError):
+    """Base exception for metrics operations."""
+
+    pass
+
+
+class MetricNotFoundError(MetricsError):
+    """Metric doesn't exist."""
+
+    def __init__(self, metric_name: str):
+        """
+        Initialize MetricNotFoundError.
+
+        Args:
+            metric_name: Name of metric
+        """
+        super().__init__(f"Metric not found: {metric_name}")
+        self.metric_name = metric_name
+
+
+class ComponentNotFoundError(MetricsError):
+    """Component doesn't exist."""
+
+    def __init__(self, component_name: str):
+        """
+        Initialize ComponentNotFoundError.
+
+        Args:
+            component_name: Name of component
+        """
+        super().__init__(f"Component not found: {component_name}")
+        self.component_name = component_name

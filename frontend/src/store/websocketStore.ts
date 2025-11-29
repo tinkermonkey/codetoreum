@@ -56,6 +56,8 @@ interface WebSocketState {
   disconnect: () => void
   subscribe: (eventType: string) => void
   unsubscribe: (eventType: string) => void
+  subscribeToWorkflowRun: (workflowRunId: string, eventTypes?: string[]) => void
+  unsubscribeFromWorkflowRun: (workflowRunId: string) => void
   clearEvents: () => void
   reconnect: () => void
 }
@@ -365,6 +367,48 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
 
   clearEvents: () => {
     set({ events: [] })
+  },
+
+  subscribeToWorkflowRun: (workflowRunId: string, eventTypes?: string[]) => {
+    const state = get()
+
+    // If connected, send subscription immediately
+    if (state.ws?.readyState === WebSocket.OPEN) {
+      state.ws.send(
+        JSON.stringify({
+          type: 'subscribe',
+          subscription_type: 'workflow_events',
+          workflow_run_id: workflowRunId,
+          event_types: eventTypes || [
+            'WorkflowStarted',
+            'WorkflowCompleted',
+            'WorkflowFailed',
+            'StageStarted',
+            'StageCompleted',
+            'StageFailed',
+            'AgentExecutionStarted',
+            'AgentExecutionCompleted',
+            'AgentExecutionFailed',
+          ],
+        })
+      )
+      console.log(`[WebSocket] Subscribed to workflow run: ${workflowRunId}`)
+    }
+  },
+
+  unsubscribeFromWorkflowRun: (workflowRunId: string) => {
+    const state = get()
+
+    // If connected, send unsubscribe immediately
+    if (state.ws?.readyState === WebSocket.OPEN) {
+      state.ws.send(
+        JSON.stringify({
+          type: 'unsubscribe',
+          workflow_run_id: workflowRunId,
+        })
+      )
+      console.log(`[WebSocket] Unsubscribed from workflow run: ${workflowRunId}`)
+    }
   },
 
   reconnect: () => {
