@@ -51,37 +51,54 @@ interface AuthState {
  * - Store clears authentication state
  * - User redirected to AuthRequiredPage
  */
-// No persistence needed - we validate the httpOnly cookie on every page load
-export const useAuthStore = create<AuthState>()((set) => ({
-  isAuthenticated: false,
-  isLoading: true, // Start as loading to prevent race conditions
-  error: null,
-  lastAuthTime: null,
-
-  setAuthenticated: (authenticated: boolean) => {
-    set({
-      isAuthenticated: authenticated,
-      error: null,
-      lastAuthTime: authenticated ? Date.now() : null
-    })
-  },
-
-  setLoading: (loading: boolean) => {
-    set({ isLoading: loading })
-  },
-
-  setError: (error: string | null) => {
-    set({ error, isLoading: false })
-  },
-
-  clearAuth: () =>
-    set({
+/**
+ * Zustand store with persistence
+ * - Only persists isAuthenticated and lastAuthTime
+ * - Does not persist transient states (isLoading, error)
+ * - Uses sessionStorage (cleared when browser/tab closes)
+ */
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
       isAuthenticated: false,
-      isLoading: false,
+      isLoading: true, // Start as loading to prevent race conditions
       error: null,
-      lastAuthTime: null
+      lastAuthTime: null,
+
+      setAuthenticated: (authenticated: boolean) => {
+        set({
+          isAuthenticated: authenticated,
+          error: null,
+          lastAuthTime: authenticated ? Date.now() : null
+        })
+      },
+
+      setLoading: (loading: boolean) => {
+        set({ isLoading: loading })
+      },
+
+      setError: (error: string | null) => {
+        set({ error, isLoading: false })
+      },
+
+      clearAuth: () =>
+        set({
+          isAuthenticated: false,
+          isLoading: false,
+          error: null,
+          lastAuthTime: null
+        }),
     }),
-}))
+    {
+      name: 'auth-storage',
+      storage: createJSONStorage(() => sessionStorage),
+      partialize: (state) => ({
+        isAuthenticated: state.isAuthenticated,
+        lastAuthTime: state.lastAuthTime
+      })
+    }
+  )
+)
 
 /**
  * Setup global event listener for 401 unauthorized responses
@@ -89,16 +106,23 @@ export const useAuthStore = create<AuthState>()((set) => ({
  */
 let unauthorizedHandler: ((event: Event) => void) | null = null
 
-if (typeof window !== 'undefined') {
-  unauthorizedHandler = () => {
-    useAuthStore.getState().clearAuth()
+const setupUnauthorizedListener = () => {
+  if (typeof window !== 'undefined' && !unauthorizedHandler) {
+    unauthorizedHandler = () => {
+      useAuthStore.getState().clearAuth()
+    }
+    window.addEventListener('auth:unauthorized', unauthorizedHandler)
   }
-  window.addEventListener('auth:unauthorized', unauthorizedHandler)
+}
+
+if (typeof window !== 'undefined') {
+  setupUnauthorizedListener()
 
   // Cleanup on page unload
   window.addEventListener('beforeunload', () => {
     if (unauthorizedHandler) {
       window.removeEventListener('auth:unauthorized', unauthorizedHandler)
+      unauthorizedHandler = null
     }
   })
 }
@@ -112,4 +136,11 @@ export const cleanupAuthStore = () => {
     window.removeEventListener('auth:unauthorized', unauthorizedHandler)
     unauthorizedHandler = null
   }
+}
+
+/**
+ * Re-initialize the unauthorized event listener (useful for testing)
+ */
+export const reinitAuthStore = () => {
+  setupUnauthorizedListener()
 }

@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { useAuthStore, cleanupAuthStore } from '../authStore'
+import { useAuthStore, cleanupAuthStore, reinitAuthStore } from '../authStore'
 
 describe('authStore', () => {
   beforeEach(() => {
@@ -24,6 +24,8 @@ describe('authStore', () => {
   afterEach(() => {
     // Cleanup event listeners
     cleanupAuthStore()
+    // Re-initialize for next test
+    reinitAuthStore()
   })
 
   describe('initial state', () => {
@@ -164,8 +166,10 @@ describe('authStore', () => {
       }
       sessionStorage.setItem('auth-storage', JSON.stringify(mockState))
 
-      // Create new store instance (simulates page reload)
-      // In Zustand v5, the store automatically rehydrates on creation
+      // Manually trigger rehydration by calling the store's persist rehydrate
+      // This simulates what happens on page reload
+      useAuthStore.persist.rehydrate()
+
       const state = useAuthStore.getState()
 
       expect(state.isAuthenticated).toBe(true)
