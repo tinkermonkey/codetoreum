@@ -544,3 +544,112 @@ class InMemoryEventStore(IEventStore):
         """
         with self._lock:
             return self._all_events.copy()
+
+    async def query_streams_by_latest_event(
+        self,
+        aggregate_type: str,
+        event_type_filters: Optional[List[str]] = None,
+        event_data_filters: Optional[Dict[str, Any]] = None,
+        sort_by: str = "timestamp",
+        sort_order: str = "desc",
+        offset: int = 0,
+        limit: int = 100,
+    ) -> tuple[List[str], int]:
+        """
+        Query stream IDs by analyzing their latest events with in-memory filtering.
+
+        This is a simplified in-memory implementation for testing purposes.
+        For production use, see ElasticsearchEventStore which uses database-level
+        aggregations for better performance.
+
+        Args:
+            aggregate_type: Filter by aggregate type (e.g., "Workflow")
+            event_type_filters: Optional list of event types to filter by
+            event_data_filters: Optional filters on event data fields
+            sort_by: Field to sort by (timestamp, stream_version, etc.)
+            sort_order: Sort order ("asc" or "desc")
+            offset: Pagination offset
+            limit: Maximum number of stream IDs to return
+
+        Returns:
+            Tuple of (stream_ids, total_count)
+
+        Raises:
+            ValidationError: If parameters are invalid
+        """
+        if not aggregate_type:
+            raise ValidationError("Aggregate type cannot be empty")
+
+        with self._lock:
+            # Filter streams by aggregate type
+            matching_streams = []
+
+            for stream_id, events in self._streams.items():
+                if not events:
+                    continue
+
+                # Check if stream matches aggregate type
+                if events[0].aggregate_type != aggregate_type:
+                    continue
+
+                # Get latest event for this stream
+                latest_event = events[-1]
+
+                # Apply event type filters
+                if event_type_filters and latest_event.event_type not in event_type_filters:
+                    continue
+
+                # Apply event data filters
+                if event_data_filters:
+                    matches = True
+                    for key, value in event_data_filters.items():
+                        # Support nested keys like "data.project_id"
+                        if key.startswith("data."):
+                            field_name = key[5:]  # Remove "data." prefix
+                            # Check across ALL events in the stream, not just latest
+                            # (e.g., project_id is in WorkflowCreated event, not necessarily latest)
+                            event_value = None
+                            for event in events:
+                                if field_name in event.payload:
+                                    event_value = event.payload[field_name]
+                                    break
+                        else:
+                            event_value = getattr(latest_event, key, None)
+
+                        if event_value != value:
+                            matches = False
+                            break
+
+                    if not matches:
+                        continue
+
+                matching_streams.append((stream_id, latest_event))
+
+            # Sort streams by latest event
+            reverse = sort_order == "desc"
+
+            if sort_by == "timestamp":
+                matching_streams.sort(
+                    key=lambda x: x[1].occurred_at,
+                    reverse=reverse
+                )
+            elif sort_by == "stream_version":
+                matching_streams.sort(
+                    key=lambda x: len(self._streams[x[0]]),
+                    reverse=reverse
+                )
+            else:
+                # Default to timestamp
+                matching_streams.sort(
+                    key=lambda x: x[1].occurred_at,
+                    reverse=reverse
+                )
+
+            # Extract stream IDs
+            all_stream_ids = [stream_id for stream_id, _ in matching_streams]
+            total_count = len(all_stream_ids)
+
+            # Apply pagination
+            paginated_stream_ids = all_stream_ids[offset:offset + limit]
+
+            return paginated_stream_ids, total_count

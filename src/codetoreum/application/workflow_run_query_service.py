@@ -26,7 +26,8 @@ from codetoreum.ports.input.workflow_run_query import (
     WorkflowRunSummary,
 )
 from codetoreum.ports.output.event_store import IEventStore
-from codetoreum.ports.output.ticket_system import ITicketSystem, TicketNotFoundError
+from codetoreum.ports.exceptions import WorkItemNotFoundError
+from codetoreum.ports.output.ticket_system import ITicketSystem
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,29 @@ class LRUCache:
         self.ttl = timedelta(seconds=ttl_seconds)
         self._cache: Dict[str, tuple[Any, datetime]] = {}
         self._access_order: List[str] = []
+
+    def __contains__(self, key: str) -> bool:
+        """
+        Check if key exists in cache (supports 'in' operator).
+
+        Args:
+            key: Cache key
+
+        Returns:
+            True if key exists and is not expired, False otherwise
+        """
+        if key not in self._cache:
+            return False
+
+        # Check if expired
+        _, timestamp = self._cache[key]
+        if datetime.now() - timestamp > self.ttl:
+            del self._cache[key]
+            if key in self._access_order:
+                self._access_order.remove(key)
+            return False
+
+        return True
 
     def get(self, key: str) -> Optional[Any]:
         """
@@ -266,8 +290,11 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         if failed_count > 0:
             logger.warning(f"Failed to reconstruct {failed_count} workflows")
 
+        # Post-reconstruction filtering (status filtering requires reconstructed workflow state)
+        filtered_workflows = self._filter_workflows_by_status(workflows, filters)
+
         # Post-reconstruction sorting (needed because Elasticsearch can't sort by calculated fields)
-        sorted_workflows = self._sort_workflows(workflows, pagination)
+        sorted_workflows = self._sort_workflows(filtered_workflows, pagination)
 
         # Apply pagination (accounting for reconstruction failures)
         paginated_workflows = sorted_workflows[
@@ -421,7 +448,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
             try:
                 work_item_metadata = await self._get_work_item_metadata(workflow.work_item_id)
                 return self._to_workflow_run_summary(workflow, work_item_metadata)
-            except TicketNotFoundError:
+            except WorkItemNotFoundError:
                 logger.warning(
                     f"Work item {workflow.work_item_id} not found, "
                     f"using default metadata"
@@ -453,6 +480,35 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
             "triggered_by": None,
             "priority": None,
         }
+
+    def _filter_workflows_by_status(
+        self,
+        workflows: List[Workflow],
+        filters: Optional[WorkflowRunFilters],
+    ) -> List[Workflow]:
+        """
+        Filter workflows by status after reconstruction.
+
+        Status filtering must be done post-reconstruction because workflow status
+        is derived from the aggregate's event stream, not stored in individual events.
+
+        Args:
+            workflows: List of workflows to filter
+            filters: Optional filters (may include status filter)
+
+        Returns:
+            Filtered list of workflows
+        """
+        if filters is None or not filters.status:
+            return workflows
+
+        # Convert WorkflowRunStatus to WorkflowStatus for comparison
+        status_filter_set = set(filters.status)
+
+        return [
+            workflow for workflow in workflows
+            if self._map_workflow_status(workflow.status) in status_filter_set
+        ]
 
     def _sort_workflows(
         self,
@@ -530,7 +586,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
                     "triggered_by": getattr(work_item, 'assignee', None) or work_item.assigned_agent_id,
                     "priority": work_item.priority.name if work_item.priority else None,
                 }
-            except TicketNotFoundError:
+            except WorkItemNotFoundError:
                 logger.warning(f"Work item {work_item_id} not found in ticket system")
                 # Cache the failure to avoid repeated lookups
                 self._work_item_cache.set(work_item_id, metadata)
