@@ -12,6 +12,7 @@ from codetoreum.application.execution_service import (
     ExecutionServiceResult,
     LogEntry,
 )
+from codetoreum.application.metrics_service import MetricsService
 from codetoreum.application.pipeline_manager import (
     PipelineManager,
     PipelineResult,
@@ -31,6 +32,7 @@ from codetoreum.application.workspace_router import (
 __all__ = [
     "WorkflowOrchestrator",
     "WorkflowRunQueryService",
+    "MetricsService",
     "AgentScheduler",
     "ContextBuilder",
     "ContextFile",
