@@ -1,0 +1,13 @@
+created_at: '2025-11-29T18:31:06.065196+00:00'
+description: Extract UX, Navigation, APM/Observability, and Testing layers from Codetoreum
+  codebase
+id: exploration-extract-ux-nav-apm-testing-2025-11-29-001
+name: extract-ux-nav-apm-testing
+status: applied
+summary:
+  elements_added: 53
+  elements_deleted: 0
+  elements_updated: 0
+type: exploration
+updated_at: '2025-11-29T18:50:56.113081+00:00'
+workflow: direct-cli

@@ -1,0 +1,650 @@
+changes:
+- data:
+    description: Main dashboard showing workflow execution status with real-time work
+      items and execution tracking via WebSocket
+    id: ux.view.dashboard-screen
+    name: Dashboard Screen
+    technology: React TypeScript TanStack-Query
+  element_id: ux.view.dashboard-screen
+  element_type: view
+  layer: ux
+  operation: add
+  timestamp: '2025-11-29T18:33:02.100178+00:00'
+- data:
+    description: Project settings management including repository details, environment
+      variables, and workflow assignment
+    id: ux.view.project-configuration-screen
+    name: Project Configuration Screen
+    technology: React TypeScript
+  element_id: ux.view.project-configuration-screen
+  element_type: view
+  layer: ux
+  operation: add
+  timestamp: '2025-11-29T18:33:03.828659+00:00'
+- data:
+    description: Create and edit multi-stage workflow definitions with pipeline stages
+      and agent assignments
+    id: ux.view.workflow-configuration-screen
+    name: Workflow Configuration Screen
+    technology: React TypeScript
+  element_id: ux.view.workflow-configuration-screen
+  element_type: view
+  layer: ux
+  operation: add
+  timestamp: '2025-11-29T18:33:05.454649+00:00'
+- data:
+    description: Manage AI agent configurations including capabilities, prompts, and
+      MCP server settings
+    id: ux.view.agent-configuration-screen
+    name: Agent Configuration Screen
+    technology: React TypeScript
+  element_id: ux.view.agent-configuration-screen
+  element_type: view
+  layer: ux
+  operation: add
+  timestamp: '2025-11-29T18:33:07.195106+00:00'
+- data:
+    description: View configuration change history with versioning, audit trail, and
+      rollback capability
+    id: ux.view.configuration-history-screen
+    name: Configuration History Screen
+    technology: React TypeScript
+  element_id: ux.view.configuration-history-screen
+  element_type: view
+  layer: ux
+  operation: add
+  timestamp: '2025-11-29T18:33:08.879550+00:00'
+- data:
+    description: Authentication prompt screen with secure token-based login using
+      httpOnly cookies
+    id: ux.view.authentication-required-screen
+    name: Authentication Required Screen
+    technology: React TypeScript
+  element_id: ux.view.authentication-required-screen
+  element_type: view
+  layer: ux
+  operation: add
+  timestamp: '2025-11-29T18:33:10.690803+00:00'
+- data:
+    description: React error boundary for graceful error handling with fallback UI
+    id: technology.artifact.error-boundary-component
+    name: Error Boundary Component
+    source-file: frontend/src/components/ErrorBoundary.tsx
+  element_id: technology.artifact.error-boundary-component
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:34:07.091164+00:00'
+- data:
+    description: Reusable button component with variants including primary, secondary,
+      and outline
+    id: technology.artifact.button-component
+    name: Button Component
+    source-file: frontend/src/components/ui/button.tsx
+  element_id: technology.artifact.button-component
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:34:08.758681+00:00'
+- data:
+    description: Reusable card container component for content sections
+    id: technology.artifact.card-component
+    name: Card Component
+    source-file: frontend/src/components/ui/card.tsx
+  element_id: technology.artifact.card-component
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:35:05.860044+00:00'
+- data:
+    description: Reusable input field component with validation support
+    id: technology.artifact.input-component
+    name: Input Component
+    source-file: frontend/src/components/ui/input.tsx
+  element_id: technology.artifact.input-component
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:35:07.543218+00:00'
+- data:
+    description: React hook for authentication state and httpOnly cookie token management
+      with XSS protection
+    id: technology.artifact.authentication-hook
+    name: Authentication Hook
+    source-file: frontend/src/hooks/useAuth.ts
+  element_id: technology.artifact.authentication-hook
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:35:09.297235+00:00'
+- data:
+    description: React hook for singleton WebSocket connection and real-time event
+      handling with automatic reconnection
+    id: technology.artifact.web-socket-hook
+    name: WebSocket Hook
+    source-file: frontend/src/hooks/useWebSocket.ts
+  element_id: technology.artifact.web-socket-hook
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:36:05.920181+00:00'
+- data:
+    description: Zustand store for global authentication state with sessionStorage
+      persistence
+    id: technology.artifact.authentication-store
+    name: Authentication Store
+    source-file: frontend/src/store/authStore.ts
+  element_id: technology.artifact.authentication-store
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:36:07.673848+00:00'
+- data:
+    description: Zustand store for singleton WebSocket connection state and real-time
+      message handling
+    id: technology.artifact.web-socket-store
+    name: WebSocket Store
+    source-file: frontend/src/store/websocketStore.ts
+  element_id: technology.artifact.web-socket-store
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:36:09.308552+00:00'
+- data:
+    description: Top navigation bar with links to Dashboard, Project, Workflows, Agents,
+      and History
+    entry-point: /dashboard
+    id: navigation.flow.main-navigation-menu
+    name: Main Navigation Menu
+  element_id: navigation.flow.main-navigation-menu
+  element_type: flow
+  layer: navigation
+  operation: add
+  timestamp: '2025-11-29T18:38:05.888625+00:00'
+- data:
+    description: Navigate from dashboard to project configuration screen
+    from: dashboard
+    id: navigation.flow.dashboard-to-configuration-flow
+    name: Dashboard to Configuration Flow
+    to: project-config
+  element_id: navigation.flow.dashboard-to-configuration-flow
+  element_type: flow
+  layer: navigation
+  operation: add
+  timestamp: '2025-11-29T18:39:06.063996+00:00'
+- data:
+    description: Create edit and manage workflow definitions with stage configuration
+    from: dashboard
+    id: navigation.flow.workflow-management-flow
+    name: Workflow Management Flow
+    to: workflows
+  element_id: navigation.flow.workflow-management-flow
+  element_type: flow
+  layer: navigation
+  operation: add
+  timestamp: '2025-11-29T18:39:07.649030+00:00'
+- data:
+    description: Configure and manage AI agents and their capabilities
+    from: dashboard
+    id: navigation.flow.agent-management-flow
+    name: Agent Management Flow
+    to: agents
+  element_id: navigation.flow.agent-management-flow
+  element_type: flow
+  layer: navigation
+  operation: add
+  timestamp: '2025-11-29T18:39:09.280851+00:00'
+- data:
+    description: View configuration change history and audit trail with rollback capability
+    from: project-config
+    id: navigation.flow.configuration-audit-flow
+    name: Configuration Audit Flow
+    to: history
+  element_id: navigation.flow.configuration-audit-flow
+  element_type: flow
+  layer: navigation
+  operation: add
+  timestamp: '2025-11-29T18:40:05.980232+00:00'
+- data:
+    description: Login and token-based authentication with secure httpOnly cookie
+      storage
+    from: auth-required
+    id: navigation.flow.authentication-flow
+    name: Authentication Flow
+    to: dashboard
+  element_id: navigation.flow.authentication-flow
+  element_type: flow
+  layer: navigation
+  operation: add
+  timestamp: '2025-11-29T18:40:07.642196+00:00'
+- data:
+    category: observability
+    criticality: high
+    description: JSON-formatted logging with correlation IDs and sensitive data scrubbing
+      for security
+    id: technology.service.structured-logging
+    name: Structured Logging
+    source-file: src/codetoreum/infrastructure/logging.py
+  element_id: technology.service.structured-logging
+  element_type: service
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:41:21.629290+00:00'
+- data:
+    category: security
+    criticality: high
+    description: Logging filter that scrubs API keys, tokens, passwords, and PII from
+      logs
+    id: technology.service.sensitive-data-filter
+    name: Sensitive Data Filter
+    source-file: src/codetoreum/infrastructure/logging.py
+  element_id: technology.service.sensitive-data-filter
+  element_type: service
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:41:23.335099+00:00'
+- data:
+    category: observability
+    criticality: medium
+    description: Context-based correlation ID tracking for request tracing across
+      services
+    id: technology.service.correlation-id-tracker
+    name: Correlation ID Tracker
+    source-file: src/codetoreum/infrastructure/logging.py
+  element_id: technology.service.correlation-id-tracker
+  element_type: service
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:41:24.954758+00:00'
+- data:
+    category: observability
+    criticality: high
+    description: Complete audit trail of all domain events using Redis and Elasticsearch
+      for event sourcing
+    id: technology.service.event-store
+    name: Event Store
+  element_id: technology.service.event-store
+  element_type: service
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:41:26.601863+00:00'
+- data:
+    category: observability
+    criticality: medium
+    description: Replay domain events for debugging and testing with time manipulation
+      support
+    id: technology.service.event-replayer
+    name: Event Replayer
+    source-file: src/codetoreum/infrastructure/event_replayer.py
+  element_id: technology.service.event-replayer
+  element_type: service
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:41:28.205443+00:00'
+- data:
+    category: observability
+    criticality: high
+    description: Health check system for monitoring service and dependency availability
+      with liveness and readiness probes
+    id: technology.service.health-checker
+    name: Health Checker
+    source-file: src/codetoreum/infrastructure/health/health_checker.py
+  element_id: technology.service.health-checker
+  element_type: service
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:41:29.883333+00:00'
+- data:
+    category: resilience
+    criticality: medium
+    description: Queue for failed events and messages with automatic retry and exponential
+      backoff
+    id: technology.service.dead-letter-queue
+    name: Dead Letter Queue
+    source-file: src/codetoreum/infrastructure/dead_letter_queue.py
+  element_id: technology.service.dead-letter-queue
+  element_type: service
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:41:31.511390+00:00'
+- data:
+    category: resilience
+    criticality: medium
+    description: Metrics for circuit breaker state transitions and failure rates
+    id: technology.service.circuit-breaker-metrics
+    name: Circuit Breaker Metrics
+  element_id: technology.service.circuit-breaker-metrics
+  element_type: service
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:41:33.428175+00:00'
+- data:
+    category: resilience
+    criticality: medium
+    description: Tracking retry attempts and success rates for external services
+    id: technology.service.retry-policy-metrics
+    name: Retry Policy Metrics
+  element_id: technology.service.retry-policy-metrics
+  element_type: service
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:41:44.667686+00:00'
+- data:
+    category: resilience
+    criticality: medium
+    description: Monitoring rate limit enforcement and throttling events
+    id: technology.service.rate-limiter-metrics
+    name: Rate Limiter Metrics
+  element_id: technology.service.rate-limiter-metrics
+  element_type: service
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:41:46.434142+00:00'
+- data:
+    category: security
+    criticality: high
+    description: Specialized logging for compliance and security auditing with retention
+      policies
+    id: technology.service.audit-logger
+    name: Audit Logger
+    source-file: src/codetoreum/infrastructure/audit/audit_logger.py
+  element_id: technology.service.audit-logger
+  element_type: service
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:41:48.132716+00:00'
+- data:
+    category: testing
+    coverage-target: 100%
+    description: Unit tests for core domain models including WorkItem, Agent, Workflow,
+      and ReviewCycle
+    framework: pytest
+    id: technology.artifact.domain-unit-tests
+    name: Domain Unit Tests
+    test-type: unit
+  element_id: technology.artifact.domain-unit-tests
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:42:09.149833+00:00'
+- data:
+    category: testing
+    coverage-target: 90%
+    description: Unit tests for application services including orchestrator, scheduler,
+      and execution service
+    framework: pytest
+    id: technology.artifact.application-unit-tests
+    name: Application Unit Tests
+    test-type: unit
+  element_id: technology.artifact.application-unit-tests
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:42:10.785265+00:00'
+- data:
+    category: testing
+    coverage-target: 85%
+    description: Unit tests for primary and secondary adapters with mocks
+    framework: pytest
+    id: technology.artifact.adapter-unit-tests
+    name: Adapter Unit Tests
+    test-type: unit
+  element_id: technology.artifact.adapter-unit-tests
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:42:12.627678+00:00'
+- data:
+    category: testing
+    coverage-target: 100%
+    description: Unit tests for port interface contracts
+    framework: pytest
+    id: technology.artifact.port-interface-unit-tests
+    name: Port Interface Unit Tests
+    test-type: unit
+  element_id: technology.artifact.port-interface-unit-tests
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:42:14.376625+00:00'
+- data:
+    category: testing
+    coverage-target: 85%
+    description: Unit tests for resilience patterns, logging, and event bus
+    framework: pytest
+    id: technology.artifact.infrastructure-unit-tests
+    name: Infrastructure Unit Tests
+    test-type: unit
+  element_id: technology.artifact.infrastructure-unit-tests
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:42:16.168540+00:00'
+- data:
+    category: testing
+    coverage-target: 80%
+    description: Integration tests for GitHub, Claude Code, Docker adapters with real
+      services
+    framework: pytest testcontainers
+    id: technology.artifact.adapter-integration-tests
+    name: Adapter Integration Tests
+    test-type: integration
+  element_id: technology.artifact.adapter-integration-tests
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:42:17.773836+00:00'
+- data:
+    category: testing
+    coverage-target: 85%
+    description: Integration tests for application services with mock adapters
+    framework: pytest
+    id: technology.artifact.application-integration-tests
+    name: Application Integration Tests
+    test-type: integration
+  element_id: technology.artifact.application-integration-tests
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:42:19.417389+00:00'
+- data:
+    category: testing
+    coverage-target: 80%
+    description: Integration tests for event store, resilience decorators, and health
+      checks
+    framework: pytest testcontainers
+    id: technology.artifact.infrastructure-integration-tests
+    name: Infrastructure Integration Tests
+    test-type: integration
+  element_id: technology.artifact.infrastructure-integration-tests
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:42:21.031994+00:00'
+- data:
+    category: testing
+    coverage-target: 85%
+    description: Integration tests for WebSocket connection, scalability, and real-time
+      events
+    framework: pytest
+    id: technology.artifact.web-socket-integration-tests
+    name: WebSocket Integration Tests
+    test-type: integration
+  element_id: technology.artifact.web-socket-integration-tests
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:42:36.549108+00:00'
+- data:
+    category: testing
+    description: End-to-end simulation of single-stage workflow execution with mock
+      LLM
+    framework: pytest
+    id: technology.artifact.simple-workflow-simulation
+    name: Simple Workflow Simulation
+    scenario: scenario_01
+    test-type: simulation
+  element_id: technology.artifact.simple-workflow-simulation
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:42:38.303931+00:00'
+- data:
+    category: testing
+    description: Simulation of concurrent workflow executions and agent scheduling
+    framework: pytest
+    id: technology.artifact.parallel-execution-simulation
+    name: Parallel Execution Simulation
+    scenario: scenario_02
+    test-type: simulation
+  element_id: technology.artifact.parallel-execution-simulation
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:42:40.083049+00:00'
+- data:
+    category: testing
+    description: Simulation of maker-checker review cycles with feedback loops
+    framework: pytest
+    id: technology.artifact.review-cycle-simulation
+    name: Review Cycle Simulation
+    scenario: scenario_03
+    test-type: simulation
+  element_id: technology.artifact.review-cycle-simulation
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:42:41.734236+00:00'
+- data:
+    category: testing
+    description: Simulation of agent execution failures and error recovery mechanisms
+    framework: pytest
+    id: technology.artifact.execution-failure-simulation
+    name: Execution Failure Simulation
+    scenario: scenario_04
+    test-type: simulation
+  element_id: technology.artifact.execution-failure-simulation
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:42:43.415599+00:00'
+- data:
+    category: testing
+    description: Simulation of multi-stage workflows with conditional transitions
+    framework: pytest
+    id: technology.artifact.complex-workflow-simulation
+    name: Complex Workflow Simulation
+    scenario: scenario_05
+    test-type: simulation
+  element_id: technology.artifact.complex-workflow-simulation
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:42:45.172576+00:00'
+- data:
+    category: testing
+    coverage-target: 70%
+    description: End-to-end tests for complete workflow execution lifecycle
+    framework: pytest
+    id: technology.artifact.workflow-execution-e2e-tests
+    name: Workflow Execution E2E Tests
+    test-type: e2e
+  element_id: technology.artifact.workflow-execution-e2e-tests
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:42:46.931993+00:00'
+- data:
+    category: testing
+    coverage-target: 70%
+    description: End-to-end tests for real-time WebSocket event delivery
+    framework: pytest
+    id: technology.artifact.web-socket-events-e2e-tests
+    name: WebSocket Events E2E Tests
+    test-type: e2e
+  element_id: technology.artifact.web-socket-events-e2e-tests
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:42:48.902716+00:00'
+- data:
+    category: testing
+    coverage-target: 70%
+    description: End-to-end tests for system error recovery and resilience patterns
+    framework: pytest
+    id: technology.artifact.error-recovery-e2e-tests
+    name: Error Recovery E2E Tests
+    test-type: e2e
+  element_id: technology.artifact.error-recovery-e2e-tests
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:43:03.469160+00:00'
+- data:
+    category: testing
+    coverage-target: 60%
+    description: Playwright tests for UI interactions and user workflows
+    framework: playwright
+    id: technology.artifact.frontend-e2e-tests
+    name: Frontend E2E Tests
+    test-type: e2e
+  element_id: technology.artifact.frontend-e2e-tests
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:43:05.157482+00:00'
+- data:
+    category: testing
+    criticality: medium
+    description: Centralized pytest configuration with markers, fixtures, and coverage
+      settings
+    framework: pytest
+    id: technology.artifact.pytest-configuration
+    name: Pytest Configuration
+    source-file: tests/conftest.py
+  element_id: technology.artifact.pytest-configuration
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:43:06.993307+00:00'
+- data:
+    category: testing
+    criticality: high
+    description: Time-manipulation framework for fast deterministic testing without
+      external services
+    framework: pytest
+    id: technology.artifact.simulation-framework
+    name: Simulation Framework
+    source-file: src/codetoreum/infrastructure/simulation/
+  element_id: technology.artifact.simulation-framework
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:43:08.862430+00:00'
+- data:
+    category: testing
+    criticality: high
+    description: Simulation adapters for ticket systems, LLM providers, and containers
+    framework: pytest
+    id: technology.artifact.mock-adapters
+    name: Mock Adapters
+    source-file: src/codetoreum/adapters/testing/
+  element_id: technology.artifact.mock-adapters
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:43:10.524852+00:00'
+- data:
+    category: testing
+    criticality: medium
+    description: Docker-based integration testing with real services including PostgreSQL,
+      Redis, and Elasticsearch
+    framework: testcontainers
+    id: technology.artifact.testcontainers
+    name: Testcontainers
+  element_id: technology.artifact.testcontainers
+  element_type: artifact
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T18:43:12.206893+00:00'
+version: '1.0'

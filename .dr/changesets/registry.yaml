@@ -1,0 +1,14 @@
+changesets:
+  exploration-extract-codetoreum-architecture-2025-11-29-001:
+    created_at: '2025-11-29T17:02:27.514454+00:00'
+    elements_count: 97
+    name: extract-codetoreum-architecture
+    status: applied
+    type: exploration
+  exploration-extract-ux-nav-apm-testing-2025-11-29-001:
+    created_at: '2025-11-29T18:31:06.065196+00:00'
+    elements_count: 53
+    name: extract-ux-nav-apm-testing
+    status: applied
+    type: exploration
+version: '1.0'

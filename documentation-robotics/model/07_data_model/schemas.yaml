@@ -1,0 +1,81 @@
+WorkItem:
+  description: Represents a unit of work (issue, task) to be processed by agents
+  format: Python dataclass
+  id: work-item
+  location: src/codetoreum/domain/work_item.py
+  name: WorkItem
+Agent:
+  description: Represents a specialized AI agent with specific capabilities
+  format: Python dataclass
+  id: agent
+  location: src/codetoreum/domain/agent.py
+  name: Agent
+AgentExecution:
+  description: Tracks an instance of an agent working on a work item
+  format: Python dataclass
+  id: agent-execution
+  location: src/codetoreum/domain/agent_execution.py
+  name: AgentExecution
+Workflow:
+  description: Multi-stage pipeline with stage transitions and review cycles
+  format: Python dataclass
+  id: workflow
+  location: src/codetoreum/domain/workflow.py
+  name: Workflow
+PipelineStage:
+  description: Individual stage in workflow with entry conditions and agent assignments
+  format: Python dataclass
+  id: pipeline-stage
+  location: src/codetoreum/domain/pipeline_stage.py
+  name: PipelineStage
+ReviewCycle:
+  description: Maker-checker review process with feedback loops
+  format: Python dataclass
+  id: review-cycle
+  location: src/codetoreum/domain/review_cycle.py
+  name: ReviewCycle
+User:
+  description: User account for authentication and authorization
+  format: Python dataclass
+  id: user
+  location: src/codetoreum/domain/user.py
+  name: User
+Comment:
+  description: Comment on work items or reviews
+  format: Python dataclass
+  id: comment
+  location: src/codetoreum/domain/comment.py
+  name: Comment
+WorkspaceContext:
+  description: Context information for agent workspace execution
+  format: Python dataclass
+  id: workspace-context
+  location: src/codetoreum/domain/workspace_context.py
+  name: WorkspaceContext
+ProjectContext:
+  description: Project configuration and environment settings
+  format: Python dataclass
+  id: project-context
+  location: src/codetoreum/domain/project_context.py
+  name: ProjectContext
+WorkflowEvent:
+  description: Domain event for workflow state changes
+  format: Python dataclass
+  id: workflow-event
+  location: src/codetoreum/domain/events.py
+  name: WorkflowEvent
+  type: domain-event
+ExecutionEvent:
+  description: Domain event for execution lifecycle changes
+  format: Python dataclass
+  id: execution-event
+  location: src/codetoreum/domain/events.py
+  name: ExecutionEvent
+  type: domain-event
+WorkItemEvent:
+  description: Domain event for work item state changes
+  format: Python dataclass
+  id: work-item-event
+  location: src/codetoreum/domain/events.py
+  name: WorkItemEvent
+  type: domain-event

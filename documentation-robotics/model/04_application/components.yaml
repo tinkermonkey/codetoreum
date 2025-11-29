@@ -1,0 +1,88 @@
+Workflow Event Handler:
+  id: workflow-event-handler
+  name: Workflow Event Handler
+  documentation: Handles workflow-related domain events
+  properties:
+    implementation.location: src/codetoreum/application/event_handlers/workflow_event_handler.py
+Review Event Handler:
+  id: review-event-handler
+  name: Review Event Handler
+  documentation: Handles review-related domain events
+  properties:
+    implementation.location: src/codetoreum/application/event_handlers/review_event_handler.py
+Execution Event Handler:
+  id: execution-event-handler
+  name: Execution Event Handler
+  documentation: Handles execution-related domain events
+  properties:
+    implementation.location: src/codetoreum/application/event_handlers/execution_event_handler.py
+GitHub Ticket Adapter:
+  adapter-type: secondary
+  id: github-ticket-adapter
+  name: GitHub Ticket Adapter
+  documentation: Adapter for GitHub Issues ticket system integration
+  properties:
+    implementation.location: src/codetoreum/adapters/secondary/github_ticket_adapter.py
+Claude Code Adapter:
+  adapter-type: secondary
+  id: claude-code-adapter
+  name: Claude Code Adapter
+  documentation: Adapter for Claude Code LLM provider integration
+  properties:
+    implementation.location: src/codetoreum/adapters/secondary/claude_code_adapter.py
+Docker Container Adapter:
+  adapter-type: secondary
+  id: docker-container-adapter
+  name: Docker Container Adapter
+  documentation: Adapter for Docker container runtime integration
+  properties:
+    implementation.location: src/codetoreum/adapters/secondary/docker_container_adapter.py
+Git Repository Adapter:
+  adapter-type: secondary
+  id: git-repository-adapter
+  name: Git Repository Adapter
+  documentation: Adapter for Git repository operations
+  properties:
+    implementation.location: src/codetoreum/adapters/secondary/git_repository_adapter.py
+Elasticsearch Event Store:
+  adapter-type: secondary
+  id: elasticsearch-event-store
+  name: Elasticsearch Event Store
+  documentation: Event store implementation using Elasticsearch
+  properties:
+    implementation.location: src/codetoreum/adapters/secondary/elasticsearch_event_store.py
+Redis Pub/Sub Adapter:
+  adapter-type: secondary
+  id: redis-pubsub-adapter
+  name: Redis Pub/Sub Adapter
+  documentation: Adapter for Redis pub/sub messaging
+  properties:
+    implementation.location: src/codetoreum/adapters/secondary/redis_pubsub_adapter.py
+Event Bus:
+  id: event-bus
+  name: Event Bus
+  documentation: Central event bus for domain event distribution
+  properties:
+    service.criticality: high
+    implementation.location: src/codetoreum/infrastructure/event_bus.py
+Circuit Breaker:
+  id: circuit-breaker
+  name: Circuit Breaker
+  pattern: circuit-breaker
+  documentation: Circuit breaker pattern implementation for resilience
+  properties:
+    implementation.location: src/codetoreum/infrastructure/resilience/circuit_breaker.py
+Rate Limiter:
+  id: rate-limiter
+  name: Rate Limiter
+  pattern: rate-limiting
+  documentation: Rate limiting for external API calls
+  properties:
+    implementation.location: src/codetoreum/infrastructure/resilience/rate_limiter.py
+Retry Policy:
+  id: retry-policy
+  name: Retry Policy
+  pattern: retry
+  documentation: Configurable retry policy for failed operations
+  properties:
+    implementation.location: src/codetoreum/infrastructure/resilience/retry_policy.py

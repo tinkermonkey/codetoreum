@@ -1,0 +1,12 @@
+created_at: '2025-11-29T17:02:27.514454+00:00'
+description: Extract DR model from Codetoreum hexagonal architecture codebase
+id: exploration-extract-codetoreum-architecture-2025-11-29-001
+name: extract-codetoreum-architecture
+status: applied
+summary:
+  elements_added: 97
+  elements_deleted: 0
+  elements_updated: 0
+type: exploration
+updated_at: '2025-11-29T18:50:49.818080+00:00'
+workflow: direct-cli

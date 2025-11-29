@@ -1,0 +1,17 @@
+PostgreSQL:
+  description: Primary relational database for configuration and work item storage
+  id: postgresql
+  name: PostgreSQL
+  purpose: configuration,work-items
+Redis:
+  description: In-memory data store for caching, event buffering, and pub/sub
+  id: redis
+  name: Redis
+  purpose: cache,event-store,pubsub
+  version: 5.2.0
+Elasticsearch:
+  description: Search and analytics engine for event storage and configuration search
+  id: elasticsearch
+  name: Elasticsearch
+  purpose: event-store,search
+  version: 8.0.0

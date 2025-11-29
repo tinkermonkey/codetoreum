@@ -1,0 +1,105 @@
+Workflow Orchestrator:
+  id: workflow-orchestrator
+  name: Workflow Orchestrator
+  documentation: Coordinates multi-stage workflow execution and stage transitions
+  properties:
+    service.criticality: high
+    implementation.location: src/codetoreum/application/workflow_orchestrator.py
+Execution Service:
+  id: execution-service
+  name: Execution Service
+  documentation: Manages agent execution lifecycle and container orchestration
+  properties:
+    service.criticality: high
+    implementation.location: src/codetoreum/application/execution_service.py
+Agent Scheduler:
+  id: agent-scheduler
+  name: Agent Scheduler
+  documentation: Queues and schedules agent executions based on priority and resources
+  properties:
+    service.criticality: high
+    implementation.location: src/codetoreum/application/agent_scheduler.py
+Review Service:
+  id: review-service
+  name: Review Service
+  documentation: Handles review cycles and feedback loops in workflows
+  properties:
+    service.criticality: medium
+    implementation.location: src/codetoreum/application/review_service.py
+Work Item Service:
+  id: work-item-service
+  name: Work Item Service
+  documentation: Manages work item lifecycle and state transitions
+  properties:
+    service.criticality: high
+    implementation.location: src/codetoreum/application/work_item_service.py
+Configuration Service:
+  id: configuration-service
+  name: Configuration Service
+  documentation: Manages system configuration and project settings
+  properties:
+    service.criticality: high
+    implementation.location: src/codetoreum/application/configuration_service.py
+Workspace Router:
+  id: workspace-router
+  name: Workspace Router
+  documentation: Manages container workspaces and file mounting for agents
+  properties:
+    service.criticality: high
+    implementation.location: src/codetoreum/application/workspace_router.py
+Authentication Service:
+  id: authentication-service
+  name: Authentication Service
+  documentation: Handles user authentication and authorization
+  properties:
+    service.criticality: high
+    implementation.location: src/codetoreum/application/authentication_service.py
+Feedback Processor:
+  id: feedback-processor
+  name: Feedback Processor
+  documentation: Processes feedback from review cycles and updates work items
+  properties:
+    service.criticality: medium
+    implementation.location: src/codetoreum/application/feedback_processor.py
+Pipeline Manager:
+  id: pipeline-manager
+  name: Pipeline Manager
+  documentation: Manages pipeline stages and workflow transitions
+  properties:
+    service.criticality: high
+    implementation.location: src/codetoreum/application/pipeline_manager.py
+Context Builder:
+  id: context-builder
+  name: Context Builder
+  documentation: Builds execution context for agents from work items and environment
+  properties:
+    service.criticality: high
+    implementation.location: src/codetoreum/application/context_builder.py
+Agent Matching Service:
+  id: agent-matching-service
+  name: Agent Matching Service
+  documentation: Matches agents to work items based on capabilities and requirements
+  properties:
+    service.criticality: medium
+    implementation.location: src/codetoreum/domain/services/agent_matching_service.py
+Execution Context Builder:
+  id: execution-context-builder
+  name: Execution Context Builder
+  documentation: Builds execution context with project and workspace information
+  properties:
+    service.criticality: high
+    implementation.location: src/codetoreum/domain/services/execution_context_builder.py
+Workflow Validation Service:
+  id: workflow-validation-service
+  name: Workflow Validation Service
+  documentation: Validates workflow definitions and stage transitions
+  properties:
+    service.criticality: medium
+    implementation.location: src/codetoreum/domain/services/workflow_validation_service.py
+Work Assignment Service:
+  id: work-assignment-service
+  name: Work Assignment Service
+  documentation: Assigns work items to agents based on workflow stage
+  properties:
+    service.criticality: high
+    implementation.location: src/codetoreum/domain/services/work_assignment_service.py

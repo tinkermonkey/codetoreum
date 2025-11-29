@@ -1,0 +1,6 @@
+Docker:
+  description: Container runtime for isolated agent execution environments
+  id: docker
+  name: Docker
+  purpose: agent-isolation
+  version: 7.1.0

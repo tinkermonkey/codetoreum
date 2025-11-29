@@ -1,0 +1,1065 @@
+changes:
+- data:
+    description: Primary programming language for the platform
+    id: python
+    name: Python 3.11+
+    type: language
+    version: 3.11+
+  element_id: python
+  element_type: systemsoftware
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T17:05:34.204397+00:00'
+- data:
+    description: Modern async Python web framework for building REST APIs
+    id: fastapi
+    name: FastAPI
+    type: framework
+    version: 0.115.0
+  element_id: fastapi
+  element_type: systemsoftware
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T17:05:35.915721+00:00'
+- data:
+    description: Primary relational database for configuration and work item storage
+    id: postgresql
+    name: PostgreSQL
+    purpose: configuration,work-items
+  element_id: postgresql
+  element_type: node
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T17:05:37.586096+00:00'
+- data:
+    description: In-memory data store for caching, event buffering, and pub/sub
+    id: redis
+    name: Redis
+    purpose: cache,event-store,pubsub
+    version: 5.2.0
+  element_id: redis
+  element_type: node
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T17:05:39.532812+00:00'
+- data:
+    description: Search and analytics engine for event storage and configuration search
+    id: elasticsearch
+    name: Elasticsearch
+    purpose: event-store,search
+    version: 8.0.0
+  element_id: elasticsearch
+  element_type: node
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T17:05:41.194269+00:00'
+- data:
+    description: Python SQL toolkit and Object-Relational Mapping library
+    id: sqlalchemy
+    name: SQLAlchemy
+    type: orm
+    version: 2.0.35
+  element_id: sqlalchemy
+  element_type: systemsoftware
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T17:05:42.773784+00:00'
+- data:
+    description: Container runtime for isolated agent execution environments
+    id: docker
+    name: Docker
+    purpose: agent-isolation
+    version: 7.1.0
+  element_id: docker
+  element_type: device
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T17:05:44.453760+00:00'
+- data:
+    description: ASGI server for running FastAPI applications
+    id: uvicorn
+    name: Uvicorn
+    type: server
+    version: 0.32.0
+  element_id: uvicorn
+  element_type: systemsoftware
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T17:05:46.340387+00:00'
+- data:
+    description: Data validation library using Python type annotations
+    id: pydantic
+    name: Pydantic
+    purpose: validation,serialization
+    type: library
+    version: 2.9.2
+  element_id: pydantic
+  element_type: systemsoftware
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T17:05:48.321877+00:00'
+- data:
+    description: Async HTTP client for external API communication
+    id: httpx
+    name: HTTPX
+    type: library
+    version: 0.27.2
+  element_id: httpx
+  element_type: systemsoftware
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T17:05:50.030582+00:00'
+- data:
+    description: Async HTTP client/server framework
+    id: aiohttp
+    name: AIOHTTP
+    type: library
+    version: 3.9.0
+  element_id: aiohttp
+  element_type: systemsoftware
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T17:05:51.678786+00:00'
+- data:
+    description: JWT token implementation for authentication
+    id: python-jose
+    name: Python-JOSE
+    purpose: jwt,authentication
+    type: library
+    version: 3.3.0
+  element_id: python-jose
+  element_type: systemsoftware
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T17:05:53.244294+00:00'
+- data:
+    description: Password hashing library with bcrypt support
+    id: passlib
+    name: Passlib
+    purpose: password-hashing
+    type: library
+    version: 1.7.4
+  element_id: passlib
+  element_type: systemsoftware
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T17:05:54.894761+00:00'
+- data:
+    description: Database migration tool for SQLAlchemy
+    id: alembic
+    name: Alembic
+    type: tool
+    version: 1.13.3
+  element_id: alembic
+  element_type: systemsoftware
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T17:05:56.464428+00:00'
+- data:
+    description: Testing framework with async support
+    id: pytest
+    name: Pytest
+    purpose: unit,integration,simulation
+    type: testing
+    version: 8.3.3
+  element_id: pytest
+  element_type: systemsoftware
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T17:05:58.100620+00:00'
+- data:
+    description: Library for integration testing with Docker containers
+    id: testcontainers
+    name: Testcontainers
+    type: testing
+    version: 4.8.2
+  element_id: testcontainers
+  element_type: systemsoftware
+  layer: technology
+  operation: add
+  timestamp: '2025-11-29T17:05:59.798230+00:00'
+- data:
+    criticality: high
+    description: Coordinates multi-stage workflow execution and stage transitions
+    id: workflow-orchestrator
+    location: src/codetoreum/application/workflow_orchestrator.py
+    name: Workflow Orchestrator
+  element_id: workflow-orchestrator
+  element_type: service
+  layer: application
+  operation: add
+  timestamp: '2025-11-29T17:06:24.011241+00:00'
+- data:
+    criticality: high
+    description: Manages agent execution lifecycle and container orchestration
+    id: execution-service
+    location: src/codetoreum/application/execution_service.py
+    name: Execution Service
+  element_id: execution-service
+  element_type: service
+  layer: application
+  operation: add
+  timestamp: '2025-11-29T17:06:25.736177+00:00'
+- data:
+    criticality: high
+    description: Queues and schedules agent executions based on priority and resources
+    id: agent-scheduler
+    location: src/codetoreum/application/agent_scheduler.py
+    name: Agent Scheduler
+  element_id: agent-scheduler
+  element_type: service
+  layer: application
+  operation: add
+  timestamp: '2025-11-29T17:06:27.408698+00:00'
+- data:
+    criticality: medium
+    description: Handles review cycles and feedback loops in workflows
+    id: review-service
+    location: src/codetoreum/application/review_service.py
+    name: Review Service
+  element_id: review-service
+  element_type: service
+  layer: application
+  operation: add
+  timestamp: '2025-11-29T17:06:28.998664+00:00'
+- data:
+    criticality: high
+    description: Manages work item lifecycle and state transitions
+    id: work-item-service
+    location: src/codetoreum/application/work_item_service.py
+    name: Work Item Service
+  element_id: work-item-service
+  element_type: service
+  layer: application
+  operation: add
+  timestamp: '2025-11-29T17:06:30.617723+00:00'
+- data:
+    criticality: high
+    description: Manages system configuration and project settings
+    id: configuration-service
+    location: src/codetoreum/application/configuration_service.py
+    name: Configuration Service
+  element_id: configuration-service
+  element_type: service
+  layer: application
+  operation: add
+  timestamp: '2025-11-29T17:06:32.294015+00:00'
+- data:
+    criticality: high
+    description: Manages container workspaces and file mounting for agents
+    id: workspace-router
+    location: src/codetoreum/application/workspace_router.py
+    name: Workspace Router
+  element_id: workspace-router
+  element_type: service
+  layer: application
+  operation: add
+  timestamp: '2025-11-29T17:06:34.450761+00:00'
+- data:
+    criticality: high
+    description: Handles user authentication and authorization
+    id: authentication-service
+    location: src/codetoreum/application/authentication_service.py
+    name: Authentication Service
+  element_id: authentication-service
+  element_type: service
+  layer: application
+  operation: add
+  timestamp: '2025-11-29T17:06:36.028169+00:00'
+- data:
+    criticality: medium
+    description: Processes feedback from review cycles and updates work items
+    id: feedback-processor
+    location: src/codetoreum/application/feedback_processor.py
+    name: Feedback Processor
+  element_id: feedback-processor
+  element_type: service
+  layer: application
+  operation: add
+  timestamp: '2025-11-29T17:06:37.617810+00:00'
+- data:
+    criticality: high
+    description: Manages pipeline stages and workflow transitions
+    id: pipeline-manager
+    location: src/codetoreum/application/pipeline_manager.py
+    name: Pipeline Manager
+  element_id: pipeline-manager
+  element_type: service
+  layer: application
+  operation: add
+  timestamp: '2025-11-29T17:06:39.239898+00:00'
+- data:
+    criticality: high
+    description: Builds execution context for agents from work items and environment
+    id: context-builder
+    location: src/codetoreum/application/context_builder.py
+    name: Context Builder
+  element_id: context-builder
+  element_type: service
+  layer: application
+  operation: add
+  timestamp: '2025-11-29T17:06:41.085483+00:00'
+- data:
+    criticality: medium
+    description: Matches agents to work items based on capabilities and requirements
+    id: agent-matching-service
+    location: src/codetoreum/domain/services/agent_matching_service.py
+    name: Agent Matching Service
+  element_id: agent-matching-service
+  element_type: service
+  layer: application
+  operation: add
+  timestamp: '2025-11-29T17:07:41.067316+00:00'
+- data:
+    criticality: high
+    description: Builds execution context with project and workspace information
+    id: execution-context-builder
+    location: src/codetoreum/domain/services/execution_context_builder.py
+    name: Execution Context Builder
+  element_id: execution-context-builder
+  element_type: service
+  layer: application
+  operation: add
+  timestamp: '2025-11-29T17:07:42.707042+00:00'
+- data:
+    criticality: medium
+    description: Validates workflow definitions and stage transitions
+    id: workflow-validation-service
+    location: src/codetoreum/domain/services/workflow_validation_service.py
+    name: Workflow Validation Service
+  element_id: workflow-validation-service
+  element_type: service
+  layer: application
+  operation: add
+  timestamp: '2025-11-29T17:08:41.024512+00:00'
+- data:
+    criticality: high
+    description: Assigns work items to agents based on workflow stage
+    id: work-assignment-service
+    location: src/codetoreum/domain/services/work_assignment_service.py
+    name: Work Assignment Service
+  element_id: work-assignment-service
+  element_type: service
+  layer: application
+  operation: add
+  timestamp: '2025-11-29T17:08:42.822486+00:00'
+- data:
+    description: Handles workflow-related domain events
+    id: workflow-event-handler
+    location: src/codetoreum/application/event_handlers/workflow_event_handler.py
+    name: Workflow Event Handler
+  element_id: workflow-event-handler
+  element_type: component
+  layer: application
+  operation: add
+  timestamp: '2025-11-29T17:09:18.305009+00:00'
+- data:
+    description: Handles review-related domain events
+    id: review-event-handler
+    location: src/codetoreum/application/event_handlers/review_event_handler.py
+    name: Review Event Handler
+  element_id: review-event-handler
+  element_type: component
+  layer: application
+  operation: add
+  timestamp: '2025-11-29T17:09:19.999910+00:00'
+- data:
+    description: Handles execution-related domain events
+    id: execution-event-handler
+    location: src/codetoreum/application/event_handlers/execution_event_handler.py
+    name: Execution Event Handler
+  element_id: execution-event-handler
+  element_type: component
+  layer: application
+  operation: add
+  timestamp: '2025-11-29T17:09:21.658720+00:00'
+- data:
+    adapter-type: secondary
+    description: Adapter for GitHub Issues ticket system integration
+    id: github-ticket-adapter
+    location: src/codetoreum/adapters/secondary/github_ticket_adapter.py
+    name: GitHub Ticket Adapter
+  element_id: github-ticket-adapter
+  element_type: component
+  layer: application
+  operation: add
+  timestamp: '2025-11-29T17:09:23.420201+00:00'
+- data:
+    adapter-type: secondary
+    description: Adapter for Claude Code LLM provider integration
+    id: claude-code-adapter
+    location: src/codetoreum/adapters/secondary/claude_code_adapter.py
+    name: Claude Code Adapter
+  element_id: claude-code-adapter
+  element_type: component
+  layer: application
+  operation: add
+  timestamp: '2025-11-29T17:09:25.045070+00:00'
+- data:
+    adapter-type: secondary
+    description: Adapter for Docker container runtime integration
+    id: docker-container-adapter
+    location: src/codetoreum/adapters/secondary/docker_container_adapter.py
+    name: Docker Container Adapter
+  element_id: docker-container-adapter
+  element_type: component
+  layer: application
+  operation: add
+  timestamp: '2025-11-29T17:09:26.750653+00:00'
+- data:
+    adapter-type: secondary
+    description: Adapter for Git repository operations
+    id: git-repository-adapter
+    location: src/codetoreum/adapters/secondary/git_repository_adapter.py
+    name: Git Repository Adapter
+  element_id: git-repository-adapter
+  element_type: component
+  layer: application
+  operation: add
+  timestamp: '2025-11-29T17:09:28.387190+00:00'
+- data:
+    adapter-type: secondary
+    description: Event store implementation using Elasticsearch
+    id: elasticsearch-event-store
+    location: src/codetoreum/adapters/secondary/elasticsearch_event_store.py
+    name: Elasticsearch Event Store
+  element_id: elasticsearch-event-store
+  element_type: component
+  layer: application
+  operation: add
+  timestamp: '2025-11-29T17:09:30.067325+00:00'
+- data:
+    adapter-type: secondary
+    description: Adapter for Redis pub/sub messaging
+    id: redis-pubsub-adapter
+    location: src/codetoreum/adapters/secondary/redis_pubsub_adapter.py
+    name: Redis Pub/Sub Adapter
+  element_id: redis-pubsub-adapter
+  element_type: component
+  layer: application
+  operation: add
+  timestamp: '2025-11-29T17:09:31.762959+00:00'
+- data:
+    criticality: high
+    description: Central event bus for domain event distribution
+    id: event-bus
+    location: src/codetoreum/infrastructure/event_bus.py
+    name: Event Bus
+  element_id: event-bus
+  element_type: component
+  layer: application
+  operation: add
+  timestamp: '2025-11-29T17:09:33.494271+00:00'
+- data:
+    description: Circuit breaker pattern implementation for resilience
+    id: circuit-breaker
+    location: src/codetoreum/infrastructure/resilience/circuit_breaker.py
+    name: Circuit Breaker
+    pattern: circuit-breaker
+  element_id: circuit-breaker
+  element_type: component
+  layer: application
+  operation: add
+  timestamp: '2025-11-29T17:09:35.166354+00:00'
+- data:
+    description: Rate limiting for external API calls
+    id: rate-limiter
+    location: src/codetoreum/infrastructure/resilience/rate_limiter.py
+    name: Rate Limiter
+    pattern: rate-limiting
+  element_id: rate-limiter
+  element_type: component
+  layer: application
+  operation: add
+  timestamp: '2025-11-29T17:09:36.898411+00:00'
+- data:
+    description: Configurable retry policy for failed operations
+    id: retry-policy
+    location: src/codetoreum/infrastructure/resilience/retry_policy.py
+    name: Retry Policy
+    pattern: retry
+  element_id: retry-policy
+  element_type: component
+  layer: application
+  operation: add
+  timestamp: '2025-11-29T17:09:38.572473+00:00'
+- data:
+    description: Create a new workflow definition
+    id: create-workflow
+    method: POST
+    name: Create Workflow
+    path: /api/v2/workflows
+  element_id: create-workflow
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:13:40.055754+00:00'
+- data:
+    description: List workflow definitions with filtering and pagination
+    id: list-workflows
+    method: GET
+    name: List Workflows
+    path: /api/v2/workflows
+  element_id: list-workflows
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:13:41.688421+00:00'
+- data:
+    description: Get workflow definition details
+    id: get-workflow
+    method: GET
+    name: Get Workflow
+    path: /api/v2/workflows/{workflow_id}
+  element_id: get-workflow
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:13:43.398061+00:00'
+- data:
+    description: Update workflow definition
+    id: update-workflow
+    method: PUT
+    name: Update Workflow
+    path: /api/v2/workflows/{workflow_id}
+  element_id: update-workflow
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:13:44.953024+00:00'
+- data:
+    description: Delete workflow definition (soft delete)
+    id: delete-workflow
+    method: DELETE
+    name: Delete Workflow
+    path: /api/v2/workflows/{workflow_id}
+  element_id: delete-workflow
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:13:46.541517+00:00'
+- data:
+    description: Get workflow version history
+    id: get-workflow-versions
+    method: GET
+    name: Get Workflow Versions
+    path: /api/v2/workflows/{workflow_id}/versions
+  element_id: get-workflow-versions
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:13:54.534301+00:00'
+- data:
+    description: Validate workflow definition
+    id: validate-workflow
+    method: GET
+    name: Validate Workflow
+    path: /api/v2/workflows/{workflow_id}/validate
+  element_id: validate-workflow
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:13:56.286072+00:00'
+- data:
+    description: Create a new work item
+    id: create-work-item
+    method: POST
+    name: Create Work Item
+    path: /api/v2/work-items
+  element_id: create-work-item
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:13:58.070273+00:00'
+- data:
+    description: List work items with filtering and pagination
+    id: list-work-items
+    method: GET
+    name: List Work Items
+    path: /api/v2/work-items
+  element_id: list-work-items
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:13:59.762757+00:00'
+- data:
+    description: Get work item details including history
+    id: get-work-item
+    method: GET
+    name: Get Work Item
+    path: /api/v2/work-items/{work_item_id}
+  element_id: get-work-item
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:14:01.852456+00:00'
+- data:
+    description: Update work item
+    id: update-work-item
+    method: PUT
+    name: Update Work Item
+    path: /api/v2/work-items/{work_item_id}
+  element_id: update-work-item
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:14:10.957333+00:00'
+- data:
+    description: Delete work item (soft delete)
+    id: delete-work-item
+    method: DELETE
+    name: Delete Work Item
+    path: /api/v2/work-items/{work_item_id}
+  element_id: delete-work-item
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:14:12.701508+00:00'
+- data:
+    description: List execution history with filtering
+    id: list-executions
+    method: GET
+    name: List Executions
+    path: /api/v2/executions
+  element_id: list-executions
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:14:22.341047+00:00'
+- data:
+    description: Get execution details
+    id: get-execution
+    method: GET
+    name: Get Execution
+    path: /api/v2/executions/{execution_id}
+  element_id: get-execution
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:14:24.003511+00:00'
+- data:
+    description: Get execution logs
+    id: get-execution-logs
+    method: GET
+    name: Get Execution Logs
+    path: /api/v2/executions/{execution_id}/logs
+  element_id: get-execution-logs
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:14:25.762948+00:00'
+- data:
+    description: Terminate a running execution
+    id: terminate-execution
+    method: POST
+    name: Terminate Execution
+    path: /api/v2/executions/{execution_id}/terminate
+  element_id: terminate-execution
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:14:27.485974+00:00'
+- data:
+    description: Create a new agent definition
+    id: create-agent
+    method: POST
+    name: Create Agent
+    path: /api/v2/agents
+  element_id: create-agent
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:14:29.185851+00:00'
+- data:
+    description: List all agents with filtering
+    id: list-agents
+    method: GET
+    name: List Agents
+    path: /api/v2/agents
+  element_id: list-agents
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:14:36.317741+00:00'
+- data:
+    description: Get agent details
+    id: get-agent
+    method: GET
+    name: Get Agent
+    path: /api/v2/agents/{agent_id}
+  element_id: get-agent
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:14:38.053241+00:00'
+- data:
+    description: Update agent definition
+    id: update-agent
+    method: PUT
+    name: Update Agent
+    path: /api/v2/agents/{agent_id}
+  element_id: update-agent
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:14:39.749580+00:00'
+- data:
+    description: Delete agent
+    id: delete-agent
+    method: DELETE
+    name: Delete Agent
+    path: /api/v2/agents/{agent_id}
+  element_id: delete-agent
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:14:41.412327+00:00'
+- data:
+    description: Start workflow orchestration
+    id: start-workflow
+    method: POST
+    name: Start Workflow
+    path: /api/v2/orchestrator/start
+  element_id: start-workflow
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:14:43.085351+00:00'
+- data:
+    description: List all projects
+    id: list-projects
+    method: GET
+    name: List Projects
+    path: /api/v2/config/projects
+  element_id: list-projects
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:15:41.159338+00:00'
+- data:
+    description: Get project details
+    id: get-project
+    method: GET
+    name: Get Project
+    path: /api/v2/config/projects/{project_id}
+  element_id: get-project
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:15:42.794970+00:00'
+- data:
+    description: Search configuration with filters
+    id: search-config
+    method: GET
+    name: Search Configuration
+    path: /api/v2/config/search
+  element_id: search-config
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:15:44.456227+00:00'
+- data:
+    description: Export configuration as JSON/YAML
+    id: export-config
+    method: GET
+    name: Export Configuration
+    path: /api/v2/config/export
+  element_id: export-config
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:15:46.108949+00:00'
+- data:
+    description: Import configuration from JSON/YAML
+    id: import-config
+    method: POST
+    name: Import Configuration
+    path: /api/v2/config/import
+  element_id: import-config
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:15:47.758933+00:00'
+- data:
+    description: List domain events
+    id: list-events
+    method: GET
+    name: List Events
+    path: /api/v2/events
+  element_id: list-events
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:16:22.322342+00:00'
+- data:
+    description: Get event details
+    id: get-event
+    method: GET
+    name: Get Event
+    path: /api/v2/events/{event_id}
+  element_id: get-event
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:16:24.005738+00:00'
+- data:
+    description: Search events by type or entity
+    id: search-events
+    method: GET
+    name: Search Events
+    path: /api/v2/events/search
+  element_id: search-events
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:16:25.672404+00:00'
+- data:
+    description: Get system metrics
+    id: get-metrics
+    method: GET
+    name: Get Metrics
+    path: /api/v2/metrics
+  element_id: get-metrics
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:16:27.315349+00:00'
+- data:
+    description: Queue a task for execution
+    id: queue-task
+    method: POST
+    name: Queue Task
+    path: /api/v2/scheduler/queue
+  element_id: queue-task
+  element_type: operation
+  layer: api
+  operation: add
+  timestamp: '2025-11-29T17:16:29.006703+00:00'
+- data:
+    description: Represents a unit of work (issue, task) to be processed by agents
+    format: Python dataclass
+    id: work-item
+    location: src/codetoreum/domain/work_item.py
+    name: WorkItem
+  element_id: work-item
+  element_type: schema
+  layer: data_model
+  operation: add
+  timestamp: '2025-11-29T17:16:39.020344+00:00'
+- data:
+    description: Represents a specialized AI agent with specific capabilities
+    format: Python dataclass
+    id: agent
+    location: src/codetoreum/domain/agent.py
+    name: Agent
+  element_id: agent
+  element_type: schema
+  layer: data_model
+  operation: add
+  timestamp: '2025-11-29T17:16:40.896017+00:00'
+- data:
+    description: Tracks an instance of an agent working on a work item
+    format: Python dataclass
+    id: agent-execution
+    location: src/codetoreum/domain/agent_execution.py
+    name: AgentExecution
+  element_id: agent-execution
+  element_type: schema
+  layer: data_model
+  operation: add
+  timestamp: '2025-11-29T17:16:42.724339+00:00'
+- data:
+    description: Multi-stage pipeline with stage transitions and review cycles
+    format: Python dataclass
+    id: workflow
+    location: src/codetoreum/domain/workflow.py
+    name: Workflow
+  element_id: workflow
+  element_type: schema
+  layer: data_model
+  operation: add
+  timestamp: '2025-11-29T17:16:44.492890+00:00'
+- data:
+    description: Individual stage in workflow with entry conditions and agent assignments
+    format: Python dataclass
+    id: pipeline-stage
+    location: src/codetoreum/domain/pipeline_stage.py
+    name: PipelineStage
+  element_id: pipeline-stage
+  element_type: schema
+  layer: data_model
+  operation: add
+  timestamp: '2025-11-29T17:16:46.320724+00:00'
+- data:
+    description: Maker-checker review process with feedback loops
+    format: Python dataclass
+    id: review-cycle
+    location: src/codetoreum/domain/review_cycle.py
+    name: ReviewCycle
+  element_id: review-cycle
+  element_type: schema
+  layer: data_model
+  operation: add
+  timestamp: '2025-11-29T17:16:55.226345+00:00'
+- data:
+    description: User account for authentication and authorization
+    format: Python dataclass
+    id: user
+    location: src/codetoreum/domain/user.py
+    name: User
+  element_id: user
+  element_type: schema
+  layer: data_model
+  operation: add
+  timestamp: '2025-11-29T17:16:56.948793+00:00'
+- data:
+    description: Comment on work items or reviews
+    format: Python dataclass
+    id: comment
+    location: src/codetoreum/domain/comment.py
+    name: Comment
+  element_id: comment
+  element_type: schema
+  layer: data_model
+  operation: add
+  timestamp: '2025-11-29T17:16:58.684545+00:00'
+- data:
+    description: Context information for agent workspace execution
+    format: Python dataclass
+    id: workspace-context
+    location: src/codetoreum/domain/workspace_context.py
+    name: WorkspaceContext
+  element_id: workspace-context
+  element_type: schema
+  layer: data_model
+  operation: add
+  timestamp: '2025-11-29T17:17:00.357318+00:00'
+- data:
+    description: Project configuration and environment settings
+    format: Python dataclass
+    id: project-context
+    location: src/codetoreum/domain/project_context.py
+    name: ProjectContext
+  element_id: project-context
+  element_type: schema
+  layer: data_model
+  operation: add
+  timestamp: '2025-11-29T17:17:02.050613+00:00'
+- data:
+    description: Domain event for workflow state changes
+    format: Python dataclass
+    id: workflow-event
+    location: src/codetoreum/domain/events.py
+    name: WorkflowEvent
+    type: domain-event
+  element_id: workflow-event
+  element_type: schema
+  layer: data_model
+  operation: add
+  timestamp: '2025-11-29T17:17:09.902142+00:00'
+- data:
+    description: Domain event for execution lifecycle changes
+    format: Python dataclass
+    id: execution-event
+    location: src/codetoreum/domain/events.py
+    name: ExecutionEvent
+    type: domain-event
+  element_id: execution-event
+  element_type: schema
+  layer: data_model
+  operation: add
+  timestamp: '2025-11-29T17:17:11.536404+00:00'
+- data:
+    description: Domain event for work item state changes
+    format: Python dataclass
+    id: work-item-event
+    location: src/codetoreum/domain/events.py
+    name: WorkItemEvent
+    type: domain-event
+  element_id: work-item-event
+  element_type: schema
+  layer: data_model
+  operation: add
+  timestamp: '2025-11-29T17:17:13.168606+00:00'
+- data:
+    description: Complete audit trail of all domain events
+    id: event-store
+    name: Event Store
+    persistence: Redis + Elasticsearch
+    retention: permanent
+  element_id: event-store
+  element_type: database
+  layer: datastore
+  operation: add
+  timestamp: '2025-11-29T17:17:28.501903+00:00'
+- data:
+    description: Storage for work items (issues, tasks)
+    id: work-items-db
+    name: Work Items Database
+    persistence: PostgreSQL
+  element_id: work-items-db
+  element_type: database
+  layer: datastore
+  operation: add
+  timestamp: '2025-11-29T17:17:30.170154+00:00'
+- data:
+    description: Storage for agent definitions and capabilities
+    id: agents-db
+    name: Agent Configurations Database
+    persistence: PostgreSQL
+  element_id: agents-db
+  element_type: database
+  layer: datastore
+  operation: add
+  timestamp: '2025-11-29T17:17:31.868571+00:00'
+- data:
+    description: Storage for workflow configurations
+    id: workflows-db
+    name: Workflow Definitions Database
+    persistence: PostgreSQL
+  element_id: workflows-db
+  element_type: database
+  layer: datastore
+  operation: add
+  timestamp: '2025-11-29T17:17:33.561091+00:00'
+- data:
+    description: Storage for agent execution records
+    id: executions-db
+    name: Execution History Database
+    persistence: PostgreSQL
+  element_id: executions-db
+  element_type: database
+  layer: datastore
+  operation: add
+  timestamp: '2025-11-29T17:17:35.410909+00:00'
+- data:
+    description: User authentication and authorization data
+    id: users-db
+    name: User Accounts Database
+    persistence: PostgreSQL
+  element_id: users-db
+  element_type: database
+  layer: datastore
+  operation: add
+  timestamp: '2025-11-29T17:17:43.419937+00:00'
+- data:
+    description: Temporary cache for configuration data
+    id: config-cache
+    name: Configuration Cache
+    persistence: Redis
+  element_id: config-cache
+  element_type: database
+  layer: datastore
+  operation: add
+  timestamp: '2025-11-29T17:17:45.171371+00:00'
+- data:
+    description: Temporary execution state and task queue
+    id: execution-cache
+    name: Execution State Cache
+    persistence: Redis
+  element_id: execution-cache
+  element_type: database
+  layer: datastore
+  operation: add
+  timestamp: '2025-11-29T17:17:46.960165+00:00'
+version: '1.0'

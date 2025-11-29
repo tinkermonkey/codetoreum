@@ -1,0 +1,42 @@
+Dashboard Screen:
+  description: Main dashboard showing workflow execution status with real-time work
+    items and execution tracking via WebSocket
+  id: ux.view.dashboard-screen
+  name: Dashboard Screen
+  technology: React TypeScript TanStack-Query
+  component-type: page
+Project Configuration Screen:
+  description: Project settings management including repository details, environment
+    variables, and workflow assignment
+  id: ux.view.project-configuration-screen
+  name: Project Configuration Screen
+  technology: React TypeScript
+  component-type: page
+Workflow Configuration Screen:
+  description: Create and edit multi-stage workflow definitions with pipeline stages
+    and agent assignments
+  id: ux.view.workflow-configuration-screen
+  name: Workflow Configuration Screen
+  technology: React TypeScript
+  component-type: page
+Agent Configuration Screen:
+  description: Manage AI agent configurations including capabilities, prompts, and
+    MCP server settings
+  id: ux.view.agent-configuration-screen
+  name: Agent Configuration Screen
+  technology: React TypeScript
+  component-type: page
+Configuration History Screen:
+  description: View configuration change history with versioning, audit trail, and
+    rollback capability
+  id: ux.view.configuration-history-screen
+  name: Configuration History Screen
+  technology: React TypeScript
+  component-type: page
+Authentication Required Screen:
+  description: Authentication prompt screen with secure token-based login using httpOnly
+    cookies
+  id: ux.view.authentication-required-screen
+  name: Authentication Required Screen
+  technology: React TypeScript
+  component-type: page

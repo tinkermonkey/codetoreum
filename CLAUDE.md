@@ -6,6 +6,8 @@ Codetoreum is an AI agent orchestration platform that automates software develop
 
 **IMPORTANT**: Design documentation for the new Gen 2 architecture is located in the `documentation/01_design/` directory. If a specific design document was not specified for a task, refer to that directory for the relevant design details.
 
+All implementation and task notes should be placed in the `documentation/claude_thoughts/` directory.
+
 ## Architecture
 
 **Gen 2 Design**: Hexagonal Architecture with Event Sourcing

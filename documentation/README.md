@@ -6,8 +6,8 @@ This directory contains all documentation for the Codetoreum AI Agent Orchestrat
 
 ### Getting Started
 - [Project Overview](../README.md) - Main project README with quick start guide
-- [Environment Setup](task_reports/ENVIRONMENT_SETUP.md) - Initial environment configuration
-- [Setup Summary](task_reports/SETUP_SUMMARY.md) - Setup process summary
+- [Environment Setup](claude_thoughts/ENVIRONMENT_SETUP.md) - Initial environment configuration
+- [Setup Summary](claude_thoughts/SETUP_SUMMARY.md) - Setup process summary
 
 ### Architecture & Design
 
@@ -121,21 +121,21 @@ This directory contains all documentation for the Codetoreum AI Agent Orchestrat
 - [Simulation Mode Testing Plan](simulation_mode_testing_plan.md)
 - [Exception Handling Guide](exception_handling_guide.md)
 - [WebSocket Horizontal Scaling](websocket_horizontal_scaling.md)
-- [Event Handler Usage Guide](task_reports/EVENT_HANDLER_USAGE_GUIDE.md)
+- [Event Handler Usage Guide](claude_thoughts/EVENT_HANDLER_USAGE_GUIDE.md)
 
 ### Task Reports & Implementation Details
-- [Phase 2.4 Implementation](task_reports/PHASE_2_4_IMPLEMENTATION_SUMMARY.md)
-- [Phase 2.5 Implementation](task_reports/PHASE_2_5_IMPLEMENTATION_SUMMARY.md)
-- [Phase 2.6 Implementation](task_reports/PHASE_2_6_IMPLEMENTATION_SUMMARY.md)
-- [Phase 5-6 Completion](task_reports/PHASE_5_6_COMPLETION_SUMMARY.md)
-- [Phase 7 Part 1 Summary](task_reports/PHASE_7_PART_1_SUMMARY.md)
-- [Phase 7 Part 1 Revision](task_reports/PHASE_7_PART_1_REVISION_SUMMARY.md)
-- [Phase 7 Part 2 Implementation](task_reports/PHASE_7_PART_2_IMPLEMENTATION_SUMMARY.md)
-- [Phase 7 Completion Report](task_reports/PHASE_7_COMPLETION_REPORT.md)
-- [Phase 7 Revision Implementation](task_reports/PHASE_7_REVISION_IMPLEMENTATION.md)
-- [Phase 7 Revision Complete](task_reports/PHASE7_REVISION_COMPLETE.md)
-- [Reliability Improvements](task_reports/RELIABILITY_IMPROVEMENTS_SUMMARY.md)
-- [Revision Summary](task_reports/REVISION_SUMMARY.md)
+- [Phase 2.4 Implementation](claude_thoughts/PHASE_2_4_IMPLEMENTATION_SUMMARY.md)
+- [Phase 2.5 Implementation](claude_thoughts/PHASE_2_5_IMPLEMENTATION_SUMMARY.md)
+- [Phase 2.6 Implementation](claude_thoughts/PHASE_2_6_IMPLEMENTATION_SUMMARY.md)
+- [Phase 5-6 Completion](claude_thoughts/PHASE_5_6_COMPLETION_SUMMARY.md)
+- [Phase 7 Part 1 Summary](claude_thoughts/PHASE_7_PART_1_SUMMARY.md)
+- [Phase 7 Part 1 Revision](claude_thoughts/PHASE_7_PART_1_REVISION_SUMMARY.md)
+- [Phase 7 Part 2 Implementation](claude_thoughts/PHASE_7_PART_2_IMPLEMENTATION_SUMMARY.md)
+- [Phase 7 Completion Report](claude_thoughts/PHASE_7_COMPLETION_REPORT.md)
+- [Phase 7 Revision Implementation](claude_thoughts/PHASE_7_REVISION_IMPLEMENTATION.md)
+- [Phase 7 Revision Complete](claude_thoughts/PHASE7_REVISION_COMPLETE.md)
+- [Reliability Improvements](claude_thoughts/RELIABILITY_IMPROVEMENTS_SUMMARY.md)
+- [Revision Summary](claude_thoughts/REVISION_SUMMARY.md)
 
 ## Documentation Organization
 
@@ -170,7 +170,7 @@ Frontend application documentation including:
 ### `/documentation/implementation/`
 Implementation summaries documenting the development progress and key decisions made during different implementation stages of the project.
 
-### `/documentation/task_reports/`
+### `/documentation/claude_thoughts/`
 Detailed task completion reports and implementation summaries for specific features and improvements.
 
 ## Key Concepts
@@ -212,7 +212,7 @@ When adding or updating documentation:
 
 1. Place design docs in appropriate `/01_design/` subdirectories
 2. Place implementation guides in `/implementation/` or `/api/` or `/frontend/`
-3. Place task reports in `/task_reports/`
+3. Place task reports in `/claude_thoughts/`
 4. Update this README's table of contents
 5. Follow markdown best practices (headers, code blocks, links)
 6. Include diagrams where helpful (mermaid, ASCII art, or images)

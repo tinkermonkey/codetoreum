@@ -1,0 +1,42 @@
+Main Navigation Menu:
+  description: Top navigation bar with links to Dashboard, Project, Workflows, Agents,
+    and History
+  entry-point: /dashboard
+  id: navigation.flow.main-navigation-menu
+  name: Main Navigation Menu
+  navigation-type: user-flow
+Dashboard to Configuration Flow:
+  description: Navigate from dashboard to project configuration screen
+  from: dashboard
+  id: navigation.flow.dashboard-to-configuration-flow
+  name: Dashboard to Configuration Flow
+  to: project-config
+  navigation-type: user-flow
+Workflow Management Flow:
+  description: Create edit and manage workflow definitions with stage configuration
+  from: dashboard
+  id: navigation.flow.workflow-management-flow
+  name: Workflow Management Flow
+  to: workflows
+  navigation-type: user-flow
+Agent Management Flow:
+  description: Configure and manage AI agents and their capabilities
+  from: dashboard
+  id: navigation.flow.agent-management-flow
+  name: Agent Management Flow
+  to: agents
+  navigation-type: user-flow
+Configuration Audit Flow:
+  description: View configuration change history and audit trail with rollback capability
+  from: project-config
+  id: navigation.flow.configuration-audit-flow
+  name: Configuration Audit Flow
+  to: history
+  navigation-type: user-flow
+Authentication Flow:
+  description: Login and token-based authentication with secure httpOnly cookie storage
+  from: auth-required
+  id: navigation.flow.authentication-flow
+  name: Authentication Flow
+  to: dashboard
+  navigation-type: user-flow

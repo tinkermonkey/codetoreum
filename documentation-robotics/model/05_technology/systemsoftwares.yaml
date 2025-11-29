@@ -1,0 +1,76 @@
+Python 3.11+:
+  description: Primary programming language for the platform
+  id: python
+  name: Python 3.11+
+  type: language
+  version: 3.11+
+FastAPI:
+  description: Modern async Python web framework for building REST APIs
+  id: fastapi
+  name: FastAPI
+  type: framework
+  version: 0.115.0
+SQLAlchemy:
+  description: Python SQL toolkit and Object-Relational Mapping library
+  id: sqlalchemy
+  name: SQLAlchemy
+  type: orm
+  version: 2.0.35
+Uvicorn:
+  description: ASGI server for running FastAPI applications
+  id: uvicorn
+  name: Uvicorn
+  type: server
+  version: 0.32.0
+Pydantic:
+  description: Data validation library using Python type annotations
+  id: pydantic
+  name: Pydantic
+  purpose: validation,serialization
+  type: library
+  version: 2.9.2
+HTTPX:
+  description: Async HTTP client for external API communication
+  id: httpx
+  name: HTTPX
+  type: library
+  version: 0.27.2
+AIOHTTP:
+  description: Async HTTP client/server framework
+  id: aiohttp
+  name: AIOHTTP
+  type: library
+  version: 3.9.0
+Python-JOSE:
+  description: JWT token implementation for authentication
+  id: python-jose
+  name: Python-JOSE
+  purpose: jwt,authentication
+  type: library
+  version: 3.3.0
+Passlib:
+  description: Password hashing library with bcrypt support
+  id: passlib
+  name: Passlib
+  purpose: password-hashing
+  type: library
+  version: 1.7.4
+Alembic:
+  description: Database migration tool for SQLAlchemy
+  id: alembic
+  name: Alembic
+  type: tool
+  version: 1.13.3
+Pytest:
+  description: Testing framework with async support
+  id: pytest
+  name: Pytest
+  purpose: unit,integration,simulation
+  type: testing
+  version: 8.3.3
+Testcontainers:
+  description: Library for integration testing with Docker containers
+  id: testcontainers
+  name: Testcontainers
+  type: testing
+  version: 4.8.2

@@ -1,0 +1,80 @@
+Structured Logging:
+  category: observability
+  criticality: high
+  description: JSON-formatted logging with correlation IDs and sensitive data scrubbing
+    for security
+  id: technology.service.structured-logging
+  name: Structured Logging
+  source-file: src/codetoreum/infrastructure/logging.py
+Sensitive Data Filter:
+  category: security
+  criticality: high
+  description: Logging filter that scrubs API keys, tokens, passwords, and PII from
+    logs
+  id: technology.service.sensitive-data-filter
+  name: Sensitive Data Filter
+  source-file: src/codetoreum/infrastructure/logging.py
+Correlation ID Tracker:
+  category: observability
+  criticality: medium
+  description: Context-based correlation ID tracking for request tracing across services
+  id: technology.service.correlation-id-tracker
+  name: Correlation ID Tracker
+  source-file: src/codetoreum/infrastructure/logging.py
+Event Store:
+  category: observability
+  criticality: high
+  description: Complete audit trail of all domain events using Redis and Elasticsearch
+    for event sourcing
+  id: technology.service.event-store
+  name: Event Store
+Event Replayer:
+  category: observability
+  criticality: medium
+  description: Replay domain events for debugging and testing with time manipulation
+    support
+  id: technology.service.event-replayer
+  name: Event Replayer
+  source-file: src/codetoreum/infrastructure/event_replayer.py
+Health Checker:
+  category: observability
+  criticality: high
+  description: Health check system for monitoring service and dependency availability
+    with liveness and readiness probes
+  id: technology.service.health-checker
+  name: Health Checker
+  source-file: src/codetoreum/infrastructure/health/health_checker.py
+Dead Letter Queue:
+  category: resilience
+  criticality: medium
+  description: Queue for failed events and messages with automatic retry and exponential
+    backoff
+  id: technology.service.dead-letter-queue
+  name: Dead Letter Queue
+  source-file: src/codetoreum/infrastructure/dead_letter_queue.py
+Circuit Breaker Metrics:
+  category: resilience
+  criticality: medium
+  description: Metrics for circuit breaker state transitions and failure rates
+  id: technology.service.circuit-breaker-metrics
+  name: Circuit Breaker Metrics
+Retry Policy Metrics:
+  category: resilience
+  criticality: medium
+  description: Tracking retry attempts and success rates for external services
+  id: technology.service.retry-policy-metrics
+  name: Retry Policy Metrics
+Rate Limiter Metrics:
+  category: resilience
+  criticality: medium
+  description: Monitoring rate limit enforcement and throttling events
+  id: technology.service.rate-limiter-metrics
+  name: Rate Limiter Metrics
+Audit Logger:
+  category: security
+  criticality: high
+  description: Specialized logging for compliance and security auditing with retention
+    policies
+  id: technology.service.audit-logger
+  name: Audit Logger
+  source-file: src/codetoreum/infrastructure/audit/audit_logger.py

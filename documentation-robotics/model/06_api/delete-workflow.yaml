@@ -1,0 +1,35 @@
+openapi: 3.0.0
+info:
+  title: Codetoreum API
+  version: 2.0.0
+  description: AI Agent Orchestration Platform API
+paths:
+  /api/v2/workflows/{workflow_id}:
+    delete:
+      operationId: delete-workflow
+      summary: Delete Workflow
+      description: Delete workflow definition (soft delete)
+      tags:
+      - workflows
+      security:
+      - bearerAuth: []
+      responses:
+        '204':
+          description: Delete deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token from httpOnly cookie authentication

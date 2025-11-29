@@ -1,3 +1,6 @@
+# Project specific
+documentation/claude_thoughts/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

@@ -1,0 +1,49 @@
+Event Store:
+  description: Complete audit trail of all domain events
+  id: event-store
+  name: Event Store
+  persistence: Redis + Elasticsearch
+  retention: permanent
+  database: Redis + Elasticsearch
+Work Items Database:
+  description: Storage for work items (issues, tasks)
+  id: work-items-db
+  name: Work Items Database
+  persistence: PostgreSQL
+  database: PostgreSQL
+Agent Configurations Database:
+  description: Storage for agent definitions and capabilities
+  id: agents-db
+  name: Agent Configurations Database
+  persistence: PostgreSQL
+  database: PostgreSQL
+Workflow Definitions Database:
+  description: Storage for workflow configurations
+  id: workflows-db
+  name: Workflow Definitions Database
+  persistence: PostgreSQL
+  database: PostgreSQL
+Execution History Database:
+  description: Storage for agent execution records
+  id: executions-db
+  name: Execution History Database
+  persistence: PostgreSQL
+  database: PostgreSQL
+User Accounts Database:
+  description: User authentication and authorization data
+  id: users-db
+  name: User Accounts Database
+  persistence: PostgreSQL
+  database: PostgreSQL
+Configuration Cache:
+  description: Temporary cache for configuration data
+  id: config-cache
+  name: Configuration Cache
+  persistence: Redis
+  database: Redis
+Execution State Cache:
+  description: Temporary execution state and task queue
+  id: execution-cache
+  name: Execution State Cache
+  persistence: Redis
+  database: Redis
