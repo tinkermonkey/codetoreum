@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Edit2, Save, X, ChevronRight, AlertCircle } from 'lucide-react'
+import { Plus, Trash2, Edit2, Save, X, AlertCircle } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import {
@@ -11,11 +11,16 @@ import {
   CardTitle,
 } from '../components/ui/card'
 import { pipelineConfigApi, agentConfigApi } from '../api/client'
-import type { PipelineConfig, Stage, StageCondition } from '../types'
+import { StageCard } from '../components/workflow-editor/StageCard'
+import { StageEditor } from '../components/workflow-editor/StageEditor'
+import type { PipelineConfig, Stage } from '../types'
+import { useToast } from '../components/ui/use-toast'
 
 export default function WorkflowConfigPage() {
   const [selectedPipeline, setSelectedPipeline] = useState<string | null>(null)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const queryClient = useQueryClient()
+  const { toast } = useToast()
 
   const { data: pipelines, isLoading, error } = useQuery({
     queryKey: ['pipelines'],
@@ -28,6 +33,19 @@ export default function WorkflowConfigPage() {
   })
 
   const selectedPipelineData = pipelines?.find((p) => p.id === selectedPipeline)
+
+  // Warning for unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasUnsavedChanges])
 
   if (isLoading) {
     return <div className="flex justify-center p-8">Loading pipelines...</div>
@@ -48,7 +66,15 @@ export default function WorkflowConfigPage() {
             Configure workflow pipelines, stages, and transitions
           </p>
         </div>
-        <CreatePipelineButton queryClient={queryClient} />
+        <CreatePipelineButton
+          queryClient={queryClient}
+          onSuccess={() => toast({ title: 'Pipeline created successfully' })}
+          onError={(error) => toast({
+            title: 'Failed to create pipeline',
+            description: error.message,
+            variant: 'destructive'
+          })}
+        />
       </div>
 
       <div className="grid grid-cols-3 gap-6">
@@ -68,10 +94,16 @@ export default function WorkflowConfigPage() {
                       ? 'bg-primary/10 border-primary'
                       : 'hover:bg-muted'
                   }`}
-                  onClick={() => setSelectedPipeline(pipeline.id)}
+                  onClick={() => {
+                    if (hasUnsavedChanges && !confirm('You have unsaved changes. Continue?')) {
+                      return
+                    }
+                    setSelectedPipeline(pipeline.id)
+                    setHasUnsavedChanges(false)
+                  }}
                 >
                   <div className="font-medium">{pipeline.name}</div>
-                  {pipeline.metadata.description && (
+                  {pipeline.metadata?.description && (
                     <p className="text-sm text-muted-foreground mt-1">
                       {pipeline.metadata.description}
                     </p>
@@ -80,7 +112,7 @@ export default function WorkflowConfigPage() {
                     <span className="text-xs text-muted-foreground">
                       {pipeline.stages.length} stages
                     </span>
-                    {pipeline.metadata.is_default && (
+                    {pipeline.metadata?.is_default && (
                       <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded">
                         Default
                       </span>
@@ -104,12 +136,14 @@ export default function WorkflowConfigPage() {
               <PipelineDetailsCard
                 pipeline={selectedPipelineData}
                 queryClient={queryClient}
+                onUnsavedChanges={setHasUnsavedChanges}
               />
               <div className="mt-6">
                 <StagesEditor
                   pipeline={selectedPipelineData}
                   agents={agents || []}
                   queryClient={queryClient}
+                  onUnsavedChanges={setHasUnsavedChanges}
                 />
               </div>
             </>
@@ -128,10 +162,19 @@ export default function WorkflowConfigPage() {
 }
 
 // Create Pipeline Button
-function CreatePipelineButton({ queryClient }: { queryClient: any }) {
+function CreatePipelineButton({
+  queryClient,
+  onSuccess,
+  onError,
+}: {
+  queryClient: any
+  onSuccess: () => void
+  onError: (error: Error) => void
+}) {
   const [isCreating, setIsCreating] = useState(false)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [error, setError] = useState('')
 
   const createMutation = useMutation({
     mutationFn: (data: Partial<PipelineConfig>) => pipelineConfigApi.create(data as PipelineConfig),
@@ -140,8 +183,33 @@ function CreatePipelineButton({ queryClient }: { queryClient: any }) {
       setIsCreating(false)
       setName('')
       setDescription('')
+      setError('')
+      onSuccess()
+    },
+    onError: (err: Error) => {
+      setError(err.message)
+      onError(err)
     },
   })
+
+  const handleCreate = () => {
+    if (!name.trim()) {
+      setError('Pipeline name is required')
+      return
+    }
+
+    createMutation.mutate({
+      id: `pipeline-${Date.now()}`,
+      name: name.trim(),
+      project_id: 'codetoreum',
+      stages: [],
+      triggers: [],
+      version: 1,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      metadata: { description: description.trim() },
+    })
+  }
 
   if (!isCreating) {
     return (
@@ -153,41 +221,50 @@ function CreatePipelineButton({ queryClient }: { queryClient: any }) {
   }
 
   return (
-    <div className="flex items-center space-x-2">
-      <Input
-        placeholder="Pipeline name"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        className="w-48"
-      />
-      <Input
-        placeholder="Description (optional)"
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        className="w-64"
-      />
-      <Button
-        onClick={() =>
-          createMutation.mutate({
-            id: `pipeline-${Date.now()}`,
-            name,
-            project_id: 'codetoreum',
-            stages: [],
-            triggers: [],
-            version: 1,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            metadata: { description },
-          })
-        }
-        disabled={!name || createMutation.isPending}
-      >
-        <Save className="h-4 w-4 mr-2" />
-        Create
-      </Button>
-      <Button variant="ghost" onClick={() => setIsCreating(false)}>
-        <X className="h-4 w-4" />
-      </Button>
+    <div className="flex flex-col space-y-2">
+      <div className="flex items-center space-x-2">
+        <Input
+          placeholder="Pipeline name *"
+          value={name}
+          onChange={(e) => {
+            setName(e.target.value)
+            setError('')
+          }}
+          className="w-48"
+        />
+        <Input
+          placeholder="Description (optional)"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          className="w-64"
+        />
+        <Button
+          onClick={handleCreate}
+          disabled={!name.trim() || createMutation.isPending}
+        >
+          {createMutation.isPending ? (
+            <>Saving...</>
+          ) : (
+            <>
+              <Save className="h-4 w-4 mr-2" />
+              Create
+            </>
+          )}
+        </Button>
+        <Button
+          variant="ghost"
+          onClick={() => {
+            setIsCreating(false)
+            setName('')
+            setDescription('')
+            setError('')
+          }}
+          disabled={createMutation.isPending}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+      {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
   )
 }
@@ -196,14 +273,26 @@ function CreatePipelineButton({ queryClient }: { queryClient: any }) {
 function PipelineDetailsCard({
   pipeline,
   queryClient,
+  onUnsavedChanges,
 }: {
   pipeline: PipelineConfig
   queryClient: any
+  onUnsavedChanges: (hasChanges: boolean) => void
 }) {
   const [isEditing, setIsEditing] = useState(false)
   const [name, setName] = useState(pipeline.name)
-  const [description, setDescription] = useState(pipeline.metadata.description || '')
-  const [isDefault, setIsDefault] = useState(pipeline.metadata.is_default || false)
+  const [description, setDescription] = useState(pipeline.metadata?.description || '')
+  const [isDefault, setIsDefault] = useState(pipeline.metadata?.is_default || false)
+  const { toast } = useToast()
+
+  useEffect(() => {
+    const hasChanges = isEditing && (
+      name !== pipeline.name ||
+      description !== (pipeline.metadata?.description || '') ||
+      isDefault !== (pipeline.metadata?.is_default || false)
+    )
+    onUnsavedChanges(hasChanges)
+  }, [isEditing, name, description, isDefault, pipeline, onUnsavedChanges])
 
   const updateMutation = useMutation({
     mutationFn: (data: Partial<PipelineConfig>) =>
@@ -211,6 +300,15 @@ function PipelineDetailsCard({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pipelines'] })
       setIsEditing(false)
+      onUnsavedChanges(false)
+      toast({ title: 'Pipeline updated successfully' })
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to update pipeline',
+        description: error.message,
+        variant: 'destructive'
+      })
     },
   })
 
@@ -218,16 +316,33 @@ function PipelineDetailsCard({
     mutationFn: () => pipelineConfigApi.delete(pipeline.name),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pipelines'] })
+      toast({ title: 'Pipeline deleted successfully' })
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to delete pipeline',
+        description: error.message,
+        variant: 'destructive'
+      })
     },
   })
 
   const handleSave = () => {
+    if (!name.trim()) {
+      toast({
+        title: 'Validation error',
+        description: 'Pipeline name is required',
+        variant: 'destructive'
+      })
+      return
+    }
+
     updateMutation.mutate({
       ...pipeline,
-      name,
+      name: name.trim(),
       metadata: {
         ...pipeline.metadata,
-        description,
+        description: description.trim(),
         is_default: isDefault,
       },
     })
@@ -243,6 +358,7 @@ function PipelineDetailsCard({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="mb-2"
+                placeholder="Pipeline name *"
               />
             ) : (
               <CardTitle>{pipeline.name}</CardTitle>
@@ -254,17 +370,38 @@ function PipelineDetailsCard({
                 onChange={(e) => setDescription(e.target.value)}
               />
             ) : (
-              <CardDescription>{pipeline.metadata.description}</CardDescription>
+              <CardDescription>{pipeline.metadata?.description}</CardDescription>
             )}
           </div>
           <div className="flex items-center space-x-2">
             {isEditing ? (
               <>
-                <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending}>
-                  <Save className="h-4 w-4 mr-2" />
-                  Save
+                <Button
+                  size="sm"
+                  onClick={handleSave}
+                  disabled={updateMutation.isPending || !name.trim()}
+                >
+                  {updateMutation.isPending ? (
+                    'Saving...'
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4 mr-2" />
+                      Save
+                    </>
+                  )}
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setIsEditing(false)
+                    setName(pipeline.name)
+                    setDescription(pipeline.metadata?.description || '')
+                    setIsDefault(pipeline.metadata?.is_default || false)
+                    onUnsavedChanges(false)
+                  }}
+                  disabled={updateMutation.isPending}
+                >
                   <X className="h-4 w-4" />
                 </Button>
               </>
@@ -284,7 +421,11 @@ function PipelineDetailsCard({
                   }}
                   disabled={deleteMutation.isPending}
                 >
-                  <Trash2 className="h-4 w-4" />
+                  {deleteMutation.isPending ? (
+                    'Deleting...'
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
                 </Button>
               </>
             )}
@@ -322,7 +463,7 @@ function PipelineDetailsCard({
               <>
                 <span className="text-muted-foreground">Default:</span>
                 <span className="ml-2 font-medium">
-                  {pipeline.metadata.is_default ? 'Yes' : 'No'}
+                  {pipeline.metadata?.is_default ? 'Yes' : 'No'}
                 </span>
               </>
             )}
@@ -338,13 +479,16 @@ function StagesEditor({
   pipeline,
   agents,
   queryClient,
+  onUnsavedChanges,
 }: {
   pipeline: PipelineConfig
   agents: any[]
   queryClient: any
+  onUnsavedChanges: (hasChanges: boolean) => void
 }) {
   const [isAddingStage, setIsAddingStage] = useState(false)
   const [editingStageIndex, setEditingStageIndex] = useState<number | null>(null)
+  const { toast } = useToast()
 
   const updateStagesMutation = useMutation({
     mutationFn: (stages: Stage[]) =>
@@ -353,6 +497,15 @@ function StagesEditor({
       queryClient.invalidateQueries({ queryKey: ['pipelines'] })
       setIsAddingStage(false)
       setEditingStageIndex(null)
+      onUnsavedChanges(false)
+      toast({ title: 'Stages updated successfully' })
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to update stages',
+        description: error.message,
+        variant: 'destructive'
+      })
     },
   })
 
@@ -368,6 +521,7 @@ function StagesEditor({
   }
 
   const deleteStage = (index: number) => {
+    if (!confirm('Are you sure you want to delete this stage?')) return
     const newStages = pipeline.stages.filter((_, i) => i !== index)
     updateStagesMutation.mutate(newStages)
   }
@@ -388,7 +542,11 @@ function StagesEditor({
             <CardTitle>Pipeline Stages</CardTitle>
             <CardDescription>Configure stages and their execution order</CardDescription>
           </div>
-          <Button size="sm" onClick={() => setIsAddingStage(true)}>
+          <Button
+            size="sm"
+            onClick={() => setIsAddingStage(true)}
+            disabled={updateStagesMutation.isPending}
+          >
             <Plus className="h-4 w-4 mr-2" />
             Add Stage
           </Button>
@@ -396,23 +554,6 @@ function StagesEditor({
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
-          {/* Pipeline Visualization */}
-          {pipeline.stages.length > 0 && (
-            <div className="flex items-center space-x-2 overflow-x-auto pb-4 mb-4 border-b">
-              {pipeline.stages.map((stage, index) => (
-                <div key={index} className="flex items-center">
-                  <div className="bg-primary/10 border border-primary px-3 py-2 rounded-md whitespace-nowrap">
-                    <div className="text-sm font-medium">{stage.name}</div>
-                    <div className="text-xs text-muted-foreground">{stage.agent}</div>
-                  </div>
-                  {index < pipeline.stages.length - 1 && (
-                    <ChevronRight className="h-5 w-5 mx-2 text-muted-foreground" />
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
           {/* Stage List */}
           {pipeline.stages.map((stage, index) => (
             <div key={index}>
@@ -421,16 +562,24 @@ function StagesEditor({
                   stage={stage}
                   agents={agents}
                   onSave={(updatedStage) => updateStage(index, updatedStage)}
-                  onCancel={() => setEditingStageIndex(null)}
+                  onCancel={() => {
+                    setEditingStageIndex(null)
+                    onUnsavedChanges(false)
+                  }}
+                  isLoading={updateStagesMutation.isPending}
                 />
               ) : (
                 <StageCard
                   stage={stage}
                   index={index}
                   totalStages={pipeline.stages.length}
-                  onEdit={() => setEditingStageIndex(index)}
+                  onEdit={() => {
+                    setEditingStageIndex(index)
+                    onUnsavedChanges(true)
+                  }}
                   onDelete={() => deleteStage(index)}
                   onMove={(direction) => moveStage(index, direction)}
+                  isLoading={updateStagesMutation.isPending}
                 />
               )}
             </div>
@@ -441,7 +590,11 @@ function StagesEditor({
             <StageEditor
               agents={agents}
               onSave={addStage}
-              onCancel={() => setIsAddingStage(false)}
+              onCancel={() => {
+                setIsAddingStage(false)
+                onUnsavedChanges(false)
+              }}
+              isLoading={updateStagesMutation.isPending}
             />
           )}
 
@@ -453,173 +606,5 @@ function StagesEditor({
         </div>
       </CardContent>
     </Card>
-  )
-}
-
-// Stage Card
-function StageCard({
-  stage,
-  index,
-  totalStages,
-  onEdit,
-  onDelete,
-  onMove,
-}: {
-  stage: Stage
-  index: number
-  totalStages: number
-  onEdit: () => void
-  onDelete: () => void
-  onMove: (direction: 'up' | 'down') => void
-}) {
-  return (
-    <div className="flex items-center justify-between p-3 border rounded-md">
-      <div className="flex-1">
-        <div className="flex items-center space-x-2">
-          <span className="text-xs bg-muted px-2 py-1 rounded font-mono">
-            Stage {index + 1}
-          </span>
-          <span className="font-medium">{stage.name}</span>
-        </div>
-        <div className="text-sm text-muted-foreground mt-1">
-          Agent: <span className="font-medium">{stage.agent}</span>
-          {stage.timeout_minutes && ` • Timeout: ${stage.timeout_minutes}m`}
-          {stage.max_retries && ` • Max retries: ${stage.max_retries}`}
-        </div>
-        {stage.entry_conditions && stage.entry_conditions.length > 0 && (
-          <div className="text-xs text-muted-foreground mt-1">
-            Entry conditions: {stage.entry_conditions.map((c) => c.type).join(', ')}
-          </div>
-        )}
-      </div>
-      <div className="flex items-center space-x-1">
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => onMove('up')}
-          disabled={index === 0}
-        >
-          ↑
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => onMove('down')}
-          disabled={index === totalStages - 1}
-        >
-          ↓
-        </Button>
-        <Button size="sm" variant="outline" onClick={onEdit}>
-          <Edit2 className="h-4 w-4" />
-        </Button>
-        <Button size="sm" variant="destructive" onClick={onDelete}>
-          <Trash2 className="h-4 w-4" />
-        </Button>
-      </div>
-    </div>
-  )
-}
-
-// Stage Editor
-function StageEditor({
-  stage,
-  agents,
-  onSave,
-  onCancel,
-}: {
-  stage?: Stage
-  agents: any[]
-  onSave: (stage: Stage) => void
-  onCancel: () => void
-}) {
-  const [name, setName] = useState(stage?.name || '')
-  const [agent, setAgent] = useState(stage?.agent || '')
-  const [timeoutMinutes, setTimeoutMinutes] = useState(stage?.timeout_minutes?.toString() || '')
-  const [maxRetries, setMaxRetries] = useState(stage?.max_retries?.toString() || '')
-  const [retryOnFailure, setRetryOnFailure] = useState(stage?.retry_on_failure || false)
-  const [conditionType, setConditionType] = useState<string>(
-    stage?.entry_conditions?.[0]?.type || 'success'
-  )
-
-  const handleSave = () => {
-    if (!name || !agent) return
-
-    const newStage: Stage = {
-      name,
-      agent,
-      timeout_minutes: timeoutMinutes ? parseInt(timeoutMinutes) : undefined,
-      max_retries: maxRetries ? parseInt(maxRetries) : undefined,
-      retry_on_failure: retryOnFailure,
-      entry_conditions: [{ type: conditionType as any }],
-    }
-
-    onSave(newStage)
-  }
-
-  return (
-    <div className="p-4 border rounded-md bg-muted/30 space-y-3">
-      <h4 className="font-medium">{stage ? 'Edit Stage' : 'New Stage'}</h4>
-      <div className="grid grid-cols-2 gap-3">
-        <Input
-          placeholder="Stage name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <select
-          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-          value={agent}
-          onChange={(e) => setAgent(e.target.value)}
-        >
-          <option value="">Select agent...</option>
-          {agents.map((a) => (
-            <option key={a.agent_name} value={a.agent_name}>
-              {a.agent_name}
-            </option>
-          ))}
-        </select>
-        <Input
-          type="number"
-          placeholder="Timeout (minutes)"
-          value={timeoutMinutes}
-          onChange={(e) => setTimeoutMinutes(e.target.value)}
-        />
-        <Input
-          type="number"
-          placeholder="Max retries"
-          value={maxRetries}
-          onChange={(e) => setMaxRetries(e.target.value)}
-        />
-        <select
-          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-          value={conditionType}
-          onChange={(e) => setConditionType(e.target.value)}
-        >
-          <option value="success">On Success</option>
-          <option value="failure">On Failure</option>
-          <option value="always">Always</option>
-          <option value="manual">Manual</option>
-          <option value="conditional">Conditional</option>
-        </select>
-        <label className="flex items-center space-x-2">
-          <input
-            type="checkbox"
-            checked={retryOnFailure}
-            onChange={(e) => setRetryOnFailure(e.target.checked)}
-            className="h-4 w-4"
-          />
-          <span className="text-sm">Retry on failure</span>
-        </label>
-      </div>
-      <div className="flex items-center space-x-2">
-        <Button onClick={handleSave} disabled={!name || !agent}>
-          <Save className="h-4 w-4 mr-2" />
-          {stage ? 'Update' : 'Add'} Stage
-        </Button>
-        <Button variant="ghost" onClick={onCancel}>
-          <X className="h-4 w-4 mr-2" />
-          Cancel
-        </Button>
-      </div>
-    </div>
   )
 }
