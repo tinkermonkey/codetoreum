@@ -1,0 +1,60 @@
+Developer:
+  id: business.actor.developer
+  name: Developer
+  type: actor
+  documentation: Software developer who uses the Codetoreum platform to automate development
+    tasks, submit work items, and review AI-generated outputs
+System Administrator:
+  id: business.actor.system-administrator
+  name: System Administrator
+  type: actor
+  documentation: Platform administrator responsible for configuring the Codetoreum
+    system, managing projects, agents, pipelines, and monitoring platform health
+Reviewer:
+  id: business.actor.reviewer
+  name: Reviewer
+  type: actor
+  documentation: Human reviewer who participates in maker-checker review cycles, providing
+    feedback on AI agent outputs and approving or requesting changes
+Project Manager:
+  id: business.actor.project-manager
+  name: Project Manager
+  type: actor
+  documentation: Team lead or project manager who configures workflows, monitors project
+    progress, and manages work item priorities
+AI Agent:
+  id: business.actor.ai-agent
+  name: AI Agent
+  type: actor
+  documentation: Specialized AI agent that executes development tasks such as code
+    generation, code review, testing, and documentation within containerized environments
+External Ticket System:
+  id: business.actor.external-ticket-system
+  name: External Ticket System
+  type: actor
+  documentation: External work item management system (e.g., GitHub Issues, Jira)
+    that integrates with Codetoreum for bidirectional work item synchronization
+Work Item Creator:
+  id: business.role.work-item-creator
+  name: Work Item Creator
+  type: role
+  documentation: Role responsible for creating and defining work items to be processed
+    by the platform
+Task Executor:
+  id: business.role.task-executor
+  name: Task Executor
+  type: role
+  documentation: Role responsible for executing assigned tasks, typically fulfilled
+    by AI agents operating within the platform
+Quality Reviewer:
+  id: business.role.quality-reviewer
+  name: Quality Reviewer
+  type: role
+  documentation: Role responsible for reviewing outputs and ensuring quality standards
+    are met, fulfilled by both AI agents and human reviewers
+Configuration Manager:
+  id: business.role.configuration-manager
+  name: Configuration Manager
+  type: role
+  documentation: Role responsible for managing platform and project configurations,
+    typically fulfilled by system administrators

@@ -1,0 +1,55 @@
+relationships:
+  - type: Assignment
+    source: technology.node.application-server
+    target: application.component.rest-api-adapter
+  - type: Assignment
+    source: technology.node.application-server
+    target: application.component.websocket-adapter
+  - type: Assignment
+    source: technology.node.application-server
+    target: application.component.github-webhook-adapter
+  - type: Assignment
+    source: technology.node.application-server
+    target: application.component.frontend-application
+  - type: Assignment
+    source: technology.node.event-store
+    target: application.component.event-store
+  - type: Assignment
+    source: technology.node.event-store
+    target: application.component.elasticsearch-event-store-adapter
+  - type: Assignment
+    source: technology.node.config-store
+    target: application.component.config-store
+  - type: Assignment
+    source: technology.node.config-store
+    target: application.component.elasticsearch-config-storage-adapter
+  - type: Assignment
+    source: technology.node.config-store
+    target: application.component.cached-config-store-adapter
+  - type: Assignment
+    source: technology.node.event-bus
+    target: application.component.event-bus
+  - type: Assignment
+    source: technology.node.event-bus
+    target: application.component.redis-pubsub-adapter
+  - type: Assignment
+    source: technology.node.event-bus
+    target: application.component.task-queue
+  - type: Assignment
+    source: technology.node.event-bus
+    target: application.component.rate-limiter
+  - type: Assignment
+    source: technology.node.application-server
+    target: application.component.resource-monitor
+  - type: Assignment
+    source: technology.node.application-server
+    target: application.component.github-ticket-adapter
+  - type: Assignment
+    source: technology.node.application-server
+    target: application.component.docker-container-adapter
+  - type: Assignment
+    source: technology.node.application-server
+    target: application.component.claude-code-adapter
+  - type: Assignment
+    source: technology.node.application-server
+    target: application.component.git-repository-adapter

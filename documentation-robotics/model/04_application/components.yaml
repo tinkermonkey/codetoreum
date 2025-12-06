@@ -1,88 +1,175 @@
-Workflow Event Handler:
-  id: workflow-event-handler
-  name: Workflow Event Handler
-  documentation: Handles workflow-related domain events
+REST API Adapter:
+  id: application.component.rest-api-adapter
+  name: REST API Adapter
+  type: component
+  documentation: FastAPI-based REST API adapter for external access
+  componentType: backend
   properties:
-    implementation.location: src/codetoreum/application/event_handlers/workflow_event_handler.py
-Review Event Handler:
-  id: review-event-handler
-  name: Review Event Handler
-  documentation: Handles review-related domain events
+    implementation.framework: FastAPI
+    spec.openapi: documentation-robotics/model/06_api/operations.yaml
+  x-archimate-ref: technology.systemsoftware.fastapi
+  deployment-node: technology.node.application-server
+  deployed-on: technology.node.application-server
+  node: technology.node.application-server
+WebSocket Adapter:
+  id: application.component.websocket-adapter
+  name: WebSocket Adapter
+  type: component
+  documentation: Real-time event streaming via WebSocket connections
+  componentType: backend
   properties:
-    implementation.location: src/codetoreum/application/event_handlers/review_event_handler.py
-Execution Event Handler:
-  id: execution-event-handler
-  name: Execution Event Handler
-  documentation: Handles execution-related domain events
+    implementation.framework: FastAPI
+  x-archimate-ref: technology.systemsoftware.fastapi
+  deployment-node: technology.node.application-server
+GitHub Webhook Adapter:
+  id: application.component.github-webhook-adapter
+  name: GitHub Webhook Adapter
+  type: component
+  documentation: Receives and processes GitHub webhook events
+  componentType: backend
   properties:
-    implementation.location: src/codetoreum/application/event_handlers/execution_event_handler.py
-GitHub Ticket Adapter:
-  adapter-type: secondary
-  id: github-ticket-adapter
-  name: GitHub Ticket Adapter
-  documentation: Adapter for GitHub Issues ticket system integration
-  properties:
-    implementation.location: src/codetoreum/adapters/secondary/github_ticket_adapter.py
-Claude Code Adapter:
-  adapter-type: secondary
-  id: claude-code-adapter
-  name: Claude Code Adapter
-  documentation: Adapter for Claude Code LLM provider integration
-  properties:
-    implementation.location: src/codetoreum/adapters/secondary/claude_code_adapter.py
-Docker Container Adapter:
-  adapter-type: secondary
-  id: docker-container-adapter
-  name: Docker Container Adapter
-  documentation: Adapter for Docker container runtime integration
-  properties:
-    implementation.location: src/codetoreum/adapters/secondary/docker_container_adapter.py
-Git Repository Adapter:
-  adapter-type: secondary
-  id: git-repository-adapter
-  name: Git Repository Adapter
-  documentation: Adapter for Git repository operations
-  properties:
-    implementation.location: src/codetoreum/adapters/secondary/git_repository_adapter.py
+    implementation.framework: FastAPI
+  x-archimate-ref: technology.systemsoftware.fastapi
+  deployment-node: technology.node.application-server
 Elasticsearch Event Store:
-  adapter-type: secondary
-  id: elasticsearch-event-store
+  id: application.component.elasticsearch-event-store-adapter
   name: Elasticsearch Event Store
-  documentation: Event store implementation using Elasticsearch
+  type: component
+  documentation: Production event store using Elasticsearch with event sourcing capabilities
+  componentType: backend
   properties:
-    implementation.location: src/codetoreum/adapters/secondary/elasticsearch_event_store.py
+    implementation.framework: Elasticsearch Python Client
+  x-archimate-ref: technology.systemsoftware.elasticsearch
+  deployment-node: technology.node.event-store
+GitHub Ticket Adapter:
+  id: application.component.github-ticket-adapter
+  name: GitHub Ticket Adapter
+  type: component
+  documentation: Integrates with GitHub Issues for work item management
+  componentType: backend
+  properties:
+    implementation.framework: HTTPX
+  x-archimate-ref: technology.systemsoftware.httpx
+  deployment-node: technology.node.application-server
+Docker Container Adapter:
+  id: application.component.docker-container-adapter
+  name: Docker Container Adapter
+  type: component
+  documentation: Manages Docker containers for isolated agent execution
+  componentType: backend
+  properties:
+    implementation.framework: Docker SDK for Python
+  x-archimate-ref: technology.systemsoftware.docker
+  deployment-node: technology.node.application-server
+Claude Code Adapter:
+  id: application.component.claude-code-adapter
+  name: Claude Code Adapter
+  type: component
+  documentation: Integrates with Claude Code API/CLI for LLM-powered agent execution
+  componentType: backend
+  properties:
+    implementation.framework: Claude API
+  component.type: adapter
+  description: Adapter for interacting with Anthropic API via Claude Code CLI, implementing
+    ILLMProvider
+  implementation.class: codetoreum.adapters.secondary.claude_code_adapter.ClaudeCodeAdapter
+  x-archimate-ref: technology.systemsoftware.anthropic-claude
+  deployment-node: technology.node.application-server
+Git Repository Adapter:
+  id: application.component.git-repository-adapter
+  name: Git Repository Adapter
+  type: component
+  documentation: Manages git operations for code repositories
+  componentType: backend
+  properties:
+    implementation.framework: GitPython
+  x-archimate-ref: technology.systemsoftware.python-runtime
+  deployment-node: technology.node.application-server
 Redis Pub/Sub Adapter:
-  adapter-type: secondary
-  id: redis-pubsub-adapter
+  id: application.component.redis-pubsub-adapter
   name: Redis Pub/Sub Adapter
-  documentation: Adapter for Redis pub/sub messaging
+  type: component
+  documentation: Redis-based publish/subscribe for event distribution
+  componentType: backend
   properties:
-    implementation.location: src/codetoreum/adapters/secondary/redis_pubsub_adapter.py
+    implementation.framework: redis-py
+  x-archimate-ref: technology.systemsoftware.redis
+  deployment-node: technology.node.event-bus
+Elasticsearch Config Storage:
+  id: application.component.elasticsearch-config-storage-adapter
+  name: Elasticsearch Config Storage
+  type: component
+  documentation: Configuration storage using Elasticsearch
+  componentType: backend
+  properties:
+    implementation.framework: Elasticsearch Python Client
+  x-archimate-ref: technology.systemsoftware.elasticsearch
+  deployment-node: technology.node.config-store
+Cached Config Store:
+  id: application.component.cached-config-store-adapter
+  name: Cached Config Store
+  type: component
+  documentation: Caching layer for configuration with Redis backend
+  componentType: backend
+  properties:
+    implementation.framework: redis-py
+  x-archimate-ref: technology.systemsoftware.redis
+  deployment-node: technology.node.config-store
+Event Store:
+  id: application.component.event-store
+  name: Event Store
+  type: component
+  documentation: Abstraction for event sourcing storage implementing IEventStore interface
+  componentType: backend
+  x-archimate-ref: technology.node.event-store
+  deployment-node: technology.node.event-store
 Event Bus:
-  id: event-bus
+  id: application.component.event-bus
   name: Event Bus
-  documentation: Central event bus for domain event distribution
-  properties:
-    service.criticality: high
-    implementation.location: src/codetoreum/infrastructure/event_bus.py
-Circuit Breaker:
-  id: circuit-breaker
-  name: Circuit Breaker
-  pattern: circuit-breaker
-  documentation: Circuit breaker pattern implementation for resilience
-  properties:
-    implementation.location: src/codetoreum/infrastructure/resilience/circuit_breaker.py
+  type: component
+  documentation: Abstraction for event publishing and subscription implementing IEventBus
+    interface
+  componentType: backend
+  x-archimate-ref: technology.node.event-bus
+  deployment-node: technology.node.event-bus
+Configuration Store:
+  id: application.component.config-store
+  name: Configuration Store
+  type: component
+  documentation: Abstraction for configuration storage implementing IConfigurationStore
+    interface
+  componentType: backend
+  x-archimate-ref: technology.node.config-store
+  deployment-node: technology.node.config-store
+Task Queue:
+  id: application.component.task-queue
+  name: Task Queue
+  type: component
+  documentation: Queue for scheduling agent execution tasks implementing ITaskQueue
+    interface
+  componentType: backend
+  x-archimate-ref: technology.systemsoftware.celery
+  deployment-node: technology.node.event-bus
 Rate Limiter:
-  id: rate-limiter
+  id: application.component.rate-limiter
   name: Rate Limiter
-  pattern: rate-limiting
-  documentation: Rate limiting for external API calls
-  properties:
-    implementation.location: src/codetoreum/infrastructure/resilience/rate_limiter.py
-Retry Policy:
-  id: retry-policy
-  name: Retry Policy
-  pattern: retry
-  documentation: Configurable retry policy for failed operations
-  properties:
-    implementation.location: src/codetoreum/infrastructure/resilience/retry_policy.py
+  type: component
+  documentation: Rate limiting for agent executions implementing IRateLimiter interface
+  componentType: backend
+  x-archimate-ref: technology.systemsoftware.slowapi
+  deployment-node: technology.node.event-bus
+Resource Monitor:
+  id: application.component.resource-monitor
+  name: Resource Monitor
+  type: component
+  documentation: Monitors resource availability for scheduling implementing IResourceMonitor
+    interface
+  componentType: backend
+  x-archimate-ref: technology.systemsoftware.open-telemetry
+  deployment-node: technology.node.application-server
+Frontend Application:
+  componentType: application
+  description: React-based frontend application
+  id: application.component.frontend-application
+  name: Frontend Application
+  deployment-node: technology.node.application-server

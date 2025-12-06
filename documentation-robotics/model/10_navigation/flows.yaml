@@ -1,42 +1,893 @@
-Main Navigation Menu:
-  description: Top navigation bar with links to Dashboard, Project, Workflows, Agents,
-    and History
-  entry-point: /dashboard
-  id: navigation.flow.main-navigation-menu
-  name: Main Navigation Menu
-  navigation-type: user-flow
-Dashboard to Configuration Flow:
-  description: Navigate from dashboard to project configuration screen
-  from: dashboard
-  id: navigation.flow.dashboard-to-configuration-flow
-  name: Dashboard to Configuration Flow
-  to: project-config
-  navigation-type: user-flow
-Workflow Management Flow:
-  description: Create edit and manage workflow definitions with stage configuration
-  from: dashboard
-  id: navigation.flow.workflow-management-flow
-  name: Workflow Management Flow
-  to: workflows
-  navigation-type: user-flow
-Agent Management Flow:
-  description: Configure and manage AI agents and their capabilities
-  from: dashboard
-  id: navigation.flow.agent-management-flow
-  name: Agent Management Flow
-  to: agents
-  navigation-type: user-flow
-Configuration Audit Flow:
-  description: View configuration change history and audit trail with rollback capability
-  from: project-config
-  id: navigation.flow.configuration-audit-flow
-  name: Configuration Audit Flow
-  to: history
-  navigation-type: user-flow
+Root Route:
+  id: navigation.route.root
+  name: Root Route
+  type: route
+  documentation: 'Application root route.
+
+
+    Behavior:
+
+    - If authenticated: Shows DashboardPage
+
+    - If not authenticated: Shows AuthRequiredPage
+
+    - If loading auth: Shows loading spinner
+
+
+    Path: /
+
+    '
+  path: /
+  component: ux.screen.dashboard
+  fallback: ux.screen.auth-required
+  properties:
+    route.loading-state: spinner
+    route.requires-auth: 'true'
+  version: 1.0.0
+  application: application.component.frontend-application
+  routes:
+  - addressing:
+      url: /
+    identifier: root
+    name: Root
+    type: experience
+Project Configuration Route:
+  id: navigation.route.config
+  name: Project Configuration Route
+  type: route
+  documentation: 'Project configuration management route.
+
+
+    Path: /config
+
+    Component: ProjectConfigPage
+
+    Wrapped in: ErrorBoundary
+
+    '
+  path: /config
+  component: ux.screen.project-config
+  properties:
+    route.requires-auth: 'true'
+  version: 1.0.0
+  application: application.component.frontend-application
+  routes:
+  - addressing:
+      url: /config
+    identifier: config
+    name: Configuration
+    type: experience
+Workflow Configuration Route:
+  id: navigation.route.workflows
+  name: Workflow Configuration Route
+  type: route
+  documentation: 'Workflow pipeline configuration route.
+
+
+    Path: /workflows
+
+    Component: WorkflowConfigPage
+
+    Status: Placeholder UI
+
+    '
+  path: /workflows
+  component: ux.screen.workflow-config
+  properties:
+    route.requires-auth: 'true'
+  version: 1.0.0
+  application: application.component.frontend-application
+  routes:
+  - addressing:
+      url: /workflows
+    identifier: workflows
+    name: Workflows
+    type: experience
+Agent Configuration Route:
+  id: navigation.route.agents
+  name: Agent Configuration Route
+  type: route
+  documentation: 'Agent settings and capabilities route.
+
+
+    Path: /agents
+
+    Component: AgentConfigPage
+
+    Status: Placeholder UI
+
+    '
+  path: /agents
+  component: ux.screen.agent-config
+  properties:
+    route.requires-auth: 'true'
+  version: 1.0.0
+  application: application.component.frontend-application
+  routes:
+  - addressing:
+      url: /agents
+    identifier: agents
+    name: Agents
+    type: experience
+Configuration History Route:
+  id: navigation.route.history
+  name: Configuration History Route
+  type: route
+  documentation: 'Configuration change history route.
+
+
+    Path: /history
+
+    Component: ConfigHistoryPage
+
+    Status: Placeholder UI
+
+    '
+  path: /history
+  component: ux.screen.config-history
+  properties:
+    route.requires-auth: 'true'
+  version: 1.0.0
+  application: application.component.frontend-application
+  routes:
+  - addressing:
+      url: /history
+    identifier: history
+    name: History
+    type: experience
+Catch-All Route:
+  id: navigation.route.catch-all
+  name: Catch-All Route
+  type: route
+  documentation: 'Catch-all route for unknown paths.
+
+
+    Behavior: Redirects to root (/)
+
+    Path: *
+
+    '
+  path: '*'
+  redirectTo: /
+  properties:
+    route.type: redirect
+  version: 1.0.0
+  application: application.component.frontend-application
+  routes:
+  - addressing:
+      url: '*'
+    identifier: catch-all
+    name: Catch All
+    type: experience
 Authentication Flow:
-  description: Login and token-based authentication with secure httpOnly cookie storage
-  from: auth-required
-  id: navigation.flow.authentication-flow
+  id: navigation.flow.authentication
   name: Authentication Flow
-  to: dashboard
-  navigation-type: user-flow
+  type: user-flow
+  documentation: 'Complete user authentication journey.
+
+
+    Entry points:
+
+    1. Direct URL access with token query parameter
+
+    2. Previously authenticated (cookie exists)
+
+    3. New user (no authentication)
+
+
+    Flow for new users with token:
+
+    1. User receives access URL from server console
+
+    2. User navigates to URL with ?token=...
+
+    3. App detects token in URL
+
+    4. Token exchanged for httpOnly cookie via /v2/health
+
+    5. URL cleaned (token removed from browser history)
+
+    6. Auth state updated to authenticated
+
+    7. Dashboard displayed
+
+
+    Flow for returning users:
+
+    1. User navigates to app
+
+    2. Cookie validated via /v2/auth/token-info
+
+    3. If valid: Dashboard displayed
+
+    4. If invalid: Cookie cleared, AuthRequired shown
+
+
+    Flow for new users without token:
+
+    1. User navigates to app
+
+    2. No cookie present
+
+    3. AuthRequiredPage displayed with instructions
+
+    '
+  supportsGoals:
+  - motivation.goal.security
+  - motivation.goal.ease-of-configuration
+  steps:
+  - description: Check authentication state
+    id: entry
+    name: Entry Point
+    transitions:
+    - condition: isLoading
+      target: loading
+    - condition: isAuthenticated
+      target: dashboard
+    - condition: hasUrlToken
+      target: exchange-token
+    - condition: default
+      target: auth-required
+    type: decision
+  - description: Show loading spinner while checking auth
+    id: loading
+    name: Loading State
+    screen: ux.screen.dashboard
+    type: display
+  - description: Exchange URL token for httpOnly cookie
+    id: exchange-token
+    name: Exchange Token
+    transitions:
+    - condition: success
+      target: clean-url
+    - condition: failure
+      target: auth-required
+    type: action
+  - description: Remove token from URL via history.replaceState
+    id: clean-url
+    name: Clean URL
+    transitions:
+    - condition: always
+      target: dashboard
+    type: action
+  - description: Show main dashboard
+    id: dashboard
+    name: Dashboard
+    screen: ux.screen.dashboard
+    type: display
+  - description: Show authentication instructions
+    id: auth-required
+    name: Auth Required
+    screen: ux.screen.auth-required
+    type: display
+  properties:
+    flow.auth-required: 'false'
+    flow.entry-points: url-token,cookie,none
+  version: 1.0.0
+  application: codetoreum
+  routes:
+  - addressing:
+      url: /login
+    identifier: auth-flow
+    name: Authentication Flow
+    type: experience
+Project Onboarding Flow:
+  id: navigation.flow.onboarding
+  name: Project Onboarding Flow
+  type: user-flow
+  documentation: 'New project configuration journey.
+
+
+    Steps:
+
+    1. Navigate to Project Configuration
+
+    2. Add environment variables (API keys, secrets)
+
+    3. Mount custom commands
+
+    4. Configure sub-agents
+
+    5. Navigate to Workflow Configuration
+
+    6. Define pipeline stages
+
+    7. Assign agents to stages
+
+    8. Configure entry conditions and transitions
+
+    9. Navigate to Agent Configuration
+
+    10. Customize agent settings
+
+    11. Set capabilities and constraints
+
+
+    Note: Steps 5-11 pending UI implementation.
+
+    '
+  supportsGoals:
+  - motivation.goal.ease-of-configuration
+  steps:
+  - description: Set project environment and commands
+    id: project-config
+    name: Configure Project
+    screen: ux.screen.project-config
+    transitions:
+    - condition: complete
+      target: workflow-config
+    type: display
+  - description: Define pipeline stages and transitions
+    id: workflow-config
+    name: Configure Workflows
+    screen: ux.screen.workflow-config
+    transitions:
+    - condition: complete
+      target: agent-config
+    type: display
+  - description: Customize agent settings
+    id: agent-config
+    name: Configure Agents
+    screen: ux.screen.agent-config
+    transitions:
+    - condition: complete
+      target: ready
+    type: display
+  - description: Project fully configured
+    id: ready
+    name: Ready
+    type: end
+  properties:
+    flow.linear: 'false'
+    flow.steps-optional: workflow-config,agent-config
+  version: 1.0.0
+  application: codetoreum
+  routes:
+  - addressing:
+      url: /onboarding
+    identifier: onboarding-flow
+    name: Onboarding Flow
+    type: experience
+Execution Monitoring Flow:
+  id: navigation.flow.monitoring
+  name: Execution Monitoring Flow
+  type: user-flow
+  documentation: 'Real-time execution monitoring journey.
+
+
+    Steps:
+
+    1. Navigate to Dashboard
+
+    2. View active work items
+
+    3. View recent executions
+
+    4. Subscribe to real-time events (automatic)
+
+    5. Observe execution status changes
+
+    6. (Planned) Drill into execution details
+
+    7. (Planned) View execution logs
+
+    8. (Planned) Analyze metrics
+
+
+    Current implementation:
+
+    - Steps 1-5 fully functional
+
+    - Steps 6-8 pending detailed views
+
+    '
+  supportsGoals:
+  - motivation.goal.observability
+  steps:
+  - description: Overview of work items and executions
+    id: dashboard
+    name: View Dashboard
+    screen: ux.screen.dashboard
+    transitions:
+    - condition: view-details
+      target: execution-details
+    type: display
+  - description: Detailed execution view (planned)
+    id: execution-details
+    name: View Execution Details
+    status: planned
+    transitions:
+    - condition: view-logs
+      target: execution-logs
+    type: display
+  - description: Execution log viewer (planned)
+    id: execution-logs
+    name: View Logs
+    status: planned
+    type: display
+  properties:
+    flow.real-time: 'true'
+    flow.websocket: 'true'
+  version: 1.0.0
+  application: codetoreum
+  routes:
+  - addressing:
+      url: /monitoring
+    identifier: monitoring-flow
+    name: Monitoring Flow
+    type: experience
+Configuration Change Flow:
+  id: navigation.flow.configuration-change
+  name: Configuration Change Flow
+  type: user-flow
+  documentation: 'Configuration modification and review journey.
+
+
+    Steps:
+
+    1. Navigate to appropriate config screen
+
+    2. Make changes (add/edit/delete)
+
+    3. Changes saved immediately (mutations)
+
+    4. (Planned) View change in history
+
+    5. (Planned) Compare with previous version
+
+    6. (Planned) Rollback if needed
+
+
+    Current implementation:
+
+    - Steps 1-3 functional for project config
+
+    - Steps 4-6 pending history UI
+
+    '
+  supportsGoals:
+  - motivation.goal.ease-of-configuration
+  - motivation.goal.observability
+  steps:
+  - description: Choose which configuration to modify
+    id: select-config
+    name: Select Configuration
+    transitions:
+    - condition: project
+      target: project-config
+    - condition: workflow
+      target: workflow-config
+    - condition: agent
+      target: agent-config
+    type: decision
+  - id: project-config
+    name: Edit Project Config
+    screen: ux.screen.project-config
+    transitions:
+    - condition: save
+      target: confirm-change
+    type: display
+  - id: workflow-config
+    name: Edit Workflow Config
+    screen: ux.screen.workflow-config
+    status: placeholder
+    transitions:
+    - condition: save
+      target: confirm-change
+    type: display
+  - id: agent-config
+    name: Edit Agent Config
+    screen: ux.screen.agent-config
+    status: placeholder
+    transitions:
+    - condition: save
+      target: confirm-change
+    type: display
+  - description: Mutation saves change, cache invalidated
+    id: confirm-change
+    name: Confirm Change
+    transitions:
+    - condition: success
+      target: view-history
+    - condition: failure
+      target: error
+    type: action
+  - description: See change in history (planned)
+    id: view-history
+    name: View History
+    screen: ux.screen.config-history
+    status: planned
+    type: display
+  - description: Show error message
+    id: error
+    name: Error State
+    type: display
+  properties:
+    flow.cache-invalidation: 'true'
+    flow.mutations: 'true'
+  version: 1.0.0
+  application: codetoreum
+  routes:
+  - addressing:
+      url: /config
+    identifier: config-flow
+    name: Config Change Flow
+    type: experience
+Work Item State Machine:
+  id: navigation.state-machine.work-item
+  name: Work Item State Machine
+  type: state-machine
+  documentation: 'Work item lifecycle states and transitions.
+
+
+    States:
+
+    - open: Newly created, not yet started
+
+    - in_progress: Currently being processed
+
+    - completed: Successfully finished
+
+    - failed: Processing failed
+
+    - cancelled: Manually cancelled
+
+
+    Transitions:
+
+    - open -> in_progress: When execution starts
+
+    - in_progress -> completed: When execution succeeds
+
+    - in_progress -> failed: When execution fails
+
+    - any -> cancelled: Manual cancellation
+
+    '
+  states:
+  - description: Work item created, awaiting processing
+    id: open
+    name: Open
+    type: initial
+  - description: Currently being processed by agent
+    id: in_progress
+    name: In Progress
+    type: active
+  - description: Successfully processed
+    id: completed
+    name: Completed
+    type: final
+  - description: Processing failed
+    id: failed
+    name: Failed
+    type: final
+  - description: Manually cancelled
+    id: cancelled
+    name: Cancelled
+    type: final
+  transitions:
+  - from: active
+    to: cancelled
+    trigger: cancel
+    description: User cancels work item
+  properties:
+    state-machine.type: WorkItemStatus
+  version: 1.0.0
+  application: codetoreum
+  routes:
+  - addressing:
+      url: /work-items
+    identifier: work-item-state
+    name: Work Item State
+    type: experience
+Execution State Machine:
+  id: navigation.state-machine.execution
+  name: Execution State Machine
+  type: state-machine
+  documentation: 'Agent execution lifecycle states and transitions.
+
+
+    States:
+
+    - queued: Waiting in scheduler queue
+
+    - running: Currently executing in container
+
+    - completed: Successfully finished
+
+    - failed: Execution failed
+
+    - cancelled: Manually terminated
+
+    - timeout: Exceeded time limit
+
+
+    Transitions defined by ExecutionService events.
+
+    '
+  states:
+  - description: Waiting for scheduler
+    id: queued
+    name: Queued
+    type: initial
+  - description: Executing in container
+    id: running
+    name: Running
+    type: active
+  - description: Successfully finished
+    id: completed
+    name: Completed
+    type: final
+  - description: Execution error
+    id: failed
+    name: Failed
+    type: final
+  - description: Manually terminated
+    id: cancelled
+    name: Cancelled
+    type: final
+  - description: Exceeded time limit
+    id: timeout
+    name: Timeout
+    type: final
+  transitions:
+  - from: running
+    to: terminated
+    trigger: cancel
+    description: User terminates execution
+  properties:
+    state-machine.type: ExecutionStatus
+  version: 1.0.0
+  application: codetoreum
+  routes:
+  - addressing:
+      url: /executions
+    identifier: execution-state
+    name: Execution State
+    type: experience
+WebSocket Connection State Machine:
+  id: navigation.state-machine.websocket
+  name: WebSocket Connection State Machine
+  type: state-machine
+  documentation: 'WebSocket connection lifecycle states.
+
+
+    States:
+
+    - disconnected: No active connection
+
+    - connecting: Attempting to establish connection
+
+    - connected: Active WebSocket connection
+
+    - reconnecting: Automatic reconnection in progress
+
+
+    Reconnection behavior:
+
+    - Exponential backoff (1s, 2s, 4s, 8s, 16s, 30s max)
+
+    - Maximum 10 attempts
+
+    - No reconnection on code 4001 (Unauthorized)
+
+    '
+  states:
+  - description: No active connection
+    id: disconnected
+    name: Disconnected
+    type: initial
+  - description: Establishing connection
+    id: connecting
+    name: Connecting
+    type: transitional
+  - description: Active connection
+    id: connected
+    name: Connected
+    type: active
+  - description: Automatic reconnection
+    id: reconnecting
+    name: Reconnecting
+    type: transitional
+  transitions:
+  - from: connecting
+    to: disconnected
+    trigger: failure
+    description: Connection failed
+  properties:
+    state-machine.backoff: exponential
+    state-machine.max-attempts: '10'
+  version: 1.0.0
+  application: codetoreum
+  routes:
+  - addressing:
+      url: /ws
+    identifier: websocket-state
+    name: WebSocket State
+    type: experience
+Authentication State Machine:
+  id: navigation.state-machine.authentication
+  name: Authentication State Machine
+  type: state-machine
+  documentation: 'Frontend authentication states.
+
+
+    States:
+
+    - loading: Initial state, checking authentication
+
+    - unauthenticated: No valid authentication
+
+    - authenticating: Exchanging token for cookie
+
+    - authenticated: Valid session active
+
+
+    State stored in Zustand (not persisted, validated on load).
+
+    '
+  states:
+  - description: Checking authentication status
+    id: loading
+    name: Loading
+    type: initial
+  - description: No valid session
+    id: unauthenticated
+    name: Unauthenticated
+    type: inactive
+  - description: Exchanging token
+    id: authenticating
+    name: Authenticating
+    type: transitional
+  - description: Valid session
+    id: authenticated
+    name: Authenticated
+    type: active
+  transitions:
+  - from: authenticating
+    to: unauthenticated
+    trigger: failure
+    description: Authentication failed
+  properties:
+    state-machine.store: zustand
+  version: 1.0.0
+  application: codetoreum
+  routes:
+  - addressing:
+      url: /auth
+    identifier: auth-state
+    name: Auth State
+    type: experience
+Authentication Guard:
+  id: navigation.guard.auth
+  name: Authentication Guard
+  type: guard
+  documentation: 'Route protection based on authentication state.
+
+
+    Implementation:
+
+    - Checks isAuthenticated from useAuth hook
+
+    - During loading: Shows spinner
+
+    - If not authenticated: Shows AuthRequiredPage
+
+    - If authenticated: Renders protected route
+
+
+    Applied to all routes via App.tsx conditional rendering.
+
+    '
+  appliesTo:
+  - navigation.route.root
+  - navigation.route.config
+  - navigation.route.workflows
+  - navigation.route.agents
+  - navigation.route.history
+  usesAuthScheme:
+  - security.authentication.httponly-cookie-auth
+  properties:
+    guard.fallback: ux.screen.auth-required
+    guard.type: authentication
+  version: 1.0.0
+  application: codetoreum
+  routes:
+  - addressing:
+      url: /protected
+    identifier: auth-guard
+    name: Auth Guard
+    type: experience
+Error Boundary Guard:
+  id: navigation.guard.error-boundary
+  name: Error Boundary Guard
+  type: guard
+  documentation: 'Error handling guard wrapping all route components.
+
+
+    Behavior:
+
+    - Catches JavaScript errors in child tree
+
+    - Logs error details
+
+    - Displays fallback UI
+
+    - Prevents full app crash
+
+
+    Each route wrapped in ErrorBoundary component.
+
+    '
+  appliesTo:
+  - navigation.route.root
+  - navigation.route.config
+  - navigation.route.workflows
+  - navigation.route.agents
+  - navigation.route.history
+  properties:
+    guard.component: ErrorBoundary
+    guard.type: error-handling
+  version: 1.0.0
+  application: codetoreum
+  routes:
+  - addressing:
+      url: /error
+    identifier: error-guard
+    name: Error Guard
+    type: experience
+Deep Link Patterns:
+  id: navigation.deep-linking.patterns
+  name: Deep Link Patterns
+  type: deep-linking
+  documentation: 'URL patterns for direct navigation to specific views.
+
+
+    Current patterns:
+
+    - / - Dashboard
+
+    - /config - Project configuration
+
+    - /workflows - Workflow configuration
+
+    - /agents - Agent configuration
+
+    - /history - Configuration history
+
+    - /?token=... - Authentication with token
+
+
+    Planned patterns:
+
+    - /work-items/:id - Work item detail
+
+    - /executions/:id - Execution detail
+
+    - /executions/:id/logs - Execution logs
+
+    - /history/:changeId - Specific config change
+
+    '
+  patterns:
+  - pattern: /
+    route: navigation.route.root
+  - pattern: /config
+    route: navigation.route.config
+  - pattern: /workflows
+    route: navigation.route.workflows
+  - pattern: /agents
+    route: navigation.route.agents
+  - pattern: /history
+    route: navigation.route.history
+  properties:
+    deep-linking.router: react-router-dom
+    deep-linking.strategy: browser
+  version: 1.0.0
+  application: codetoreum
+  routes:
+  - addressing:
+      url: /deep
+    identifier: deep-link
+    name: Deep Link
+    type: experience

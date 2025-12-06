@@ -1,5 +1,6 @@
 # Project specific
 documentation/claude_thoughts/
+.dr/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

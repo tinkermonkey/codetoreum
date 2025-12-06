@@ -1,42 +1,1199 @@
-Dashboard Screen:
-  description: Main dashboard showing workflow execution status with real-time work
-    items and execution tracking via WebSocket
-  id: ux.view.dashboard-screen
-  name: Dashboard Screen
-  technology: React TypeScript TanStack-Query
-  component-type: page
-Project Configuration Screen:
-  description: Project settings management including repository details, environment
-    variables, and workflow assignment
-  id: ux.view.project-configuration-screen
-  name: Project Configuration Screen
-  technology: React TypeScript
-  component-type: page
-Workflow Configuration Screen:
-  description: Create and edit multi-stage workflow definitions with pipeline stages
-    and agent assignments
-  id: ux.view.workflow-configuration-screen
-  name: Workflow Configuration Screen
-  technology: React TypeScript
-  component-type: page
-Agent Configuration Screen:
-  description: Manage AI agent configurations including capabilities, prompts, and
-    MCP server settings
-  id: ux.view.agent-configuration-screen
-  name: Agent Configuration Screen
-  technology: React TypeScript
-  component-type: page
-Configuration History Screen:
-  description: View configuration change history with versioning, audit trail, and
-    rollback capability
-  id: ux.view.configuration-history-screen
-  name: Configuration History Screen
-  technology: React TypeScript
-  component-type: page
 Authentication Required Screen:
-  description: Authentication prompt screen with secure token-based login using httpOnly
-    cookies
-  id: ux.view.authentication-required-screen
+  id: ux.screen.auth-required
   name: Authentication Required Screen
-  technology: React TypeScript
-  component-type: page
+  type: screen
+  version: 1.0.0
+  channel: visual
+  views:
+  - description: Step-by-step guide for authenticating with server token
+    name: auth-instructions
+    title: Authentication Instructions
+    type: detail
+  documentation: 'Landing page shown when user is not authenticated.
+
+
+    Purpose: Guide users to authenticate using server-generated token.
+
+
+    Content:
+
+    - Authentication required message
+
+    - Step-by-step authentication instructions
+
+    - Example server output showing access URL
+
+    - Security note about single-tenant model
+
+
+    Location: frontend/src/pages/AuthRequiredPage.tsx
+
+    '
+  route: navigation.route.root
+  supportsGoals:
+  - motivation.goal.security
+  - motivation.goal.ease-of-configuration
+  usesAuthScheme:
+  - security.authentication.query-param-auth
+  properties:
+    screen.component: AuthRequiredPage
+    screen.icons: AlertCircle, Terminal
+    screen.public: 'true'
+  experience: visual
+  states:
+  - name: default
+    initial: true
+    description: Default state
+Dashboard Screen:
+  id: ux.screen.dashboard
+  name: Dashboard Screen
+  type: screen
+  version: 1.0.0
+  channel: visual
+  views:
+  - name: work-items-overview
+    title: Active Work Items
+    type: dashboard
+    components:
+    - name: work-items-list
+      type: list
+      dataBinding:
+        dataSource: api.operation.list-work-items
+  - name: executions-overview
+    title: Recent Executions
+    type: list
+    components:
+    - name: executions-list
+      type: list
+      dataBinding:
+        dataSource: api.operation.list-executions
+  documentation: 'Main dashboard showing system overview with real-time updates.
+
+
+    Sections:
+
+    1. Active Work Items - List of current work items with status
+
+    2. Recent Executions - Latest agent execution summaries
+
+    3. Real-time Events - WebSocket event feed (last 10 events)
+
+    4. Connection Status - Live indicator (green pulse when connected)
+
+
+    Features:
+
+    - Real-time WebSocket updates for execution events
+
+    - Status-based color coding (green/blue/red/yellow)
+
+    - Time formatting with date-fns
+
+    - Responsive grid layout
+
+
+    Data sources:
+
+    - GET /api/v2/work-items (limit 20)
+
+    - GET /api/v2/executions (limit 10)
+
+    - WebSocket /api/v2/events/stream
+
+
+    Location: frontend/src/pages/DashboardPage.tsx
+
+    '
+  route: navigation.route.root
+  supportsGoals:
+  - motivation.goal.observability
+  - motivation.goal.ease-of-configuration
+  usesApiOperations:
+  - api.operation.list-work-items
+  - api.operation.list-executions
+  properties:
+    screen.component: DashboardPage
+    screen.icons: Activity, Clock, CheckCircle2, XCircle, Loader2
+    screen.requires-auth: 'true'
+    screen.websocket: 'true'
+  experience: visual
+  states:
+  - description: Default state
+    initial: true
+    name: default
+  api-refs: '["api.operation.list-work-items"]'
+  route-ref: navigation.route.root
+Project Configuration Screen:
+  id: ux.screen.project-config
+  name: Project Configuration Screen
+  type: screen
+  version: 1.0.0
+  channel: visual
+  views:
+  - name: config-form
+    title: Project Configuration
+    type: form
+    components:
+    - name: config-editor
+      type: form-field
+      dataBinding:
+        dataSource: api.operation.get-project-config
+  documentation: "Project settings management interface.\n\nSections:\n1. Environment\
+    \ Variables\n   - List existing variables\n   - Show/hide secret values\n   -\
+    \ Add new variables (with secret flag)\n   - Delete variables\n\n2. Mounted Commands\n\
+    \   - List mounted command files\n   - Add new command mounts\n   - Remove command\
+    \ mounts\n\n3. Mounted Sub-Agents\n   - Display sub-agent configurations\n   -\
+    \ Show JSON config details\n\n4. Repository Settings\n   - Tech stacks display\n\
+    \   - Testing configuration display\n\nFeatures:\n- React Query mutations with\
+    \ cache invalidation\n- Form validation\n- Secret value masking with toggle\n\n\
+    Location: frontend/src/pages/ProjectConfigPage.tsx\n"
+  route: navigation.route.config
+  supportsGoals:
+  - motivation.goal.ease-of-configuration
+  - motivation.goal.security
+  usesApiOperations:
+  - api.operation.get-project-config
+  - api.operation.update-project-config
+  properties:
+    screen.component: ProjectConfigPage
+    screen.icons: Plus, Trash2, Eye, EyeOff, Save
+    screen.requires-auth: 'true'
+  experience: visual
+  states:
+  - description: Default state
+    initial: true
+    name: default
+  api-refs: '["api.operation.get-project-config"]'
+  route-ref: navigation.route.config
+Workflow Configuration Screen:
+  id: ux.screen.workflow-config
+  name: Workflow Configuration Screen
+  type: screen
+  version: 1.0.0
+  channel: visual
+  views:
+  - name: workflow-list
+    title: Workflows
+    type: list
+    components:
+    - name: workflow-table
+      type: table
+      dataBinding:
+        dataSource: api.operation.get-project-config
+  documentation: 'Workflow pipeline configuration interface.
+
+
+    Planned functionality (UI implementation pending):
+
+    - List existing pipelines
+
+    - Add/edit pipeline stages
+
+    - Configure stage transitions
+
+    - Assign agents to stages
+
+    - Configure entry conditions
+
+
+    Current state: Placeholder with description of planned features.
+
+
+    Location: frontend/src/pages/WorkflowConfigPage.tsx
+
+    '
+  route: navigation.route.workflows
+  supportsGoals:
+  - motivation.goal.ease-of-configuration
+  - motivation.goal.automation
+  properties:
+    screen.component: WorkflowConfigPage
+    screen.requires-auth: 'true'
+    screen.status: placeholder
+  experience: visual
+  states:
+  - description: Default state
+    initial: true
+    name: default
+  api-refs: '["api.operation.get-project-config"]'
+  route-ref: navigation.route.workflows
+Agent Configuration Screen:
+  id: ux.screen.agent-config
+  name: Agent Configuration Screen
+  type: screen
+  version: 1.0.0
+  channel: visual
+  views:
+  - name: agent-list
+    title: Agents
+    type: list
+    components:
+    - name: agent-table
+      type: table
+      dataBinding:
+        dataSource: api.operation.list-agents
+  documentation: 'Agent settings and capabilities management.
+
+
+    Planned functionality (UI implementation pending):
+
+    - List all agents
+
+    - Edit agent model and timeout
+
+    - Configure MCP servers
+
+    - Set agent capabilities
+
+    - Configure agent constraints
+
+
+    Current state: Placeholder with description of planned features.
+
+
+    Location: frontend/src/pages/AgentConfigPage.tsx
+
+    '
+  route: navigation.route.agents
+  supportsGoals:
+  - motivation.goal.ease-of-configuration
+  - motivation.goal.security
+  properties:
+    screen.component: AgentConfigPage
+    screen.requires-auth: 'true'
+    screen.status: placeholder
+  experience: visual
+  states:
+  - description: Default state
+    initial: true
+    name: default
+  api-refs: '["api.operation.list-agents"]'
+  route-ref: navigation.route.agents
+Configuration History Screen:
+  id: ux.screen.config-history
+  name: Configuration History Screen
+  type: screen
+  version: 1.0.0
+  channel: visual
+  views:
+  - name: history-list
+    title: Configuration History
+    type: list
+    components:
+    - name: history-table
+      type: table
+      dataBinding:
+        dataSource: api.operation.get-project-config
+  documentation: 'Configuration change history and rollback interface.
+
+
+    Planned functionality (UI implementation pending):
+
+    - List all configuration changes
+
+    - Show diff view for changes
+
+    - Implement rollback functionality
+
+    - Filter by change type and date
+
+
+    Current state: Placeholder with description of planned features.
+
+
+    Location: frontend/src/pages/ConfigHistoryPage.tsx
+
+    '
+  route: navigation.route.history
+  supportsGoals:
+  - motivation.goal.observability
+  - motivation.goal.ease-of-configuration
+  properties:
+    screen.component: ConfigHistoryPage
+    screen.requires-auth: 'true'
+    screen.status: placeholder
+  experience: visual
+  states:
+  - description: Default state
+    initial: true
+    name: default
+  api-refs: '["api.operation.get-project-config"]'
+  route-ref: navigation.route.history
+Navigation Menu:
+  id: ux.component.navigation-menu
+  name: Navigation Menu
+  type: component
+  documentation: 'Top navigation bar with links to all main screens.
+
+
+    Links:
+
+    - Dashboard (Activity icon) -> /
+
+    - Project (Settings icon) -> /config
+
+    - Workflows (GitBranch icon) -> /workflows
+
+    - Agents (Users icon) -> /agents
+
+    - History (History icon) -> /history
+
+
+    Features:
+
+    - Codetoreum branding
+
+    - Icon + text links
+
+    - Hover state styling
+
+    - Responsive layout
+
+
+    Location: frontend/src/App.tsx (inline)
+
+    '
+  containedIn: ux.screen.dashboard
+  properties:
+    component.framework: react-router-dom
+    component.icons: Settings, GitBranch, Users, Activity, History
+  version: 1.0.0
+  experience: visual
+  channel: visual
+  states:
+  - name: default
+    initial: true
+    description: Default state
+  views:
+  - name: default
+    type: custom
+    description: Default view
+Work Item List:
+  id: ux.component.work-item-list
+  name: Work Item List
+  type: component
+  documentation: 'Displays active work items with status indicators.
+
+
+    Features:
+
+    - Title and description (2-line clamp)
+
+    - Status badge with icon and color
+
+    - Current stage display
+
+    - Labels display (max 3)
+
+    - Relative time formatting
+
+    - Hover state for interaction
+
+
+    Status colors:
+
+    - completed: green
+
+    - in_progress/running: blue
+
+    - failed: red
+
+    - queued: yellow
+
+    - cancelled/default: gray
+
+    '
+  containedIn: ux.screen.dashboard
+  properties:
+    component.data-source: workItemsApi.list
+    component.max-items: '20'
+  version: 1.0.0
+  experience: visual
+  channel: visual
+  states:
+  - name: default
+    initial: true
+    description: Default state
+  views:
+  - name: default
+    type: custom
+    description: Default view
+Execution List:
+  id: ux.component.execution-list
+  name: Execution List
+  type: component
+  documentation: 'Displays recent agent executions with status.
+
+
+    Features:
+
+    - Work item title
+
+    - Agent name
+
+    - Status badge with icon
+
+    - Start time (relative)
+
+    - Duration in seconds
+
+    - Hover state for interaction
+
+    '
+  containedIn: ux.screen.dashboard
+  properties:
+    component.data-source: executionsApi.list
+    component.max-items: '10'
+  version: 1.0.0
+  experience: visual
+  channel: visual
+  states:
+  - name: default
+    initial: true
+    description: Default state
+  views:
+  - name: default
+    type: custom
+    description: Default view
+Real-time Events Feed:
+  id: ux.component.real-time-events
+  name: Real-time Events Feed
+  type: component
+  documentation: 'WebSocket-powered live event display.
+
+
+    Features:
+
+    - Last 10 events shown
+
+    - Event type header
+
+    - JSON data display (formatted)
+
+    - Timestamp (HH:mm:ss format)
+
+    - Visual indicator (left border)
+
+    - Empty state message
+
+
+    Event types subscribed:
+
+    - ExecutionStarted
+
+    - ExecutionCompleted
+
+    - ExecutionFailed
+
+    '
+  containedIn: ux.screen.dashboard
+  usesWebSocket: true
+  properties:
+    component.display-limit: '10'
+    component.event-buffer: '100'
+  version: 1.0.0
+  experience: visual
+  channel: visual
+  states:
+  - name: default
+    initial: true
+    description: Default state
+  views:
+  - name: default
+    type: custom
+    description: Default view
+Connection Status Indicator:
+  id: ux.component.connection-status
+  name: Connection Status Indicator
+  type: component
+  documentation: 'Visual indicator for WebSocket connection state.
+
+
+    States:
+
+    - Connected: Green pulsing dot, "Live" text
+
+    - Disconnected: Gray dot, "Disconnected" text
+
+
+    Features:
+
+    - CSS animation for pulse effect
+
+    - Inline with dashboard header
+
+    '
+  containedIn: ux.screen.dashboard
+  properties:
+    component.animation: animate-pulse
+    component.connected-color: bg-green-500
+  version: 1.0.0
+  experience: visual
+  channel: visual
+  states:
+  - name: default
+    initial: true
+    description: Default state
+  views:
+  - name: default
+    type: custom
+    description: Default view
+Environment Variables Form:
+  id: ux.component.environment-variables-form
+  name: Environment Variables Form
+  type: component
+  documentation: 'Environment variable management interface.
+
+
+    Features:
+
+    - List existing variables
+
+    - Secret indicator badge
+
+    - Show/hide secret values toggle
+
+    - Add new variable form
+
+    - Delete variable button
+
+    - Secret checkbox for new variables
+
+    - Description field
+
+
+    Mutations:
+
+    - addEnvironmentVariable
+
+    - removeEnvironmentVariable
+
+    '
+  containedIn: ux.screen.project-config
+  properties:
+    component.mutations: add,remove
+  version: 1.0.0
+  experience: visual
+  channel: visual
+  states:
+  - name: default
+    initial: true
+    description: Default state
+  views:
+  - name: default
+    type: custom
+    description: Default view
+Mounted Commands Form:
+  id: ux.component.mounted-commands-form
+  name: Mounted Commands Form
+  type: component
+  documentation: 'Custom command mounting interface.
+
+
+    Features:
+
+    - List existing command mounts
+
+    - Command name and path display
+
+    - Description display
+
+    - Add new command form
+
+    - Delete command button
+
+
+    Mutations:
+
+    - addMountCommand
+
+    - removeMountCommand
+
+    '
+  containedIn: ux.screen.project-config
+  properties:
+    component.mutations: mount,unmount
+  version: 1.0.0
+  experience: visual
+  channel: visual
+  states:
+  - name: default
+    initial: true
+    description: Default state
+  views:
+  - name: default
+    type: custom
+    description: Default view
+Card Component:
+  id: ux.component.card
+  name: Card Component
+  type: component
+  documentation: 'Reusable card container from shadcn/ui pattern.
+
+
+    Sub-components:
+
+    - Card: Main container with border and shadow
+
+    - CardHeader: Title and description area
+
+    - CardTitle: Card heading
+
+    - CardDescription: Subtitle text
+
+    - CardContent: Main content area
+
+
+    Location: frontend/src/components/ui/card.tsx
+
+    '
+  properties:
+    component.library: shadcn/ui pattern
+    component.styling: tailwind
+  version: 1.0.0
+  experience: visual
+  channel: visual
+  states:
+  - name: default
+    initial: true
+    description: Default state
+  views:
+  - name: default
+    type: custom
+    description: Default view
+Button Component:
+  id: ux.component.button
+  name: Button Component
+  type: component
+  documentation: 'Reusable button with variants.
+
+
+    Variants:
+
+    - default
+
+    - destructive
+
+    - outline
+
+    - secondary
+
+    - ghost
+
+    - link
+
+
+    Sizes:
+
+    - default
+
+    - sm
+
+    - lg
+
+    - icon
+
+
+    Location: frontend/src/components/ui/button.tsx
+
+    '
+  properties:
+    component.library: shadcn/ui pattern
+    component.variants: default,destructive,outline,secondary,ghost,link
+  version: 1.0.0
+  experience: visual
+  channel: visual
+  states:
+  - name: default
+    initial: true
+    description: Default state
+  views:
+  - name: default
+    type: custom
+    description: Default view
+Input Component:
+  id: ux.component.input
+  name: Input Component
+  type: component
+  documentation: 'Reusable form input field.
+
+
+    Features:
+
+    - Consistent styling
+
+    - Focus states
+
+    - Disabled states
+
+
+    Location: frontend/src/components/ui/input.tsx
+
+    '
+  properties:
+    component.library: shadcn/ui pattern
+  version: 1.0.0
+  experience: visual
+  channel: visual
+  states:
+  - name: default
+    initial: true
+    description: Default state
+  views:
+  - name: default
+    type: custom
+    description: Default view
+Error Boundary:
+  id: ux.component.error-boundary
+  name: Error Boundary
+  type: component
+  documentation: 'React error boundary for graceful error handling.
+
+
+    Features:
+
+    - Catches JavaScript errors in child components
+
+    - Displays fallback UI instead of crashing
+
+    - Wraps all route components
+
+
+    Location: frontend/src/components/ErrorBoundary.tsx
+
+    '
+  properties:
+    component.type: error-boundary
+    component.wraps: route-components
+  version: 1.0.0
+  experience: visual
+  channel: visual
+  states:
+  - name: default
+    initial: true
+    description: Default state
+  views:
+  - name: default
+    type: custom
+    description: Default view
+Loading Indicator:
+  id: ux.component.loading-indicator
+  name: Loading Indicator
+  type: component
+  documentation: 'Loading spinner for async operations.
+
+
+    Implementation:
+
+    - Lucide Loader2 icon with animate-spin
+
+    - Centered display
+
+    - Used during auth checking and data fetching
+
+    '
+  properties:
+    component.animation: animate-spin
+    component.icon: Loader2
+  version: 1.0.0
+  experience: visual
+  channel: visual
+  states:
+  - name: default
+    initial: true
+    description: Default state
+  views:
+  - name: default
+    type: custom
+    description: Default view
+Authentication Store:
+  id: ux.store.auth-store
+  name: Authentication Store
+  type: state-store
+  documentation: 'Zustand store for authentication state.
+
+
+    State:
+
+    - isAuthenticated: boolean
+
+    - isLoading: boolean (starts true)
+
+    - error: string | null
+
+    - lastAuthTime: number | null
+
+
+    Actions:
+
+    - setAuthenticated(boolean)
+
+    - setLoading(boolean)
+
+    - setError(string | null)
+
+    - clearAuth()
+
+
+    Security:
+
+    - No token stored (httpOnly cookies)
+
+    - No persistence (validates on each load)
+
+    - Global event listener for ''auth:unauthorized''
+
+
+    Location: frontend/src/store/authStore.ts
+
+    '
+  supportsGoals:
+  - motivation.goal.security
+  properties:
+    store.framework: zustand
+    store.persistence: none
+  version: 1.0.0
+  experience: visual
+  channel: visual
+  states:
+  - name: default
+    initial: true
+  views:
+  - name: default
+    type: custom
+WebSocket Store:
+  id: ux.store.websocket-store
+  name: WebSocket Store
+  type: state-store
+  documentation: 'Zustand store for singleton WebSocket connection.
+
+
+    State:
+
+    - ws: WebSocket | null
+
+    - isConnected: boolean
+
+    - isConnecting: boolean
+
+    - error: string | null
+
+    - reconnectAttempt: number
+
+    - events: WebSocketEvent[] (last 100)
+
+    - subscriptions: Set<string>
+
+
+    Actions:
+
+    - connect(isAuthenticated)
+
+    - disconnect()
+
+    - subscribe(eventType)
+
+    - unsubscribe(eventType)
+
+    - clearEvents()
+
+    - reconnect()
+
+
+    Features:
+
+    - Singleton connection across app
+
+    - Exponential backoff reconnection
+
+    - Event buffering (last 100)
+
+    - Subscription management
+
+    - Cookie-based authentication
+
+
+    Location: frontend/src/store/websocketStore.ts
+
+    '
+  supportsGoals:
+  - motivation.goal.observability
+  usesAuthScheme:
+  - security.authentication.websocket-auth
+  properties:
+    store.framework: zustand
+    store.event-buffer: '100'
+    store.max-reconnect-attempts: '10'
+  version: 1.0.0
+  experience: visual
+  channel: visual
+  states:
+  - name: default
+    initial: true
+  views:
+  - name: default
+    type: custom
+useAuth Hook:
+  id: ux.hook.use-auth
+  name: useAuth Hook
+  type: hook
+  documentation: 'Authentication hook for managing auth state and flow.
+
+
+    Returns:
+
+    - isAuthenticated: boolean
+
+    - isLoading: boolean
+
+    - error: string | null
+
+    - logout: () => Promise<void>
+
+
+    Flow:
+
+    1. Check for token in URL query parameter
+
+    2. If found, exchange for httpOnly cookie
+
+    3. Remove token from URL
+
+    4. Validate existing cookie via /v2/auth/token-info
+
+    5. Update auth store state
+
+
+    Features:
+
+    - Single initialization across components
+
+    - URL token cleanup
+
+    - Error handling
+
+
+    Location: frontend/src/hooks/useAuth.ts
+
+    '
+  usesAuthScheme:
+  - security.authentication.httponly-cookie-auth
+  - security.authentication.query-param-auth
+  properties:
+    hook.singleton-init: 'true'
+  version: 1.0.0
+  experience: visual
+  channel: visual
+  states:
+  - name: default
+    initial: true
+  views:
+  - name: default
+    type: custom
+useWebSocket Hook:
+  id: ux.hook.use-websocket
+  name: useWebSocket Hook
+  type: hook
+  documentation: 'WebSocket hook wrapping the Zustand store.
+
+
+    Parameters:
+
+    - isAuthenticated: boolean
+
+    - isAuthLoading: boolean (default false)
+
+    - config: WebSocketConfig (optional)
+
+
+    Returns:
+
+    - isConnected: boolean
+
+    - isConnecting: boolean
+
+    - error: string | null
+
+    - events: WebSocketEvent[]
+
+    - reconnectAttempt: number
+
+    - subscribe: (eventType) => void
+
+    - unsubscribe: (eventType) => void
+
+    - clearEvents: () => void
+
+    - reconnect: () => void
+
+    - disconnect: () => void
+
+
+    Features:
+
+    - Waits for auth to complete before connecting
+
+    - Wraps Zustand store for backward compatibility
+
+    - Automatic cleanup on unmount
+
+
+    Location: frontend/src/hooks/useWebSocket.ts
+
+    '
+  usesAuthScheme:
+  - security.authentication.websocket-auth
+  properties:
+    hook.wraps-store: websocketStore
+  version: 1.0.0
+  experience: visual
+  channel: visual
+  states:
+  - name: default
+    initial: true
+  views:
+  - name: default
+    type: custom
+Authenticate User:
+  id: ux.interaction.authenticate
+  name: Authenticate User
+  type: interaction
+  documentation: 'User authentication flow via URL token.
+
+
+    Steps:
+
+    1. User receives access URL from server console
+
+    2. User opens URL in browser
+
+    3. App detects token in query parameter
+
+    4. App exchanges token for httpOnly cookie
+
+    5. URL is cleaned (token removed)
+
+    6. User is authenticated and sees dashboard
+
+    '
+  triggeredBy: url-access
+  invokesScreen:
+  - ux.screen.dashboard
+  properties:
+    interaction.entry-point: query-parameter
+    interaction.success-redirect: /
+  version: 1.0.0
+  experience: visual
+  channel: visual
+  states:
+  - name: default
+    initial: true
+  views:
+  - name: default
+    type: custom
+View Dashboard:
+  id: ux.interaction.view-dashboard
+  name: View Dashboard
+  type: interaction
+  documentation: 'Main dashboard viewing interaction.
+
+
+    Steps:
+
+    1. User navigates to dashboard
+
+    2. Work items fetched via React Query
+
+    3. Executions fetched via React Query
+
+    4. WebSocket connection established
+
+    5. Real-time events displayed as they arrive
+
+    '
+  triggeredBy: navigation
+  invokesScreen:
+  - ux.screen.dashboard
+  properties:
+    interaction.data-fetching: react-query
+    interaction.real-time: websocket
+  version: 1.0.0
+  experience: visual
+  channel: visual
+  states:
+  - name: default
+    initial: true
+  views:
+  - name: default
+    type: custom
+Manage Environment Variables:
+  id: ux.interaction.manage-env-vars
+  name: Manage Environment Variables
+  type: interaction
+  documentation: 'Environment variable CRUD operations.
+
+
+    Operations:
+
+    - View existing variables
+
+    - Toggle secret visibility
+
+    - Add new variable (with optional secret flag)
+
+    - Delete variable
+
+
+    Mutations invalidate cache for immediate UI update.
+
+    '
+  triggeredBy: user-action
+  invokesScreen:
+  - ux.screen.project-config
+  usesApiOperations:
+  - api.operation.add-environment-variable
+  - api.operation.remove-environment-variable
+  properties:
+    interaction.mutations: add,remove
+    interaction.cache-invalidation: 'true'
+  version: 1.0.0
+  experience: visual
+  channel: visual
+  states:
+  - name: default
+    initial: true
+  views:
+  - name: default
+    type: custom
+Subscribe to Events:
+  id: ux.interaction.subscribe-events
+  name: Subscribe to Events
+  type: interaction
+  documentation: 'WebSocket event subscription flow.
+
+
+    Steps:
+
+    1. Component mounts and checks connection
+
+    2. When connected, subscribes to event types
+
+    3. Subscription message sent via WebSocket
+
+    4. Events received and added to buffer
+
+    5. UI updates with new events
+
+    '
+  triggeredBy: component-mount
+  properties:
+    interaction.event-types: ExecutionStarted,ExecutionCompleted,ExecutionFailed
+  version: 1.0.0
+  experience: visual
+  channel: visual
+  states:
+  - name: default
+    initial: true
+  views:
+  - name: default
+    type: custom

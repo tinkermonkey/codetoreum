@@ -1,0 +1,192 @@
+Redis Cache and Pub/Sub:
+  id: datastore.database.redis-cache
+  name: Redis Cache and Pub/Sub
+  documentation: 'In-memory data structure store for caching, event streaming,
+
+    and real-time message distribution. Enables horizontal scalability
+
+    for WebSocket connections via pub/sub.
+
+    '
+  database:
+    name: codetoreum-redis
+    type: Redis
+    version: 7.0+
+    metadata:
+      x-owner: codetoreum-platform
+      x-purpose: Caching, pub/sub, session management
+      x-ha-mode: cluster-or-sentinel
+    schemas:
+    - name: cache
+      tables:
+      - name: config-cache
+        columns:
+        - name: key
+          dataType: string
+        - name: value
+          dataType: hash
+        - name: ttl
+          dataType: integer
+      - name: session-store
+        columns:
+        - name: session_id
+          dataType: string
+        - name: user_id
+          dataType: string
+        - name: expires_at
+          dataType: timestamp
+      - name: execution-state
+        columns:
+        - name: execution_id
+          dataType: string
+        - name: status
+          dataType: string
+        - name: container_id
+          dataType: string
+    keyspaces:
+    - pattern: config:project:*
+      documentation: Cached project configurations
+      ttl: 300
+      data_type: hash
+      fields:
+      - name
+      - github_org
+      - github_repo
+      - default_workflow_template_id
+      - updated_at
+      metadata:
+        x-invalidation: config:invalidation channel
+    - pattern: config:agent:*
+      documentation: Cached agent configurations (key format - project_id:agent_name)
+      ttl: 300
+      data_type: hash
+      fields:
+      - model
+      - timeout
+      - requires_docker
+      - makes_code_changes
+      - mcp_servers
+      metadata:
+        x-invalidation: config:invalidation channel
+    - pattern: config:pipeline:*
+      documentation: Cached pipeline configurations
+      ttl: 300
+      data_type: hash
+      metadata:
+        x-invalidation: config:invalidation channel
+    - pattern: config:workflow:*
+      documentation: Cached workflow template configurations
+      ttl: 300
+      data_type: hash
+      metadata:
+        x-invalidation: config:invalidation channel
+    - pattern: session:*
+      documentation: User session data
+      ttl: 86400
+      data_type: hash
+      fields:
+      - user_id
+      - username
+      - roles
+      - created_at
+      - expires_at
+      metadata:
+        x-pii: true
+        x-owner: authentication-service
+    - pattern: execution:*
+      documentation: Active execution state cache
+      ttl: 3600
+      data_type: hash
+      fields:
+      - status
+      - agent_id
+      - work_item_id
+      - started_at
+      - container_id
+      metadata:
+        x-owner: execution-service
+    - pattern: ratelimit:*
+      documentation: Rate limiting counters
+      ttl: 60
+      data_type: string
+      metadata:
+        x-owner: api-gateway
+    channels:
+    - name: websocket:events
+      documentation: 'Domain events for WebSocket broadcast across server instances.
+
+        Enables horizontal scalability for real-time updates.
+
+        '
+      message_format:
+        type: object
+        properties:
+          type:
+            type: string
+            enum:
+            - event
+          event_type:
+            type: string
+            documentation: Event class name (WorkItemCreated, etc.)
+          event:
+            type: object
+            documentation: Serialized domain event
+    - name: websocket:control
+      documentation: 'Control messages for WebSocket coordination between instances.
+
+        Used for disconnect notifications, connection state updates.
+
+        '
+      message_format:
+        type: object
+        properties:
+          type:
+            type: string
+            documentation: Control message type (disconnect, etc.)
+          data:
+            type: object
+            documentation: Control message payload
+    - name: config:invalidation
+      documentation: 'Cache invalidation notifications for configuration changes.
+
+        Published when configuration is updated in Elasticsearch.
+
+        '
+      message_format:
+        type: object
+        properties:
+          config_type:
+            type: string
+            enum:
+            - project
+            - agent
+            - pipeline
+            - workflow
+          config_id:
+            type: string
+          action:
+            type: string
+            enum:
+            - update
+            - delete
+    statistics:
+      messages_published:
+        description: Total messages published to pub/sub channels
+        type: counter
+      messages_received:
+        description: Total messages received from pub/sub channels
+        type: counter
+      publish_errors:
+        description: Publish operation failures
+        type: counter
+      receive_errors:
+        description: Receive operation failures
+        type: counter
+      cache_hits:
+        description: Cache hit count
+        type: counter
+      cache_misses:
+        description: Cache miss count
+        type: counter
+  uses-technology:
+  - technology.systemsoftware.redis

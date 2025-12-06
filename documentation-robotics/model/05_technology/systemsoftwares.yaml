@@ -1,76 +1,110 @@
-Python 3.11+:
-  description: Primary programming language for the platform
-  id: python
-  name: Python 3.11+
-  type: language
-  version: 3.11+
-FastAPI:
-  description: Modern async Python web framework for building REST APIs
-  id: fastapi
-  name: FastAPI
-  type: framework
-  version: 0.115.0
-SQLAlchemy:
-  description: Python SQL toolkit and Object-Relational Mapping library
-  id: sqlalchemy
-  name: SQLAlchemy
-  type: orm
-  version: 2.0.35
-Uvicorn:
-  description: ASGI server for running FastAPI applications
-  id: uvicorn
-  name: Uvicorn
-  type: server
-  version: 0.32.0
-Pydantic:
-  description: Data validation library using Python type annotations
-  id: pydantic
-  name: Pydantic
-  purpose: validation,serialization
-  type: library
-  version: 2.9.2
-HTTPX:
-  description: Async HTTP client for external API communication
-  id: httpx
-  name: HTTPX
-  type: library
-  version: 0.27.2
-AIOHTTP:
-  description: Async HTTP client/server framework
-  id: aiohttp
-  name: AIOHTTP
-  type: library
-  version: 3.9.0
-Python-JOSE:
-  description: JWT token implementation for authentication
-  id: python-jose
-  name: Python-JOSE
-  purpose: jwt,authentication
-  type: library
-  version: 3.3.0
-Passlib:
-  description: Password hashing library with bcrypt support
-  id: passlib
-  name: Passlib
-  purpose: password-hashing
-  type: library
-  version: 1.7.4
+Anthropic Claude:
+  description: LLM provider for code generation and analysis, specifically using Claude
+    3.5 Sonnet via Claude Code CLI
+  id: technology.systemsoftware.anthropic-claude
+  name: Anthropic Claude
+  software.license: commercial
+  software.type: cloud-service
+  software.version: Sonnet 3.5
+Celery:
+  description: Distributed task queue for background processing
+  id: technology.systemsoftware.celery
+  name: Celery
+  software.type: middleware
+  software.version: 5.3+
+OpenTelemetry:
+  description: Observability framework for cloud-native software
+  id: technology.systemsoftware.open-telemetry
+  name: OpenTelemetry
+  software.type: middleware
+  software.version: 1.21+
+GitPython:
+  description: Python library used to interact with Git repositories
+  id: technology.systemsoftware.git-python
+  name: GitPython
+  software.license: opensource
+  software.type: middleware
 Alembic:
   description: Database migration tool for SQLAlchemy
-  id: alembic
+  id: technology.systemsoftware.alembic
   name: Alembic
-  type: tool
-  version: 1.13.3
-Pytest:
-  description: Testing framework with async support
-  id: pytest
-  name: Pytest
-  purpose: unit,integration,simulation
-  type: testing
-  version: 8.3.3
-Testcontainers:
-  description: Library for integration testing with Docker containers
-  id: testcontainers
-  name: Testcontainers
-  type: testing
-  version: 4.8.2
+  software.license: opensource
+  software.type: middleware
+AsyncPG:
+  description: A fast asyncio PostgreSQL driver/client library
+  id: technology.systemsoftware.async-pg
+  name: AsyncPG
+  software.license: opensource
+  software.type: middleware
+AIOHTTP:
+  description: Asynchronous HTTP client/server framework
+  id: technology.systemsoftware.aiohttp
+  name: AIOHTTP
+  software.license: opensource
+  software.type: middleware
+Prometheus Client:
+  description: Python client for Prometheus monitoring
+  id: technology.systemsoftware.prometheus-client
+  name: Prometheus Client
+  software.license: opensource
+  software.type: middleware
+Ruff:
+  description: An extremely fast Python linter and code formatter
+  id: technology.systemsoftware.ruff
+  name: Ruff
+  software.license: opensource
+  software.type: devtools
+MyPy:
+  description: Optional static typing for Python
+  id: technology.systemsoftware.my-py
+  name: MyPy
+  software.license: opensource
+  software.type: devtools
+Black:
+  description: The uncompromising Python code formatter
+  id: technology.systemsoftware.black
+  name: Black
+  software.license: opensource
+  software.type: devtools
+React:
+  description: JavaScript library for building user interfaces
+  id: technology.systemsoftware.react
+  name: React
+  software.license: opensource
+  software.type: framework
+Vite:
+  description: Next generation frontend tooling
+  id: technology.systemsoftware.vite
+  name: Vite
+  software.license: opensource
+  software.type: devtools
+Tailwind CSS:
+  description: Utility-first CSS framework
+  id: technology.systemsoftware.tailwind-css
+  name: Tailwind CSS
+  software.license: opensource
+  software.type: framework
+Zustand:
+  description: Small, fast and scalable bearbones state-management solution
+  id: technology.systemsoftware.zustand
+  name: Zustand
+  software.license: opensource
+  software.type: library
+React Query:
+  description: Powerful asynchronous state management
+  id: technology.systemsoftware.react-query
+  name: React Query
+  software.license: opensource
+  software.type: library
+Axios:
+  description: Promise based HTTP client for the browser and node.js
+  id: technology.systemsoftware.axios
+  name: Axios
+  software.license: opensource
+  software.type: library
+Zod:
+  description: TypeScript-first schema declaration and validation library
+  id: technology.systemsoftware.zod
+  name: Zod
+  software.license: opensource
+  software.type: library

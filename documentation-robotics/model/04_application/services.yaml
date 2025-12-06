@@ -1,105 +1,173 @@
 Workflow Orchestrator:
-  id: workflow-orchestrator
+  id: application.service.workflow-orchestrator
   name: Workflow Orchestrator
-  documentation: Coordinates multi-stage workflow execution and stage transitions
+  type: service
+  documentation: Coordinates multi-stage workflow execution, manages stage transitions,
+    and handles workflow lifecycle
+  serviceType: asynchronous
+  realizes: business.service.workflow-automation
+  supportsGoals:
+  - motivation.goal.automation
+  - motivation.goal.developer-productivity
   properties:
-    service.criticality: high
-    implementation.location: src/codetoreum/application/workflow_orchestrator.py
+    apm.sla-target-availability: 99.9%
+    apm.sla-target-latency: 500ms
+    apm.traced: 'true'
+    service.version: 2.0.0
+  realizesProcesses: '[''business.process.automated-development-workflow'']'
 Execution Service:
-  id: execution-service
+  id: application.service.execution-service
   name: Execution Service
-  documentation: Manages agent execution lifecycle and container orchestration
+  type: service
+  documentation: Manages agent execution lifecycle including initialization, monitoring,
+    and completion
+  serviceType: asynchronous
+  realizes: business.service.agent-execution
+  supportsGoals:
+  - motivation.goal.automation
+  - motivation.goal.security
   properties:
-    service.criticality: high
-    implementation.location: src/codetoreum/application/execution_service.py
+    apm.sla-target-availability: 99.9%
+    apm.sla-target-latency: 1000ms
+    apm.traced: 'true'
+    service.version: 2.0.0
+  realizesProcesses: '[''business.process.agent-execution-cycle'']'
 Agent Scheduler:
-  id: agent-scheduler
+  id: application.service.agent-scheduler
   name: Agent Scheduler
-  documentation: Queues and schedules agent executions based on priority and resources
+  type: service
+  documentation: Manages agent execution scheduling with priority-based queuing, resource
+    checking, and rate limiting
+  serviceType: asynchronous
+  realizes: business.service.agent-scheduling
+  supportsGoals:
+  - motivation.goal.automation
+  - motivation.goal.scalability
   properties:
-    service.criticality: high
-    implementation.location: src/codetoreum/application/agent_scheduler.py
+    service.version: 2.0.0
+    apm.traced: 'true'
+    apm.sla-target-latency: 200ms
 Review Service:
-  id: review-service
+  id: application.service.review-service
   name: Review Service
-  documentation: Handles review cycles and feedback loops in workflows
+  type: service
+  documentation: Orchestrates maker-checker review cycles with feedback processing
+    and escalation handling
+  serviceType: asynchronous
+  realizes: business.service.code-review
+  supportsGoals:
+  - motivation.goal.quality-assurance
+  - motivation.goal.automation
   properties:
-    service.criticality: medium
-    implementation.location: src/codetoreum/application/review_service.py
-Work Item Service:
-  id: work-item-service
-  name: Work Item Service
-  documentation: Manages work item lifecycle and state transitions
-  properties:
-    service.criticality: high
-    implementation.location: src/codetoreum/application/work_item_service.py
-Configuration Service:
-  id: configuration-service
-  name: Configuration Service
-  documentation: Manages system configuration and project settings
-  properties:
-    service.criticality: high
-    implementation.location: src/codetoreum/application/configuration_service.py
+    apm.traced: 'true'
+    service.version: 2.0.0
+  realizesProcesses: '[''business.process.maker-checker-review'']'
+  servesActors: '[''business.actor.reviewer'']'
 Workspace Router:
-  id: workspace-router
+  id: application.service.workspace-router
   name: Workspace Router
-  documentation: Manages container workspaces and file mounting for agents
+  type: service
+  documentation: Manages container workspaces, file mounting, and agent execution
+    environments
+  serviceType: synchronous
+  realizes: business.service.workspace-management
+  supportsGoals:
+  - motivation.goal.security
+  - motivation.goal.automation
   properties:
-    service.criticality: high
-    implementation.location: src/codetoreum/application/workspace_router.py
+    service.version: 2.0.0
+    apm.traced: 'true'
+Configuration Service:
+  id: application.service.configuration-service
+  name: Configuration Service
+  type: service
+  documentation: Manages project, agent, and pipeline configuration with versioning
+  serviceType: synchronous
+  realizes: business.service.configuration-management
+  supportsGoals:
+  - motivation.goal.ease-of-configuration
+  - motivation.goal.observability
+  properties:
+    apm.sla-target-latency: 100ms
+    apm.traced: 'true'
+    service.version: 2.0.0
+  servesActors: '[''business.actor.system-administrator'']'
+Work Item Service:
+  id: application.service.work-item-service
+  name: Work Item Service
+  type: service
+  documentation: Manages work item lifecycle and state transitions
+  serviceType: synchronous
+  realizes: business.service.work-item-management
+  supportsGoals:
+  - motivation.goal.automation
+  - motivation.goal.extensibility
+  properties:
+    apm.traced: 'true'
+    service.version: 2.0.0
+  servesActors: '[''business.actor.developer'', ''business.actor.project-manager'']'
 Authentication Service:
-  id: authentication-service
+  id: application.service.authentication-service
   name: Authentication Service
-  documentation: Handles user authentication and authorization
+  type: service
+  documentation: Manages single-token authentication for the platform
+  serviceType: synchronous
+  realizes: business.service.authentication-authorization
+  supportsGoals:
+  - motivation.goal.security
   properties:
-    service.criticality: high
-    implementation.location: src/codetoreum/application/authentication_service.py
-Feedback Processor:
-  id: feedback-processor
-  name: Feedback Processor
-  documentation: Processes feedback from review cycles and updates work items
-  properties:
-    service.criticality: medium
-    implementation.location: src/codetoreum/application/feedback_processor.py
+    service.version: 2.0.0
+    apm.traced: 'true'
+    apm.sla-target-latency: 50ms
+    apm.sla-target-availability: 99.99%
 Pipeline Manager:
-  id: pipeline-manager
+  id: application.service.pipeline-manager
   name: Pipeline Manager
-  documentation: Manages pipeline stages and workflow transitions
+  type: service
+  documentation: Manages pipeline definitions and stage configurations
+  serviceType: synchronous
+  realizes: business.service.pipeline-management
+  supportsGoals:
+  - motivation.goal.automation
+  - motivation.goal.ease-of-configuration
   properties:
-    service.criticality: high
-    implementation.location: src/codetoreum/application/pipeline_manager.py
+    service.version: 2.0.0
+Feedback Processor:
+  id: application.service.feedback-processor
+  name: Feedback Processor
+  type: service
+  documentation: Processes review feedback and determines required actions
+  serviceType: asynchronous
+  realizes: business.service.feedback-processing
+  supportsGoals:
+  - motivation.goal.quality-assurance
+  - motivation.goal.developer-productivity
+  properties:
+    service.version: 2.0.0
 Context Builder:
-  id: context-builder
+  id: application.service.context-builder
   name: Context Builder
-  documentation: Builds execution context for agents from work items and environment
+  type: service
+  documentation: Builds execution context for agents including work item details,
+    code, and previous outputs
+  serviceType: synchronous
+  realizes: business.service.context-building
+  supportsGoals:
+  - motivation.goal.automation
+  - motivation.goal.quality-assurance
   properties:
-    service.criticality: high
-    implementation.location: src/codetoreum/application/context_builder.py
-Agent Matching Service:
-  id: agent-matching-service
-  name: Agent Matching Service
-  documentation: Matches agents to work items based on capabilities and requirements
+    service.version: 2.0.0
+Event Processor:
+  id: application.service.event-processor
+  name: Event Processor
+  type: service
+  documentation: Processes and routes domain events for observability, streaming to
+    Redis and indexing to Elasticsearch
+  serviceType: asynchronous
+  realizes: business.service.platform-observability
+  supportsGoals:
+  - motivation.goal.observability
+  - motivation.goal.resilience
   properties:
-    service.criticality: medium
-    implementation.location: src/codetoreum/domain/services/agent_matching_service.py
-Execution Context Builder:
-  id: execution-context-builder
-  name: Execution Context Builder
-  documentation: Builds execution context with project and workspace information
-  properties:
-    service.criticality: high
-    implementation.location: src/codetoreum/domain/services/execution_context_builder.py
-Workflow Validation Service:
-  id: workflow-validation-service
-  name: Workflow Validation Service
-  documentation: Validates workflow definitions and stage transitions
-  properties:
-    service.criticality: medium
-    implementation.location: src/codetoreum/domain/services/workflow_validation_service.py
-Work Assignment Service:
-  id: work-assignment-service
-  name: Work Assignment Service
-  documentation: Assigns work items to agents based on workflow stage
-  properties:
-    service.criticality: high
-    implementation.location: src/codetoreum/domain/services/work_assignment_service.py
+    service.version: 2.0.0
+    apm.traced: 'true'

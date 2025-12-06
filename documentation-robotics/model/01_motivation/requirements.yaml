@@ -1,0 +1,152 @@
+Hexagonal Architecture Pattern:
+  id: motivation.requirement.hexagonal-architecture
+  name: Hexagonal Architecture Pattern
+  type: requirement
+  documentation: System must implement hexagonal architecture (ports and adapters)
+    pattern with clear separation between domain logic and external dependencies,
+    enabling testability and extensibility
+  requirementType: technical
+  priority: critical
+  realizesGoals:
+  - motivation.goal.testability
+  - motivation.goal.extensibility
+  properties:
+    requirement.source: Design documentation - 02_high_level_arch.md
+    requirement.status: approved
+Event Sourcing for State Changes:
+  id: motivation.requirement.event-sourcing
+  name: Event Sourcing for State Changes
+  type: requirement
+  documentation: All domain state changes must emit domain events that are persisted
+    to an event store, enabling complete audit trails, event replay, and debugging
+    capabilities
+  requirementType: technical
+  priority: critical
+  realizesGoals:
+  - motivation.goal.observability
+  properties:
+    requirement.source: Design documentation - 02_high_level_arch.md
+    requirement.status: approved
+Simulation Mode Support:
+  id: motivation.requirement.simulation-mode
+  name: Simulation Mode Support
+  type: requirement
+  documentation: Platform must support full simulation mode for end-to-end testing
+    without external services, including time manipulation, deterministic LLM responses,
+    and event replay
+  requirementType: technical
+  priority: critical
+  realizesGoals:
+  - motivation.goal.testability
+  properties:
+    requirement.source: Design documentation - 02_high_level_arch.md
+    requirement.status: approved
+Agent Container Isolation:
+  id: motivation.requirement.container-isolation
+  name: Agent Container Isolation
+  type: requirement
+  documentation: AI agents must execute in isolated Docker containers with no access
+    to git credentials, GitHub keys, SSH keys, or Docker socket. Orchestrator manages
+    all privileged operations.
+  requirementType: technical
+  priority: critical
+  realizesGoals:
+  - motivation.goal.security
+  properties:
+    requirement.source: Design documentation - 01_design_changes.md
+    requirement.status: approved
+File-Based Context Passing:
+  id: motivation.requirement.context-file-mounting
+  name: File-Based Context Passing
+  type: requirement
+  documentation: Agent context must be provided via mounted files rather than embedded
+    in prompts, enabling large context support and complex multi-file context without
+    token limits
+  requirementType: technical
+  priority: high
+  realizesGoals:
+  - motivation.goal.automation
+  properties:
+    requirement.source: Design documentation - 01_design_changes.md
+    requirement.status: approved
+GitHub Integration:
+  id: motivation.requirement.github-integration
+  name: GitHub Integration
+  type: requirement
+  documentation: Platform must integrate with GitHub for work item management (Issues,
+    Projects), pull request workflows, and code repository operations
+  requirementType: functional
+  priority: critical
+  realizesGoals:
+  - motivation.goal.automation
+  properties:
+    requirement.source: CLAUDE.md - External Systems
+    requirement.status: approved
+LLM Provider Abstraction:
+  id: motivation.requirement.llm-provider-abstraction
+  name: LLM Provider Abstraction
+  type: requirement
+  documentation: LLM integration must be abstracted through ILLMProvider interface
+    to support multiple providers (Claude Code, GPT-4, Aider) via adapter pattern
+  requirementType: technical
+  priority: high
+  realizesGoals:
+  - motivation.goal.extensibility
+  properties:
+    requirement.source: Design documentation - 02_high_level_arch.md
+    requirement.status: approved
+Database-Backed Configuration:
+  id: motivation.requirement.database-backed-config
+  name: Database-Backed Configuration
+  type: requirement
+  documentation: All configuration (projects, workflows, agents) must be stored in
+    Elasticsearch with Redis caching, replacing YAML files, with versioning and full-text
+    search capabilities
+  requirementType: functional
+  priority: high
+  realizesGoals:
+  - motivation.goal.ease-of-configuration
+  properties:
+    requirement.source: Design documentation - 01_design_changes.md
+    requirement.status: approved
+Web-Based Configuration UI:
+  id: motivation.requirement.web-configuration-ui
+  name: Web-Based Configuration UI
+  type: requirement
+  documentation: Platform must provide web-based user interface for managing all configuration
+    including projects, workflows, agents, pipelines, and environment variables
+  requirementType: functional
+  priority: high
+  realizesGoals:
+  - motivation.goal.ease-of-configuration
+  properties:
+    requirement.source: Design documentation - 02_high_level_arch.md
+    requirement.status: approved
+Centralized Resilience Patterns:
+  id: motivation.requirement.resilience-patterns
+  name: Centralized Resilience Patterns
+  type: requirement
+  documentation: Infrastructure layer must provide centralized resilience patterns
+    (circuit breakers, rate limiting, retries, timeouts) applied via decorators to
+    adapters, with adapters remaining pure
+  requirementType: non-functional
+  priority: high
+  realizesGoals:
+  - motivation.goal.resilience
+  properties:
+    requirement.source: CLAUDE.md - Key Constraints
+    requirement.status: approved
+Maker-Checker Review Cycles:
+  id: motivation.requirement.maker-checker-review
+  name: Maker-Checker Review Cycles
+  type: requirement
+  documentation: Platform must implement maker-checker review patterns where agent
+    outputs are reviewed by another agent or human before acceptance, with feedback
+    loop support
+  requirementType: functional
+  priority: high
+  realizesGoals:
+  - motivation.goal.quality-assurance
+  properties:
+    requirement.source: CLAUDE.md - Core Concepts
+    requirement.status: approved

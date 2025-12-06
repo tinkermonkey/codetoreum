@@ -1,0 +1,95 @@
+Domain Layer No External Dependencies:
+  id: motivation.constraint.no-domain-external-deps
+  name: Domain Layer No External Dependencies
+  type: constraint
+  documentation: Domain layer MUST have no external dependencies. All external interactions
+    must go through port interfaces to maintain pure business logic separation.
+  constraintType: technology
+  properties:
+    constraint.source: CLAUDE.md - Key Constraints
+    constraint.negotiable: 'false'
+Pure Adapter Implementation:
+  id: motivation.constraint.pure-adapters
+  name: Pure Adapter Implementation
+  type: constraint
+  documentation: Adapters MUST remain pure with no embedded resilience logic. All
+    resilience patterns (circuit breakers, retries, rate limiting) must be applied
+    through infrastructure decorators.
+  constraintType: technology
+  properties:
+    constraint.source: CLAUDE.md - Key Constraints
+    constraint.negotiable: 'false'
+Mandatory Event Emission:
+  id: motivation.constraint.event-emission-required
+  name: Mandatory Event Emission
+  type: constraint
+  documentation: All state changes MUST emit domain events. No state mutation is permitted
+    without corresponding event emission for audit and replay purposes.
+  constraintType: technology
+  properties:
+    constraint.source: CLAUDE.md - Key Constraints
+    constraint.negotiable: 'false'
+No Git Credentials in Containers:
+  id: motivation.constraint.no-git-credentials
+  name: No Git Credentials in Containers
+  type: constraint
+  documentation: General purpose containerized agents MUST NOT have access to git
+    credentials, GitHub credentials, SSH keys, or Docker socket. Orchestrator manages
+    all privileged operations.
+  constraintType: technology
+  properties:
+    constraint.source: Design documentation - 01_design_changes.md
+    constraint.negotiable: 'false'
+Orchestrator Git Control:
+  id: motivation.constraint.orchestrator-git-control
+  name: Orchestrator Git Control
+  type: constraint
+  documentation: Orchestrator is solely responsible for all git operations (clone,
+    pull, push, branch management). Agents receive pre-checked-out code via mounted
+    volumes.
+  constraintType: organizational
+  properties:
+    constraint.source: Design documentation - 01_design_changes.md
+    constraint.negotiable: 'false'
+Elasticsearch and Redis Stack:
+  id: motivation.constraint.elasticsearch-redis-stack
+  name: Elasticsearch and Redis Stack
+  type: constraint
+  documentation: Platform must use Elasticsearch as primary persistence layer with
+    Redis as buffering and caching layer. PostgreSQL is explicitly not chosen for
+    the event store.
+  constraintType: technology
+  properties:
+    constraint.source: Design documentation - 01_design_changes.md
+    constraint.negotiable: 'true'
+Eventual Consistency Model:
+  id: motivation.constraint.eventual-consistency
+  name: Eventual Consistency Model
+  type: constraint
+  documentation: System operates under eventual consistency model with events acknowledged
+    immediately on Redis write and durable persistence within ~5 seconds. This is
+    acceptable for audit trail and workflow execution.
+  constraintType: technology
+  properties:
+    constraint.source: Design documentation - 01_design_changes.md
+    constraint.negotiable: 'true'
+Python 3.11+ Runtime:
+  id: motivation.constraint.python-runtime
+  name: Python 3.11+ Runtime
+  type: constraint
+  documentation: Platform implementation must use Python 3.11 or higher with FastAPI
+    for web framework and SQLAlchemy for ORM.
+  constraintType: technology
+  properties:
+    constraint.source: CLAUDE.md - Technology Stack
+    constraint.negotiable: 'false'
+Docker Container Runtime:
+  id: motivation.constraint.container-runtime
+  name: Docker Container Runtime
+  type: constraint
+  documentation: Agent execution must use Docker as the container runtime for isolated
+    execution environments.
+  constraintType: technology
+  properties:
+    constraint.source: CLAUDE.md - Technology Stack
+    constraint.negotiable: 'true'

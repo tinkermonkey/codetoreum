@@ -20,7 +20,7 @@
         },
         "type": {
           "type": "string",
-          "enum": ["PostgreSQL", "MySQL", "SQLite", "MariaDB", "Oracle", "SQL Server"]
+          "enum": ["PostgreSQL", "MySQL", "SQLite", "MariaDB", "Oracle", "SQL Server", "Elasticsearch", "Redis", "MongoDB", "DynamoDB", "Cassandra", "Neo4j"]
         },
         "version": {
           "type": "string"

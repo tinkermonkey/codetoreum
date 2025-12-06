@@ -1,0 +1,136 @@
+Separation of Concerns:
+  id: motivation.principle.separation-of-concerns
+  name: Separation of Concerns
+  type: principle
+  documentation: System architecture must maintain clear separation between domain
+    logic, application orchestration, port interfaces, and adapter implementations
+    following hexagonal architecture patterns
+  category: application
+  properties:
+    principle.rationale: Enables independent testing, reduces coupling, and supports
+      extensibility through clean boundaries
+    principle.implications: Requires port/adapter pattern for all external integrations,
+      domain layer must have zero external dependencies
+Domain-Driven Design:
+  id: motivation.principle.domain-driven-design
+  name: Domain-Driven Design
+  type: principle
+  documentation: Core business logic is organized around domain models (WorkItem,
+    Agent, AgentExecution, Workflow, PipelineStage, ReviewCycle) that are independent
+    of infrastructure concerns
+  category: application
+  properties:
+    principle.rationale: Aligns code structure with business concepts, improves maintainability,
+      and enables ubiquitous language across team
+    principle.implications: Domain models must be pure with no framework dependencies,
+      all state changes through domain events
+Event-Driven Architecture:
+  id: motivation.principle.event-driven-architecture
+  name: Event-Driven Architecture
+  type: principle
+  documentation: System behavior is driven by domain events with event sourcing for
+    all state changes, enabling audit trails, replay, and loose coupling between components
+  category: application
+  properties:
+    principle.rationale: Provides complete audit trail, enables debugging via replay,
+      supports eventual consistency, and decouples components
+    principle.implications: All state changes must emit events, event store is source
+      of truth, requires event versioning strategy
+Defense in Depth:
+  id: motivation.principle.defense-in-depth
+  name: Defense in Depth
+  type: principle
+  documentation: Security is implemented through multiple layers including container
+    isolation, credential separation, network segmentation, and principle of least
+    privilege
+  category: security
+  properties:
+    principle.rationale: Multiple security layers prevent single point of failure,
+      limits blast radius of security incidents
+    principle.implications: Agents cannot access credentials, orchestrator handles
+      privileged operations, containers have minimal capabilities
+Principle of Least Privilege:
+  id: motivation.principle.least-privilege
+  name: Principle of Least Privilege
+  type: principle
+  documentation: AI agents and system components operate with minimal required privileges,
+    with credentials and sensitive operations isolated to trusted orchestrator components
+  category: security
+  properties:
+    principle.rationale: Minimizes attack surface and limits potential damage from
+      compromised components
+    principle.implications: Agents receive only mounted files and environment variables,
+      no access to host system credentials
+Adapter Pattern for Integration:
+  id: motivation.principle.adapter-pattern
+  name: Adapter Pattern for Integration
+  type: principle
+  documentation: All external system integrations (ticket systems, LLM providers,
+    container runtimes) are implemented through adapter pattern with port interfaces
+  category: integration
+  properties:
+    principle.rationale: Enables swapping implementations, supports mock adapters
+      for testing, isolates external dependencies
+    principle.implications: Every external integration requires port interface, production
+      and mock adapter implementations
+Contract-First Integration:
+  id: motivation.principle.contract-first
+  name: Contract-First Integration
+  type: principle
+  documentation: Port interfaces define contracts that adapters must implement, with
+    contract tests verifying adapter compliance
+  category: integration
+  properties:
+    principle.rationale: Ensures consistent behavior across implementations, enables
+      confident adapter swapping
+    principle.implications: Requires contract test suites for all port interfaces,
+      adapters must pass contract tests
+Observability First:
+  id: motivation.principle.observability-first
+  name: Observability First
+  type: principle
+  documentation: System is designed with observability as a primary concern, emitting
+    events, metrics, traces, and logs that enable complete visibility into system
+    behavior
+  category: technology
+  properties:
+    principle.rationale: Enables debugging, performance optimization, and operational
+      monitoring in production
+    principle.implications: All services must emit structured events, metrics must
+      be collected for key operations
+Graceful Degradation:
+  id: motivation.principle.graceful-degradation
+  name: Graceful Degradation
+  type: principle
+  documentation: System components degrade gracefully under failure conditions through
+    circuit breakers, fallbacks, and rate limiting rather than cascading failures
+  category: technology
+  properties:
+    principle.rationale: Maintains partial service availability during failures, prevents
+      cascade failures
+    principle.implications: Requires circuit breakers for external calls, fallback
+      behaviors must be defined, rate limiting on resource-intensive operations
+Testability by Design:
+  id: motivation.principle.testability-by-design
+  name: Testability by Design
+  type: principle
+  documentation: System architecture prioritizes testability through dependency injection,
+    mock adapters, simulation mode, and deterministic testing capabilities
+  category: application
+  properties:
+    principle.rationale: Enables confident refactoring, fast feedback loops, and high
+      test coverage without external dependencies
+    principle.implications: All dependencies injectable, simulation mode required,
+      mock adapters for all external systems
+Configuration as Data:
+  id: motivation.principle.configuration-as-data
+  name: Configuration as Data
+  type: principle
+  documentation: All system configuration is stored as structured data in Elasticsearch
+    with versioning, search, and audit capabilities rather than code or YAML files
+  category: data
+  properties:
+    principle.rationale: Enables web UI management, full-text search, version history,
+      and configuration audit trails
+    principle.implications: No YAML configuration files, all config in Elasticsearch,
+      web UI required for config management

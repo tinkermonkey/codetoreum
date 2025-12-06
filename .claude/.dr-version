@@ -1,33 +1,9 @@
 components:
   agents:
-    dr-documenter.md:
-      hash: ec5c6c6e
-      modified: false
-    dr-extractor.md:
-      hash: 5bcd24c5
-      modified: false
-    dr-helper.md:
-      hash: 248331ce
-      modified: false
-    dr-ideator.md:
-      hash: 590d8810
-      modified: false
-    dr-link-validator.md:
-      hash: 3682d0d9
-      modified: false
-    dr-schema-migrator.md:
-      hash: 39d5b288
-      modified: false
-    dr-security-reviewer.md:
-      hash: 872c91dc
-      modified: false
-    dr-validator.md:
-      hash: b23ec9b9
+    dr-architect.md:
+      hash: 2798ac3e
       modified: false
   commands:
-    design_aspect_inventory.md:
-      hash: 664baa0c
-      modified: false
     dr-changeset.md:
       hash: 299fbd0f
       modified: false
@@ -37,20 +13,11 @@ components:
     dr-init.md:
       hash: 11c56b2b
       modified: false
-    dr-links.md:
-      hash: 9ca5772d
-      modified: false
     dr-model.md:
       hash: e9af5d4a
       modified: false
-    dr-project.md:
-      hash: a149e6e1
-      modified: false
     dr-validate.md:
-      hash: fc2ee179
-      modified: false
-    prime_documentation.md:
-      hash: 3192a2e2
+      hash: f8ff3fb4
       modified: false
   reference_sheets:
     dr-tier1-essentials.md:
@@ -68,13 +35,13 @@ components:
       hash: 554ddc87
       modified: false
     custom-agent-template.md:
-      hash: f5736041
+      hash: b115c266
       modified: false
     custom-command-template.md:
-      hash: 734250ca
+      hash: 30c6422d
       modified: false
     workflow-examples.md:
-      hash: 032f63b1
+      hash: 9e217a1d
       modified: false
-installed_at: '2025-11-29T11:56:09.864628'
-version: 0.5.0
+installed_at: '2025-12-05T11:06:49.352842'
+version: 0.6.3

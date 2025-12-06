@@ -1,0 +1,1302 @@
+JWT Token Authentication:
+  id: security.authentication.jwt-token-auth
+  name: JWT Token Authentication
+  type: authentication
+  version: 1.0.0
+  documentation: 'Primary authentication mechanism using JSON Web Tokens (JWT) with
+    HS256 signing.
+
+    Single-tenant, JupyterLab-style token generated at server startup.
+
+
+    Token characteristics:
+
+    - Generated using python-jose library
+
+    - Signed with CODETOREUM_SECRET_KEY (required in production)
+
+    - Default expiry: 365 days (configurable via CODETOREUM_TOKEN_EXPIRATION_DAYS)
+
+    - Subject: "codetoreum-server"
+
+    - Type: "access"
+
+
+    Migration path: Designed to be replaced with multi-user JWT system in future.
+
+    '
+  scheme: bearer
+  supportsGoals:
+  - motivation.goal.security
+  realizedBy:
+  - application.service.authentication-service
+  properties:
+    auth.algorithm: HS256
+    auth.production-requirement: CODETOREUM_SECRET_KEY must be set
+    auth.secret-key-length: 64 bytes URL-safe
+    auth.token-expiry-days: '365'
+  application: codetoreum
+  authentication:
+    provider: jwt
+    sessionTimeout: 60
+  roles:
+  - description: Standard user role
+    displayName: User Role
+    name: user
+  resources:
+  - description: API resources
+    operations:
+    - description: Default access operation
+      operation: access
+    resource: api
+    type: api
+  dataClassification:
+    classifications:
+    - accessControl: role-based
+      auditLevel: standard
+      description: Internal data not for public release
+      encryption: at-rest
+      label: Internal Data
+      level: internal
+      retention:
+        deleteAfter: false
+        period: 1y
+        reviewRequired: false
+  displayName: JWT Token Authentication
+HttpOnly Cookie Authentication:
+  id: security.authentication.httponly-cookie-auth
+  name: HttpOnly Cookie Authentication
+  type: authentication
+  version: 1.0.0
+  documentation: 'Secure browser session authentication using httpOnly cookies.
+
+    Primary mechanism for web UI after initial token exchange.
+
+
+    Cookie attributes:
+
+    - Name: codetoreum_token
+
+    - HttpOnly: true (prevents JavaScript access, XSS protection)
+
+    - SameSite: Strict (CSRF protection)
+
+    - Secure: true in production (HTTPS only)
+
+    - Max-Age: 1 year
+
+    - Path: /
+
+
+    Flow:
+
+    1. User receives access URL with token query parameter
+
+    2. First request exchanges token for httpOnly cookie
+
+    3. Token removed from URL (history protection)
+
+    4. All subsequent requests use cookie automatically
+
+    '
+  scheme: cookie
+  supportsGoals:
+  - motivation.goal.security
+  realizedBy:
+  - application.service.authentication-service
+  properties:
+    auth.cookie-name: codetoreum_token
+    auth.httponly: 'true'
+    auth.max-age-seconds: '31536000'
+    auth.samesite: Strict
+    auth.secure-in-production: 'true'
+  application: codetoreum
+  authentication:
+    provider: session
+    sessionTimeout: 30
+  roles:
+  - description: Standard user role
+    displayName: User Role
+    name: user
+  resources:
+  - description: API resources
+    operations:
+    - description: Default access operation
+      operation: access
+    resource: api
+    type: api
+  dataClassification:
+    classifications:
+    - accessControl: role-based
+      auditLevel: standard
+      description: Internal data not for public release
+      encryption: at-rest
+      label: Internal Data
+      level: internal
+      retention:
+        deleteAfter: false
+        period: 1y
+        reviewRequired: false
+  displayName: HttpOnly Cookie Authentication
+Bearer Header Authentication:
+  id: security.authentication.bearer-header-auth
+  name: Bearer Header Authentication
+  type: authentication
+  version: 1.0.0
+  documentation: 'API client authentication using Authorization header.
+
+    Format: Authorization: Bearer <jwt-token>
+
+
+    Use cases:
+
+    - CLI tools
+
+    - Service-to-service communication
+
+    - API testing tools
+
+    - Programmatic access
+
+
+    Validation includes format checking (min 20 chars, 3 dot-separated parts).
+
+    '
+  scheme: bearer
+  supportsGoals:
+  - motivation.goal.security
+  realizedBy:
+  - application.service.authentication-service
+  properties:
+    auth.header: Authorization
+    auth.min-token-length: '20'
+    auth.prefix: Bearer
+  application: codetoreum
+  authentication:
+    provider: session
+    sessionTimeout: 30
+  roles:
+  - description: Standard user role
+    displayName: User Role
+    name: user
+  resources:
+  - description: API resources
+    operations:
+    - description: Default access operation
+      operation: access
+    resource: api
+    type: api
+  dataClassification:
+    classifications:
+    - accessControl: role-based
+      auditLevel: standard
+      description: Internal data not for public release
+      encryption: at-rest
+      label: Internal Data
+      level: internal
+      retention:
+        deleteAfter: false
+        period: 1y
+        reviewRequired: false
+  displayName: Bearer Header Authentication
+Query Parameter Authentication:
+  id: security.authentication.query-param-auth
+  name: Query Parameter Authentication
+  type: authentication
+  version: 1.0.0
+  documentation: 'Initial authentication via URL query parameter.
+
+    Used for:
+
+    - First-time web UI authentication
+
+    - WebSocket connection establishment
+
+    - Access URL links from server console
+
+
+    Security notes:
+
+    - Token immediately exchanged for httpOnly cookie
+
+    - URL cleaned via history.replaceState()
+
+    - Should only be used for initial handshake
+
+
+    Format: ?token=<jwt-token>
+
+    '
+  scheme: query
+  supportsGoals:
+  - motivation.goal.security
+  realizedBy:
+  - application.service.authentication-service
+  properties:
+    auth.param-name: token
+    auth.single-use: 'true'
+    auth.triggers-cookie-set: 'true'
+  application: codetoreum
+  authentication:
+    provider: session
+    sessionTimeout: 30
+  roles:
+  - description: Standard user role
+    displayName: User Role
+    name: user
+  resources:
+  - description: API resources
+    operations:
+    - description: Default access operation
+      operation: access
+    resource: api
+    type: api
+  dataClassification:
+    classifications:
+    - accessControl: role-based
+      auditLevel: standard
+      description: Internal data not for public release
+      encryption: at-rest
+      label: Internal Data
+      level: internal
+      retention:
+        deleteAfter: false
+        period: 1y
+        reviewRequired: false
+  displayName: Query Parameter Authentication
+WebSocket Authentication:
+  id: security.authentication.websocket-auth
+  name: WebSocket Authentication
+  type: authentication
+  version: 1.0.0
+  documentation: 'Authentication for WebSocket real-time event streaming.
+
+
+    Mechanism:
+
+    - Browser sends httpOnly cookies automatically on WebSocket upgrade
+
+    - Backend validates cookie during connection handshake
+
+    - Close code 4001 indicates authentication failure
+
+
+    Reconnection behavior:
+
+    - Exponential backoff (1s, 2s, 4s, 8s, 16s, 30s max)
+
+    - Max 10 reconnection attempts
+
+    - No reconnection on 4001 (Unauthorized)
+
+    '
+  scheme: cookie
+  supportsGoals:
+  - motivation.goal.security
+  realizedBy:
+  - application.service.authentication-service
+  properties:
+    auth.close-code-unauthorized: '4001'
+    auth.max-reconnect-attempts: '10'
+    auth.max-reconnect-delay-ms: '30000'
+  application: codetoreum
+  authentication:
+    provider: session
+    sessionTimeout: 30
+  roles:
+  - description: Standard user role
+    displayName: User Role
+    name: user
+  resources:
+  - description: API resources
+    operations:
+    - description: Default access operation
+      operation: access
+    resource: api
+    type: api
+  dataClassification:
+    classifications:
+    - accessControl: role-based
+      auditLevel: standard
+      description: Internal data not for public release
+      encryption: at-rest
+      label: Internal Data
+      level: internal
+      retention:
+        deleteAfter: false
+        period: 1y
+        reviewRequired: false
+  displayName: WebSocket Authentication
+Single Tenant Access Policy:
+  id: security.policy.single-tenant-access
+  name: Single Tenant Access Policy
+  type: authorization-policy
+  version: 1.0.0
+  documentation: 'Current authorization model: single-tenant, full access.
+
+
+    Design rationale (JupyterLab-style):
+
+    - Designed for single-tenant deployments
+
+    - Development environments where simplicity is valued
+
+    - Server generates single token granting full access
+
+    - Anyone with token has complete API access
+
+
+    Future migration path:
+
+    - Replace with multi-user RBAC
+
+    - Add role-based permissions
+
+    - Implement resource-level authorization
+
+    '
+  supportsGoals:
+  - motivation.goal.security
+  properties:
+    policy.migration-planned: 'true'
+    policy.model: single-tenant
+  application: codetoreum
+  authentication:
+    provider: session
+    sessionTimeout: 30
+  roles:
+  - description: Standard user role
+    displayName: User Role
+    name: user
+  resources:
+  - description: API resources
+    operations:
+    - description: Default access operation
+      operation: access
+    resource: api
+    type: api
+  dataClassification:
+    classifications:
+    - accessControl: role-based
+      auditLevel: standard
+      description: Internal data not for public release
+      encryption: at-rest
+      label: Internal Data
+      level: internal
+      retention:
+        deleteAfter: false
+        period: 1y
+        reviewRequired: false
+  displayName: Single Tenant Access Policy
+API Endpoint Protection Policy:
+  id: security.policy.api-endpoint-protection
+  name: API Endpoint Protection Policy
+  type: authorization-policy
+  version: 1.0.0
+  documentation: 'All API endpoints (except public health check) require authentication.
+
+
+    Protected endpoints require:
+
+    - Valid JWT token via cookie, header, or query param
+
+    - Token format validation (prevents CPU exhaustion)
+
+    - JWT signature and expiration validation
+
+
+    Public endpoints:
+
+    - GET /api/v2/health (basic health check)
+
+    - OpenAPI documentation endpoints
+
+    '
+  supportsGoals:
+  - motivation.goal.security
+  realizedBy:
+  - application.service.authentication-service
+  properties:
+    policy.default: authenticated
+    policy.public-endpoints: /api/v2/health,/api/docs,/api/openapi.json
+  application: codetoreum
+  authentication:
+    provider: session
+    sessionTimeout: 30
+  roles:
+  - description: Standard user role
+    displayName: User Role
+    name: user
+  resources:
+  - description: API resources
+    operations:
+    - description: Default access operation
+      operation: access
+    resource: api
+    type: api
+  dataClassification:
+    classifications:
+    - accessControl: role-based
+      auditLevel: standard
+      description: Internal data not for public release
+      encryption: at-rest
+      label: Internal Data
+      level: internal
+      retention:
+        deleteAfter: false
+        period: 1y
+        reviewRequired: false
+  displayName: API Endpoint Protection Policy
+Rate Limiting Control:
+  id: security.control.rate-limiting
+  name: Rate Limiting Control
+  type: security-control
+  version: 1.0.0
+  documentation: 'Token bucket rate limiter with sliding window for API protection.
+
+
+    Features:
+
+    - Request-based limiting (max requests per window)
+
+    - Token-based limiting for LLM APIs (cost-aware)
+
+    - Configurable max wait time before rejection
+
+    - Thread-safe for async operations
+
+
+    Configuration:
+
+    - max_requests: Requests per window
+
+    - window_seconds: Time window (default 60s)
+
+    - max_tokens: Optional token limit for LLM quotas
+
+    - max_wait_seconds: Max blocking time
+
+
+    Applied via infrastructure decorator pattern.
+
+    '
+  controlType: preventive
+  supportsGoals:
+  - motivation.goal.security
+  - motivation.goal.resilience
+  properties:
+    control.async-safe: 'true'
+    control.default-window: 60s
+    control.implementation: TokenBucketRateLimiter
+  application: codetoreum
+  authentication:
+    provider: session
+    sessionTimeout: 30
+  roles:
+  - description: Standard user role
+    displayName: User Role
+    name: user
+  resources:
+  - description: API resources
+    operations:
+    - description: Default access operation
+      operation: access
+    resource: api
+    type: api
+  dataClassification:
+    classifications:
+    - accessControl: role-based
+      auditLevel: standard
+      description: Internal data not for public release
+      encryption: at-rest
+      label: Internal Data
+      level: internal
+      retention:
+        deleteAfter: false
+        period: 1y
+        reviewRequired: false
+  displayName: Rate Limiting Control
+Circuit Breaker Control:
+  id: security.control.circuit-breaker
+  name: Circuit Breaker Control
+  type: security-control
+  version: 1.0.0
+  documentation: 'Prevents cascading failures when external services are unhealthy.
+
+
+    States:
+
+    - CLOSED: Normal operation, requests pass through
+
+    - OPEN: Service unhealthy, requests fail fast
+
+    - HALF_OPEN: Testing recovery with limited requests
+
+
+    Transitions:
+
+    - CLOSED -> OPEN: After failure_threshold consecutive failures
+
+    - OPEN -> HALF_OPEN: After timeout_seconds elapsed
+
+    - HALF_OPEN -> CLOSED: After success_threshold consecutive successes
+
+    - HALF_OPEN -> OPEN: On any failure
+
+
+    Default configuration:
+
+    - failure_threshold: 5
+
+    - timeout_seconds: 60
+
+    - success_threshold: 2
+
+    '
+  controlType: preventive
+  supportsGoals:
+  - motivation.goal.resilience
+  - motivation.goal.security
+  properties:
+    control.failure-threshold: '5'
+    control.implementation: CircuitBreaker
+    control.success-threshold: '2'
+    control.timeout-seconds: '60'
+  application: codetoreum
+  authentication:
+    provider: session
+    sessionTimeout: 30
+  roles:
+  - description: Standard user role
+    displayName: User Role
+    name: user
+  resources:
+  - description: API resources
+    operations:
+    - description: Default access operation
+      operation: access
+    resource: api
+    type: api
+  dataClassification:
+    classifications:
+    - accessControl: role-based
+      auditLevel: standard
+      description: Internal data not for public release
+      encryption: at-rest
+      label: Internal Data
+      level: internal
+      retention:
+        deleteAfter: false
+        period: 1y
+        reviewRequired: false
+  displayName: Circuit Breaker Control
+Container Isolation Control:
+  id: security.control.container-isolation
+  name: Container Isolation Control
+  type: security-control
+  version: 1.0.0
+  documentation: 'Security sandbox for AI agent execution in Docker containers.
+
+
+    Agent containers have:
+
+    - Internet access (for research/downloads)
+
+    - Mounted project files (read/write or read-only as configured)
+
+    - Project-level environment variables
+
+    - MCP servers for artifacts and logging
+
+
+    Agent containers DO NOT have:
+
+    - Git credentials or SSH keys
+
+    - GitHub credentials or app keys
+
+    - Docker socket access
+
+    - Host filesystem access beyond mounts
+
+
+    Critical security implication:
+
+    Orchestrator handles ALL git operations (clone, commit, push).
+
+    Agents work on pre-checked-out code.
+
+    '
+  controlType: preventive
+  supportsGoals:
+  - motivation.goal.security
+  governedByConstraints:
+  - motivation.constraint.no-git-credentials
+  - motivation.constraint.orchestrator-git-control
+  properties:
+    control.docker-socket: 'false'
+    control.git-credentials: 'false'
+    control.internet-access: 'true'
+    control.mcp-servers: 'true'
+  application: codetoreum
+  authentication:
+    provider: session
+    sessionTimeout: 30
+  roles:
+  - description: Standard user role
+    displayName: User Role
+    name: user
+  resources:
+  - description: API resources
+    operations:
+    - description: Default access operation
+      operation: access
+    resource: api
+    type: api
+  dataClassification:
+    classifications:
+    - accessControl: role-based
+      auditLevel: standard
+      description: Internal data not for public release
+      encryption: at-rest
+      label: Internal Data
+      level: internal
+      retention:
+        deleteAfter: false
+        period: 1y
+        reviewRequired: false
+  displayName: Container Isolation Control
+Input Validation Control:
+  id: security.control.input-validation
+  name: Input Validation Control
+  type: security-control
+  version: 1.0.0
+  documentation: "Request validation using FastAPI Pydantic models.\n\nValidation\
+    \ layers:\n1. Token format pre-validation (prevents CPU exhaustion)\n   - Minimum\
+    \ 20 characters\n   - Maximum 2000 characters\n   - Exactly 2 dots (JWT structure)\n\
+    \n2. Pydantic model validation\n   - Type checking\n   - Required field enforcement\n\
+    \   - Value constraints\n\n3. Business rule validation\n   - Domain-specific constraints\n\
+    \   - Cross-field validation\n"
+  controlType: preventive
+  supportsGoals:
+  - motivation.goal.security
+  properties:
+    control.framework: FastAPI/Pydantic
+    control.token-max-length: '2000'
+    control.token-min-length: '20'
+  application: codetoreum
+  authentication:
+    provider: session
+    sessionTimeout: 30
+  roles:
+  - description: Standard user role
+    displayName: User Role
+    name: user
+  resources:
+  - description: API resources
+    operations:
+    - description: Default access operation
+      operation: access
+    resource: api
+    type: api
+  dataClassification:
+    classifications:
+    - accessControl: role-based
+      auditLevel: standard
+      description: Internal data not for public release
+      encryption: at-rest
+      label: Internal Data
+      level: internal
+      retention:
+        deleteAfter: false
+        period: 1y
+        reviewRequired: false
+  displayName: Input Validation Control
+Retry Policy Control:
+  id: security.control.retry-policy
+  name: Retry Policy Control
+  type: security-control
+  version: 1.0.0
+  documentation: 'Handles transient failures with configurable backoff strategies.
+
+
+    Features:
+
+    - Configurable max retries
+
+    - Exponential backoff with jitter
+
+    - Retryable exception filtering
+
+    - Statistics tracking
+
+
+    Applied via infrastructure decorator pattern.
+
+    '
+  controlType: detective
+  supportsGoals:
+  - motivation.goal.resilience
+  properties:
+    control.backoff-type: exponential
+    control.implementation: IRetryPolicy
+  application: codetoreum
+  authentication:
+    provider: session
+    sessionTimeout: 30
+  roles:
+  - description: Standard user role
+    displayName: User Role
+    name: user
+  resources:
+  - description: API resources
+    operations:
+    - description: Default access operation
+      operation: access
+    resource: api
+    type: api
+  dataClassification:
+    classifications:
+    - accessControl: role-based
+      auditLevel: standard
+      description: Internal data not for public release
+      encryption: at-rest
+      label: Internal Data
+      level: internal
+      retention:
+        deleteAfter: false
+        period: 1y
+        reviewRequired: false
+  displayName: Retry Policy Control
+Timeout Control:
+  id: security.control.timeout-control
+  name: Timeout Control
+  type: security-control
+  version: 1.0.0
+  documentation: 'Prevents operations from hanging indefinitely.
+
+
+    Features:
+
+    - Configurable timeout per operation
+
+    - Statistics tracking (total, timeouts, avg/max duration)
+
+    - Applied at multiple levels (HTTP, database, external services)
+
+    '
+  controlType: preventive
+  supportsGoals:
+  - motivation.goal.resilience
+  properties:
+    control.implementation: ITimeout
+  application: codetoreum
+  authentication:
+    provider: session
+    sessionTimeout: 30
+  roles:
+  - description: Standard user role
+    displayName: User Role
+    name: user
+  resources:
+  - description: API resources
+    operations:
+    - description: Default access operation
+      operation: access
+    resource: api
+    type: api
+  dataClassification:
+    classifications:
+    - accessControl: role-based
+      auditLevel: standard
+      description: Internal data not for public release
+      encryption: at-rest
+      label: Internal Data
+      level: internal
+      retention:
+        deleteAfter: false
+        period: 1y
+        reviewRequired: false
+  displayName: Timeout Control
+CORS Policy Control:
+  id: security.control.cors-policy
+  name: CORS Policy Control
+  type: security-control
+  version: 1.0.0
+  documentation: 'Cross-Origin Resource Sharing policy for API access.
+
+
+    Applied via FastAPI middleware for browser-based clients.
+
+    Configured to allow frontend origin access while preventing
+
+    unauthorized cross-origin requests.
+
+    '
+  controlType: preventive
+  supportsGoals:
+  - motivation.goal.security
+  properties:
+    control.middleware: CORSMiddleware
+  application: codetoreum
+  authentication:
+    provider: session
+    sessionTimeout: 30
+  roles:
+  - description: Standard user role
+    displayName: User Role
+    name: user
+  resources:
+  - description: API resources
+    operations:
+    - description: Default access operation
+      operation: access
+    resource: api
+    type: api
+  dataClassification:
+    classifications:
+    - accessControl: role-based
+      auditLevel: standard
+      description: Internal data not for public release
+      encryption: at-rest
+      label: Internal Data
+      level: internal
+      retention:
+        deleteAfter: false
+        period: 1y
+        reviewRequired: false
+  displayName: CORS Policy Control
+Audit Logging Control:
+  id: security.control.audit-logging
+  name: Audit Logging Control
+  type: security-control
+  version: 1.0.0
+  documentation: 'Comprehensive audit trail for security-sensitive operations.
+
+
+    Event categories:
+
+    - Authentication: AUTH_SUCCESS, AUTH_FAILURE, AUTH_TOKEN_VALIDATED, AUTH_TOKEN_INVALID
+
+    - Agent: AGENT_CREATED, AGENT_UPDATED, AGENT_DELETED, AGENT_CAPABILITY_MODIFIED
+
+    - Workflow: WORKFLOW_CREATED, WORKFLOW_UPDATED, WORKFLOW_DELETED
+
+    - Configuration: CONFIG_PROJECT_*, CONFIG_AGENT_*, CONFIG_ENV_VAR_*, CONFIG_SECRET_*
+
+    - Execution: EXECUTION_STARTED, EXECUTION_TERMINATED, EXECUTION_COMPLETED
+
+    - Workspace: WORKSPACE_CREATED, WORKSPACE_DELETED, WORKSPACE_FILES_MOUNTED
+
+    - System: SYSTEM_STARTUP, SYSTEM_SHUTDOWN, SYSTEM_CONFIG_CHANGED
+
+
+    Event structure:
+
+    - timestamp, event_type, resource_type, resource_id
+
+    - action, user_id, correlation_id
+
+    - success, error_message, metadata
+
+
+    Features:
+
+    - Correlation ID support for request tracing
+
+    - Sensitive data scrubbing
+
+    - Async storage to avoid blocking
+
+    - Standard logger integration
+
+    '
+  controlType: detective
+  supportsGoals:
+  - motivation.goal.observability
+  - motivation.goal.security
+  realizedBy:
+  - application.service.event-processor
+  properties:
+    control.async-storage: 'true'
+    control.correlation-id: 'true'
+    control.implementation: AuditLogger
+  application: codetoreum
+  authentication:
+    provider: session
+    sessionTimeout: 30
+  roles:
+  - description: Standard user role
+    displayName: User Role
+    name: user
+  resources:
+  - description: API resources
+    operations:
+    - description: Default access operation
+      operation: access
+    resource: api
+    type: api
+  dataClassification:
+    classifications:
+    - accessControl: role-based
+      auditLevel: standard
+      description: Internal data not for public release
+      encryption: at-rest
+      label: Internal Data
+      level: internal
+      retention:
+        deleteAfter: false
+        period: 1y
+        reviewRequired: false
+  displayName: Audit Logging Control
+Secret Management:
+  id: security.data-protection.secret-management
+  name: Secret Management
+  type: data-protection
+  version: 1.0.0
+  documentation: 'Protection of sensitive configuration data.
+
+
+    Secret types:
+
+    - JWT signing key (CODETOREUM_SECRET_KEY)
+
+    - Environment variables marked as secret
+
+    - API keys for external services
+
+
+    Protection mechanisms:
+
+    - Secrets marked with is_secret flag in configuration
+
+    - Masked display in UI (shown as dots)
+
+    - Separate storage consideration in audit logs
+
+    - Not exposed in error messages or logs
+
+    '
+  supportsGoals:
+  - motivation.goal.security
+  properties:
+    protection.env-secret-flag: is_secret
+    protection.signing-key: CODETOREUM_SECRET_KEY
+    protection.ui-masking: 'true'
+  application: codetoreum
+  authentication:
+    provider: session
+    sessionTimeout: 30
+  roles:
+  - description: Standard user role
+    displayName: User Role
+    name: user
+  resources:
+  - description: API resources
+    operations:
+    - description: Default access operation
+      operation: access
+    resource: api
+    type: api
+  dataClassification:
+    classifications:
+    - accessControl: role-based
+      auditLevel: standard
+      description: Internal data not for public release
+      encryption: at-rest
+      label: Internal Data
+      level: internal
+      retention:
+        deleteAfter: false
+        period: 1y
+        reviewRequired: false
+  displayName: Secret Management
+Session Security:
+  id: security.data-protection.session-security
+  name: Session Security
+  type: data-protection
+  version: 1.0.0
+  documentation: 'Browser session protection using httpOnly cookies.
+
+
+    XSS Protection:
+
+    - Token never stored in localStorage
+
+    - Token never accessible to JavaScript
+
+    - httpOnly cookie prevents XSS token theft
+
+
+    CSRF Protection:
+
+    - SameSite=Strict prevents cross-site request forgery
+
+    - Cookie only sent for same-site requests
+
+
+    Transmission Security:
+
+    - Secure flag ensures HTTPS-only in production
+
+    '
+  supportsGoals:
+  - motivation.goal.security
+  properties:
+    protection.csrf-prevention: SameSite=Strict
+    protection.https-only: Secure flag in production
+    protection.xss-prevention: httpOnly cookie
+  application: codetoreum
+  authentication:
+    provider: session
+    sessionTimeout: 30
+  roles:
+  - description: Standard user role
+    displayName: User Role
+    name: user
+  resources:
+  - description: API resources
+    operations:
+    - description: Default access operation
+      operation: access
+    resource: api
+    type: api
+  dataClassification:
+    classifications:
+    - accessControl: role-based
+      auditLevel: standard
+      description: Internal data not for public release
+      encryption: at-rest
+      label: Internal Data
+      level: internal
+      retention:
+        deleteAfter: false
+        period: 1y
+        reviewRequired: false
+  displayName: Session Security
+Frontend Authentication State:
+  id: security.data-protection.frontend-auth-state
+  name: Frontend Authentication State
+  type: data-protection
+  version: 1.0.0
+  documentation: 'Secure authentication state management in React frontend.
+
+
+    Design principles:
+
+    - No token stored in state or localStorage
+
+    - Only authentication status tracked (boolean)
+
+    - Zustand store without persistence (validated on each load)
+
+    - Cookie validation via /v2/auth/token-info endpoint
+
+
+    Unauthorized handling:
+
+    - Custom ''auth:unauthorized'' window event
+
+    - Automatic state clearing on 401
+
+    - Redirect to AuthRequiredPage
+
+
+    URL token handling:
+
+    - Token in URL immediately exchanged for cookie
+
+    - URL cleaned via history.replaceState()
+
+    - Prevents browser history exposure
+
+    '
+  supportsGoals:
+  - motivation.goal.security
+  properties:
+    protection.no-localstorage: 'true'
+    protection.no-token-in-state: 'true'
+    protection.url-token-cleanup: 'true'
+  application: codetoreum
+  authentication:
+    provider: session
+    sessionTimeout: 30
+  roles:
+  - description: Standard user role
+    displayName: User Role
+    name: user
+  resources:
+  - description: API resources
+    operations:
+    - description: Default access operation
+      operation: access
+    resource: api
+    type: api
+  dataClassification:
+    classifications:
+    - accessControl: role-based
+      auditLevel: standard
+      description: Internal data not for public release
+      encryption: at-rest
+      label: Internal Data
+      level: internal
+      retention:
+        deleteAfter: false
+        period: 1y
+        reviewRequired: false
+  displayName: Frontend Authentication State
+XSS Prevention:
+  id: security.threat.xss-prevention
+  name: XSS Prevention
+  type: threat-mitigation
+  version: 1.0.0
+  documentation: 'Cross-Site Scripting (XSS) attack prevention.
+
+
+    Mitigations:
+
+    1. httpOnly cookies - tokens inaccessible to JavaScript
+
+    2. No localStorage usage - eliminates common XSS target
+
+    3. React default escaping - prevents injection in UI
+
+    4. Input validation - Pydantic models sanitize input
+
+    '
+  supportsGoals:
+  - motivation.goal.security
+  properties:
+    mitigation.httponly-cookies: 'true'
+    mitigation.no-localstorage: 'true'
+  application: codetoreum
+  authentication:
+    provider: session
+    sessionTimeout: 30
+  roles:
+  - description: Standard user role
+    displayName: User Role
+    name: user
+  resources:
+  - description: API resources
+    operations:
+    - description: Default access operation
+      operation: access
+    resource: api
+    type: api
+  dataClassification:
+    classifications:
+    - accessControl: role-based
+      auditLevel: standard
+      description: Internal data not for public release
+      encryption: at-rest
+      label: Internal Data
+      level: internal
+      retention:
+        deleteAfter: false
+        period: 1y
+        reviewRequired: false
+  displayName: XSS Prevention
+CSRF Prevention:
+  id: security.threat.csrf-prevention
+  name: CSRF Prevention
+  type: threat-mitigation
+  version: 1.0.0
+  documentation: 'Cross-Site Request Forgery (CSRF) attack prevention.
+
+
+    Mitigations:
+
+    1. SameSite=Strict cookie attribute
+
+    2. CORS policy restricting origins
+
+    3. Token validation on state-changing operations
+
+    '
+  supportsGoals:
+  - motivation.goal.security
+  properties:
+    mitigation.cors: 'true'
+    mitigation.samesite: Strict
+  application: codetoreum
+  authentication:
+    provider: session
+    sessionTimeout: 30
+  roles:
+  - description: Standard user role
+    displayName: User Role
+    name: user
+  resources:
+  - description: API resources
+    operations:
+    - description: Default access operation
+      operation: access
+    resource: api
+    type: api
+  dataClassification:
+    classifications:
+    - accessControl: role-based
+      auditLevel: standard
+      description: Internal data not for public release
+      encryption: at-rest
+      label: Internal Data
+      level: internal
+      retention:
+        deleteAfter: false
+        period: 1y
+        reviewRequired: false
+  displayName: CSRF Prevention
+Token Theft Prevention:
+  id: security.threat.token-theft-prevention
+  name: Token Theft Prevention
+  type: threat-mitigation
+  version: 1.0.0
+  documentation: 'Protection against authentication token theft.
+
+
+    Mitigations:
+
+    1. URL token immediately cleaned after exchange
+
+    2. httpOnly cookies prevent JavaScript access
+
+    3. Secure flag ensures HTTPS transport in production
+
+    4. Token format pre-validation prevents timing attacks
+
+    '
+  supportsGoals:
+  - motivation.goal.security
+  properties:
+    mitigation.httponly: 'true'
+    mitigation.secure-transport: 'true'
+    mitigation.url-cleanup: 'true'
+  application: codetoreum
+  authentication:
+    provider: session
+    sessionTimeout: 30
+  roles:
+  - description: Standard user role
+    displayName: User Role
+    name: user
+  resources:
+  - description: API resources
+    operations:
+    - description: Default access operation
+      operation: access
+    resource: api
+    type: api
+  dataClassification:
+    classifications:
+    - accessControl: role-based
+      auditLevel: standard
+      description: Internal data not for public release
+      encryption: at-rest
+      label: Internal Data
+      level: internal
+      retention:
+        deleteAfter: false
+        period: 1y
+        reviewRequired: false
+  displayName: Token Theft Prevention

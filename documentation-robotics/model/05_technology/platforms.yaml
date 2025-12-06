@@ -1,0 +1,110 @@
+Python 3.11+ Runtime:
+  id: technology.systemsoftware.python-runtime
+  name: Python 3.11+ Runtime
+  type: systemsoftware
+  documentation: Primary programming language runtime for the Codetoreum platform
+    with async IO support, type hints, and dataclasses
+  softwareType: middleware
+  properties:
+    software.version: 3.11+
+    software.license: opensource
+FastAPI:
+  id: technology.systemsoftware.fastapi
+  name: FastAPI
+  type: systemsoftware
+  documentation: Modern, high-performance web framework for building APIs with Python
+    featuring async native support, OpenAPI generation, WebSocket support, and Pydantic
+    validation
+  softwareType: web-server
+  properties:
+    software.version: latest
+    software.license: opensource
+Docker Container Runtime:
+  id: technology.systemsoftware.docker
+  name: Docker Container Runtime
+  type: systemsoftware
+  documentation: Container platform for isolated agent execution environments providing
+    container isolation, volume mounting, network isolation, and resource limits
+  softwareType: container-runtime
+  properties:
+    software.version: 24.0+
+    software.license: opensource
+Redis:
+  id: technology.systemsoftware.redis
+  name: Redis
+  type: systemsoftware
+  documentation: In-memory data structure store for caching, event streaming, and
+    task queuing with pub-sub, key-value storage, list operations, and streams support
+  softwareType: database
+  properties:
+    software.version: 7.0+
+    software.license: opensource
+Elasticsearch:
+  id: technology.systemsoftware.elasticsearch
+  name: Elasticsearch
+  type: systemsoftware
+  documentation: Distributed search and analytics engine for event store and metrics
+    with full-text search, distributed architecture, near-real-time indexing, and
+    aggregations
+  softwareType: database
+  properties:
+    software.version: 8.0+
+    software.license: commercial
+PostgreSQL:
+  id: technology.systemsoftware.postgresql
+  name: PostgreSQL
+  type: systemsoftware
+  documentation: Relational database for configuration storage and persistence with
+    ACID compliance, JSON support, full-text search, and transactional guarantees
+  softwareType: database
+  properties:
+    software.version: 15+
+    software.license: opensource
+SQLAlchemy:
+  id: technology.systemsoftware.sqlalchemy
+  name: SQLAlchemy
+  type: systemsoftware
+  documentation: SQL toolkit and Object-Relational Mapping library version 2.0+ for
+    database operations
+  softwareType: middleware
+  properties:
+    software.version: 2.0+
+    software.license: opensource
+HTTPX:
+  id: technology.systemsoftware.httpx
+  name: HTTPX
+  type: systemsoftware
+  documentation: Async HTTP client for Python with HTTP/2 support
+  softwareType: middleware
+  properties:
+    software.version: latest
+    software.license: opensource
+Pytest:
+  id: technology.systemsoftware.pytest
+  name: Pytest
+  type: systemsoftware
+  documentation: Testing framework for Python with async testing, fixtures, and parameterization
+    support
+  softwareType: middleware
+  properties:
+    software.version: latest
+    software.license: opensource
+SlowAPI:
+  id: technology.systemsoftware.slowapi
+  name: SlowAPI
+  type: systemsoftware
+  documentation: Rate limiting library for FastAPI applications
+  softwareType: middleware
+  properties:
+    software.version: latest
+    software.license: opensource
+OpenTelemetry:
+  id: technology.systemsoftware.opentelemetry
+  name: OpenTelemetry
+  type: systemsoftware
+  documentation: Observability framework for metrics, traces, and logs with distributed
+    tracing, metrics collection, and context propagation
+  softwareType: middleware
+  properties:
+    software.version: latest
+    software.license: opensource

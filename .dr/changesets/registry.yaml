@@ -11,4 +11,112 @@ changesets:
     name: extract-ux-nav-apm-testing
     status: applied
     type: exploration
+  feature-add-api-endpoints-and-datastores-2025-12-05-001:
+    created_at: '2025-12-05T22:13:57.988488+00:00'
+    elements_count: 32
+    name: add-api-endpoints-and-datastores
+    status: applied
+    type: feature
+  feature-add-missing-links-2025-12-05-001:
+    created_at: '2025-12-05T19:04:07.365666+00:00'
+    elements_count: 14
+    name: add-missing-links
+    status: applied
+    type: feature
+  feature-add-missing-tech-data-nav-2025-12-05-001:
+    created_at: '2025-12-05T21:57:09.787736+00:00'
+    elements_count: 42
+    name: add-missing-tech-data-nav
+    status: applied
+    type: feature
+  feature-build-ux-nav-layers-2025-12-05-001:
+    created_at: '2025-12-05T16:29:58.141344+00:00'
+    elements_count: 41
+    name: build-ux-nav-layers
+    status: applied
+    type: feature
+  feature-feature-add-missing-links-v2-2025-12-05-001:
+    created_at: '2025-12-05T22:33:58.148307+00:00'
+    elements_count: 40
+    name: feature-add-missing-links-v2
+    status: applied
+    type: feature
+  feature-improve-model-accuracy-2025-12-05-001:
+    created_at: '2025-12-05T21:51:13.633224+00:00'
+    elements_count: 24
+    name: improve-model-accuracy
+    status: applied
+    type: feature
+  feature-improve-tech-layer-celery-2025-12-05-001:
+    created_at: '2025-12-05T16:26:17.750568+00:00'
+    elements_count: 2
+    name: improve-tech-layer-celery
+    status: applied
+    type: feature
+  feature-improve-tech-layer-llm-2025-12-05-001:
+    created_at: '2025-12-05T16:24:31.007816+00:00'
+    elements_count: 3
+    name: improve-tech-layer-llm
+    status: applied
+    type: feature
+  fix-cleanup-duplicates-2025-12-05-001:
+    created_at: '2025-12-05T22:05:05.530638+00:00'
+    elements_count: 7
+    name: cleanup-duplicates
+    status: applied
+    type: fix
+  fix-fix-api-datastore-errors-2025-12-05-001:
+    created_at: '2025-12-05T22:18:38.015275+00:00'
+    elements_count: 16
+    name: fix-api-datastore-errors
+    status: applied
+    type: fix
+  fix-fix-api-datastore-v2-2025-12-05-001:
+    created_at: '2025-12-05T22:20:42.376189+00:00'
+    elements_count: 18
+    name: fix-api-datastore-v2
+    status: applied
+    type: fix
+  fix-fix-navigation-arrays-2025-12-05-001:
+    created_at: '2025-12-05T22:04:09.376799+00:00'
+    elements_count: 7
+    name: fix-navigation-arrays
+    status: applied
+    type: fix
+  fix-fix-navigation-errors-2025-12-05-001:
+    created_at: '2025-12-05T22:03:19.513824+00:00'
+    elements_count: 7
+    name: fix-navigation-errors
+    status: applied
+    type: fix
+  fix-fix-route-application-refs-2025-12-05-001:
+    created_at: '2025-12-05T22:09:29.542685+00:00'
+    elements_count: 6
+    name: fix-route-application-refs
+    status: applied
+    type: fix
+  fix-fix-schema-compliance-2025-12-05-001:
+    created_at: '2025-12-05T16:47:48.530461+00:00'
+    elements_count: 92
+    name: fix-schema-compliance
+    status: applied
+    type: fix
+  fix-fix-ux-nav-validation-2-2025-12-05-001:
+    created_at: '2025-12-05T16:35:46.671618+00:00'
+    elements_count: 41
+    name: fix-ux-nav-validation-2
+    status: applied
+    type: fix
+  fix-fix-ux-nav-validation-2025-12-05-001:
+    created_at: '2025-12-05T16:33:29.047628+00:00'
+    elements_count: 41
+    name: fix-ux-nav-validation
+    status: applied
+    type: fix
+  fix-fix-validation-errors-2025-12-05-001:
+    created_at: '2025-12-05T22:02:12.579597+00:00'
+    elements_count: 17
+    name: fix-validation-errors
+    status: applied
+    type: fix
 version: '1.0'

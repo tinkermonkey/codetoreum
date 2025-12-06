@@ -1,49 +1,91 @@
-Event Store:
-  description: Complete audit trail of all domain events
-  id: event-store
-  name: Event Store
-  persistence: Redis + Elasticsearch
-  retention: permanent
-  database: Redis + Elasticsearch
-Work Items Database:
-  description: Storage for work items (issues, tasks)
-  id: work-items-db
-  name: Work Items Database
-  persistence: PostgreSQL
-  database: PostgreSQL
-Agent Configurations Database:
-  description: Storage for agent definitions and capabilities
-  id: agents-db
-  name: Agent Configurations Database
-  persistence: PostgreSQL
-  database: PostgreSQL
-Workflow Definitions Database:
-  description: Storage for workflow configurations
-  id: workflows-db
-  name: Workflow Definitions Database
-  persistence: PostgreSQL
-  database: PostgreSQL
-Execution History Database:
-  description: Storage for agent execution records
-  id: executions-db
-  name: Execution History Database
-  persistence: PostgreSQL
-  database: PostgreSQL
-User Accounts Database:
-  description: User authentication and authorization data
-  id: users-db
-  name: User Accounts Database
-  persistence: PostgreSQL
-  database: PostgreSQL
-Configuration Cache:
-  description: Temporary cache for configuration data
-  id: config-cache
-  name: Configuration Cache
-  persistence: Redis
-  database: Redis
-Execution State Cache:
-  description: Temporary execution state and task queue
-  id: execution-cache
-  name: Execution State Cache
-  persistence: Redis
-  database: Redis
+Datastore Architecture Index:
+  id: datastore.index.overview
+  name: Datastore Architecture Index
+  database:
+    name: codetoreum-datastore-index
+    schemas:
+    - name: overview
+      tables:
+      - columns:
+        - dataType: string
+          name: name
+        - dataType: string
+          name: reference
+        - dataType: string
+          name: purpose
+        name: datastore-components
+    type: Elasticsearch
+  documentation: 'Overview of Codetoreum''s data persistence layer.
+
+
+    Architecture Decisions:
+
+    - No traditional RDBMS (PostgreSQL removed in Gen 2)
+
+    - Event sourcing via Elasticsearch for complete audit trail
+
+    - Redis for caching and real-time messaging
+
+    - All state changes emit domain events
+
+
+    Data Flow:
+
+    1. Domain entities emit events on state changes
+
+    2. Events stored in Elasticsearch event store
+
+    3. Configuration cached in Redis for fast access
+
+    4. WebSocket updates distributed via Redis pub/sub
+
+
+    Resilience Patterns Applied:
+
+    - Circuit breaker on Elasticsearch connections
+
+    - Rate limiting on API operations
+
+    - Retry with exponential backoff
+
+    - Timeout on all external calls
+
+    '
+  components:
+  - file: elasticsearch.yaml
+    name: Elasticsearch Event Store
+    purpose: Event sourcing and audit trail
+    reference: datastore.database.event-store
+  - file: elasticsearch.yaml
+    name: Elasticsearch Config Storage
+    purpose: Configuration versioning and search
+    reference: datastore.database.config-storage
+  - file: redis.yaml
+    name: Redis Cache
+    purpose: Caching, pub/sub, session management
+    reference: datastore.database.redis-cache
+  x-governed-by-constraints: '[''motivation.constraint.elasticsearch-redis-stack'',
+    ''motivation.constraint.eventual-consistency'', ''motivation.constraint.event-emission-required'']'
+Audit Database:
+  database.type: postgresql
+  description: PostgreSQL database for audit logs
+  id: datastore.database.audit-database
+  name: Audit Database
+  database:
+    name: codetoreum_audit
+    schemas:
+    - name: public
+      tables:
+      - columns:
+        - dataType: uuid
+          name: id
+        - dataType: timestamp
+          name: timestamp
+        - dataType: string
+          name: event_type
+        - dataType: string
+          name: user_id
+        - dataType: jsonb
+          name: details
+        name: audit_events
+    type: PostgreSQL
