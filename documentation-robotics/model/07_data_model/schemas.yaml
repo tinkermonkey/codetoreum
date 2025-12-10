@@ -1470,3 +1470,153 @@ Audit Event:
   - datastore.database.audit-database
   $schema: http://json-schema.org/draft-07/schema#
   type: object
+System Health Response:
+  id: data_model.schema.system-health-response
+  name: System Health Response
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Performance Metrics Response:
+  id: data_model.schema.performance-metrics-response
+  name: Performance Metrics Response
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Resilience Metrics Response:
+  id: data_model.schema.resilience-metrics-response
+  name: Resilience Metrics Response
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Integration Status Response:
+  id: data_model.schema.integration-status-response
+  name: Integration Status Response
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Simulation Mode Response:
+  id: data_model.schema.simulation-mode-response
+  name: Simulation Mode Response
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Endpoint Metrics Response:
+  id: data_model.schema.endpoint-metrics-response
+  name: Endpoint Metrics Response
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Agent Execution Metrics Response:
+  id: data_model.schema.agent-execution-metrics-response
+  name: Agent Execution Metrics Response
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Metric Names Response:
+  id: data_model.schema.metric-names-response
+  name: Metric Names Response
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Active Agents Response:
+  id: data_model.schema.active-agents-response
+  name: Active Agents Response
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Api Usage Response:
+  id: data_model.schema.api-usage-response
+  name: Api Usage Response
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Start Workflow Execution Request:
+  id: data_model.schema.start-workflow-execution-request
+  name: Start Workflow Execution Request
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Start Workflow Execution Response:
+  id: data_model.schema.start-workflow-execution-response
+  name: Start Workflow Execution Response
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Workflow Execution Response:
+  id: data_model.schema.workflow-execution-response
+  name: Workflow Execution Response
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Cancel Workflow Execution Request:
+  id: data_model.schema.cancel-workflow-execution-request
+  name: Cancel Workflow Execution Request
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Pause Workflow Execution Request:
+  id: data_model.schema.pause-workflow-execution-request
+  name: Pause Workflow Execution Request
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Resume Workflow Execution Request:
+  id: data_model.schema.resume-workflow-execution-request
+  name: Resume Workflow Execution Request
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Entry Condition Validation Request:
+  id: data_model.schema.entry-condition-validation-request
+  name: Entry Condition Validation Request
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Entry Condition Validation Response:
+  id: data_model.schema.entry-condition-validation-response
+  name: Entry Condition Validation Response
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Execution Queue Response:
+  id: data_model.schema.execution-queue-response
+  name: Execution Queue Response
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Workspace List Response:
+  id: data_model.schema.workspace-list-response
+  name: Workspace List Response
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Workspace Response:
+  id: data_model.schema.workspace-response
+  name: Workspace Response
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Resource Usage Summary Response:
+  id: data_model.schema.resource-usage-summary-response
+  name: Resource Usage Summary Response
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Workspace Logs Response:
+  id: data_model.schema.workspace-logs-response
+  name: Workspace Logs Response
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Workflow Run Response:
+  id: data_model.schema.workflow-run-response
+  name: Workflow Run Response
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Workflow Run List Response:
+  id: data_model.schema.workflow-run-list-response
+  name: Workflow Run List Response
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Workflow Events List Response:
+  id: data_model.schema.workflow-events-list-response
+  name: Workflow Events List Response
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Event List Response:
+  id: data_model.schema.event-list-response
+  name: Event List Response
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Event Replay Request:
+  id: data_model.schema.event-replay-request
+  name: Event Replay Request
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Event Replay Response:
+  id: data_model.schema.event-replay-response
+  name: Event Replay Response
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object
+Event Statistics Response:
+  id: data_model.schema.event-statistics-response
+  name: Event Statistics Response
+  $schema: http://json-schema.org/draft-07/schema#
+  type: object

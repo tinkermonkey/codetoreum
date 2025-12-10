@@ -1,7 +1,7 @@
 components:
   agents:
     dr-architect.md:
-      hash: 2798ac3e
+      hash: f5f21396
       modified: false
   commands:
     dr-changeset.md:
@@ -11,28 +11,28 @@ components:
       hash: ac178f90
       modified: false
     dr-init.md:
-      hash: 11c56b2b
+      hash: 2d40a7f5
       modified: false
     dr-model.md:
-      hash: e9af5d4a
+      hash: f3f58993
       modified: false
     dr-validate.md:
       hash: f8ff3fb4
       modified: false
   reference_sheets:
     dr-tier1-essentials.md:
-      hash: 98d3b3a3
+      hash: 41d11d6a
       modified: false
     dr-tier2-developer-guide.md:
-      hash: ab0726d9
+      hash: e3d3d818
       modified: false
     dr-tier3-complete-reference.md:
-      hash: 84f2a798
+      hash: 7e736c47
       modified: false
   skills: {}
   templates:
     README.md:
-      hash: 554ddc87
+      hash: c6558d2e
       modified: false
     custom-agent-template.md:
       hash: b115c266
@@ -43,5 +43,5 @@ components:
     workflow-examples.md:
       hash: 9e217a1d
       modified: false
-installed_at: '2025-12-05T11:06:49.352842'
-version: 0.6.3
+installed_at: '2025-12-09T16:27:48.406653'
+version: 0.7.1

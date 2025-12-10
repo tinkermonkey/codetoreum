@@ -9,7 +9,13 @@ List Work Items:
     version: 1.0.0
   paths: {}
   x-archimate-ref: application.service.work-item-service
+  applicationServiceRef: application.service.work-item-service
   x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
   operationId: listWorkItems
   x-business-service-ref: application.service.work-item-service
   realizes: application.service.work-item-service
@@ -24,7 +30,13 @@ List Executions:
     version: 1.0.0
   paths: {}
   x-archimate-ref: application.service.execution-service
+  applicationServiceRef: application.service.execution-service
   x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
 Get Project Config:
   id: api.operation.get-project-config
   method: GET
@@ -36,7 +48,13 @@ Get Project Config:
     version: 1.0.0
   paths: {}
   x-archimate-ref: application.service.configuration-service
+  applicationServiceRef: application.service.configuration-service
   x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
 Update Project Config:
   id: api.operation.update-project-config
   method: PUT
@@ -48,7 +66,13 @@ Update Project Config:
     version: 1.0.0
   paths: {}
   x-archimate-ref: application.service.configuration-service
+  applicationServiceRef: application.service.configuration-service
   x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
 Add Environment Variable:
   id: api.operation.add-environment-variable
   method: POST
@@ -60,7 +84,13 @@ Add Environment Variable:
     version: 1.0.0
   paths: {}
   x-archimate-ref: application.service.configuration-service
+  applicationServiceRef: application.service.configuration-service
   x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
 Remove Environment Variable:
   id: api.operation.remove-environment-variable
   method: DELETE
@@ -72,7 +102,13 @@ Remove Environment Variable:
     version: 1.0.0
   paths: {}
   x-archimate-ref: application.service.configuration-service
+  applicationServiceRef: application.service.configuration-service
   x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
 Create Work Item:
   id: api.operation.create-work-item
   method: POST
@@ -80,6 +116,10 @@ Create Work Item:
   operationId: createWorkItem
   path: /api/v2/work-items
   x-archimate-ref: application.service.work-item-service
+  applicationServiceRef: application.service.work-item-service
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
   openapi: 3.0.3
   paths: {}
   info:
@@ -95,6 +135,10 @@ Get Work Item:
   operationId: getWorkItem
   path: /api/v2/work-items/{id}
   x-archimate-ref: application.service.work-item-service
+  applicationServiceRef: application.service.work-item-service
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
   openapi: 3.0.3
   paths: {}
   info:
@@ -107,6 +151,10 @@ Update Work Item:
   operationId: updateWorkItem
   path: /api/v2/work-items/{id}
   x-archimate-ref: application.service.work-item-service
+  applicationServiceRef: application.service.work-item-service
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
   openapi: 3.0.3
   paths: {}
   info:
@@ -119,6 +167,10 @@ Delete Work Item:
   operationId: deleteWorkItem
   path: /api/v2/work-items/{id}
   x-archimate-ref: application.service.work-item-service
+  applicationServiceRef: application.service.work-item-service
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
   openapi: 3.0.3
   paths: {}
   info:
@@ -131,6 +183,10 @@ Create Agent:
   operationId: createAgent
   path: /api/v2/agents
   x-archimate-ref: application.service.configuration-service
+  applicationServiceRef: application.service.configuration-service
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
   openapi: 3.0.3
   paths: {}
   info:
@@ -143,6 +199,10 @@ List Agents:
   operationId: listAgents
   path: /api/v2/agents
   x-archimate-ref: application.service.configuration-service
+  applicationServiceRef: application.service.configuration-service
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
   openapi: 3.0.3
   paths: {}
   info:
@@ -155,6 +215,10 @@ Get Agent:
   operationId: getAgent
   path: /api/v2/agents/{id}
   x-archimate-ref: application.service.configuration-service
+  applicationServiceRef: application.service.configuration-service
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
   openapi: 3.0.3
   paths: {}
   info:
@@ -167,6 +231,10 @@ Update Agent:
   operationId: updateAgent
   path: /api/v2/agents/{id}
   x-archimate-ref: application.service.configuration-service
+  applicationServiceRef: application.service.configuration-service
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
   openapi: 3.0.3
   paths: {}
   info:
@@ -179,6 +247,10 @@ Delete Agent:
   operationId: deleteAgent
   path: /api/v2/agents/{id}
   x-archimate-ref: application.service.configuration-service
+  applicationServiceRef: application.service.configuration-service
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
   openapi: 3.0.3
   paths: {}
   info:
@@ -191,6 +263,10 @@ Add Agent Capability:
   operationId: addAgentCapability
   path: /api/v2/agents/{id}/capabilities
   x-archimate-ref: application.service.configuration-service
+  applicationServiceRef: application.service.configuration-service
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
   openapi: 3.0.3
   paths: {}
   info:
@@ -203,6 +279,10 @@ Remove Agent Capability:
   operationId: removeAgentCapability
   path: /api/v2/agents/{id}/capabilities
   x-archimate-ref: application.service.configuration-service
+  applicationServiceRef: application.service.configuration-service
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
   openapi: 3.0.3
   paths: {}
   info:
@@ -215,6 +295,10 @@ Add Agent MCP Server:
   operationId: addAgentMcpServer
   path: /api/v2/agents/{id}/mcp-servers
   x-archimate-ref: application.service.configuration-service
+  applicationServiceRef: application.service.configuration-service
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
   openapi: 3.0.3
   paths: {}
   info:
@@ -227,8 +311,407 @@ Remove Agent MCP Server:
   operationId: removeAgentMcpServer
   path: /api/v2/agents/{id}/mcp-servers
   x-archimate-ref: application.service.configuration-service
+  applicationServiceRef: application.service.configuration-service
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
   openapi: 3.0.3
   paths: {}
   info:
     title: remove agent mcp server
     version: 1.0.0
+Get System Health:
+  id: api.operation.get-system-health
+  method: GET
+  name: Get System Health
+  path: /api/v2/metrics/health
+  openapi: 3.0.3
+  info:
+    title: get system health
+    version: 1.0.0
+  paths: {}
+  applicationServiceRef: application.service.execution-service
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+Get Performance Metrics:
+  id: api.operation.get-performance-metrics
+  method: GET
+  name: Get Performance Metrics
+  path: /api/v2/metrics
+  openapi: 3.0.3
+  info:
+    title: get performance metrics
+    version: 1.0.0
+  paths: {}
+  applicationServiceRef: application.service.execution-service
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+Get Resilience Metrics:
+  id: api.operation.get-resilience-metrics
+  method: GET
+  name: Get Resilience Metrics
+  path: /api/v2/metrics/resilience
+  openapi: 3.0.3
+  info:
+    title: get resilience metrics
+    version: 1.0.0
+  paths: {}
+  applicationServiceRef: application.service.execution-service
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+Get Integration Status:
+  id: api.operation.get-integration-status
+  method: GET
+  name: Get Integration Status
+  path: /api/v2/metrics/integrations
+  openapi: 3.0.3
+  info:
+    title: get integration status
+    version: 1.0.0
+  paths: {}
+  applicationServiceRef: application.service.execution-service
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+Get Simulation Mode Info:
+  id: api.operation.get-simulation-mode-info
+  method: GET
+  name: Get Simulation Mode Info
+  path: /api/v2/metrics/simulation
+  openapi: 3.0.3
+  info:
+    title: get simulation mode info
+    version: 1.0.0
+  paths: {}
+  applicationServiceRef: application.service.execution-service
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+Get Endpoint Metrics:
+  id: api.operation.get-endpoint-metrics
+  method: GET
+  name: Get Endpoint Metrics
+  path: /api/v2/metrics/endpoints
+  openapi: 3.0.3
+  info:
+    title: get endpoint metrics
+    version: 1.0.0
+  paths: {}
+  applicationServiceRef: application.service.execution-service
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+Get Agent Execution Metrics:
+  id: api.operation.get-agent-execution-metrics
+  method: GET
+  name: Get Agent Execution Metrics
+  path: /api/v2/metrics/agents
+  openapi: 3.0.3
+  info:
+    title: get agent execution metrics
+    version: 1.0.0
+  paths: {}
+  applicationServiceRef: application.service.execution-service
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+List Metric Names:
+  id: api.operation.list-metric-names
+  method: GET
+  name: List Metric Names
+  path: /api/v2/metrics/names
+  openapi: 3.0.3
+  info:
+    title: list metric names
+    version: 1.0.0
+  paths: {}
+  applicationServiceRef: application.service.execution-service
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+Get Active Agents:
+  id: api.operation.get-active-agents
+  method: GET
+  name: Get Active Agents
+  path: /api/v2/metrics/active-agents
+  openapi: 3.0.3
+  info:
+    title: get active agents
+    version: 1.0.0
+  paths: {}
+  applicationServiceRef: application.service.agent-scheduler
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+Get API Usage:
+  id: api.operation.get-api-usage
+  method: GET
+  name: Get API Usage
+  path: /api/v2/metrics/api-usage
+  openapi: 3.0.3
+  info:
+    title: get api usage
+    version: 1.0.0
+  paths: {}
+  applicationServiceRef: application.service.execution-service
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+Start Workflow Execution:
+  id: api.operation.start-workflow-execution
+  method: POST
+  name: Start Workflow Execution
+  path: /api/v2/orchestrator/start
+  openapi: 3.0.3
+  info:
+    title: start workflow execution
+    version: 1.0.0
+  paths: {}
+  applicationServiceRef: application.service.workflow-orchestrator
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+Cancel Workflow Execution:
+  id: api.operation.cancel-workflow-execution
+  method: POST
+  name: Cancel Workflow Execution
+  path: /api/v2/orchestrator/{workflow_run_id}/cancel
+  openapi: 3.0.3
+  info:
+    title: cancel workflow execution
+    version: 1.0.0
+  paths: {}
+  applicationServiceRef: application.service.workflow-orchestrator
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+Pause Workflow Execution:
+  id: api.operation.pause-workflow-execution
+  method: POST
+  name: Pause Workflow Execution
+  path: /api/v2/orchestrator/{workflow_run_id}/pause
+  openapi: 3.0.3
+  info:
+    title: pause workflow execution
+    version: 1.0.0
+  paths: {}
+  applicationServiceRef: application.service.workflow-orchestrator
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+Resume Workflow Execution:
+  id: api.operation.resume-workflow-execution
+  method: POST
+  name: Resume Workflow Execution
+  path: /api/v2/orchestrator/{workflow_run_id}/resume
+  openapi: 3.0.3
+  info:
+    title: resume workflow execution
+    version: 1.0.0
+  paths: {}
+  applicationServiceRef: application.service.workflow-orchestrator
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+Validate Entry Conditions:
+  id: api.operation.validate-entry-conditions
+  method: POST
+  name: Validate Entry Conditions
+  path: /api/v2/orchestrator/validate-entry-conditions
+  openapi: 3.0.3
+  info:
+    title: validate entry conditions
+    version: 1.0.0
+  paths: {}
+  applicationServiceRef: application.service.workflow-orchestrator
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+Get Execution Queue:
+  id: api.operation.get-execution-queue
+  method: GET
+  name: Get Execution Queue
+  path: /api/v2/scheduler/queue
+  openapi: 3.0.3
+  info:
+    title: get execution queue
+    version: 1.0.0
+  paths: {}
+  applicationServiceRef: application.service.agent-scheduler
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+Get Queue Statistics:
+  id: api.operation.get-queue-statistics
+  method: GET
+  name: Get Queue Statistics
+  path: /api/v2/scheduler/queue/stats
+  openapi: 3.0.3
+  info:
+    title: get queue statistics
+    version: 1.0.0
+  paths: {}
+  applicationServiceRef: application.service.agent-scheduler
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+List Workspaces:
+  id: api.operation.list-workspaces
+  method: GET
+  name: List Workspaces
+  path: /api/v2/workspace/status
+  openapi: 3.0.3
+  info:
+    title: list workspaces
+    version: 1.0.0
+  paths: {}
+  applicationServiceRef: application.service.workspace-router
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+List Active Workspaces:
+  id: api.operation.list-active-workspaces
+  method: GET
+  name: List Active Workspaces
+  path: /api/v2/workspace/active
+  openapi: 3.0.3
+  info:
+    title: list active workspaces
+    version: 1.0.0
+  paths: {}
+  applicationServiceRef: application.service.workspace-router
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+Get Workspace:
+  id: api.operation.get-workspace
+  method: GET
+  name: Get Workspace
+  path: /api/v2/workspace/{workspace_id}
+  openapi: 3.0.3
+  info:
+    title: get workspace
+    version: 1.0.0
+  paths: {}
+  applicationServiceRef: application.service.workspace-router
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+Get Resource Usage Summary:
+  id: api.operation.get-resource-usage-summary
+  method: GET
+  name: Get Resource Usage Summary
+  path: /api/v2/workspace/resources/summary
+  openapi: 3.0.3
+  info:
+    title: get resource usage summary
+    version: 1.0.0
+  paths: {}
+  applicationServiceRef: application.service.workspace-router
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+Get Workspace Logs:
+  id: api.operation.get-workspace-logs
+  method: GET
+  name: Get Workspace Logs
+  path: /api/v2/workspace/{workspace_id}/logs
+  openapi: 3.0.3
+  info:
+    title: get workspace logs
+    version: 1.0.0
+  paths: {}
+  applicationServiceRef: application.service.workspace-router
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+List Workflow Runs:
+  id: api.operation.list-workflow-runs
+  method: GET
+  name: List Workflow Runs
+  path: /api/v2/workflows/runs
+  openapi: 3.0.3
+  info:
+    title: list workflow runs
+    version: 1.0.0
+  paths: {}
+  applicationServiceRef: application.service.workflow-orchestrator
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+Get Workflow Run:
+  id: api.operation.get-workflow-run
+  method: GET
+  name: Get Workflow Run
+  path: /api/v2/workflows/runs/{workflow_run_id}
+  openapi: 3.0.3
+  info:
+    title: get workflow run
+    version: 1.0.0
+  paths: {}
+  applicationServiceRef: application.service.workflow-orchestrator
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+Get Workflow Run Events:
+  id: api.operation.get-workflow-run-events
+  method: GET
+  name: Get Workflow Run Events
+  path: /api/v2/workflows/runs/{workflow_run_id}/events
+  openapi: 3.0.3
+  info:
+    title: get workflow run events
+    version: 1.0.0
+  paths: {}
+  applicationServiceRef: application.service.event-processor
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+Get Events:
+  id: api.operation.get-events
+  method: GET
+  name: Get Events
+  path: /api/v2/events
+  openapi: 3.0.3
+  info:
+    title: get events
+    version: 1.0.0
+  paths: {}
+  applicationServiceRef: application.service.event-processor
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+Replay Events:
+  id: api.operation.replay-events
+  method: POST
+  name: Replay Events
+  path: /api/v2/events/replay
+  openapi: 3.0.3
+  info:
+    title: replay events
+    version: 1.0.0
+  paths: {}
+  applicationServiceRef: application.service.event-processor
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []
+Get Event Statistics:
+  id: api.operation.get-event-statistics
+  method: GET
+  name: Get Event Statistics
+  path: /api/v2/events/statistics
+  openapi: 3.0.3
+  info:
+    title: get event statistics
+    version: 1.0.0
+  paths: {}
+  applicationServiceRef: application.service.event-processor
+  x-security-policy-ref: security.authentication.jwt-token-auth
+  security:
+    - BearerAuth: []

@@ -171,3 +171,75 @@ Event Processor:
   properties:
     service.version: 2.0.0
     apm.traced: 'true'
+Metrics Service:
+  id: application.service.metrics-service
+  name: Metrics Service
+  type: service
+  documentation: Collects and reports system metrics including execution statistics,
+    resource usage, and performance data
+  serviceType: synchronous
+  realizes: business.service.platform-observability
+  supportsGoals:
+  - motivation.goal.observability
+  - motivation.goal.scalability
+  properties:
+    service.version: 2.0.0
+    apm.traced: 'true'
+    apm.sla-target-latency: 100ms
+Workflow Run Query Service:
+  id: application.service.workflow-run-query-service
+  name: Workflow Run Query Service
+  type: service
+  documentation: Provides query operations for workflow run instances and their
+    execution history
+  serviceType: synchronous
+  realizes: business.service.workflow-automation
+  supportsGoals:
+  - motivation.goal.observability
+  - motivation.goal.automation
+  properties:
+    service.version: 2.0.0
+    apm.traced: 'true'
+    apm.sla-target-latency: 150ms
+Agent Matching Service:
+  id: application.service.agent-matching
+  name: Agent Matching Service
+  type: service
+  documentation: Domain service for matching agents to work items based on capabilities
+    and requirements
+  serviceType: synchronous
+  realizes: business.service.agent-scheduling
+  supportsGoals:
+  - motivation.goal.automation
+  - motivation.goal.quality-assurance
+  properties:
+    service.version: 2.0.0
+    apm.traced: 'true'
+Work Assignment Service:
+  id: application.service.work-assignment
+  name: Work Assignment Service
+  type: service
+  documentation: Domain service for assigning work items to agents with priority
+    and capability matching
+  serviceType: synchronous
+  realizes: business.service.agent-scheduling
+  supportsGoals:
+  - motivation.goal.automation
+  - motivation.goal.developer-productivity
+  properties:
+    service.version: 2.0.0
+    apm.traced: 'true'
+Workflow Validation Service:
+  id: application.service.workflow-validation
+  name: Workflow Validation Service
+  type: service
+  documentation: Domain service for validating workflow definitions, stage configurations,
+    and entry conditions
+  serviceType: synchronous
+  realizes: business.service.workflow-automation
+  supportsGoals:
+  - motivation.goal.quality-assurance
+  - motivation.goal.automation
+  properties:
+    service.version: 2.0.0
+    apm.traced: 'true'

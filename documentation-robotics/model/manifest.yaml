@@ -1,4 +1,4 @@
-cli_version: 0.6.3
+cli_version: 0.7.1
 conventions:
   file_naming:
     api: '{service-name}-api.yaml'
@@ -11,7 +11,7 @@ layers:
   api:
     elements:
       openapi-specs: 1
-      operation: 19
+      operation: 47
     enabled: true
     files:
     - codetoreum-api.yaml
@@ -58,7 +58,7 @@ layers:
     schema: .dr/schemas/02-business-layer.schema.json
   data_model:
     elements:
-      schema: 14
+      schema: 44
       schemas: 20
     enabled: true
     files:
@@ -170,7 +170,7 @@ project:
   name: codetoreum
   version: 2.0.0
 schema: documentation-robotics-v2
-spec_version: 0.3.0
+spec_version: 0.5.0
 statistics:
   completeness: 0.82
   elements_by_layer:
@@ -184,11 +184,11 @@ statistics:
     security: 22
     technology: 15
     ux: 28
-  last_validation: '2025-12-05T22:52:20.278735Z'
-  total_elements: 264
+  last_validation: '2025-12-10T14:20:38.083388Z'
+  total_elements: 322
   total_relationships: 95
   validation_status: passed
-updated: '2025-12-05T22:52:20.278744Z'
+updated: '2025-12-10T14:20:38.083399Z'
 upgrade_history:
 - changes:
   - Fixed YAML structure to match DR CLI element format
@@ -260,5 +260,14 @@ upgrade_history:
 - from_version: 0.2.3
   to_version: 0.6.3
   upgraded_at: '2025-12-05T16:01:46.198525Z'
-upgraded_at: '2025-12-05T16:01:46.246264Z'
+- from_version: 0.2.3
+  to_version: 0.6.4
+  upgraded_at: '2025-12-06T09:23:56.451210Z'
+- from_version: 0.2.3
+  to_version: 0.6.5
+  upgraded_at: '2025-12-06T09:30:52.153493Z'
+- from_version: 0.2.3
+  to_version: 0.7.1
+  upgraded_at: '2025-12-09T21:27:48.387807Z'
+upgraded_at: '2025-12-09T21:27:48.412176Z'
 version: 0.2.3

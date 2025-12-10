@@ -1,0 +1,174 @@
+# Test Suites for Codetoreum Platform
+# Organized test collections mapped to testing strategies
+
+Domain Models Test Suite:
+  id: testing.suite.domain-models
+  name: Domain Models Test Suite
+  type: test-suite
+  strategy: testing.strategy.unit-testing
+  documentation: Comprehensive unit tests for all domain models and value objects
+  tests:
+    - business.object.work-item
+    - business.object.agent
+    - business.object.workflow
+    - business.object.pipeline-stage
+    - business.object.review-cycle
+    - data_model.schema.agent
+    - data_model.schema.workflow
+  testCount: 250+
+  properties:
+    test.path: tests/unit/domain/
+    coverage.target: 100%
+    run.time: 30s
+
+Application Services Test Suite:
+  id: testing.suite.application-services
+  name: Application Services Test Suite
+  type: test-suite
+  strategy: testing.strategy.integration-testing
+  documentation: Integration tests for application services with mock adapters
+  tests:
+    - application.service.workflow-orchestrator
+    - application.service.execution-service
+    - application.service.agent-scheduler
+    - application.service.review-service
+    - application.service.workspace-router
+  testCount: 180+
+  properties:
+    test.path: tests/integration/application/
+    coverage.target: 90%
+    run.time: 120s
+
+API Endpoints Test Suite:
+  id: testing.suite.api-endpoints
+  name: API Endpoints Test Suite
+  type: test-suite
+  strategy: testing.strategy.api-testing
+  documentation: Complete REST API endpoint testing with request/response validation
+  tests:
+    - api.operation.*
+  testCount: 95+
+  properties:
+    test.path: tests/integration/api/
+    coverage.target: 100%
+    run.time: 90s
+    validates.openapi: true
+
+Event Sourcing Test Suite:
+  id: testing.suite.event-sourcing
+  name: Event Sourcing Test Suite
+  type: test-suite
+  strategy: testing.strategy.event-sourcing-testing
+  documentation: Event store, persistence, and replay testing
+  tests:
+    - application.component.event-bus-impl
+    - application.component.event-persistence-worker
+    - application.component.event-replayer
+    - application.component.elasticsearch-event-store-adapter
+  testCount: 75+
+  properties:
+    test.path: tests/integration/events/
+    run.time: 150s
+    requires.elasticsearch: true
+
+Resilience Patterns Test Suite:
+  id: testing.suite.resilience-patterns
+  name: Resilience Patterns Test Suite
+  type: test-suite
+  strategy: testing.strategy.resilience-testing
+  documentation: Comprehensive testing of all resilience patterns and decorators
+  tests:
+    - application.component.circuit-breaker
+    - application.component.exponential-backoff-retry
+    - application.component.async-timeout
+    - application.component.token-bucket-rate-limiter
+    - application.component.resilient-ticket-decorator
+    - application.component.resilient-llm-decorator
+  testCount: 120+
+  properties:
+    test.path: tests/unit/infrastructure/resilience/
+    coverage.target: 95%
+    run.time: 60s
+
+Simulation Test Suite:
+  id: testing.suite.simulation
+  name: Simulation Test Suite
+  type: test-suite
+  strategy: testing.strategy.simulation-testing
+  documentation: End-to-end workflow simulation with mock LLM and external services
+  tests:
+    - business.process.issue-to-pr-automation
+    - business.process.automated-development-workflow
+    - business.process.maker-checker-review
+  testCount: 25+
+  properties:
+    test.path: tests/simulation/
+    run.time: 300s
+    uses.simulation.mode: true
+    speedup.factor: 10x
+
+Port Interface Contracts Test Suite:
+  id: testing.suite.port-contracts
+  name: Port Interface Contracts Test Suite
+  type: test-suite
+  strategy: testing.strategy.contract-testing
+  documentation: Verifies all adapter implementations conform to port interfaces
+  tests:
+    - application.component.ticket-system-port
+    - application.component.llm-provider-port
+    - application.component.container-port
+    - application.component.repository-port
+    - application.component.event-store-port
+  testCount: 90+
+  properties:
+    test.path: tests/unit/ports/
+    coverage.target: 100%
+    run.time: 45s
+
+Security Test Suite:
+  id: testing.suite.security
+  name: Security Test Suite
+  type: test-suite
+  strategy: testing.strategy.security-testing
+  documentation: Security vulnerability scanning and container isolation testing
+  tests:
+    - security.control.*
+    - application.component.docker-container-adapter
+  testCount: 50+
+  properties:
+    test.path: tests/security/
+    run.time: 600s
+    scan.frequency: weekly
+
+Performance Test Suite:
+  id: testing.suite.performance
+  name: Performance Test Suite
+  type: test-suite
+  strategy: testing.strategy.performance-testing
+  documentation: Load testing and performance benchmarking
+  tests:
+    - api.operation.*
+    - application.service.workflow-orchestrator
+    - application.service.execution-service
+  testCount: 20+
+  properties:
+    test.path: tests/performance/
+    run.time: 3600s
+    target.rps: 1000
+    duration: 1h
+
+Audit Infrastructure Test Suite:
+  id: testing.suite.audit
+  name: Audit Infrastructure Test Suite
+  type: test-suite
+  strategy: testing.strategy.integration-testing
+  documentation: Testing of audit logging, retention, and storage
+  tests:
+    - application.component.audit-logger
+    - application.component.postgresql-audit-store
+    - application.component.audit-retention-policy
+  testCount: 40+
+  properties:
+    test.path: tests/integration/audit/
+    run.time: 60s
+    requires.postgresql: true

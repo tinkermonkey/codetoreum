@@ -29,12 +29,13 @@ Authentication Required Screen:
     Location: frontend/src/pages/AuthRequiredPage.tsx
 
     '
-  route: navigation.route.root
+  route: navigation.route.auth-required
   supportsGoals:
   - motivation.goal.security
   - motivation.goal.ease-of-configuration
   usesAuthScheme:
   - security.authentication.query-param-auth
+  usesApiOperations: []
   properties:
     screen.component: AuthRequiredPage
     screen.icons: AlertCircle, Terminal
@@ -206,6 +207,8 @@ Workflow Configuration Screen:
   supportsGoals:
   - motivation.goal.ease-of-configuration
   - motivation.goal.automation
+  usesApiOperations:
+  - api.operation.get-project-config
   properties:
     screen.component: WorkflowConfigPage
     screen.requires-auth: 'true'
@@ -258,6 +261,8 @@ Agent Configuration Screen:
   supportsGoals:
   - motivation.goal.ease-of-configuration
   - motivation.goal.security
+  usesApiOperations:
+  - api.operation.list-agents
   properties:
     screen.component: AgentConfigPage
     screen.requires-auth: 'true'
@@ -308,6 +313,8 @@ Configuration History Screen:
   supportsGoals:
   - motivation.goal.observability
   - motivation.goal.ease-of-configuration
+  usesApiOperations:
+  - api.operation.get-project-config
   properties:
     screen.component: ConfigHistoryPage
     screen.requires-auth: 'true'
