@@ -1,4 +1,4 @@
-cli_version: 0.7.1
+cli_version: 0.7.3
 conventions:
   file_naming:
     api: '{service-name}-api.yaml'
@@ -184,11 +184,11 @@ statistics:
     security: 22
     technology: 15
     ux: 28
-  last_validation: '2025-12-10T14:20:38.083388Z'
+  last_validation: '2025-12-10T21:28:50.407064Z'
   total_elements: 322
   total_relationships: 95
   validation_status: passed
-updated: '2025-12-10T14:20:38.083399Z'
+updated: '2025-12-10T21:28:50.407073Z'
 upgrade_history:
 - changes:
   - Fixed YAML structure to match DR CLI element format
@@ -269,5 +269,8 @@ upgrade_history:
 - from_version: 0.2.3
   to_version: 0.7.1
   upgraded_at: '2025-12-09T21:27:48.387807Z'
-upgraded_at: '2025-12-09T21:27:48.412176Z'
+- from_version: 0.2.3
+  to_version: 0.7.3
+  upgraded_at: '2025-12-10T16:48:19.329754Z'
+upgraded_at: '2025-12-10T16:48:19.341277Z'
 version: 0.2.3

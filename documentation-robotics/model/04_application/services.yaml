@@ -15,6 +15,7 @@ Workflow Orchestrator:
     apm.traced: 'true'
     service.version: 2.0.0
   realizesProcesses: '[''business.process.automated-development-workflow'']'
+  deployedTo: technology.node.application-server
 Execution Service:
   id: application.service.execution-service
   name: Execution Service
@@ -32,6 +33,7 @@ Execution Service:
     apm.traced: 'true'
     service.version: 2.0.0
   realizesProcesses: '[''business.process.agent-execution-cycle'']'
+  deployedTo: technology.node.application-server
 Agent Scheduler:
   id: application.service.agent-scheduler
   name: Agent Scheduler
@@ -47,6 +49,7 @@ Agent Scheduler:
     service.version: 2.0.0
     apm.traced: 'true'
     apm.sla-target-latency: 200ms
+  deployedTo: technology.node.application-server
 Review Service:
   id: application.service.review-service
   name: Review Service
@@ -63,6 +66,7 @@ Review Service:
     service.version: 2.0.0
   realizesProcesses: '[''business.process.maker-checker-review'']'
   servesActors: '[''business.actor.reviewer'']'
+  deployedTo: technology.node.application-server
 Workspace Router:
   id: application.service.workspace-router
   name: Workspace Router
@@ -77,6 +81,7 @@ Workspace Router:
   properties:
     service.version: 2.0.0
     apm.traced: 'true'
+  deployedTo: technology.node.application-server
 Configuration Service:
   id: application.service.configuration-service
   name: Configuration Service
@@ -92,6 +97,7 @@ Configuration Service:
     apm.traced: 'true'
     service.version: 2.0.0
   servesActors: '[''business.actor.system-administrator'']'
+  deployedTo: technology.node.application-server
 Work Item Service:
   id: application.service.work-item-service
   name: Work Item Service
@@ -106,6 +112,7 @@ Work Item Service:
     apm.traced: 'true'
     service.version: 2.0.0
   servesActors: '[''business.actor.developer'', ''business.actor.project-manager'']'
+  deployedTo: technology.node.application-server
 Authentication Service:
   id: application.service.authentication-service
   name: Authentication Service
@@ -120,6 +127,7 @@ Authentication Service:
     apm.traced: 'true'
     apm.sla-target-latency: 50ms
     apm.sla-target-availability: 99.99%
+  deployedTo: technology.node.application-server
 Pipeline Manager:
   id: application.service.pipeline-manager
   name: Pipeline Manager
@@ -132,6 +140,7 @@ Pipeline Manager:
   - motivation.goal.ease-of-configuration
   properties:
     service.version: 2.0.0
+  deployedTo: technology.node.application-server
 Feedback Processor:
   id: application.service.feedback-processor
   name: Feedback Processor
@@ -144,6 +153,7 @@ Feedback Processor:
   - motivation.goal.developer-productivity
   properties:
     service.version: 2.0.0
+  deployedTo: technology.node.application-server
 Context Builder:
   id: application.service.context-builder
   name: Context Builder
@@ -157,6 +167,7 @@ Context Builder:
   - motivation.goal.quality-assurance
   properties:
     service.version: 2.0.0
+  deployedTo: technology.node.application-server
 Event Processor:
   id: application.service.event-processor
   name: Event Processor
@@ -171,6 +182,7 @@ Event Processor:
   properties:
     service.version: 2.0.0
     apm.traced: 'true'
+  deployedTo: technology.node.application-server
 Metrics Service:
   id: application.service.metrics-service
   name: Metrics Service
@@ -186,12 +198,13 @@ Metrics Service:
     service.version: 2.0.0
     apm.traced: 'true'
     apm.sla-target-latency: 100ms
+  deployedTo: technology.node.application-server
 Workflow Run Query Service:
   id: application.service.workflow-run-query-service
   name: Workflow Run Query Service
   type: service
-  documentation: Provides query operations for workflow run instances and their
-    execution history
+  documentation: Provides query operations for workflow run instances and their execution
+    history
   serviceType: synchronous
   realizes: business.service.workflow-automation
   supportsGoals:
@@ -201,6 +214,7 @@ Workflow Run Query Service:
     service.version: 2.0.0
     apm.traced: 'true'
     apm.sla-target-latency: 150ms
+  deployedTo: technology.node.application-server
 Agent Matching Service:
   id: application.service.agent-matching
   name: Agent Matching Service
@@ -215,12 +229,13 @@ Agent Matching Service:
   properties:
     service.version: 2.0.0
     apm.traced: 'true'
+  deployedTo: technology.node.application-server
 Work Assignment Service:
   id: application.service.work-assignment
   name: Work Assignment Service
   type: service
-  documentation: Domain service for assigning work items to agents with priority
-    and capability matching
+  documentation: Domain service for assigning work items to agents with priority and
+    capability matching
   serviceType: synchronous
   realizes: business.service.agent-scheduling
   supportsGoals:
@@ -229,6 +244,7 @@ Work Assignment Service:
   properties:
     service.version: 2.0.0
     apm.traced: 'true'
+  deployedTo: technology.node.application-server
 Workflow Validation Service:
   id: application.service.workflow-validation
   name: Workflow Validation Service
@@ -243,3 +259,4 @@ Workflow Validation Service:
   properties:
     service.version: 2.0.0
     apm.traced: 'true'
+  deployedTo: technology.node.application-server

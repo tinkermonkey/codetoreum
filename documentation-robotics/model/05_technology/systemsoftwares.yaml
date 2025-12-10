@@ -108,3 +108,94 @@ Zod:
   name: Zod
   software.license: opensource
   software.type: library
+Pydantic:
+  description: Data validation using Python type annotations
+  id: technology.systemsoftware.pydantic
+  name: Pydantic
+  software.license: opensource
+  software.type: library
+  software.version: 2.0+
+SQLAlchemy:
+  description: SQL toolkit and Object Relational Mapper for Python
+  id: technology.systemsoftware.sqlalchemy
+  name: SQLAlchemy
+  software.license: opensource
+  software.type: middleware
+  software.version: 2.0+
+HTTPX:
+  description: A next generation HTTP client for Python with async support
+  id: technology.systemsoftware.httpx
+  name: HTTPX
+  software.license: opensource
+  software.type: library
+  software.version: 0.27+
+Redis-Py:
+  description: Python client for Redis key-value store
+  id: technology.systemsoftware.redis-py
+  name: Redis-Py
+  software.license: opensource
+  software.type: library
+  software.version: 5.0+
+Elasticsearch-Py:
+  description: Official Python client for Elasticsearch
+  id: technology.systemsoftware.elasticsearch-py
+  name: Elasticsearch-Py
+  software.license: opensource
+  software.type: library
+  software.version: 8.0+
+Docker-Py:
+  description: Python library for the Docker Engine API
+  id: technology.systemsoftware.docker-py
+  name: Docker-Py
+  software.license: opensource
+  software.type: library
+  software.version: 7.0+
+Pytest:
+  description: The pytest testing framework makes it easy to write small tests
+  id: technology.systemsoftware.pytest
+  name: Pytest
+  software.license: opensource
+  software.type: devtools
+  software.version: 8.0+
+Pytest-Asyncio:
+  description: Pytest support for asyncio-based tests
+  id: technology.systemsoftware.pytest-asyncio
+  name: Pytest-Asyncio
+  software.license: opensource
+  software.type: devtools
+  software.version: 0.23+
+Cryptography:
+  description: Cryptographic recipes and primitives for Python
+  id: technology.systemsoftware.cryptography
+  name: Cryptography
+  software.license: opensource
+  software.type: library
+  software.version: 42.0+
+Python-JOSE:
+  description: JavaScript Object Signing and Encryption for Python
+  id: technology.systemsoftware.python-jose
+  name: Python-JOSE
+  software.license: opensource
+  software.type: library
+  software.version: 3.3+
+Passlib:
+  description: Comprehensive password hashing framework supporting over 30 schemes
+  id: technology.systemsoftware.passlib
+  name: Passlib
+  software.license: opensource
+  software.type: library
+  software.version: 1.7+
+Python-Multipart:
+  description: A streaming multipart parser for Python
+  id: technology.systemsoftware.python-multipart
+  name: Python-Multipart
+  software.license: opensource
+  software.type: library
+  software.version: 0.0.9+
+Websockets:
+  description: A library for building WebSocket servers and clients in Python
+  id: technology.systemsoftware.websockets
+  name: Websockets
+  software.license: opensource
+  software.type: library
+  software.version: 12.0+

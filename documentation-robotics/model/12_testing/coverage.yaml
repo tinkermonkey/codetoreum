@@ -1,0 +1,504 @@
+# Testing Coverage Configuration
+# Direct 1:1 conversion from test strategies and suites
+
+Codetoreum Test Coverage:
+  id: testing.coverage.codetoreum-platform
+  name: Codetoreum Test Coverage
+  type: test-coverage-model
+  version: "1.0"
+  application: codetoreum
+  description: Comprehensive test coverage model for Codetoreum platform with 1000+ tests
+  motivationRefs:
+    - motivation.goal.testability
+    - motivation.goal.quality-assurance
+    - motivation.goal.resilience
+
+  coverageTargets:
+    - id: testing.target.domain-models
+      name: Domain Models Coverage
+      targetType: composite
+      priority: critical
+      targetRef: domain-layer
+      description: All domain models and value objects (WorkItem, Agent, Workflow, etc.)
+      applicableContexts:
+        - ctx-unit-test
+
+    - id: testing.target.application-services
+      name: Application Services Coverage
+      targetType: composite
+      priority: high
+      targetRef: application-layer
+      description: Application services with mock adapters (WorkflowOrchestrator, ExecutionService, etc.)
+      applicableContexts:
+        - ctx-integration-test
+
+    - id: testing.target.api-endpoints
+      name: API Endpoints Coverage
+      targetType: composite
+      priority: critical
+      targetRef: api-layer
+      description: All REST API endpoints with OpenAPI validation
+      applicableContexts:
+        - ctx-api-test
+
+    - id: testing.target.event-sourcing
+      name: Event Sourcing Coverage
+      targetType: composite
+      priority: high
+      targetRef: event-sourcing-components
+      description: Event store, persistence, and replay functionality
+      applicableContexts:
+        - ctx-integration-test
+
+    - id: testing.target.resilience-patterns
+      name: Resilience Patterns Coverage
+      targetType: composite
+      priority: high
+      targetRef: resilience-components
+      description: Circuit breakers, retries, timeouts, rate limiting
+      applicableContexts:
+        - ctx-unit-test
+        - ctx-chaos-test
+
+    - id: testing.target.workflows
+      name: Workflow Simulation Coverage
+      targetType: workflow
+      priority: critical
+      targetRef: business-processes
+      description: End-to-end workflow simulation with deterministic mocks
+      applicableContexts:
+        - ctx-simulation-test
+
+    - id: testing.target.port-contracts
+      name: Port Contract Coverage
+      targetType: composite
+      priority: critical
+      targetRef: port-interfaces
+      description: Adapter implementations conformance to port interfaces
+      applicableContexts:
+        - ctx-contract-test
+
+    - id: testing.target.security-controls
+      name: Security Controls Coverage
+      targetType: composite
+      priority: high
+      targetRef: security-layer
+      description: Security vulnerability scanning and container isolation
+      applicableContexts:
+        - ctx-security-test
+
+    - id: testing.target.performance
+      name: Performance Coverage
+      targetType: composite
+      priority: medium
+      targetRef: api-and-services
+      description: Load testing and performance benchmarking
+      applicableContexts:
+        - ctx-performance-test
+
+    - id: testing.target.audit-infrastructure
+      name: Audit Infrastructure Coverage
+      targetType: composite
+      priority: high
+      targetRef: audit-components
+      description: Audit logging, retention, and storage functionality
+      applicableContexts:
+        - ctx-integration-test
+
+  contextVariations:
+    - id: ctx-unit-test
+      name: Unit Test Context
+      contextType: integration
+      description: Isolated unit testing with no external dependencies
+
+    - id: ctx-integration-test
+      name: Integration Test Context
+      contextType: integration
+      description: Integration testing with test containers and mock adapters
+
+    - id: ctx-api-test
+      name: API Test Context
+      contextType: api-entry
+      description: API endpoint testing with OpenAPI validation
+
+    - id: ctx-simulation-test
+      name: Simulation Test Context
+      contextType: integration
+      description: End-to-end simulation with deterministic mocks and time manipulation
+
+    - id: ctx-contract-test
+      name: Contract Test Context
+      contextType: integration
+      description: Port/adapter interface contract validation
+
+    - id: ctx-security-test
+      name: Security Test Context
+      contextType: integration
+      description: Security vulnerability scanning and penetration testing
+
+    - id: ctx-performance-test
+      name: Performance Test Context
+      contextType: integration
+      description: Load testing and performance benchmarking
+
+    - id: ctx-chaos-test
+      name: Chaos Test Context
+      contextType: integration
+      description: Failure injection and recovery testing
+
+  coverageRequirements:
+    - id: testing.req.domain-models-exhaustive
+      name: Domain Models Exhaustive Coverage
+      description: 100% unit test coverage for all domain models
+      coverageCriteria: exhaustive
+      priority: critical
+      targetRef: testing.target.domain-models
+      requirementRefs:
+        - motivation.requirement.hexagonal-architecture
+      contextSelections:
+        - ctx-unit-test
+      outcomeSelections:
+        - success
+        - validation-error
+
+    - id: testing.req.application-services-pairwise
+      name: Application Services Pairwise Coverage
+      description: 90% integration test coverage with mock adapters
+      coverageCriteria: pairwise
+      priority: high
+      targetRef: testing.target.application-services
+      requirementRefs:
+        - motivation.requirement.hexagonal-architecture
+      contextSelections:
+        - ctx-integration-test
+      outcomeSelections:
+        - success
+        - validation-error
+        - error
+
+    - id: testing.req.api-endpoints-exhaustive
+      name: API Endpoints Exhaustive Coverage
+      description: 100% API endpoint coverage with OpenAPI validation
+      coverageCriteria: exhaustive
+      priority: critical
+      targetRef: testing.target.api-endpoints
+      requirementRefs:
+        - motivation.requirement.hexagonal-architecture
+      contextSelections:
+        - ctx-api-test
+      outcomeSelections:
+        - success
+        - validation-error
+        - authorization-denied
+        - not-found
+        - error
+
+    - id: testing.req.event-sourcing-boundary
+      name: Event Sourcing Boundary Coverage
+      description: Event store, persistence, and replay testing
+      coverageCriteria: boundary
+      priority: high
+      targetRef: testing.target.event-sourcing
+      contextSelections:
+        - ctx-integration-test
+      outcomeSelections:
+        - success
+        - error
+
+    - id: testing.req.resilience-error-path
+      name: Resilience Patterns Error Path Coverage
+      description: 95% coverage of resilience pattern failure scenarios
+      coverageCriteria: error-path
+      priority: high
+      targetRef: testing.target.resilience-patterns
+      contextSelections:
+        - ctx-unit-test
+        - ctx-chaos-test
+      outcomeSelections:
+        - success
+        - error
+        - precondition-failed
+
+    - id: testing.req.workflows-happy-path
+      name: Workflow Simulation Happy Path Coverage
+      description: End-to-end workflow testing with deterministic mocks
+      coverageCriteria: happy-path
+      priority: critical
+      targetRef: testing.target.workflows
+      contextSelections:
+        - ctx-simulation-test
+      outcomeSelections:
+        - success
+
+    - id: testing.req.port-contracts-exhaustive
+      name: Port Contract Exhaustive Coverage
+      description: 100% port interface contract validation
+      coverageCriteria: exhaustive
+      priority: critical
+      targetRef: testing.target.port-contracts
+      contextSelections:
+        - ctx-contract-test
+      outcomeSelections:
+        - success
+        - validation-error
+
+    - id: testing.req.security-risk-based
+      name: Security Controls Risk-Based Coverage
+      description: Risk-based security testing and vulnerability scanning
+      coverageCriteria: risk-based
+      priority: high
+      targetRef: testing.target.security-controls
+      contextSelections:
+        - ctx-security-test
+      outcomeSelections:
+        - success
+        - error
+
+    - id: testing.req.performance-boundary
+      name: Performance Boundary Coverage
+      description: Load testing with 1000 RPS target
+      coverageCriteria: boundary
+      priority: medium
+      targetRef: testing.target.performance
+      contextSelections:
+        - ctx-performance-test
+      outcomeSelections:
+        - success
+        - error
+
+    - id: testing.req.audit-pairwise
+      name: Audit Infrastructure Pairwise Coverage
+      description: Integration testing of audit logging and storage
+      coverageCriteria: pairwise
+      priority: high
+      targetRef: testing.target.audit-infrastructure
+      contextSelections:
+        - ctx-integration-test
+      outcomeSelections:
+        - success
+        - error
+
+  testCaseSketches:
+    - id: testing.case.domain-models
+      name: Domain Models Test Cases
+      description: Unit tests for WorkItem, Agent, Workflow, PipelineStage, ReviewCycle
+      status: automated
+      coverageReqRef: testing.req.domain-models-exhaustive
+      implementationRef: tests/unit/domain/
+      implementationFormat: pytest
+      inputSelections:
+        - partitionRef: default-partition
+          selectedValue: default-value
+      contextSelection: ctx-unit-test
+      expectedOutcome: success
+      notes: "250+ tests, 100% coverage, 30s runtime"
+
+    - id: testing.case.application-services
+      name: Application Services Test Cases
+      description: Integration tests for WorkflowOrchestrator, ExecutionService, AgentScheduler, ReviewService, WorkspaceRouter
+      status: automated
+      coverageReqRef: testing.req.application-services-pairwise
+      implementationRef: tests/integration/application/
+      implementationFormat: pytest
+      inputSelections:
+        - partitionRef: default-partition
+          selectedValue: default-value
+      contextSelection: ctx-integration-test
+      expectedOutcome: success
+      notes: "180+ tests, 90% coverage, 120s runtime"
+
+    - id: testing.case.api-endpoints
+      name: API Endpoints Test Cases
+      description: REST API endpoint testing with OpenAPI validation for all operations
+      status: automated
+      coverageReqRef: testing.req.api-endpoints-exhaustive
+      implementationRef: tests/integration/api/
+      implementationFormat: pytest
+      inputSelections:
+        - partitionRef: default-partition
+          selectedValue: default-value
+      contextSelection: ctx-api-test
+      expectedOutcome: success
+      notes: "95+ tests, 100% coverage, 90s runtime, validates OpenAPI spec"
+
+    - id: testing.case.event-sourcing
+      name: Event Sourcing Test Cases
+      description: Event bus, persistence worker, replayer, and Elasticsearch adapter tests
+      status: automated
+      coverageReqRef: testing.req.event-sourcing-boundary
+      implementationRef: tests/integration/events/
+      implementationFormat: pytest
+      inputSelections:
+        - partitionRef: default-partition
+          selectedValue: default-value
+      contextSelection: ctx-integration-test
+      expectedOutcome: success
+      notes: "75+ tests, 150s runtime, requires Elasticsearch"
+
+    - id: testing.case.resilience-patterns
+      name: Resilience Patterns Test Cases
+      description: Circuit breaker, retry, timeout, rate limiter, and decorator tests
+      status: automated
+      coverageReqRef: testing.req.resilience-error-path
+      implementationRef: tests/unit/infrastructure/resilience/
+      implementationFormat: pytest
+      inputSelections:
+        - partitionRef: default-partition
+          selectedValue: default-value
+      contextSelection: ctx-unit-test
+      expectedOutcome: success
+      notes: "120+ tests, 95% coverage, 60s runtime"
+
+    - id: testing.case.simulation
+      name: Workflow Simulation Test Cases
+      description: End-to-end simulation for issue-to-PR, automated development, and review workflows
+      status: automated
+      coverageReqRef: testing.req.workflows-happy-path
+      implementationRef: tests/simulation/
+      implementationFormat: pytest
+      inputSelections:
+        - partitionRef: default-partition
+          selectedValue: default-value
+      contextSelection: ctx-simulation-test
+      expectedOutcome: success
+      notes: "25+ tests, 300s runtime, 10x speedup with simulation mode"
+
+    - id: testing.case.port-contracts
+      name: Port Interface Contract Test Cases
+      description: Verification that all adapters conform to port interfaces (TicketSystem, LLMProvider, Container, Repository, EventStore)
+      status: automated
+      coverageReqRef: testing.req.port-contracts-exhaustive
+      implementationRef: tests/unit/ports/
+      implementationFormat: pytest
+      inputSelections:
+        - partitionRef: default-partition
+          selectedValue: default-value
+      contextSelection: ctx-contract-test
+      expectedOutcome: success
+      notes: "90+ tests, 100% coverage, 45s runtime"
+
+    - id: testing.case.security
+      name: Security Test Cases
+      description: Security vulnerability scanning and container isolation testing
+      status: automated
+      coverageReqRef: testing.req.security-risk-based
+      implementationRef: tests/security/
+      implementationFormat: pytest
+      inputSelections:
+        - partitionRef: default-partition
+          selectedValue: default-value
+      contextSelection: ctx-security-test
+      expectedOutcome: success
+      notes: "50+ tests, 600s runtime, weekly scanning"
+
+    - id: testing.case.performance
+      name: Performance Test Cases
+      description: Load testing for API endpoints and services with 1000 RPS target
+      status: automated
+      coverageReqRef: testing.req.performance-boundary
+      implementationRef: tests/performance/
+      implementationFormat: other
+      inputSelections:
+        - partitionRef: default-partition
+          selectedValue: default-value
+      contextSelection: ctx-performance-test
+      expectedOutcome: success
+      notes: "20+ tests, 3600s runtime, 1000 RPS target"
+
+    - id: testing.case.audit
+      name: Audit Infrastructure Test Cases
+      description: Audit logger, PostgreSQL audit store, and retention policy tests
+      status: automated
+      coverageReqRef: testing.req.audit-pairwise
+      implementationRef: tests/integration/audit/
+      implementationFormat: pytest
+      inputSelections:
+        - partitionRef: default-partition
+          selectedValue: default-value
+      contextSelection: ctx-integration-test
+      expectedOutcome: success
+      notes: "40+ tests, 60s runtime, requires PostgreSQL"
+
+  coverageSummary:
+    generatedAt: "2025-12-10T00:00:00Z"
+    totalTargets: 10
+    totalRequirements: 10
+    totalSketches: 10
+    targetSummaries:
+      - targetRef: testing.target.domain-models
+        sketchCount: 1
+        implementedCount: 1
+        automatedCount: 1
+        coveragePercentage: 100
+
+      - targetRef: testing.target.application-services
+        sketchCount: 1
+        implementedCount: 1
+        automatedCount: 1
+        coveragePercentage: 90
+
+      - targetRef: testing.target.api-endpoints
+        sketchCount: 1
+        implementedCount: 1
+        automatedCount: 1
+        coveragePercentage: 100
+
+      - targetRef: testing.target.event-sourcing
+        sketchCount: 1
+        implementedCount: 1
+        automatedCount: 1
+        coveragePercentage: 85
+
+      - targetRef: testing.target.resilience-patterns
+        sketchCount: 1
+        implementedCount: 1
+        automatedCount: 1
+        coveragePercentage: 95
+
+      - targetRef: testing.target.workflows
+        sketchCount: 1
+        implementedCount: 1
+        automatedCount: 1
+        coveragePercentage: 80
+
+      - targetRef: testing.target.port-contracts
+        sketchCount: 1
+        implementedCount: 1
+        automatedCount: 1
+        coveragePercentage: 100
+
+      - targetRef: testing.target.security-controls
+        sketchCount: 1
+        implementedCount: 1
+        automatedCount: 1
+        coveragePercentage: 70
+
+      - targetRef: testing.target.performance
+        sketchCount: 1
+        implementedCount: 1
+        automatedCount: 1
+        coveragePercentage: 60
+
+      - targetRef: testing.target.audit-infrastructure
+        sketchCount: 1
+        implementedCount: 1
+        automatedCount: 1
+        coveragePercentage: 85
+
+    gaps: []
+
+  x-test-statistics:
+    total-tests: 1000+
+    automated: 100%
+    test-frameworks:
+      - pytest
+      - locust
+    test-types:
+      - unit
+      - integration
+      - api
+      - simulation
+      - contract
+      - security
+      - performance
+    coverage-overall: 90%

@@ -1,1 +1,345 @@
-{}
+# Navigation Routes for Codetoreum Platform
+# Each element defines a route with proper nested structure
+
+Root Route:
+  id: navigation.route.root
+  name: Dashboard Route
+  type: route
+  version: "1.0.0"
+  application: codetoreum
+  documentation: 'Primary landing page after authentication. Shows Dashboard for authenticated users.'
+  path: /
+  component: ux.screen.dashboard
+  fallback: ux.screen.auth-required
+  properties:
+    route.requires-auth: 'true'
+    route.loading-state: spinner
+  routes:
+    - identifier: root
+      name: Root
+      type: experience
+      addressing:
+        url: /
+      guards:
+        - auth-required
+
+Auth Required Route:
+  id: navigation.route.auth-required
+  name: Authentication Required Route
+  type: route
+  version: "1.0.0"
+  application: codetoreum
+  documentation: 'Public page guiding users to authenticate via query parameter.'
+  path: /auth-required
+  component: ux.screen.auth-required
+  routes:
+    - identifier: auth-required
+      name: Authentication Required
+      type: experience
+      addressing:
+        url: /auth-required
+
+Work Items List Route:
+  id: navigation.route.work-items
+  name: Work Items List Route
+  type: route
+  version: "1.0.0"
+  application: codetoreum
+  documentation: 'List view of all work items with filtering and search.'
+  path: /work-items
+  component: ux.screen.work-items-list
+  properties:
+    route.requires-auth: 'true'
+  routes:
+    - identifier: work-items
+      name: Work Items
+      type: experience
+      addressing:
+        url: /work-items
+      guards:
+        - auth-required
+
+Work Item Detail Route:
+  id: navigation.route.work-item-detail
+  name: Work Item Detail Route
+  type: route
+  version: "1.0.0"
+  application: codetoreum
+  documentation: 'Detailed view of a single work item with execution history.'
+  path: /work-items/:workItemId
+  component: ux.screen.work-item-detail
+  properties:
+    route.requires-auth: 'true'
+  routes:
+    - identifier: work-item-detail
+      name: Work Item Detail
+      type: experience
+      addressing:
+        url: /work-items/:workItemId
+        pathParameters:
+          - name: workItemId
+            type: string
+            required: true
+      guards:
+        - auth-required
+
+Executions List Route:
+  id: navigation.route.executions
+  name: Executions List Route
+  type: route
+  version: "1.0.0"
+  application: codetoreum
+  documentation: 'List view of all agent executions across work items.'
+  path: /executions
+  component: ux.screen.executions-list
+  properties:
+    route.requires-auth: 'true'
+  routes:
+    - identifier: executions
+      name: Executions
+      type: experience
+      addressing:
+        url: /executions
+      guards:
+        - auth-required
+
+Execution Detail Route:
+  id: navigation.route.execution-detail
+  name: Execution Detail Route
+  type: route
+  version: "1.0.0"
+  application: codetoreum
+  documentation: 'Detailed view of a single agent execution with logs and output.'
+  path: /executions/:executionId
+  component: ux.screen.execution-detail
+  properties:
+    route.requires-auth: 'true'
+  routes:
+    - identifier: execution-detail
+      name: Execution Detail
+      type: experience
+      addressing:
+        url: /executions/:executionId
+        pathParameters:
+          - name: executionId
+            type: string
+            required: true
+      guards:
+        - auth-required
+
+Projects List Route:
+  id: navigation.route.projects
+  name: Projects List Route
+  type: route
+  version: "1.0.0"
+  application: codetoreum
+  documentation: 'List view of all configured projects.'
+  path: /projects
+  component: ux.screen.projects-list
+  properties:
+    route.requires-auth: 'true'
+  routes:
+    - identifier: projects
+      name: Projects
+      type: experience
+      addressing:
+        url: /projects
+      guards:
+        - auth-required
+
+Project Configuration Route:
+  id: navigation.route.project-config
+  name: Project Configuration Route
+  type: route
+  version: "1.0.0"
+  application: codetoreum
+  documentation: 'Project settings and configuration management.'
+  path: /projects/:projectId/config
+  component: ux.screen.project-config
+  properties:
+    route.requires-auth: 'true'
+  routes:
+    - identifier: project-config
+      name: Project Configuration
+      type: experience
+      addressing:
+        url: /projects/:projectId/config
+        pathParameters:
+          - name: projectId
+            type: string
+            required: true
+      guards:
+        - auth-required
+
+Agents Configuration Route:
+  id: navigation.route.agents
+  name: Agents Configuration Route
+  type: route
+  version: "1.0.0"
+  application: codetoreum
+  documentation: 'Agent capabilities and configuration.'
+  path: /agents
+  component: ux.screen.agents-config
+  properties:
+    route.requires-auth: 'true'
+  routes:
+    - identifier: agents
+      name: Agents
+      type: experience
+      addressing:
+        url: /agents
+      guards:
+        - auth-required
+
+Workflows Configuration Route:
+  id: navigation.route.workflows
+  name: Workflows Configuration Route
+  type: route
+  version: "1.0.0"
+  application: codetoreum
+  documentation: 'Workflow pipeline definitions and stage configuration.'
+  path: /workflows
+  component: ux.screen.workflow-config
+  properties:
+    route.requires-auth: 'true'
+  routes:
+    - identifier: workflows
+      name: Workflows
+      type: experience
+      addressing:
+        url: /workflows
+      guards:
+        - auth-required
+
+Workflow Edit Route:
+  id: navigation.route.workflow-edit
+  name: Workflow Edit Route
+  type: route
+  version: "1.0.0"
+  application: codetoreum
+  documentation: 'Edit a specific workflow pipeline configuration.'
+  path: /workflows/:workflowId/edit
+  component: ux.screen.workflow-edit
+  properties:
+    route.requires-auth: 'true'
+  routes:
+    - identifier: workflow-edit
+      name: Edit Workflow
+      type: experience
+      addressing:
+        url: /workflows/:workflowId/edit
+        pathParameters:
+          - name: workflowId
+            type: string
+            required: true
+      guards:
+        - auth-required
+
+Pipelines Configuration Route:
+  id: navigation.route.pipelines
+  name: Pipelines Configuration Route
+  type: route
+  version: "1.0.0"
+  application: codetoreum
+  documentation: 'Pipeline stage definitions and transitions.'
+  path: /pipelines
+  component: ux.screen.pipeline-config
+  properties:
+    route.requires-auth: 'true'
+  routes:
+    - identifier: pipelines
+      name: Pipelines
+      type: experience
+      addressing:
+        url: /pipelines
+      guards:
+        - auth-required
+
+System Health Route:
+  id: navigation.route.system-health
+  name: System Health Route
+  type: route
+  version: "1.0.0"
+  application: codetoreum
+  documentation: 'System health monitoring dashboard with metrics and alerts. Admin only.'
+  path: /system/health
+  component: ux.screen.system-health
+  properties:
+    route.requires-auth: 'true'
+    route.requires-admin: 'true'
+  routes:
+    - identifier: system-health
+      name: System Health
+      type: experience
+      addressing:
+        url: /system/health
+      guards:
+        - auth-required
+        - admin-only
+
+Events Log Route:
+  id: navigation.route.events-log
+  name: Events Log Route
+  type: route
+  version: "1.0.0"
+  application: codetoreum
+  documentation: 'Event sourcing log viewer for debugging and auditing.'
+  path: /events
+  component: ux.screen.events-log
+  properties:
+    route.requires-auth: 'true'
+  routes:
+    - identifier: events
+      name: Events Log
+      type: experience
+      addressing:
+        url: /events
+      guards:
+        - auth-required
+
+API Documentation Route:
+  id: navigation.route.api-docs
+  name: API Documentation Route
+  type: route
+  version: "1.0.0"
+  application: codetoreum
+  documentation: 'External link to OpenAPI documentation (Swagger UI).'
+  path: /api/docs
+  routes:
+    - identifier: api-docs
+      name: API Documentation
+      type: external
+      addressing:
+        url: /api/docs
+
+Not Found Route:
+  id: navigation.route.not-found
+  name: Not Found Route
+  type: route
+  version: "1.0.0"
+  application: codetoreum
+  documentation: '404 error page for invalid routes.'
+  path: /404
+  component: ux.screen.not-found
+  routes:
+    - identifier: not-found
+      name: Not Found
+      type: experience
+      addressing:
+        url: /404
+
+Server Error Route:
+  id: navigation.route.server-error
+  name: Server Error Route
+  type: route
+  version: "1.0.0"
+  application: codetoreum
+  documentation: '500 error page for server errors.'
+  path: /500
+  component: ux.screen.server-error
+  routes:
+    - identifier: server-error
+      name: Server Error
+      type: experience
+      addressing:
+        url: /500

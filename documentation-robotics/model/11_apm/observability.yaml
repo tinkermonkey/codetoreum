@@ -1,0 +1,416 @@
+# APM Observability Configuration - OpenTelemetry Format
+# Codetoreum Platform Performance and Reliability Monitoring
+
+Codetoreum APM Observability:
+  id: apm.observability.codetoreum-platform
+  name: Codetoreum APM Observability
+  type: observability-configuration
+  version: "1.0"
+  application: codetoreum
+  documentation: |
+    Complete OpenTelemetry observability configuration for Codetoreum platform.
+
+    Components:
+    - Tracing: Distributed tracing across services and components
+    - Logging: Structured logging with audit trail
+    - Metrics: Performance and reliability monitoring
+
+    Tracks execution performance, API reliability, infrastructure health,
+    event processing, caching, workflows, costs, and overall system health.
+
+  tracing:
+    serviceName: codetoreum-platform
+    serviceVersion: "2.0.0"
+    deploymentEnvironment: production
+
+    sampler:
+      type: parentbased_traceidratio
+      config:
+        ratio: 0.1
+
+    propagators:
+      - w3c-trace-context
+      - w3c-baggage
+
+    exporters:
+      - type: otlp
+        endpoint: http://jaeger:4317
+        protocol: grpc
+        compression: gzip
+        enabled: true
+        timeout: 10000
+
+      - type: jaeger
+        endpoint: http://jaeger:14268/api/traces
+        protocol: http/json
+        enabled: true
+        timeout: 5000
+
+    instrumentations:
+      - type: http
+        config:
+          captureHeaders: true
+          recordRequestHeaders:
+            - content-type
+            - user-agent
+          recordResponseHeaders:
+            - content-type
+
+      - type: database
+        config:
+          recordQueries: true
+          sanitizeStatements: true
+          maxStatementLength: 2000
+
+      - type: redis
+        config:
+          recordCommands: true
+
+    resource:
+      attributes:
+        - key: service.name
+          value:
+            stringValue: codetoreum-platform
+        - key: service.version
+          value:
+            stringValue: "2.0.0"
+        - key: deployment.environment
+          value:
+            stringValue: production
+
+    spanLimits:
+      maxAttributesPerSpan: 128
+      maxEventsPerSpan: 128
+      maxLinksPerSpan: 32
+
+  logging:
+    serviceName: codetoreum-platform
+    logLevel: INFO
+
+    processors:
+      - type: batch
+        config:
+          maxQueueSize: 2048
+          scheduledDelayMillis: 5000
+          exportTimeoutMillis: 30000
+          maxExportBatchSize: 512
+
+      - type: resource
+        config:
+          attributes:
+            service.name: codetoreum-platform
+            deployment.environment: production
+
+    exporters:
+      - type: otlp
+        endpoint: http://otel-collector:4317
+        protocol: grpc
+        compression: gzip
+        enabled: true
+        timeout: 10000
+
+      - type: console
+        endpoint: stdout
+        enabled: false
+
+    auditConfiguration:
+      securityControlRef: security.control.audit-logging
+      retentionPeriod: 7years
+      nonRepudiation: true
+
+  metrics:
+    serviceName: codetoreum-platform
+    exportIntervalMillis: 60000
+
+    meters:
+      - name: execution-meter
+        instruments:
+          - type: histogram
+            name: codetoreum_execution_duration_seconds
+            unit: s
+            description: Time taken for agent execution from start to completion
+            buckets: [0.1, 0.5, 1, 2, 5, 10, 30, 60, 120, 300]
+            attributes:
+              - agent_id
+              - work_item_id
+              - status
+            motivationMapping:
+              contributesToGoal: motivation.goal.automation
+              measuresOutcome: execution-performance
+            businessProcessRef: business.process.agent-execution-cycle
+            id: apm.metric.execution-duration
+
+          - type: gauge
+            name: codetoreum_execution_success_rate
+            unit: "%"
+            description: Percentage of successful agent executions
+            attributes:
+              - time_window
+            motivationMapping:
+              contributesToGoal: motivation.goal.reliability
+              validationCriteria:
+                requirementId: motivation.requirement.reliability
+                threshold: "95%"
+                alertOnViolation: true
+            id: apm.metric.execution-success-rate
+
+          - type: gauge
+            name: codetoreum_agent_matching_accuracy
+            unit: "%"
+            description: Accuracy of agent-to-work-item matching
+            attributes:
+              - agent_type
+            motivationMapping:
+              contributesToGoal: motivation.goal.quality-assurance
+              validationCriteria:
+                requirementId: motivation.requirement.quality-assurance
+                threshold: "85%"
+                alertOnViolation: true
+            id: apm.metric.agent-matching-accuracy
+
+      - name: api-meter
+        instruments:
+          - type: histogram
+            name: codetoreum_api_response_time_ms
+            unit: ms
+            description: HTTP API endpoint response times
+            buckets: [10, 25, 50, 100, 250, 500, 1000, 2500, 5000]
+            attributes:
+              - endpoint
+              - method
+              - status_code
+            motivationMapping:
+              contributesToGoal: motivation.goal.scalability
+              validationCriteria:
+                requirementId: motivation.requirement.performance
+                threshold: "p95 < 500ms"
+                alertOnViolation: true
+            id: apm.metric.api-response-time
+
+          - type: counter
+            name: codetoreum_api_errors_total
+            unit: "1"
+            description: Number of API errors (4xx, 5xx responses)
+            attributes:
+              - status_code
+              - endpoint
+              - error_type
+            motivationMapping:
+              contributesToGoal: motivation.goal.reliability
+            id: apm.metric.api-error-rate
+
+      - name: infrastructure-meter
+        instruments:
+          - type: gauge
+            name: codetoreum_circuit_breaker_state
+            unit: "1"
+            description: Current state of circuit breakers (open=0, half-open=1, closed=2)
+            attributes:
+              - service
+              - circuit_name
+            motivationMapping:
+              contributesToGoal: motivation.goal.resilience
+            securityControlRef: security.control.circuit-breaker
+            id: apm.metric.circuit-breaker-state
+
+          - type: counter
+            name: codetoreum_rate_limit_hits_total
+            unit: "1"
+            description: Number of rate limit threshold hits
+            attributes:
+              - limiter_name
+              - client_id
+            motivationMapping:
+              contributesToGoal: motivation.goal.security
+            securityControlRef: security.control.rate-limiting
+            id: apm.metric.rate-limit-hits
+
+          - type: gauge
+            name: codetoreum_queue_depth
+            unit: "1"
+            description: Number of pending tasks in execution queue
+            attributes:
+              - queue_name
+            motivationMapping:
+              contributesToGoal: motivation.goal.scalability
+            alertThreshold: "1000"
+            id: apm.metric.queue-depth
+
+          - type: gauge
+            name: codetoreum_container_resource_usage
+            unit: "%"
+            description: CPU and memory usage of agent containers
+            attributes:
+              - resource_type
+              - container_id
+              - agent_id
+            motivationMapping:
+              contributesToGoal: motivation.goal.scalability
+            id: apm.metric.container-resource-usage
+
+      - name: event-meter
+        instruments:
+          - type: gauge
+            name: codetoreum_event_bus_lag_ms
+            unit: ms
+            description: Time lag between event publication and consumption
+            attributes:
+              - event_type
+              - consumer_group
+            motivationMapping:
+              contributesToGoal: motivation.goal.observability
+            alertThreshold: "5000"
+            id: apm.metric.event-bus-lag
+
+          - type: histogram
+            name: codetoreum_event_store_write_latency_ms
+            unit: ms
+            description: Latency for writing events to Elasticsearch event store
+            buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000]
+            attributes:
+              - event_type
+              - index_name
+            motivationMapping:
+              contributesToGoal: motivation.goal.observability
+            id: apm.metric.event-store-write-latency
+
+          - type: gauge
+            name: codetoreum_dlq_size
+            unit: "1"
+            description: Number of failed events in dead letter queue
+            attributes:
+              - queue_name
+            motivationMapping:
+              contributesToGoal: motivation.goal.reliability
+            alertThreshold: "100"
+            id: apm.metric.dead-letter-queue-size
+
+      - name: cache-meter
+        instruments:
+          - type: gauge
+            name: codetoreum_cache_hit_rate
+            unit: "%"
+            description: Configuration cache hit rate
+            attributes:
+              - cache_name
+            motivationMapping:
+              contributesToGoal: motivation.goal.scalability
+              validationCriteria:
+                requirementId: motivation.requirement.performance
+                threshold: "90%"
+                alertOnViolation: false
+            id: apm.metric.cache-hit-rate
+
+      - name: workflow-meter
+        instruments:
+          - type: histogram
+            name: codetoreum_workflow_completion_time_seconds
+            unit: s
+            description: Time from workflow start to completion
+            buckets: [60, 300, 600, 1800, 3600, 7200, 14400, 28800]
+            attributes:
+              - workflow_id
+              - workflow_type
+              - stage_count
+            motivationMapping:
+              contributesToGoal: motivation.goal.developer-productivity
+            businessProcessRef: business.process.automated-development-workflow
+            id: apm.metric.workflow-completion-time
+
+          - type: histogram
+            name: codetoreum_review_cycle_duration_seconds
+            unit: s
+            description: Time taken for review cycle completion
+            buckets: [60, 300, 600, 1800, 3600, 7200, 14400]
+            attributes:
+              - review_type
+              - reviewer_id
+              - iteration_count
+            motivationMapping:
+              contributesToGoal: motivation.goal.quality-assurance
+            businessProcessRef: business.process.maker-checker-review
+            id: apm.metric.review-cycle-duration
+
+      - name: cost-meter
+        instruments:
+          - type: counter
+            name: codetoreum_llm_tokens_total
+            unit: tokens
+            description: Total tokens consumed by LLM provider
+            attributes:
+              - model
+              - operation_type
+              - agent_id
+            motivationMapping:
+              contributesToGoal: motivation.goal.cost-efficiency
+            id: apm.metric.llm-token-usage
+
+          - type: gauge
+            name: codetoreum_github_rate_limit_remaining
+            unit: "1"
+            description: Remaining GitHub API rate limit quota
+            attributes:
+              - resource_type
+            motivationMapping:
+              contributesToGoal: motivation.goal.extensibility
+            alertThreshold: "100"
+            id: apm.metric.github-api-rate-limit
+
+      - name: health-meter
+        instruments:
+          - type: gauge
+            name: codetoreum_system_health_score
+            unit: "1"
+            description: Composite health score (0-100) based on availability, latency, and error rate
+            attributes:
+              - component
+            motivationMapping:
+              contributesToGoal: motivation.goal.reliability
+              kpiFormula: "availability * 0.4 + (100 - latency_score) * 0.3 + (100 - error_rate) * 0.3"
+            alertThreshold: "70"
+            id: apm.metric.system-health-score
+
+    exporters:
+      - type: prometheus
+        endpoint: http://prometheus:9090
+        protocol: http
+        enabled: true
+        timeout: 5000
+
+      - type: otlp
+        endpoint: http://otel-collector:4317
+        protocol: grpc
+        compression: gzip
+        enabled: true
+        timeout: 10000
+
+    resource:
+      attributes:
+        - key: service.name
+          value:
+            stringValue: codetoreum-platform
+        - key: service.version
+          value:
+            stringValue: "2.0.0"
+        - key: deployment.environment
+          value:
+            stringValue: production
+        - key: service.namespace
+          value:
+            stringValue: codetoreum
+
+  motivationMapping:
+    governedByPrinciples:
+      - motivation.principle.observability-first
+      - motivation.principle.event-driven-architecture
+
+  x-meters-summary:
+    execution-meter: 3 instruments (duration, success rate, matching accuracy)
+    api-meter: 2 instruments (response time, error rate)
+    infrastructure-meter: 4 instruments (circuit breaker, rate limiter, queue, containers)
+    event-meter: 3 instruments (bus lag, store latency, DLQ size)
+    cache-meter: 1 instrument (cache hit rate)
+    workflow-meter: 2 instruments (workflow time, review cycle)
+    cost-meter: 2 instruments (LLM tokens, GitHub rate limit)
+    health-meter: 1 instrument (system health score)
+    total: 18 instruments across 8 meters

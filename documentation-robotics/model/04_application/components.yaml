@@ -12,6 +12,7 @@ REST API Adapter:
   deployedOn: technology.node.application-server
   deployed-on: technology.node.application-server
   node: technology.node.application-server
+  deployedTo: technology.node.application-server
 WebSocket Adapter:
   id: application.component.websocket-adapter
   name: WebSocket Adapter
@@ -23,6 +24,7 @@ WebSocket Adapter:
   x-archimate-ref: technology.systemsoftware.fastapi
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 GitHub Webhook Adapter:
   id: application.component.github-webhook-adapter
   name: GitHub Webhook Adapter
@@ -34,6 +36,7 @@ GitHub Webhook Adapter:
   x-archimate-ref: technology.systemsoftware.fastapi
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Elasticsearch Event Store:
   id: application.component.elasticsearch-event-store-adapter
   name: Elasticsearch Event Store
@@ -45,6 +48,7 @@ Elasticsearch Event Store:
   x-archimate-ref: technology.systemsoftware.elasticsearch
   deployment-node: technology.node.event-store
   deployedOn: technology.node.event-store
+  deployedTo: technology.node.event-store
 GitHub Ticket Adapter:
   id: application.component.github-ticket-adapter
   name: GitHub Ticket Adapter
@@ -56,6 +60,7 @@ GitHub Ticket Adapter:
   x-archimate-ref: technology.systemsoftware.httpx
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Docker Container Adapter:
   id: application.component.docker-container-adapter
   name: Docker Container Adapter
@@ -67,6 +72,7 @@ Docker Container Adapter:
   x-archimate-ref: technology.systemsoftware.docker
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.agent-containers
 Claude Code Adapter:
   id: application.component.claude-code-adapter
   name: Claude Code Adapter
@@ -82,6 +88,7 @@ Claude Code Adapter:
   x-archimate-ref: technology.systemsoftware.anthropic-claude
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Git Repository Adapter:
   id: application.component.git-repository-adapter
   name: Git Repository Adapter
@@ -93,6 +100,7 @@ Git Repository Adapter:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Redis Pub/Sub Adapter:
   id: application.component.redis-pubsub-adapter
   name: Redis Pub/Sub Adapter
@@ -104,6 +112,7 @@ Redis Pub/Sub Adapter:
   x-archimate-ref: technology.systemsoftware.redis
   deployment-node: technology.node.event-bus
   deployedOn: technology.node.event-bus
+  deployedTo: technology.node.application-server
 Elasticsearch Config Storage:
   id: application.component.elasticsearch-config-storage-adapter
   name: Elasticsearch Config Storage
@@ -115,6 +124,7 @@ Elasticsearch Config Storage:
   x-archimate-ref: technology.systemsoftware.elasticsearch
   deployment-node: technology.node.config-store
   deployedOn: technology.node.config-store
+  deployedTo: technology.node.event-store
 Cached Config Store:
   id: application.component.cached-config-store-adapter
   name: Cached Config Store
@@ -126,6 +136,7 @@ Cached Config Store:
   x-archimate-ref: technology.systemsoftware.redis
   deployment-node: technology.node.config-store
   deployedOn: technology.node.config-store
+  deployedTo: technology.node.application-server
 Event Store:
   id: application.component.event-store
   name: Event Store
@@ -135,6 +146,7 @@ Event Store:
   x-archimate-ref: technology.node.event-store
   deployment-node: technology.node.event-store
   deployedOn: technology.node.event-store
+  deployedTo: technology.node.application-server
 Event Bus:
   id: application.component.event-bus
   name: Event Bus
@@ -145,6 +157,7 @@ Event Bus:
   x-archimate-ref: technology.node.event-bus
   deployment-node: technology.node.event-bus
   deployedOn: technology.node.event-bus
+  deployedTo: technology.node.application-server
 Configuration Store:
   id: application.component.config-store
   name: Configuration Store
@@ -155,6 +168,7 @@ Configuration Store:
   x-archimate-ref: technology.node.config-store
   deployment-node: technology.node.config-store
   deployedOn: technology.node.config-store
+  deployedTo: technology.node.application-server
 Task Queue:
   id: application.component.task-queue
   name: Task Queue
@@ -165,6 +179,7 @@ Task Queue:
   x-archimate-ref: technology.systemsoftware.celery
   deployment-node: technology.node.event-bus
   deployedOn: technology.node.event-bus
+  deployedTo: technology.node.application-server
 Rate Limiter:
   id: application.component.rate-limiter
   name: Rate Limiter
@@ -174,6 +189,7 @@ Rate Limiter:
   x-archimate-ref: technology.systemsoftware.slowapi
   deployment-node: technology.node.event-bus
   deployedOn: technology.node.event-bus
+  deployedTo: technology.node.application-server
 Resource Monitor:
   id: application.component.resource-monitor
   name: Resource Monitor
@@ -184,7 +200,7 @@ Resource Monitor:
   x-archimate-ref: technology.systemsoftware.open-telemetry
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
-# Resilience Infrastructure Components
+  deployedTo: technology.node.application-server
 Circuit Breaker:
   id: application.component.circuit-breaker
   name: Circuit Breaker
@@ -196,6 +212,7 @@ Circuit Breaker:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Token Bucket Rate Limiter:
   id: application.component.token-bucket-rate-limiter
   name: Token Bucket Rate Limiter
@@ -207,6 +224,7 @@ Token Bucket Rate Limiter:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Exponential Backoff Retry:
   id: application.component.exponential-backoff-retry
   name: Exponential Backoff Retry
@@ -218,6 +236,7 @@ Exponential Backoff Retry:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Async Timeout:
   id: application.component.async-timeout
   name: Async Timeout
@@ -229,6 +248,7 @@ Async Timeout:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Resilient Ticket System Decorator:
   id: application.component.resilient-ticket-decorator
   name: Resilient Ticket System Decorator
@@ -240,6 +260,7 @@ Resilient Ticket System Decorator:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Resilient LLM Provider Decorator:
   id: application.component.resilient-llm-decorator
   name: Resilient LLM Provider Decorator
@@ -251,6 +272,7 @@ Resilient LLM Provider Decorator:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Resilient Container Provider Decorator:
   id: application.component.resilient-container-decorator
   name: Resilient Container Provider Decorator
@@ -262,6 +284,7 @@ Resilient Container Provider Decorator:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.agent-containers
 Resilient Repository Decorator:
   id: application.component.resilient-repository-decorator
   name: Resilient Repository Decorator
@@ -273,6 +296,7 @@ Resilient Repository Decorator:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Resilience Factory:
   id: application.component.resilience-factory
   name: Resilience Factory
@@ -284,6 +308,7 @@ Resilience Factory:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Resilience Configuration:
   id: application.component.resilience-config
   name: Resilience Configuration
@@ -295,6 +320,7 @@ Resilience Configuration:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Circuit Breaker Configuration:
   id: application.component.circuit-breaker-config
   name: Circuit Breaker Configuration
@@ -306,6 +332,7 @@ Circuit Breaker Configuration:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Rate Limiter Configuration:
   id: application.component.rate-limiter-config
   name: Rate Limiter Configuration
@@ -317,6 +344,7 @@ Rate Limiter Configuration:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Retry Configuration:
   id: application.component.retry-config
   name: Retry Configuration
@@ -328,6 +356,7 @@ Retry Configuration:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Timeout Configuration:
   id: application.component.timeout-config
   name: Timeout Configuration
@@ -339,6 +368,7 @@ Timeout Configuration:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Mock Circuit Breaker:
   id: application.component.mock-circuit-breaker
   name: Mock Circuit Breaker
@@ -350,6 +380,7 @@ Mock Circuit Breaker:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Mock Rate Limiter:
   id: application.component.mock-rate-limiter
   name: Mock Rate Limiter
@@ -361,6 +392,7 @@ Mock Rate Limiter:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Mock Retry Policy:
   id: application.component.mock-retry-policy
   name: Mock Retry Policy
@@ -372,6 +404,7 @@ Mock Retry Policy:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Mock Timeout:
   id: application.component.mock-timeout
   name: Mock Timeout
@@ -383,6 +416,7 @@ Mock Timeout:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Resilience Exception:
   id: application.component.resilience-exception
   name: Resilience Exception
@@ -394,6 +428,7 @@ Resilience Exception:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Circuit Breaker Open Exception:
   id: application.component.circuit-breaker-open-exception
   name: Circuit Breaker Open Exception
@@ -405,6 +440,7 @@ Circuit Breaker Open Exception:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Rate Limit Exceeded Exception:
   id: application.component.rate-limit-exceeded-exception
   name: Rate Limit Exceeded Exception
@@ -416,6 +452,7 @@ Rate Limit Exceeded Exception:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Retry Exhausted Exception:
   id: application.component.retry-exhausted-exception
   name: Retry Exhausted Exception
@@ -427,6 +464,7 @@ Retry Exhausted Exception:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Timeout Exception:
   id: application.component.timeout-exception
   name: Timeout Exception
@@ -438,7 +476,7 @@ Timeout Exception:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
-# Audit Infrastructure Components
+  deployedTo: technology.node.application-server
 Audit Logger:
   id: application.component.audit-logger
   name: Audit Logger
@@ -450,6 +488,7 @@ Audit Logger:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Audit Event:
   id: application.component.audit-event
   name: Audit Event
@@ -461,6 +500,7 @@ Audit Event:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 PostgreSQL Audit Store:
   id: application.component.postgresql-audit-store
   name: PostgreSQL Audit Store
@@ -472,6 +512,7 @@ PostgreSQL Audit Store:
   x-archimate-ref: technology.systemsoftware.postgresql
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 File Audit Store:
   id: application.component.file-audit-store
   name: File Audit Store
@@ -483,6 +524,7 @@ File Audit Store:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 In-Memory Audit Store:
   id: application.component.inmemory-audit-store
   name: In-Memory Audit Store
@@ -494,6 +536,7 @@ In-Memory Audit Store:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Audit Retention Policy:
   id: application.component.audit-retention-policy
   name: Audit Retention Policy
@@ -505,6 +548,7 @@ Audit Retention Policy:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Audit CLI:
   id: application.component.audit-cli
   name: Audit CLI
@@ -516,6 +560,7 @@ Audit CLI:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Audit Migrations:
   id: application.component.audit-migrations
   name: Audit Migrations
@@ -527,7 +572,7 @@ Audit Migrations:
   x-archimate-ref: technology.systemsoftware.alembic
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
-# Event Infrastructure Components
+  deployedTo: technology.node.application-server
 Event Bus Implementation:
   id: application.component.event-bus-impl
   name: Event Bus Implementation
@@ -539,6 +584,7 @@ Event Bus Implementation:
   x-archimate-ref: technology.systemsoftware.redis
   deployment-node: technology.node.event-bus
   deployedOn: technology.node.event-bus
+  deployedTo: technology.node.application-server
 Event Persistence Worker:
   id: application.component.event-persistence-worker
   name: Event Persistence Worker
@@ -550,6 +596,7 @@ Event Persistence Worker:
   x-archimate-ref: technology.systemsoftware.redis
   deployment-node: technology.node.event-store
   deployedOn: technology.node.event-store
+  deployedTo: technology.node.application-server
 Event Replayer:
   id: application.component.event-replayer
   name: Event Replayer
@@ -561,6 +608,7 @@ Event Replayer:
   x-archimate-ref: technology.systemsoftware.elasticsearch
   deployment-node: technology.node.event-store
   deployedOn: technology.node.event-store
+  deployedTo: technology.node.application-server
 Event Serialization:
   id: application.component.event-serialization
   name: Event Serialization
@@ -572,6 +620,7 @@ Event Serialization:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.event-bus
   deployedOn: technology.node.event-bus
+  deployedTo: technology.node.application-server
 Redis Event Buffer:
   id: application.component.redis-event-buffer
   name: Redis Event Buffer
@@ -583,6 +632,7 @@ Redis Event Buffer:
   x-archimate-ref: technology.systemsoftware.redis
   deployment-node: technology.node.event-bus
   deployedOn: technology.node.event-bus
+  deployedTo: technology.node.event-bus
 Dead Letter Queue:
   id: application.component.dead-letter-queue
   name: Dead Letter Queue
@@ -594,6 +644,7 @@ Dead Letter Queue:
   x-archimate-ref: technology.systemsoftware.redis
   deployment-node: technology.node.event-bus
   deployedOn: technology.node.event-bus
+  deployedTo: technology.node.application-server
 Mock Dead Letter Queue:
   id: application.component.mock-dead-letter-queue
   name: Mock Dead Letter Queue
@@ -605,6 +656,7 @@ Mock Dead Letter Queue:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.event-bus
   deployedOn: technology.node.event-bus
+  deployedTo: technology.node.application-server
 Event CLI:
   id: application.component.event-cli
   name: Event CLI
@@ -616,7 +668,7 @@ Event CLI:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
-# Caching & Configuration Infrastructure
+  deployedTo: technology.node.application-server
 Redis Config Cache:
   id: application.component.redis-config-cache
   name: Redis Config Cache
@@ -628,6 +680,7 @@ Redis Config Cache:
   x-archimate-ref: technology.systemsoftware.redis
   deployment-node: technology.node.config-store
   deployedOn: technology.node.config-store
+  deployedTo: technology.node.application-server
 Config Serialization Utils:
   id: application.component.config-serialization-utils
   name: Config Serialization Utils
@@ -639,7 +692,7 @@ Config Serialization Utils:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
-# Simulation Infrastructure
+  deployedTo: technology.node.application-server
 Simulation Clock:
   id: application.component.simulation-clock
   name: Simulation Clock
@@ -651,6 +704,7 @@ Simulation Clock:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Simulation Runner:
   id: application.component.simulation-runner
   name: Simulation Runner
@@ -662,7 +716,7 @@ Simulation Runner:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
-# Health & Monitoring Infrastructure
+  deployedTo: technology.node.application-server
 Health Checker:
   id: application.component.health-checker
   name: Health Checker
@@ -674,6 +728,7 @@ Health Checker:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Logging Infrastructure:
   id: application.component.logging-infrastructure
   name: Logging Infrastructure
@@ -685,7 +740,7 @@ Logging Infrastructure:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
-# Input Port Interface Components
+  deployedTo: technology.node.application-server
 Agent Command Port:
   id: application.component.agent-command-port
   name: Agent Command Port
@@ -698,6 +753,7 @@ Agent Command Port:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Agent Query Port:
   id: application.component.agent-query-port
   name: Agent Query Port
@@ -710,6 +766,7 @@ Agent Query Port:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Authentication Port:
   id: application.component.authentication-port
   name: Authentication Port
@@ -722,6 +779,7 @@ Authentication Port:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Config Command Port:
   id: application.component.config-command-port
   name: Config Command Port
@@ -734,6 +792,7 @@ Config Command Port:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Config Query Port:
   id: application.component.config-query-port
   name: Config Query Port
@@ -746,6 +805,7 @@ Config Query Port:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Execution Command Port:
   id: application.component.execution-command-port
   name: Execution Command Port
@@ -758,6 +818,7 @@ Execution Command Port:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Execution Query Port:
   id: application.component.execution-query-port
   name: Execution Query Port
@@ -770,6 +831,7 @@ Execution Query Port:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Metrics Query Port:
   id: application.component.metrics-query-port
   name: Metrics Query Port
@@ -782,6 +844,7 @@ Metrics Query Port:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Orchestration Command Port:
   id: application.component.orchestration-command-port
   name: Orchestration Command Port
@@ -794,6 +857,7 @@ Orchestration Command Port:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Task Query Port:
   id: application.component.task-query-port
   name: Task Query Port
@@ -806,6 +870,7 @@ Task Query Port:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Workflow Command Port:
   id: application.component.workflow-command-port
   name: Workflow Command Port
@@ -818,6 +883,7 @@ Workflow Command Port:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Workflow Definition Command Port:
   id: application.component.workflow-definition-command-port
   name: Workflow Definition Command Port
@@ -830,6 +896,7 @@ Workflow Definition Command Port:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Workflow Query Port:
   id: application.component.workflow-query-port
   name: Workflow Query Port
@@ -842,6 +909,7 @@ Workflow Query Port:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Workflow Run Query Port:
   id: application.component.workflow-run-query-port
   name: Workflow Run Query Port
@@ -854,6 +922,7 @@ Workflow Run Query Port:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Work Item Command Port:
   id: application.component.work-item-command-port
   name: Work Item Command Port
@@ -866,6 +935,7 @@ Work Item Command Port:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Work Item Query Port:
   id: application.component.work-item-query-port
   name: Work Item Query Port
@@ -878,6 +948,7 @@ Work Item Query Port:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Workspace Query Port:
   id: application.component.workspace-query-port
   name: Workspace Query Port
@@ -890,7 +961,7 @@ Workspace Query Port:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
-# Event Handler Components
+  deployedTo: technology.node.application-server
 Execution Event Handler:
   id: application.component.execution-event-handler
   name: Execution Event Handler
@@ -900,13 +971,14 @@ Execution Event Handler:
   properties:
     implementation.class: application.event_handlers.execution_event_handler.ExecutionEventHandler
     subscribesTo:
-      - ExecutionStarted
-      - ExecutionCompleted
-      - ExecutionFailed
-      - ExecutionCancelled
+    - ExecutionStarted
+    - ExecutionCompleted
+    - ExecutionFailed
+    - ExecutionCancelled
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Review Event Handler:
   id: application.component.review-event-handler
   name: Review Event Handler
@@ -916,41 +988,45 @@ Review Event Handler:
   properties:
     implementation.class: application.event_handlers.review_event_handler.ReviewEventHandler
     subscribesTo:
-      - ReviewStarted
-      - ReviewApproved
-      - ReviewRejected
-      - FeedbackProvided
+    - ReviewStarted
+    - ReviewApproved
+    - ReviewRejected
+    - FeedbackProvided
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Workflow Event Handler:
   id: application.component.workflow-event-handler
   name: Workflow Event Handler
   type: component
   componentType: event-handler
-  documentation: Handles workflow state change events (started, stage-completed, completed, failed)
+  documentation: Handles workflow state change events (started, stage-completed, completed,
+    failed)
   properties:
     implementation.class: application.event_handlers.workflow_event_handler.WorkflowEventHandler
     subscribesTo:
-      - WorkflowStarted
-      - StageCompleted
-      - WorkflowCompleted
-      - WorkflowFailed
+    - WorkflowStarted
+    - StageCompleted
+    - WorkflowCompleted
+    - WorkflowFailed
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
-# Secondary Adapter Components
+  deployedTo: technology.node.application-server
 Config Storage Factory:
   id: application.component.config-storage-factory
   name: Config Storage Factory
   type: component
   componentType: secondary-adapter
-  documentation: Factory for creating config store implementations (Elasticsearch, File, InMemory)
+  documentation: Factory for creating config store implementations (Elasticsearch,
+    File, InMemory)
   properties:
     implementation.class: adapters.secondary.config_storage_factory.ConfigStorageFactory
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Event Bus Wiring:
   id: application.component.event-bus-wiring
   name: Event Bus Wiring
@@ -962,7 +1038,7 @@ Event Bus Wiring:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
-# Output Port Interface Components
+  deployedTo: technology.node.application-server
 Ticket System Port:
   id: application.component.ticket-system-port
   name: Ticket System Port
@@ -975,6 +1051,7 @@ Ticket System Port:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 LLM Provider Port:
   id: application.component.llm-provider-port
   name: LLM Provider Port
@@ -987,6 +1064,7 @@ LLM Provider Port:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Container Port:
   id: application.component.container-port
   name: Container Port
@@ -999,6 +1077,7 @@ Container Port:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Repository Port:
   id: application.component.repository-port
   name: Repository Port
@@ -1011,6 +1090,7 @@ Repository Port:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Event Store Port:
   id: application.component.event-store-port
   name: Event Store Port
@@ -1023,6 +1103,7 @@ Event Store Port:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.event-store
   deployedOn: technology.node.event-store
+  deployedTo: technology.node.application-server
 Storage Port:
   id: application.component.storage-port
   name: Storage Port
@@ -1035,6 +1116,7 @@ Storage Port:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Config Store Port:
   id: application.component.config-store-port
   name: Config Store Port
@@ -1047,6 +1129,7 @@ Config Store Port:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.config-store
   deployedOn: technology.node.config-store
+  deployedTo: technology.node.application-server
 Encryption Service Port:
   id: application.component.encryption-service-port
   name: Encryption Service Port
@@ -1059,6 +1142,7 @@ Encryption Service Port:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Message Broker Port:
   id: application.component.message-broker-port
   name: Message Broker Port
@@ -1071,6 +1155,7 @@ Message Broker Port:
   x-archimate-ref: technology.systemsoftware.redis
   deployment-node: technology.node.event-bus
   deployedOn: technology.node.event-bus
+  deployedTo: technology.node.application-server
 Metrics Port:
   id: application.component.metrics-port
   name: Metrics Port
@@ -1083,6 +1168,7 @@ Metrics Port:
   x-archimate-ref: technology.systemsoftware.open-telemetry
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Notifier Port:
   id: application.component.notifier-port
   name: Notifier Port
@@ -1095,9 +1181,11 @@ Notifier Port:
   x-archimate-ref: technology.systemsoftware.python-runtime
   deployment-node: technology.node.application-server
   deployedOn: technology.node.application-server
+  deployedTo: technology.node.application-server
 Frontend Application:
   componentType: application
   description: React-based frontend application
   id: application.component.frontend-application
   name: Frontend Application
   deployment-node: technology.node.application-server
+  deployedTo: technology.node.application-server

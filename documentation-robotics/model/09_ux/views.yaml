@@ -35,7 +35,6 @@ Authentication Required Screen:
   - motivation.goal.ease-of-configuration
   usesAuthScheme:
   - security.authentication.query-param-auth
-  usesApiOperations: []
   properties:
     screen.component: AuthRequiredPage
     screen.icons: AlertCircle, Terminal
@@ -155,6 +154,8 @@ Project Configuration Screen:
   usesApiOperations:
   - api.operation.get-project-config
   - api.operation.update-project-config
+  - api.operation.add-environment-variable
+  - api.operation.remove-environment-variable
   properties:
     screen.component: ProjectConfigPage
     screen.icons: Plus, Trash2, Eye, EyeOff, Save
@@ -208,7 +209,12 @@ Workflow Configuration Screen:
   - motivation.goal.ease-of-configuration
   - motivation.goal.automation
   usesApiOperations:
-  - api.operation.get-project-config
+  - api.operation.list-workflow-runs
+  - api.operation.get-workflow-run
+  - api.operation.start-workflow-execution
+  - api.operation.pause-workflow-execution
+  - api.operation.resume-workflow-execution
+  - api.operation.cancel-workflow-execution
   properties:
     screen.component: WorkflowConfigPage
     screen.requires-auth: 'true'
@@ -263,6 +269,14 @@ Agent Configuration Screen:
   - motivation.goal.security
   usesApiOperations:
   - api.operation.list-agents
+  - api.operation.get-agent
+  - api.operation.create-agent
+  - api.operation.update-agent
+  - api.operation.delete-agent
+  - api.operation.add-agent-capability
+  - api.operation.remove-agent-capability
+  - api.operation.add-agent-mcp-server
+  - api.operation.remove-agent-mcp-server
   properties:
     screen.component: AgentConfigPage
     screen.requires-auth: 'true'
@@ -314,7 +328,8 @@ Configuration History Screen:
   - motivation.goal.observability
   - motivation.goal.ease-of-configuration
   usesApiOperations:
-  - api.operation.get-project-config
+  - api.operation.get-events
+  - api.operation.replay-events
   properties:
     screen.component: ConfigHistoryPage
     screen.requires-auth: 'true'

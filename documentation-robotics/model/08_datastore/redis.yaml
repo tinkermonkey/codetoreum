@@ -188,5 +188,68 @@ Redis Cache and Pub/Sub:
       cache_misses:
         description: Cache miss count
         type: counter
+  evictionPolicy:
+    policy: allkeys-lru
+    description: Least Recently Used (LRU) eviction for all keys when max memory reached
+    maxMemory: 2gb
+    samples: 5
+    alternatives:
+      - volatile-lru: Evict LRU keys with expiration set
+      - allkeys-random: Evict random keys
+      - volatile-ttl: Evict keys with shortest TTL
+    rationale: allkeys-lru provides best balance for mixed workload with config cache, sessions, and rate limiting
+
+  persistenceConfiguration:
+    aofEnabled: true
+    aofSyncStrategy: everysec
+    description: Append-Only File (AOF) with fsync every second for durability with minimal performance impact
+    aofRewritePercentage: 100
+    aofRewriteMinSize: 64mb
+    rdbEnabled: false
+    rationale: AOF provides better durability guarantees than RDB snapshots for critical cache and session data
+
+  clusterConfiguration:
+    mode: sentinel
+    description: Redis Sentinel for high availability with automatic failover
+    sentinels: 3
+    quorum: 2
+    downAfterMilliseconds: 5000
+    failoverTimeout: 60000
+    replicas: 2
+
+  memoryManagement:
+    maxMemory: 2gb
+    maxMemoryPolicy: allkeys-lru
+    maxMemorySamples: 5
+    lazyfreeEnabled: true
+    description: Asynchronous memory freeing to avoid blocking operations
+
+  performanceTuning:
+    ioThreads: 4
+    ioThreadsDoReads: true
+    tcpBacklog: 511
+    tcpKeepalive: 300
+    timeout: 0
+
+  monitoringIntegration:
+    prometheusExporter: true
+    exporterPort: 9121
+    metricsCollected:
+      - connected_clients
+      - used_memory
+      - evicted_keys
+      - keyspace_hits
+      - keyspace_misses
+      - pubsub_channels
+      - pubsub_patterns
+    alertThresholds:
+      memory_usage_high: 90%
+      eviction_rate_high: 1000/min
+      connection_pool_exhausted: 90%
+
   uses-technology:
   - technology.systemsoftware.redis
+
+  x-deployment-node: technology.node.redis-cluster
+  x-backup-strategy: AOF file backup to S3 every 6 hours
+  x-disaster-recovery: Point-in-time recovery from AOF files with 6-hour RPO
