@@ -18,7 +18,15 @@ import os
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional
 
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import Depends, FastAPI, Header, Query, Request, Response, WebSocket
+
+# OpenTelemetry / Signoz integration
+from codetoreum.infrastructure.observability.config import ObservabilityConfig
+from codetoreum.infrastructure.observability.otel_setup import setup_opentelemetry
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -140,7 +148,10 @@ async def lifespan(app: FastAPI):
     Handles startup and shutdown events.
     """
     # Startup
-    print("Starting Codetoreum API Server...")
+    print("Starting Codetoreum API Server...", flush=True)
+
+    # Note: OpenTelemetry instrumentation is now done at module level
+    # (see bottom of this file, after app = create_development_app())
 
     # Print authentication info if auth manager exists
     if hasattr(app.state, "auth_manager"):
@@ -154,6 +165,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     print("Shutting down Codetoreum API Server...")
+    # TODO: Flush pending telemetry data to Signoz before shutdown
 
 
 # ============================================================================
@@ -2220,3 +2232,21 @@ def create_development_app() -> FastAPI:
 
 # For running with uvicorn
 app = create_development_app()
+
+# Initialize OpenTelemetry instrumentation at module level
+# This must happen after app creation but before the app starts handling requests
+# Guard prevents double instrumentation if module is imported multiple times
+_otel_instrumented = False
+
+if not _otel_instrumented:
+    from codetoreum.infrastructure.observability import ObservabilityConfig, setup_opentelemetry
+
+    _otel_config = ObservabilityConfig.from_env()
+    if _otel_config.enabled and _otel_config.traces_enabled and _otel_config.signoz.enabled:
+        setup_opentelemetry(_otel_config, app)
+        print(f"[MODULE] OpenTelemetry instrumented at module level", flush=True)
+        print(f"[MODULE]   → Endpoint: {_otel_config.signoz.grpc_endpoint}", flush=True)
+        print(f"[MODULE]   → Service: {_otel_config.signoz.service_name}", flush=True)
+        _otel_instrumented = True
+    else:
+        print(f"[MODULE] OpenTelemetry disabled or not configured", flush=True)

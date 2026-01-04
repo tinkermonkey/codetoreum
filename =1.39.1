@@ -1,0 +1,51 @@
+Collecting opentelemetry-exporter-otlp-proto-grpc
+  Downloading opentelemetry_exporter_otlp_proto_grpc-1.39.1-py3-none-any.whl.metadata (2.5 kB)
+Collecting opentelemetry-exporter-otlp-proto-http
+  Downloading opentelemetry_exporter_otlp_proto_http-1.39.1-py3-none-any.whl.metadata (2.4 kB)
+Collecting googleapis-common-protos~=1.57 (from opentelemetry-exporter-otlp-proto-grpc)
+  Downloading googleapis_common_protos-1.72.0-py3-none-any.whl.metadata (9.4 kB)
+Collecting grpcio<2.0.0,>=1.63.2 (from opentelemetry-exporter-otlp-proto-grpc)
+  Downloading grpcio-1.76.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (3.7 kB)
+Collecting opentelemetry-api~=1.15 (from opentelemetry-exporter-otlp-proto-grpc)
+  Downloading opentelemetry_api-1.39.1-py3-none-any.whl.metadata (1.5 kB)
+Collecting opentelemetry-exporter-otlp-proto-common==1.39.1 (from opentelemetry-exporter-otlp-proto-grpc)
+  Downloading opentelemetry_exporter_otlp_proto_common-1.39.1-py3-none-any.whl.metadata (1.8 kB)
+Collecting opentelemetry-proto==1.39.1 (from opentelemetry-exporter-otlp-proto-grpc)
+  Downloading opentelemetry_proto-1.39.1-py3-none-any.whl.metadata (2.3 kB)
+Collecting opentelemetry-sdk~=1.39.1 (from opentelemetry-exporter-otlp-proto-grpc)
+  Downloading opentelemetry_sdk-1.39.1-py3-none-any.whl.metadata (1.5 kB)
+Requirement already satisfied: typing-extensions>=4.6.0 in ./.venv/lib/python3.12/site-packages (from opentelemetry-exporter-otlp-proto-grpc) (4.15.0)
+Collecting protobuf<7.0,>=5.0 (from opentelemetry-proto==1.39.1->opentelemetry-exporter-otlp-proto-grpc)
+  Downloading protobuf-6.33.2-cp39-abi3-manylinux2014_x86_64.whl.metadata (593 bytes)
+Requirement already satisfied: requests~=2.7 in ./.venv/lib/python3.12/site-packages (from opentelemetry-exporter-otlp-proto-http) (2.32.5)
+Collecting importlib-metadata<8.8.0,>=6.0 (from opentelemetry-api~=1.15->opentelemetry-exporter-otlp-proto-grpc)
+  Downloading importlib_metadata-8.7.1-py3-none-any.whl.metadata (4.7 kB)
+Collecting opentelemetry-semantic-conventions==0.60b1 (from opentelemetry-sdk~=1.39.1->opentelemetry-exporter-otlp-proto-grpc)
+  Downloading opentelemetry_semantic_conventions-0.60b1-py3-none-any.whl.metadata (2.4 kB)
+Requirement already satisfied: charset_normalizer<4,>=2 in ./.venv/lib/python3.12/site-packages (from requests~=2.7->opentelemetry-exporter-otlp-proto-http) (3.4.4)
+Requirement already satisfied: idna<4,>=2.5 in ./.venv/lib/python3.12/site-packages (from requests~=2.7->opentelemetry-exporter-otlp-proto-http) (3.11)
+Requirement already satisfied: urllib3<3,>=1.21.1 in ./.venv/lib/python3.12/site-packages (from requests~=2.7->opentelemetry-exporter-otlp-proto-http) (2.5.0)
+Requirement already satisfied: certifi>=2017.4.17 in ./.venv/lib/python3.12/site-packages (from requests~=2.7->opentelemetry-exporter-otlp-proto-http) (2025.11.12)
+Collecting zipp>=3.20 (from importlib-metadata<8.8.0,>=6.0->opentelemetry-api~=1.15->opentelemetry-exporter-otlp-proto-grpc)
+  Using cached zipp-3.23.0-py3-none-any.whl.metadata (3.6 kB)
+Downloading opentelemetry_exporter_otlp_proto_grpc-1.39.1-py3-none-any.whl (19 kB)
+Downloading opentelemetry_exporter_otlp_proto_common-1.39.1-py3-none-any.whl (18 kB)
+Downloading opentelemetry_proto-1.39.1-py3-none-any.whl (72 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 72.5/72.5 kB 4.1 MB/s eta 0:00:00
+Downloading opentelemetry_exporter_otlp_proto_http-1.39.1-py3-none-any.whl (19 kB)
+Downloading googleapis_common_protos-1.72.0-py3-none-any.whl (297 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 297.5/297.5 kB 15.4 MB/s eta 0:00:00
+Downloading grpcio-1.76.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (6.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.6/6.6 MB 60.3 MB/s eta 0:00:00
+Downloading opentelemetry_api-1.39.1-py3-none-any.whl (66 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 66.4/66.4 kB 6.5 MB/s eta 0:00:00
+Downloading opentelemetry_sdk-1.39.1-py3-none-any.whl (132 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 132.6/132.6 kB 13.1 MB/s eta 0:00:00
+Downloading opentelemetry_semantic_conventions-0.60b1-py3-none-any.whl (219 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 220.0/220.0 kB 20.2 MB/s eta 0:00:00
+Downloading importlib_metadata-8.7.1-py3-none-any.whl (27 kB)
+Downloading protobuf-6.33.2-cp39-abi3-manylinux2014_x86_64.whl (323 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 323.3/323.3 kB 17.5 MB/s eta 0:00:00
+Using cached zipp-3.23.0-py3-none-any.whl (10 kB)
+Installing collected packages: zipp, protobuf, grpcio, opentelemetry-proto, importlib-metadata, googleapis-common-protos, opentelemetry-exporter-otlp-proto-common, opentelemetry-api, opentelemetry-semantic-conventions, opentelemetry-sdk, opentelemetry-exporter-otlp-proto-http, opentelemetry-exporter-otlp-proto-grpc
+Successfully installed googleapis-common-protos-1.72.0 grpcio-1.76.0 importlib-metadata-8.7.1 opentelemetry-api-1.39.1 opentelemetry-exporter-otlp-proto-common-1.39.1 opentelemetry-exporter-otlp-proto-grpc-1.39.1 opentelemetry-exporter-otlp-proto-http-1.39.1 opentelemetry-proto-1.39.1 opentelemetry-sdk-1.39.1 opentelemetry-semantic-conventions-0.60b1 protobuf-6.33.2 zipp-3.23.0

@@ -12,6 +12,16 @@ import re
 from contextvars import ContextVar
 from typing import Any, Dict, Optional
 
+# Import TraceContextInjector for OpenTelemetry trace correlation
+# Note: Import is conditional - TraceContextInjector gracefully handles when OTel is not initialized
+try:
+    from codetoreum.infrastructure.observability.logging_integration import TraceContextInjector
+    TRACE_CONTEXT_AVAILABLE = True
+except ImportError:
+    # Observability module not available yet (e.g., during initial setup)
+    TRACE_CONTEXT_AVAILABLE = False
+    TraceContextInjector = None  # type: ignore
+
 # Context variable for correlation ID
 correlation_id_context: ContextVar[Optional[str]] = ContextVar(
     "correlation_id", default=None
@@ -126,6 +136,8 @@ class JSONFormatter(logging.Formatter):
     - logger
     - message
     - correlation_id (if available)
+    - trace_id (if available from OpenTelemetry)
+    - span_id (if available from OpenTelemetry)
     - Additional context fields
     """
 
@@ -150,6 +162,11 @@ class JSONFormatter(logging.Formatter):
         correlation_id = correlation_id_context.get()
         if correlation_id:
             log_data["correlation_id"] = correlation_id
+
+        # Add trace context if available (from TraceContextInjector)
+        if hasattr(record, 'trace_id') and record.trace_id != "N/A":
+            log_data["trace_id"] = record.trace_id
+            log_data["span_id"] = record.span_id
 
         # Add exception info if present
         if record.exc_info:
@@ -222,7 +239,7 @@ def configure_logging(
             formatter = JSONFormatter()
         else:
             formatter = logging.Formatter(
-                "%(asctime)s - %(name)s - %(levelname)s - [%(correlation_id)s] - %(message)s",
+                "%(asctime)s - %(name)s - %(levelname)s - [%(correlation_id)s] - [trace:%(trace_id)s span:%(span_id)s] - %(message)s",
                 datefmt="%Y-%m-%d %H:%M:%S",
             )
 
@@ -233,6 +250,10 @@ def configure_logging(
             console_handler.addFilter(SensitiveDataFilter(custom_patterns=custom_patterns))
 
         console_handler.addFilter(CorrelationIdFilter())
+
+        # Add trace context injector if available
+        if TRACE_CONTEXT_AVAILABLE and TraceContextInjector:
+            console_handler.addFilter(TraceContextInjector())
 
         # Add handler to root logger
         root_logger.addHandler(console_handler)
