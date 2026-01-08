@@ -217,9 +217,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
             raise ValidationError("project_id is required")
 
         if project_id not in self._monitoring:
-            raise ResourceNotFoundError(
-                f"Not monitoring project {project_id}"
-            )
+            raise ResourceNotFoundError("project", project_id)
 
         # Cancel polling task if running
         if project_id in self._polling_tasks:
@@ -346,7 +344,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
 
             return None
         except Exception as e:
-            raise ExternalServiceError(f"Failed to search for PR: {e}")
+            raise ExternalServiceError("github", f"Failed to search for PR: {e}")
 
     async def get_review_status(self, review_id: str) -> CodeReviewStatus:
         """Query current PR review status.
@@ -391,13 +389,13 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
             pr_node = result.get("node")
 
             if not pr_node:
-                raise ResourceNotFoundError(f"PR {review_id} not found")
+                raise ResourceNotFoundError("PR", review_id)
 
             return self._compute_review_status(pr_node)
-        except ExternalServiceError:
+        except (ExternalServiceError, ResourceNotFoundError):
             raise
         except Exception as e:
-            raise ExternalServiceError(f"Failed to fetch PR status: {e}")
+            raise ExternalServiceError("github", f"Failed to fetch PR status: {e}")
 
     async def get_review_comments(self, review_id: str) -> List[ReviewComment]:
         """Retrieve all comments on a code review.
@@ -467,7 +465,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
             pr_node = result.get("node")
 
             if not pr_node:
-                raise ResourceNotFoundError(f"PR {review_id} not found")
+                raise ResourceNotFoundError("PR", review_id)
 
             comments = []
 
@@ -505,7 +503,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
         except ResourceNotFoundError:
             raise
         except Exception as e:
-            raise ExternalServiceError(f"Failed to fetch PR comments: {e}")
+            raise ExternalServiceError("github", f"Failed to fetch PR comments: {e}")
 
     # Command Operations
 
@@ -577,7 +575,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
             )
             if not review_node:
                 raise ExternalServiceError(
-                    "Failed to submit review: empty response"
+                    "github", "Failed to submit review: empty response"
                 )
 
             # Get new status
@@ -623,7 +621,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
         except ExternalServiceError:
             raise
         except Exception as e:
-            raise ExternalServiceError(f"Failed to request changes: {e}")
+            raise ExternalServiceError("github", f"Failed to request changes: {e}")
 
     async def approve(self, review_id: str) -> None:
         """Approve a code review.
@@ -685,7 +683,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
             )
             if not review_node:
                 raise ExternalServiceError(
-                    "Failed to approve: empty response"
+                    "github", "Failed to approve: empty response"
                 )
 
             # Get new status
@@ -712,7 +710,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
         except ExternalServiceError:
             raise
         except Exception as e:
-            raise ExternalServiceError(f"Failed to approve: {e}")
+            raise ExternalServiceError("github", f"Failed to approve: {e}")
 
     # Webhook handling
 
@@ -978,13 +976,13 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
             pr_node = result.get("node")
 
             if not pr_node:
-                raise ResourceNotFoundError(f"PR {pr_id} not found")
+                raise ResourceNotFoundError("PR", pr_id)
 
             return self._parse_code_review(pr_node)
         except ResourceNotFoundError:
             raise
         except Exception as e:
-            raise ExternalServiceError(f"Failed to fetch PR details: {e}")
+            raise ExternalServiceError("github", f"Failed to fetch PR details: {e}")
 
     async def _get_open_prs(self, project_id: str) -> List[Dict[str, Any]]:
         """Query all open PRs for a project.
@@ -1036,7 +1034,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
             prs = result.get("repository", {}).get("pullRequests", {}).get("nodes", [])
             return prs
         except Exception as e:
-            raise ExternalServiceError(f"Failed to fetch open PRs: {e}")
+            raise ExternalServiceError("github", f"Failed to fetch open PRs: {e}")
 
     def _compute_review_status(self, pr_node: Dict[str, Any]) -> CodeReviewStatus:
         """Compute overall review status from PR node.
@@ -1192,7 +1190,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
             return (self._ticket_adapter._owner, self._ticket_adapter._repo)
 
         raise ExternalServiceError(
-            "Unable to determine GitHub owner/repo from adapter"
+            "github", "Unable to determine GitHub owner/repo from adapter"
         )
 
     async def _get_project_id(self) -> str:

@@ -127,12 +127,11 @@ class GitHubBoardAdapter(IBoardService):
             project_id: Project containing the board
             config: Monitoring configuration
         """
-        key = f"{project_id}:{config.board_id}"
+        key = project_id
 
         self._monitoring[key] = MonitoringStatus(
             state=MonitoringState.ACTIVE,
             project_id=project_id,
-            board_id=config.board_id,
             started_at=datetime.utcnow().isoformat(),
         )
 
@@ -144,52 +143,53 @@ class GitHubBoardAdapter(IBoardService):
         self._polling_intervals[key] = 60.0  # Initial 60s interval
 
         # Start polling if webhooks disabled
-        if not self._webhook_enabled:
-            self._polling_tasks[key] = asyncio.create_task(
-                self._poll_board_changes(project_id, config.board_id)
+        if not self._webhook_enabled and hasattr(config, 'board_id'):
+            board_id = config.board_id
+            poll_key = f"{project_id}:{board_id}"
+            self._polling_tasks[poll_key] = asyncio.create_task(
+                self._poll_board_changes(project_id, board_id)
             )
 
-    async def stop_monitoring(self, project_id: str, board_id: str) -> None:
+    async def stop_monitoring(self, project_id: str) -> None:
         """Stop monitoring board for changes.
 
         Args:
-            project_id: Project containing the board
-            board_id: Board to stop monitoring
+            project_id: Project to stop monitoring
         """
-        key = f"{project_id}:{board_id}"
+        key = project_id
 
-        if key in self._polling_tasks:
-            task = self._polling_tasks[key]
+        # Cancel all polling tasks for this project
+        tasks_to_cancel = [k for k in self._polling_tasks.keys() if k.startswith(f"{project_id}:")]
+        for task_key in tasks_to_cancel:
+            task = self._polling_tasks[task_key]
             task.cancel()
             try:
                 await task
             except asyncio.CancelledError:
                 pass
-            del self._polling_tasks[key]
+            del self._polling_tasks[task_key]
 
         if key in self._monitoring:
             self._monitoring[key].state = MonitoringState.STOPPED
 
     def get_monitoring_status(
-        self, project_id: str, board_id: str
+        self, project_id: str
     ) -> MonitoringStatus:
-        """Get monitoring status for a board.
+        """Get monitoring status for a project.
 
         Args:
-            project_id: Project containing the board
-            board_id: Board to query
+            project_id: Project to query
 
         Returns:
             Current monitoring status
         """
-        key = f"{project_id}:{board_id}"
+        key = project_id
         if key in self._monitoring:
             return self._monitoring[key]
 
         return MonitoringStatus(
             state=MonitoringState.STOPPED,
             project_id=project_id,
-            board_id=board_id,
         )
 
     # Query Operations
@@ -259,13 +259,13 @@ class GitHubBoardAdapter(IBoardService):
             board_node = result.get("node")
 
             if not board_node:
-                raise ResourceNotFoundError(f"Board {board_id} not found")
+                raise ResourceNotFoundError("Board", board_id)
 
             return self._parse_board_response(project_id, board_id, board_node)
         except ExternalServiceError:
             raise
         except Exception as e:
-            raise ExternalServiceError(f"Failed to fetch board: {str(e)}")
+            raise ExternalServiceError("GitHub", f"Failed to fetch board: {str(e)}")
 
     async def get_columns(self, board_id: str) -> List[Column]:
         """Get all columns for a board.
@@ -307,7 +307,7 @@ class GitHubBoardAdapter(IBoardService):
             if column.name == column_name:
                 return column.work_item_ids
 
-        raise ResourceNotFoundError(f"Column '{column_name}' not found on board")
+        raise ResourceNotFoundError("Column", column_name)
 
     async def get_item_position(self, work_item_id: str) -> Tuple[str, int]:
         """Get current column position of a work item.
@@ -366,7 +366,7 @@ class GitHubBoardAdapter(IBoardService):
 
         if not from_column:
             raise ResourceNotFoundError(
-                f"Work item {work_item_id} not found on board"
+                "WorkItem", work_item_id
             )
 
         # Validate target column exists
@@ -705,7 +705,7 @@ class GitHubBoardAdapter(IBoardService):
                     break
 
             if not status_field:
-                raise ExternalServiceError("Status field not found on board")
+                raise ExternalServiceError("GitHub", "Status field not found on board")
 
             # Build column map
             columns_by_id: Dict[str, str] = {}
@@ -766,7 +766,7 @@ class GitHubBoardAdapter(IBoardService):
 
         except (KeyError, TypeError) as e:
             raise ExternalServiceError(
-                f"Invalid board response format: {str(e)}"
+                "GitHub", f"Invalid board response format: {str(e)}"
             )
 
     def _find_status_field_id(self, board: ProjectBoard) -> Optional[str]:

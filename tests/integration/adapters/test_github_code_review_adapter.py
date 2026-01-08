@@ -42,13 +42,35 @@ class MockGraphQLClient:
     def __init__(self):
         self.queries: List[tuple] = []
         self.responses: Dict[str, Any] = {}
+        self.call_count: Dict[str, int] = {}  # Track call counts per query type
 
     async def execute(self, query: str, variables: Optional[Dict] = None) -> Dict[str, Any]:
         """Record query and return mock response."""
         self.queries.append((query, variables))
 
         # Return mock responses based on query type
+        # Check for GetPullRequestComments FIRST since it contains "GetPullRequest"
+        if "GetPullRequestComments" in query:
+            return self.responses.get("GetPullRequestComments", {
+                "node": {
+                    "id": "PR123",
+                    "reviews": {"nodes": []},
+                    "comments": {"nodes": []},
+                }
+            })
+
         if "GetPullRequest" in query and "prId" in str(variables):
+            # Track call count to simulate status changes after mutations
+            query_type = "GetPullRequest"
+            self.call_count[query_type] = self.call_count.get(query_type, 0) + 1
+
+            # If we have a custom response sequence, use that
+            if f"{query_type}_responses" in self.responses:
+                responses_list = self.responses[f"{query_type}_responses"]
+                call_idx = min(self.call_count[query_type] - 1, len(responses_list) - 1)
+                return responses_list[call_idx]
+
+            # Otherwise use default or single response
             return self.responses.get("GetPullRequest", {
                 "node": {
                     "id": "PR123",
@@ -64,15 +86,6 @@ class MockGraphQLClient:
                             }
                         ]
                     },
-                }
-            })
-
-        if "GetPullRequestComments" in query:
-            return self.responses.get("GetPullRequestComments", {
-                "node": {
-                    "id": "PR123",
-                    "reviews": {"nodes": []},
-                    "comments": {"nodes": []},
                 }
             })
 
@@ -436,13 +449,32 @@ class TestCommandOperations:
     @pytest.mark.asyncio
     async def test_request_changes_emits_status_changed(self, adapter, mock_graphql_client):
         """Test request_changes emits review.status_changed event."""
-        mock_graphql_client.responses["GetPullRequest"] = {
-            "node": {
-                "id": "PR123",
-                "state": "OPEN",
-                "reviews": {"nodes": []},
-            }
-        }
+        # First call returns no reviews (initial state), second call returns the new review
+        mock_graphql_client.responses["GetPullRequest_responses"] = [
+            {
+                "node": {
+                    "id": "PR123",
+                    "state": "OPEN",
+                    "reviews": {"nodes": []},
+                }
+            },
+            {
+                "node": {
+                    "id": "PR123",
+                    "state": "OPEN",
+                    "reviews": {
+                        "nodes": [
+                            {
+                                "id": "REVIEW_NEW",
+                                "state": "CHANGES_REQUESTED",
+                                "author": {"login": "bot"},
+                                "submittedAt": "2024-01-01T11:00:00Z",
+                            }
+                        ]
+                    },
+                }
+            },
+        ]
 
         # Mock response after mutation
         mock_graphql_client.responses["SubmitReview"] = {
@@ -469,13 +501,32 @@ class TestCommandOperations:
     @pytest.mark.asyncio
     async def test_request_changes_emits_comment_added(self, adapter, mock_graphql_client):
         """Test request_changes emits review.comment_added event."""
-        mock_graphql_client.responses["GetPullRequest"] = {
-            "node": {
-                "id": "PR123",
-                "state": "OPEN",
-                "reviews": {"nodes": []},
-            }
-        }
+        # First call returns no reviews (initial state), second call returns the new review
+        mock_graphql_client.responses["GetPullRequest_responses"] = [
+            {
+                "node": {
+                    "id": "PR123",
+                    "state": "OPEN",
+                    "reviews": {"nodes": []},
+                }
+            },
+            {
+                "node": {
+                    "id": "PR123",
+                    "state": "OPEN",
+                    "reviews": {
+                        "nodes": [
+                            {
+                                "id": "REVIEW_NEW",
+                                "state": "CHANGES_REQUESTED",
+                                "author": {"login": "bot"},
+                                "submittedAt": "2024-01-01T11:00:00Z",
+                            }
+                        ]
+                    },
+                }
+            },
+        ]
 
         mock_graphql_client.responses["SubmitReview"] = {
             "submitPullRequestReview": {
@@ -521,13 +572,32 @@ class TestCommandOperations:
     @pytest.mark.asyncio
     async def test_approve_emits_status_changed(self, adapter, mock_graphql_client):
         """Test approve emits review.status_changed event."""
-        mock_graphql_client.responses["GetPullRequest"] = {
-            "node": {
-                "id": "PR123",
-                "state": "OPEN",
-                "reviews": {"nodes": []},
-            }
-        }
+        # First call returns no reviews (initial state), second call returns the approval
+        mock_graphql_client.responses["GetPullRequest_responses"] = [
+            {
+                "node": {
+                    "id": "PR123",
+                    "state": "OPEN",
+                    "reviews": {"nodes": []},
+                }
+            },
+            {
+                "node": {
+                    "id": "PR123",
+                    "state": "OPEN",
+                    "reviews": {
+                        "nodes": [
+                            {
+                                "id": "REVIEW_NEW",
+                                "state": "APPROVED",
+                                "author": {"login": "bot"},
+                                "submittedAt": "2024-01-01T11:00:00Z",
+                            }
+                        ]
+                    },
+                }
+            },
+        ]
 
         mock_graphql_client.responses["SubmitReview"] = {
             "submitPullRequestReview": {
