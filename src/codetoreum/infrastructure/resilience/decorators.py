@@ -5,7 +5,7 @@ Provides decorators that wrap port interfaces with resilience patterns.
 
 import time
 from datetime import datetime
-from typing import Any, AsyncIterator, Callable, Dict, List, Optional, TypeVar
+from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Tuple, TypeVar
 
 from codetoreum.domain.comment import Comment
 from codetoreum.domain.types import ExecutionId, ProjectId, UserId, WorkItemId
@@ -21,6 +21,14 @@ from codetoreum.ports.output.llm_provider import (
     UsageStats,
 )
 from codetoreum.ports.output.ticket_system import ITicketSystem
+from codetoreum.ports.output.board_service import (
+    IBoardService,
+    ProjectBoard,
+    Column,
+    ReconciliationResult,
+    BoardConfig,
+)
+from codetoreum.ports.output.monitoring import MonitoringConfig, MonitoringStatus
 
 from .interfaces import ICircuitBreaker, IRateLimiter, IRetryPolicy, ITimeout
 
@@ -514,3 +522,211 @@ class ResilientLLMProviderDecorator(ILLMProvider):
     def _estimate_tokens(self, text: str) -> int:
         """Rough token estimation (4 chars per token)."""
         return max(1, len(text) // 4)
+
+
+# ============================================================================
+# Resilient Board Service Decorator
+# ============================================================================
+
+class ResilientBoardServiceDecorator(IBoardService):
+    """
+    Wraps IBoardService with resilience patterns.
+
+    Applies rate limiting, circuit breaking, retries, and timeouts
+    to all board service operations.
+    """
+
+    def __init__(
+        self,
+        wrapped: IBoardService,
+        rate_limiter: Optional[IRateLimiter] = None,
+        circuit_breaker: Optional[ICircuitBreaker] = None,
+        retry_policy: Optional[IRetryPolicy] = None,
+        timeout: Optional[ITimeout] = None,
+        default_timeout_seconds: float = 30.0
+    ):
+        """
+        Initialize resilient board service decorator.
+
+        Args:
+            wrapped: Underlying board service adapter
+            rate_limiter: Optional rate limiter (respects GitHub 5000 req/hr limit)
+            circuit_breaker: Optional circuit breaker
+            retry_policy: Optional retry policy
+            timeout: Optional timeout handler
+            default_timeout_seconds: Default operation timeout
+        """
+        self._wrapped = wrapped
+        self._rate_limiter = rate_limiter
+        self._circuit_breaker = circuit_breaker
+        self._retry_policy = retry_policy
+        self._timeout = timeout
+        self._default_timeout = default_timeout_seconds
+
+    # IEventEmitter implementation (pass through)
+
+    def on(self, event_type: str, handler: Callable) -> None:
+        """Register event handler."""
+        self._wrapped.on(event_type, handler)
+
+    def off(self, event_type: str, handler: Callable) -> None:
+        """Unregister event handler."""
+        self._wrapped.off(event_type, handler)
+
+    def emit(self, event: Any) -> None:
+        """Emit event."""
+        self._wrapped.emit(event)
+
+    # IMonitoredService implementation
+
+    async def start_monitoring(
+        self, project_id: str, config: MonitoringConfig
+    ) -> None:
+        """Start monitoring with resilience."""
+        return await self._execute_resilient(
+            operation=lambda: self._wrapped.start_monitoring(project_id, config),
+            operation_name="start_monitoring",
+            rate_limit_cost=1
+        )
+
+    async def stop_monitoring(self, project_id: str, board_id: str) -> None:
+        """Stop monitoring with resilience."""
+        return await self._execute_resilient(
+            operation=lambda: self._wrapped.stop_monitoring(project_id, board_id),
+            operation_name="stop_monitoring",
+            rate_limit_cost=1
+        )
+
+    def get_monitoring_status(
+        self, project_id: str, board_id: str
+    ) -> MonitoringStatus:
+        """Get monitoring status (synchronous, no resilience)."""
+        return self._wrapped.get_monitoring_status(project_id, board_id)
+
+    # Query Operations
+
+    async def get_board(self, project_id: str, board_id: str) -> ProjectBoard:
+        """Get board with resilience (1 GraphQL credit)."""
+        return await self._execute_resilient(
+            operation=lambda: self._wrapped.get_board(project_id, board_id),
+            operation_name="get_board",
+            rate_limit_cost=1
+        )
+
+    async def get_columns(self, board_id: str) -> List[Column]:
+        """Get columns with resilience (1 GraphQL credit)."""
+        return await self._execute_resilient(
+            operation=lambda: self._wrapped.get_columns(board_id),
+            operation_name="get_columns",
+            rate_limit_cost=1
+        )
+
+    async def get_items_in_column(
+        self, board_id: str, column_name: str
+    ) -> List[str]:
+        """Get items in column with resilience (1 GraphQL credit)."""
+        return await self._execute_resilient(
+            operation=lambda: self._wrapped.get_items_in_column(board_id, column_name),
+            operation_name="get_items_in_column",
+            rate_limit_cost=1
+        )
+
+    async def get_item_position(self, work_item_id: str) -> Tuple[str, int]:
+        """Get item position with resilience."""
+        return await self._execute_resilient(
+            operation=lambda: self._wrapped.get_item_position(work_item_id),
+            operation_name="get_item_position",
+            rate_limit_cost=1
+        )
+
+    # Command Operations
+
+    async def move_item_to_column(
+        self, work_item_id: str, target_column: str
+    ) -> None:
+        """Move item with resilience (1 GraphQL mutation)."""
+        return await self._execute_resilient(
+            operation=lambda: self._wrapped.move_item_to_column(work_item_id, target_column),
+            operation_name="move_item_to_column",
+            rate_limit_cost=1
+        )
+
+    async def reconcile_board(self, config: BoardConfig) -> ReconciliationResult:
+        """Reconcile board with resilience."""
+        return await self._execute_resilient(
+            operation=lambda: self._wrapped.reconcile_board(config),
+            operation_name="reconcile_board",
+            rate_limit_cost=5  # May create multiple columns
+        )
+
+    # Webhook Handler
+
+    async def handle_webhook(self, payload: dict) -> None:
+        """Handle webhook (no rate limiting, no retries)."""
+        # Webhooks should fail fast, no retries
+        return await self._wrapped.handle_webhook(payload)
+
+    # Resilience execution
+
+    async def _execute_resilient(
+        self,
+        operation: Callable[[], T],
+        operation_name: str,
+        rate_limit_cost: int = 1,
+        timeout_seconds: Optional[float] = None
+    ) -> T:
+        """
+        Execute operation with all resilience patterns.
+
+        Order of application:
+        1. Rate limiting (respect GitHub 5000 req/hr limit)
+        2. Circuit breaker (fail fast if unhealthy)
+        3. Timeout (prevent hanging)
+        4. Retry (handle transient errors)
+        """
+        # 1. Rate limiting
+        if self._rate_limiter:
+            await self._rate_limiter.acquire(operation_name, rate_limit_cost)
+
+        # 2. Circuit breaker wraps the rest
+        if self._circuit_breaker:
+            return await self._circuit_breaker.call(
+                self._execute_with_timeout_and_retry,
+                operation_name,
+                operation,
+                operation_name,
+                timeout_seconds or self._default_timeout
+            )
+        else:
+            return await self._execute_with_timeout_and_retry(
+                operation,
+                operation_name,
+                timeout_seconds or self._default_timeout
+            )
+
+    async def _execute_with_timeout_and_retry(
+        self,
+        operation: Callable[[], T],
+        operation_name: str,
+        timeout_seconds: float
+    ) -> T:
+        """Apply timeout and retry."""
+        # 3. Timeout wraps operation
+        async def timed_operation():
+            if self._timeout:
+                return await self._timeout.execute(
+                    operation,
+                    timeout_seconds,
+                    operation_name
+                )
+            else:
+                return await operation()
+
+        # 4. Retry wraps timeout
+        if self._retry_policy:
+            return await self._retry_policy.execute(
+                timed_operation,
+                operation_name
+            )
+        else:
+            return await timed_operation()
