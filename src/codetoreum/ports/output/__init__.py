@@ -1,16 +1,40 @@
 """Output port interfaces."""
 
+from codetoreum.ports.output.board_service import (
+    BoardConfig,
+    Column,
+    IBoardService,
+    ProjectBoard,
+    ReconciliationResult,
+)
+from codetoreum.ports.output.code_review_service import (
+    Approval,
+    CodeReview,
+    CodeReviewStatus,
+    ICodeReviewService,
+    ReviewComment,
+)
 from codetoreum.ports.output.container import (
     ContainerResult,
     ContainerStatus,
     IContainer,
+)
+from codetoreum.ports.output.discussion_adapter import (
+    DiscussionMonitoringConfig,
+    DiscussionThread,
+    IDiscussionAdapter,
 )
 from codetoreum.ports.output.encryption_service import (
     DecryptionError,
     EncryptionError,
     IEncryptionService,
 )
+from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.event_store import IEventStore
+from codetoreum.ports.output.identity_service import (
+    BotIdentityConfig,
+    IIdentityService,
+)
 from codetoreum.ports.output.llm_provider import (
     ExecutionContext,
     ExecutionResult,
@@ -24,6 +48,12 @@ from codetoreum.ports.output.llm_provider import (
     UsageStats,
 )
 from codetoreum.ports.output.metrics import IMetrics, MetricData
+from codetoreum.ports.output.monitoring import (
+    IMonitoredService,
+    MonitoringConfig,
+    MonitoringState,
+    MonitoringStatus,
+)
 from codetoreum.ports.output.notifier import (
     Action,
     Attachment,
@@ -35,6 +65,10 @@ from codetoreum.ports.output.notifier import (
     NotificationResult,
     RichContent,
 )
+from codetoreum.ports.output.pipeline_lock_service import (
+    IPipelineLockService,
+    PipelineLock,
+)
 from codetoreum.ports.output.repository import (
     IRepository,
     MergeResult,
@@ -42,18 +76,44 @@ from codetoreum.ports.output.repository import (
 )
 from codetoreum.ports.output.storage import IStorage, StorageObject
 from codetoreum.ports.output.ticket_system import Comment, ITicketSystem
+from codetoreum.ports.output.version_control_service import (
+    IVersionControlService,
+    Repository,
+)
+from codetoreum.ports.output.work_item_service import IWorkItemService
 
 __all__ = [
+    # Board Service
+    "IBoardService",
+    "BoardConfig",
+    "Column",
+    "ProjectBoard",
+    "ReconciliationResult",
+    # Code Review Service
+    "ICodeReviewService",
+    "Approval",
+    "CodeReview",
+    "CodeReviewStatus",
+    "ReviewComment",
     # Container
     "IContainer",
     "ContainerResult",
     "ContainerStatus",
+    # Discussion Adapter
+    "IDiscussionAdapter",
+    "DiscussionMonitoringConfig",
+    "DiscussionThread",
     # Encryption Service
     "IEncryptionService",
     "EncryptionError",
     "DecryptionError",
+    # Event Emitter
+    "IEventEmitter",
     # Event Store
     "IEventStore",
+    # Identity Service
+    "IIdentityService",
+    "BotIdentityConfig",
     # LLM Provider
     "ILLMProvider",
     "ExecutionContext",
@@ -68,6 +128,11 @@ __all__ = [
     # Metrics
     "IMetrics",
     "MetricData",
+    # Monitoring
+    "IMonitoredService",
+    "MonitoringConfig",
+    "MonitoringState",
+    "MonitoringStatus",
     # Notifier
     "INotifier",
     "Action",
@@ -78,6 +143,9 @@ __all__ = [
     "NotificationPriority",
     "NotificationResult",
     "RichContent",
+    # Pipeline Lock Service
+    "IPipelineLockService",
+    "PipelineLock",
     # Repository
     "IRepository",
     "MergeResult",
@@ -88,4 +156,9 @@ __all__ = [
     # Ticket System
     "ITicketSystem",
     "Comment",
+    # Version Control Service
+    "IVersionControlService",
+    "Repository",
+    # Work Item Service
+    "IWorkItemService",
 ]
