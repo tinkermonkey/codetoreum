@@ -24,6 +24,9 @@ from codetoreum.adapters.secondary.git_repository_adapter import (
     GitConfig,
     GitRepositoryAdapter,
 )
+from codetoreum.adapters.secondary.github_board_adapter import (
+    GitHubBoardAdapter,
+)
 from codetoreum.adapters.secondary.github_ticket_adapter import (
     GitHubConfig,
     GitHubTicketAdapter,
@@ -33,6 +36,8 @@ __all__ = [
     # GitHub Ticket System
     "GitHubTicketAdapter",
     "GitHubConfig",
+    # GitHub Board System
+    "GitHubBoardAdapter",
     # Claude Code LLM Provider
     "ClaudeCodeAdapter",
     "ClaudeCodeConfig",

@@ -9,8 +9,11 @@ Implements IBoardService interface for GitHub Projects v2, supporting:
 """
 
 import asyncio
+import logging
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 from codetoreum.adapters.secondary.github_ticket_adapter import GitHubTicketAdapter
 from codetoreum.domain.events.board_events import (
@@ -600,9 +603,12 @@ class GitHubBoardAdapter(IBoardService):
 
         except asyncio.CancelledError:
             pass
-        except Exception:
-            # Continue polling even on errors
-            pass
+        except Exception as e:
+            # Continue polling even on errors, but log for debugging
+            logger.warning(
+                f"Error during board polling for {project_id}:{board_id}: {e}",
+                exc_info=False,
+            )
 
     def _detect_column_changes(
         self,
@@ -771,10 +777,14 @@ class GitHubBoardAdapter(IBoardService):
 
         Returns:
             Status field ID or None
+
+        Raises:
+            NotImplementedError: Feature requires enhancement to extract field IDs from GraphQL response
         """
-        # Note: This would need to be extracted from the GraphQL response
-        # For now, return None - in practice, store field IDs in board response
-        return None
+        raise NotImplementedError(
+            "Status field ID extraction requires enhancement to extract field IDs from GraphQL response. "
+            "The _parse_board_response method should store field IDs and option IDs in the ProjectBoard dataclass."
+        )
 
     def _find_option_id(
         self,
@@ -791,10 +801,14 @@ class GitHubBoardAdapter(IBoardService):
 
         Returns:
             Option ID or None
+
+        Raises:
+            NotImplementedError: Feature requires enhancement to extract option IDs from GraphQL response
         """
-        # Note: This would need to be extracted from the GraphQL response
-        # For now, return None - in practice, store option IDs in board response
-        return None
+        raise NotImplementedError(
+            "Option ID extraction requires enhancement to extract option IDs from GraphQL response. "
+            "The _parse_board_response method should store option IDs in the Column dataclass."
+        )
 
     async def _create_column(self, board_id: str, column_name: str) -> None:
         """Create a new column on the board.
@@ -804,11 +818,13 @@ class GitHubBoardAdapter(IBoardService):
             column_name: Name of new column
 
         Raises:
+            NotImplementedError: Feature requires GitHub Projects v2 mutation implementation
             ExternalServiceError: GraphQL mutation failed
         """
-        # This would require a mutation to add a new option to the Status field
-        # Implement based on GitHub Projects v2 API capabilities
-        pass
+        raise NotImplementedError(
+            "Column creation requires implementation of GitHub Projects v2 mutation to add a new option to the Status field. "
+            "This requires extracting the field ID and building the proper GraphQL mutation."
+        )
 
     def _extract_work_item_id(self, item_data: dict) -> Optional[str]:
         """Extract work item ID from webhook item data.
