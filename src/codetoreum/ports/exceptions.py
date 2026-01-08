@@ -52,6 +52,12 @@ class AuthenticationError(PortError):
     pass
 
 
+class PermissionError(PortError):
+    """Permission denied."""
+
+    pass
+
+
 class ConcurrencyConflictError(PortError):
     """Concurrent modification detected."""
 
