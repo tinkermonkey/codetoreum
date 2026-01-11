@@ -14,9 +14,15 @@ All adapters emit their events to the event bus via handlers registered here.
 
 import asyncio
 import logging
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
 
 from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.infrastructure.event_bus_protocols import (
+    IBoardService,
+    IDiscussionAdapter,
+    IPipelineLockService,
+    ICodeReviewService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +39,9 @@ class EventBusWiring:
         """
         self._event_bus = event_bus
         self._wired_adapters = set()
+        self._pending_tasks: set = set()  # Track background tasks for cleanup
 
-    def wire_board_service(self, board_service: Any) -> None:
+    def wire_board_service(self, board_service: IBoardService) -> None:
         """
         Wire a board service to the event bus.
 
@@ -54,7 +61,7 @@ class EventBusWiring:
         self._wired_adapters.add("board_service")
         logger.info("Wired board service to event bus")
 
-    def wire_discussion_adapter(self, discussion_adapter: Any) -> None:
+    def wire_discussion_adapter(self, discussion_adapter: IDiscussionAdapter) -> None:
         """
         Wire a discussion adapter to the event bus.
 
@@ -74,7 +81,7 @@ class EventBusWiring:
         self._wired_adapters.add("discussion_adapter")
         logger.info("Wired discussion adapter to event bus")
 
-    def wire_lock_service(self, lock_service: Any) -> None:
+    def wire_lock_service(self, lock_service: IPipelineLockService) -> None:
         """
         Wire a lock service to the event bus.
 
@@ -95,7 +102,7 @@ class EventBusWiring:
         self._wired_adapters.add("lock_service")
         logger.info("Wired lock service to event bus")
 
-    def wire_review_service(self, review_service: Any) -> None:
+    def wire_review_service(self, review_service: ICodeReviewService) -> None:
         """
         Wire a code review service to the event bus.
 
@@ -117,10 +124,10 @@ class EventBusWiring:
 
     def wire_all_adapters(
         self,
-        board_service: Optional[Any] = None,
-        discussion_adapter: Optional[Any] = None,
-        lock_service: Optional[Any] = None,
-        review_service: Optional[Any] = None,
+        board_service: Optional[IBoardService] = None,
+        discussion_adapter: Optional[IDiscussionAdapter] = None,
+        lock_service: Optional[IPipelineLockService] = None,
+        review_service: Optional[ICodeReviewService] = None,
     ) -> None:
         """
         Wire all provided adapters to the event bus.
@@ -170,26 +177,39 @@ class EventBusWiring:
         """
         Create an event publisher callback for adapters.
 
-        The publisher handles both sync and async event emission to the bus.
+        The publisher handles both sync and async event emission to the bus,
+        with proper error handling and task tracking.
 
         Returns:
             Callback function to publish events
         """
 
-        def publisher(event: Any) -> None:
+        def publisher(event) -> None:
             """Publish event to the event bus."""
-            # Schedule async publish as a background task
-            asyncio.create_task(self._event_bus.publish(event))
+            # Schedule async publish as a background task with error handling
+            task = asyncio.create_task(self._event_bus.publish(event))
+
+            # Track the task and remove it when done
+            self._pending_tasks.add(task)
+            task.add_done_callback(lambda t: self._handle_task_done(t))
 
         return publisher
+
+    def _handle_task_done(self, task) -> None:
+        """Handle completion of a background task and log any errors."""
+        self._pending_tasks.discard(task)
+        try:
+            task.result()
+        except Exception as e:
+            logger.error(f"Error publishing event: {e}", exc_info=True)
 
 
 def wire_adapters_to_event_bus(
     event_bus: EventBus,
-    board_service: Optional[Any] = None,
-    discussion_adapter: Optional[Any] = None,
-    lock_service: Optional[Any] = None,
-    review_service: Optional[Any] = None,
+    board_service: Optional[IBoardService] = None,
+    discussion_adapter: Optional[IDiscussionAdapter] = None,
+    lock_service: Optional[IPipelineLockService] = None,
+    review_service: Optional[ICodeReviewService] = None,
 ) -> EventBusWiring:
     """
     Wire adapter event emitters to the central event bus.

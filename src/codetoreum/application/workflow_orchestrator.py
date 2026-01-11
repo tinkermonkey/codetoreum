@@ -16,6 +16,7 @@ from codetoreum.domain.events import (
 from codetoreum.domain.workflow import Workflow, WorkflowStatus
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority
 from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.infrastructure.event_types import EventTypes
 from codetoreum.ports.output import IEventStore, ITicketSystem
 
 logger = logging.getLogger(__name__)
@@ -872,45 +873,29 @@ class WorkflowOrchestrator:
 
         # Subscribe to board events
         self.event_bus.subscribe(
-            "workitem.column_changed",
-            self._async_wrapper(self._handle_column_change)
+            EventTypes.WORKITEM_COLUMN_CHANGED,
+            self._handle_column_change
         )
 
         # Subscribe to discussion events
         self.event_bus.subscribe(
-            "comment.needs_response",
-            self._async_wrapper(self._handle_comment_needs_response)
+            EventTypes.COMMENT_NEEDS_RESPONSE,
+            self._handle_comment_needs_response
         )
 
         # Subscribe to lock events
         self.event_bus.subscribe(
-            "lock.released",
-            self._async_wrapper(self._handle_lock_released)
+            EventTypes.LOCK_RELEASED,
+            self._handle_lock_released
         )
 
         # Subscribe to review events
         self.event_bus.subscribe(
-            "review.status_changed",
-            self._async_wrapper(self._handle_review_status_changed)
+            EventTypes.REVIEW_STATUS_CHANGED,
+            self._handle_review_status_changed
         )
 
         logger.info("WorkflowOrchestrator subscribed to adapter events")
-
-    @staticmethod
-    def _async_wrapper(async_handler: Callable) -> Callable:
-        """
-        Wrap an async handler to be called from EventBus.
-
-        The EventBus checks if callbacks are async and awaits them,
-        so we just return the async handler directly.
-
-        Args:
-            async_handler: Async function to wrap
-
-        Returns:
-            The async handler
-        """
-        return async_handler
 
     async def _handle_column_change(self, event: DomainEvent) -> None:
         """
@@ -1092,10 +1077,45 @@ class WorkflowOrchestrator:
                 logger.debug("No item queued after lock release")
                 return
 
-            # Try to acquire lock for next item
-            # Note: Lock acquisition is handled by lock service
-            # This handler just logs/monitors the lock progression
-            logger.debug(f"Next item {next_in_queue} would acquire lock (implementation in lock service)")
+            # Get workflow configuration
+            workflow_config = await self.config.get_workflow_config(project_id, board_id)
+            if not workflow_config:
+                logger.warning(f"No workflow config found for project {project_id}, board {board_id}")
+                return
+
+            # Load workflow state to get item position
+            try:
+                # Get the column where the next item is currently located
+                item_position = await self.workflow_state.get_item_position(next_in_queue)
+                if not item_position:
+                    logger.warning(f"Could not find position for item {next_in_queue}")
+                    return
+
+                current_column_name = item_position.get("column")
+                column_config = self._find_column_config(workflow_config, current_column_name)
+
+                if not column_config:
+                    logger.warning(f"No config found for column {current_column_name}")
+                    return
+
+                # If this is an automated column, trigger the agent
+                if column_config.agent:
+                    logger.info(
+                        f"Triggering agent {column_config.agent} for queued item {next_in_queue}"
+                    )
+                    await self.task_queue.enqueue({
+                        "work_item_id": next_in_queue,
+                        "project_id": project_id,
+                        "board_id": board_id,
+                        "column": current_column_name,
+                        "agent": column_config.agent,
+                        "priority": WorkItemPriority.NORMAL,
+                    })
+                else:
+                    logger.debug(f"Column {current_column_name} is not automated, no agent to trigger")
+
+            except Exception as e:
+                logger.error(f"Error processing next item {next_in_queue}: {e}", exc_info=e)
 
         except Exception as e:
             logger.error(f"Error handling lock released event: {e}", exc_info=e)
@@ -1133,17 +1153,66 @@ class WorkflowOrchestrator:
                 if self.projects_api:
                     try:
                         # Get workflow to find next column
+                        board_id = event.payload.get("board_id", "default")
                         workflow_config = await self.config.get_workflow_config(
-                            project_id, event.payload.get("board_id", "default")
+                            project_id, board_id
                         )
-                        # Next column logic would go here
-                        logger.info(f"Review approved, would move item to next column")
+
+                        # Find current column
+                        item_position = await self.workflow_state.get_item_position(work_item_id)
+                        if not item_position:
+                            logger.warning(f"Could not find position for item {work_item_id}")
+                            return
+
+                        current_column_name = item_position.get("column")
+                        current_column = self._find_column_config(workflow_config, current_column_name)
+                        if not current_column:
+                            logger.warning(f"No config for column {current_column_name}")
+                            return
+
+                        # Find next column
+                        next_column = self._get_next_column(workflow_config, current_column)
+                        if next_column:
+                            logger.info(
+                                f"Moving approved item {work_item_id} from {current_column.name} to {next_column.name}"
+                            )
+                            await self.projects_api.move_card_to_column(
+                                project_id, board_id, work_item_id, next_column.name
+                            )
+                        else:
+                            logger.info(
+                                f"No next column found for item {work_item_id} in workflow"
+                            )
                     except Exception as e:
-                        logger.error(f"Failed to get workflow config: {e}")
+                        logger.error(f"Failed to move approved item: {e}", exc_info=e)
 
             elif new_status == "changes_requested":
-                # Move back to development
-                logger.info(f"Changes requested on review, would move back to development")
+                # Move back to development column
+                if self.projects_api:
+                    try:
+                        board_id = event.payload.get("board_id", "default")
+                        workflow_config = await self.config.get_workflow_config(
+                            project_id, board_id
+                        )
+
+                        # Find development column (typically first column or has "dev" in name)
+                        dev_column = None
+                        for col in workflow_config.columns:
+                            if col.position == 0 or "dev" in col.name.lower():
+                                dev_column = col
+                                break
+
+                        if dev_column:
+                            logger.info(
+                                f"Moving item {work_item_id} back to development column {dev_column.name}"
+                            )
+                            await self.projects_api.move_card_to_column(
+                                project_id, board_id, work_item_id, dev_column.name
+                            )
+                        else:
+                            logger.warning(f"No development column found for item {work_item_id}")
+                    except Exception as e:
+                        logger.error(f"Failed to move item back to development: {e}", exc_info=e)
 
         except Exception as e:
             logger.error(f"Error handling review status event: {e}", exc_info=e)

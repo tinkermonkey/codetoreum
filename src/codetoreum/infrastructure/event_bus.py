@@ -498,8 +498,6 @@ def event_handler(*event_types: str):
 
     def decorator(cls: Type[EventHandler]) -> Type[EventHandler]:
         # Store event types on the class
-        original_get_event_types = getattr(cls, "get_event_types", None)
-
         def get_event_types(self) -> List[str]:
             return list(event_types)
 

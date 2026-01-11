@@ -5,6 +5,7 @@ from typing import Dict, Any, Optional
 
 from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.infrastructure.event_types import EventTypes
 
 logger = logging.getLogger(__name__)
 
@@ -55,37 +56,63 @@ class MetricsCollector:
 
         # Board events
         self.event_bus.subscribe(
-            "workitem.column_changed",
+            EventTypes.WORKITEM_COLUMN_CHANGED,
             self._record_column_change
         )
 
         # Lock events
         self.event_bus.subscribe(
-            "lock.acquired",
+            EventTypes.LOCK_ACQUIRED,
             self._record_lock_acquisition
         )
         self.event_bus.subscribe(
-            "lock.released",
+            EventTypes.LOCK_RELEASED,
             self._record_lock_release
         )
 
         # Review events
         self.event_bus.subscribe(
-            "review.status_changed",
+            EventTypes.REVIEW_STATUS_CHANGED,
             self._record_review_status
         )
 
         # Discussion events
         self.event_bus.subscribe(
-            "comment.posted",
+            EventTypes.COMMENT_POSTED,
             self._record_comment
         )
         self.event_bus.subscribe(
-            "comment.needs_response",
+            EventTypes.COMMENT_NEEDS_RESPONSE,
             self._record_comment_needs_response
         )
 
         logger.info("MetricsCollector subscribed to adapter events")
+
+    def _get_event_attribute(self, event: DomainEvent, attribute: str, default: Any = None) -> Any:
+        """
+        Extract an attribute from an event supporting both dict and object formats.
+
+        Handles events that may be either:
+        - Objects with attributes
+        - Objects with a payload dict containing the attribute
+
+        Args:
+            event: Event object
+            attribute: Attribute name to extract
+            default: Default value if attribute not found
+
+        Returns:
+            Attribute value or default
+        """
+        # Try as object attribute first
+        if hasattr(event, attribute):
+            return getattr(event, attribute, default)
+
+        # Try as payload dict entry
+        if hasattr(event, 'payload') and isinstance(event.payload, dict):
+            return event.payload.get(attribute, default)
+
+        return default
 
     async def _record_column_change(self, event: DomainEvent) -> None:
         """
@@ -95,12 +122,7 @@ class MetricsCollector:
             event: workitem.column_changed event
         """
         try:
-            # Handle both dict and object event formats
-            if hasattr(event, 'payload'):
-                to_column = event.payload.get("to_column")
-            else:
-                to_column = getattr(event, "to_column", None)
-
+            to_column = self._get_event_attribute(event, "to_column")
             if not to_column:
                 return
 
@@ -110,11 +132,7 @@ class MetricsCollector:
             self._metrics["column_changes"][to_column] += 1
 
             # Track agent triggering if agent would be triggered
-            if hasattr(event, 'payload'):
-                agent_name = event.payload.get("agent_name")
-            else:
-                agent_name = getattr(event, "agent_name", None)
-
+            agent_name = self._get_event_attribute(event, "agent_name")
             if agent_name:
                 self._metrics["agents_triggered"] += 1
 
@@ -136,11 +154,7 @@ class MetricsCollector:
         """
         try:
             self._metrics["lock_acquisitions"] += 1
-
-            if hasattr(event, 'payload'):
-                acquisition_method = event.payload.get("acquisition_method", "unknown")
-            else:
-                acquisition_method = getattr(event, "acquisition_method", "unknown")
+            acquisition_method = self._get_event_attribute(event, "acquisition_method", "unknown")
 
             logger.debug(
                 f"Recorded lock acquisition "
@@ -162,12 +176,8 @@ class MetricsCollector:
             self._metrics["lock_releases"] += 1
 
             # Record lock duration if available
-            if hasattr(event, 'payload'):
-                duration_ms = event.payload.get("duration_ms")
-                reason = event.payload.get("reason", "unknown")
-            else:
-                duration_ms = getattr(event, "duration_ms", None)
-                reason = getattr(event, "reason", "unknown")
+            duration_ms = self._get_event_attribute(event, "duration_ms")
+            reason = self._get_event_attribute(event, "reason", "unknown")
 
             if duration_ms:
                 self._metrics["lock_wait_time_ms"].append(duration_ms)
@@ -189,10 +199,7 @@ class MetricsCollector:
             event: review.status_changed event
         """
         try:
-            if hasattr(event, 'payload'):
-                new_status = event.payload.get("new_status")
-            else:
-                new_status = getattr(event, "new_status", None)
+            new_status = self._get_event_attribute(event, "new_status")
 
             if new_status == "approved":
                 self._metrics["reviews_approved"] += 1
