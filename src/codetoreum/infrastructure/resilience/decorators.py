@@ -28,6 +28,7 @@ from codetoreum.ports.output.board_service import (
     ReconciliationResult,
     BoardConfig,
 )
+from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
 from codetoreum.ports.output.monitoring import MonitoringConfig, MonitoringStatus
 
 from .interfaces import ICircuitBreaker, IRateLimiter, IRetryPolicy, ITimeout
@@ -736,7 +737,7 @@ class ResilientBoardServiceDecorator(IBoardService):
 # Resilient Discussion Adapter Decorator
 # ============================================================================
 
-class ResilientDiscussionAdapterDecorator:
+class ResilientDiscussionAdapterDecorator(IDiscussionAdapter):
     """
     Wraps IDiscussionAdapter with resilience patterns.
 
@@ -819,6 +820,19 @@ class ResilientDiscussionAdapterDecorator:
     def emit(self, event) -> None:
         """Emit event (pass through)."""
         return self._wrapped.emit(event)
+
+    async def close(self) -> None:
+        """Close underlying adapter (pass through)."""
+        return await self._wrapped.close()
+
+    async def __aenter__(self):
+        """Async context manager entry."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        await self.close()
+        return False
 
     async def _execute_resilient(
         self,

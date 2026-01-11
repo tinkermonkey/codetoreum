@@ -28,26 +28,7 @@ from codetoreum.ports.exceptions import (
     ResourceNotFoundError,
     ValidationError,
 )
-
-
-class MockIdentityService:
-    """Mock identity service for testing."""
-
-    def __init__(self, bot_usernames: Optional[List[str]] = None):
-        self.bot_usernames = bot_usernames or ["dependabot", "renovate", "codetoreum-bot"]
-        self.configured_bot = "codetoreum-bot"
-
-    def is_bot_user(self, username: str) -> bool:
-        return username in self.bot_usernames
-
-    def get_bot_username(self) -> str:
-        return self.configured_bot
-
-    def get_human_users(self, usernames: List[str]) -> List[str]:
-        return [u for u in usernames if not self.is_bot_user(u)]
-
-    def configure(self, config):
-        pass
+from conftest import MockIdentityService
 
 
 class TestGitHubDiscussionAdapterWebhook:
@@ -74,6 +55,7 @@ class TestGitHubDiscussionAdapterWebhook:
             agent_assignment="agent-1",
         )
 
+    @pytest.mark.asyncio
     async def test_webhook_created_action_emits_event(self, adapter, monitoring_config):
         """Webhook for comment.created emits comment.needs_response for human comments."""
         # Setup
@@ -106,6 +88,7 @@ class TestGitHubDiscussionAdapterWebhook:
         assert event.work_item_id == "123"
         assert event.project_id == "proj-1"
 
+    @pytest.mark.asyncio
     async def test_webhook_skips_bot_comments(self, adapter, monitoring_config):
         """Webhook for bot comments does not emit events."""
         # Setup
@@ -131,6 +114,7 @@ class TestGitHubDiscussionAdapterWebhook:
         # Assert
         assert len(events) == 0
 
+    @pytest.mark.asyncio
     async def test_webhook_ignores_unmonitored_issues(self, adapter):
         """Webhook for unmonitored issues is ignored."""
         events = []
@@ -151,6 +135,7 @@ class TestGitHubDiscussionAdapterWebhook:
 
         assert len(events) == 0
 
+    @pytest.mark.asyncio
     async def test_webhook_ignores_deleted_action(self, adapter, monitoring_config):
         """Webhook for deleted/modified comments is ignored."""
         adapter.start_monitoring("123", monitoring_config)
@@ -172,6 +157,7 @@ class TestGitHubDiscussionAdapterWebhook:
 
         assert len(events) == 0
 
+    @pytest.mark.asyncio
     async def test_webhook_invalid_payload_raises_error(self, adapter, monitoring_config):
         """Webhook with invalid payload raises ValidationError."""
         adapter.start_monitoring("123", monitoring_config)
@@ -184,6 +170,7 @@ class TestGitHubDiscussionAdapterWebhook:
         with pytest.raises(ValidationError):
             await adapter.handle_webhook(payload)
 
+    @pytest.mark.asyncio
     async def test_webhook_tracks_last_processed_comment(self, adapter, monitoring_config):
         """Webhook updates last_processed_comment_id."""
         adapter.start_monitoring("123", monitoring_config)

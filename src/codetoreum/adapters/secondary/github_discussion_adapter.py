@@ -14,6 +14,7 @@ Features:
 """
 
 import asyncio
+import logging
 from datetime import datetime, timezone
 from typing import Callable, Dict, List, Optional
 from dataclasses import dataclass
@@ -39,6 +40,8 @@ from codetoreum.ports.output.discussion_adapter import (
 )
 from codetoreum.ports.output.identity_service import IIdentityService
 from codetoreum.infrastructure.http.github_graphql_client import GitHubGraphQLClient
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -154,6 +157,15 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
         if self._http_client is not None:
             await self._http_client.aclose()
             self._http_client = None
+
+    async def __aenter__(self):
+        """Async context manager entry."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        await self.close()
+        return False
 
     # Query Operations
 
@@ -371,6 +383,7 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
         """Stop monitoring a specific work item for new comments.
 
         Cancels polling task if running. After this call, no events are emitted.
+        Closes HTTP client if no other work items are being monitored.
 
         Args:
             work_item_id: Work item to stop monitoring
@@ -394,6 +407,16 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
         # Clean up monitoring state
         del self._monitoring[work_item_id]
         self._last_processed.pop(work_item_id, None)
+
+        # Close HTTP client if no more work items being monitored
+        if not self._monitoring and self._http_client is not None:
+            # Schedule close to be called from async context
+            import asyncio
+            try:
+                asyncio.create_task(self.close())
+            except RuntimeError:
+                # No event loop running, client will be closed on next close() call
+                pass
 
     # Webhook Handling
 
@@ -421,7 +444,7 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
         if not issue or not comment_data:
             raise ValidationError("Invalid webhook payload: missing issue or comment")
 
-        work_item_id = str(issue["number"])
+        work_item_id = str(issue.get("number", issue.get("id")))
 
         # Ignore if not monitoring this work item
         if work_item_id not in self._monitoring:
@@ -470,8 +493,8 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
                 # Get current thread
                 try:
                     thread = await self.get_thread(work_item_id)
-                except Exception:
-                    # Log error but continue polling
+                except Exception as e:
+                    logger.warning(f"Polling error for {work_item_id}: {e}")
                     continue
 
                 # Find new comments since last poll
@@ -494,8 +517,8 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
 
             except asyncio.CancelledError:
                 break
-            except Exception:
-                # Log error but continue polling
+            except Exception as e:
+                logger.error(f"Unexpected error in polling loop for {work_item_id}: {e}")
                 continue
 
     def _filter_new_comments(

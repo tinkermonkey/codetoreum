@@ -1,7 +1,7 @@
 """Shared fixtures for GitHub discussion adapter integration tests."""
 
 import pytest
-from unittest.mock import Mock, AsyncMock
+from unittest.mock import Mock
 from typing import List, Optional
 
 from codetoreum.adapters.secondary.github_discussion_adapter import (
