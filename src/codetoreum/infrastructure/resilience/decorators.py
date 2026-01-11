@@ -730,3 +730,155 @@ class ResilientBoardServiceDecorator(IBoardService):
             )
         else:
             return await timed_operation()
+
+
+# ============================================================================
+# Resilient Discussion Adapter Decorator
+# ============================================================================
+
+class ResilientDiscussionAdapterDecorator:
+    """
+    Wraps IDiscussionAdapter with resilience patterns.
+
+    Applies rate limiting, circuit breaking, retries, and timeouts
+    to all discussion adapter operations.
+    """
+
+    def __init__(
+        self,
+        wrapped,
+        rate_limiter: Optional[IRateLimiter] = None,
+        circuit_breaker: Optional[ICircuitBreaker] = None,
+        retry_policy: Optional[IRetryPolicy] = None,
+        timeout: Optional[ITimeout] = None,
+        default_timeout_seconds: float = 30.0
+    ):
+        """
+        Initialize resilient decorator.
+
+        Args:
+            wrapped: Underlying discussion adapter
+            rate_limiter: Optional rate limiter
+            circuit_breaker: Optional circuit breaker
+            retry_policy: Optional retry policy
+            timeout: Optional timeout handler
+            default_timeout_seconds: Default operation timeout
+        """
+        self._wrapped = wrapped
+        self._rate_limiter = rate_limiter
+        self._circuit_breaker = circuit_breaker
+        self._retry_policy = retry_policy
+        self._timeout = timeout
+        self._default_timeout = default_timeout_seconds
+
+    async def get_thread(self, work_item_id: str):
+        """Retrieve thread with resilience."""
+        return await self._execute_resilient(
+            operation=lambda: self._wrapped.get_thread(work_item_id),
+            operation_name="discussion_get_thread",
+            rate_limit_cost=1
+        )
+
+    async def add_comment(
+        self,
+        work_item_id: str,
+        content: str,
+        parent_id: Optional[str] = None,
+    ):
+        """Add comment with resilience."""
+        return await self._execute_resilient(
+            operation=lambda: self._wrapped.add_comment(work_item_id, content, parent_id),
+            operation_name="discussion_add_comment",
+            rate_limit_cost=2  # Writes cost more
+        )
+
+    def start_monitoring(self, work_item_id: str, config) -> None:
+        """Start monitoring (synchronous, no resilience wrapper)."""
+        return self._wrapped.start_monitoring(work_item_id, config)
+
+    def stop_monitoring(self, work_item_id: str) -> None:
+        """Stop monitoring (synchronous, no resilience wrapper)."""
+        return self._wrapped.stop_monitoring(work_item_id)
+
+    async def handle_webhook(self, payload: dict) -> None:
+        """Handle webhook with resilience."""
+        return await self._execute_resilient(
+            operation=lambda: self._wrapped.handle_webhook(payload),
+            operation_name="discussion_handle_webhook",
+            rate_limit_cost=1
+        )
+
+    def on(self, event_type: str, handler) -> None:
+        """Register event handler (pass through)."""
+        return self._wrapped.on(event_type, handler)
+
+    def off(self, event_type: str, handler) -> None:
+        """Unregister event handler (pass through)."""
+        return self._wrapped.off(event_type, handler)
+
+    def emit(self, event) -> None:
+        """Emit event (pass through)."""
+        return self._wrapped.emit(event)
+
+    async def _execute_resilient(
+        self,
+        operation: Callable[[], T],
+        operation_name: str,
+        rate_limit_cost: int = 1,
+        timeout_seconds: Optional[float] = None
+    ) -> T:
+        """
+        Execute operation with all resilience patterns.
+
+        Order of application:
+        1. Rate limiting (prevent overload)
+        2. Circuit breaker (fail fast if unhealthy)
+        3. Timeout (prevent hanging)
+        4. Retry (handle transient errors)
+        """
+        # 1. Rate limiting
+        if self._rate_limiter:
+            await self._rate_limiter.acquire(operation_name, rate_limit_cost)
+
+        # 2. Circuit breaker wraps the rest
+        if self._circuit_breaker:
+            return await self._circuit_breaker.call(
+                self._execute_with_timeout_and_retry,
+                operation_name,
+                operation,
+                operation_name,
+                timeout_seconds or self._default_timeout
+            )
+        else:
+            return await self._execute_with_timeout_and_retry(
+                operation,
+                operation_name,
+                timeout_seconds or self._default_timeout
+            )
+
+    async def _execute_with_timeout_and_retry(
+        self,
+        operation: Callable[[], T],
+        operation_name: str,
+        timeout_seconds: float
+    ) -> T:
+        """Apply timeout and retry."""
+        # 3. Timeout wraps operation
+        async def timed_operation():
+            if self._timeout:
+                return await self._timeout.execute(
+                    operation,
+                    timeout_seconds,
+                    operation_name
+                )
+            else:
+                return await operation()
+
+        # 4. Retry wraps timeout
+        if self._retry_policy:
+            return await self._retry_policy.execute(
+                timed_operation,
+                operation_name
+            )
+        else:
+            return await timed_operation()
