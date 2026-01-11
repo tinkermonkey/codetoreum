@@ -214,12 +214,12 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
                 if response.status_code == 401:
                     raise AuthenticationError("GitHub authentication failed")
                 if response.status_code == 404:
-                    raise ResourceNotFoundError(f"Issue not found: {work_item_id}")
+                    raise ResourceNotFoundError("Issue", work_item_id)
                 if response.status_code == 403:
-                    raise ExternalServiceError("GitHub rate limit exceeded")
+                    raise ExternalServiceError("GitHub", "Rate limit exceeded")
                 if response.status_code >= 400:
                     raise ExternalServiceError(
-                        f"GitHub API error: {response.status_code}"
+                        "GitHub", f"API error: {response.status_code}"
                     )
 
                 page_data = response.json()
@@ -305,12 +305,12 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             if response.status_code == 401:
                 raise AuthenticationError("GitHub authentication failed")
             if response.status_code == 404:
-                raise ResourceNotFoundError(f"Issue not found: {work_item_id}")
+                raise ResourceNotFoundError("Issue", work_item_id)
             if response.status_code == 403:
-                raise ExternalServiceError("GitHub rate limit exceeded")
+                raise ExternalServiceError("GitHub", "Rate limit exceeded")
             if response.status_code >= 400:
                 raise ExternalServiceError(
-                    f"GitHub API error: {response.status_code}"
+                    "GitHub", f"API error: {response.status_code}"
                 )
 
             data = response.json()
@@ -396,7 +396,7 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             raise ValidationError("work_item_id cannot be empty")
 
         if work_item_id not in self._monitoring:
-            raise ResourceNotFoundError(f"Not monitoring work item: {work_item_id}")
+            raise ResourceNotFoundError("WorkItem", work_item_id)
 
         # Cancel polling task if running
         if work_item_id in self._polling_tasks:
