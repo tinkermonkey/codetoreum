@@ -1,0 +1,857 @@
+
+You are a Senior Software Engineer.
+
+I implement clean, well thought out code with proper error handling and maintainable architecture.
+
+**Issue Title**: Phase 7: Integrate event-emitting adapters with workflow orchestrator
+
+**Description**:
+Update WorkflowOrchestrator to subscribe to board, discussion, lock, and review events. Implement event handlers that trigger agents for automated columns, release locks for exit columns, start discussion monitoring for conversational columns, and progress work items through maker-checker cycles.
+
+## Requirements
+- **FR9.1**: Orchestrator shall implement central event bus receiving events from all adapters
+- **FR9.2**: Event bus shall route events to: Workflow Engine, Lock Manager, Agent Executor, Metrics Collector
+- **FR9.3**: Workflow Engine shall subscribe to board, discussion, lock, and review events
+- **FR9.4**: Workflow Engine shall handle `workitem.column_changed` by: triggering agents for automated columns, releasing locks for exit columns, starting discussion monitoring for conversational columns
+- **FR9.5**: Workflow Engine shall handle `lock.released` by acquiring lock for next queued item
+- **FR9.6**: All events shall flow from adapters to orchestrator; orchestrator shall not poll adapters
+- **US2**: Column Change Detection and Reaction - workflow engine triggers agents, releases locks, starts discussion monitoring
+- **US5**: Pipeline Lock Lifecycle Management - lock manager reacts to lock events
+
+## Design Guidance
+**Event Bus Architecture**:
+
+The existing EventBus infrastructure (`src/codetoreum/infrastructure/event_bus.py`) routes events from adapters to handlers. Extend it to support adapter events:
+
+```python
+# src/codetoreum/infrastructure/event_bus.py (extend existing)
+class EventBus:
+    """Central event bus routing events to handlers."""
+    
+    def __init__(self):
+        self._handlers: Dict[str, List[Callable]] = {}
+        self._redis_client = redis.Redis()  # Existing infrastructure
+    
+    def subscribe(self, event_type: str, handler: Callable[[CodetoreumEvent], Awaitable[None]]) -> None:
+        """Subscribe handler to event type."""
+        if event_type not in self._handlers:
+            self._handlers[event_type] = []
+        self._handlers[event_type].append(handler)
+    
+    async def publish(self, event: CodetoreumEvent) -> None:
+        """Publish event to all subscribers and persist."""
+        # Persist to Redis Streams
+        await self._redis_client.xadd(
+            f"events:{event.type}",
+            {"payload": json.dumps(asdict(event))}
+        )
+        
+        # Route to handlers
+        if event.type in self._handlers:
+            for handler in self._handlers[event.type]:
+                await handler(event)
+        
+        # Persist to Elasticsearch (existing infrastructure)
+        await self._persist_to_elasticsearch(event)
+```
+
+**Workflow Engine Event Handlers** (update `src/codetoreum/application/workflow_orchestrator.py`):
+
+```python
+from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent, BoardReconciledEvent
+from codetoreum.domain.events.discussion_events import CommentNeedsResponseEvent
+from codetoreum.domain.events.lock_events import LockReleasedEvent
+from codetoreum.domain.events.review_events import ReviewStatusChangedEvent
+
+class WorkflowOrchestrator:
+    """Orchestrates workflow execution based on events."""
+    
+    def __init__(
+        self,
+        event_bus: EventBus,
+        board_service: IBoardService,
+        discussion_adapter: IDiscussionAdapter,
+        lock_service: IPipelineLockService,
+        review_service: ICodeReviewService,
+        agent_executor: AgentExecutor,
+        config_store: ConfigStore
+    ):
+        self._event_bus = event_bus
+        self._board_service = board_service
+        self._discussion_adapter = discussion_adapter
+        self._lock_service = lock_service
+        self._review_service = review_service
+        self._agent_executor = agent_executor
+        self._config_store = config_store
+        
+        # Subscribe to events
+        self._subscribe_to_events()
+    
+    def _subscribe_to_events(self) -> None:
+        """Subscribe workflow engine to adapter events."""
+        self._event_bus.subscribe('workitem.column_changed', self._handle_column_change)
+        self._event_bus.subscribe('comment.needs_response', self._handle_comment)
+        self._event_bus.subscribe('lock.released', self._handle_lock_released)
+        self._event_bus.subscribe('review.status_changed', self._handle_review_status)
+    
+    async def _handle_column_change(self, event: WorkItemColumnChangedEvent) -> None:
+        """Handle work item column change event."""
+        # Get column configuration
+        column_config = await self._config_store.get_column_config(
+            event.project_id, 
+            event.board_id, 
+            event.to_column
+        )
+        
+        # Case 1: Automated column - trigger agent
+        if column_config.type == 'automated' and column_config.agent:
+            # Try to acquire pipeline lock
+            success, reason = await self._lock_service.try_acquire_lock(
+                event.project_id, 
+                event.board_id, 
+                event.work_item_id
+            )
+            
+            if success:
+                await self._agent_executor.trigger_agent(
+                    work_item_id=event.work_item_id,
+                    agent_name=column_config.agent,
+                    context={
+                        'column': event.to_column,
+                        'project_id': event.project_id,
+                        'board_id': event.board_id
+                    }
+                )
+            else:
+                # Queued for later execution (lock service handles queue)
+                pass
+        
+        # Case 2: Exit column - release lock
+        if column_config.exit_column:
+            await self._lock_service.release_lock(
+                event.project_id, 
+                event.board_id, 
+                event.work_item_id
+            )
+        
+        # Case 3: Conversational column - start discussion monitoring
+        if column_config.type == 'conversational' and column_config.agent:
+            self._discussion_adapter.start_monitoring(
+                event.work_item_id,
+                DiscussionMonitoringConfig(
+                    project_id=event.project_id,
+                    column_name=event.to_column,
+                    agent_assignment=column_config.agent
+                )
+            )
+        
+        # Case 4: Leaving conversational column - stop monitoring
+        from_column_config = await self._config_store.get_column_config(
+            event.project_id, 
+            event.board_id, 
+            event.from_column
+        )
+        if from_column_config.type == 'conversational':
+            self._discussion_adapter.stop_monitoring(event.work_item_id)
+    
+    async def _handle_comment(self, event: CommentNeedsResponseEvent) -> None:
+        """Handle comment requiring response."""
+        # Trigger conversational agent
+        await self._agent_executor.trigger_agent(
+            work_item_id=event.work_item_id,
+            agent_name=event.context.agent_assignment,
+            context={
+                'comment': event.comment,
+                'context': event.context,
+                'project_id': event.project_id
+            }
+        )
+    
+    async def _handle_lock_released(self, event: LockReleasedEvent) -> None:
+        """Handle pipeline lock released event."""
+        if event.next_in_queue:
+            # Acquire lock for next queued item
+            success, reason = await self._lock_service.try_acquire_lock(
+                event.project_id,
+                event.board_id,
+                event.next_in_queue
+            )
+            
+            if success:
+                # Get column configuration and trigger agent
+                position = await self._board_service.get_item_position(event.next_in_queue)
+                column_name = position[0]
+                column_config = await self._config_store.get_column_config(
+                    event.project_id,
+                    event.board_id,
+                    column_name
+                )
+                
+                if column_config.type == 'automated' and column_config.agent:
+                    await self._agent_executor.trigger_agent(
+                        work_item_id=event.next_in_queue,
+                        agent_name=column_config.agent,
+                        context={
+                            'column': column_name,
+                            'project_id': event.project_id,
+                            'board_id': event.board_id
+                        }
+                    )
+    
+    async def _handle_review_status(self, event: ReviewStatusChangedEvent) -> None:
+        """Handle code review status change."""
+        if event.new_status == 'approved':
+            # Move work item to next column in workflow
+            if event.work_item_id:
+                workflow = await self._config_store.get_workflow(event.project_id)
+                next_column = workflow.get_next_column_after_review(event.work_item_id)
+                
+                if next_column:
+                    await self._board_service.move_item_to_column(
+                        event.work_item_id,
+                        next_column
+                    )
+        
+        elif event.new_status == 'changes_requested':
+            # Move work item back to development column
+            if event.work_item_id:
+                workflow = await self._config_store.get_workflow(event.project_id)
+                dev_column = workflow.get_development_column()
+                
+                await self._board_service.move_item_to_column(
+                    event.work_item_id,
+                    dev_column
+                )
+```
+
+**Wiring Adapters to Event Bus** (create `src/codetoreum/infrastructure/event_bus_wiring.py`):
+
+```python
+def wire_adapters_to_event_bus(
+    event_bus: EventBus,
+    board_service: IBoardService,
+    discussion_adapter: IDiscussionAdapter,
+    lock_service: IPipelineLockService,
+    review_service: ICodeReviewService
+) -> None:
+    """Wire adapter event emitters to central event bus."""
+    
+    # Board service events
+    board_service.on('workitem.column_changed', lambda e: asyncio.create_task(event_bus.publish(e)))
+    board_service.on('board.reconciled', lambda e: asyncio.create_task(event_bus.publish(e)))
+    
+    # Discussion adapter events
+    discussion_adapter.on('comment.needs_response', lambda e: asyncio.create_task(event_bus.publish(e)))
+    discussion_adapter.on('comment.posted', lambda e: asyncio.create_task(event_bus.publish(e)))
+    
+    # Lock service events
+    lock_service.on('lock.acquired', lambda e: asyncio.create_task(event_bus.publish(e)))
+    lock_service.on('lock.released', lambda e: asyncio.create_task(event_bus.publish(e)))
+    lock_service.on('lock.stale_detected', lambda e: asyncio.create_task(event_bus.publish(e)))
+    
+    # Review service events
+    review_service.on('review.status_changed', lambda e: asyncio.create_task(event_bus.publish(e)))
+    review_service.on('review.comment_added', lambda e: asyncio.create_task(event_bus.publish(e)))
+```
+
+**Metrics Collector Integration** (create `src/codetoreum/infrastructure/metrics_collector.py`):
+
+```python
+class MetricsCollector:
+    """Collects metrics from adapter events."""
+    
+    def __init__(self, event_bus: EventBus):
+        self._event_bus = event_bus
+        self._subscribe_to_events()
+    
+    def _subscribe_to_events(self) -> None:
+        """Subscribe to all adapter events for metrics."""
+        self._event_bus.subscribe('workitem.column_changed', self._record_column_change)
+        self._event_bus.subscribe('lock.acquired', self._record_lock_acquisition)
+        self._event_bus.subscribe('lock.released', self._record_lock_release)
+        self._event_bus.subscribe('review.status_changed', self._record_review_status)
+    
+    async def _record_column_change(self, event: WorkItemColumnChangedEvent) -> None:
+        """Record column change metric."""
+        # Increment Prometheus counter
+        column_changes_counter.labels(
+            project=event.project_id,
+            from_column=event.from_column,
+            to_column=event.to_column,
+            moved_by=event.moved_by
+        ).inc()
+    
+    async def _record_lock_acquisition(self, event: LockAcquiredEvent) -> None:
+        """Record lock acquisition metric."""
+        lock_acquisitions_counter.labels(
+            project=event.project_id,
+            method=event.acquisition_method
+        ).inc()
+    
+    async def _record_lock_release(self, event: LockReleasedEvent) -> None:
+        """Record lock release metric."""
+        # Calculate lock duration
+        # ... metric recording logic
+    
+    async def _record_review_status(self, event: ReviewStatusChangedEvent) -> None:
+        """Record review status change metric."""
+        review_status_changes_counter.labels(
+            project=event.project_id,
+            previous_status=event.previous_status,
+            new_status=event.new_status
+        ).inc()
+```
+
+## Acceptance Criteria
+- [ ] `EventBus` extended to support adapter event routing
+- [ ] `EventBus.publish()` persists events to Redis Streams
+- [ ] `EventBus.publish()` routes events to subscribed handlers
+- [ ] `WorkflowOrchestrator` subscribes to board, discussion, lock, review events
+- [ ] `_handle_column_change()` triggers agents for automated columns
+- [ ] `_handle_column_change()` releases locks for exit columns
+- [ ] `_handle_column_change()` starts discussion monitoring for conversational columns
+- [ ] `_handle_column_change()` stops discussion monitoring when leaving conversational columns
+- [ ] `_handle_comment()` triggers conversational agents
+- [ ] `_handle_lock_released()` acquires lock for next queued item and triggers agent
+- [ ] `_handle_review_status()` moves work items based on review status (approved → next column, changes_requested → development)
+- [ ] `wire_adapters_to_event_bus()` connects all adapter event emitters to event bus
+- [ ] `MetricsCollector` subscribes to events and records Prometheus metrics
+- [ ] Integration tests verify end-to-end event flow (mock adapters → event bus → orchestrator → actions)
+- [ ] Simulation tests demonstrate full workflow: column change → agent execution → review → approval → next column
+- [ ] Code is reviewed and approved
+
+## Dependencies
+Phase 3, Phase 4, Phase 5, Phase 6
+
+## Parent Issue
+Part of #95
+
+## Discussion
+This work is detailed in discussion [96](https://github.com/tinkermonkey/codetoreum/discussions/96)
+
+---
+
+
+## Previous Work and Feedback
+
+The following is the complete history of agent outputs and feedback for this issue.
+This includes outputs from ALL previous stages (design, testing, QA, etc.) and any
+user feedback. If this issue was returned from testing or QA, pay special attention
+to their feedback and address all issues they identified.
+
+## Output from Software Architect
+
+**@tinkermonkey** (human feedback):
+# Architecture Design
+
+---
+
+Now I have a comprehensive understanding of the existing architecture and can provide the architectural analysis for the vendor-agnostic abstraction layers requirement.
+
+## Executive Summary
+
+This architectural analysis addresses the implementation of vendor-agnostic abstraction layers for Codetoreum, enabling the orchestrator to work seamlessly with multiple external systems (GitHub, JIRA, Trello, Azure DevOps, etc.) without coupling to vendor-specific implementations. The core design principle—event-based adapters where detection mechanisms are adapter-internal and the orchestrator receives standardized events—aligns well with the existing hexagonal architecture and complements the established port/adapter pattern already implemented in the codebase.
+
+## System Architecture
+
+### Current State Assessment
+
+The existing Codetoreum codebase already implements a hexagonal architecture with:
+- **Output Ports**: `ITicketSystem`, `ILLMProvider`, `IContainer`, `IRepository`, `IEventStore` (all in `src/codetoreum/ports/output/`)
+- **Adapters**: `GitHubTicketAdapter`, `ClaudeCodeAdapter`, `InMemoryTicketAdapter` (in `src/codetoreum/adapters/`)
+- **Resilience Layer**: Circuit breakers, rate limiters, retry policies (in `src/codetoreum/infrastructure/resilience/`)
+- **Event System**: Event bus, event store, event handlers (in `src/codetoreum/infrastructure/`)
+
+### Proposed Architecture Extension
+
+The vendor-agnostic abstraction requires extending the current architecture with **event-emitting capabilities** layered on top of the existing synchronous ports:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          ORCHESTRATOR LAYER                              │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │              Central Event Bus (IEventBus)                        │   │
+│  │   Subscribers: WorkflowEngine, LockManager, AgentExecutor,       │   │
+│  │                MetricsCollector, DiscussionMonitor                │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+│                                    ▲                                     │
+│                                    │ Standardized Events                 │
+└────────────────────────────────────┼─────────────────────────────────────┘
+                                     │
+┌────────────────────────────────────┼─────────────────────────────────────┐
+│              EVENT-EMITTING ADAPTER LAYER (New)                          │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────────┐   │
+│  │IBoardService│ │IDiscussion  │ │ICodeReview  │ │IPipelineLock    │   │
+│  │EventEmitter │ │Adapter      │ │Service      │ │Service          │   │
+│  └──────┬──────┘ └──────┬──────┘ └──────┬──────┘ └───────┬─────────┘   │
+│         │               │               │                 │             │
+│   Internal Detection Mechanisms (vendor-specific)                       │
+│   ┌─────┴─────┐   ┌─────┴─────┐   ┌─────┴─────┐   ┌──────┴──────┐     │
+│   │polling    │   │webhooks   │   │webhooks   │   │internal     │     │
+│   │webhooks   │   │polling    │   │polling    │   │state mgmt   │     │
+│   └───────────┘   └───────────┘   └───────────┘   └─────────────┘     │
+└─────────────────────────────────────────────────────────────────────────┘
+                                     │
+┌────────────────────────────────────┼─────────────────────────────────────┐
+│              EXISTING OUTPUT PORTS (Commands/Queries)                    │
+│  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────────────┐   │
+│  │ ITicketSystem   │ │ IRepository     │ │ IIdentityService (New)  │   │
+│  │ (synchronous)   │ │ (synchronous)   │ │ (query-only)            │   │
+│  └─────────────────┘ └─────────────────┘ └─────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Layered Interface Decomposition
+
+The requirement defines seven abstraction layers. Based on the existing architecture, these map to:
+
+| Layer | New Interface | Extends/Composes | Event-Based |
+|-------|---------------|------------------|-------------|
+| Work Items | `IWorkItemService` | Extends `ITicketSystem` + `IEventEmitter` | Yes |
+| Board | `IBoardService` | New interface + `IEventEmitter` | Yes |
+| Discussion | `IDiscussionAdapter` | New interface + `IEventEmitter` | Yes |
+| Code Review | `ICodeReviewService` | New interface + `IEventEmitter` | Yes |
+| Pipeline Lock | `IPipelineLockService` | New interface + `IEventEmitter` | Yes |
+| Version Control | `IVersionControlService` | Alias for existing `IRepository` | No |
+| Identity | `IIdentityService` | New interface (query-only) | No |
+
+## Scalability Design
+
+### Event Distribution Architecture
+
+The event system must support high-throughput event processing with multiple subscribers:
+
+```python
+# Event distribution via existing Redis infrastructure
+┌────────────────────────────────────────────────────────────┐
+│                  Event Flow Architecture                    │
+│                                                             │
+│  Adapters ──► Redis Pub/Sub ──► Event Bus ──► Handlers    │
+│                    │                                        │
+│                    └──► Redis Streams (buffering)          │
+│                              │                              │
+│                              └──► Elasticsearch (persist)  │
+└────────────────────────────────────────────────────────────┘
+```
+
+**Throughput Considerations**:
+- Board column changes: ~100-1000/day per project (bursty)
+- Discussion comments: ~50-500/day per project
+- Code review status changes: ~10-100/day per project
+- Pipeline lock events: ~100-500/day per project
+
+The existing Redis Streams + Elasticsearch infrastructure (documented in `03_implementation_plan.md`) can handle these volumes with margin.
+
+### Detection Mechanism Scaling
+
+Each adapter encapsulates its detection mechanism:
+
+| Adapter | Mechanism | Scaling Characteristics |
+|---------|-----------|------------------------|
+| GitHub | Webhooks preferred, polling fallback | Webhook: no polling overhead; Polling: ~6000 req/hr limit |
+| JIRA | Webhooks or JQL polling | Webhook preferred; Polling intervals configurable |
+| Trello | Webhooks (required) | Rate limits: 300 req/10s, 100 req/10s per token |
+| Azure DevOps | Service Hooks | Near real-time; queue-based delivery |
+
+Adapters should implement **adaptive polling** when webhooks unavailable:
+- Exponential backoff during low-activity periods
+- Burst capacity during high-activity periods
+- Respect per-vendor rate limits via existing `IRateLimiter`
+
+### Horizontal Scaling Patterns
+
+For multi-instance deployments:
+1. **Event Deduplication**: Use `event_id` for idempotent processing
+2. **Partition by Project**: Each instance handles subset of projects
+3. **Leader Election**: For lock service coordination (Redis-based)
+
+## Established Patterns
+
+### Pattern 1: Event-Emitting Adapter (Decorator Pattern Extension)
+
+Build on existing `IEventEmitter` from infrastructure layer:
+
+```python
+# src/codetoreum/ports/output/event_emitter.py
+from abc import ABC, abstractmethod
+from typing import Callable, List
+from codetoreum.domain.events import CodetoreumEvent
+
+class IEventEmitter(ABC):
+    """Event emission capability for adapters."""
+    
+    @abstractmethod
+    def on(self, event_type: str, handler: Callable[[CodetoreumEvent], None]) -> None:
+        """Subscribe to events of a specific type."""
+        pass
+    
+    @abstractmethod
+    def off(self, event_type: str, handler: Callable[[CodetoreumEvent], None]) -> None:
+        """Unsubscribe from events."""
+        pass
+    
+    @abstractmethod
+    def emit(self, event: CodetoreumEvent) -> None:
+        """Emit an event to all subscribers."""
+        pass
+```
+
+### Pattern 2: Monitoring Lifecycle Protocol
+
+Each event-emitting service follows a consistent monitoring protocol:
+
+```python
+class IMonitoredService(ABC):
+    """Standard monitoring lifecycle for event-emitting services."""
+    
+    @abstractmethod
+    def start_monitoring(self, project_id: str, config: MonitoringConfig) -> None:
+        """Begin monitoring for changes (detection mechanism is internal)."""
+        pass
+    
+    @abstractmethod
+    def stop_monitoring(self, project_id: str) -> None:
+        """Stop monitoring for changes."""
+        pass
+    
+    @abstractmethod
+    def get_monitoring_status(self, project_id: str) -> MonitoringStatus:
+        """Query current monitoring state."""
+        pass
+```
+
+### Pattern 3: Mock Adapter Event Simulation
+
+Extend existing mock adapters with event simulation helpers:
+
+```python
+class MockBoardAdapter(IBoardService):
+    """Mock implementation with test helpers."""
+    
+    # Existing mock behavior...
+    
+    # Test helper methods
+    def simulate_column_change(
+        self, 
+        work_item_id: str, 
+        from_column: str, 
+        to_column: str,
+        moved_by: str = 'human'
+    ) -> None:
+        """Simulate column change for testing."""
+        self.emit(WorkItemColumnChangedEvent(
+            type='workitem.column_changed',
+            work_item_id=work_item_id,
+            project_id=self.current_project,
+            board_id=self.current_board,
+            from_column=from_column,
+            to_column=to_column,
+            moved_by=moved_by,
+            timestamp=datetime.utcnow().isoformat(),
+            source='mock'
+        ))
+```
+
+### Pattern 4: Vendor-Agnostic Domain Events
+
+Events use standardized terminology from the requirement:
+
+```python
+# src/codetoreum/domain/events/board_events.py
+@dataclass
+class WorkItemColumnChangedEvent(CodetoreumEvent):
+    type: str = 'workitem.column_changed'
+    work_item_id: str
+    project_id: str
+    board_id: str
+    from_column: str
+    to_column: str
+    moved_by: Literal['human', 'orchestrator', 'unknown']
+```
+
+**No GitHub-specific terms** (`issue_number`, `projects_v2`, `status_field`) appear in event schemas.
+
+## Component Reuse
+
+### Reuse Existing Infrastructure
+
+| Existing Component | Reuse Strategy |
+|-------------------|----------------|
+| `ITicketSystem` port | Extend for `IWorkItemService` (add monitoring + events) |
+| `InMemoryTicketAdapter` | Base for `MockWorkItemAdapter` |
+| `GitHubTicketAdapter` | Base for `GitHubBoardAdapter` (add Projects v2) |
+| `IRateLimiter`, `ICircuitBreaker` | Apply to all new adapters via decorators |
+| `IEventStore` | Store board/discussion/review events |
+| `EventBus` | Route events from adapters to handlers |
+| Resilience factory | Create resilient versions of new adapters |
+
+### New Interfaces Building on Existing
+
+```python
+# IBoardService extends pattern established by ITicketSystem
+class IBoardService(IEventEmitter, ABC):
+    """Board management with event emission."""
+    
+    # Query methods (similar pattern to ITicketSystem.list_work_items)
+    @abstractmethod
+    async def get_board(self, project_id: str, board_id: str) -> ProjectBoard: ...
+    
+    @abstractmethod
+    async def get_columns(self, board_id: str) -> List[Column]: ...
+    
+    # Command methods
+    @abstractmethod
+    async def move_item_to_column(self, work_item_id: str, target_column: str) -> None: ...
+    
+    # Monitoring lifecycle (new pattern)
+    @abstractmethod
+    def start_monitoring(self, project_id: str, board_id: str) -> None: ...
+```
+
+### Adapter Composition
+
+Production adapters compose multiple capabilities:
+
+```python
+class GitHubBoardAdapter(IBoardService):
+    """GitHub Projects v2 board adapter."""
+    
+    def __init__(
+        self,
+        ticket_adapter: GitHubTicketAdapter,  # Reuse existing
+        graphql_client: GitHubGraphQLClient,   # New for Projects v2
+        event_bus: IEventBus                   # Existing infrastructure
+    ):
+        self._ticket_adapter = ticket_adapter
+        self._graphql = graphql_client
+        self._event_bus = event_bus
+        self._polling_tasks: Dict[str, asyncio.Task] = {}
+```
+
+## Implementation Plan
+
+### Phase 1: Core Event Infrastructure (Aligns with existing Phase 3)
+
+**Deliverables**:
+1. Define `IEventEmitter` protocol in `src/codetoreum/ports/output/event_emitter.py`
+2. Define domain events in `src/codetoreum/domain/events/`:
+   - `board_events.py`: `WorkItemColumnChangedEvent`, `BoardReconciledEvent`
+   - `discussion_events.py`: `CommentNeedsResponseEvent`, `CommentPostedEvent`
+   - `review_events.py`: `ReviewStatusChangedEvent`, `ReviewCommentAddedEvent`
+   - `lock_events.py`: `LockAcquiredEvent`, `LockReleasedEvent`, `LockStaleDetectedEvent`
+3. Integrate with existing `EventBus` infrastructure
+
+**Dependencies**: None (can start immediately)
+
+### Phase 2: Port Interfaces (Aligns with existing Phase 2)
+
+**Deliverables**:
+1. `IBoardService` in `src/codetoreum/ports/output/board_service.py`
+2. `IDiscussionAdapter` in `src/codetoreum/ports/output/discussion_adapter.py`
+3. `ICodeReviewService` in `src/codetoreum/ports/output/code_review_service.py`
+4. `IPipelineLockService` in `src/codetoreum/ports/output/pipeline_lock_service.py`
+5. `IIdentityService` in `src/codetoreum/ports/output/identity_service.py`
+6. Extend `ITicketSystem` → `IWorkItemService` (backward compatible)
+
+**Dependencies**: Phase 1 (event types defined)
+
+### Phase 3: Mock Adapters (Aligns with existing Phase 4)
+
+**Deliverables**:
+1. `InMemoryBoardAdapter` with `simulateColumnChange()` helper
+2. `MockDiscussionAdapter` with `simulateComment()` helper
+3. `MockCodeReviewAdapter` with `simulateApproval()` helper
+4. `InMemoryPipelineLockService` with full lock lifecycle
+5. `ConfigurableIdentityService` for bot detection testing
+
+**Dependencies**: Phase 2 (interfaces defined)
+
+### Phase 4: Production Adapters - GitHub (Priority 1)
+
+**Deliverables**:
+1. `GitHubBoardAdapter`:
+   - Projects v2 GraphQL integration
+   - Webhook handler for `project_card` events
+   - Polling fallback with adaptive intervals
+2. `GitHubDiscussionAdapter`:
+   - Issue comment detection
+   - Discussion thread support (if enabled)
+   - Webhook + polling for comments
+3. `GitHubCodeReviewAdapter`:
+   - PR status change detection
+   - Review comment handling
+   - Webhook for `pull_request_review` events
+
+**Dependencies**: Phase 3 (mock adapters for testing)
+
+### Phase 5: Workflow Engine Integration
+
+**Deliverables**:
+1. Update `WorkflowOrchestrator` to subscribe to board events
+2. Update `AgentScheduler` to react to lock events
+3. Implement discussion monitoring lifecycle management
+4. Wire event handlers in `event_bus_wiring.py`
+
+**Dependencies**: Phase 4 (at least mock adapters available)
+
+### Phase 6: Additional Vendor Adapters (Priority 2-3)
+
+**Deliverables**:
+1. JIRA adapters (board, discussion, code review via Bitbucket link)
+2. Azure DevOps adapters (Boards, Repos PRs)
+3. Trello adapters (board only)
+
+**Dependencies**: Phase 4 (GitHub as reference implementation)
+
+## ADR: Event-Based vs Polling-Based Orchestrator Integration
+
+### Context
+
+The orchestrator needs to react to external changes (work items moving between columns, new comments, PR approvals). Two approaches exist:
+1. **Polling-based**: Orchestrator polls adapters periodically
+2. **Event-based**: Adapters emit events, orchestrator subscribes
+
+### Decision
+
+**Adopt event-based adapters where detection mechanisms are adapter-internal.**
+
+### Rationale
+
+1. **Vendor Flexibility**: Each vendor has different optimal detection mechanisms (GitHub webhooks, JIRA JQL polling, Trello webhooks). Encapsulating detection inside adapters allows each to use its optimal approach.
+
+2. **Clean Separation**: Orchestrator logic doesn't depend on detection method. A `workitem.column_changed` event is handled identically whether it came from a GitHub webhook or JIRA polling.
+
+3. **Testability**: Mock adapters can emit events directly without simulating polling or webhook infrastructure. This enables deterministic, fast simulation tests.
+
+4. **Consistency with Architecture**: The existing event-sourcing infrastructure (`IEventStore`, `EventBus`) already provides event distribution. Extending this to adapter events maintains architectural consistency.
+
+### Consequences
+
+- **Positive**: Cleaner orchestrator code, better testability, vendor flexibility
+- **Negative**: Slightly more complex adapter implementations (must manage detection lifecycle)
+- **Mitigation**: Provide base classes and mixins for common detection patterns
+
+## ADR: Terminology Standardization
+
+### Context
+
+GitHub uses terms like "Issue", "Pull Request", "Projects v2 Status Field". JIRA uses "Issue", "Pull Request" (via Bitbucket), "Board". The codebase needs consistent terminology.
+
+### Decision
+
+**Adopt vendor-agnostic terminology as specified in the requirement:**
+
+| Vendor Term | Standard Term |
+|-------------|---------------|
+| Issue (GitHub/JIRA) | Work Item |
+| Issue Number | Work Item ID |
+| Projects v2 | Project Board |
+| Status Field | Column / Workflow State |
+| Pull Request / Merge Request | Code Review |
+| Issue Comment / PR Comment | Comment |
+
+### Rationale
+
+1. **Mental Model**: Developers working with Codetoreum shouldn't need to think in GitHub terms when the system supports multiple vendors.
+
+2. **Interface Stability**: Using vendor-neutral terms in interfaces means interfaces don't change when adding vendors.
+
+3. **Documentation Clarity**: Simulation scenarios and test cases use consistent terminology.
+
+### Consequences
+
+- **Positive**: Cleaner domain model, easier multi-vendor support
+- **Negative**: Adapters must translate terminology at boundaries
+- **Mitigation**: Use consistent mapping utilities; document term mappings per vendor
+
+## Security Considerations
+
+### Event Data Sensitivity
+
+Events may contain sensitive information (work item titles, code review comments). Ensure:
+1. Events in Redis Streams have appropriate TTL (2 hours per existing design)
+2. Elasticsearch event indices follow retention policy (90 days)
+3. Mock adapters don't log sensitive data in test output
+4. Webhook endpoints validate signatures (GitHub: `X-Hub-Signature-256`)
+
+### Identity Service Security
+
+`IIdentityService` must not expose authentication tokens. It only answers:
+- "Is this username a bot?"
+- "What is the configured bot username?"
+- "Filter human users from this list"
+
+Configure via `BotIdentityConfig` without hardcoded values.
+
+## Testing Strategy
+
+### Contract Tests
+
+Each interface requires contract tests verifying:
+- All methods implemented
+- Events emitted for expected operations
+- Error handling follows port contract
+
+```python
+class IBoardServiceContract(ABC):
+    """Contract tests for IBoardService implementations."""
+    
+    @abstractmethod
+    def create_adapter(self) -> IBoardService: ...
+    
+    async def test_move_item_emits_event(self):
+        adapter = self.create_adapter()
+        events = []
+        adapter.on('workitem.column_changed', events.append)
+        
+        await adapter.move_item_to_column('item-1', 'Done')
+        
+        assert len(events) == 1
+        assert events[0].to_column == 'Done'
+```
+
+### Simulation Tests
+
+Full workflow tests using mock adapters:
+```python
+async def test_column_change_triggers_agent(simulation_runner):
+    """When work item moves to automated column, agent executes."""
+    
+    # Arrange
+    simulation_runner.board.add_work_item('item-1', column='Backlog')
+    
+    # Act - simulate column change
+    simulation_runner.board.simulate_column_change(
+        'item-1', from_column='Backlog', to_column='Development'
+    )
+    await simulation_runner.process_events()
+    
+    # Assert
+    assert simulation_runner.agent_executor.was_triggered('item-1')
+```
+
+## Metrics and Observability
+
+### Recommended Metrics
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `adapter.events_emitted_total` | Counter | `adapter`, `event_type` |
+| `adapter.detection_latency_ms` | Histogram | `adapter`, `method` |
+| `adapter.monitoring_active` | Gauge | `adapter`, `project_id` |
+| `lock.acquisitions_total` | Counter | `project_id`, `method` |
+| `lock.wait_time_ms` | Histogram | `project_id` |
+
+### Dashboard Recommendations
+
+1. **Event Flow Dashboard**: Events per adapter over time
+2. **Detection Latency Dashboard**: Webhook vs polling latency comparison
+3. **Lock Contention Dashboard**: Lock wait times, queue depths
+
+---
+_Generated by Orchestrator Bot 🤖_
+_Processed by the software_architect agent_
+
+IMPORTANT: Review all feedback carefully and address every issue that is not already addressed.
+
+

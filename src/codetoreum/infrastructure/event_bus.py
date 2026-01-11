@@ -1,4 +1,4 @@
-"""In-process event bus for real-time event handling."""
+"""In-process event bus for real-time event handling with optional Redis persistence."""
 
 import asyncio
 import logging
@@ -7,6 +7,13 @@ from typing import Any, Callable, Dict, List, Optional, Set, Type
 from codetoreum.domain.events import DomainEvent
 
 logger = logging.getLogger(__name__)
+
+# Optional Redis support
+try:
+    from redis import asyncio as aioredis
+    REDIS_AVAILABLE = True
+except ImportError:
+    REDIS_AVAILABLE = False
 
 
 class EventBusError(Exception):
@@ -73,16 +80,26 @@ class EventBus:
         await bus.publish(WorkItemCreated(...))
     """
 
-    def __init__(self, max_retries: int = 3, retry_delay_seconds: float = 1.0):
+    def __init__(
+        self,
+        max_retries: int = 3,
+        retry_delay_seconds: float = 1.0,
+        redis_client: Optional[Any] = None,
+        redis_stream_prefix: str = "events",
+    ):
         """
         Initialize event bus.
 
         Args:
             max_retries: Maximum retry attempts for failed handlers
             retry_delay_seconds: Delay between retries
+            redis_client: Optional Redis async client for event persistence
+            redis_stream_prefix: Prefix for Redis streams (e.g., "events:workitem.column_changed")
         """
         self.max_retries = max_retries
         self.retry_delay_seconds = retry_delay_seconds
+        self.redis_client = redis_client
+        self.redis_stream_prefix = redis_stream_prefix
 
         # Handler registry: event_type -> list of handlers
         self._handlers: Dict[str, List[EventHandler]] = {}
@@ -99,6 +116,8 @@ class EventBus:
             "events_published": 0,
             "events_handled": 0,
             "handler_errors": 0,
+            "events_persisted": 0,
+            "persistence_errors": 0,
         }
 
     def register_handler(self, handler: EventHandler) -> None:
@@ -214,6 +233,8 @@ class EventBus:
         """
         Publish an event to all registered handlers and callbacks.
 
+        Also persists event to Redis Streams if Redis client is configured.
+
         Args:
             event: Domain event to publish
 
@@ -223,6 +244,10 @@ class EventBus:
         self._stats["events_published"] += 1
 
         try:
+            # Persist event to Redis Streams if available
+            if self.redis_client:
+                await self._persist_to_redis(event)
+
             # Get handlers for this event type
             handlers = self._get_handlers_for_event(event)
 
@@ -374,6 +399,53 @@ class EventBus:
         # All retries exhausted
         raise last_exception
 
+    async def _persist_to_redis(self, event: DomainEvent) -> None:
+        """
+        Persist event to Redis Streams.
+
+        Args:
+            event: Domain event to persist
+
+        Raises:
+            Exception: If persistence fails
+        """
+        if not self.redis_client:
+            return
+
+        try:
+            # Create stream key from event type (e.g., "events:WorkItemCreated")
+            stream_key = f"{self.redis_stream_prefix}:{event.event_type}"
+
+            # Serialize event to dictionary
+            event_dict = event.to_dict()
+
+            # Add to Redis Stream
+            await self.redis_client.xadd(
+                name=stream_key,
+                fields={
+                    "event_id": str(event.event_id),
+                    "aggregate_id": event.aggregate_id,
+                    "aggregate_type": event.aggregate_type,
+                    "timestamp": event.occurred_at.isoformat(),
+                    "payload": str(event_dict),
+                },
+            )
+
+            self._stats["events_persisted"] += 1
+
+            logger.debug(
+                f"Persisted event {event.event_type} "
+                f"(ID: {event.event_id}) to Redis stream {stream_key}"
+            )
+
+        except Exception as e:
+            self._stats["persistence_errors"] += 1
+            logger.error(
+                f"Failed to persist event {event.event_type} to Redis: {e}",
+                exc_info=e,
+            )
+            # Don't raise - persistence failure shouldn't block event handling
+
     def get_statistics(self) -> Dict[str, Any]:
         """
         Get event bus statistics.
@@ -395,6 +467,7 @@ class EventBus:
             },
             "wildcard_handlers": len(self._wildcard_handlers),
             "wildcard_callbacks": len(self._wildcard_callbacks),
+            "redis_enabled": bool(self.redis_client),
         }
 
     def reset_statistics(self) -> None:

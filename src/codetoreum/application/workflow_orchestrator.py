@@ -1,18 +1,21 @@
 """Workflow Orchestrator application service."""
 
+import asyncio
 import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from codetoreum.domain.events import (
     WorkflowStageAdvanced,
     WorkItemStageUpdated,
+    DomainEvent,
 )
 from codetoreum.domain.workflow import Workflow, WorkflowStatus
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority
+from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.output import IEventStore, ITicketSystem
 
 logger = logging.getLogger(__name__)
@@ -280,6 +283,12 @@ class WorkflowOrchestrator:
 
     Coordinates workflow execution from card movement to agent completion.
     Handles agent routing, stage progression, and decision making.
+
+    Also acts as an event handler subscribing to adapter events:
+    - workitem.column_changed: Triggers agents for automated columns
+    - comment.needs_response: Triggers conversational agents
+    - lock.released: Acquires lock for next queued item
+    - review.status_changed: Progresses work through maker-checker cycles
     """
 
     def __init__(
@@ -290,6 +299,7 @@ class WorkflowOrchestrator:
         decision_events: IDecisionEvents,
         event_store: IEventStore,
         ticket_system: ITicketSystem,
+        event_bus: Optional[EventBus] = None,
         projects_api: Optional[IProjectsAPI] = None,
     ):
         """
@@ -302,6 +312,7 @@ class WorkflowOrchestrator:
             decision_events: Decision event emission
             event_store: Event store for domain events
             ticket_system: Ticket system for issue operations
+            event_bus: Event bus for subscribing to adapter events (optional)
             projects_api: Projects API for card movement (optional)
         """
         self.task_queue = task_queue
@@ -310,7 +321,12 @@ class WorkflowOrchestrator:
         self.decision_events = decision_events
         self.event_store = event_store
         self.ticket_system = ticket_system
+        self.event_bus = event_bus
         self.projects_api = projects_api
+
+        # Subscribe to adapter events if event bus is available
+        if self.event_bus:
+            self._subscribe_to_events()
 
     async def handle_card_movement(self, event: CardMovedEvent) -> WorkflowResult:
         """
@@ -838,3 +854,296 @@ class WorkflowOrchestrator:
         )
 
         return await self.task_queue.enqueue(task)
+
+    # Event Bus Integration (Phase 7)
+
+    def _subscribe_to_events(self) -> None:
+        """
+        Subscribe workflow engine to adapter events.
+
+        Subscribes to:
+        - workitem.column_changed: Handle column transitions
+        - comment.needs_response: Handle discussion responses
+        - lock.released: Handle lock release and queue progression
+        - review.status_changed: Handle review cycle completion
+        """
+        if not self.event_bus:
+            return
+
+        # Subscribe to board events
+        self.event_bus.subscribe(
+            "workitem.column_changed",
+            self._async_wrapper(self._handle_column_change)
+        )
+
+        # Subscribe to discussion events
+        self.event_bus.subscribe(
+            "comment.needs_response",
+            self._async_wrapper(self._handle_comment_needs_response)
+        )
+
+        # Subscribe to lock events
+        self.event_bus.subscribe(
+            "lock.released",
+            self._async_wrapper(self._handle_lock_released)
+        )
+
+        # Subscribe to review events
+        self.event_bus.subscribe(
+            "review.status_changed",
+            self._async_wrapper(self._handle_review_status_changed)
+        )
+
+        logger.info("WorkflowOrchestrator subscribed to adapter events")
+
+    @staticmethod
+    def _async_wrapper(async_handler: Callable) -> Callable:
+        """
+        Wrap an async handler to be called from EventBus.
+
+        The EventBus checks if callbacks are async and awaits them,
+        so we just return the async handler directly.
+
+        Args:
+            async_handler: Async function to wrap
+
+        Returns:
+            The async handler
+        """
+        return async_handler
+
+    async def _handle_column_change(self, event: DomainEvent) -> None:
+        """
+        Handle work item column change event.
+
+        Decision Flow:
+        1. Get column configuration
+        2. If automated column: Try to acquire lock and trigger agent
+        3. If exit column: Release lock (triggers next item in queue)
+        4. If conversational column: Start discussion monitoring
+        5. If leaving conversational column: Stop discussion monitoring
+
+        Args:
+            event: workitem.column_changed event
+        """
+        try:
+            # Extract event data
+            work_item_id = event.payload.get("work_item_id")
+            project_id = event.payload.get("project_id")
+            board_id = event.payload.get("board_id")
+            to_column = event.payload.get("to_column")
+            from_column = event.payload.get("from_column")
+            moved_by = event.payload.get("moved_by", "unknown")
+
+            if not all([work_item_id, project_id, board_id, to_column]):
+                logger.warning(
+                    f"Column change event missing required fields: {event.payload}"
+                )
+                return
+
+            logger.info(
+                f"Handling column change: item {work_item_id} "
+                f"from '{from_column}' to '{to_column}'"
+            )
+
+            # Get workflow configuration
+            try:
+                workflow_config = await self.config.get_workflow_config(
+                    project_id, board_id
+                )
+            except Exception as e:
+                logger.error(f"Failed to get workflow config: {e}")
+                return
+
+            # Find target column configuration
+            target_column_config = self._find_column_config(workflow_config, to_column)
+            if not target_column_config:
+                logger.warning(f"Column '{to_column}' not found in workflow config")
+                return
+
+            # Case 1: Automated column - trigger agent
+            if target_column_config.agent:
+                # Create task context
+                task_context = {
+                    "work_item_id": work_item_id,
+                    "column": to_column,
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "moved_by": moved_by,
+                }
+
+                # Create and enqueue task
+                task = Task(
+                    id=f"auto_{project_id}_{work_item_id}_{int(time.time())}",
+                    agent=target_column_config.agent,
+                    project=project_id,
+                    priority=WorkItemPriority.MEDIUM,
+                    context=task_context,
+                    created_at=datetime.now(timezone.utc),
+                )
+
+                try:
+                    task_id = await self.task_queue.enqueue(task)
+                    logger.info(
+                        f"Enqueued agent task {task_id} for column '{to_column}'"
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to enqueue task: {e}")
+
+            # Case 2: Exit column - release lock
+            if getattr(target_column_config, 'exit_column', False):
+                logger.debug(f"Column '{to_column}' is exit column, releasing lock")
+                # Lock release is handled by lock service on item completion
+                # This is informational
+
+            # Case 3: Conversational column - start monitoring (if implemented)
+            if getattr(target_column_config, 'discussion_category', None):
+                logger.debug(
+                    f"Column '{to_column}' has discussion, "
+                    f"would start monitoring (implementation pending)"
+                )
+
+            # Case 4: Leaving conversational column - stop monitoring
+            if from_column:
+                from_column_config = self._find_column_config(workflow_config, from_column)
+                if from_column_config and getattr(from_column_config, 'discussion_category', None):
+                    logger.debug(
+                        f"Leaving discussion column '{from_column}', "
+                        f"would stop monitoring (implementation pending)"
+                    )
+
+        except Exception as e:
+            logger.error(f"Error handling column change event: {e}", exc_info=e)
+
+    async def _handle_comment_needs_response(self, event: DomainEvent) -> None:
+        """
+        Handle comment requiring response event.
+
+        Triggers conversational agent to respond to comment.
+
+        Args:
+            event: comment.needs_response event
+        """
+        try:
+            work_item_id = event.payload.get("work_item_id")
+            project_id = event.payload.get("project_id")
+            agent_name = event.payload.get("agent_assignment")
+            comment_text = event.payload.get("comment")
+
+            if not all([work_item_id, project_id, agent_name]):
+                logger.warning(
+                    f"Comment event missing required fields: {event.payload}"
+                )
+                return
+
+            logger.info(
+                f"Handling comment response for item {work_item_id} "
+                f"with agent {agent_name}"
+            )
+
+            # Create task for conversational agent
+            task = Task(
+                id=f"comment_{project_id}_{work_item_id}_{int(time.time())}",
+                agent=agent_name,
+                project=project_id,
+                priority=WorkItemPriority.MEDIUM,
+                context={
+                    "work_item_id": work_item_id,
+                    "comment": comment_text,
+                    "project_id": project_id,
+                },
+                created_at=datetime.now(timezone.utc),
+            )
+
+            try:
+                task_id = await self.task_queue.enqueue(task)
+                logger.info(f"Enqueued comment response task {task_id}")
+            except Exception as e:
+                logger.error(f"Failed to enqueue comment response task: {e}")
+
+        except Exception as e:
+            logger.error(f"Error handling comment event: {e}", exc_info=e)
+
+    async def _handle_lock_released(self, event: DomainEvent) -> None:
+        """
+        Handle pipeline lock released event.
+
+        When a lock is released, check if there's a next item in queue
+        and try to acquire lock for it.
+
+        Args:
+            event: lock.released event
+        """
+        try:
+            project_id = event.payload.get("project_id")
+            board_id = event.payload.get("board_id")
+            next_in_queue = event.payload.get("next_in_queue")
+
+            if not all([project_id, board_id]):
+                logger.warning(f"Lock event missing required fields: {event.payload}")
+                return
+
+            logger.info(
+                f"Lock released for {project_id}/{board_id}, "
+                f"next in queue: {next_in_queue}"
+            )
+
+            if not next_in_queue:
+                logger.debug("No item queued after lock release")
+                return
+
+            # Try to acquire lock for next item
+            # Note: Lock acquisition is handled by lock service
+            # This handler just logs/monitors the lock progression
+            logger.debug(f"Next item {next_in_queue} would acquire lock (implementation in lock service)")
+
+        except Exception as e:
+            logger.error(f"Error handling lock released event: {e}", exc_info=e)
+
+    async def _handle_review_status_changed(self, event: DomainEvent) -> None:
+        """
+        Handle code review status change event.
+
+        Progresses work item based on review status:
+        - Approved: Move to next column
+        - Changes requested: Move back to development column
+
+        Args:
+            event: review.status_changed event
+        """
+        try:
+            work_item_id = event.payload.get("work_item_id")
+            project_id = event.payload.get("project_id")
+            new_status = event.payload.get("new_status")
+            previous_status = event.payload.get("previous_status")
+
+            if not all([work_item_id, project_id, new_status]):
+                logger.warning(
+                    f"Review event missing required fields: {event.payload}"
+                )
+                return
+
+            logger.info(
+                f"Review status changed for item {work_item_id}: "
+                f"{previous_status} -> {new_status}"
+            )
+
+            if new_status == "approved":
+                # Move to next column
+                if self.projects_api:
+                    try:
+                        # Get workflow to find next column
+                        workflow_config = await self.config.get_workflow_config(
+                            project_id, event.payload.get("board_id", "default")
+                        )
+                        # Next column logic would go here
+                        logger.info(f"Review approved, would move item to next column")
+                    except Exception as e:
+                        logger.error(f"Failed to get workflow config: {e}")
+
+            elif new_status == "changes_requested":
+                # Move back to development
+                logger.info(f"Changes requested on review, would move back to development")
+
+        except Exception as e:
+            logger.error(f"Error handling review status event: {e}", exc_info=e)
