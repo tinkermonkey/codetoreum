@@ -1109,7 +1109,7 @@ class WorkflowOrchestrator:
                         "board_id": board_id,
                         "column": current_column_name,
                         "agent": column_config.agent,
-                        "priority": WorkItemPriority.NORMAL,
+                        "priority": WorkItemPriority.MEDIUM,
                     })
                 else:
                     logger.debug(f"Column {current_column_name} is not automated, no agent to trigger")

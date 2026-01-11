@@ -14,7 +14,7 @@ All adapters emit their events to the event bus via handlers registered here.
 
 import asyncio
 import logging
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.event_bus_protocols import (
