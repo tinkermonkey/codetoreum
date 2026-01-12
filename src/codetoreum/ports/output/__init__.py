@@ -3,9 +3,12 @@
 from codetoreum.ports.output.board_service import (
     BoardConfig,
     Column,
+    ColumnMovementResult,
     IBoardService,
+    MovedByType,
     ProjectBoard,
     ReconciliationResult,
+    WorkItemPosition,
 )
 from codetoreum.ports.output.code_review_service import (
     Approval,
@@ -87,8 +90,11 @@ __all__ = [
     "IBoardService",
     "BoardConfig",
     "Column",
+    "ColumnMovementResult",
+    "MovedByType",
     "ProjectBoard",
     "ReconciliationResult",
+    "WorkItemPosition",
     # Code Review Service
     "ICodeReviewService",
     "Approval",

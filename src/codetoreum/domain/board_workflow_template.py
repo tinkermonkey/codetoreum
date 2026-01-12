@@ -53,6 +53,9 @@ class BoardWorkflowTemplate:
         pipeline_trigger_columns: Column names that acquire pipeline lock
         exit_columns: Column names that release pipeline lock
         columns: Ordered list of column configurations
+
+    Raises:
+        ValueError: If column positions are not unique or not sequential starting at 0
     """
 
     id: str
@@ -60,6 +63,20 @@ class BoardWorkflowTemplate:
     pipeline_trigger_columns: List[str]
     exit_columns: List[str]
     columns: List[ColumnTemplate]
+
+    def __post_init__(self) -> None:
+        """Validate column positions are unique and sequential."""
+        if not self.columns:
+            return
+
+        positions = sorted([col.position for col in self.columns])
+        expected = list(range(len(self.columns)))
+
+        if positions != expected:
+            raise ValueError(
+                f"Column positions must be unique and sequential starting at 0. "
+                f"Got {positions}, expected {expected}"
+            )
 
     def get_column_config(self, column_name: str) -> Optional[ColumnTemplate]:
         """Get configuration for a specific column by name.
@@ -91,8 +108,12 @@ class BoardWorkflowTemplate:
 
 
 @dataclass
-class BoardConfig:
+class BoardReconciliationConfig:
     """Configuration for reconciling a board with workflow template.
+
+    Domain entity for specifying how to reconcile a board's structure
+    with a workflow template. Used to ensure board columns match expected
+    workflow stages and agent assignments.
 
     Attributes:
         workflow_template_id: ID of the workflow template to apply

@@ -79,7 +79,7 @@ from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStat
 from codetoreum.domain.workflow import Workflow, WorkflowStatus
 from codetoreum.domain.workflow_template import StageTemplate, WorkflowTemplate
 from codetoreum.domain.board_workflow_template import (
-    BoardConfig,
+    BoardReconciliationConfig,
     BoardWorkflowTemplate,
     ColumnTemplate,
     ColumnType,
@@ -144,7 +144,7 @@ __all__ = [
     "BoardWorkflowTemplate",
     "ColumnTemplate",
     "ColumnType",
-    "BoardConfig",
+    "BoardReconciliationConfig",
     # Project Context
     "ProjectContext",
     "ProjectContextCreated",

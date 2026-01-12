@@ -3,7 +3,7 @@
 import pytest
 
 from codetoreum.domain.board_workflow_template import (
-    BoardConfig,
+    BoardReconciliationConfig,
     BoardWorkflowTemplate,
     ColumnTemplate,
     ColumnType,
@@ -359,12 +359,12 @@ class TestGetNextColumn:
         assert fourth is None
 
 
-class TestBoardConfig:
-    """Test BoardConfig dataclass."""
+class TestBoardReconciliationConfig:
+    """Test BoardReconciliationConfig dataclass."""
 
-    def test_create_board_config(self):
-        """Test creating board configuration."""
-        config = BoardConfig(
+    def test_create_board_reconciliation_config(self):
+        """Test creating board reconciliation configuration."""
+        config = BoardReconciliationConfig(
             workflow_template_id="template-1",
             board_id="board-123",
             project_id="proj-456",
@@ -458,3 +458,145 @@ class TestBoardWorkflowTemplateEdgeCases:
         assert ColumnType.MANUAL.value == "manual"
         assert ColumnType.AUTOMATED.value == "automated"
         assert len(ColumnType) == 2
+
+
+class TestBoardWorkflowTemplatePositionValidation:
+    """Test position validation in BoardWorkflowTemplate."""
+
+    def test_valid_sequential_positions(self):
+        """Test that sequential positions are accepted."""
+        columns = [
+            ColumnTemplate(
+                name="Col0",
+                type=ColumnType.MANUAL,
+                agent_id=None,
+                is_pipeline_trigger=False,
+                is_exit_column=False,
+                position=0,
+                auto_progress_on_completion=False,
+            ),
+            ColumnTemplate(
+                name="Col1",
+                type=ColumnType.MANUAL,
+                agent_id=None,
+                is_pipeline_trigger=False,
+                is_exit_column=False,
+                position=1,
+                auto_progress_on_completion=False,
+            ),
+            ColumnTemplate(
+                name="Col2",
+                type=ColumnType.MANUAL,
+                agent_id=None,
+                is_pipeline_trigger=False,
+                is_exit_column=False,
+                position=2,
+                auto_progress_on_completion=False,
+            ),
+        ]
+
+        template = BoardWorkflowTemplate(
+            id="template-1",
+            name="Test",
+            pipeline_trigger_columns=[],
+            exit_columns=[],
+            columns=columns,
+        )
+
+        assert len(template.columns) == 3
+
+    def test_invalid_duplicate_positions(self):
+        """Test that duplicate positions are rejected."""
+        columns = [
+            ColumnTemplate(
+                name="Col0",
+                type=ColumnType.MANUAL,
+                agent_id=None,
+                is_pipeline_trigger=False,
+                is_exit_column=False,
+                position=0,
+                auto_progress_on_completion=False,
+            ),
+            ColumnTemplate(
+                name="Col1",
+                type=ColumnType.MANUAL,
+                agent_id=None,
+                is_pipeline_trigger=False,
+                is_exit_column=False,
+                position=0,  # Duplicate position
+                auto_progress_on_completion=False,
+            ),
+        ]
+
+        with pytest.raises(ValueError, match="Column positions must be unique"):
+            BoardWorkflowTemplate(
+                id="template-1",
+                name="Test",
+                pipeline_trigger_columns=[],
+                exit_columns=[],
+                columns=columns,
+            )
+
+    def test_invalid_positions_not_starting_at_zero(self):
+        """Test that positions not starting at 0 are rejected."""
+        columns = [
+            ColumnTemplate(
+                name="Col1",
+                type=ColumnType.MANUAL,
+                agent_id=None,
+                is_pipeline_trigger=False,
+                is_exit_column=False,
+                position=1,
+                auto_progress_on_completion=False,
+            ),
+            ColumnTemplate(
+                name="Col2",
+                type=ColumnType.MANUAL,
+                agent_id=None,
+                is_pipeline_trigger=False,
+                is_exit_column=False,
+                position=2,
+                auto_progress_on_completion=False,
+            ),
+        ]
+
+        with pytest.raises(ValueError, match="Column positions must be unique"):
+            BoardWorkflowTemplate(
+                id="template-1",
+                name="Test",
+                pipeline_trigger_columns=[],
+                exit_columns=[],
+                columns=columns,
+            )
+
+    def test_invalid_positions_with_gaps(self):
+        """Test that positions with gaps are rejected."""
+        columns = [
+            ColumnTemplate(
+                name="Col0",
+                type=ColumnType.MANUAL,
+                agent_id=None,
+                is_pipeline_trigger=False,
+                is_exit_column=False,
+                position=0,
+                auto_progress_on_completion=False,
+            ),
+            ColumnTemplate(
+                name="Col2",
+                type=ColumnType.MANUAL,
+                agent_id=None,
+                is_pipeline_trigger=False,
+                is_exit_column=False,
+                position=2,  # Gap: missing position 1
+                auto_progress_on_completion=False,
+            ),
+        ]
+
+        with pytest.raises(ValueError, match="Column positions must be unique"):
+            BoardWorkflowTemplate(
+                id="template-1",
+                name="Test",
+                pipeline_trigger_columns=[],
+                exit_columns=[],
+                columns=columns,
+            )

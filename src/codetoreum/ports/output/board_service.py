@@ -10,10 +10,19 @@ abstractions over GitHub Projects v2, Trello, JIRA boards, etc.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from enum import Enum
+from typing import List, Optional
+from datetime import datetime
 
 from .event_emitter import IEventEmitter
 from .monitoring import IMonitoredService, MonitoringConfig
+
+
+class MovedByType(Enum):
+    """Type of entity that moved a work item between columns."""
+
+    HUMAN = "human"
+    ORCHESTRATOR = "orchestrator"
 
 
 @dataclass
@@ -34,6 +43,21 @@ class Column:
 
 
 @dataclass
+class WorkItemPosition:
+    """Position of a work item within a board column.
+
+    Attributes:
+        work_item_id: Unique identifier of the work item
+        column_name: Name of the column containing the item
+        position: Position within the column (0 = top/first)
+    """
+
+    work_item_id: str
+    column_name: str
+    position: int
+
+
+@dataclass
 class ProjectBoard:
     """Represents a project board with all columns and structure.
 
@@ -48,6 +72,25 @@ class ProjectBoard:
     name: str
     project_id: str
     columns: List[Column]
+
+
+@dataclass
+class ColumnMovementResult:
+    """Result of moving a work item between columns.
+
+    Attributes:
+        work_item_id: ID of the work item that was moved
+        from_column: Name of the source column (None if item was not on a board)
+        to_column: Name of the target column
+        moved_by: Type of entity that initiated the move (HUMAN or ORCHESTRATOR)
+        timestamp: ISO format timestamp of when the move occurred
+    """
+
+    work_item_id: str
+    from_column: Optional[str]
+    to_column: str
+    moved_by: MovedByType
+    timestamp: str
 
 
 @dataclass
@@ -118,10 +161,12 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
             columns = await svc.get_columns("board-456")
 
             # Move item between columns
-            await svc.move_item_to_column("item-789", "In Progress")
+            result = await svc.move_item_to_column(
+                "item-789", "In Progress", MovedByType.ORCHESTRATOR
+            )
 
             # Reconcile board
-            result = await svc.reconcile_board(
+            reconcile_result = await svc.reconcile_board(
                 BoardConfig(
                     board_id="board-456",
                     expected_columns=["Backlog", "In Progress", "Review", "Done"],
@@ -190,7 +235,7 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
         pass
 
     @abstractmethod
-    async def get_item_position(self, work_item_id: str) -> Tuple[str, int]:
+    async def get_item_position(self, work_item_id: str) -> WorkItemPosition:
         """Get current column position of a work item.
 
         Returns which column the item is in and its position within that column.
@@ -199,7 +244,7 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
             work_item_id: Item to locate
 
         Returns:
-            Tuple[str, int]: (column_name, position_in_column)
+            WorkItemPosition: Current position details
 
         Raises:
             ResourceNotFoundError: Work item not found on any board
@@ -211,8 +256,8 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
 
     @abstractmethod
     async def move_item_to_column(
-        self, work_item_id: str, target_column: str
-    ) -> None:
+        self, work_item_id: str, target_column: str, moved_by: MovedByType
+    ) -> ColumnMovementResult:
         """Move work item to target column.
 
         Moves the item to the specified column on its board.
@@ -221,6 +266,10 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
         Args:
             work_item_id: Item to move
             target_column: Target column name (e.g., "In Progress")
+            moved_by: Type of entity initiating the move (HUMAN or ORCHESTRATOR)
+
+        Returns:
+            ColumnMovementResult: Details of the movement operation
 
         Raises:
             ResourceNotFoundError: Work item or target column doesn't exist
