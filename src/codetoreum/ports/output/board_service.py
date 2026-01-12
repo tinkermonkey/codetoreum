@@ -26,7 +26,7 @@ class MovedByType(Enum):
 
 
 @dataclass
-class Column:
+class BoardColumn:
     """Represents a column (lane) on a project board.
 
     Attributes:
@@ -71,7 +71,7 @@ class ProjectBoard:
     id: str
     name: str
     project_id: str
-    columns: List[Column]
+    columns: List[BoardColumn]
 
 
 @dataclass
@@ -203,7 +203,7 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
         pass
 
     @abstractmethod
-    async def get_columns(self, board_id: str) -> List[Column]:
+    async def get_columns(self, board_id: str) -> List[BoardColumn]:
         """Get all columns for a board.
 
         Returns columns in order of their position on the board.
@@ -212,7 +212,7 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
             board_id: Board to query
 
         Returns:
-            List[Column]: Columns ordered by position (0 = first)
+            List[BoardColumn]: Columns ordered by position (0 = first)
 
         Raises:
             ResourceNotFoundError: Board doesn't exist

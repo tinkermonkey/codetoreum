@@ -19,11 +19,11 @@ class EventEmitter(Protocol):
 class IBoardService(EventEmitter, Protocol):
     """Protocol for board service implementations."""
 
-    async def move_item_to_column(self, work_item_id: str, column_name: str) -> None:
+    async def move_item_to_column(self, work_item_id: str, column_name: str, moved_by: str) -> None:
         """Move a work item to a specific column."""
         ...
 
-    async def get_item_position(self, work_item_id: str) -> tuple[str, int]:
+    async def get_item_position(self, work_item_id: str):
         """Get the column and position of a work item."""
         ...
 

@@ -1,8 +1,8 @@
 """Output port interfaces."""
 
 from codetoreum.ports.output.board_service import (
+    BoardColumn,
     BoardConfig,
-    Column,
     ColumnMovementResult,
     IBoardService,
     MovedByType,
@@ -88,8 +88,8 @@ from codetoreum.ports.output.work_item_service import IWorkItemService
 __all__ = [
     # Board Service
     "IBoardService",
+    "BoardColumn",
     "BoardConfig",
-    "Column",
     "ColumnMovementResult",
     "MovedByType",
     "ProjectBoard",

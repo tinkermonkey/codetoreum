@@ -31,10 +31,12 @@ from codetoreum.ports.exceptions import (
 )
 from codetoreum.ports.output.board_service import (
     BoardConfig,
-    Column,
+    BoardColumn,
     IBoardService,
     ProjectBoard,
     ReconciliationResult,
+    WorkItemPosition,
+    MovedByType,
 )
 from codetoreum.ports.output.monitoring import MonitoringConfig, MonitoringState, MonitoringStatus
 
@@ -276,7 +278,7 @@ class GitHubBoardAdapter(IBoardService):
         except Exception as e:
             raise ExternalServiceError("GitHub", f"Failed to fetch board: {str(e)}")
 
-    async def get_columns(self, board_id: str) -> List[Column]:
+    async def get_columns(self, board_id: str) -> List[BoardColumn]:
         """Get all columns for a board.
 
         Args:
@@ -296,15 +298,15 @@ class GitHubBoardAdapter(IBoardService):
 
     async def get_items_in_column(
         self, board_id: str, column_name: str
-    ) -> List[str]:
-        """Get work item IDs in a specific column.
+    ) -> List[WorkItemPosition]:
+        """Get work items in a specific column ordered by position.
 
         Args:
             board_id: Board to query
             column_name: Name of column to query
 
         Returns:
-            List of work item IDs in the column
+            List of WorkItemPosition objects in the column
 
         Raises:
             ResourceNotFoundError: Board or column doesn't exist
@@ -314,18 +316,25 @@ class GitHubBoardAdapter(IBoardService):
 
         for column in board.columns:
             if column.name == column_name:
-                return column.work_item_ids
+                return [
+                    WorkItemPosition(
+                        work_item_id=item_id,
+                        column_name=column_name,
+                        position=index
+                    )
+                    for index, item_id in enumerate(column.work_item_ids)
+                ]
 
         raise ResourceNotFoundError("Column", column_name)
 
-    async def get_item_position(self, work_item_id: str) -> Tuple[str, int]:
+    async def get_item_position(self, work_item_id: str) -> WorkItemPosition:
         """Get current column position of a work item.
 
         Args:
             work_item_id: Item to locate
 
         Returns:
-            Tuple of (column_name, position_in_column)
+            WorkItemPosition with column and position details
 
         Raises:
             ResourceNotFoundError: Work item not found
@@ -340,13 +349,14 @@ class GitHubBoardAdapter(IBoardService):
     # Command Operations
 
     async def move_item_to_column(
-        self, work_item_id: str, target_column: str
-    ) -> None:
+        self, work_item_id: str, target_column: str, moved_by: MovedByType
+    ):
         """Move work item to target column.
 
         Args:
             work_item_id: Item to move
             target_column: Target column name
+            moved_by: Type of entity that initiated the move
 
         Raises:
             ResourceNotFoundError: Work item or column doesn't exist
@@ -354,7 +364,7 @@ class GitHubBoardAdapter(IBoardService):
             ExternalServiceError: GraphQL mutation failed
 
         Events:
-            Emits 'workitem.column_changed' event with moved_by='orchestrator'
+            Emits 'workitem.column_changed' event with moved_by value
         """
         if not self._current_project_id or not self._current_board_id:
             raise ValidationError(
@@ -446,14 +456,15 @@ class GitHubBoardAdapter(IBoardService):
                 board_id=self._current_board_id,
                 from_column=from_column,
                 to_column=target_column,
-                moved_by="orchestrator",
+                moved_by=moved_by.value,
             )
         )
 
-    async def reconcile_board(self, config: BoardConfig) -> ReconciliationResult:
+    async def reconcile_board(self, board_id: str, config: BoardConfig) -> ReconciliationResult:
         """Reconcile board structure with expected configuration.
 
         Args:
+            board_id: Board to reconcile
             config: Board reconciliation configuration
 
         Returns:
@@ -467,7 +478,7 @@ class GitHubBoardAdapter(IBoardService):
             Emits 'board.reconciled' event with changes summary
         """
         # Get current board state
-        board = await self.get_board("", config.board_id)
+        board = await self.get_board("", board_id)
         current_columns = {col.name for col in board.columns}
         expected_columns = set(config.expected_columns)
 
@@ -477,13 +488,15 @@ class GitHubBoardAdapter(IBoardService):
         # Create missing columns if auto_create_missing
         if config.auto_create_missing and columns_added:
             for column_name in columns_added:
-                await self._create_column(config.board_id, column_name)
+                await self._create_column(board_id, column_name)
 
         # Create reconciliation result
         result = ReconciliationResult(
+            board_id=board_id,
             columns_added=columns_added,
             columns_removed=columns_removed,
-            items_moved=0,
+            columns_renamed=[],
+            orphaned_items=[],
         )
 
         # Extract project_id from board or use empty
@@ -766,8 +779,8 @@ class GitHubBoardAdapter(IBoardService):
                                 str(issue_number)
                             )
 
-            # Create Column objects ordered by position
-            columns: List[Column] = []
+            # Create BoardColumn objects ordered by position
+            columns: List[BoardColumn] = []
             for position, option in enumerate(
                 status_field.get("options", [])
             ):
@@ -776,7 +789,7 @@ class GitHubBoardAdapter(IBoardService):
                 work_items = columns_by_name.get(column_name, [])
 
                 columns.append(
-                    Column(
+                    BoardColumn(
                         id=column_id,
                         name=column_name,
                         position=position,

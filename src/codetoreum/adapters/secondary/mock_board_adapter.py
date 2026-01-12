@@ -14,10 +14,12 @@ from codetoreum.domain.events.board_events import (
 )
 from codetoreum.ports.output.board_service import (
     BoardConfig,
-    Column,
+    BoardColumn,
     IBoardService,
     ProjectBoard,
     ReconciliationResult,
+    WorkItemPosition,
+    MovedByType,
 )
 from codetoreum.ports.output.monitoring import (
     IMonitoredService,
@@ -90,14 +92,14 @@ class MockBoardAdapter(MockEventEmitter, IBoardService):
             raise ValueError(f"Board not found: {board_id}")
         return self._boards[key]
 
-    async def get_columns(self, board_id: str) -> List[Column]:
+    async def get_columns(self, board_id: str) -> List[BoardColumn]:
         """Get all columns for a board.
 
         Args:
             board_id: Board to query
 
         Returns:
-            List[Column]: Columns ordered by position
+            List[BoardColumn]: Columns ordered by position
 
         Raises:
             ValueError: Board doesn't exist
@@ -107,15 +109,15 @@ class MockBoardAdapter(MockEventEmitter, IBoardService):
         board = await self.get_board(self.current_project, board_id)
         return sorted(board.columns, key=lambda c: c.position)
 
-    async def get_items_in_column(self, board_id: str, column_name: str) -> List[str]:
-        """Get all work item IDs in a specific column.
+    async def get_items_in_column(self, board_id: str, column_name: str) -> List[WorkItemPosition]:
+        """Get all work items in a specific column ordered by position.
 
         Args:
             board_id: Board to query
             column_name: Column name
 
         Returns:
-            List[str]: Work item IDs in the column
+            List[WorkItemPosition]: Work items in the column ordered by position
 
         Raises:
             ValueError: Board or column doesn't exist
@@ -125,17 +127,24 @@ class MockBoardAdapter(MockEventEmitter, IBoardService):
         board = await self.get_board(self.current_project, board_id)
         for column in board.columns:
             if column.name == column_name:
-                return column.work_item_ids.copy()
+                return [
+                    WorkItemPosition(
+                        work_item_id=item_id,
+                        column_name=column_name,
+                        position=index
+                    )
+                    for index, item_id in enumerate(column.work_item_ids)
+                ]
         raise ValueError(f"Column not found: {column_name}")
 
-    async def get_item_position(self, work_item_id: str) -> Tuple[str, int]:
+    async def get_item_position(self, work_item_id: str) -> WorkItemPosition:
         """Get current column position of a work item.
 
         Args:
             work_item_id: Item to locate
 
         Returns:
-            Tuple[str, int]: (column_name, position_in_column)
+            WorkItemPosition: Current position details
 
         Raises:
             ValueError: Work item not found on any board
@@ -143,16 +152,23 @@ class MockBoardAdapter(MockEventEmitter, IBoardService):
         if work_item_id not in self._item_positions:
             raise ValueError(f"Work item not in any column: {work_item_id}")
         _, column_name, position = self._item_positions[work_item_id]
-        return (column_name, position)
+        return WorkItemPosition(
+            work_item_id=work_item_id,
+            column_name=column_name,
+            position=position
+        )
 
     # Command Operations
 
-    async def move_item_to_column(self, work_item_id: str, target_column: str) -> None:
+    async def move_item_to_column(
+        self, work_item_id: str, target_column: str, moved_by: MovedByType
+    ):
         """Move work item to target column.
 
         Args:
             work_item_id: Item to move
             target_column: Target column name
+            moved_by: Type of entity that moved the item
 
         Raises:
             ValueError: Work item or column doesn't exist
@@ -202,10 +218,11 @@ class MockBoardAdapter(MockEventEmitter, IBoardService):
                 source='mock'
             ))
 
-    async def reconcile_board(self, config: BoardConfig) -> ReconciliationResult:
+    async def reconcile_board(self, board_id: str, config: BoardConfig) -> ReconciliationResult:
         """Reconcile board structure with expected configuration.
 
         Args:
+            board_id: Board to reconcile
             config: Reconciliation configuration
 
         Returns:
@@ -217,11 +234,12 @@ class MockBoardAdapter(MockEventEmitter, IBoardService):
         if self.current_project is None:
             raise ValueError("current_project not set")
 
-        board = await self.get_board(self.current_project, config.board_id)
+        board = await self.get_board(self.current_project, board_id)
 
         columns_added = []
         columns_removed = []
-        items_moved = 0
+        columns_renamed = []
+        orphaned_items = []
 
         # Check for missing columns
         existing_names = {col.name for col in board.columns}
@@ -229,7 +247,7 @@ class MockBoardAdapter(MockEventEmitter, IBoardService):
             if expected_col not in existing_names:
                 if config.auto_create_missing:
                     # Add new column
-                    new_col = Column(
+                    new_col = BoardColumn(
                         id=f"col-{len(board.columns)}",
                         name=expected_col,
                         position=len(board.columns),
@@ -244,18 +262,20 @@ class MockBoardAdapter(MockEventEmitter, IBoardService):
                 columns_removed.append(col.name)
 
         result = ReconciliationResult(
+            board_id=board_id,
             columns_added=columns_added,
             columns_removed=columns_removed,
-            items_moved=items_moved
+            columns_renamed=columns_renamed,
+            orphaned_items=orphaned_items
         )
 
         self.emit(BoardReconciledEvent(
             type='board.reconciled',
             project_id=self.current_project,
-            board_id=config.board_id,
+            board_id=board_id,
             columns_added=result.columns_added,
             columns_removed=result.columns_removed,
-            items_moved=result.items_moved,
+            orphaned_items=result.orphaned_items,
             timestamp=self._get_iso_timestamp(),
             source='mock'
         ))
@@ -316,7 +336,7 @@ class MockBoardAdapter(MockEventEmitter, IBoardService):
             name=f"Board {board_id}",
             project_id=project_id,
             columns=[
-                Column(
+                BoardColumn(
                     id=f"col-{i}",
                     name=col,
                     position=i,
