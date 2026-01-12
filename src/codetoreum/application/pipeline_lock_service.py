@@ -1,4 +1,4 @@
-"""Pipeline lock service for managing column-based workflow contention.
+"""Queued pipeline lock service for managing column-based workflow contention.
 
 This application-layer service manages lock acquisition and release with queue
 ordering based on work item board positions. It enables pipeline trigger columns
@@ -18,6 +18,11 @@ Lock Lifecycle:
 4. If held: work item added to queue sorted by position
 5. Upon completion, work item reaches exit column
 6. release_lock() called, granting lock to topmost queued item
+
+Architecture Note:
+This service (IQueuedPipelineLockService) is distinct from the port interface
+IPipelineLockService found in ports/output/. This application service adds
+position-based queue management on top of basic lock semantics.
 """
 
 from abc import ABC, abstractmethod
@@ -38,9 +43,14 @@ class LockStatus(Enum):
 class QueueEntry:
     """Entry in pipeline lock queue.
 
+    This is an internal mutable structure used by queue implementations to track
+    work items in the queue. The board_position field is mutable to support
+    reordering when users manually reorder cards in the UI. Callers should not
+    directly mutate queue entries - use update_queue_positions() instead.
+
     Attributes:
         work_item_id: ID of work item in queue
-        board_position: Position in column at enqueue time (for ordering)
+        board_position: Position in column (mutable for reordering)
         enqueued_at: Timestamp when added to queue
     """
     work_item_id: str
@@ -96,13 +106,16 @@ class PipelineQueueState:
     queue: List[QueueEntry]
 
 
-class IPipelineLockService(ABC):
-    """Application service for managing pipeline lock contention.
+class IQueuedPipelineLockService(ABC):
+    """Application service for managing queued pipeline locks.
 
     Manages exclusive lock acquisition for pipeline trigger columns,
     queue ordering by board position, and lock release with queue
     advancement. Ensures only one work item executes in trigger columns
     at a time while respecting positional ordering.
+
+    This is distinct from IPipelineLockService (port interface) by including
+    position-based queue management.
 
     Example:
         # Acquire lock when work item enters trigger column
@@ -220,3 +233,7 @@ class IPipelineLockService(ABC):
             updated_positions: Dict of work_item_id -> new_board_position
         """
         pass
+
+
+# Backward compatibility alias
+IPipelineLockService = IQueuedPipelineLockService

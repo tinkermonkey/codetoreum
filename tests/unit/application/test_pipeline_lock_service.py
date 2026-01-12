@@ -10,7 +10,7 @@ Tests the application-layer pipeline lock service including:
 """
 
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
@@ -588,14 +588,14 @@ class TestQueueStateQueries:
         """Get queue state should return lock holder info."""
         service = InMemoryLockService()
 
-        before = datetime.utcnow()
+        before = datetime.now(timezone.utc)
         await service.try_acquire_lock(
             project_id="proj-1",
             board_id="board-1",
             work_item_id="item-1",
             board_position=0
         )
-        after = datetime.utcnow()
+        after = datetime.now(timezone.utc)
 
         state = await service.get_queue_state("proj-1", "board-1")
 

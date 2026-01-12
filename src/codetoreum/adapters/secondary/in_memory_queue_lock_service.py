@@ -8,7 +8,7 @@ Thread-safe via internal locking mechanism.
 """
 
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Optional
 
 from codetoreum.application.pipeline_lock_service import (
@@ -60,7 +60,20 @@ class InMemoryLockService(IPipelineLockService):
 
         Returns:
             LockAcquisitionResult with status and queue position if QUEUED
+
+        Raises:
+            ValueError: Invalid parameters (empty strings or negative position)
         """
+        # Validate inputs
+        if not project_id:
+            raise ValueError("project_id cannot be empty")
+        if not board_id:
+            raise ValueError("board_id cannot be empty")
+        if not work_item_id:
+            raise ValueError("work_item_id cannot be empty")
+        if board_position < 0:
+            raise ValueError("board_position cannot be negative")
+
         with self._lock:
             board_key = f"{project_id}:{board_id}"
 
@@ -87,10 +100,24 @@ class InMemoryLockService(IPipelineLockService):
             # Try to acquire lock
             if state.lock_holder is None:
                 state.lock_holder = work_item_id
-                state.lock_acquired_at = datetime.utcnow()
+                state.lock_acquired_at = datetime.now(timezone.utc)
                 return LockAcquisitionResult(
                     status=LockStatus.ACQUIRED,
                     work_item_id=work_item_id,
+                    queue_length=len(state.queue)
+                )
+
+            # Check if already in queue
+            if any(e.work_item_id == work_item_id for e in state.queue):
+                # Find current position in queue
+                queue_position = next(
+                    i for i, e in enumerate(state.queue)
+                    if e.work_item_id == work_item_id
+                )
+                return LockAcquisitionResult(
+                    status=LockStatus.QUEUED,
+                    work_item_id=work_item_id,
+                    queue_position=queue_position,
                     queue_length=len(state.queue)
                 )
 
@@ -98,7 +125,7 @@ class InMemoryLockService(IPipelineLockService):
             queue_entry = QueueEntry(
                 work_item_id=work_item_id,
                 board_position=board_position,
-                enqueued_at=datetime.utcnow()
+                enqueued_at=datetime.now(timezone.utc)
             )
             state.queue.append(queue_entry)
 
@@ -139,8 +166,16 @@ class InMemoryLockService(IPipelineLockService):
             LockReleaseResult with next work item ID and queue length
 
         Raises:
-            ValueError: If work_item_id does not hold lock
+            ValueError: Invalid parameters or if work_item_id does not hold lock
         """
+        # Validate inputs
+        if not project_id:
+            raise ValueError("project_id cannot be empty")
+        if not board_id:
+            raise ValueError("board_id cannot be empty")
+        if not work_item_id:
+            raise ValueError("work_item_id cannot be empty")
+
         with self._lock:
             board_key = f"{project_id}:{board_id}"
             state = self._lock_state.get(board_key)
@@ -158,7 +193,7 @@ class InMemoryLockService(IPipelineLockService):
                 next_entry = state.queue.pop(0)
                 next_item_id = next_entry.work_item_id
                 state.lock_holder = next_item_id
-                state.lock_acquired_at = datetime.utcnow()
+                state.lock_acquired_at = datetime.now(timezone.utc)
 
             return LockReleaseResult(
                 released_work_item_id=work_item_id,
@@ -182,7 +217,16 @@ class InMemoryLockService(IPipelineLockService):
 
         Returns:
             PipelineQueueState with lock and queue information
+
+        Raises:
+            ValueError: Invalid parameters
         """
+        # Validate inputs
+        if not project_id:
+            raise ValueError("project_id cannot be empty")
+        if not board_id:
+            raise ValueError("board_id cannot be empty")
+
         with self._lock:
             board_key = f"{project_id}:{board_id}"
             if board_key not in self._lock_state:
@@ -220,7 +264,16 @@ class InMemoryLockService(IPipelineLockService):
             project_id: Project ID
             board_id: Board ID
             updated_positions: Dict of work_item_id -> new_board_position
+
+        Raises:
+            ValueError: Invalid parameters
         """
+        # Validate inputs
+        if not project_id:
+            raise ValueError("project_id cannot be empty")
+        if not board_id:
+            raise ValueError("board_id cannot be empty")
+
         with self._lock:
             board_key = f"{project_id}:{board_id}"
             state = self._lock_state.get(board_key)
