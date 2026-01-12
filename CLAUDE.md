@@ -4,57 +4,58 @@
 
 Codetoreum is an AI agent orchestration platform that automates software development workflows using specialized AI agents. The system integrates with GitHub for work item management and uses Claude Code for agent execution in containerized environments.
 
-**IMPORTANT**: Design documentation for the new Gen 2 architecture is located in the `documentation/01_design/` directory. If a specific design document was not specified for a task, refer to that directory for the relevant design details.
-
-All implementation and task notes should be placed in the `documentation/claude_thoughts/` directory.
+**IMPORTANT**: Design documentation for the Gen 2 architecture is located in the `documentation/01_design/` directory. If a specific design document was not specified for a task, refer to that directory for the relevant design details.
 
 ## Architecture
 
 **Gen 2 Design**: Hexagonal Architecture with Event Sourcing
-- **Domain Layer**: Pure business logic (WorkItem, Agent, Workflow, etc.)
+
+### Layers
+- **Domain Layer**: Pure business logic (WorkItem, Agent, Workflow, etc.) - NO external dependencies
 - **Application Layer**: Orchestration services (WorkflowOrchestrator, ExecutionService, etc.)
 - **Ports**: Clean interfaces between core and external systems
 - **Adapters**: Swappable implementations (production + mock/simulation)
-- **Event Store**: Complete audit trail and replay capability
+- **Infrastructure**: Cross-cutting concerns (resilience, event bus, observability)
+
+### Event-Driven Architecture
+- **Domain Events**: Immutable records of state changes (WorkItemColumnChangedEvent, etc.)
+- **Event Bus**: Pub/sub infrastructure for event distribution
+- **Event Emission**: Adapters emit events for external system changes
+- **Event Store**: Redis-based persistence for complete audit trail and replay
 
 ## Key Design Principles
 
 1. **Testability**: Full end-to-end testing without external services via simulation mode
 2. **Observability**: Event sourcing provides complete audit trail
 3. **Extensibility**: Plugin architecture for ticket systems and LLM providers
-4. **Ease of Configuration**: Web-based UI with database storage (replacing YAML)
+4. **Vendor-Agnostic**: Abstract interfaces hide external system details
+5. **Immutability**: Events are immutable (frozen dataclasses) for audit integrity
 
 ## Project Structure
 
 ```
 codetoreum/
-├── documentation/
-│   ├── 00_legacy/           # Gen 1 system documentation
-│   └── 01_design/           # Gen 2 design specifications
-│       ├── 01_design_changes.md
-│       ├── 02_high_level_arch.md
-│       ├── 03_implementation_plan.md
-│       ├── domains/         # Domain model designs
-│       ├── application_services/
-│       ├── input_ports/     # Inbound port interfaces
-│       ├── output_ports/    # Outbound port interfaces
-│       ├── primary_adapters/    # Inbound adapters
-│       ├── secondary_adapters/  # Outbound adapters
-│       ├── events/          # Event catalog
-│       ├── infrastructure/  # Cross-cutting infrastructure
-│       └── external_systems/    # External system integration specs
-└── src/                     # Implementation
-│   ├── domain/              # Core business logic
-│   ├── application/         # Application services
-│   ├── ports/              # Port interfaces
-│   ├── adapters/           # Adapter implementations
-│   │   ├── primary/        # Inbound adapters
-│   │   └── secondary/      # Outbound adapters
-│   └── infrastructure/     # Cross-cutting concerns
-├── tests/
-│   ├── unit/
-│   ├── integration/
-│   └── simulation/
+├── documentation/01_design/    # Gen 2 design specifications
+│   ├── domains/                # Domain model designs
+│   ├── application_services/   # Orchestration service designs
+│   ├── input_ports/            # Inbound port interfaces
+│   ├── output_ports/           # Outbound port interfaces
+│   ├── events/                 # Domain event catalog
+│   └── infrastructure/         # Cross-cutting infrastructure
+└── src/
+    ├── domain/                 # Core business logic (pure)
+    │   ├── events/             # Domain events (immutable)
+    ├── application/            # Application services
+    ├── ports/                  # Port interfaces
+    │   ├── input/              # Inbound ports
+    │   └── output/             # Outbound ports
+    ├── adapters/               # Adapter implementations
+    │   ├── primary/            # Inbound adapters
+    │   └── secondary/          # Outbound adapters (GitHub, etc.)
+    └── infrastructure/         # Cross-cutting concerns
+        ├── event_bus.py        # Event distribution
+        ├── resilience/         # Circuit breakers, retries, rate limiting
+        └── http/               # HTTP clients (GitHub GraphQL, etc.)
 ```
 
 ## Core Concepts
@@ -67,6 +68,14 @@ codetoreum/
 - **PipelineStage**: Individual stage in workflow with entry conditions
 - **ReviewCycle**: Maker-checker review process with feedback loops
 
+### Domain Events (Immutable State Changes)
+- **WorkItemColumnChangedEvent**: Work item moved between workflow columns
+- **BoardReconciledEvent**: Board structure synchronized with external system
+- **CommentNeedsResponseEvent**: Comment requiring agent attention
+- **ReviewStatusChangedEvent**: Code review status updated
+- **LockAcquiredEvent/LockReleasedEvent**: Pipeline lock lifecycle
+- All events frozen (immutable) with serialization support
+
 ### Application Services (Orchestration)
 - **WorkflowOrchestrator**: Coordinates workflow execution
 - **AgentScheduler**: Queues and schedules agent executions
@@ -75,33 +84,65 @@ codetoreum/
 - **WorkspaceRouter**: Manages container workspaces and file mounting
 
 ### Port Interfaces (Contracts)
-- **ITicketSystem**: Abstract ticket system (GitHub, Jira, Markdown, etc.)
-- **ILLMProvider**: Abstract LLM provider (Claude Code, Aider, GPT-4, etc.)
+
+**Core System Ports:**
+- **ITicketSystem**: Abstract ticket system (GitHub, Jira, etc.)
+- **ILLMProvider**: Abstract LLM provider (Claude Code, GPT-4, etc.)
 - **IContainer**: Container runtime abstraction
 - **IRepository**: Git repository operations
 - **IEventStore**: Event sourcing storage
-- **IStorage**: Artifact storage (local, etc.)
+- **IStorage**: Artifact storage
+
+**New Vendor-Agnostic Ports (PR #121):**
+- **IBoardService**: Project board management (columns, work items)
+- **ICodeReviewService**: Code review lifecycle (PRs, approvals)
+- **IDiscussionAdapter**: Discussion/comment thread management
+- **IWorkItemService**: Work item CRUD operations
+- **IVersionControlService**: VCS operations (branches, commits)
+- **IPipelineLockService**: Distributed locking for workflow coordination
+- **IIdentityService**: Bot/human user identification
+- **IEventEmitter**: Event publication interface
+- **IMonitoredService**: Lifecycle management (start/stop monitoring)
 
 ### Infrastructure Layer (Cross-cutting Concerns)
-- **Resilience Patterns**: Circuit breakers, rate limiting, retries, timeouts
-  - Applied via decorators that wrap adapters
-  - Centralized implementation, reusable across all external integrations
-  - Production and mock implementations for simulation testing
-- **Event Store**: Elasticsearch + Redis for event sourcing
-- **Configuration Store**: Database-backed config with versioning and search
-- **Observability**: Metrics, logging, tracing, auditing
+
+**Resilience Patterns** (Centralized):
+- Circuit breakers, rate limiting, retries, timeouts
+- Applied via decorators that wrap adapters (ResilientBoardServiceDecorator)
+- Production and mock implementations for simulation testing
+- **Key Principle**: Adapters remain pure - resilience is infrastructure concern
+
+**Event Bus**:
+- Pub/sub event distribution with async handlers
+- Event persistence to Redis for audit trail
+- Support for event replay and debugging
+- Stats tracking (events emitted, handler errors, etc.)
+
+**Observability**:
+- Structured logging with context (event_id, project_id, etc.)
+- Metrics tracking (Prometheus-compatible)
+- Distributed tracing (OpenTelemetry/Jaeger)
+- Comprehensive error logging (no silent failures)
 
 ### Adapters (Implementations)
-**Production**: GitHubTicketAdapter, ClaudeCodeAdapter, DockerContainerAdapter
-**Testing/Simulation**: InMemoryTicketAdapter, MockLLMAdapter, FakeContainerAdapter
+
+**Production**:
+- GitHubTicketAdapter, GitHubBoardAdapter, GitHubCodeReviewAdapter
+- ClaudeCodeAdapter (LLM provider)
+- DockerContainerAdapter
+
+**Testing/Simulation**:
+- InMemoryTicketAdapter, MockBoardAdapter, MockCodeReviewAdapter
+- MockLLMAdapter, MockEventEmitter
+- FakeContainerAdapter
 
 ## Important Design Changes (Gen 1 → Gen 2)
 
 ### Containerized Agent Context
-- Context written to files and mounted into container
-  - Issue details → `/context/issue.txt`
-  - Code snippets → `/context/code/`
-  - Previous outputs → `/context/previous_stage.txt`
+Context written to files and mounted into container:
+- Issue details → `/context/issue.txt`
+- Code snippets → `/context/code/`
+- Previous outputs → `/context/previous_stage.txt`
 
 ### Agent Security Model
 General purpose containerized agents:
@@ -116,16 +157,17 @@ General purpose containerized agents:
 **Implication**: Orchestrator handles all git operations (clone, commit, push) and provides files to agents.
 
 ### Configuration Management
-- Database-backed configuration with web UI
-  - Project settings
-  - Workflow definitions
-  - Agent configurations
-  - Environment variables
+Database-backed configuration with web UI:
+- Project settings
+- Workflow definitions
+- Agent configurations
+- Environment variables
+- Replaces YAML-based configuration
 
 ## Testing Strategy
 
 ### Test Pyramid
-- **Unit Tests**: Domain models (100% coverage target)
+- **Unit Tests**: Domain models and events (100% coverage target)
 - **Integration Tests**: Application services with mock adapters (90% coverage)
 - **Simulation Tests**: Full workflows with deterministic mock responses
 - **Contract Tests**: Verify adapters conform to port interfaces
@@ -133,50 +175,22 @@ General purpose containerized agents:
 
 ### Simulation Mode
 - Time manipulation (fast-forward simulation)
-- Deterministic LLM responses
+- Deterministic LLM responses via mock adapters
 - No external service dependencies
 - Event replay for debugging
 - 10-100x faster than real execution
-
-## Key Documentation
-
-### Essential Reading
-1. `documentation/01_design/02_high_level_arch.md` - Architecture overview
-2. `documentation/01_design/03_implementation_plan.md` - Detailed implementation plan
-3. `documentation/01_design/01_design_changes.md` - Key design changes
-
-### Gen 1 Legacy System
-- `documentation/00_legacy/README.md` - Complete Gen 1 system analysis
-- `documentation/00_legacy/01_components_and_layers.md` - 150+ components
-- `documentation/00_legacy/04_containerization_architecture.md` - Docker-in-Docker deep dive
-
-### Design Specifications
-- `domains/` - Domain model specifications (WorkItem, Agent, Workflow, etc.)
-- `application_services/` - Application service designs
-- `input_ports/` and `output_ports/` - Port interface specifications
-- `primary_adapters/` and `secondary_adapters/` - Adapter designs
-- `infrastructure/` - Cross-cutting infrastructure (resilience, observability)
-- `events/` - Domain event catalog
 
 ## Technology Stack
 
 - **Language**: Python 3.11+
 - **Web Framework**: FastAPI (REST + WebSocket APIs)
 - **ORM**: SQLAlchemy
-- **Databases**: PostgreSQL (configuration), Redis (event store)
+- **Databases**: PostgreSQL (configuration), Redis (event store, caching)
 - **Container Runtime**: Docker
 - **Testing**: pytest, pytest-asyncio, testcontainers
 - **Monitoring**: Prometheus, Grafana, Jaeger (OpenTelemetry)
 - **Frontend**: React or Vue (configuration dashboard)
 - **LLM Integration**: Claude Code API/CLI (primary), pluggable for others
-
-## External Systems
-
-- **GitHub**: Issues, project boards, pull requests
-- **Claude API**: LLM provider for agent execution
-- **Docker**: Container runtime for isolated agent execution
-- **Redis**: Event store, task queue, caching
-- **Elasticsearch**: Metrics storage (legacy, may be replaced)
 
 ## Development Workflow
 
@@ -190,38 +204,48 @@ General purpose containerized agents:
 ### When Adding New Features
 1. Review relevant design docs in `documentation/01_design/`
 2. Check if domain models, ports, or adapters need updates
-3. Follow hexagonal architecture patterns
+3. Follow hexagonal architecture patterns (no external deps in domain)
 4. Write tests first (domain layer) or alongside (application layer)
-5. Update design documentation to match implementation
+5. Emit domain events for all state changes
+6. Update design documentation to match implementation
 
 ### When Debugging
-1. Check event store for audit trail
-2. Use event replay to reproduce issues
-3. Review relevant flow documentation in `documentation/00_legacy/03_information_flow_patterns.md` (Gen 1)
-4. Check adapter implementations for external system issues
+1. Check event store for audit trail (event replay capability)
+2. Review structured logs with context (event_id, correlation_id)
+3. Check adapter implementations for external system issues
+4. Verify resilience patterns (circuit breakers, rate limits)
 
 ### When Refactoring
-1. Maintain port interfaces (contracts)
-2. Update adapters as needed
+1. Maintain port interfaces (contracts) - adapters can change freely
+2. Keep domain layer pure (no external dependencies)
 3. Ensure tests still pass (especially simulation tests)
-4. Update documentation
+4. Update documentation to match changes
 
-### Key Constraints
+### Key Constraints (MUST FOLLOW)
 - Domain layer MUST have no external dependencies
 - All external interactions through port interfaces
-- All state changes must emit domain events
-- Configuration must be database-backed
+- All state changes MUST emit domain events
+- Events MUST be immutable (frozen dataclasses)
+- Configuration MUST be database-backed
 - Agents execute in isolated containers with limited privileges
-- Resilience patterns (circuit breakers, rate limiting, etc.) MUST be centralized in infrastructure layer
-- Adapters MUST remain pure (no resilience logic embedded in adapter code)
+- Resilience patterns MUST be centralized in infrastructure layer
+- Adapters MUST remain pure (no resilience logic embedded)
+- No silent error handling (all errors logged with exc_info=True)
 
-## Contact & Resources
+## Key Documentation
 
-- **Design Docs**: `documentation/01_design/`
-- **Legacy System Docs**: `documentation/00_legacy/`
-- **Implementation Plan**: `documentation/01_design/03_implementation_plan.md`
-- **Architecture Overview**: `documentation/01_design/02_high_level_arch.md`
-- **Resilience Infrastructure**: `documentation/01_design/infrastructure/resilience_infrastructure_design.md`
+**Essential Reading:**
+1. `documentation/01_design/02_high_level_arch.md` - Architecture overview
+2. `documentation/01_design/03_implementation_plan.md` - Implementation plan
+3. `documentation/01_design/infrastructure/resilience_infrastructure_design.md` - Resilience patterns
+4. `documentation/01_design/ports/output/NEW_INTERFACES_QUICK_REFERENCE.md` - Port interface guide
+
+**Design Specifications:**
+- `domains/` - Domain model specifications
+- `application_services/` - Application service designs
+- `input_ports/` and `output_ports/` - Port interface specifications
+- `events/` - Domain event catalog
+- `infrastructure/` - Cross-cutting infrastructure
 
 ---
 
