@@ -210,3 +210,191 @@ class LockStaleDetectedEvent(CodetoreumEvent):
             work_item_id=data.get("work_item_id", ""),
             lock_acquired_at=data.get("lock_acquired_at", ""),
         )
+
+
+class PipelineLockAcquiredEvent(CodetoreumEvent):
+    """Emitted when a work item acquires a pipeline lock.
+
+    Distinct from LockAcquiredEvent - this is specific to the application-layer
+    pipeline lock service which manages position-based queue ordering.
+    """
+
+    def __init__(
+        self,
+        type: str = "pipeline.lock_acquired",
+        timestamp: str = "",
+        source: str = "",
+        correlation_id: Optional[str] = None,
+        event_id: Optional[str] = None,
+        work_item_id: str = "",
+        board_id: str = "",
+        queue_length_at_acquire: int = 0,
+    ):
+        super().__init__(
+            type=type,
+            timestamp=timestamp,
+            source=source,
+            correlation_id=correlation_id,
+            event_id=event_id or str(uuid4()),
+        )
+        self.work_item_id = work_item_id
+        self.board_id = board_id
+        self.queue_length_at_acquire = queue_length_at_acquire
+        self._validate()
+
+    def _validate(self) -> None:
+        """Validate event fields."""
+        if not self.work_item_id:
+            raise ValueError("work_item_id is required")
+        if not self.board_id:
+            raise ValueError("board_id is required")
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update({
+            "work_item_id": self.work_item_id,
+            "board_id": self.board_id,
+            "queue_length_at_acquire": self.queue_length_at_acquire,
+        })
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "PipelineLockAcquiredEvent":
+        """Deserialize from dictionary."""
+        return cls(
+            type=data.get("type", "pipeline.lock_acquired"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id"),
+            work_item_id=data.get("work_item_id", ""),
+            board_id=data.get("board_id", ""),
+            queue_length_at_acquire=data.get("queue_length_at_acquire", 0),
+        )
+
+
+class PipelineLockReleasedEvent(CodetoreumEvent):
+    """Emitted when a work item releases a pipeline lock.
+
+    Distinct from LockReleasedEvent - this is specific to the application-layer
+    pipeline lock service which manages position-based queue ordering.
+    """
+
+    def __init__(
+        self,
+        type: str = "pipeline.lock_released",
+        timestamp: str = "",
+        source: str = "",
+        correlation_id: Optional[str] = None,
+        event_id: Optional[str] = None,
+        work_item_id: str = "",
+        board_id: str = "",
+        next_work_item_id: Optional[str] = None,
+    ):
+        super().__init__(
+            type=type,
+            timestamp=timestamp,
+            source=source,
+            correlation_id=correlation_id,
+            event_id=event_id or str(uuid4()),
+        )
+        self.work_item_id = work_item_id
+        self.board_id = board_id
+        self.next_work_item_id = next_work_item_id
+        self._validate()
+
+    def _validate(self) -> None:
+        """Validate event fields."""
+        if not self.work_item_id:
+            raise ValueError("work_item_id is required")
+        if not self.board_id:
+            raise ValueError("board_id is required")
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update({
+            "work_item_id": self.work_item_id,
+            "board_id": self.board_id,
+            "next_work_item_id": self.next_work_item_id,
+        })
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "PipelineLockReleasedEvent":
+        """Deserialize from dictionary."""
+        return cls(
+            type=data.get("type", "pipeline.lock_released"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id"),
+            work_item_id=data.get("work_item_id", ""),
+            board_id=data.get("board_id", ""),
+            next_work_item_id=data.get("next_work_item_id"),
+        )
+
+
+class WorkItemQueuedEvent(CodetoreumEvent):
+    """Emitted when a work item is added to pipeline lock queue.
+
+    Indicates that a work item could not acquire the lock immediately
+    and has been added to the position-based queue.
+    """
+
+    def __init__(
+        self,
+        type: str = "workitem.queued",
+        timestamp: str = "",
+        source: str = "",
+        correlation_id: Optional[str] = None,
+        event_id: Optional[str] = None,
+        work_item_id: str = "",
+        board_id: str = "",
+        queue_position: int = 0,
+    ):
+        super().__init__(
+            type=type,
+            timestamp=timestamp,
+            source=source,
+            correlation_id=correlation_id,
+            event_id=event_id or str(uuid4()),
+        )
+        self.work_item_id = work_item_id
+        self.board_id = board_id
+        self.queue_position = queue_position
+        self._validate()
+
+    def _validate(self) -> None:
+        """Validate event fields."""
+        if not self.work_item_id:
+            raise ValueError("work_item_id is required")
+        if not self.board_id:
+            raise ValueError("board_id is required")
+        if self.queue_position < 0:
+            raise ValueError("queue_position must be non-negative")
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update({
+            "work_item_id": self.work_item_id,
+            "board_id": self.board_id,
+            "queue_position": self.queue_position,
+        })
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "WorkItemQueuedEvent":
+        """Deserialize from dictionary."""
+        return cls(
+            type=data.get("type", "workitem.queued"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id"),
+            work_item_id=data.get("work_item_id", ""),
+            board_id=data.get("board_id", ""),
+            queue_position=data.get("queue_position", 0),
+        )
