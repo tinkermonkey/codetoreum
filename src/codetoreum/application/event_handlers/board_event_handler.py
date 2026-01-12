@@ -20,6 +20,7 @@ from codetoreum.domain.board_workflow_template import (
 )
 from codetoreum.domain.events import DomainEvent, WorkItemColumnChanged
 from codetoreum.infrastructure.event_bus import EventHandler, event_handler, EventBus
+from codetoreum.ports.output.agent_executor import IAgentExecutor
 from codetoreum.ports.output.board_service import IBoardService, MovedByType
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
@@ -67,7 +68,7 @@ class BoardColumnEventHandler(EventHandler):
         board_service: IBoardService,
         lock_service: IQueuedPipelineLockService,
         workflow_config: IWorkflowConfigService,
-        agent_executor: "IAgentExecutor",
+        agent_executor: IAgentExecutor,
         event_bus: EventBus,
     ):
         """
@@ -137,11 +138,12 @@ class BoardColumnEventHandler(EventHandler):
         work_item_id = event.payload.get("work_item_id")
         board_id = event.payload.get("board_id")
         project_id = event.payload.get("project_id")
+        from_column = event.payload.get("from_column")
         to_column = event.payload.get("to_column")
 
         logger.info(
             f"Processing column change for {work_item_id}: "
-            f"{event.payload.get('from_column')} -> {to_column}"
+            f"{from_column} -> {to_column}"
         )
 
         # Get workflow configuration for this board
@@ -309,7 +311,6 @@ class BoardColumnEventHandler(EventHandler):
         self,
         work_item_id: str,
         board_id: str,
-        project_id: str,
         success: bool,
     ) -> None:
         """
@@ -321,7 +322,6 @@ class BoardColumnEventHandler(EventHandler):
         Args:
             work_item_id: ID of work item that agent processed
             board_id: ID of board containing work item
-            project_id: ID of project containing board
             success: Whether agent execution succeeded
 
         Raises:

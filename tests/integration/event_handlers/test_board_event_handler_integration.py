@@ -363,7 +363,6 @@ class TestEndToEndColumnChangeWorkflow:
         await handler.handle_agent_completion(
             work_item_id="item-1",
             board_id="board-1",
-            project_id="proj-1",
             success=True,
         )
 
@@ -382,7 +381,6 @@ class TestEndToEndColumnChangeWorkflow:
         await handler.handle_agent_completion(
             work_item_id="item-1",
             board_id="board-1",
-            project_id="proj-1",
             success=True,
         )
 

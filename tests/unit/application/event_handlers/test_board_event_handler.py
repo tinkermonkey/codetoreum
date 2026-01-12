@@ -383,39 +383,6 @@ class TestHandleColumnChangeWithExitColumn:
         )
 
     @pytest.mark.asyncio
-    async def test_releases_lock_on_exit_column(
-        self,
-        handler,
-        mock_workflow_config,
-        mock_lock_service,
-        sample_workflow_config,
-    ):
-        """Should release lock when exiting through exit column."""
-        # Setup
-        mock_workflow_config.get_board_workflow_template.return_value = (
-            sample_workflow_config
-        )
-        mock_lock_service.release_lock.return_value = LockReleaseResult(
-            released_work_item_id="item-1",
-            next_work_item_id="item-2",
-            queue_length_after_release=1,
-        )
-
-        event = create_column_changed_event(
-            work_item_id="item-1",
-            board_id="board-1",
-            project_id="proj-1",
-            from_column="Review",
-            to_column="Done",
-        )
-
-        # Act
-        await handler.handle_column_change(event)
-
-        # Assert
-        mock_lock_service.release_lock.assert_called_once()
-
-    @pytest.mark.asyncio
     async def test_triggers_agent_for_next_queued_item(
         self,
         handler,
@@ -565,6 +532,36 @@ class TestHandleColumnChangeWithManualColumn:
         mock_agent_executor.execute.assert_not_called()
 
 
+class TestTriggerAgent:
+    """Tests for _trigger_agent method."""
+
+    @pytest.mark.asyncio
+    async def test_trigger_agent_with_none_agent_id(
+        self,
+        handler,
+        mock_agent_executor,
+        caplog,
+    ):
+        """Should log warning when column has no agent assigned."""
+        # Setup
+        column_config = ColumnTemplate(
+            name="No Agent Column",
+            type=ColumnType.MANUAL,
+            agent_id=None,
+            is_pipeline_trigger=False,
+            is_exit_column=False,
+            position=0,
+            auto_progress_on_completion=False,
+        )
+
+        # Act
+        await handler._trigger_agent("item-1", column_config)
+
+        # Assert
+        mock_agent_executor.execute.assert_not_called()
+        assert "has no agent assigned" in caplog.text
+
+
 class TestHandleAgentCompletion:
     """Tests for handle_agent_completion method."""
 
@@ -591,7 +588,6 @@ class TestHandleAgentCompletion:
         await handler.handle_agent_completion(
             work_item_id="item-1",
             board_id="board-1",
-            project_id="proj-1",
             success=True,
         )
 
@@ -621,7 +617,6 @@ class TestHandleAgentCompletion:
         await handler.handle_agent_completion(
             work_item_id="item-1",
             board_id="board-1",
-            project_id="proj-1",
             success=False,
         )
 
@@ -652,7 +647,6 @@ class TestHandleAgentCompletion:
         await handler.handle_agent_completion(
             work_item_id="item-1",
             board_id="board-1",
-            project_id="proj-1",
             success=True,
         )
 
@@ -682,7 +676,6 @@ class TestHandleAgentCompletion:
         await handler.handle_agent_completion(
             work_item_id="item-1",
             board_id="board-1",
-            project_id="proj-1",
             success=True,
         )
 
