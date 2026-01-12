@@ -280,15 +280,6 @@ class TemplateNotFoundError(NotificationError):
     pass
 
 
-# Metrics errors
-
-
-class MetricsError(PortError):
-    """Base exception for metrics operations."""
-
-    pass
-
-
 class MetricNotFoundError(MetricsError):
     """Metric doesn't exist."""
 

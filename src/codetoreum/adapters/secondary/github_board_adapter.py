@@ -24,6 +24,7 @@ from codetoreum.infrastructure.http.github_graphql_client import (
     GitHubGraphQLClient,
 )
 from codetoreum.ports.exceptions import (
+    AuthenticationError,
     ExternalServiceError,
     ResourceNotFoundError,
     ValidationError,
@@ -112,9 +113,17 @@ class GitHubBoardAdapter(IBoardService):
             for handler in self._event_handlers[event_type]:
                 try:
                     handler(event)
-                except Exception:
-                    # Log but don't fail on handler errors
-                    pass
+                except Exception as e:
+                    logger.error(
+                        f"Event handler failed for {event_type}: {e}",
+                        exc_info=True,
+                        extra={
+                            "event_type": event_type,
+                            "event_id": getattr(event, "event_id", None),
+                            "handler": getattr(handler, "__name__", str(handler))
+                        }
+                    )
+                    # Continue processing other handlers - don't re-raise
 
     # IMonitoredService implementation
 
@@ -602,13 +611,31 @@ class GitHubBoardAdapter(IBoardService):
                 self._last_known_state[key] = current_state
 
         except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            # Continue polling even on errors, but log for debugging
-            logger.warning(
-                f"Error during board polling for {project_id}:{board_id}: {e}",
-                exc_info=False,
+            logger.info(f"Polling cancelled for {project_id}:{board_id}")
+        except (AuthenticationError, ResourceNotFoundError, ValidationError) as e:
+            # Permanent errors - stop polling and update monitoring state
+            logger.error(
+                f"Permanent error in board polling for {project_id}:{board_id}: {e}",
+                exc_info=True,
+                extra={"project_id": project_id, "board_id": board_id, "error_type": type(e).__name__}
             )
+            if project_id in self._monitoring:
+                self._monitoring[project_id].state = MonitoringState.ERROR
+        except ExternalServiceError as e:
+            # Transient errors - log and continue polling
+            logger.warning(
+                f"External service error during board polling for {project_id}:{board_id}: {e}",
+                exc_info=True
+            )
+        except Exception as e:
+            # Unexpected errors - log critically and stop polling
+            logger.critical(
+                f"Unexpected error during board polling for {project_id}:{board_id}: {e}",
+                exc_info=True,
+                extra={"project_id": project_id, "board_id": board_id}
+            )
+            if project_id in self._monitoring:
+                self._monitoring[project_id].state = MonitoringState.ERROR
 
     def _detect_column_changes(
         self,

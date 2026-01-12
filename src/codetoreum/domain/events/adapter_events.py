@@ -21,7 +21,7 @@ from typing import Optional
 from uuid import UUID, uuid4
 
 
-@dataclass
+@dataclass(frozen=True)
 class CodetoreumEvent:
     """Base event interface for vendor-agnostic adapters.
 
@@ -106,7 +106,6 @@ class CodetoreumEvent:
             raise ValueError(f"Missing required field: {e}")
 
 
-@staticmethod
 def now_iso() -> str:
     """Get current time in ISO 8601 format.
 

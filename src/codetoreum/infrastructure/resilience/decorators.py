@@ -590,19 +590,17 @@ class ResilientBoardServiceDecorator(IBoardService):
             rate_limit_cost=1
         )
 
-    async def stop_monitoring(self, project_id: str, board_id: str) -> None:
+    async def stop_monitoring(self, project_id: str) -> None:
         """Stop monitoring with resilience."""
         return await self._execute_resilient(
-            operation=lambda: self._wrapped.stop_monitoring(project_id, board_id),
+            operation=lambda: self._wrapped.stop_monitoring(project_id),
             operation_name="stop_monitoring",
             rate_limit_cost=1
         )
 
-    def get_monitoring_status(
-        self, project_id: str, board_id: str
-    ) -> MonitoringStatus:
-        """Get monitoring status (synchronous, no resilience)."""
-        return self._wrapped.get_monitoring_status(project_id, board_id)
+    async def get_monitoring_status(self, project_id: str) -> MonitoringStatus:
+        """Get monitoring status."""
+        return await self._wrapped.get_monitoring_status(project_id)
 
     # Query Operations
 
