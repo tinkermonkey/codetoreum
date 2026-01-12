@@ -275,7 +275,6 @@ class MockBoardAdapter(MockEventEmitter, IBoardService):
             board_id=board_id,
             columns_added=result.columns_added,
             columns_removed=result.columns_removed,
-            orphaned_items=result.orphaned_items,
             timestamp=self._get_iso_timestamp(),
             source='mock'
         ))

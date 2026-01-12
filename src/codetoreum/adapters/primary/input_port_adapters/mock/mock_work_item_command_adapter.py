@@ -36,28 +36,28 @@ class MockWorkItemCommandAdapter(IWorkItemCommandPort):
     async def create_work_item(self, command: CreateWorkItemCommand) -> WorkItem:
         """Creates a new work item."""
         with self._lock:
-            work_item_id = str(uuid4())
             now = datetime.now(timezone.utc)
 
             work_item = WorkItem(
-                id=work_item_id,
+                id=str(uuid4()),
                 project_id=command.project_id,
                 title=command.title,
                 description=command.description,
-                status=WorkItemStatus.OPEN,
+                status=WorkItemStatus.NEW,
                 priority=command.priority,
-                assignee=None,
+                assigned_agent_id=None,
+                assigned_at=None,
                 labels=command.labels or [],
-                workflow_id=None,
-                workflow_stage=None,
+                current_workflow_id=None,
+                current_stage=None,
                 external_id=command.external_id,
                 external_url=command.external_url,
-                metadata={},
                 created_at=now,
                 updated_at=now,
+                completed_at=None,
             )
 
-            self._work_items[work_item_id] = work_item
+            self._work_items[work_item.id] = work_item
             return work_item
 
     async def update_work_item(self, command: UpdateWorkItemCommand) -> WorkItem:
@@ -146,8 +146,8 @@ class MockWorkItemCommandAdapter(IWorkItemCommandPort):
                 raise WorkItemNotFoundError(command.work_item_id)
 
             work_item = self._work_items[command.work_item_id]
-            # Note: Direct assignment for workflow_id as domain model doesn't enforce validation
-            work_item.workflow_id = command.workflow_id
+            # Note: Direct assignment for current_workflow_id as domain model doesn't enforce validation
+            work_item.current_workflow_id = command.workflow_id
             work_item.updated_at = datetime.now(timezone.utc)
 
             return work_item
