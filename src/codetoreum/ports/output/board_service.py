@@ -101,14 +101,18 @@ class ReconciliationResult:
     to expected configuration (adding missing columns, removing extras, etc.).
 
     Attributes:
-        columns_added: IDs of columns that were created
-        columns_removed: IDs of columns that were deleted
-        items_moved: Number of work items repositioned
+        board_id: ID of the board that was reconciled
+        columns_added: Names of columns that were created
+        columns_removed: Names of columns that were deleted
+        columns_renamed: List of (old_name, new_name) tuples for renamed columns
+        orphaned_items: Work item IDs that were in deleted columns
     """
 
+    board_id: str
     columns_added: List[str]
     columns_removed: List[str]
-    items_moved: int
+    columns_renamed: List[tuple[str, str]]
+    orphaned_items: List[str]
 
 
 @dataclass
@@ -167,6 +171,7 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
 
             # Reconcile board
             reconcile_result = await svc.reconcile_board(
+                "board-456",
                 BoardConfig(
                     board_id="board-456",
                     expected_columns=["Backlog", "In Progress", "Review", "Done"],
@@ -218,15 +223,15 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
     @abstractmethod
     async def get_items_in_column(
         self, board_id: str, column_name: str
-    ) -> List[str]:
-        """Get all work item IDs in a specific column.
+    ) -> List[WorkItemPosition]:
+        """Get all work items in a specific column ordered by position.
 
         Args:
             board_id: Board to query
             column_name: Column name (e.g., "In Progress")
 
         Returns:
-            List[str]: Work item IDs in the column
+            List[WorkItemPosition]: Work items in the column ordered by position (0 = first)
 
         Raises:
             ResourceNotFoundError: Board or column doesn't exist
@@ -282,7 +287,9 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
         pass
 
     @abstractmethod
-    async def reconcile_board(self, config: BoardConfig) -> ReconciliationResult:
+    async def reconcile_board(
+        self, board_id: str, config: "BoardConfig"
+    ) -> ReconciliationResult:
         """Reconcile board structure with expected configuration.
 
         Compares actual board structure to expected columns. If differences found:
@@ -293,6 +300,7 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
         Used to ensure boards stay in expected state as they evolve.
 
         Args:
+            board_id: Board to reconcile
             config: Reconciliation configuration
 
         Returns:
