@@ -22,7 +22,11 @@ from .config import (
     ServiceResilienceConfig,
     TimeoutConfig,
 )
-from .decorators import ResilientLLMProviderDecorator, ResilientTicketSystemDecorator
+from .decorators import (
+    ResilientBoardServiceDecorator,
+    ResilientLLMProviderDecorator,
+    ResilientTicketSystemDecorator,
+)
 from .exceptions import (
     CircuitBreakerOpenError,
     MaxRetriesExceededError,
@@ -77,6 +81,7 @@ __all__ = [
     # Decorators
     "ResilientTicketSystemDecorator",
     "ResilientLLMProviderDecorator",
+    "ResilientBoardServiceDecorator",
     # Factory
     "ResilienceFactory",
     # Configuration

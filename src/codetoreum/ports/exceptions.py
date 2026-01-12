@@ -52,6 +52,12 @@ class AuthenticationError(PortError):
     pass
 
 
+class PermissionError(PortError):
+    """Permission denied."""
+
+    pass
+
+
 class ConcurrencyConflictError(PortError):
     """Concurrent modification detected."""
 
@@ -270,15 +276,6 @@ class ChannelNotFoundError(NotificationError):
 
 class TemplateNotFoundError(NotificationError):
     """Notification template doesn't exist."""
-
-    pass
-
-
-# Metrics errors
-
-
-class MetricsError(PortError):
-    """Base exception for metrics operations."""
 
     pass
 
