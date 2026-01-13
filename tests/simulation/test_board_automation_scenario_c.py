@@ -28,8 +28,9 @@ Test Scenarios:
 - Scenario C3: Multiple Rejection Cycles (Rejection → Fix → Approval on second attempt)
 """
 
+import asyncio
+
 import pytest
-from enum import Enum
 
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
@@ -49,13 +50,6 @@ from codetoreum.domain.board_workflow_template import (
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.output.board_service import MovedByType
 from tests.simulation.conftest import MockAgentExecutor, create_column_changed_event
-
-
-class ReviewOutcome(Enum):
-    """Possible review outcomes for maker-checker pattern."""
-    APPROVED = "approved"
-    CHANGES_REQUESTED = "changes_requested"
-    BLOCKED = "blocked"
 
 
 class TestScenarioC_ReviewRejectionLoop:
@@ -104,8 +98,6 @@ class TestScenarioC_ReviewRejectionLoop:
         event_bus.register_handler(event_handler)
 
         # Register event handler with board service to handle auto-progression events
-        import asyncio
-
         def handle_column_change_event(event):
             """Sync wrapper for async event handler."""
             try:
@@ -511,8 +503,8 @@ class TestScenarioC_ReviewRejectionLoop:
         )
 
         # Verify work item stays in Code Review (no auto-progression)
-        board_service.assert_item_in_column("work-item-300", "Code Review"), (
-            "Work item should stay in Code Review after BLOCKED outcome"
+        board_service.assert_item_in_column(
+            "work-item-300", "Code Review"
         )
 
         # Verify no movement to next column
