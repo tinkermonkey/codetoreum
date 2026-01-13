@@ -22,7 +22,6 @@ This test validates:
 """
 
 import pytest
-from datetime import datetime, timedelta, timezone
 
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
@@ -39,10 +38,12 @@ from codetoreum.domain.board_workflow_template import (
     ColumnTemplate,
     ColumnType,
 )
-from codetoreum.domain.events import WorkItemColumnChanged
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.output.board_service import MovedByType
-from tests.simulation.conftest import MockAgentExecutor as BaseAgentExecutor
+from tests.simulation.conftest import (
+    MockAgentExecutor as BaseAgentExecutor,
+    create_column_changed_event,
+)
 
 
 class MockAgentExecutor(BaseAgentExecutor):
@@ -85,40 +86,6 @@ class MockAgentExecutor(BaseAgentExecutor):
         """Clear execution history and repair cycles."""
         super().clear()
         self._repair_cycles.clear()
-
-
-def create_column_changed_event(
-    work_item_id: str,
-    project_id: str,
-    board_id: str,
-    from_column: str,
-    to_column: str,
-    moved_by: str = "human",
-) -> WorkItemColumnChanged:
-    """Helper to create a column changed event with proper payload dict.
-
-    Args:
-        work_item_id: ID of the work item
-        project_id: ID of the project
-        board_id: ID of the board
-        from_column: Source column name
-        to_column: Destination column name
-        moved_by: Who moved the item (default: "human")
-
-    Returns:
-        WorkItemColumnChanged event with proper payload
-    """
-    return WorkItemColumnChanged(
-        aggregate_id=work_item_id,
-        payload={
-            "work_item_id": work_item_id,
-            "project_id": project_id,
-            "board_id": board_id,
-            "from_column": from_column,
-            "to_column": to_column,
-            "moved_by": moved_by,
-        },
-    )
 
 
 class TestScenarioD_HumanIntervention:
