@@ -225,7 +225,14 @@ class BoardColumnEventHandler(EventHandler):
             )
 
         elif result.status == LockStatus.ALREADY_HELD:
-            logger.warning(f"{work_item_id} already holds lock")
+            logger.info(
+                f"{work_item_id} re-entering pipeline trigger column (already holds lock). "
+                f"Re-triggering agent if configured."
+            )
+            # Even though the lock is already held, we should still trigger the agent
+            # when re-entering the column (e.g., after reviewer rejection in maker-checker flow)
+            if column_config.agent_id:
+                await self._trigger_agent(work_item_id, column_config)
 
     async def _handle_exit_column(
         self,
