@@ -1,5 +1,5 @@
 """
-Scenario B: Pipeline Lock Contention - Phase 7 Simulation Test
+Pipeline Lock Contention Simulation Test
 
 Complete simulation test for pipeline lock contention where multiple work items
 attempt to enter the Development column.
@@ -25,8 +25,6 @@ Test Design:
 """
 
 import pytest
-from datetime import datetime, timezone
-from typing import Dict, List
 
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
@@ -43,90 +41,8 @@ from codetoreum.domain.board_workflow_template import (
     ColumnTemplate,
     ColumnType,
 )
-from codetoreum.domain.events import WorkItemColumnChanged
 from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.ports.output.agent_executor import IAgentExecutor
-from codetoreum.ports.output.board_service import MovedByType
-
-
-class MockAgentExecutor(IAgentExecutor):
-    """Mock agent executor that tracks executions without actually executing."""
-
-    def __init__(self):
-        """Initialize the mock agent executor."""
-        self._executions: List[Dict] = []
-        self._lock = __import__("threading").Lock()
-
-    async def execute(self, work_item_id: str, agent_id: str) -> None:
-        """Record agent execution.
-
-        Args:
-            work_item_id: ID of work item being processed
-            agent_id: ID of agent being executed
-        """
-        with self._lock:
-            self._executions.append(
-                {
-                    "work_item_id": work_item_id,
-                    "agent_id": agent_id,
-                    "timestamp": datetime.now(tz=timezone.utc),
-                }
-            )
-
-    def was_triggered(self, agent_id: str, work_item_id: str) -> bool:
-        """Check if agent was triggered for work item.
-
-        Args:
-            agent_id: Agent ID to check
-            work_item_id: Work item ID to check
-
-        Returns:
-            True if agent was triggered for this work item
-        """
-        with self._lock:
-            return any(
-                e["agent_id"] == agent_id and e["work_item_id"] == work_item_id
-                for e in self._executions
-            )
-
-    def get_execution_count(self, agent_id: str) -> int:
-        """Get total execution count for an agent.
-
-        Args:
-            agent_id: Agent ID to check
-
-        Returns:
-            Number of times this agent was executed
-        """
-        with self._lock:
-            return sum(1 for e in self._executions if e["agent_id"] == agent_id)
-
-    def clear(self) -> None:
-        """Clear execution history."""
-        with self._lock:
-            self._executions.clear()
-
-
-def _create_column_changed_event(
-    work_item_id: str,
-    project_id: str,
-    board_id: str,
-    from_column: str,
-    to_column: str,
-    moved_by: str = "human",
-) -> WorkItemColumnChanged:
-    """Helper to create a column changed event with proper payload dict."""
-    return WorkItemColumnChanged(
-        aggregate_id=work_item_id,
-        payload={
-            "work_item_id": work_item_id,
-            "project_id": project_id,
-            "board_id": board_id,
-            "from_column": from_column,
-            "to_column": to_column,
-            "moved_by": moved_by,
-        },
-    )
+from tests.simulation.conftest import MockAgentExecutor, create_column_changed_event
 
 
 class TestScenarioB_LockContention:
@@ -279,7 +195,7 @@ class TestScenarioB_LockContention:
 
         # Manually trigger event handler to acquire lock
         await event_handler.handle_column_change(
-            _create_column_changed_event(
+            create_column_changed_event(
                 work_item_id="work-item-100",
                 project_id="proj-1",
                 board_id="board-1",
@@ -307,7 +223,7 @@ class TestScenarioB_LockContention:
 
         # Manually trigger event handler
         await event_handler.handle_column_change(
-            _create_column_changed_event(
+            create_column_changed_event(
                 work_item_id="work-item-101",
                 project_id="proj-1",
                 board_id="board-1",
@@ -333,7 +249,7 @@ class TestScenarioB_LockContention:
 
         # Manually trigger event handler
         await event_handler.handle_column_change(
-            _create_column_changed_event(
+            create_column_changed_event(
                 work_item_id="work-item-102",
                 project_id="proj-1",
                 board_id="board-1",
@@ -361,7 +277,7 @@ class TestScenarioB_LockContention:
 
         # Manually trigger event handler for Code Review (exit column)
         await event_handler.handle_column_change(
-            _create_column_changed_event(
+            create_column_changed_event(
                 work_item_id="work-item-100",
                 project_id="proj-1",
                 board_id="board-1",
@@ -423,7 +339,7 @@ class TestScenarioB_LockContention:
 
         # Simulate moves to trigger lock logic
         await event_handler.handle_column_change(
-            _create_column_changed_event(
+            create_column_changed_event(
                 work_item_id="work-item-100",
                 project_id="proj-1",
                 board_id="board-1",
@@ -433,7 +349,7 @@ class TestScenarioB_LockContention:
             )
         )
         await event_handler.handle_column_change(
-            _create_column_changed_event(
+            create_column_changed_event(
                 work_item_id="work-item-101",
                 project_id="proj-1",
                 board_id="board-1",
@@ -443,7 +359,7 @@ class TestScenarioB_LockContention:
             )
         )
         await event_handler.handle_column_change(
-            _create_column_changed_event(
+            create_column_changed_event(
                 work_item_id="work-item-102",
                 project_id="proj-1",
                 board_id="board-1",
@@ -516,13 +432,6 @@ class TestScenarioB_LockContention:
         assert agent_executor.was_triggered(
             "senior_software_engineer", "work-item-102"
         ), "Engineer should be triggered when #102 acquires lock after reorder"
-
-
-# Async test helper - allows async fixtures and setup
-@pytest.fixture
-async def async_setup():
-    """Fixture that allows async setup."""
-    pass
 
 
 if __name__ == "__main__":
