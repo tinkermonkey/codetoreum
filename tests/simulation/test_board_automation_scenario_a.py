@@ -43,6 +43,7 @@ from codetoreum.domain.board_workflow_template import (
     ColumnType,
 )
 from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.ports.output.board_service import MovedByType
 from tests.simulation.conftest import MockAgentExecutor, create_column_changed_event
 
 

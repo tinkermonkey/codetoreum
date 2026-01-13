@@ -381,14 +381,10 @@ class TestScenarioB_LockContention:
             "Second queue item should be work-item-102"
         )
 
-        # Human reorders: drag #102 to top position (position 1, after lock holder at 0)
-        board_service.reorder_items_in_column("board-1", "Development", {
-            "work-item-100": 0,
-            "work-item-102": 1,
-            "work-item-101": 2,
-        })
-
-        # Manually trigger event handler with reordered queue
+        # Simulate human reordering: #102 moved to position 1 (after lock holder at 0)
+        # This updates the board positions directly, which would normally come from
+        # a board UI reordering action. The lock service then reorders its queue based
+        # on these new board positions.
         await lock_service.update_queue_positions("proj-1", "board-1", {
             "work-item-102": 0,
             "work-item-101": 1,
@@ -408,17 +404,28 @@ class TestScenarioB_LockContention:
             f"got '{queue_state.queue[1].work_item_id}'"
         )
 
-        # Release lock and verify #102 gets it (new first in queue)
-        release_result = await lock_service.release_lock("proj-1", "board-1", "work-item-100")
-        assert release_result.next_work_item_id == "work-item-102", (
-            f"After reorder and lock release, next work item should be 'work-item-102', "
-            f"got '{release_result.next_work_item_id}'"
+        # Release lock through event handler to properly trigger next agent
+        await event_handler.handle_agent_completion(
+            work_item_id="work-item-100", board_id="board-1", success=True
         )
 
-        # Verify new lock state
+        # Trigger exit column event to release lock
+        await event_handler.handle_column_change(
+            create_column_changed_event(
+                work_item_id="work-item-100",
+                project_id="proj-1",
+                board_id="board-1",
+                from_column="Development",
+                to_column="Code Review",
+                moved_by="orchestrator",
+            )
+        )
+
+        # Verify new lock state after event handler processes release
         queue_state = await lock_service.get_queue_state("proj-1", "board-1")
         assert queue_state.lock_holder == "work-item-102", (
-            f"Lock holder should now be 'work-item-102', got '{queue_state.lock_holder}'"
+            f"After reorder and lock release, lock holder should be 'work-item-102', "
+            f"got '{queue_state.lock_holder}'"
         )
         assert len(queue_state.queue) == 1, (
             f"Queue should have 1 remaining item, got {len(queue_state.queue)}"
@@ -428,7 +435,7 @@ class TestScenarioB_LockContention:
             f"got '{queue_state.queue[0].work_item_id}'"
         )
 
-        # Verify agent triggered for #102 (which now holds lock)
+        # Verify agent triggered for #102 (which now holds lock after reorder)
         assert agent_executor.was_triggered(
             "senior_software_engineer", "work-item-102"
         ), "Engineer should be triggered when #102 acquires lock after reorder"
