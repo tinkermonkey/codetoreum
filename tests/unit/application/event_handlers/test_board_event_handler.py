@@ -1,5 +1,6 @@
 """Unit tests for BoardColumnEventHandler."""
 
+import logging
 import pytest
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, call
@@ -318,6 +319,7 @@ class TestHandleColumnChangeWithPipelineTrigger:
     ):
         """Should log when work item already holds lock."""
         # Setup
+        caplog.set_level(logging.INFO)
         mock_workflow_config.get_board_workflow_template.return_value = (
             sample_workflow_config
         )
