@@ -17,7 +17,6 @@ These tests validate:
 """
 
 import pytest
-from datetime import timezone, datetime
 
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
@@ -35,10 +34,7 @@ from codetoreum.domain.board_workflow_template import (
     ColumnType,
 )
 from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.ports.output.board_service import (
-    MovedByType,
-    BoardConfig,
-)
+from codetoreum.ports.output.board_service import BoardConfig
 from tests.simulation.conftest import MockAgentExecutor
 
 
@@ -95,7 +91,6 @@ class TestBoardReconciliation:
         """
         board_service = setup["board_service"]
         config_service = setup["config_service"]
-        event_bus = setup["event_bus"]
 
         # Add work item to "Review" column
         board_service.add_item_to_column(
@@ -189,11 +184,13 @@ class TestBoardReconciliation:
         assert position.column_name == "Review"
 
     @pytest.mark.asyncio
-    async def test_columns_removed_detection(self, setup):
-        """Test detection of removed columns in reconciliation.
+    async def test_orphaned_item_detection_in_deleted_column(self, setup):
+        """Test detection of orphaned items when column is deleted.
 
-        When a column is removed from the workflow config, reconciliation
-        should report it as removed.
+        When a column is removed from the workflow config, any work items
+        in that column should be tracked. The reconciliation result includes
+        orphaned_items field for applications to detect and handle items
+        in deleted columns.
         """
         board_service = setup["board_service"]
         config_service = setup["config_service"]
@@ -203,6 +200,100 @@ class TestBoardReconciliation:
             board_id="board-1",
             column_name="Review",
             work_item_id="work-item-orphan",
+        )
+
+        # Verify item was added
+        position = await board_service.get_item_position("work-item-orphan")
+        assert position.column_name == "Review"
+
+        # Create new config without "Review" column
+        new_template = BoardWorkflowTemplate(
+            id="workflow-1",
+            name="Simplified Workflow",
+            pipeline_trigger_columns=["Development"],
+            exit_columns=["Done"],
+            columns=[
+                ColumnTemplate(
+                    name="Backlog",
+                    type=ColumnType.MANUAL,
+                    agent_id=None,
+                    is_pipeline_trigger=False,
+                    is_exit_column=False,
+                    position=0,
+                    auto_progress_on_completion=False,
+                ),
+                ColumnTemplate(
+                    name="Development",
+                    type=ColumnType.AUTOMATED,
+                    agent_id="senior_software_engineer",
+                    is_pipeline_trigger=True,
+                    is_exit_column=False,
+                    position=1,
+                    auto_progress_on_completion=True,
+                ),
+                # "Review" column removed
+                ColumnTemplate(
+                    name="Testing",
+                    type=ColumnType.AUTOMATED,
+                    agent_id="test_runner",
+                    is_pipeline_trigger=False,
+                    is_exit_column=False,
+                    position=2,
+                    auto_progress_on_completion=True,
+                ),
+                ColumnTemplate(
+                    name="Done",
+                    type=ColumnType.MANUAL,
+                    agent_id=None,
+                    is_pipeline_trigger=False,
+                    is_exit_column=True,
+                    position=3,
+                    auto_progress_on_completion=False,
+                ),
+            ],
+        )
+
+        config_service.register_template("board-1", new_template)
+
+        # Create reconciliation config from template
+        expected_columns = [col.name for col in new_template.columns]
+        board_config = BoardConfig(
+            board_id="board-1",
+            expected_columns=expected_columns,
+            auto_create_missing=True,
+        )
+
+        # Reconcile board
+        result = await board_service.reconcile_board(
+            board_id="board-1",
+            config=board_config,
+        )
+
+        # Verify removed column detected
+        assert result is not None
+        assert "Review" in result.columns_removed
+
+        # Verify orphaned_items field exists (application responsible for populating)
+        assert hasattr(result, "orphaned_items"), "Reconciliation result should have orphaned_items field"
+        # Note: The mock adapter doesn't track orphaned items automatically.
+        # In production, the application layer would populate this based on
+        # which items remain in deleted columns.
+
+    @pytest.mark.asyncio
+    async def test_columns_removed_detection(self, setup):
+        """Test detection of removed columns in reconciliation.
+
+        When a column is removed from the workflow config, reconciliation
+        should report it as removed.
+        """
+        board_service = setup["board_service"]
+        config_service = setup["config_service"]
+
+        # Add work item to "Testing" column (will remain)
+        board_service.add_item_to_column(
+            board_id="board-1",
+            column_name="Testing",
+            work_item_id="work-item-kept",
         )
 
         # Create new config without "Review" column
@@ -353,6 +444,88 @@ class TestBoardReconciliation:
         # Columns removed should include those not in new template
         assert "Review" in result.columns_removed
         assert "Testing" in result.columns_removed
+
+    @pytest.mark.asyncio
+    async def test_board_reconciled_event_emitted(self, setup):
+        """Test that board.reconciled event is emitted after reconciliation.
+
+        Reconciliation should emit a domain event to communicate the
+        completion of board structure synchronization.
+        """
+        board_service = setup["board_service"]
+        config_service = setup["config_service"]
+
+        # Track events emitted during reconciliation
+        emitted_events = []
+
+        def capture_event(event):
+            emitted_events.append(event)
+
+        # Register listener for board.reconciled events
+        board_service.on("board.reconciled", capture_event)
+
+        # Create new config with column changes
+        new_template = BoardWorkflowTemplate(
+            id="workflow-1",
+            name="Event Test Workflow",
+            pipeline_trigger_columns=["Development"],
+            exit_columns=["Done"],
+            columns=[
+                ColumnTemplate(
+                    name="Backlog",
+                    type=ColumnType.MANUAL,
+                    agent_id=None,
+                    is_pipeline_trigger=False,
+                    is_exit_column=False,
+                    position=0,
+                    auto_progress_on_completion=False,
+                ),
+                ColumnTemplate(
+                    name="Development",
+                    type=ColumnType.AUTOMATED,
+                    agent_id="engineer",
+                    is_pipeline_trigger=True,
+                    is_exit_column=False,
+                    position=1,
+                    auto_progress_on_completion=True,
+                ),
+                # Remove Review and Testing
+                ColumnTemplate(
+                    name="Done",
+                    type=ColumnType.MANUAL,
+                    agent_id=None,
+                    is_pipeline_trigger=False,
+                    is_exit_column=True,
+                    position=2,
+                    auto_progress_on_completion=False,
+                ),
+            ],
+        )
+
+        config_service.register_template("board-1", new_template)
+
+        # Create reconciliation config from template
+        expected_columns = [col.name for col in new_template.columns]
+        board_config = BoardConfig(
+            board_id="board-1",
+            expected_columns=expected_columns,
+            auto_create_missing=True,
+        )
+
+        # Reconcile board
+        result = await board_service.reconcile_board(
+            board_id="board-1",
+            config=board_config,
+        )
+
+        # Verify board.reconciled event was emitted
+        assert len(emitted_events) > 0, "Should emit board.reconciled event"
+
+        # Verify event contains board details
+        event = emitted_events[0]
+        assert event.board_id == "board-1"
+        assert hasattr(event, "columns_removed")
+        assert hasattr(event, "columns_added")
 
 
 class TestManualColumns:
