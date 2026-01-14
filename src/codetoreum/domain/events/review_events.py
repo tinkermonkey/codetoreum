@@ -20,7 +20,21 @@ CodeReviewStatus = Literal["open", "approved", "changes_requested", "merged", "c
 
 @dataclass(frozen=True)
 class ReviewStatusChangedEvent(CodetoreumEvent):
-    """Emitted when a code review's status changes."""
+    """Emitted when a code review's status changes.
+
+    **Note**: This is an immutable event (frozen dataclass). All fields are
+    read-only after construction to maintain audit trail integrity per the
+    event sourcing architecture.
+
+    Attributes:
+        type (str): Fixed to "review.status_changed"
+        review_id (str): ID of the code review (e.g., PR ID)
+        work_item_id (Optional[str]): ID of associated work item, None if not linked
+        project_id (str): ID of the project containing the review
+        previous_status (Literal["open", "approved", "changes_requested", "merged", "closed"]): Previous review status
+        new_status (Literal["open", "approved", "changes_requested", "merged", "closed"]): New review status
+        reviewer (Optional[str]): Username of reviewer who changed status, None if automated
+    """
 
     review_id: str = ""
     work_item_id: Optional[str] = None
@@ -76,7 +90,19 @@ class ReviewStatusChangedEvent(CodetoreumEvent):
 
 @dataclass(frozen=True)
 class ReviewCommentAddedEvent(CodetoreumEvent):
-    """Emitted when a comment is added to a code review."""
+    """Emitted when a comment is added to a code review.
+
+    **Note**: This is an immutable event (frozen dataclass). All fields are
+    read-only after construction to maintain audit trail integrity per the
+    event sourcing architecture.
+
+    Attributes:
+        type (str): Fixed to "review.comment_added"
+        review_id (str): ID of the code review (e.g., PR ID)
+        work_item_id (Optional[str]): ID of associated work item, None if not linked
+        project_id (str): ID of the project containing the review
+        comment (Optional[Comment]): The comment object added to the review, None if not available
+    """
 
     review_id: str = ""
     work_item_id: Optional[str] = None

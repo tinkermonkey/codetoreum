@@ -17,7 +17,19 @@ from .adapter_events import CodetoreumEvent
 
 @dataclass(frozen=True)
 class WorkItemCreatedEvent(CodetoreumEvent):
-    """Emitted when a work item is created."""
+    """Emitted when a work item is created.
+
+    **Note**: This is an immutable event (frozen dataclass). All fields are
+    read-only after construction to maintain audit trail integrity per the
+    event sourcing architecture.
+
+    Attributes:
+        type (str): Fixed to "workitem.created"
+        work_item_id (str): ID of the newly created work item
+        project_id (str): ID of the project containing the work item
+        title (str): Title or name of the work item
+        initial_column (Optional[str]): Name of initial board column, None if not on board
+    """
 
     work_item_id: str = ""
     project_id: str = ""
@@ -65,9 +77,18 @@ class WorkItemCreatedEvent(CodetoreumEvent):
 class WorkItemUpdatedEvent(CodetoreumEvent):
     """Emitted when a work item's properties are updated.
 
-    Note: The `changes` dict is mutable, but the field reference is immutable (frozen).
-    This is an intentional exception to allow flexible change tracking while maintaining
-    immutability of the event itself and preventing field reassignment.
+    **Note**: This is an immutable event (frozen dataclass). All fields are
+    read-only after construction to maintain audit trail integrity per the
+    event sourcing architecture. The `changes` dict field reference is immutable
+    (cannot be reassigned), though the dict itself is mutable for flexible change
+    tracking.
+
+    Attributes:
+        type (str): Fixed to "workitem.updated"
+        work_item_id (str): ID of the updated work item
+        project_id (str): ID of the project containing the work item
+        changes (Dict[str, Any]): Dictionary of field names to new values that were changed.
+            Field reference is immutable (frozen), though dict contents are mutable.
     """
 
     work_item_id: str = ""

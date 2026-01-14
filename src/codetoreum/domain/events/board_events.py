@@ -20,18 +20,22 @@ from .adapter_events import CodetoreumEvent
 class WorkItemColumnChangedEvent(CodetoreumEvent):
     """Emitted when a work item moves between columns on a board.
 
+    **Note**: This is an immutable event (frozen dataclass). All fields are
+    read-only after construction to maintain audit trail integrity per the
+    event sourcing architecture.
+
     This event captures the movement of a work item from one column
     (workflow state) to another, including who initiated the change
     (human, orchestrator, or unknown).
 
     Attributes:
-        type: Fixed to "workitem.column_changed"
-        work_item_id: ID of the work item that moved (e.g., issue #123)
-        project_id: ID of the project containing the board
-        board_id: ID of the board where the move occurred
-        from_column: Name of the column the item left
-        to_column: Name of the column the item entered
-        moved_by: Actor who initiated the move ("human", "orchestrator", "unknown")
+        type (str): Fixed to "workitem.column_changed"
+        work_item_id (str): ID of the work item that moved (e.g., issue #123)
+        project_id (str): ID of the project containing the board
+        board_id (str): ID of the board where the move occurred
+        from_column (str): Name of the column the item left
+        to_column (str): Name of the column the item entered
+        moved_by (Literal["human", "orchestrator", "unknown"]): Actor who initiated the move
     """
 
     work_item_id: str = ""
@@ -90,17 +94,21 @@ class WorkItemColumnChangedEvent(CodetoreumEvent):
 class BoardReconciledEvent(CodetoreumEvent):
     """Emitted when a board's structure is reconciled with the source system.
 
+    **Note**: This is an immutable event (frozen dataclass). All fields are
+    read-only after construction to maintain audit trail integrity per the
+    event sourcing architecture.
+
     This event is emitted when the adapter detects that the board's columns
     or work items have changed structurally (columns added/removed, items
     repositioned). This can be used to trigger full board re-sync if needed.
 
     Attributes:
-        type: Fixed to "board.reconciled"
-        project_id: ID of the project
-        board_id: ID of the board
-        columns_added: Tuple of new column names
-        columns_removed: Tuple of deleted column names
-        items_moved: Number of work items repositioned
+        type (str): Fixed to "board.reconciled"
+        project_id (str): ID of the project
+        board_id (str): ID of the board
+        columns_added (Tuple[str, ...]): Immutable tuple of new column names
+        columns_removed (Tuple[str, ...]): Immutable tuple of deleted column names
+        items_moved (int): Number of work items repositioned
     """
 
     project_id: str = ""

@@ -17,7 +17,19 @@ from .adapter_events import CodetoreumEvent
 
 @dataclass(frozen=True)
 class LockAcquiredEvent(CodetoreumEvent):
-    """Emitted when a lock is acquired on a work item."""
+    """Emitted when a lock is acquired on a work item.
+
+    **Note**: This is an immutable event (frozen dataclass). All fields are
+    read-only after construction to maintain audit trail integrity per the
+    event sourcing architecture.
+
+    Attributes:
+        type (str): Fixed to "lock.acquired"
+        project_id (str): ID of the project
+        board_id (str): ID of the board containing the work item
+        work_item_id (str): ID of the work item for which the lock was acquired
+        acquisition_method (Literal["normal", "stale_recovery"]): Method used to acquire lock
+    """
 
     project_id: str = ""
     board_id: str = ""
@@ -63,7 +75,20 @@ class LockAcquiredEvent(CodetoreumEvent):
 
 @dataclass(frozen=True)
 class LockReleasedEvent(CodetoreumEvent):
-    """Emitted when a lock is released from a work item."""
+    """Emitted when a lock is released from a work item.
+
+    **Note**: This is an immutable event (frozen dataclass). All fields are
+    read-only after construction to maintain audit trail integrity per the
+    event sourcing architecture.
+
+    Attributes:
+        type (str): Fixed to "lock.released"
+        project_id (str): ID of the project
+        board_id (str): ID of the board containing the work item
+        work_item_id (str): ID of the work item for which the lock was released
+        reason (Literal["completed", "exit_column", "timeout", "manual"]): Reason for releasing lock
+        next_in_queue (Optional[str]): ID of next work item in queue if any, None if queue empty
+    """
 
     project_id: str = ""
     board_id: str = ""
@@ -112,7 +137,19 @@ class LockReleasedEvent(CodetoreumEvent):
 
 @dataclass(frozen=True)
 class LockStaleDetectedEvent(CodetoreumEvent):
-    """Emitted when a stale lock is detected."""
+    """Emitted when a stale lock is detected.
+
+    **Note**: This is an immutable event (frozen dataclass). All fields are
+    read-only after construction to maintain audit trail integrity per the
+    event sourcing architecture.
+
+    Attributes:
+        type (str): Fixed to "lock.stale_detected"
+        project_id (str): ID of the project
+        board_id (str): ID of the board containing the work item
+        work_item_id (str): ID of the work item with stale lock
+        lock_acquired_at (str): ISO 8601 timestamp when the lock was originally acquired
+    """
 
     project_id: str = ""
     board_id: str = ""
@@ -162,8 +199,19 @@ class LockStaleDetectedEvent(CodetoreumEvent):
 class PipelineLockAcquiredEvent(CodetoreumEvent):
     """Emitted when a work item acquires a pipeline lock.
 
+    **Note**: This is an immutable event (frozen dataclass). All fields are
+    read-only after construction to maintain audit trail integrity per the
+    event sourcing architecture.
+
     Distinct from LockAcquiredEvent - this is specific to the application-layer
     pipeline lock service which manages position-based queue ordering.
+
+    Attributes:
+        type (str): Fixed to "pipeline.lock_acquired"
+        project_id (str): ID of the project
+        work_item_id (str): ID of the work item acquiring the pipeline lock
+        board_id (str): ID of the board containing the work item
+        queue_length_at_acquire (int): Length of queue at time of acquisition
     """
 
     project_id: str = ""
@@ -212,8 +260,19 @@ class PipelineLockAcquiredEvent(CodetoreumEvent):
 class PipelineLockReleasedEvent(CodetoreumEvent):
     """Emitted when a work item releases a pipeline lock.
 
+    **Note**: This is an immutable event (frozen dataclass). All fields are
+    read-only after construction to maintain audit trail integrity per the
+    event sourcing architecture.
+
     Distinct from LockReleasedEvent - this is specific to the application-layer
     pipeline lock service which manages position-based queue ordering.
+
+    Attributes:
+        type (str): Fixed to "pipeline.lock_released"
+        project_id (str): ID of the project
+        work_item_id (str): ID of the work item releasing the pipeline lock
+        board_id (str): ID of the board containing the work item
+        next_work_item_id (Optional[str]): ID of next work item in queue, None if queue empty
     """
 
     project_id: str = ""
@@ -262,8 +321,18 @@ class PipelineLockReleasedEvent(CodetoreumEvent):
 class WorkItemQueuedEvent(CodetoreumEvent):
     """Emitted when a work item is added to pipeline lock queue.
 
+    **Note**: This is an immutable event (frozen dataclass). All fields are
+    read-only after construction to maintain audit trail integrity per the
+    event sourcing architecture.
+
     Indicates that a work item could not acquire the lock immediately
     and has been added to the position-based queue.
+
+    Attributes:
+        type (str): Fixed to "workitem.queued"
+        work_item_id (str): ID of the work item queued
+        board_id (str): ID of the board containing the work item
+        queue_position (int): Position in the queue (0-based, 0 = next in queue)
     """
 
     work_item_id: str = ""

@@ -19,7 +19,19 @@ from .adapter_events import CodetoreumEvent
 
 @dataclass(frozen=True)
 class Comment:
-    """Represents a comment in the system."""
+    """Represents a comment in the system.
+
+    **Note**: This is an immutable object (frozen dataclass). All fields are
+    read-only after construction to maintain data integrity.
+
+    Attributes:
+        id (str): Unique identifier for the comment
+        author (str): Username of the comment author
+        body (str): The text content of the comment
+        created_at (str): ISO 8601 timestamp when the comment was created
+        parent_id (Optional[str]): ID of parent comment if this is a reply, None if top-level
+        is_bot (bool): Whether the comment was authored by a bot (default: False)
+    """
 
     id: str
     author: str
@@ -70,7 +82,18 @@ class Comment:
 
 @dataclass(frozen=True)
 class CommentContext:
-    """Context information about a comment's location and purpose."""
+    """Context information about a comment's location and purpose.
+
+    **Note**: This is an immutable object (frozen dataclass). All fields are
+    read-only after construction to maintain data integrity.
+
+    Attributes:
+        thread_id (Optional[str]): ID of the discussion thread, None if not part of thread
+        parent_comment (Optional[Comment]): The parent comment if this is a reply, None otherwise
+        is_initial_request (bool): Whether this is the initial request comment (default: False)
+        column_name (str): Name of the board column where comment was made (empty if not applicable)
+        agent_assignment (str): Agent assigned to handle the comment (empty if unassigned)
+    """
 
     thread_id: Optional[str] = None
     parent_comment: Optional[Comment] = None
@@ -115,7 +138,19 @@ class CommentContext:
 
 @dataclass(frozen=True)
 class CommentNeedsResponseEvent(CodetoreumEvent):
-    """Emitted when a comment requires a response from the system."""
+    """Emitted when a comment requires a response from the system.
+
+    **Note**: This is an immutable event (frozen dataclass). All fields are
+    read-only after construction to maintain audit trail integrity per the
+    event sourcing architecture.
+
+    Attributes:
+        type (str): Fixed to "comment.needs_response"
+        work_item_id (str): ID of the work item containing the comment
+        project_id (str): ID of the project containing the work item
+        comment (Optional[Comment]): The comment object requiring response, None if not available
+        context (Optional[CommentContext]): Context information about the comment, None if not available
+    """
 
     work_item_id: str = ""
     project_id: str = ""
@@ -162,7 +197,18 @@ class CommentNeedsResponseEvent(CodetoreumEvent):
 
 @dataclass(frozen=True)
 class CommentPostedEvent(CodetoreumEvent):
-    """Emitted when a comment is posted to a work item."""
+    """Emitted when a comment is posted to a work item.
+
+    **Note**: This is an immutable event (frozen dataclass). All fields are
+    read-only after construction to maintain audit trail integrity per the
+    event sourcing architecture.
+
+    Attributes:
+        type (str): Fixed to "comment.posted"
+        work_item_id (str): ID of the work item where comment was posted
+        project_id (str): ID of the project containing the work item
+        comment (Optional[Comment]): The comment object that was posted, None if not available
+    """
 
     work_item_id: str = ""
     project_id: str = ""
