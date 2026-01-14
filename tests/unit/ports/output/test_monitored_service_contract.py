@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 
 import pytest
 
+from codetoreum.ports.exceptions import ResourceNotFoundError
 from codetoreum.ports.output.monitoring import (
     IMonitoredService,
     MonitoringConfig,
@@ -65,11 +66,12 @@ class TestMonitoredServiceContract(ABC):
 
     @pytest.mark.asyncio
     async def test_stop_monitoring_not_started_raises_error(self):
-        """Stopping monitoring that wasn't started should raise error."""
+        """Stopping monitoring that wasn't started should raise ResourceNotFoundError."""
         service = await self.create_service()
 
-        with pytest.raises(Exception):  # ResourceNotFoundError
+        with pytest.raises(ResourceNotFoundError) as exc_info:
             await service.stop_monitoring("proj-123")
+        assert exc_info.value.resource_type == "monitoring"
 
     @pytest.mark.asyncio
     async def test_monitoring_respects_config_settings(self):

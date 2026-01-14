@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 
 import pytest
 
+from codetoreum.ports.exceptions import ResourceNotFoundError, ValidationError
 from codetoreum.ports.output.board_service import (
     BoardConfig,
     IBoardService,
@@ -122,14 +123,17 @@ class TestBoardServiceContract(ABC):
         """Querying nonexistent board should raise ResourceNotFoundError."""
         service = await self.create_service()
 
-        with pytest.raises(Exception):  # ResourceNotFoundError
+        with pytest.raises(ResourceNotFoundError) as exc_info:
             await service.get_board("proj-123", "nonexistent-board")
+        assert exc_info.value.resource_type == "board"
+        assert exc_info.value.resource_id == "nonexistent-board"
 
     @pytest.mark.asyncio
     async def test_column_not_found_raises_error(self):
-        """Querying nonexistent column should raise ValidationError."""
+        """Querying nonexistent column should raise ResourceNotFoundError."""
         service = await self.create_service()
         await self.setup_test_board(service, "proj-123", "board-456")
 
-        with pytest.raises(Exception):  # ResourceNotFoundError or ValidationError
+        with pytest.raises(ResourceNotFoundError) as exc_info:
             await service.get_items_in_column("board-456", "NonexistentColumn")
+        assert exc_info.value.resource_type == "column"

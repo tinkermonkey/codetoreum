@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 
 import pytest
 
+from codetoreum.ports.exceptions import RepositoryError, ValidationError
 from codetoreum.ports.output.version_control_service import (
     IVersionControlService,
     Repository,
@@ -213,15 +214,15 @@ class TestVersionControlServiceContract(ABC):
 
     @pytest.mark.asyncio
     async def test_invalid_repo_path_raises_error(self):
-        """Operations on invalid paths should raise errors."""
+        """Operations on invalid paths should raise RepositoryError."""
         service = await self.create_service()
 
-        with pytest.raises(Exception):  # RepositoryError or ValidationError
+        with pytest.raises(RepositoryError):
             await service.pull_latest("/nonexistent/path/that/does/not/exist")
 
     @pytest.mark.asyncio
     async def test_invalid_branch_raises_error(self):
-        """Checking out invalid branch should raise error."""
+        """Checking out invalid branch should raise RepositoryError."""
         service = await self.create_service()
         import tempfile
         import os
@@ -233,7 +234,7 @@ class TestVersionControlServiceContract(ABC):
                 url = self.get_test_repo_url()
                 await service.clone_repository(url, target_path)
 
-                with pytest.raises(Exception):  # RepositoryError
+                with pytest.raises(RepositoryError):
                     await service.checkout(target_path, "nonexistent-branch-xyz")
             finally:
                 await self.cleanup_repo_path(target_path)

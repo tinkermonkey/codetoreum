@@ -11,6 +11,7 @@ import re
 
 import pytest
 
+from codetoreum.ports.exceptions import ValidationError
 from codetoreum.ports.output.identity_service import (
     BotIdentityConfig,
     IIdentityService,
@@ -111,7 +112,7 @@ class TestIdentityServiceContract(ABC):
         assert bot_name == "codetoreum-bot"
 
     def test_get_bot_username_without_configuration_raises(self):
-        """Should raise error if no bot username configured."""
+        """Should raise ValidationError if no bot username configured."""
         service = self.create_service()
 
         # Create config with no bot_usernames
@@ -121,7 +122,7 @@ class TestIdentityServiceContract(ABC):
         )
         service.configure(config)
 
-        with pytest.raises(Exception):  # ConfigurationError
+        with pytest.raises(ValidationError):
             service.get_bot_username()
 
     # User Filtering Tests
@@ -236,7 +237,7 @@ class TestIdentityServiceContract(ABC):
         assert service.is_bot_user("bot3") is True
 
     def test_configure_empty_config_raises(self):
-        """Configure with no bots should raise error."""
+        """Configure with no bots should raise ValidationError."""
         service = self.create_service()
 
         config = BotIdentityConfig(
@@ -244,7 +245,7 @@ class TestIdentityServiceContract(ABC):
             bot_patterns=[]
         )
 
-        with pytest.raises(Exception):  # ValidationError
+        with pytest.raises(ValidationError):
             service.configure(config)
 
     def test_configure_with_both_usernames_and_patterns(self):

@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 import pytest
 
 from codetoreum.domain.events import Comment
+from codetoreum.ports.exceptions import ResourceNotFoundError, ValidationError
 from codetoreum.ports.output.discussion_adapter import (
     DiscussionMonitoringConfig,
     IDiscussionAdapter,
@@ -104,7 +105,7 @@ class TestDiscussionAdapterContract(ABC):
         """Adding empty comment should raise ValidationError."""
         adapter = await self.create_adapter()
 
-        with pytest.raises(Exception):  # ValidationError
+        with pytest.raises(ValidationError):
             await adapter.add_comment(
                 work_item_id="issue-123",
                 content="",  # Empty content
@@ -112,11 +113,13 @@ class TestDiscussionAdapterContract(ABC):
 
     @pytest.mark.asyncio
     async def test_get_thread_nonexistent_work_item(self):
-        """Getting thread for nonexistent item should raise error."""
+        """Getting thread for nonexistent item should raise ResourceNotFoundError."""
         adapter = await self.create_adapter()
 
-        with pytest.raises(Exception):  # ResourceNotFoundError
+        with pytest.raises(ResourceNotFoundError) as exc_info:
             await adapter.get_thread("nonexistent-issue")
+        assert exc_info.value.resource_type == "work_item"
+        assert exc_info.value.resource_id == "nonexistent-issue"
 
     @pytest.mark.asyncio
     async def test_monitoring_config_with_last_processed_comment(self):
