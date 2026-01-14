@@ -174,46 +174,51 @@ class TestSimulateHumanMove:
         adapter.add_item_to_column("board-1", "Backlog", "item-1")
         return adapter
 
-    def test_simulate_human_move_moves_item(self, adapter_with_item):
-        """Test simulate_human_move() moves item to target column."""
+    @pytest.mark.asyncio
+    async def test_simulate_human_move_moves_item(self, adapter_with_item):
+        """Test simulate_human_move_async() moves item to target column."""
         adapter = adapter_with_item
-        adapter.simulate_human_move("item-1", "In Progress")
+        await adapter.simulate_human_move_async("item-1", "In Progress")
 
-        position = asyncio.run(adapter.get_item_position("item-1"))
+        position = await adapter.get_item_position("item-1")
         assert position.column_name == "In Progress"
 
-    def test_simulate_human_move_emits_event_with_human_moved_by(self, adapter_with_item):
-        """Test simulate_human_move() emits event with MovedByType.HUMAN."""
+    @pytest.mark.asyncio
+    async def test_simulate_human_move_emits_event_with_human_moved_by(self, adapter_with_item):
+        """Test simulate_human_move_async() emits event with MovedByType.HUMAN."""
         adapter = adapter_with_item
         events = []
         adapter.on("workitem.column_changed", events.append)
 
-        adapter.simulate_human_move("item-1", "In Progress")
+        await adapter.simulate_human_move_async("item-1", "In Progress")
 
-        # Give async operation time to complete
-        asyncio.run(asyncio.sleep(0.1))
+        # Event should be emitted immediately (no race condition)
+        assert len(events) == 1
+        assert events[0].moved_by == "human"
 
-        # Event may be scheduled as task, check after brief delay
-        assert len(events) > 0 or True  # Event emission is async
-        if events:
-            assert events[0].moved_by == "human"
-
-    def test_simulate_human_move_logs_movement(self, adapter_with_item):
-        """Test simulate_human_move() logs movement in history."""
+    @pytest.mark.asyncio
+    async def test_simulate_human_move_logs_movement(self, adapter_with_item):
+        """Test simulate_human_move_async() logs movement in history."""
         adapter = adapter_with_item
-        adapter.simulate_human_move("item-1", "In Progress")
+        await adapter.simulate_human_move_async("item-1", "In Progress")
 
-        # Wait for async operation
-        asyncio.run(asyncio.sleep(0.1))
-
+        # No wait needed - operation completed before this line
         history = adapter.get_movement_history("item-1")
         assert len(history) > 0
 
-    def test_simulate_human_move_item_not_found(self, adapter_with_item):
-        """Test simulate_human_move() raises error for non-existent item."""
+    @pytest.mark.asyncio
+    async def test_simulate_human_move_item_not_found(self, adapter_with_item):
+        """Test simulate_human_move_async() raises error for non-existent item."""
         adapter = adapter_with_item
         with pytest.raises(ValueError, match="Work item not found"):
-            adapter.simulate_human_move("item-999", "In Progress")
+            await adapter.simulate_human_move_async("item-999", "In Progress")
+
+    @pytest.mark.asyncio
+    async def test_simulate_human_move_sync_from_async_raises_error(self, adapter_with_item):
+        """Test that calling sync simulate_human_move from async context raises error."""
+        adapter = adapter_with_item
+        with pytest.raises(RuntimeError, match="Cannot call sync simulate_human_move from async context"):
+            adapter.simulate_human_move("item-1", "In Progress")
 
 
 class TestAssertItemInColumn:

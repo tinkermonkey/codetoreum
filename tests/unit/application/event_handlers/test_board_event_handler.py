@@ -342,6 +342,47 @@ class TestHandleColumnChangeWithPipelineTrigger:
         # Assert
         assert "already holds lock" in caplog.text
 
+    @pytest.mark.asyncio
+    async def test_retriggers_agent_when_already_holds_lock(
+        self,
+        handler,
+        mock_workflow_config,
+        mock_lock_service,
+        mock_agent_executor,
+        sample_workflow_config,
+    ):
+        """Should re-trigger agent when work item re-enters trigger column while holding lock.
+
+        This supports maker-checker review loops where a work item is sent back to
+        Development after review rejection while still holding the pipeline lock.
+        """
+        # Setup
+        mock_workflow_config.get_board_workflow_template.return_value = (
+            sample_workflow_config
+        )
+        mock_lock_service.try_acquire_lock.return_value = LockAcquisitionResult(
+            status=LockStatus.ALREADY_HELD,
+            work_item_id="item-1",
+            queue_length=0,
+        )
+
+        event = create_column_changed_event(
+            work_item_id="item-1",
+            board_id="board-1",
+            project_id="proj-1",
+            to_column="In Development",
+        )
+
+        # Act
+        await handler.handle_column_change(event)
+
+        # Assert - Agent should be re-triggered for maker-checker review loops
+        mock_agent_executor.execute.assert_called_once()
+        call_args = mock_agent_executor.execute.call_args
+        assert call_args[1]["work_item_id"] == "item-1"
+        # Verify it's calling with the Development column's agent
+        # (from sample_workflow_config fixture)
+
 
 class TestHandleColumnChangeWithExitColumn:
     """Tests for handle_column_change with exit columns."""

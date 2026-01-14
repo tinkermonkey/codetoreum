@@ -516,11 +516,12 @@ class MockBoardAdapter(IBoardService):
                     board_id_stored, col, _ = self._item_positions[item_id]
                     self._item_positions[item_id] = (board_id_stored, col, i)
 
-    def simulate_human_move(
+    async def simulate_human_move_async(
         self, work_item_id: str, target_column: str
     ) -> None:
-        """Test helper: Simulate user dragging card in board UI.
+        """Test helper: Simulate user dragging card in board UI (async version).
 
+        Use this in async test contexts where you can await the result.
         Moves the item to the target column and emits a movement event with
         moved_by=MovedByType.HUMAN.
 
@@ -532,6 +533,33 @@ class MockBoardAdapter(IBoardService):
             ValueError: Work item or column doesn't exist
 
         Example:
+            await adapter.simulate_human_move_async("item-1", "In Progress")
+        """
+        if self.current_project is None:
+            raise ValueError("current_project not set")
+
+        await self.move_item_to_column(work_item_id, target_column, MovedByType.HUMAN)
+
+    def simulate_human_move(
+        self, work_item_id: str, target_column: str
+    ) -> None:
+        """Test helper: Simulate user dragging card in board UI (sync version).
+
+        Use this in synchronous test contexts. Cannot be called from async contexts
+        (use simulate_human_move_async instead).
+
+        Moves the item to the target column and emits a movement event with
+        moved_by=MovedByType.HUMAN.
+
+        Args:
+            work_item_id: Item that moved
+            target_column: Target column name
+
+        Raises:
+            ValueError: Work item or column doesn't exist
+            RuntimeError: If called from async context
+
+        Example:
             adapter.simulate_human_move("item-1", "In Progress")
         """
         import asyncio
@@ -539,25 +567,23 @@ class MockBoardAdapter(IBoardService):
         if self.current_project is None:
             raise ValueError("current_project not set")
 
-        with self._lock:
-            if work_item_id not in self._item_positions:
-                raise ValueError(f"Work item not found: {work_item_id}")
-
-            board_id, from_column, _ = self._item_positions[work_item_id]
-
-        # Run async operation
+        # Check if we're in an async context
         try:
-            asyncio.get_running_loop()
-            # We're in an async context, schedule as task
             loop = asyncio.get_running_loop()
-            loop.create_task(
-                self.move_item_to_column(work_item_id, target_column, MovedByType.HUMAN)
+            # We're in async context - don't allow sync call
+            raise RuntimeError(
+                "Cannot call sync simulate_human_move from async context. "
+                "Use 'await simulate_human_move_async(...)' instead."
             )
-        except RuntimeError:
-            # No running loop, create one
-            asyncio.run(
-                self.move_item_to_column(work_item_id, target_column, MovedByType.HUMAN)
-            )
+        except RuntimeError as e:
+            if "no running event loop" in str(e).lower():
+                # No loop running, create one
+                asyncio.run(
+                    self.move_item_to_column(work_item_id, target_column, MovedByType.HUMAN)
+                )
+            else:
+                # Re-raise if it's our error message
+                raise
 
     def assert_item_in_column(
         self, work_item_id: str, expected_column: str

@@ -19,6 +19,12 @@ from codetoreum.application.pipeline_lock_service import (
     PipelineQueueState,
     QueueEntry,
 )
+from codetoreum.domain.events.lock_events import (
+    PipelineLockAcquiredEvent,
+    PipelineLockReleasedEvent,
+    WorkItemQueuedEvent,
+)
+from codetoreum.infrastructure.event_bus import EventBus
 
 
 class InMemoryLockService(IPipelineLockService):
@@ -32,12 +38,18 @@ class InMemoryLockService(IPipelineLockService):
     Attributes:
         _lock_state: Dict mapping "project_id:board_id" to PipelineQueueState
         _lock: Threading lock for thread-safe access
+        _event_bus: Optional event bus for emitting domain events
     """
 
-    def __init__(self) -> None:
-        """Initialize empty lock service."""
+    def __init__(self, event_bus: Optional[EventBus] = None) -> None:
+        """Initialize empty lock service.
+
+        Args:
+            event_bus: Optional event bus for emitting lock lifecycle events
+        """
         self._lock_state: Dict[str, PipelineQueueState] = {}
         self._lock = threading.Lock()
+        self._event_bus = event_bus
 
     async def try_acquire_lock(
         self,
@@ -101,6 +113,20 @@ class InMemoryLockService(IPipelineLockService):
             if state.lock_holder is None:
                 state.lock_holder = work_item_id
                 state.lock_acquired_at = datetime.now(timezone.utc)
+
+                # Emit lock acquired event
+                if self._event_bus:
+                    event = PipelineLockAcquiredEvent(
+                        type="pipeline.lock_acquired",
+                        timestamp=datetime.now(timezone.utc).isoformat(),
+                        source="in_memory_lock_service",
+                        project_id=project_id,
+                        work_item_id=work_item_id,
+                        board_id=board_id,
+                        queue_length_at_acquire=len(state.queue),
+                    )
+                    await self._event_bus.publish(event)
+
                 return LockAcquisitionResult(
                     status=LockStatus.ACQUIRED,
                     work_item_id=work_item_id,
@@ -137,6 +163,18 @@ class InMemoryLockService(IPipelineLockService):
                 i for i, e in enumerate(state.queue)
                 if e.work_item_id == work_item_id
             )
+
+            # Emit queued event
+            if self._event_bus:
+                event = WorkItemQueuedEvent(
+                    type="workitem.queued",
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    source="in_memory_lock_service",
+                    work_item_id=work_item_id,
+                    board_id=board_id,
+                    queue_position=queue_position,
+                )
+                await self._event_bus.publish(event)
 
             return LockAcquisitionResult(
                 status=LockStatus.QUEUED,
@@ -194,6 +232,32 @@ class InMemoryLockService(IPipelineLockService):
                 next_item_id = next_entry.work_item_id
                 state.lock_holder = next_item_id
                 state.lock_acquired_at = datetime.now(timezone.utc)
+
+            # Emit lock released event
+            if self._event_bus:
+                release_event = PipelineLockReleasedEvent(
+                    type="pipeline.lock_released",
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    source="in_memory_lock_service",
+                    project_id=project_id,
+                    work_item_id=work_item_id,
+                    board_id=board_id,
+                    next_work_item_id=next_item_id,
+                )
+                await self._event_bus.publish(release_event)
+
+                # If next item acquired lock, emit acquisition event
+                if next_item_id:
+                    acquire_event = PipelineLockAcquiredEvent(
+                        type="pipeline.lock_acquired",
+                        timestamp=datetime.now(timezone.utc).isoformat(),
+                        source="in_memory_lock_service",
+                        project_id=project_id,
+                        work_item_id=next_item_id,
+                        board_id=board_id,
+                        queue_length_at_acquire=len(state.queue),
+                    )
+                    await self._event_bus.publish(acquire_event)
 
             return LockReleaseResult(
                 released_work_item_id=work_item_id,

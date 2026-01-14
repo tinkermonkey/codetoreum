@@ -16,6 +16,12 @@ from codetoreum.ports.output.board_service import (
     ProjectBoard,
     WorkItemPosition,
 )
+from codetoreum.ports.exceptions import (
+    AuthenticationError,
+    ExternalServiceError,
+    ResourceNotFoundError,
+    ValidationError,
+)
 
 
 @pytest.fixture
@@ -321,3 +327,195 @@ class TestPollingIntegration:
 
         # Should have called get_board twice
         assert mock_board_service.get_board.call_count == 2
+
+
+class TestErrorRecovery:
+    """Tests for error recovery and handling in polling service."""
+
+    @pytest.mark.asyncio
+    async def test_permanent_error_disables_board_polling(
+        self, polling_service, mock_board_service
+    ):
+        """Test that permanent errors (AuthenticationError) disable polling for the board."""
+        # Setup - board initially in state
+        polling_service.enable_board("proj-1", "board-1")
+        polling_service._board_states["board-1"] = BoardState(
+            board_id="board-1", item_columns={}
+        )
+
+        # Mock get_board to raise AuthenticationError
+        mock_board_service.get_board.side_effect = AuthenticationError("Invalid token")
+
+        # Poll the board
+        await polling_service._poll_board("proj-1", "board-1")
+
+        # Assert - board state should be removed (polling disabled)
+        assert "board-1" not in polling_service._board_states
+
+    @pytest.mark.asyncio
+    async def test_resource_not_found_disables_board_polling(
+        self, polling_service, mock_board_service
+    ):
+        """Test that ResourceNotFoundError disables polling for the board."""
+        # Setup
+        polling_service.enable_board("proj-1", "board-1")
+        polling_service._board_states["board-1"] = BoardState(
+            board_id="board-1", item_columns={}
+        )
+
+        # Mock get_board to raise ResourceNotFoundError
+        mock_board_service.get_board.side_effect = ResourceNotFoundError(
+            "Board", "board-1"
+        )
+
+        # Poll the board
+        await polling_service._poll_board("proj-1", "board-1")
+
+        # Assert - board state should be removed
+        assert "board-1" not in polling_service._board_states
+
+    @pytest.mark.asyncio
+    async def test_validation_error_disables_board_polling(
+        self, polling_service, mock_board_service
+    ):
+        """Test that ValidationError disables polling for the board."""
+        # Setup
+        polling_service.enable_board("proj-1", "board-1")
+        polling_service._board_states["board-1"] = BoardState(
+            board_id="board-1", item_columns={}
+        )
+
+        # Mock get_board to raise ValidationError
+        mock_board_service.get_board.side_effect = ValidationError("Invalid board ID")
+
+        # Poll the board
+        await polling_service._poll_board("proj-1", "board-1")
+
+        # Assert - board state should be removed
+        assert "board-1" not in polling_service._board_states
+
+    @pytest.mark.asyncio
+    async def test_transient_error_preserves_board_state(
+        self, polling_service, mock_board_service
+    ):
+        """Test that transient errors (ExternalServiceError) preserve board state."""
+        # Setup - initialize board state
+        initial_state = BoardState(
+            board_id="board-1", item_columns={"item-1": "Backlog"}
+        )
+        polling_service.enable_board("proj-1", "board-1")
+        polling_service._board_states["board-1"] = initial_state
+
+        # Mock get_board to raise ExternalServiceError
+        mock_board_service.get_board.side_effect = ExternalServiceError(
+            "BoardService", "Service temporarily unavailable"
+        )
+
+        # Poll the board
+        await polling_service._poll_board("proj-1", "board-1")
+
+        # Assert - board state should still exist (will retry next interval)
+        assert "board-1" in polling_service._board_states
+        assert polling_service._board_states["board-1"] == initial_state
+
+    @pytest.mark.asyncio
+    async def test_recovery_after_transient_error(
+        self, polling_service, mock_board_service
+    ):
+        """Test that polling recovers successfully after a transient error."""
+        # Setup - initialize board state
+        column1 = BoardColumn(
+            id="col-1", name="Backlog", position=0, work_item_ids=["item-1"]
+        )
+        board = ProjectBoard(
+            id="board-1", name="Test Board", project_id="proj-1", columns=[column1]
+        )
+        item_pos = WorkItemPosition(
+            work_item_id="item-1", column_name="Backlog", position=0
+        )
+
+        polling_service.enable_board("proj-1", "board-1")
+        polling_service._board_states["board-1"] = BoardState(
+            board_id="board-1", item_columns={"item-1": "Backlog"}
+        )
+
+        # First poll - transient error
+        mock_board_service.get_board.side_effect = ExternalServiceError(
+            "BoardService", "Network timeout"
+        )
+        await polling_service._poll_board("proj-1", "board-1")
+
+        # Assert - state preserved
+        assert "board-1" in polling_service._board_states
+
+        # Second poll - service recovered
+        mock_board_service.get_board.side_effect = None
+        mock_board_service.get_board.return_value = board
+        mock_board_service.get_items_in_column.return_value = [item_pos]
+
+        await polling_service._poll_board("proj-1", "board-1")
+
+        # Assert - polling succeeded and state updated
+        assert "board-1" in polling_service._board_states
+        assert mock_board_service.get_board.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_multiple_boards_independent_error_handling(
+        self, polling_service, mock_board_service
+    ):
+        """Test that error on one board doesn't affect other boards."""
+        # Setup two boards
+        polling_service.enable_board("proj-1", "board-1")
+        polling_service.enable_board("proj-1", "board-2")
+        polling_service._board_states["board-1"] = BoardState(
+            board_id="board-1", item_columns={}
+        )
+        polling_service._board_states["board-2"] = BoardState(
+            board_id="board-2", item_columns={}
+        )
+
+        # Mock get_board to fail for board-1 but succeed for board-2
+        def get_board_side_effect(project_id, board_id):
+            if board_id == "board-1":
+                raise AuthenticationError("Auth failed")
+            return ProjectBoard(
+                id=board_id, name="Board 2", project_id=project_id, columns=[]
+            )
+
+        mock_board_service.get_board.side_effect = get_board_side_effect
+        mock_board_service.get_items_in_column.return_value = []
+
+        # Poll both boards
+        await polling_service._poll_board("proj-1", "board-1")
+        await polling_service._poll_board("proj-1", "board-2")
+
+        # Assert - board-1 removed, board-2 still active
+        assert "board-1" not in polling_service._board_states
+        assert "board-2" in polling_service._board_states
+
+    @pytest.mark.asyncio
+    async def test_error_during_get_items_in_column(
+        self, polling_service, mock_board_service
+    ):
+        """Test error handling when get_items_in_column fails."""
+        # Setup
+        column1 = BoardColumn(
+            id="col-1", name="Backlog", position=0, work_item_ids=["item-1"]
+        )
+        board = ProjectBoard(
+            id="board-1", name="Test Board", project_id="proj-1", columns=[column1]
+        )
+
+        polling_service.enable_board("proj-1", "board-1")
+
+        # Mock get_board succeeds, but get_items_in_column fails
+        mock_board_service.get_board.return_value = board
+        mock_board_service.get_items_in_column.side_effect = ExternalServiceError(
+            "BoardService", "Failed to fetch items"
+        )
+
+        # Poll the board - should handle error gracefully
+        await polling_service._poll_board("proj-1", "board-1")
+
+        # Assert - no exception raised, polling can continue
+        assert mock_board_service.get_board.called

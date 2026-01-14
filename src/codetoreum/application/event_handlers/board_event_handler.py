@@ -20,6 +20,7 @@ from codetoreum.domain.board_workflow_template import (
 )
 from codetoreum.domain.events import DomainEvent, WorkItemColumnChanged
 from codetoreum.infrastructure.event_bus import EventHandler, event_handler, EventBus
+from codetoreum.ports.exceptions import ExternalServiceError, ResourceNotFoundError
 from codetoreum.ports.output.agent_executor import IAgentExecutor
 from codetoreum.ports.output.board_service import IBoardService, MovedByType
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
@@ -201,15 +202,58 @@ class BoardColumnEventHandler(EventHandler):
             column_config: Configuration of the trigger column
             workflow_config: Full workflow template for the board
         """
-        # Get item position for queue ordering
-        position = await self.board_service.get_item_position(work_item_id)
+        # Get item position for queue ordering with error handling
+        try:
+            position = await self.board_service.get_item_position(work_item_id)
+        except ResourceNotFoundError as e:
+            logger.error(
+                f"Cannot acquire lock for {work_item_id}: work item not found on board",
+                exc_info=True,
+                extra={"work_item_id": work_item_id, "board_id": board_id},
+            )
+            # TODO: Emit WorkItemNotFoundEvent
+            return
+        except ExternalServiceError as e:
+            logger.error(
+                f"Board service error while getting position for {work_item_id}: {e}",
+                exc_info=True,
+                extra={"work_item_id": work_item_id, "board_id": board_id},
+            )
+            # Could retry or emit error event
+            return
 
-        result = await self.lock_service.try_acquire_lock(
-            project_id=project_id,
-            board_id=board_id,
-            work_item_id=work_item_id,
-            board_position=position.position,
-        )
+        # Try acquire lock with error handling
+        try:
+            result = await self.lock_service.try_acquire_lock(
+                project_id=project_id,
+                board_id=board_id,
+                work_item_id=work_item_id,
+                board_position=position.position,
+            )
+        except ValueError as e:
+            # Invalid parameters (negative position, empty IDs)
+            logger.error(
+                f"Invalid parameters for lock acquisition on {work_item_id}: {e}",
+                exc_info=True,
+                extra={
+                    "work_item_id": work_item_id,
+                    "board_id": board_id,
+                    "position": position.position,
+                },
+            )
+            return
+        except Exception as e:
+            logger.error(
+                f"Lock service failed for {work_item_id}: {e}",
+                exc_info=True,
+                extra={
+                    "work_item_id": work_item_id,
+                    "board_id": board_id,
+                    "project_id": project_id,
+                },
+            )
+            # TODO: Emit LockAcquisitionFailedEvent
+            return
 
         if result.status == LockStatus.ACQUIRED:
             logger.info(f"Lock acquired for {work_item_id}")
@@ -256,11 +300,30 @@ class BoardColumnEventHandler(EventHandler):
             column_config: Configuration of the exit column
             workflow_config: Full workflow template for the board
         """
-        release_result = await self.lock_service.release_lock(
-            project_id=project_id,
-            board_id=board_id,
-            work_item_id=work_item_id,
-        )
+        # Release lock with error handling
+        try:
+            release_result = await self.lock_service.release_lock(
+                project_id=project_id,
+                board_id=board_id,
+                work_item_id=work_item_id,
+            )
+        except ValueError as e:
+            # Work item doesn't hold lock (race condition or already released)
+            logger.warning(
+                f"Cannot release lock for {work_item_id}: {e}",
+                exc_info=True,
+                extra={"work_item_id": work_item_id, "board_id": board_id},
+            )
+            return
+        except Exception as e:
+            logger.critical(
+                f"Lock service failed to release lock for {work_item_id}: {e}",
+                exc_info=True,
+                extra={"work_item_id": work_item_id, "board_id": board_id},
+            )
+            # CRITICAL: Lock may be stuck
+            # TODO: Emit LockStuckEvent for manual intervention
+            return
 
         logger.info(
             f"Lock released for {work_item_id}, "
@@ -269,18 +332,35 @@ class BoardColumnEventHandler(EventHandler):
 
         # Trigger agent for next queued item if one exists
         if release_result.next_work_item_id:
-            next_position = await self.board_service.get_item_position(
-                release_result.next_work_item_id
-            )
-            next_column_config = workflow_config.get_column_config(
-                next_position.column_name
-            )
-
-            if next_column_config and next_column_config.agent_id:
-                logger.info(
-                    f"Triggering agent for next queued item: {release_result.next_work_item_id}"
+            try:
+                next_position = await self.board_service.get_item_position(
+                    release_result.next_work_item_id
                 )
-                await self._trigger_agent(release_result.next_work_item_id, next_column_config)
+                next_column_config = workflow_config.get_column_config(
+                    next_position.column_name
+                )
+
+                if next_column_config and next_column_config.agent_id:
+                    logger.info(
+                        f"Triggering agent for next queued item: {release_result.next_work_item_id}"
+                    )
+                    await self._trigger_agent(
+                        release_result.next_work_item_id, next_column_config
+                    )
+            except ResourceNotFoundError as e:
+                logger.warning(
+                    f"Next queued item {release_result.next_work_item_id} not found: {e}",
+                    exc_info=True,
+                    extra={"work_item_id": release_result.next_work_item_id},
+                )
+                # Item was deleted - OK, lock is released
+            except Exception as e:
+                logger.error(
+                    f"Failed to trigger next item {release_result.next_work_item_id}: {e}",
+                    exc_info=True,
+                    extra={"work_item_id": release_result.next_work_item_id},
+                )
+                # Next item holds lock but agent never triggered - PROBLEM
 
     async def _trigger_agent(
         self, work_item_id: str, column_config: ColumnTemplate

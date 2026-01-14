@@ -440,18 +440,15 @@ class TestBoardWorkflowTemplateEdgeCases:
         assert "QA" in template.pipeline_trigger_columns
 
     def test_empty_columns_list(self):
-        """Test template with empty columns list."""
-        template = BoardWorkflowTemplate(
-            id="template-1",
-            name="Empty Template",
-            pipeline_trigger_columns=[],
-            exit_columns=[],
-            columns=[],
-        )
-
-        assert len(template.columns) == 0
-        assert template.get_column_config("Any") is None
-        assert template.get_next_column("Any") is None
+        """Test template with empty columns list raises ValueError."""
+        with pytest.raises(ValueError, match="Workflow must have at least one column"):
+            BoardWorkflowTemplate(
+                id="template-1",
+                name="Empty Template",
+                pipeline_trigger_columns=(),
+                exit_columns=(),
+                columns=(),
+            )
 
     def test_column_type_enum(self):
         """Test ColumnType enum values."""

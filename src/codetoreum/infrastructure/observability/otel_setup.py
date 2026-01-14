@@ -8,25 +8,34 @@ Supports configurable sampling strategies, performance tuning, and granular enab
 import logging
 from typing import Optional
 
-from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.sdk.trace.sampling import (
-    TraceIdRatioBased,
-    StaticSampler,
-    Decision,
-    ParentBased,
-    ALWAYS_ON,
-    ALWAYS_OFF,
-)
-from opentelemetry.sdk.resources import (
-    Resource,
-    SERVICE_NAME,
-    DEPLOYMENT_ENVIRONMENT,
-    SERVICE_VERSION,
-)
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+# Try to import OpenTelemetry - it's optional
+try:
+    from opentelemetry import trace
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    from opentelemetry.sdk.trace.sampling import (
+        TraceIdRatioBased,
+        StaticSampler,
+        Decision,
+        ParentBased,
+        ALWAYS_ON,
+        ALWAYS_OFF,
+    )
+    from opentelemetry.sdk.resources import (
+        Resource,
+        SERVICE_NAME,
+        DEPLOYMENT_ENVIRONMENT,
+        SERVICE_VERSION,
+    )
+    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+    OPENTELEMETRY_AVAILABLE = True
+except ImportError:
+    OPENTELEMETRY_AVAILABLE = False
+    # Provide dummy values for when opentelemetry is not installed
+    ALWAYS_ON = None
+    ALWAYS_OFF = None
 
 from .config import ObservabilityConfig
 
@@ -90,6 +99,13 @@ def setup_opentelemetry(config: ObservabilityConfig, app=None) -> None:
         - If initialization fails, the application continues without tracing
         - Graceful degradation ensures observability issues don't crash the service
     """
+    # Check if OpenTelemetry is available
+    if not OPENTELEMETRY_AVAILABLE:
+        msg = "OpenTelemetry packages not installed - observability disabled"
+        print(f"[OTEL] {msg}")
+        logger.info(msg)
+        return
+
     # DEBUG: Print to stdout since logger might not be configured yet
     print(f"[OTEL] setup_opentelemetry called with config.enabled={config.enabled}, traces_enabled={config.traces_enabled}, signoz.enabled={config.signoz.enabled}")
 

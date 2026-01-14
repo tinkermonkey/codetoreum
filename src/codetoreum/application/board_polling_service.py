@@ -7,6 +7,12 @@ from typing import Dict, Optional, Set
 
 from codetoreum.domain.events import WorkItemColumnChanged
 from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.ports.exceptions import (
+    AuthenticationError,
+    ExternalServiceError,
+    ResourceNotFoundError,
+    ValidationError,
+)
 from codetoreum.ports.output.board_service import IBoardService, MovedByType
 
 logger = logging.getLogger(__name__)
@@ -137,17 +143,70 @@ class BoardPollingService:
             project_id: Project containing the board
             board_id: Board to poll
         """
-        board = await self.board_service.get_board(project_id, board_id)
+        # Get board with error handling
+        try:
+            board = await self.board_service.get_board(project_id, board_id)
+        except (AuthenticationError, ResourceNotFoundError, ValidationError) as e:
+            # Permanent errors - disable polling for this board
+            logger.error(
+                f"Permanent error polling board {board_id}, disabling: {e}",
+                exc_info=True,
+                extra={
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "error_type": type(e).__name__,
+                },
+            )
+            # Remove from enabled boards
+            if board_id in self._board_states:
+                del self._board_states[board_id]
+            # TODO: Emit BoardPollingFailedEvent for user notification
+            return
+        except ExternalServiceError as e:
+            # Transient errors - log and continue (will retry next interval)
+            logger.warning(
+                f"Transient error polling board {board_id}: {e}",
+                exc_info=True,
+                extra={"project_id": project_id, "board_id": board_id},
+            )
+            return
+        except Exception as e:
+            # Unexpected errors - disable polling and alert
+            logger.critical(
+                f"Unexpected error polling board {board_id}: {e}",
+                exc_info=True,
+                extra={"project_id": project_id, "board_id": board_id},
+            )
+            if board_id in self._board_states:
+                del self._board_states[board_id]
+            return
 
-        # Build current state
+        # Build current state with error handling
         current_state = BoardState(board_id=board_id, item_columns={})
 
-        for column in board.columns:
-            items = await self.board_service.get_items_in_column(
-                board_id, column.name
+        try:
+            for column in board.columns:
+                items = await self.board_service.get_items_in_column(
+                    board_id, column.name
+                )
+                for item in items:
+                    current_state.item_columns[item.work_item_id] = column.name
+        except ExternalServiceError as e:
+            # Transient error getting column items - log and return
+            logger.warning(
+                f"Error getting items in columns for board {board_id}: {e}",
+                exc_info=True,
+                extra={"project_id": project_id, "board_id": board_id},
             )
-            for item in items:
-                current_state.item_columns[item.work_item_id] = column.name
+            return
+        except Exception as e:
+            # Unexpected error processing columns
+            logger.error(
+                f"Unexpected error processing columns for board {board_id}: {e}",
+                exc_info=True,
+                extra={"project_id": project_id, "board_id": board_id},
+            )
+            return
 
         # Detect changes
         previous_state = self._board_states.get(board_id)
@@ -167,11 +226,28 @@ class BoardPollingService:
                         "project_id": project_id,
                     },
                 )
-                await self.event_bus.publish(event)
-                logger.info(
-                    f"Detected column change: {change['work_item_id']} "
-                    f"{change['from_column']} -> {change['to_column']}"
-                )
+
+                # Emit event with error handling
+                try:
+                    await self.event_bus.publish(event)
+                    logger.info(
+                        f"Detected column change: {change['work_item_id']} "
+                        f"{change['from_column']} -> {change['to_column']}"
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"Failed to emit column change event for {change['work_item_id']}: {e}",
+                        exc_info=True,
+                        extra={
+                            "work_item_id": change["work_item_id"],
+                            "from_column": change["from_column"],
+                            "to_column": change["to_column"],
+                            "board_id": board_id,
+                            "project_id": project_id,
+                        },
+                    )
+                    # Continue processing other changes - don't fail entire poll
+                    continue
 
         # Update cached state
         self._board_states[board_id] = current_state

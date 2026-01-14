@@ -84,9 +84,19 @@ class TestRegisterTemplate:
         new_template = BoardWorkflowTemplate(
             id="workflow-2",
             name="New Workflow",
-            pipeline_trigger_columns=[],
-            exit_columns=[],
-            columns=[],
+            pipeline_trigger_columns=(),
+            exit_columns=(),
+            columns=(
+                ColumnTemplate(
+                    name="Todo",
+                    type=ColumnType.MANUAL,
+                    agent_id=None,
+                    is_pipeline_trigger=False,
+                    is_exit_column=False,
+                    position=0,
+                    auto_progress_on_completion=False,
+                ),
+            ),
         )
 
         config_service.register_template("board-1", new_template)
@@ -124,9 +134,19 @@ class TestGetBoardWorkflowTemplate:
         template2 = BoardWorkflowTemplate(
             id="workflow-2",
             name="Workflow 2",
-            pipeline_trigger_columns=[],
-            exit_columns=[],
-            columns=[],
+            pipeline_trigger_columns=(),
+            exit_columns=(),
+            columns=(
+                ColumnTemplate(
+                    name="Open",
+                    type=ColumnType.MANUAL,
+                    agent_id=None,
+                    is_pipeline_trigger=False,
+                    is_exit_column=False,
+                    position=0,
+                    auto_progress_on_completion=False,
+                ),
+            ),
         )
 
         config_service.register_template("board-1", template1)

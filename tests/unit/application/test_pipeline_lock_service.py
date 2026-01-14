@@ -661,3 +661,182 @@ class TestQueueStateQueries:
         # Get state again - should not be affected by modification
         state2 = await service.get_queue_state("proj-1", "board-1")
         assert len(state2.queue) == initial_queue_length
+
+
+class TestOrphanedLockHolder:
+    """Tests for edge cases involving orphaned lock holders.
+
+    An orphaned lock holder is a work item that holds a lock but has been
+    removed from the board (deleted, moved to another board, etc.). The system
+    should handle this gracefully.
+    """
+
+    @pytest.mark.asyncio
+    async def test_orphaned_lock_holder_identified_in_queue_state(self):
+        """Queue state should identify orphaned lock holders."""
+        service = InMemoryLockService()
+
+        # Item-1 acquires lock
+        await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+            board_position=0
+        )
+
+        # Item-2 queued
+        await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-2",
+            board_position=1
+        )
+
+        # Check queue state - item-1 holds lock
+        state = await service.get_queue_state("proj-1", "board-1")
+        assert state.lock_holder == "item-1"
+        assert len(state.queue) == 1
+
+        # Scenario: item-1 has been removed from board (orphaned)
+        # The queue state should still show item-1 as holder
+        # (Recovery would happen via lock timeout or manual release)
+        assert state.lock_holder == "item-1"
+        assert state.queue[0].work_item_id == "item-2"
+
+    @pytest.mark.asyncio
+    async def test_release_lock_for_orphaned_holder_grants_to_next(self):
+        """Releasing an orphaned lock holder's lock should grant to next in queue."""
+        service = InMemoryLockService()
+
+        # Item-1 acquires lock
+        await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+            board_position=0
+        )
+
+        # Item-2 and item-3 queued
+        await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-2",
+            board_position=1
+        )
+        await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-3",
+            board_position=2
+        )
+
+        # Scenario: item-1 removed from board (orphaned)
+        # System releases item-1's lock manually (e.g., via board reconciliation)
+        result = await service.release_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1"
+        )
+
+        # Lock should be granted to item-2
+        assert result.released_work_item_id == "item-1"
+        assert result.next_work_item_id == "item-2"
+        assert result.queue_length_after_release == 1  # Only item-3 remains
+
+        # Verify new lock holder
+        state = await service.get_queue_state("proj-1", "board-1")
+        assert state.lock_holder == "item-2"
+        assert len(state.queue) == 1
+        assert state.queue[0].work_item_id == "item-3"
+
+    @pytest.mark.asyncio
+    async def test_acquire_lock_after_orphaned_holder_removed(self):
+        """After orphaned lock holder is removed, new items can acquire lock."""
+        service = InMemoryLockService()
+
+        # Item-1 acquires lock
+        await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+            board_position=0
+        )
+
+        # Scenario: item-1 removed from board (orphaned)
+        # System releases lock
+        await service.release_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1"
+        )
+
+        # New item should be able to acquire lock
+        result = await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-2",
+            board_position=1
+        )
+
+        assert result.status == LockStatus.ACQUIRED
+        assert result.work_item_id == "item-2"
+
+        # Verify lock holder
+        state = await service.get_queue_state("proj-1", "board-1")
+        assert state.lock_holder == "item-2"
+
+    @pytest.mark.asyncio
+    async def test_multiple_orphaned_items_in_queue(self):
+        """Queue can contain multiple orphaned items waiting for lock."""
+        service = InMemoryLockService()
+
+        # Item-1 holds lock
+        await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+            board_position=0
+        )
+
+        # Item-2, item-3, item-4 queued
+        await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-2",
+            board_position=1
+        )
+        await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-3",
+            board_position=2
+        )
+        await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-4",
+            board_position=3
+        )
+
+        # Scenario: item-2 and item-3 removed from board (orphaned)
+        # Queue state should still show all items
+        state = await service.get_queue_state("proj-1", "board-1")
+        assert state.lock_holder == "item-1"
+        assert len(state.queue) == 3
+        assert state.queue[0].work_item_id == "item-2"
+        assert state.queue[1].work_item_id == "item-3"
+        assert state.queue[2].work_item_id == "item-4"
+
+        # When lock is released, it grants to first queued item (item-2)
+        # even though item-2 is orphaned
+        result = await service.release_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1"
+        )
+        assert result.next_work_item_id == "item-2"
+
+        # Orphaned item-2 now holds lock
+        # This would be cleaned up by board reconciliation/timeout logic
+        state = await service.get_queue_state("proj-1", "board-1")
+        assert state.lock_holder == "item-2"
