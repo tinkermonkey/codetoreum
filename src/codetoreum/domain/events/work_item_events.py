@@ -63,7 +63,12 @@ class WorkItemCreatedEvent(CodetoreumEvent):
 
 @dataclass(frozen=True)
 class WorkItemUpdatedEvent(CodetoreumEvent):
-    """Emitted when a work item's properties are updated."""
+    """Emitted when a work item's properties are updated.
+
+    Note: The `changes` dict is mutable, but the field reference is immutable (frozen).
+    This is an intentional exception to allow flexible change tracking while maintaining
+    immutability of the event itself and preventing field reassignment.
+    """
 
     work_item_id: str = ""
     project_id: str = ""

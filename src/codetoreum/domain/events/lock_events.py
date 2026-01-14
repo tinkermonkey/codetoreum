@@ -8,7 +8,7 @@ Terminology (vendor-agnostic):
 - Stale Lock: A lock that hasn't been updated/renewed within a timeout period
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal, Optional
 from uuid import uuid4
 
@@ -24,7 +24,7 @@ class LockAcquiredEvent(CodetoreumEvent):
     work_item_id: str = ""
     acquisition_method: Literal["normal", "stale_recovery"] = "normal"
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate event after initialization."""
         super().__post_init__()
         if not self.project_id:
@@ -71,7 +71,7 @@ class LockReleasedEvent(CodetoreumEvent):
     reason: Literal["completed", "exit_column", "timeout", "manual"] = "completed"
     next_in_queue: Optional[str] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate event after initialization."""
         super().__post_init__()
         if not self.project_id:
@@ -119,7 +119,7 @@ class LockStaleDetectedEvent(CodetoreumEvent):
     work_item_id: str = ""
     lock_acquired_at: str = ""
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate event after initialization."""
         super().__post_init__()
         if not self.project_id:
@@ -171,7 +171,7 @@ class PipelineLockAcquiredEvent(CodetoreumEvent):
     board_id: str = ""
     queue_length_at_acquire: int = 0
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate event after initialization."""
         super().__post_init__()
         if not self.project_id:
@@ -221,7 +221,7 @@ class PipelineLockReleasedEvent(CodetoreumEvent):
     board_id: str = ""
     next_work_item_id: Optional[str] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate event after initialization."""
         super().__post_init__()
         if not self.project_id:
@@ -270,7 +270,7 @@ class WorkItemQueuedEvent(CodetoreumEvent):
     board_id: str = ""
     queue_position: int = 0
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate event after initialization."""
         super().__post_init__()
         if not self.work_item_id:
