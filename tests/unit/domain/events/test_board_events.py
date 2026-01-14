@@ -226,14 +226,14 @@ class TestBoardReconciledEvent:
             source="github",
             project_id="proj-1",
             board_id="board-1",
-            columns_added=["New Column"],
-            columns_removed=["Old Column"],
+            columns_added=("New Column",),
+            columns_removed=("Old Column",),
             items_moved=5,
         )
 
         assert event.project_id == "proj-1"
-        assert event.columns_added == ["New Column"]
-        assert event.columns_removed == ["Old Column"]
+        assert event.columns_added == ("New Column",)
+        assert event.columns_removed == ("Old Column",)
         assert event.items_moved == 5
 
     def test_board_reconciled_no_changes(self):
@@ -246,8 +246,8 @@ class TestBoardReconciledEvent:
             board_id="board-1",
         )
 
-        assert event.columns_added == []
-        assert event.columns_removed == []
+        assert event.columns_added == ()
+        assert event.columns_removed == ()
         assert event.items_moved == 0
 
     def test_board_reconciled_columns_added(self):
@@ -258,12 +258,12 @@ class TestBoardReconciledEvent:
             source="github",
             project_id="proj-1",
             board_id="board-1",
-            columns_added=["Ready", "In Review", "Done"],
+            columns_added=("Ready", "In Review", "Done"),
             items_moved=10,
         )
 
-        assert event.columns_added == ["Ready", "In Review", "Done"]
-        assert event.columns_removed == []
+        assert event.columns_added == ("Ready", "In Review", "Done")
+        assert event.columns_removed == ()
         assert event.items_moved == 10
 
     def test_missing_project_id(self):
@@ -297,8 +297,8 @@ class TestBoardReconciledEvent:
             source="github",
             project_id="proj-1",
             board_id="board-1",
-            columns_added=["New"],
-            columns_removed=["Old"],
+            columns_added=("New",),
+            columns_removed=("Old",),
             items_moved=3,
         )
 
@@ -319,8 +319,8 @@ class TestBoardReconciledEvent:
             correlation_id="corr-456",
             project_id="proj-2",
             board_id="board-2",
-            columns_added=["Backlog", "Ready"],
-            columns_removed=["Archived"],
+            columns_added=("Backlog", "Ready"),
+            columns_removed=("Archived",),
             items_moved=7,
         )
 

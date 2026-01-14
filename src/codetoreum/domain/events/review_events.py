@@ -8,6 +8,7 @@ Terminology (vendor-agnostic):
 - Review Status: The state of a code review (open, approved, changes_requested, merged, closed)
 """
 
+from dataclasses import dataclass
 from typing import Literal, Optional
 from uuid import uuid4
 
@@ -17,40 +18,20 @@ from .discussion_events import Comment
 CodeReviewStatus = Literal["open", "approved", "changes_requested", "merged", "closed"]
 
 
+@dataclass(frozen=True)
 class ReviewStatusChangedEvent(CodetoreumEvent):
     """Emitted when a code review's status changes."""
 
-    def __init__(
-        self,
-        type: str = "review.status_changed",
-        timestamp: str = "",
-        source: str = "",
-        correlation_id: Optional[str] = None,
-        event_id: Optional[str] = None,
-        review_id: str = "",
-        work_item_id: Optional[str] = None,
-        project_id: str = "",
-        previous_status: CodeReviewStatus = "open",  # type: ignore
-        new_status: CodeReviewStatus = "open",  # type: ignore
-        reviewer: Optional[str] = None,
-    ):
-        super().__init__(
-            type=type,
-            timestamp=timestamp,
-            source=source,
-            correlation_id=correlation_id,
-            event_id=event_id or str(uuid4()),
-        )
-        self.review_id = review_id
-        self.work_item_id = work_item_id
-        self.project_id = project_id
-        self.previous_status = previous_status
-        self.new_status = new_status
-        self.reviewer = reviewer
-        self._validate()
+    review_id: str = ""
+    work_item_id: Optional[str] = None
+    project_id: str = ""
+    previous_status: CodeReviewStatus = "open"  # type: ignore
+    new_status: CodeReviewStatus = "open"  # type: ignore
+    reviewer: Optional[str] = None
 
-    def _validate(self) -> None:
-        """Validate event fields."""
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
         if not self.review_id:
             raise ValueError("review_id is required")
         if not self.project_id:
@@ -83,7 +64,7 @@ class ReviewStatusChangedEvent(CodetoreumEvent):
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
-            event_id=data.get("event_id"),
+            event_id=data.get("event_id") or str(uuid4()),
             review_id=data.get("review_id", ""),
             work_item_id=data.get("work_item_id"),
             project_id=data.get("project_id", ""),
@@ -93,40 +74,25 @@ class ReviewStatusChangedEvent(CodetoreumEvent):
         )
 
 
+@dataclass(frozen=True)
 class ReviewCommentAddedEvent(CodetoreumEvent):
     """Emitted when a comment is added to a code review."""
 
-    def __init__(
-        self,
-        type: str = "review.comment_added",
-        timestamp: str = "",
-        source: str = "",
-        correlation_id: Optional[str] = None,
-        event_id: Optional[str] = None,
-        review_id: str = "",
-        work_item_id: Optional[str] = None,
-        project_id: str = "",
-        comment: Optional[Comment] = None,
-    ):
-        super().__init__(
-            type=type,
-            timestamp=timestamp,
-            source=source,
-            correlation_id=correlation_id,
-            event_id=event_id or str(uuid4()),
-        )
-        self.review_id = review_id
-        self.work_item_id = work_item_id
-        self.project_id = project_id
-        self.comment = comment or Comment("", "", "", "")
-        self._validate()
+    review_id: str = ""
+    work_item_id: Optional[str] = None
+    project_id: str = ""
+    comment: Optional[Comment] = None
 
-    def _validate(self) -> None:
-        """Validate event fields."""
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
         if not self.review_id:
             raise ValueError("review_id is required")
         if not self.project_id:
             raise ValueError("project_id is required")
+        # Ensure comment is initialized if None
+        if self.comment is None:
+            object.__setattr__(self, "comment", Comment("", "", "", ""))
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -149,7 +115,7 @@ class ReviewCommentAddedEvent(CodetoreumEvent):
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
-            event_id=data.get("event_id"),
+            event_id=data.get("event_id") or str(uuid4()),
             review_id=data.get("review_id", ""),
             work_item_id=data.get("work_item_id"),
             project_id=data.get("project_id", ""),
