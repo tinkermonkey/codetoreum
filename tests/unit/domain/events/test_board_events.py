@@ -334,15 +334,10 @@ class TestBoardReconciledEvent:
 
 
 class TestWorkItemColumnChangedEventImmutability:
-    """Test immutability of WorkItemColumnChangedEvent."""
+    """Test immutability of WorkItemColumnChangedEvent (frozen dataclass)."""
 
-    def test_work_item_column_changed_event_immutability(self):
-        """Test that WorkItemColumnChangedEvent attributes cannot be modified.
-
-        NOTE: This test currently documents expected behavior.
-        When events are converted to frozen dataclasses, this test will
-        verify that the frozen=True constraint is properly enforced.
-        """
+    def test_work_item_column_changed_event_is_frozen(self):
+        """Test that WorkItemColumnChangedEvent is immutable (frozen dataclass)."""
         event = WorkItemColumnChangedEvent(
             type="workitem.column_changed",
             timestamp=now_iso(),
@@ -357,27 +352,25 @@ class TestWorkItemColumnChangedEventImmutability:
         # Verify the event is properly created
         assert event.work_item_id == "123"
         assert event.from_column == "Backlog"
+        assert event.to_column == "In Progress"
 
-        # When frozen dataclasses are implemented, these assertions
-        # will test that modification raises FrozenInstanceError
-        # For now, we just verify the event values are as expected
-        original_id = event.work_item_id
-        original_column = event.from_column
+        # WorkItemColumnChangedEvent is a frozen dataclass, so attempting to modify
+        # any attribute should raise FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
+            event.work_item_id = "456"  # type: ignore
 
-        # Verify values haven't changed
-        assert event.work_item_id == original_id
-        assert event.from_column == original_column
+        with pytest.raises(FrozenInstanceError):
+            event.from_column = "Done"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.to_column = "Review"  # type: ignore
 
 
 class TestBoardReconciledEventImmutability:
-    """Test immutability of BoardReconciledEvent."""
+    """Test immutability of BoardReconciledEvent (frozen dataclass)."""
 
-    def test_board_reconciled_event_columns_immutable(self):
-        """Test that BoardReconciledEvent column lists are properly handled.
-
-        When events are converted to frozen dataclasses with tuple conversion,
-        this test verifies that columns_added and columns_removed are tuples.
-        """
+    def test_board_reconciled_event_is_frozen(self):
+        """Test that BoardReconciledEvent is immutable (frozen dataclass)."""
         event = BoardReconciledEvent(
             type="board.reconciled",
             timestamp=now_iso(),
@@ -388,14 +381,39 @@ class TestBoardReconciledEventImmutability:
             columns_removed=["Old Column"],
         )
 
-        # Verify lists are stored as provided
-        assert event.columns_added == ["New Column"]
-        assert event.columns_removed == ["Old Column"]
+        # Verify the event is properly created
+        assert event.board_id == "board-1"
+        assert event.project_id == "proj-1"
 
-        # When frozen dataclasses are implemented, verify tuple conversion
-        # For now, document that these should become immutable tuples
-        assert isinstance(event.columns_added, (list, tuple))
-        assert isinstance(event.columns_removed, (list, tuple))
+        # BoardReconciledEvent is a frozen dataclass, so attempting to modify
+        # any attribute should raise FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
+            event.board_id = "board-2"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.project_id = "proj-2"  # type: ignore
+
+    def test_board_reconciled_event_columns_immutable(self):
+        """Test that BoardReconciledEvent column tuples are immutable."""
+        event = BoardReconciledEvent(
+            type="board.reconciled",
+            timestamp=now_iso(),
+            source="github",
+            project_id="proj-1",
+            board_id="board-1",
+            columns_added=["New Column"],
+            columns_removed=["Old Column"],
+        )
+
+        # Verify columns are stored as tuples (immutable)
+        assert isinstance(event.columns_added, tuple)
+        assert isinstance(event.columns_removed, tuple)
+        assert event.columns_added == ("New Column",)
+        assert event.columns_removed == ("Old Column",)
+
+        # Attempt to modify tuple should fail (tuples are immutable)
+        with pytest.raises(TypeError):
+            event.columns_added[0] = "Modified"  # type: ignore
 
     def test_board_reconciled_event_base_attributes(self):
         """Test that base event attributes are preserved."""

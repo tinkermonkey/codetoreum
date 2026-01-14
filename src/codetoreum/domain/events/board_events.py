@@ -110,12 +110,17 @@ class BoardReconciledEvent(CodetoreumEvent):
     items_moved: int = 0
 
     def __post_init__(self) -> None:
-        """Validate event after initialization."""
+        """Validate event after initialization and convert lists to tuples."""
         super().__post_init__()
         if not self.project_id:
             raise ValueError("project_id is required")
         if not self.board_id:
             raise ValueError("board_id is required")
+        # Convert lists to tuples for immutability
+        if isinstance(self.columns_added, list):
+            object.__setattr__(self, "columns_added", tuple(self.columns_added))
+        if isinstance(self.columns_removed, list):
+            object.__setattr__(self, "columns_removed", tuple(self.columns_removed))
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""

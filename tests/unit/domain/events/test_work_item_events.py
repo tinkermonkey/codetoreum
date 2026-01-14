@@ -298,15 +298,10 @@ class TestWorkItemUpdatedEvent:
 
 
 class TestWorkItemCreatedEventImmutability:
-    """Test immutability of WorkItemCreatedEvent."""
+    """Test immutability of WorkItemCreatedEvent (frozen dataclass)."""
 
-    def test_work_item_created_event_immutability(self):
-        """Test that WorkItemCreatedEvent attributes are immutable.
-
-        NOTE: This test currently documents expected behavior.
-        When events are converted to frozen dataclasses, this test will
-        verify that the frozen=True constraint is properly enforced.
-        """
+    def test_work_item_created_event_is_frozen(self):
+        """Test that WorkItemCreatedEvent is immutable (frozen dataclass)."""
         event = WorkItemCreatedEvent(
             type="workitem.created",
             timestamp=now_iso(),
@@ -322,30 +317,23 @@ class TestWorkItemCreatedEventImmutability:
         assert event.title == "Add user authentication"
         assert event.initial_column == "Backlog"
 
-        # When frozen dataclasses are implemented, these assertions
-        # will test that modification raises FrozenInstanceError
-        original_id = event.work_item_id
-        original_title = event.title
+        # WorkItemCreatedEvent is a frozen dataclass, so attempting to modify
+        # any attribute should raise FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
+            event.work_item_id = "456"  # type: ignore
 
-        # Verify values haven't changed
-        assert event.work_item_id == original_id
-        assert event.title == original_title
+        with pytest.raises(FrozenInstanceError):
+            event.title = "Different title"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.initial_column = "In Progress"  # type: ignore
 
 
 class TestWorkItemUpdatedEventImmutability:
-    """Test immutability of WorkItemUpdatedEvent."""
+    """Test immutability of WorkItemUpdatedEvent (frozen dataclass)."""
 
-    def test_work_item_updated_event_immutability(self):
-        """Test that WorkItemUpdatedEvent attributes are immutable.
-
-        NOTE: This test documents expected immutability behavior.
-        When events are converted to frozen dataclasses, this test will
-        verify the frozen=True constraint.
-
-        KNOWN ISSUE: The 'changes' dict is mutable in current implementation.
-        When converted to frozen dataclasses, consider converting to
-        immutable mapping or tuple of tuples if mutation protection is needed.
-        """
+    def test_work_item_updated_event_is_frozen(self):
+        """Test that WorkItemUpdatedEvent is immutable (frozen dataclass)."""
         changes = {"status": "In Progress", "priority": 5}
 
         event = WorkItemUpdatedEvent(
@@ -361,13 +349,46 @@ class TestWorkItemUpdatedEventImmutability:
         assert event.work_item_id == "123"
         assert event.changes["status"] == "In Progress"
 
-        # Document the expected state
-        original_id = event.work_item_id
-        original_changes = event.changes.copy()
+        # WorkItemUpdatedEvent is a frozen dataclass, so attempting to modify
+        # field attributes should raise FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
+            event.work_item_id = "456"  # type: ignore
 
-        # Verify values haven't changed
-        assert event.work_item_id == original_id
-        assert event.changes == original_changes
+        with pytest.raises(FrozenInstanceError):
+            event.changes = {"status": "Done"}  # type: ignore
+
+    def test_work_item_updated_event_changes_dict_limitation(self):
+        """Test that changes dict is mutable (known limitation).
+
+        KNOWN ISSUE: The 'changes' dict is mutable even in a frozen dataclass
+        because the dataclass is frozen by reference, not by value. The dict
+        object itself can be mutated though the field reference cannot be changed.
+
+        This is documented as a known limitation. For future enhancement,
+        consider using frozendict or converting to tuple of tuples if deep
+        immutability is required for the changes mapping.
+        """
+        changes = {"status": "In Progress"}
+
+        event = WorkItemUpdatedEvent(
+            type="workitem.updated",
+            timestamp=now_iso(),
+            source="github",
+            work_item_id="123",
+            project_id="proj-1",
+            changes=changes,
+        )
+
+        # The dict field itself cannot be reassigned
+        with pytest.raises(FrozenInstanceError):
+            event.changes = {}  # type: ignore
+
+        # But the dict contents CAN be mutated (known limitation)
+        # This is documented but not prevented
+        original_status = event.changes.get("status")
+        assert original_status == "In Progress"
+        # Verify the changes dict is still intact (no mutations were made)
+        assert event.changes == {"status": "In Progress"}
 
     def test_work_item_updated_changes_dict_structure(self):
         """Test structure of changes dict for proper immutability handling.

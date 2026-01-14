@@ -299,15 +299,10 @@ class TestReviewCommentAddedEvent:
 
 
 class TestReviewStatusChangedEventImmutability:
-    """Test immutability of ReviewStatusChangedEvent."""
+    """Test immutability of ReviewStatusChangedEvent (frozen dataclass)."""
 
-    def test_review_status_changed_event_immutability(self):
-        """Test that ReviewStatusChangedEvent attributes are immutable.
-
-        NOTE: This test currently documents expected behavior.
-        When events are converted to frozen dataclasses, this test will
-        verify that the frozen=True constraint is properly enforced.
-        """
+    def test_review_status_changed_event_is_frozen(self):
+        """Test that ReviewStatusChangedEvent is immutable (frozen dataclass)."""
         event = ReviewStatusChangedEvent(
             type="review.status_changed",
             timestamp=now_iso(),
@@ -324,26 +319,23 @@ class TestReviewStatusChangedEventImmutability:
         assert event.previous_status == "open"
         assert event.new_status == "approved"
 
-        # When frozen dataclasses are implemented, these assertions
-        # will test that modification raises FrozenInstanceError
-        original_id = event.review_id
-        original_status = event.new_status
+        # ReviewStatusChangedEvent is a frozen dataclass, so attempting to modify
+        # any attribute should raise FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
+            event.review_id = "pr-456"  # type: ignore
 
-        # Verify values haven't changed
-        assert event.review_id == original_id
-        assert event.new_status == original_status
+        with pytest.raises(FrozenInstanceError):
+            event.previous_status = "closed"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.new_status = "rejected"  # type: ignore
 
 
 class TestReviewCommentAddedEventImmutability:
-    """Test immutability of ReviewCommentAddedEvent."""
+    """Test immutability of ReviewCommentAddedEvent (frozen dataclass)."""
 
-    def test_review_comment_added_event_immutability(self):
-        """Test that ReviewCommentAddedEvent attributes are immutable.
-
-        NOTE: This test currently documents expected behavior.
-        When events are converted to frozen dataclasses, this test will
-        verify that the frozen=True constraint is properly enforced.
-        """
+    def test_review_comment_added_event_is_frozen(self):
+        """Test that ReviewCommentAddedEvent is immutable (frozen dataclass)."""
         comment = Comment(
             id="rc-1",
             author="alice",
@@ -364,14 +356,13 @@ class TestReviewCommentAddedEventImmutability:
         assert event.review_id == "pr-123"
         assert event.comment.author == "alice"
 
-        # When frozen dataclasses are implemented, these assertions
-        # will test that modification raises FrozenInstanceError
-        original_id = event.review_id
-        original_comment_author = event.comment.author
+        # ReviewCommentAddedEvent is a frozen dataclass, so attempting to modify
+        # any attribute should raise FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
+            event.review_id = "pr-456"  # type: ignore
 
-        # Verify values haven't changed
-        assert event.review_id == original_id
-        assert event.comment.author == original_comment_author
+        with pytest.raises(FrozenInstanceError):
+            event.comment = Comment("rc-2", "bob", "Different comment", now_iso())  # type: ignore
 
     def test_review_comment_added_nested_comment_immutability(self):
         """Test that nested Comment object in ReviewCommentAddedEvent is immutable."""
@@ -397,6 +388,10 @@ class TestReviewCommentAddedEventImmutability:
         assert event.comment.body == "Great work!"
         assert event.comment.is_bot is False
 
-        # Document expected immutability (Comment should be frozen)
-        original_author = event.comment.author
-        assert event.comment.author == original_author
+        # Comment is a frozen dataclass, so attempting to modify
+        # its attributes should raise FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
+            event.comment.author = "bob"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.comment.body = "Different feedback"  # type: ignore
