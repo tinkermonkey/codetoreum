@@ -2,7 +2,7 @@
 
 import pytest
 from datetime import datetime, timezone
-from typing import Generator
+from typing import Dict, Generator, List
 
 from fastapi import FastAPI
 
@@ -24,6 +24,105 @@ from codetoreum.infrastructure.simulation.bootstrap import (
     SimulationPorts,
     SimulationInfrastructure,
 )
+from codetoreum.domain.events import WorkItemColumnChanged
+from codetoreum.ports.output.agent_executor import IAgentExecutor
+
+
+# ====================================================================================
+# Shared Test Utilities (Scenario Tests)
+# ====================================================================================
+
+
+class MockAgentExecutor(IAgentExecutor):
+    """Mock agent executor that tracks executions without actually executing."""
+
+    def __init__(self):
+        """Initialize the mock agent executor."""
+        self._executions: List[Dict] = []
+        self._lock = __import__("threading").Lock()
+
+    async def execute(self, work_item_id: str, agent_id: str) -> None:
+        """Record agent execution.
+
+        Args:
+            work_item_id: ID of work item being processed
+            agent_id: ID of agent being executed
+        """
+        with self._lock:
+            self._executions.append(
+                {
+                    "work_item_id": work_item_id,
+                    "agent_id": agent_id,
+                    "timestamp": datetime.now(tz=timezone.utc),
+                }
+            )
+
+    def was_triggered(self, agent_id: str, work_item_id: str) -> bool:
+        """Check if agent was triggered for work item.
+
+        Args:
+            agent_id: Agent ID to check
+            work_item_id: Work item ID to check
+
+        Returns:
+            True if agent was triggered for this work item
+        """
+        with self._lock:
+            return any(
+                e["agent_id"] == agent_id and e["work_item_id"] == work_item_id
+                for e in self._executions
+            )
+
+    def get_execution_count(self, agent_id: str) -> int:
+        """Get total execution count for an agent.
+
+        Args:
+            agent_id: Agent ID to check
+
+        Returns:
+            Number of times this agent was executed
+        """
+        with self._lock:
+            return sum(1 for e in self._executions if e["agent_id"] == agent_id)
+
+    def clear(self) -> None:
+        """Clear execution history."""
+        with self._lock:
+            self._executions.clear()
+
+
+def create_column_changed_event(
+    work_item_id: str,
+    project_id: str,
+    board_id: str,
+    from_column: str,
+    to_column: str,
+    moved_by: str = "human",
+) -> WorkItemColumnChanged:
+    """Helper to create a column changed event with proper payload dict.
+
+    Args:
+        work_item_id: ID of the work item
+        project_id: ID of the project
+        board_id: ID of the board
+        from_column: Source column name
+        to_column: Destination column name
+        moved_by: Who moved the item (default: "human")
+
+    Returns:
+        WorkItemColumnChanged event with proper payload
+    """
+    return WorkItemColumnChanged(
+        aggregate_id=work_item_id,
+        payload={
+            "work_item_id": work_item_id,
+            "project_id": project_id,
+            "board_id": board_id,
+            "from_column": from_column,
+            "to_column": to_column,
+            "moved_by": moved_by,
+        },
+    )
 
 
 @pytest.fixture

@@ -260,6 +260,7 @@ class SimulationApplicationBootstrap:
         Clean up all resources.
 
         Performs cleanup in reverse order:
+        - Stop clock auto-advance (if running)
         - Stop event bus
         - Clear adapters
         - Reset state
@@ -269,6 +270,10 @@ class SimulationApplicationBootstrap:
 
         try:
             logger.info("Tearing down simulation bootstrap...")
+
+            # Stop clock auto-advance if it's running
+            if self.infrastructure and self.infrastructure.clock:
+                await self.infrastructure.clock.stop_auto_advance()
 
             # Clean up resources
             if self.infrastructure and self.infrastructure.event_bus:

@@ -165,6 +165,11 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     print("Shutting down Codetoreum API Server...")
+
+    # Close WebSocket adapter and wait for pending background tasks
+    if hasattr(app.state, "websocket_adapter"):
+        await app.state.websocket_adapter.close()
+
     # TODO: Flush pending telemetry data to Signoz before shutdown
 
 
@@ -354,6 +359,7 @@ def create_app(
         config=websocket_config,
         auth_manager=auth_manager if not disable_auth else None,
     )
+    app.state.websocket_adapter = websocket_adapter
 
     # Register WebSocket adapter with event bus for real-time streaming
     # Subscribe to all events and broadcast to connected WebSocket clients

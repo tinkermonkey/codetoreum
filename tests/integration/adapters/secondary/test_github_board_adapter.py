@@ -35,8 +35,9 @@ from codetoreum.ports.exceptions import (
     ValidationError,
 )
 from codetoreum.ports.output.board_service import (
+    BoardColumn,
     BoardConfig,
-    Column,
+    MovedByType,
     ProjectBoard,
     ReconciliationResult,
 )
@@ -212,7 +213,10 @@ class TestGetItemsInColumn:
 
         result = await board_adapter.get_items_in_column("board-456", "In Progress")
 
-        assert result == ["2"]
+        assert len(result) == 1
+        assert result[0].work_item_id == "2"
+        assert result[0].column_name == "In Progress"
+        assert result[0].position == 0
 
     @pytest.mark.asyncio
     async def test_get_items_in_column_not_found(self, board_adapter, mock_graphql_client, sample_board_response):
@@ -230,7 +234,7 @@ class TestMoveItemToColumn:
     async def test_move_item_to_column_no_context(self, board_adapter):
         """Test move without project/board context."""
         with pytest.raises(ValidationError):
-            await board_adapter.move_item_to_column("item-1", "In Progress")
+            await board_adapter.move_item_to_column("item-1", "In Progress", MovedByType.ORCHESTRATOR)
 
 
 

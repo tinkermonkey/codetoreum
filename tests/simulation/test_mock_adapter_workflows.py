@@ -7,7 +7,7 @@ orchestrator behavior without external service dependencies.
 import pytest
 from typing import List
 
-from codetoreum.adapters.secondary.mock_board_adapter import MockBoardAdapter
+from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
 from codetoreum.adapters.secondary.mock_discussion_adapter import MockDiscussionAdapter
 from codetoreum.adapters.secondary.mock_code_review_adapter import MockCodeReviewAdapter
 from codetoreum.adapters.secondary.in_memory_pipeline_lock_service import (
@@ -20,6 +20,7 @@ from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.domain.events.discussion_events import CommentNeedsResponseEvent
 from codetoreum.domain.events.review_events import ReviewStatusChangedEvent
 from codetoreum.domain.events.lock_events import LockAcquiredEvent, LockReleasedEvent
+from codetoreum.ports.output.board_service import MovedByType
 from codetoreum.ports.output.discussion_adapter import DiscussionMonitoringConfig
 from codetoreum.ports.output.monitoring import MonitoringConfig
 
@@ -33,7 +34,7 @@ class TestBoardWorkflow:
         adapter = MockBoardAdapter()
         adapter.current_project = "demo-project"
         adapter.current_board = "main-board"
-        adapter.add_board("demo-project", "main-board", [
+        adapter.create_board("demo-project", "main-board", "Main Board", [
             "Backlog", "Ready", "In Progress", "In Review", "Done"
         ])
         return adapter
@@ -49,7 +50,7 @@ class TestBoardWorkflow:
         board_adapter.on("workitem.column_changed", events.append)
 
         # Add work item to backlog
-        board_adapter.add_work_item("PROJ-42", "Backlog")
+        board_adapter.add_item_to_column("main-board", "Backlog", "PROJ-42")
 
         # Simulate progression through workflow
         transitions = [
@@ -60,7 +61,7 @@ class TestBoardWorkflow:
         ]
 
         for from_col, to_col in transitions:
-            board_adapter.simulate_column_change("PROJ-42", from_col, to_col)
+            await board_adapter.move_item_to_column("PROJ-42", to_col, MovedByType.HUMAN)
 
         # Verify events
         assert len(events) == 4
@@ -84,12 +85,12 @@ class TestBoardWorkflow:
 
         # Create multiple work items
         for i in range(3):
-            board_adapter.add_work_item(f"PROJ-{i}", "Backlog")
+            board_adapter.add_item_to_column("main-board", "Backlog", f"PROJ-{i}")
 
         # Move them independently
-        board_adapter.simulate_column_change("PROJ-0", "Backlog", "In Progress")
-        board_adapter.simulate_column_change("PROJ-1", "Backlog", "Ready")
-        board_adapter.simulate_column_change("PROJ-2", "Backlog", "In Review")
+        await board_adapter.move_item_to_column("PROJ-0", "In Progress", MovedByType.HUMAN)
+        await board_adapter.move_item_to_column("PROJ-1", "Ready", MovedByType.HUMAN)
+        await board_adapter.move_item_to_column("PROJ-2", "In Review", MovedByType.HUMAN)
 
         assert len(events) == 3
         assert {e.work_item_id for e in events} == {"PROJ-0", "PROJ-1", "PROJ-2"}
@@ -364,7 +365,7 @@ class TestCombinedWorkflow:
         board = MockBoardAdapter()
         board.current_project = "ACME"
         board.current_board = "main"
-        board.add_board("ACME", "main", ["Backlog", "Dev", "Review", "Done"])
+        board.create_board("ACME", "main", "Main Board", ["Backlog", "Dev", "Review", "Done"])
 
         identity = ConfigurableIdentityService()
         discussion = MockDiscussionAdapter(identity)
@@ -384,10 +385,10 @@ class TestCombinedWorkflow:
 
         # Workflow:
         # 1. Item in Backlog
-        board.add_work_item("ACME-1", "Backlog")
+        board.add_item_to_column("main", "Backlog", "ACME-1")
 
         # 2. Move to Dev, acquire lock
-        board.simulate_column_change("ACME-1", "Backlog", "Dev")
+        await board.move_item_to_column("ACME-1", "Dev", MovedByType.ORCHESTRATOR)
         success, _ = await lock.try_acquire_lock("ACME", "main", "ACME-1")
         assert success
 
@@ -404,7 +405,7 @@ class TestCombinedWorkflow:
         review.add_review("PR-1", "ACME-1")
 
         # 5. Move to Review
-        board.simulate_column_change("ACME-1", "Dev", "Review")
+        await board.move_item_to_column("ACME-1", "Review", MovedByType.ORCHESTRATOR)
 
         # 6. Simulate review feedback
         discussion.simulate_comment(
@@ -418,7 +419,7 @@ class TestCombinedWorkflow:
         review.simulate_approval("PR-1", "reviewer")
 
         # 9. Move to Done
-        board.simulate_column_change("ACME-1", "Review", "Done")
+        await board.move_item_to_column("ACME-1", "Done", MovedByType.ORCHESTRATOR)
 
         # 10. Release lock
         await lock.release_lock("ACME", "main", "ACME-1")

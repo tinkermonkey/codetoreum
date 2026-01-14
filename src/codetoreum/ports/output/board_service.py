@@ -10,14 +10,23 @@ abstractions over GitHub Projects v2, Trello, JIRA boards, etc.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from enum import Enum
+from typing import List, Optional
+from datetime import datetime
 
 from .event_emitter import IEventEmitter
 from .monitoring import IMonitoredService, MonitoringConfig
 
 
+class MovedByType(Enum):
+    """Type of entity that moved a work item between columns."""
+
+    HUMAN = "human"
+    ORCHESTRATOR = "orchestrator"
+
+
 @dataclass
-class Column:
+class BoardColumn:
     """Represents a column (lane) on a project board.
 
     Attributes:
@@ -34,6 +43,21 @@ class Column:
 
 
 @dataclass
+class WorkItemPosition:
+    """Position of a work item within a board column.
+
+    Attributes:
+        work_item_id: Unique identifier of the work item
+        column_name: Name of the column containing the item
+        position: Position within the column (0 = top/first)
+    """
+
+    work_item_id: str
+    column_name: str
+    position: int
+
+
+@dataclass
 class ProjectBoard:
     """Represents a project board with all columns and structure.
 
@@ -47,7 +71,26 @@ class ProjectBoard:
     id: str
     name: str
     project_id: str
-    columns: List[Column]
+    columns: List[BoardColumn]
+
+
+@dataclass
+class ColumnMovementResult:
+    """Result of moving a work item between columns.
+
+    Attributes:
+        work_item_id: ID of the work item that was moved
+        from_column: Name of the source column (None if item was not on a board)
+        to_column: Name of the target column
+        moved_by: Type of entity that initiated the move (HUMAN or ORCHESTRATOR)
+        timestamp: ISO format timestamp of when the move occurred
+    """
+
+    work_item_id: str
+    from_column: Optional[str]
+    to_column: str
+    moved_by: MovedByType
+    timestamp: str
 
 
 @dataclass
@@ -58,14 +101,18 @@ class ReconciliationResult:
     to expected configuration (adding missing columns, removing extras, etc.).
 
     Attributes:
-        columns_added: IDs of columns that were created
-        columns_removed: IDs of columns that were deleted
-        items_moved: Number of work items repositioned
+        board_id: ID of the board that was reconciled
+        columns_added: Names of columns that were created
+        columns_removed: Names of columns that were deleted
+        columns_renamed: List of (old_name, new_name) tuples for renamed columns
+        orphaned_items: Work item IDs that were in deleted columns
     """
 
+    board_id: str
     columns_added: List[str]
     columns_removed: List[str]
-    items_moved: int
+    columns_renamed: List[tuple[str, str]]
+    orphaned_items: List[str]
 
 
 @dataclass
@@ -118,10 +165,13 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
             columns = await svc.get_columns("board-456")
 
             # Move item between columns
-            await svc.move_item_to_column("item-789", "In Progress")
+            result = await svc.move_item_to_column(
+                "item-789", "In Progress", MovedByType.ORCHESTRATOR
+            )
 
             # Reconcile board
-            result = await svc.reconcile_board(
+            reconcile_result = await svc.reconcile_board(
+                "board-456",
                 BoardConfig(
                     board_id="board-456",
                     expected_columns=["Backlog", "In Progress", "Review", "Done"],
@@ -153,7 +203,7 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
         pass
 
     @abstractmethod
-    async def get_columns(self, board_id: str) -> List[Column]:
+    async def get_columns(self, board_id: str) -> List[BoardColumn]:
         """Get all columns for a board.
 
         Returns columns in order of their position on the board.
@@ -162,7 +212,7 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
             board_id: Board to query
 
         Returns:
-            List[Column]: Columns ordered by position (0 = first)
+            List[BoardColumn]: Columns ordered by position (0 = first)
 
         Raises:
             ResourceNotFoundError: Board doesn't exist
@@ -173,15 +223,15 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
     @abstractmethod
     async def get_items_in_column(
         self, board_id: str, column_name: str
-    ) -> List[str]:
-        """Get all work item IDs in a specific column.
+    ) -> List[WorkItemPosition]:
+        """Get all work items in a specific column ordered by position.
 
         Args:
             board_id: Board to query
             column_name: Column name (e.g., "In Progress")
 
         Returns:
-            List[str]: Work item IDs in the column
+            List[WorkItemPosition]: Work items in the column ordered by position (0 = first)
 
         Raises:
             ResourceNotFoundError: Board or column doesn't exist
@@ -190,7 +240,7 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
         pass
 
     @abstractmethod
-    async def get_item_position(self, work_item_id: str) -> Tuple[str, int]:
+    async def get_item_position(self, work_item_id: str) -> WorkItemPosition:
         """Get current column position of a work item.
 
         Returns which column the item is in and its position within that column.
@@ -199,7 +249,7 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
             work_item_id: Item to locate
 
         Returns:
-            Tuple[str, int]: (column_name, position_in_column)
+            WorkItemPosition: Current position details
 
         Raises:
             ResourceNotFoundError: Work item not found on any board
@@ -211,8 +261,8 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
 
     @abstractmethod
     async def move_item_to_column(
-        self, work_item_id: str, target_column: str
-    ) -> None:
+        self, work_item_id: str, target_column: str, moved_by: MovedByType
+    ) -> ColumnMovementResult:
         """Move work item to target column.
 
         Moves the item to the specified column on its board.
@@ -221,6 +271,10 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
         Args:
             work_item_id: Item to move
             target_column: Target column name (e.g., "In Progress")
+            moved_by: Type of entity initiating the move (HUMAN or ORCHESTRATOR)
+
+        Returns:
+            ColumnMovementResult: Details of the movement operation
 
         Raises:
             ResourceNotFoundError: Work item or target column doesn't exist
@@ -233,7 +287,9 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
         pass
 
     @abstractmethod
-    async def reconcile_board(self, config: BoardConfig) -> ReconciliationResult:
+    async def reconcile_board(
+        self, board_id: str, config: "BoardConfig"
+    ) -> ReconciliationResult:
         """Reconcile board structure with expected configuration.
 
         Compares actual board structure to expected columns. If differences found:
@@ -244,6 +300,7 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
         Used to ensure boards stay in expected state as they evolve.
 
         Args:
+            board_id: Board to reconcile
             config: Reconciliation configuration
 
         Returns:

@@ -1536,3 +1536,52 @@ class SubAgentUnmounted(DomainEvent):
             payload=payload,
             **kwargs
         )
+
+
+# =============================================================================
+# Board Events
+# =============================================================================
+
+
+class WorkItemColumnChanged(DomainEvent):
+    """Emitted when work item moves between board columns."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize WorkItemColumnChanged event.
+
+        Required payload fields:
+        - work_item_id: str
+        - from_column: Optional[str]
+        - to_column: str
+        - moved_by: str (HUMAN or ORCHESTRATOR)
+        - board_id: str
+        - project_id: str
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="WorkItem",
+            payload=payload,
+            **kwargs
+        )
+
+
+class BoardReconciled(DomainEvent):
+    """Emitted after board structure synchronized with config."""
+
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+        """
+        Initialize BoardReconciled event.
+
+        Required payload fields:
+        - board_id: str
+        - columns_added: List[str]
+        - columns_removed: List[str]
+        - orphaned_items: List[str]
+        """
+        super().__init__(
+            aggregate_id=aggregate_id,
+            aggregate_type="Board",
+            payload=payload,
+            **kwargs
+        )

@@ -9,13 +9,21 @@ import functools
 import logging
 from typing import Any, Callable, Dict, Optional
 
-from opentelemetry import trace
-from opentelemetry.trace import Status, StatusCode
+# Try to import OpenTelemetry - it's optional
+try:
+    from opentelemetry import trace
+    from opentelemetry.trace import Status, StatusCode
+
+    OPENTELEMETRY_AVAILABLE = True
+    # Get tracer for instrumentation
+    _tracer = trace.get_tracer(__name__)
+except ImportError:
+    OPENTELEMETRY_AVAILABLE = False
+    _tracer = None
+    Status = None  # type: ignore
+    StatusCode = None  # type: ignore
 
 logger = logging.getLogger(__name__)
-
-# Get tracer for instrumentation
-_tracer = trace.get_tracer(__name__)
 
 
 def instrument_function(
@@ -43,6 +51,11 @@ def instrument_function(
         def create_work_item(self, title: str, description: str) -> WorkItem:
             ...
     """
+    # If OpenTelemetry is not available, return a no-op decorator
+    if not OPENTELEMETRY_AVAILABLE:
+        def decorator(func: Callable) -> Callable:
+            return func
+        return decorator
 
     def decorator(func: Callable) -> Callable:
         span_name = name or f"{func.__module__}.{func.__qualname__}"
@@ -105,6 +118,11 @@ def instrument_async_function(
         async def execute_agent(self, agent_id: str) -> ExecutionResult:
             ...
     """
+    # If OpenTelemetry is not available, return a no-op decorator
+    if not OPENTELEMETRY_AVAILABLE:
+        def decorator(func: Callable) -> Callable:
+            return func
+        return decorator
 
     def decorator(func: Callable) -> Callable:
         span_name = name or f"{func.__module__}.{func.__qualname__}"
@@ -160,6 +178,11 @@ def instrument_class(attributes: Optional[Dict[str, Any]] = None) -> Callable:
             def update_status(self, status: str):
                 ...
     """
+    # If OpenTelemetry is not available, return a no-op decorator
+    if not OPENTELEMETRY_AVAILABLE:
+        def decorator(cls):
+            return cls
+        return decorator
 
     def decorator(cls):
         for attr_name in dir(cls):
@@ -202,6 +225,10 @@ def add_span_attributes(**attributes: Any) -> None:
                 priority="high"
             )
     """
+    # If OpenTelemetry is not available, this is a no-op
+    if not OPENTELEMETRY_AVAILABLE:
+        return
+
     span = trace.get_current_span()
     if span.is_recording():
         for key, value in attributes.items():
@@ -224,6 +251,10 @@ def add_span_event(name: str, attributes: Optional[Dict[str, Any]] = None) -> No
             # ... do work ...
             add_span_event("workflow_completed", {"stages": 5})
     """
+    # If OpenTelemetry is not available, this is a no-op
+    if not OPENTELEMETRY_AVAILABLE:
+        return
+
     span = trace.get_current_span()
     if span.is_recording():
         span.add_event(name, attributes=attributes or {})

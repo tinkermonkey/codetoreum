@@ -24,9 +24,11 @@ from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.board_service import (
     IBoardService,
     ProjectBoard,
-    Column,
+    BoardColumn,
     ReconciliationResult,
     BoardConfig,
+    WorkItemPosition,
+    MovedByType,
 )
 from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
 from codetoreum.ports.output.monitoring import MonitoringConfig, MonitoringStatus
@@ -612,7 +614,7 @@ class ResilientBoardServiceDecorator(IBoardService):
             rate_limit_cost=1
         )
 
-    async def get_columns(self, board_id: str) -> List[Column]:
+    async def get_columns(self, board_id: str) -> List[BoardColumn]:
         """Get columns with resilience (1 GraphQL credit)."""
         return await self._execute_resilient(
             operation=lambda: self._wrapped.get_columns(board_id),
@@ -622,7 +624,7 @@ class ResilientBoardServiceDecorator(IBoardService):
 
     async def get_items_in_column(
         self, board_id: str, column_name: str
-    ) -> List[str]:
+    ):
         """Get items in column with resilience (1 GraphQL credit)."""
         return await self._execute_resilient(
             operation=lambda: self._wrapped.get_items_in_column(board_id, column_name),
@@ -630,7 +632,7 @@ class ResilientBoardServiceDecorator(IBoardService):
             rate_limit_cost=1
         )
 
-    async def get_item_position(self, work_item_id: str) -> Tuple[str, int]:
+    async def get_item_position(self, work_item_id: str) -> WorkItemPosition:
         """Get item position with resilience."""
         return await self._execute_resilient(
             operation=lambda: self._wrapped.get_item_position(work_item_id),
@@ -641,19 +643,19 @@ class ResilientBoardServiceDecorator(IBoardService):
     # Command Operations
 
     async def move_item_to_column(
-        self, work_item_id: str, target_column: str
-    ) -> None:
+        self, work_item_id: str, target_column: str, moved_by: MovedByType
+    ):
         """Move item with resilience (1 GraphQL mutation)."""
         return await self._execute_resilient(
-            operation=lambda: self._wrapped.move_item_to_column(work_item_id, target_column),
+            operation=lambda: self._wrapped.move_item_to_column(work_item_id, target_column, moved_by),
             operation_name="move_item_to_column",
             rate_limit_cost=1
         )
 
-    async def reconcile_board(self, config: BoardConfig) -> ReconciliationResult:
+    async def reconcile_board(self, board_id: str, config: BoardConfig) -> ReconciliationResult:
         """Reconcile board with resilience."""
         return await self._execute_resilient(
-            operation=lambda: self._wrapped.reconcile_board(config),
+            operation=lambda: self._wrapped.reconcile_board(board_id, config),
             operation_name="reconcile_board",
             rate_limit_cost=5  # May create multiple columns
         )

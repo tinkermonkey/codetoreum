@@ -1,11 +1,15 @@
 """Output port interfaces."""
 
+from codetoreum.ports.output.agent_executor import IAgentExecutor
 from codetoreum.ports.output.board_service import (
+    BoardColumn,
     BoardConfig,
-    Column,
+    ColumnMovementResult,
     IBoardService,
+    MovedByType,
     ProjectBoard,
     ReconciliationResult,
+    WorkItemPosition,
 )
 from codetoreum.ports.output.code_review_service import (
     Approval,
@@ -81,14 +85,20 @@ from codetoreum.ports.output.version_control_service import (
     Repository,
 )
 from codetoreum.ports.output.work_item_service import IWorkItemService
+from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 __all__ = [
+    # Agent Executor
+    "IAgentExecutor",
     # Board Service
     "IBoardService",
+    "BoardColumn",
     "BoardConfig",
-    "Column",
+    "ColumnMovementResult",
+    "MovedByType",
     "ProjectBoard",
     "ReconciliationResult",
+    "WorkItemPosition",
     # Code Review Service
     "ICodeReviewService",
     "Approval",
@@ -161,4 +171,6 @@ __all__ = [
     "Repository",
     # Work Item Service
     "IWorkItemService",
+    # Workflow Config Service
+    "IWorkflowConfigService",
 ]

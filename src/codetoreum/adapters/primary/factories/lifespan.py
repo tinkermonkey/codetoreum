@@ -49,4 +49,8 @@ def create_lifespan(app: FastAPI):
         # Shutdown
         print("Shutting down Codetoreum API Server...")
 
+        # Close WebSocket adapter and wait for pending background tasks
+        if hasattr(app.state, "websocket_adapter"):
+            await app.state.websocket_adapter.close()
+
     return lifespan

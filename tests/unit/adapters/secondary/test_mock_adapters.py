@@ -11,7 +11,7 @@ import pytest
 import re
 from datetime import datetime
 
-from codetoreum.adapters.secondary.mock_board_adapter import MockBoardAdapter
+from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
 from codetoreum.adapters.secondary.mock_discussion_adapter import MockDiscussionAdapter
 from codetoreum.adapters.secondary.mock_code_review_adapter import MockCodeReviewAdapter
 from codetoreum.adapters.secondary.in_memory_pipeline_lock_service import (
@@ -44,7 +44,7 @@ class TestMockBoardAdapter:
         adapter = MockBoardAdapter()
         adapter.current_project = "proj-1"
         adapter.current_board = "board-1"
-        adapter.add_board("proj-1", "board-1", ["Backlog", "In Progress", "Done"])
+        adapter.create_board("proj-1", "board-1", "Test Board", ["Backlog", "In Progress", "Done"])
         return adapter
 
     async def test_get_board(self, adapter):
@@ -64,18 +64,20 @@ class TestMockBoardAdapter:
 
     async def test_add_work_item(self, adapter):
         """Test adding work item to board."""
-        adapter.add_work_item("item-1", "Backlog")
-        column_name, position = await adapter.get_item_position("item-1")
-        assert column_name == "Backlog"
-        assert position == 0
+        adapter.add_item_to_column("board-1", "Backlog", "item-1")
+        item_pos = await adapter.get_item_position("item-1")
+        assert item_pos.column_name == "Backlog"
+        assert item_pos.position == 0
 
     async def test_simulate_column_change_emits_event(self, adapter):
-        """Test simulate_column_change emits correct event."""
-        adapter.add_work_item("item-1", "Backlog")
+        """Test move_item_to_column emits correct event."""
+        from codetoreum.ports.output.board_service import MovedByType
+
+        adapter.add_item_to_column("board-1", "Backlog", "item-1")
         events = []
         adapter.on("workitem.column_changed", events.append)
 
-        adapter.simulate_column_change("item-1", "Backlog", "In Progress")
+        await adapter.move_item_to_column("item-1", "In Progress", MovedByType.HUMAN)
 
         assert len(events) == 1
         event = events[0]
@@ -87,25 +89,27 @@ class TestMockBoardAdapter:
         assert event.source == "mock"
 
     async def test_simulate_column_change_by_orchestrator(self, adapter):
-        """Test simulate_column_change with orchestrator as mover."""
-        adapter.add_work_item("item-1", "Backlog")
+        """Test move_item_to_column with orchestrator as mover."""
+        from codetoreum.ports.output.board_service import MovedByType
+
+        adapter.add_item_to_column("board-1", "Backlog", "item-1")
         events = []
         adapter.on("workitem.column_changed", events.append)
 
-        adapter.simulate_column_change(
-            "item-1", "Backlog", "In Progress", moved_by="orchestrator"
-        )
+        await adapter.move_item_to_column("item-1", "In Progress", MovedByType.ORCHESTRATOR)
 
         assert len(events) == 1
         assert events[0].moved_by == "orchestrator"
 
     async def test_move_item_to_column_emits_event(self, adapter):
         """Test move_item_to_column emits event."""
-        adapter.add_work_item("item-1", "Backlog")
+        from codetoreum.ports.output.board_service import MovedByType
+
+        adapter.add_item_to_column("board-1", "Backlog", "item-1")
         events = []
         adapter.on("workitem.column_changed", events.append)
 
-        await adapter.move_item_to_column("item-1", "In Progress")
+        await adapter.move_item_to_column("item-1", "In Progress", MovedByType.ORCHESTRATOR)
 
         assert len(events) == 1
         assert events[0].to_column == "In Progress"
@@ -120,7 +124,7 @@ class TestMockBoardAdapter:
             expected_columns=["Backlog", "In Progress", "Review", "Done"],
             auto_create_missing=True
         )
-        result = await adapter.reconcile_board(config)
+        result = await adapter.reconcile_board("board-1", config)
 
         assert len(events) == 1
         assert isinstance(events[0], BoardReconciledEvent)
@@ -129,11 +133,13 @@ class TestMockBoardAdapter:
 
     async def test_event_timestamp_is_iso_format(self, adapter):
         """Test that emitted events have valid ISO 8601 timestamps."""
-        adapter.add_work_item("item-1", "Backlog")
+        from codetoreum.ports.output.board_service import MovedByType
+
+        adapter.add_item_to_column("board-1", "Backlog", "item-1")
         events = []
         adapter.on("workitem.column_changed", events.append)
 
-        adapter.simulate_column_change("item-1", "Backlog", "Done")
+        await adapter.move_item_to_column("item-1", "Done", MovedByType.HUMAN)
 
         event = events[0]
         # Should not raise ValueError

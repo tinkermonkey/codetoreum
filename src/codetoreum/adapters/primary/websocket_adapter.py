@@ -285,6 +285,7 @@ class ConnectionManager:
         self.config = config or WebSocketConfig()
         self.redis_pubsub = redis_pubsub
         self.redis_client = redis_client
+        self._background_tasks: set[asyncio.Task] = set()
 
         # Active connections: connection_id -> ConnectionState
         self.connections: Dict[str, ConnectionState] = {}
@@ -472,6 +473,34 @@ class ConnectionManager:
         except Exception as e:
             logger.error(f"Failed to remove persisted connection state for {connection_id}: {e}")
 
+    def _create_tracked_task(self, coro):
+        """
+        Create a background task and track it for cleanup.
+
+        Args:
+            coro: Coroutine to run in background
+
+        Returns:
+            The created asyncio.Task
+        """
+        task = asyncio.create_task(coro)
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+        return task
+
+    async def close(self):
+        """
+        Close the connection manager and wait for all background tasks to complete.
+        """
+        # Cancel all pending background tasks
+        for task in list(self._background_tasks):
+            if not task.done():
+                task.cancel()
+
+        # Wait for all tasks to finish (they'll get CancelledError)
+        if self._background_tasks:
+            await asyncio.gather(*self._background_tasks, return_exceptions=True)
+
     def disconnect(self, connection_id: str):
         """
         Remove a WebSocket connection and clean up all associated resources.
@@ -544,7 +573,7 @@ class ConnectionManager:
 
         # Remove persisted state
         if self.config.enable_connection_persistence and self.redis_client:
-            asyncio.create_task(self._remove_persisted_connection_state(connection_id))
+            self._create_tracked_task(self._remove_persisted_connection_state(connection_id))
 
     def subscribe(self, connection_id: str, filter: EventFilter):
         """
@@ -1009,6 +1038,7 @@ class WebSocketAdapter:
         self.auth_manager = auth_manager
         self._connection_counter = 0
         self._heartbeat_task: Optional[asyncio.Task] = None
+        self._background_tasks: set[asyncio.Task] = set()
 
     def get_next_connection_id(self) -> str:
         """
@@ -1058,149 +1088,154 @@ class WebSocketAdapter:
                 self._heartbeat_monitor(connection_id)
             )
 
-            # Message handling loop
-            while True:
-                # Receive message from client
-                data = await websocket.receive_text()
+            try:
+                # Message handling loop
+                while True:
+                    # Receive message from client
+                    data = await websocket.receive_text()
 
-                # Validate message size (prevent memory exhaustion)
-                MAX_MESSAGE_SIZE = 10_000  # 10KB max message size
-                if len(data) > MAX_MESSAGE_SIZE:
-                    logger.warning(f"Message too large from connection {connection_id}: {len(data)} bytes")
-                    await self.manager.send_personal_message(
-                        ErrorMessage(
-                            code="message_too_large",
-                            message=f"Message size {len(data)} bytes exceeds maximum {MAX_MESSAGE_SIZE} bytes",
-                            timestamp=datetime.utcnow(),
-                        ).model_dump(mode="json"),
-                        connection_id,
-                    )
-                    continue
-
-                message = json.loads(data)
-
-                # Validate message structure
-                if not isinstance(message, dict):
-                    logger.warning(f"Invalid message structure from connection {connection_id}: not a JSON object")
-                    await self.manager.send_personal_message(
-                        ErrorMessage(
-                            code="invalid_message",
-                            message="Message must be a JSON object",
-                            timestamp=datetime.utcnow(),
-                        ).model_dump(mode="json"),
-                        connection_id,
-                    )
-                    continue
-
-                if "type" not in message:
-                    logger.warning(f"Message missing 'type' field from connection {connection_id}")
-                    await self.manager.send_personal_message(
-                        ErrorMessage(
-                            code="invalid_message",
-                            message="Message must contain 'type' field",
-                            timestamp=datetime.utcnow(),
-                        ).model_dump(mode="json"),
-                        connection_id,
-                    )
-                    continue
-
-                # Check rate limit
-                if connection_id in self.manager.connections:
-                    conn_state = self.manager.connections[connection_id]
-
-                    # Update last heartbeat timestamp
-                    conn_state.last_heartbeat = time.time()
-
-                    # Apply rate limiting
-                    if conn_state.rate_limiter and not conn_state.rate_limiter.try_consume():
-                        logger.warning(f"Rate limit exceeded for connection {connection_id}")
+                    # Validate message size (prevent memory exhaustion)
+                    MAX_MESSAGE_SIZE = 10_000  # 10KB max message size
+                    if len(data) > MAX_MESSAGE_SIZE:
+                        logger.warning(f"Message too large from connection {connection_id}: {len(data)} bytes")
                         await self.manager.send_personal_message(
                             ErrorMessage(
-                                code="rate_limit_exceeded",
-                                message="Rate limit exceeded. Slow down message rate.",
+                                code="message_too_large",
+                                message=f"Message size {len(data)} bytes exceeds maximum {MAX_MESSAGE_SIZE} bytes",
                                 timestamp=datetime.utcnow(),
                             ).model_dump(mode="json"),
                             connection_id,
                         )
-                        # Don't disconnect, just skip processing this message
                         continue
 
-                # Handle message based on type
-                message_type = message.get("type")
+                    message = json.loads(data)
 
-                if message_type == "subscribe":
-                    await self._handle_subscribe(connection_id, message)
-                elif message_type == "unsubscribe":
-                    await self._handle_unsubscribe(connection_id, message)
-                elif message_type == "ping":
-                    await self._handle_ping(connection_id)
-                else:
-                    # Unknown message type
+                    # Validate message structure
+                    if not isinstance(message, dict):
+                        logger.warning(f"Invalid message structure from connection {connection_id}: not a JSON object")
+                        await self.manager.send_personal_message(
+                            ErrorMessage(
+                                code="invalid_message",
+                                message="Message must be a JSON object",
+                                timestamp=datetime.utcnow(),
+                            ).model_dump(mode="json"),
+                            connection_id,
+                        )
+                        continue
+
+                    if "type" not in message:
+                        logger.warning(f"Message missing 'type' field from connection {connection_id}")
+                        await self.manager.send_personal_message(
+                            ErrorMessage(
+                                code="invalid_message",
+                                message="Message must contain 'type' field",
+                                timestamp=datetime.utcnow(),
+                            ).model_dump(mode="json"),
+                            connection_id,
+                        )
+                        continue
+
+                    # Check rate limit
+                    if connection_id in self.manager.connections:
+                        conn_state = self.manager.connections[connection_id]
+
+                        # Update last heartbeat timestamp
+                        conn_state.last_heartbeat = time.time()
+
+                        # Apply rate limiting
+                        if conn_state.rate_limiter and not conn_state.rate_limiter.try_consume():
+                            logger.warning(f"Rate limit exceeded for connection {connection_id}")
+                            await self.manager.send_personal_message(
+                                ErrorMessage(
+                                    code="rate_limit_exceeded",
+                                    message="Rate limit exceeded. Slow down message rate.",
+                                    timestamp=datetime.utcnow(),
+                                ).model_dump(mode="json"),
+                                connection_id,
+                            )
+                            # Don't disconnect, just skip processing this message
+                            continue
+
+                    # Handle message based on type
+                    message_type = message.get("type")
+
+                    if message_type == "subscribe":
+                        await self._handle_subscribe(connection_id, message)
+                    elif message_type == "unsubscribe":
+                        await self._handle_unsubscribe(connection_id, message)
+                    elif message_type == "ping":
+                        await self._handle_ping(connection_id)
+                    else:
+                        # Unknown message type
+                        await self.manager.send_personal_message(
+                            ErrorMessage(
+                                code="unknown_message_type",
+                                message=f"Unknown message type: {message_type}",
+                                timestamp=datetime.utcnow(),
+                            ).model_dump(mode="json"),
+                            connection_id,
+                        )
+
+            except WebSocketDisconnect:
+                # Client disconnected
+                logger.info(f"WebSocket client {connection_id} disconnected")
+                self.manager.disconnect(connection_id)
+            except ValueError as e:
+                # Invalid message format or data
+                logger.error(f"ValueError in WebSocket handler for {connection_id}: {e}", exc_info=True)
+                try:
                     await self.manager.send_personal_message(
                         ErrorMessage(
-                            code="unknown_message_type",
-                            message=f"Unknown message type: {message_type}",
+                            code="invalid_message",
+                            message=f"Invalid message: {str(e)}",
                             timestamp=datetime.utcnow(),
                         ).model_dump(mode="json"),
                         connection_id,
                     )
-
-        except WebSocketDisconnect:
-            # Client disconnected
-            logger.info(f"WebSocket client {connection_id} disconnected")
-            self.manager.disconnect(connection_id)
-        except ValueError as e:
-            # Invalid message format or data
-            logger.error(f"ValueError in WebSocket handler for {connection_id}: {e}", exc_info=True)
-            try:
-                await self.manager.send_personal_message(
-                    ErrorMessage(
-                        code="invalid_message",
-                        message=f"Invalid message: {str(e)}",
-                        timestamp=datetime.utcnow(),
-                    ).model_dump(mode="json"),
-                    connection_id,
-                )
-            except Exception:
-                pass
-            finally:
-                self.manager.disconnect(connection_id)
-        except json.JSONDecodeError as e:
-            # JSON parsing error
-            logger.error(f"JSON decode error for {connection_id}: {e}", exc_info=True)
-            try:
-                await self.manager.send_personal_message(
-                    ErrorMessage(
-                        code="json_error",
-                        message=f"Invalid JSON: {str(e)}",
-                        timestamp=datetime.utcnow(),
-                    ).model_dump(mode="json"),
-                    connection_id,
-                )
-            except Exception:
-                pass
-            finally:
-                self.manager.disconnect(connection_id)
-        except Exception as e:
-            # Unexpected error
-            logger.error(f"Unexpected WebSocket error for client {connection_id}: {e}", exc_info=True)
-            try:
-                await self.manager.send_personal_message(
-                    ErrorMessage(
-                        code="internal_error",
-                        message=f"Internal error: {str(e)}",
-                        timestamp=datetime.utcnow(),
-                    ).model_dump(mode="json"),
-                    connection_id,
-                )
-            except Exception:
-                pass
+                except Exception:
+                    pass
+                finally:
+                    self.manager.disconnect(connection_id)
+            except json.JSONDecodeError as e:
+                # JSON parsing error
+                logger.error(f"JSON decode error for {connection_id}: {e}", exc_info=True)
+                try:
+                    await self.manager.send_personal_message(
+                        ErrorMessage(
+                            code="json_error",
+                            message=f"Invalid JSON: {str(e)}",
+                            timestamp=datetime.utcnow(),
+                        ).model_dump(mode="json"),
+                        connection_id,
+                    )
+                except Exception:
+                    pass
+                finally:
+                    self.manager.disconnect(connection_id)
+            except Exception as e:
+                # Unexpected error
+                logger.error(f"Unexpected WebSocket error for client {connection_id}: {e}", exc_info=True)
+                try:
+                    await self.manager.send_personal_message(
+                        ErrorMessage(
+                            code="internal_error",
+                            message=f"Internal error: {str(e)}",
+                            timestamp=datetime.utcnow(),
+                        ).model_dump(mode="json"),
+                        connection_id,
+                    )
+                except Exception:
+                    pass
             finally:
                 self.manager.disconnect(connection_id)
         finally:
             # Cancel heartbeat task
             if heartbeat_task:
                 heartbeat_task.cancel()
+                try:
+                    await heartbeat_task
+                except asyncio.CancelledError:
+                    pass
 
     async def _heartbeat_monitor(self, connection_id: str) -> None:
         """
@@ -1344,3 +1379,12 @@ class WebSocketAdapter:
             event: Domain event to broadcast
         """
         await self.manager.broadcast_event(event)
+
+    async def close(self):
+        """
+        Close the WebSocket adapter and clean up all background tasks.
+
+        This should be called during application shutdown to ensure
+        all pending tasks complete gracefully.
+        """
+        await self.manager.close()

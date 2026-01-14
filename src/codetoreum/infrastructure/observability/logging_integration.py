@@ -5,7 +5,15 @@ Provides log filters to inject trace context into log records for correlation.
 """
 
 import logging
-from opentelemetry import trace
+
+# Try to import OpenTelemetry - it's optional
+try:
+    from opentelemetry import trace
+
+    OPENTELEMETRY_AVAILABLE = True
+except ImportError:
+    OPENTELEMETRY_AVAILABLE = False
+    trace = None  # type: ignore
 
 
 class TraceContextInjector(logging.Filter):
@@ -39,6 +47,12 @@ class TraceContextInjector(logging.Filter):
         Returns:
             True (always allows record through)
         """
+        # If OpenTelemetry is not available, set N/A
+        if not OPENTELEMETRY_AVAILABLE:
+            record.trace_id = "N/A"
+            record.span_id = "N/A"
+            return True
+
         span = trace.get_current_span()
         span_context = span.get_span_context()
 

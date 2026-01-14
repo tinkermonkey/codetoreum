@@ -69,6 +69,8 @@ class TestBoardServiceContract(ABC):
     @pytest.mark.asyncio
     async def test_move_item_to_column_changes_position(self):
         """Moving item should update its column."""
+        from codetoreum.ports.output.board_service import MovedByType
+
         service = await self.create_service()
         board = await self.setup_test_board(service, "proj-123", "board-456")
 
@@ -76,10 +78,10 @@ class TestBoardServiceContract(ABC):
             item_id = board.columns[0].work_item_ids[0]
             target_column = board.columns[1].name
 
-            await service.move_item_to_column(item_id, target_column)
+            await service.move_item_to_column(item_id, target_column, MovedByType.HUMAN)
 
-            column_name, _ = await service.get_item_position(item_id)
-            assert column_name == target_column
+            position = await service.get_item_position(item_id)
+            assert position.column_name == target_column
 
     @pytest.mark.asyncio
     async def test_reconcile_board_with_expected_columns(self):
@@ -93,12 +95,13 @@ class TestBoardServiceContract(ABC):
             auto_create_missing=True,
         )
 
-        result = await service.reconcile_board(config)
+        result = await service.reconcile_board("board-456", config)
 
         # Reconciliation should complete
         assert isinstance(result.columns_added, list)
         assert isinstance(result.columns_removed, list)
-        assert isinstance(result.items_moved, int)
+        assert isinstance(result.columns_renamed, list)
+        assert isinstance(result.orphaned_items, list)
 
     @pytest.mark.asyncio
     async def test_get_item_position_returns_column_and_position(self):
@@ -108,11 +111,11 @@ class TestBoardServiceContract(ABC):
 
         if board.columns and board.columns[0].work_item_ids:
             item_id = board.columns[0].work_item_ids[0]
-            column_name, position = await service.get_item_position(item_id)
+            position = await service.get_item_position(item_id)
 
-            assert column_name == board.columns[0].name
-            assert isinstance(position, int)
-            assert position >= 0
+            assert position.column_name == board.columns[0].name
+            assert isinstance(position.position, int)
+            assert position.position >= 0
 
     @pytest.mark.asyncio
     async def test_board_not_found_raises_error(self):

@@ -26,6 +26,7 @@ from codetoreum.domain.events import (
     AgentMcpServerRemoved,
     AgentModelUpdated,
     AgentTimeoutUpdated,
+    BoardReconciled,
     DomainEvent,
     ExecutionCompleted,
     ExecutionFailed,
@@ -53,6 +54,7 @@ from codetoreum.domain.events import (
     WorkflowStageStatusUpdated,
     WorkflowStarted,
     WorkItemBlocked,
+    WorkItemColumnChanged,
     WorkItemCompleted,
     WorkItemCreated,
     WorkItemFailed,
@@ -76,6 +78,12 @@ from codetoreum.domain.review_cycle import (
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
 from codetoreum.domain.workflow import Workflow, WorkflowStatus
 from codetoreum.domain.workflow_template import StageTemplate, WorkflowTemplate
+from codetoreum.domain.board_workflow_template import (
+    BoardReconciliationConfig,
+    BoardWorkflowTemplate,
+    ColumnTemplate,
+    ColumnType,
+)
 from codetoreum.domain.workspace_context import (
     WorkspaceContext,
     WorkspaceType,
@@ -132,6 +140,11 @@ __all__ = [
     # Workflow Template
     "WorkflowTemplate",
     "StageTemplate",
+    # Board Workflow Template
+    "BoardWorkflowTemplate",
+    "ColumnTemplate",
+    "ColumnType",
+    "BoardReconciliationConfig",
     # Project Context
     "ProjectContext",
     "ProjectContextCreated",
@@ -166,6 +179,9 @@ __all__ = [
     "WorkItemStageUpdated",
     "WorkItemLabelsUpdated",
     "WorkItemPriorityUpdated",
+    # Board Events
+    "WorkItemColumnChanged",
+    "BoardReconciled",
     # Agent Events
     "AgentCreated",
     "AgentCapabilityAdded",
