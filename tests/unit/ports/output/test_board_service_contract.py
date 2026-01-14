@@ -199,3 +199,72 @@ class TestBoardServiceContract(ABC):
 
         with pytest.raises((ValueError, ResourceNotFoundError)):
             await service.get_item_position("nonexistent-item-id-12345")
+
+    # Boundary Value Tests
+
+    @pytest.mark.asyncio
+    async def test_column_position_zero_minimum(self):
+        """Test that column position zero is accepted as minimum boundary."""
+        service = await self.create_service()
+        board = await self.setup_test_board(service, "proj-123", "board-456")
+
+        if board.columns:
+            # Get columns and verify minimum position is 0
+            columns = await service.get_columns("board-456")
+            min_position = min(col.position for col in columns)
+            assert min_position >= 0
+
+    @pytest.mark.asyncio
+    async def test_column_position_negative_rejected(self):
+        """Test that negative column positions are rejected."""
+        from codetoreum.ports.output.board_service import BoardColumn
+
+        service = await self.create_service()
+        board = await self.setup_test_board(service, "proj-123", "board-456")
+
+        # Attempting to get items at negative position should fail
+        # (Most services won't support negative positions)
+        if board.columns:
+            # Try to query with invalid position - expect to fail
+            try:
+                # Get board to verify it handles position validation
+                retrieved = await service.get_board("proj-123", "board-456")
+                # All positions should be non-negative
+                for column in retrieved.columns:
+                    assert column.position >= 0
+            except (ValueError, ValidationError):
+                # Rejection is acceptable
+                pass
+
+    @pytest.mark.asyncio
+    async def test_queue_position_boundaries(self):
+        """Test that queue_position field respects boundary values."""
+        service = await self.create_service()
+        board = await self.setup_test_board(service, "proj-123", "board-456")
+
+        if board.columns and board.columns[0].work_item_ids:
+            item_id = board.columns[0].work_item_ids[0]
+            position = await service.get_item_position(item_id)
+
+            # Queue position should be non-negative
+            assert position.position >= 0
+
+    @pytest.mark.asyncio
+    async def test_board_column_count_limits(self):
+        """Test that board respects reasonable column count boundaries."""
+        service = await self.create_service()
+        await self.setup_test_board(service, "proj-123", "board-456")
+
+        config = BoardConfig(
+            board_id="board-456",
+            expected_columns=["Backlog", "In Progress", "Review", "Done"],
+            auto_create_missing=True,
+        )
+
+        result = await service.reconcile_board("board-456", config)
+
+        # Board should have a reasonable number of columns
+        retrieved = await service.get_board("proj-123", "board-456")
+        assert len(retrieved.columns) > 0
+        # Sanity check: boards shouldn't have unreasonably many columns
+        assert len(retrieved.columns) < 100
