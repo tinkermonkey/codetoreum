@@ -144,6 +144,9 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
     def emit(self, event: Any) -> None:
         """Emit event to all registered handlers.
 
+        Handler failures are logged but do not prevent other handlers from
+        executing. Monitor handler_failures metric for production issues.
+
         Args:
             event: Event to emit (should be CodetoreumEvent or subclass)
 
@@ -154,11 +157,39 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
         if event_type not in self._event_handlers:
             return
 
+        failures = []
         for handler in self._event_handlers[event_type]:
             try:
                 handler(event)
+            except asyncio.CancelledError:
+                # Never suppress cancellation - propagate immediately
+                raise
+            except (ValueError, TypeError) as e:
+                # Expected validation errors from handlers
+                handler_name = getattr(handler, "__name__", str(handler))
+                logger.error(
+                    f"Handler {handler_name} validation error for {event_type}: {e}",
+                    exc_info=True,
+                    extra={
+                        "event_type": event_type,
+                        "handler": handler_name,
+                        "error_id": "ERR_HANDLER_VALIDATION"
+                    }
+                )
+                failures.append((handler, e))
             except Exception as e:
-                logger.warning(f"Error in event handler for {event_type}: {e}")
+                # Unexpected errors - critical issue
+                handler_name = getattr(handler, "__name__", str(handler))
+                logger.error(
+                    f"Unexpected error in handler {handler_name} for {event_type}: {e}",
+                    exc_info=True,
+                    extra={
+                        "event_type": event_type,
+                        "handler": handler_name,
+                        "error_id": "ERR_HANDLER_UNEXPECTED"
+                    }
+                )
+                failures.append((handler, e))
 
     # IMonitoredService implementation
 
