@@ -581,3 +581,84 @@ class TestEventBus:
         # Assert - traceback should be in logs (evidence of exc_info=True)
         assert "ValueError" in caplog.text
         assert "Traceback" in caplog.text
+
+
+# Synchronous tests for registration and subscription error logging
+class TestEventBusErrorLogging:
+    """Test suite for error logging with exc_info=True."""
+
+    def test_handler_registration_error_includes_stack_trace(self, caplog):
+        """Test that handler registration failures log stack traces."""
+        # Arrange
+        bus = EventBus()
+
+        # Create a broken handler that will fail during registration
+        class BrokenHandler:
+            def get_event_types(self):
+                raise AttributeError("Intentional test error")
+
+        # Act & Assert
+        caplog.set_level(logging.ERROR)
+        with pytest.raises(EventBusError):
+            bus.register_handler(BrokenHandler())
+
+        # Verify error log includes stack trace
+        assert "Failed to register handler" in caplog.text
+        assert "Traceback" in caplog.text
+
+        # Verify exc_info was captured in the log record
+        error_records = [r for r in caplog.records if r.levelname == "ERROR"]
+        assert error_records, "No ERROR level log records found"
+
+        # Verify exc_info is set
+        assert any(r.exc_info for r in error_records), "exc_info not found in error log records"
+
+        # Verify structured logging context is included
+        handler_record = error_records[0]
+        assert handler_record.handler_class == "BrokenHandler"
+        assert handler_record.error_id == "ERR_HANDLER_REGISTRATION"
+
+    def test_callback_subscription_error_includes_stack_trace(self, caplog):
+        """Test that callback subscription failures log stack traces."""
+        # Arrange
+        bus = EventBus()
+
+        # Create a callback that will be stored, but we'll monkey-patch
+        # the subscription to force an error during the registration check
+        def test_callback(event: DomainEvent):
+            pass
+
+        # Monkey-patch the _callbacks dict to raise an error when accessing it
+        original_callbacks = bus._callbacks
+
+        class FailingDict(dict):
+            def __setitem__(self, key, value):
+                raise RuntimeError("Intentional test error during callback subscription")
+
+        bus._callbacks = FailingDict()
+
+        # Act & Assert
+        caplog.set_level(logging.ERROR)
+        with pytest.raises(EventBusError):
+            bus.subscribe("WorkItemCreated", test_callback)
+
+        # Verify error log includes stack trace
+        assert "Failed to subscribe callback" in caplog.text
+        assert "Traceback" in caplog.text
+
+        # Verify exc_info was captured in the log record
+        error_records = [r for r in caplog.records if r.levelname == "ERROR"]
+        assert error_records, "No ERROR level log records found"
+
+        # Verify exc_info is set
+        assert any(r.exc_info for r in error_records), "exc_info not found in error log records"
+
+        # Verify structured logging context is included
+        callback_record = error_records[0]
+        assert callback_record.event_type == "WorkItemCreated"
+        assert callback_record.error_id == "ERR_CALLBACK_SUBSCRIPTION"
+        assert "test_callback" in callback_record.callback
+
+        # Restore original dict
+        bus._callbacks = original_callbacks
+

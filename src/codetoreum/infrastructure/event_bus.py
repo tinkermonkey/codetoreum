@@ -152,6 +152,14 @@ class EventBus:
                 )
 
         except Exception as e:
+            logger.error(
+                f"Failed to register handler {handler.__class__.__name__}: {e}",
+                exc_info=True,
+                extra={
+                    "handler_class": handler.__class__.__name__,
+                    "error_id": "ERR_HANDLER_REGISTRATION"
+                }
+            )
             raise EventBusError(f"Failed to register handler: {e}") from e
 
     def unregister_handler(self, handler: EventHandler) -> None:
@@ -203,6 +211,15 @@ class EventBus:
                 logger.info(f"Subscribed callback to event type: {event_type}")
 
         except Exception as e:
+            logger.error(
+                f"Failed to subscribe callback to event {event_type}: {e}",
+                exc_info=True,
+                extra={
+                    "event_type": event_type,
+                    "callback": callback.__name__ if hasattr(callback, '__name__') else str(callback),
+                    "error_id": "ERR_CALLBACK_SUBSCRIPTION"
+                }
+            )
             raise EventBusError(f"Failed to subscribe callback: {e}") from e
 
     def unsubscribe(
