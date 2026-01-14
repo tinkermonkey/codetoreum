@@ -9,12 +9,14 @@ Terminology (vendor-agnostic):
 - Project Board: The board containing work items (GitHub Projects v2, Jira board, etc.)
 """
 
-from typing import List, Literal, Optional
+from dataclasses import dataclass
+from typing import Literal, Optional, Tuple
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
 
 
+@dataclass(frozen=True)
 class WorkItemColumnChangedEvent(CodetoreumEvent):
     """Emitted when a work item moves between columns on a board.
 
@@ -32,37 +34,16 @@ class WorkItemColumnChangedEvent(CodetoreumEvent):
         moved_by: Actor who initiated the move ("human", "orchestrator", "unknown")
     """
 
-    def __init__(
-        self,
-        type: str = "workitem.column_changed",
-        timestamp: str = "",
-        source: str = "",
-        correlation_id: Optional[str] = None,
-        event_id: Optional[str] = None,
-        work_item_id: str = "",
-        project_id: str = "",
-        board_id: str = "",
-        from_column: str = "",
-        to_column: str = "",
-        moved_by: Literal["human", "orchestrator", "unknown"] = "unknown",
-    ):
-        super().__init__(
-            type=type,
-            timestamp=timestamp,
-            source=source,
-            correlation_id=correlation_id,
-            event_id=event_id or str(uuid4()),
-        )
-        self.work_item_id = work_item_id
-        self.project_id = project_id
-        self.board_id = board_id
-        self.from_column = from_column
-        self.to_column = to_column
-        self.moved_by = moved_by
-        self._validate()
+    work_item_id: str = ""
+    project_id: str = ""
+    board_id: str = ""
+    from_column: str = ""
+    to_column: str = ""
+    moved_by: Literal["human", "orchestrator", "unknown"] = "unknown"
 
-    def _validate(self) -> None:
-        """Validate event fields."""
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
         if not self.project_id:
@@ -95,7 +76,7 @@ class WorkItemColumnChangedEvent(CodetoreumEvent):
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
-            event_id=data.get("event_id"),
+            event_id=data.get("event_id") or str(uuid4()),
             work_item_id=data.get("work_item_id", ""),
             project_id=data.get("project_id", ""),
             board_id=data.get("board_id", ""),
@@ -105,6 +86,7 @@ class WorkItemColumnChangedEvent(CodetoreumEvent):
         )
 
 
+@dataclass(frozen=True)
 class BoardReconciledEvent(CodetoreumEvent):
     """Emitted when a board's structure is reconciled with the source system.
 
@@ -116,40 +98,25 @@ class BoardReconciledEvent(CodetoreumEvent):
         type: Fixed to "board.reconciled"
         project_id: ID of the project
         board_id: ID of the board
-        columns_added: List of new column names
-        columns_removed: List of deleted column names
+        columns_added: Tuple of new column names
+        columns_removed: Tuple of deleted column names
         items_moved: Number of work items repositioned
     """
 
-    def __init__(
-        self,
-        type: str = "board.reconciled",
-        timestamp: str = "",
-        source: str = "",
-        correlation_id: Optional[str] = None,
-        event_id: Optional[str] = None,
-        project_id: str = "",
-        board_id: str = "",
-        columns_added: Optional[List[str]] = None,
-        columns_removed: Optional[List[str]] = None,
-        items_moved: int = 0,
-    ):
-        super().__init__(
-            type=type,
-            timestamp=timestamp,
-            source=source,
-            correlation_id=correlation_id,
-            event_id=event_id or str(uuid4()),
-        )
-        self.project_id = project_id
-        self.board_id = board_id
-        self.columns_added = columns_added or []
-        self.columns_removed = columns_removed or []
-        self.items_moved = items_moved
-        self._validate()
+    project_id: str = ""
+    board_id: str = ""
+    columns_added: Tuple[str, ...] = ()
+    columns_removed: Tuple[str, ...] = ()
+    items_moved: int = 0
 
-    def _validate(self) -> None:
-        """Validate event fields."""
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        # Convert lists to tuples for immutability
+        if isinstance(self.columns_added, list):
+            object.__setattr__(self, "columns_added", tuple(self.columns_added))
+        if isinstance(self.columns_removed, list):
+            object.__setattr__(self, "columns_removed", tuple(self.columns_removed))
         if not self.project_id:
             raise ValueError("project_id is required")
         if not self.board_id:
@@ -161,8 +128,8 @@ class BoardReconciledEvent(CodetoreumEvent):
         d.update({
             "project_id": self.project_id,
             "board_id": self.board_id,
-            "columns_added": self.columns_added or [],
-            "columns_removed": self.columns_removed or [],
+            "columns_added": list(self.columns_added),
+            "columns_removed": list(self.columns_removed),
             "items_moved": self.items_moved,
         })
         return d
@@ -175,10 +142,10 @@ class BoardReconciledEvent(CodetoreumEvent):
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
-            event_id=data.get("event_id"),
+            event_id=data.get("event_id") or str(uuid4()),
             project_id=data.get("project_id", ""),
             board_id=data.get("board_id", ""),
-            columns_added=data.get("columns_added"),
-            columns_removed=data.get("columns_removed"),
+            columns_added=tuple(data.get("columns_added", [])),
+            columns_removed=tuple(data.get("columns_removed", [])),
             items_moved=data.get("items_moved", 0),
         )

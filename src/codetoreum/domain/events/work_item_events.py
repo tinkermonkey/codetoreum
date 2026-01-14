@@ -8,42 +8,25 @@ Terminology (vendor-agnostic):
 - Work Item ID: The identifier of a work item (issue number, key, etc.)
 """
 
+from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
 
 
+@dataclass(frozen=True)
 class WorkItemCreatedEvent(CodetoreumEvent):
     """Emitted when a work item is created."""
 
-    def __init__(
-        self,
-        type: str = "workitem.created",
-        timestamp: str = "",
-        source: str = "",
-        correlation_id: Optional[str] = None,
-        event_id: Optional[str] = None,
-        work_item_id: str = "",
-        project_id: str = "",
-        title: str = "",
-        initial_column: Optional[str] = None,
-    ):
-        super().__init__(
-            type=type,
-            timestamp=timestamp,
-            source=source,
-            correlation_id=correlation_id,
-            event_id=event_id or str(uuid4()),
-        )
-        self.work_item_id = work_item_id
-        self.project_id = project_id
-        self.title = title
-        self.initial_column = initial_column
-        self._validate()
+    work_item_id: str = ""
+    project_id: str = ""
+    title: str = ""
+    initial_column: Optional[str] = None
 
-    def _validate(self) -> None:
-        """Validate event fields."""
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
         if not self.project_id:
@@ -70,7 +53,7 @@ class WorkItemCreatedEvent(CodetoreumEvent):
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
-            event_id=data.get("event_id"),
+            event_id=data.get("event_id") or str(uuid4()),
             work_item_id=data.get("work_item_id", ""),
             project_id=data.get("project_id", ""),
             title=data.get("title", ""),
@@ -78,38 +61,24 @@ class WorkItemCreatedEvent(CodetoreumEvent):
         )
 
 
+@dataclass(frozen=True)
 class WorkItemUpdatedEvent(CodetoreumEvent):
     """Emitted when a work item's properties are updated."""
 
-    def __init__(
-        self,
-        type: str = "workitem.updated",
-        timestamp: str = "",
-        source: str = "",
-        correlation_id: Optional[str] = None,
-        event_id: Optional[str] = None,
-        work_item_id: str = "",
-        project_id: str = "",
-        changes: Optional[Dict[str, Any]] = None,
-    ):
-        super().__init__(
-            type=type,
-            timestamp=timestamp,
-            source=source,
-            correlation_id=correlation_id,
-            event_id=event_id or str(uuid4()),
-        )
-        self.work_item_id = work_item_id
-        self.project_id = project_id
-        self.changes = changes or {}
-        self._validate()
+    work_item_id: str = ""
+    project_id: str = ""
+    changes: Dict[str, Any] = field(default_factory=dict)  # type: ignore
 
-    def _validate(self) -> None:
-        """Validate event fields."""
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
         if not self.project_id:
             raise ValueError("project_id is required")
+        # Ensure changes dict is initialized
+        if self.changes is None:
+            object.__setattr__(self, "changes", {})
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -129,7 +98,7 @@ class WorkItemUpdatedEvent(CodetoreumEvent):
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
-            event_id=data.get("event_id"),
+            event_id=data.get("event_id") or str(uuid4()),
             work_item_id=data.get("work_item_id", ""),
             project_id=data.get("project_id", ""),
             changes=data.get("changes", {}),

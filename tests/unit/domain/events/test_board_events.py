@@ -225,8 +225,8 @@ class TestBoardReconciledEvent:
         )
 
         assert event.project_id == "proj-1"
-        assert event.columns_added == ["New Column"]
-        assert event.columns_removed == ["Old Column"]
+        assert event.columns_added == ("New Column",)
+        assert event.columns_removed == ("Old Column",)
         assert event.items_moved == 5
 
     def test_board_reconciled_no_changes(self):
@@ -239,8 +239,8 @@ class TestBoardReconciledEvent:
             board_id="board-1",
         )
 
-        assert event.columns_added == []
-        assert event.columns_removed == []
+        assert event.columns_added == ()
+        assert event.columns_removed == ()
         assert event.items_moved == 0
 
     def test_board_reconciled_columns_added(self):
@@ -255,8 +255,8 @@ class TestBoardReconciledEvent:
             items_moved=10,
         )
 
-        assert event.columns_added == ["Ready", "In Review", "Done"]
-        assert event.columns_removed == []
+        assert event.columns_added == ("Ready", "In Review", "Done")
+        assert event.columns_removed == ()
         assert event.items_moved == 10
 
     def test_missing_project_id(self):
@@ -321,6 +321,9 @@ class TestBoardReconciledEvent:
         restored = BoardReconciledEvent.from_dict(d)
 
         assert restored.project_id == original.project_id
+        # Verify tuples are preserved through serialization
+        assert isinstance(restored.columns_added, tuple)
+        assert isinstance(restored.columns_removed, tuple)
         assert restored.columns_added == original.columns_added
         assert restored.columns_removed == original.columns_removed
         assert restored.items_moved == original.items_moved
