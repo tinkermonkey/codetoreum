@@ -1,11 +1,12 @@
 """Unit tests for EventBus."""
 
 import asyncio
+import logging
 
 import pytest
 
 from codetoreum.domain.events import DomainEvent, WorkItemCreated, WorkItemCompleted
-from codetoreum.infrastructure.event_bus import EventBus, EventHandler, event_handler
+from codetoreum.infrastructure.event_bus import EventBus, EventBusError, EventHandler, event_handler
 
 
 @event_handler("WorkItemCreated")
@@ -417,3 +418,166 @@ class TestEventBus:
         stats = bus.get_statistics()
         assert stats["events_published"] == 1
         assert stats["events_handled"] == 0
+
+    async def test_cancelled_error_propagates(self, caplog):
+        """Test that asyncio.CancelledError is always propagated from publish()."""
+        # Arrange
+        class MockRedisClient:
+            async def xadd(self, *args, **kwargs):
+                # Simulate a cancelled operation
+                raise asyncio.CancelledError()
+
+        bus = EventBus(redis_client=MockRedisClient())
+
+        event = WorkItemCreated(
+            aggregate_id="work-item-123",
+            payload={"title": "Test"},
+        )
+
+        # Act & Assert
+        caplog.set_level(logging.INFO)
+        with pytest.raises(asyncio.CancelledError):
+            await bus.publish(event)
+
+        # Verify cancellation was logged
+        assert "cancelled" in caplog.text.lower()
+
+    async def test_connection_error_propagates_from_get_handlers(self, caplog):
+        """Test that ConnectionError during handler lookup raises EventBusError with retry hint."""
+        # Arrange
+        bus = EventBus()
+
+        event = WorkItemCreated(
+            aggregate_id="work-item-123",
+            payload={"title": "Test"},
+        )
+
+        # Monkey-patch _get_handlers_for_event to raise ConnectionError
+        def failing_get_handlers(evt):
+            raise ConnectionError("Handler lookup failed")
+
+        bus._get_handlers_for_event = failing_get_handlers
+
+        # Act & Assert
+        caplog.set_level(logging.ERROR)
+        with pytest.raises(EventBusError) as exc_info:
+            await bus.publish(event)
+
+        # Verify error message includes retry hint
+        assert "transient" in str(exc_info.value).lower()
+        assert "retry" in str(exc_info.value).lower()
+
+        # Verify error was logged with exc_info=True
+        assert "Connection error" in caplog.text
+        assert "Traceback" in caplog.text
+
+    async def test_timeout_error_propagates_from_handler_dispatch(self, caplog):
+        """Test that TimeoutError during handler dispatch raises EventBusError with retry hint."""
+        # Arrange
+        bus = EventBus()
+
+        event = WorkItemCreated(
+            aggregate_id="work-item-123",
+            payload={"title": "Test"},
+        )
+
+        # Monkey-patch _get_callbacks_for_event to raise TimeoutError
+        def failing_get_callbacks(evt):
+            raise TimeoutError("Callback lookup timed out")
+
+        bus._get_callbacks_for_event = failing_get_callbacks
+
+        # Act & Assert
+        caplog.set_level(logging.ERROR)
+        with pytest.raises(EventBusError) as exc_info:
+            await bus.publish(event)
+
+        # Verify error message includes retry hint
+        assert "transient" in str(exc_info.value).lower()
+        assert "retry" in str(exc_info.value).lower()
+
+        # Verify error was logged with exc_info=True
+        assert "Connection error" in caplog.text
+        assert "Traceback" in caplog.text
+
+    async def test_value_error_propagates_from_validation(self, caplog):
+        """Test that ValueError during publish() is caught and re-raised as EventBusError with validation hint."""
+        # Arrange
+        bus = EventBus()
+
+        event = WorkItemCreated(
+            aggregate_id="work-item-123",
+            payload={"title": "Test"},
+        )
+
+        # Monkey-patch _get_handlers_for_event to raise ValueError
+        def failing_validation(evt):
+            raise ValueError("Invalid event field: 'title' cannot be empty")
+
+        bus._get_handlers_for_event = failing_validation
+
+        # Act & Assert
+        caplog.set_level(logging.ERROR)
+        with pytest.raises(EventBusError) as exc_info:
+            await bus.publish(event)
+
+        # Verify error message includes validation hint
+        assert "invalid" in str(exc_info.value).lower()
+        assert "check event structure" in str(exc_info.value).lower()
+
+        # Verify error was logged with exc_info=True
+        assert "Validation error" in caplog.text
+        assert "Traceback" in caplog.text
+
+    async def test_unexpected_exception_propagates_from_dispatch(self, caplog):
+        """Test that unexpected exceptions from dispatch are caught and re-raised as EventBusError."""
+        # Arrange
+        bus = EventBus()
+
+        event = WorkItemCreated(
+            aggregate_id="work-item-123",
+            payload={"title": "Test"},
+        )
+
+        # Monkey-patch _get_handlers_for_event to raise RuntimeError
+        def failing_dispatch(evt):
+            raise RuntimeError("Something unexpected happened")
+
+        bus._get_handlers_for_event = failing_dispatch
+
+        # Act & Assert
+        caplog.set_level(logging.CRITICAL)
+        with pytest.raises(EventBusError) as exc_info:
+            await bus.publish(event)
+
+        # Verify generic error message
+        assert "Unexpected error" in str(exc_info.value)
+
+        # Verify error was logged as critical with exc_info=True
+        assert "Unexpected error" in caplog.text
+        assert "Traceback" in caplog.text
+
+    async def test_all_exception_logs_have_exc_info(self, caplog):
+        """Test that all error logs include exc_info=True for debugging."""
+        # Arrange
+        class FailingRedisClient:
+            async def xadd(self, *args, **kwargs):
+                raise ValueError("Test error during persistence")
+
+        bus = EventBus(redis_client=FailingRedisClient())
+
+        event = WorkItemCreated(
+            aggregate_id="work-item-123",
+            payload={"title": "Test"},
+        )
+
+        # Act
+        caplog.set_level(logging.ERROR)
+        try:
+            await bus.publish(event)
+        except EventBusError:
+            pass
+
+        # Assert - traceback should be in logs (evidence of exc_info=True)
+        assert "ValueError" in caplog.text
+        assert "Traceback" in caplog.text
