@@ -5,7 +5,7 @@ from typing import Generator
 import docker
 import pytest
 from testcontainers.core.container import DockerContainer
-from testcontainers.core.wait_strategies import HttpWaitStrategy
+from testcontainers.core.wait_strategies import HttpWaitStrategy, PortWaitStrategy
 
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
@@ -216,3 +216,37 @@ class ModernElasticsearchContainer(DockerContainer):
         host = self.get_container_host_ip()
         port = self.get_exposed_port(self.port)
         return f"http://{host}:{port}"
+
+
+class ModernRedisContainer(DockerContainer):
+    """Redis container using modern wait strategy API.
+
+    This class replaces testcontainers.redis.RedisContainer to avoid
+    the DeprecationWarning from @wait_container_is_ready decorator. Uses structured
+    wait strategies (PortWaitStrategy) instead of the deprecated decorator approach.
+
+    Example:
+        >>> container = ModernRedisContainer("redis:7-alpine")
+        >>> container.start()
+        >>> host = container.get_container_host_ip()
+        >>> port = container.get_exposed_port(6379)
+        >>> # ... use Redis ...
+        >>> container.stop()
+    """
+
+    def __init__(self, image: str = "redis:latest", port: int = 6379, password: str | None = None) -> None:
+        """Initialize Redis container.
+
+        Args:
+            image: Docker image name. Defaults to "redis:latest"
+            port: Container port to expose. Defaults to 6379
+            password: Optional Redis password. If provided, starts Redis with requirepass
+        """
+        super().__init__(image)
+        self.port = port
+        self.password = password
+        self.with_exposed_ports(self.port)
+        if self.password:
+            self.with_command(f"redis-server --requirepass {self.password}")
+        # Use PortWaitStrategy instead of deprecated @wait_container_is_ready decorator
+        self.waiting_for(PortWaitStrategy(self.port))

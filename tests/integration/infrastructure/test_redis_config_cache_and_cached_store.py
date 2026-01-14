@@ -10,7 +10,6 @@ from uuid import uuid4
 import pytest
 from elasticsearch import AsyncElasticsearch
 from redis import asyncio as aioredis
-from testcontainers.redis import RedisContainer
 
 from codetoreum.adapters.secondary.cached_config_store import CachedConfigStore
 from codetoreum.adapters.secondary.elasticsearch_config_storage import (
@@ -24,7 +23,7 @@ from codetoreum.ports.output.config_store import (
     ProjectConfig,
     WorkflowTemplate,
 )
-from tests.conftest import docker_available, ModernElasticsearchContainer
+from tests.conftest import docker_available, ModernElasticsearchContainer, ModernRedisContainer
 
 # Mark all tests in this module as requiring Docker
 pytestmark = docker_available
@@ -32,8 +31,12 @@ pytestmark = docker_available
 
 @pytest.fixture(scope="module")
 def redis_container():
-    """Create Redis testcontainer with resource limits."""
-    container = RedisContainer("redis:7-alpine")
+    """Create Redis testcontainer with resource limits.
+
+    Uses ModernRedisContainer to avoid deprecation warnings from the
+    testcontainers library's @wait_container_is_ready decorator.
+    """
+    container = ModernRedisContainer("redis:7-alpine")
     # Redis is lightweight but we still set a reasonable limit
     container.with_kwargs(mem_limit="128m")
     container.start()
