@@ -25,6 +25,7 @@ from codetoreum.infrastructure.http.github_graphql_client import (
     GitHubGraphQLClient,
 )
 from codetoreum.ports.exceptions import (
+    AuthenticationError,
     ExternalServiceError,
     PermissionError,
     ResourceNotFoundError,
@@ -863,8 +864,28 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
                 # Query open PRs
                 try:
                     open_prs = await self._get_open_prs(project_id)
+                except asyncio.CancelledError:
+                    logger.info(f"PR polling cancelled for {project_id}")
+                    raise
+                except (AuthenticationError, ResourceNotFoundError, ValidationError) as e:
+                    logger.error(
+                        f"Permanent error in PR polling for {project_id}: {e}",
+                        exc_info=True,
+                        extra={"project_id": project_id, "error_type": "permanent"}
+                    )
+                    break
+                except ExternalServiceError as e:
+                    logger.warning(
+                        f"Transient error in PR polling for {project_id}: {e}",
+                        extra={"project_id": project_id, "error_type": "transient"}
+                    )
+                    continue
                 except Exception as e:
-                    logger.warning(f"Failed to poll PRs for {project_id}: {e}")
+                    logger.critical(
+                        f"Unexpected error in PR polling for {project_id}: {e}",
+                        exc_info=True,
+                        extra={"project_id": project_id, "error_type": "unexpected"}
+                    )
                     continue
 
                 changes_detected = 0

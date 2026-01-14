@@ -268,11 +268,18 @@ class EventBus:
                 results = await asyncio.gather(*tasks, return_exceptions=True)
 
                 # Check for errors
-                for result in results:
+                for idx, result in enumerate(results):
                     if isinstance(result, Exception):
+                        handler_name = f"handler_{idx}"
                         logger.error(
-                            f"Handler failed for event {event.event_type}: {result}",
+                            f"Handler {handler_name} failed for event {event.event_type}: {result}",
                             exc_info=result,
+                            extra={
+                                "event_type": event.event_type,
+                                "event_id": event.event_id,
+                                "handler_index": idx,
+                                "error_type": type(result).__name__
+                            }
                         )
                         self._stats["handler_errors"] += 1
 
@@ -438,11 +445,28 @@ class EventBus:
                 f"(ID: {event.event_id}) to Redis stream {stream_key}"
             )
 
-        except Exception as e:
+        except ConnectionError as e:
             self._stats["persistence_errors"] += 1
             logger.error(
-                f"Failed to persist event {event.event_type} to Redis: {e}",
-                exc_info=e,
+                f"Redis connection error persisting event {event.event_type}: {e}",
+                exc_info=True,
+                extra={
+                    "event_id": event.event_id,
+                    "event_type": event.event_type,
+                    "error_type": "redis_connection"
+                }
+            )
+            # Don't raise - persistence failure shouldn't block event handling
+        except Exception as e:
+            self._stats["persistence_errors"] += 1
+            logger.critical(
+                f"Unexpected error persisting event {event.event_type}: {e}",
+                exc_info=True,
+                extra={
+                    "event_id": event.event_id,
+                    "event_type": event.event_type,
+                    "error_type": "unexpected"
+                }
             )
             # Don't raise - persistence failure shouldn't block event handling
 
