@@ -4,6 +4,8 @@ from typing import Generator
 
 import docker
 import pytest
+from testcontainers.core.container import DockerContainer
+from testcontainers.core.wait_strategies import HttpWaitStrategy
 
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
@@ -171,3 +173,46 @@ def event_bus() -> Generator[EventBus, None, None]:
     for handler in list(bus._wildcard_handlers):
         bus.unregister_handler(handler)
     bus.reset_statistics()
+
+
+class ModernElasticsearchContainer(DockerContainer):
+    """Elasticsearch container using modern wait strategy API.
+
+    This class replaces testcontainers.elasticsearch.ElasticSearchContainer to avoid
+    the DeprecationWarning from @wait_container_is_ready decorator. Uses structured
+    wait strategies (HttpWaitStrategy) instead of the deprecated decorator approach.
+
+    Example:
+        >>> container = ModernElasticsearchContainer("elasticsearch:8.11.0")
+        >>> container.start()
+        >>> url = container.get_url()
+        >>> # ... use Elasticsearch ...
+        >>> container.stop()
+    """
+
+    def __init__(self, image: str = "elasticsearch:8.11.0", port: int = 9200) -> None:
+        """Initialize Elasticsearch container.
+
+        Args:
+            image: Docker image name (must include version). Defaults to "elasticsearch:8.11.0"
+            port: Container port to expose. Defaults to 9200
+        """
+        super().__init__(image)
+        self.port = port
+        self.with_exposed_ports(self.port)
+        self.with_env("transport.host", "127.0.0.1")
+        self.with_env("http.host", "0.0.0.0")
+        self.with_env("xpack.security.enabled", "false")
+        self.with_env("discovery.type", "single-node")
+        # Use HttpWaitStrategy instead of deprecated @wait_container_is_ready decorator
+        self.waiting_for(HttpWaitStrategy(port=self.port).for_status_code(200))
+
+    def get_url(self) -> str:
+        """Get the URL to access Elasticsearch.
+
+        Returns:
+            Full URL to Elasticsearch instance (http://host:port)
+        """
+        host = self.get_container_host_ip()
+        port = self.get_exposed_port(self.port)
+        return f"http://{host}:{port}"

@@ -358,6 +358,7 @@ class TestGitHubDiscussionAdapterQueries:
     async def test_get_thread_handles_pagination(self, adapter):
         """get_thread handles paginated responses."""
         # Mock responses for two pages
+        # Generate valid ISO 8601 timestamps: hours increment when minutes exceed 59
         responses = [
             Mock(
                 status_code=200,
@@ -367,7 +368,7 @@ class TestGitHubDiscussionAdapterQueries:
                             "id": i,
                             "user": {"login": f"user{i}"},
                             "body": f"Comment {i}",
-                            "created_at": f"2025-01-08T10:{i:02d}:00Z",
+                            "created_at": f"2025-01-08T{10 + i // 60:02d}:{i % 60:02d}:00Z",
                         }
                         for i in range(100)
                     ]
@@ -622,12 +623,13 @@ class TestGitHubDiscussionAdapterEventEmission:
         adapter.on("comment.needs_response", handler2)
 
         event = CommentNeedsResponseEvent(
+            type="comment.needs_response",
+            timestamp="2025-01-08T10:00:00Z",
+            source="github",
             work_item_id="123",
             project_id="proj-1",
             comment=Comment("1", "alice", "test", "2025-01-08T10:00:00Z"),
             context=CommentContext(),
-            timestamp="2025-01-08T10:00:00Z",
-            source="github",
         )
 
         adapter.emit(event)
