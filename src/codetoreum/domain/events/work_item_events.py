@@ -19,9 +19,12 @@ from .adapter_events import CodetoreumEvent
 class WorkItemCreatedEvent(CodetoreumEvent):
     """Emitted when a work item is created.
 
-    **Note**: This is an immutable event (frozen dataclass). All fields are
-    read-only after construction to maintain audit trail integrity per the
-    event sourcing architecture.
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Events represent immutable facts—attempting to modify any field
+    will raise `FrozenInstanceError`. This immutability is essential because
+    events are the permanent record of state changes in the system and must
+    never be altered once created.
 
     Attributes:
         type (str): Fixed to "workitem.created"
@@ -29,6 +32,17 @@ class WorkItemCreatedEvent(CodetoreumEvent):
         project_id (str): ID of the project containing the work item
         title (str): Title or name of the work item
         initial_column (Optional[str]): Name of initial board column, None if not on board
+
+    Example:
+        >>> event = WorkItemCreatedEvent(
+        ...     type="workitem.created",
+        ...     timestamp="2025-01-14T10:30:00+00:00",
+        ...     source="github",
+        ...     work_item_id="123",
+        ...     project_id="proj-1",
+        ...     title="Implement new feature"
+        ... )
+        >>> event.title = "Updated title"  # ❌ Raises FrozenInstanceError
     """
 
     work_item_id: str = ""
@@ -77,11 +91,14 @@ class WorkItemCreatedEvent(CodetoreumEvent):
 class WorkItemUpdatedEvent(CodetoreumEvent):
     """Emitted when a work item's properties are updated.
 
-    **Note**: This is an immutable event (frozen dataclass). All fields are
-    read-only after construction to maintain audit trail integrity per the
-    event sourcing architecture. The `changes` dict field reference is immutable
-    (cannot be reassigned), though the dict itself is mutable for flexible change
-    tracking.
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Events represent immutable facts—attempting to modify any field
+    will raise `FrozenInstanceError`. This immutability is essential because
+    events are the permanent record of state changes in the system and must
+    never be altered once created. The `changes` dict field reference is
+    immutable (cannot be reassigned), though the dict itself is mutable for
+    flexible change tracking.
 
     Attributes:
         type (str): Fixed to "workitem.updated"
@@ -89,6 +106,17 @@ class WorkItemUpdatedEvent(CodetoreumEvent):
         project_id (str): ID of the project containing the work item
         changes (Dict[str, Any]): Dictionary of field names to new values that were changed.
             Field reference is immutable (frozen), though dict contents are mutable.
+
+    Example:
+        >>> event = WorkItemUpdatedEvent(
+        ...     type="workitem.updated",
+        ...     timestamp="2025-01-14T10:30:00+00:00",
+        ...     source="github",
+        ...     work_item_id="123",
+        ...     project_id="proj-1",
+        ...     changes={"status": "In Progress"}
+        ... )
+        >>> event.changes = {"status": "Done"}  # ❌ Raises FrozenInstanceError
     """
 
     work_item_id: str = ""

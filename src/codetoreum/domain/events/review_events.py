@@ -22,9 +22,12 @@ CodeReviewStatus = Literal["open", "approved", "changes_requested", "merged", "c
 class ReviewStatusChangedEvent(CodetoreumEvent):
     """Emitted when a code review's status changes.
 
-    **Note**: This is an immutable event (frozen dataclass). All fields are
-    read-only after construction to maintain audit trail integrity per the
-    event sourcing architecture.
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Events represent immutable facts—attempting to modify any field
+    will raise `FrozenInstanceError`. This immutability is essential because
+    events are the permanent record of state changes in the system and must
+    never be altered once created.
 
     Attributes:
         type (str): Fixed to "review.status_changed"
@@ -34,6 +37,19 @@ class ReviewStatusChangedEvent(CodetoreumEvent):
         previous_status (Literal["open", "approved", "changes_requested", "merged", "closed"]): Previous review status
         new_status (Literal["open", "approved", "changes_requested", "merged", "closed"]): New review status
         reviewer (Optional[str]): Username of reviewer who changed status, None if automated
+
+    Example:
+        >>> event = ReviewStatusChangedEvent(
+        ...     type="review.status_changed",
+        ...     timestamp="2025-01-14T10:30:00+00:00",
+        ...     source="github",
+        ...     review_id="pr-1",
+        ...     project_id="proj-1",
+        ...     previous_status="open",
+        ...     new_status="approved",
+        ...     reviewer="reviewer123"
+        ... )
+        >>> event.new_status = "changes_requested"  # ❌ Raises FrozenInstanceError
     """
 
     review_id: str = ""
@@ -92,9 +108,12 @@ class ReviewStatusChangedEvent(CodetoreumEvent):
 class ReviewCommentAddedEvent(CodetoreumEvent):
     """Emitted when a comment is added to a code review.
 
-    **Note**: This is an immutable event (frozen dataclass). All fields are
-    read-only after construction to maintain audit trail integrity per the
-    event sourcing architecture.
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Events represent immutable facts—attempting to modify any field
+    will raise `FrozenInstanceError`. This immutability is essential because
+    events are the permanent record of state changes in the system and must
+    never be altered once created.
 
     Attributes:
         type (str): Fixed to "review.comment_added"
@@ -102,6 +121,16 @@ class ReviewCommentAddedEvent(CodetoreumEvent):
         work_item_id (Optional[str]): ID of associated work item, None if not linked
         project_id (str): ID of the project containing the review
         comment (Optional[Comment]): The comment object added to the review, None if not available
+
+    Example:
+        >>> event = ReviewCommentAddedEvent(
+        ...     type="review.comment_added",
+        ...     timestamp="2025-01-14T10:30:00+00:00",
+        ...     source="github",
+        ...     review_id="pr-1",
+        ...     project_id="proj-1"
+        ... )
+        >>> event.review_id = "pr-2"  # ❌ Raises FrozenInstanceError
     """
 
     review_id: str = ""

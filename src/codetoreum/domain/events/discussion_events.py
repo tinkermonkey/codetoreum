@@ -21,8 +21,11 @@ from .adapter_events import CodetoreumEvent
 class Comment:
     """Represents a comment in the system.
 
-    **Note**: This is an immutable object (frozen dataclass). All fields are
-    read-only after construction to maintain data integrity.
+    **Immutability**: This is an immutable object (frozen dataclass). All fields
+    are read-only after construction to ensure data integrity and thread safety.
+    Events and value objects in the event sourcing system must be immutable to
+    prevent accidental modifications. Attempting to modify any field will raise
+    `FrozenInstanceError`.
 
     Attributes:
         id (str): Unique identifier for the comment
@@ -31,6 +34,15 @@ class Comment:
         created_at (str): ISO 8601 timestamp when the comment was created
         parent_id (Optional[str]): ID of parent comment if this is a reply, None if top-level
         is_bot (bool): Whether the comment was authored by a bot (default: False)
+
+    Example:
+        >>> comment = Comment(
+        ...     id="comment-1",
+        ...     author="user123",
+        ...     body="This is a comment",
+        ...     created_at="2025-01-14T10:30:00+00:00"
+        ... )
+        >>> comment.body = "Modified text"  # ❌ Raises FrozenInstanceError
     """
 
     id: str
@@ -84,8 +96,11 @@ class Comment:
 class CommentContext:
     """Context information about a comment's location and purpose.
 
-    **Note**: This is an immutable object (frozen dataclass). All fields are
-    read-only after construction to maintain data integrity.
+    **Immutability**: This is an immutable object (frozen dataclass). All fields
+    are read-only after construction to ensure data integrity and thread safety.
+    Events and value objects in the event sourcing system must be immutable to
+    prevent accidental modifications. Attempting to modify any field will raise
+    `FrozenInstanceError`.
 
     Attributes:
         thread_id (Optional[str]): ID of the discussion thread, None if not part of thread
@@ -93,6 +108,14 @@ class CommentContext:
         is_initial_request (bool): Whether this is the initial request comment (default: False)
         column_name (str): Name of the board column where comment was made (empty if not applicable)
         agent_assignment (str): Agent assigned to handle the comment (empty if unassigned)
+
+    Example:
+        >>> context = CommentContext(
+        ...     thread_id="thread-1",
+        ...     is_initial_request=True,
+        ...     column_name="In Progress"
+        ... )
+        >>> context.column_name = "Review"  # ❌ Raises FrozenInstanceError
     """
 
     thread_id: Optional[str] = None
@@ -140,9 +163,12 @@ class CommentContext:
 class CommentNeedsResponseEvent(CodetoreumEvent):
     """Emitted when a comment requires a response from the system.
 
-    **Note**: This is an immutable event (frozen dataclass). All fields are
-    read-only after construction to maintain audit trail integrity per the
-    event sourcing architecture.
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Events represent immutable facts—attempting to modify any field
+    will raise `FrozenInstanceError`. This immutability is essential because
+    events are the permanent record of state changes in the system and must
+    never be altered once created.
 
     Attributes:
         type (str): Fixed to "comment.needs_response"
@@ -150,6 +176,16 @@ class CommentNeedsResponseEvent(CodetoreumEvent):
         project_id (str): ID of the project containing the work item
         comment (Optional[Comment]): The comment object requiring response, None if not available
         context (Optional[CommentContext]): Context information about the comment, None if not available
+
+    Example:
+        >>> event = CommentNeedsResponseEvent(
+        ...     type="comment.needs_response",
+        ...     timestamp="2025-01-14T10:30:00+00:00",
+        ...     source="github",
+        ...     work_item_id="issue-1",
+        ...     project_id="proj-1"
+        ... )
+        >>> event.work_item_id = "issue-2"  # ❌ Raises FrozenInstanceError
     """
 
     work_item_id: str = ""
@@ -199,15 +235,28 @@ class CommentNeedsResponseEvent(CodetoreumEvent):
 class CommentPostedEvent(CodetoreumEvent):
     """Emitted when a comment is posted to a work item.
 
-    **Note**: This is an immutable event (frozen dataclass). All fields are
-    read-only after construction to maintain audit trail integrity per the
-    event sourcing architecture.
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Events represent immutable facts—attempting to modify any field
+    will raise `FrozenInstanceError`. This immutability is essential because
+    events are the permanent record of state changes in the system and must
+    never be altered once created.
 
     Attributes:
         type (str): Fixed to "comment.posted"
         work_item_id (str): ID of the work item where comment was posted
         project_id (str): ID of the project containing the work item
         comment (Optional[Comment]): The comment object that was posted, None if not available
+
+    Example:
+        >>> event = CommentPostedEvent(
+        ...     type="comment.posted",
+        ...     timestamp="2025-01-14T10:30:00+00:00",
+        ...     source="github",
+        ...     work_item_id="issue-1",
+        ...     project_id="proj-1"
+        ... )
+        >>> event.project_id = "proj-2"  # ❌ Raises FrozenInstanceError
     """
 
     work_item_id: str = ""

@@ -20,9 +20,12 @@ from .adapter_events import CodetoreumEvent
 class WorkItemColumnChangedEvent(CodetoreumEvent):
     """Emitted when a work item moves between columns on a board.
 
-    **Note**: This is an immutable event (frozen dataclass). All fields are
-    read-only after construction to maintain audit trail integrity per the
-    event sourcing architecture.
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Events represent immutable facts—attempting to modify any field
+    will raise `FrozenInstanceError`. This immutability is essential because
+    events are the permanent record of state changes in the system and must
+    never be altered once created.
 
     This event captures the movement of a work item from one column
     (workflow state) to another, including who initiated the change
@@ -36,6 +39,20 @@ class WorkItemColumnChangedEvent(CodetoreumEvent):
         from_column (str): Name of the column the item left
         to_column (str): Name of the column the item entered
         moved_by (Literal["human", "orchestrator", "unknown"]): Actor who initiated the move
+
+    Example:
+        >>> event = WorkItemColumnChangedEvent(
+        ...     type="workitem.column_changed",
+        ...     timestamp="2025-01-14T10:30:00+00:00",
+        ...     source="github",
+        ...     work_item_id="123",
+        ...     project_id="proj-1",
+        ...     board_id="board-1",
+        ...     from_column="Backlog",
+        ...     to_column="In Progress",
+        ...     moved_by="human"
+        ... )
+        >>> event.to_column = "Done"  # ❌ Raises FrozenInstanceError
     """
 
     work_item_id: str = ""
@@ -94,9 +111,12 @@ class WorkItemColumnChangedEvent(CodetoreumEvent):
 class BoardReconciledEvent(CodetoreumEvent):
     """Emitted when a board's structure is reconciled with the source system.
 
-    **Note**: This is an immutable event (frozen dataclass). All fields are
-    read-only after construction to maintain audit trail integrity per the
-    event sourcing architecture.
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Events represent immutable facts—attempting to modify any field
+    will raise `FrozenInstanceError`. This immutability is essential because
+    events are the permanent record of state changes in the system and must
+    never be altered once created.
 
     This event is emitted when the adapter detects that the board's columns
     or work items have changed structurally (columns added/removed, items
@@ -109,6 +129,19 @@ class BoardReconciledEvent(CodetoreumEvent):
         columns_added (Tuple[str, ...]): Immutable tuple of new column names
         columns_removed (Tuple[str, ...]): Immutable tuple of deleted column names
         items_moved (int): Number of work items repositioned
+
+    Example:
+        >>> event = BoardReconciledEvent(
+        ...     type="board.reconciled",
+        ...     timestamp="2025-01-14T10:30:00+00:00",
+        ...     source="github",
+        ...     project_id="proj-1",
+        ...     board_id="board-1",
+        ...     columns_added=("Review", "Done"),
+        ...     columns_removed=("Archived",),
+        ...     items_moved=5
+        ... )
+        >>> event.items_moved = 10  # ❌ Raises FrozenInstanceError
     """
 
     project_id: str = ""
