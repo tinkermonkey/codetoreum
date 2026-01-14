@@ -388,6 +388,41 @@ class TestEventEmitter:
         # Should not raise
         adapter.emit(event)
 
+    def test_emit_logs_failure_summary(self, adapter, caplog):
+        """Test emit logs a summary when multiple handlers fail."""
+        handler1 = MagicMock(side_effect=ValueError("Handler 1 fails"))
+        handler2 = MagicMock()  # Success
+        handler3 = MagicMock(side_effect=RuntimeError("Handler 3 fails"))
+
+        adapter.on("review.status_changed", handler1)
+        adapter.on("review.status_changed", handler2)
+        adapter.on("review.status_changed", handler3)
+
+        event = ReviewStatusChangedEvent(
+            type="review.status_changed",
+            timestamp="2024-01-01T10:00:00Z",
+            source="github",
+            review_id="PR123",
+            project_id="proj-1",
+            previous_status="open",
+            new_status="approved",
+        )
+
+        adapter.emit(event)
+
+        # Should have logged individual handler errors and a summary
+        error_logs = [record for record in caplog.records if record.levelname == "ERROR"]
+        assert len(error_logs) >= 3  # 2 handler errors + 1 summary
+
+        # Verify summary log exists
+        summary_logs = [
+            record for record in error_logs
+            if "completed with" in record.message and "handler failure(s)" in record.message
+        ]
+        assert len(summary_logs) == 1
+        assert summary_logs[0].__dict__.get("failure_count") == 2
+        assert summary_logs[0].__dict__.get("error_id") == "ERR_HANDLER_FAILURES"
+
     def test_on_rejects_non_callable(self, adapter):
         """Test on() rejects non-callable handlers."""
         with pytest.raises(ValueError, match="must be callable"):

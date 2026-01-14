@@ -144,14 +144,22 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
     def emit(self, event: Any) -> None:
         """Emit event to all registered handlers.
 
-        Handler failures are logged but do not prevent other handlers from
-        executing. Monitor handler_failures metric for production issues.
+        Handler failures are logged at ERROR level with full stack traces but do not
+        prevent other handlers from executing. This allows event processing to continue
+        while ensuring failures are visible in logs for monitoring and debugging.
+
+        Critical exceptions like asyncio.CancelledError and KeyboardInterrupt are
+        never suppressed - they propagate immediately to the caller. Only application-
+        level exceptions (ValueError, TypeError, and other Exception subclasses) are
+        caught and logged.
 
         Args:
             event: Event to emit (should be CodetoreumEvent or subclass)
 
         Raises:
-            ValueError: If event is invalid
+            asyncio.CancelledError: If a handler is cancelled
+            KeyboardInterrupt: If interrupted by user (via BaseException, not caught)
+            SystemExit: If system exit is requested (via BaseException, not caught)
         """
         event_type = getattr(event, "type", None)
         if event_type not in self._event_handlers:
@@ -159,6 +167,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
 
         failures = []
         for handler in self._event_handlers[event_type]:
+            handler_name = getattr(handler, "__name__", str(handler))
             try:
                 handler(event)
             except asyncio.CancelledError:
@@ -166,7 +175,6 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
                 raise
             except (ValueError, TypeError) as e:
                 # Expected validation errors from handlers
-                handler_name = getattr(handler, "__name__", str(handler))
                 logger.error(
                     f"Handler {handler_name} validation error for {event_type}: {e}",
                     exc_info=True,
@@ -179,7 +187,6 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
                 failures.append((handler, e))
             except Exception as e:
                 # Unexpected errors - critical issue
-                handler_name = getattr(handler, "__name__", str(handler))
                 logger.error(
                     f"Unexpected error in handler {handler_name} for {event_type}: {e}",
                     exc_info=True,
@@ -190,6 +197,16 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
                     }
                 )
                 failures.append((handler, e))
+
+        if failures:
+            logger.error(
+                f"Event emission for {event_type} completed with {len(failures)} handler failure(s)",
+                extra={
+                    "event_type": event_type,
+                    "failure_count": len(failures),
+                    "error_id": "ERR_HANDLER_FAILURES"
+                }
+            )
 
     # IMonitoredService implementation
 
