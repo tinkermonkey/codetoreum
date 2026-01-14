@@ -209,3 +209,104 @@ class TestWorkItemServiceContract(ABC):
         assert updated.title == "Updated Title"
         assert updated.status == "in_progress"
         assert updated.id == item.id  # Same item
+
+    # Negative Test Cases
+
+    @pytest.mark.asyncio
+    async def test_empty_string_title_validation(self):
+        """Test that empty string in required title field raises ValidationError."""
+        service = await self.create_service()
+
+        with pytest.raises((ValueError, AttributeError, TypeError)):
+            await service.create_work_item(
+                project_id="proj-123",
+                title="",  # Empty string - should fail
+                description="Test Description"
+            )
+
+    @pytest.mark.asyncio
+    async def test_empty_string_project_id_validation(self):
+        """Test that empty string in project_id raises ValidationError."""
+        service = await self.create_service()
+
+        with pytest.raises((ValueError, AttributeError, TypeError)):
+            await service.create_work_item(
+                project_id="",  # Empty - should fail
+                title="Test Title",
+                description="Test Description"
+            )
+
+    @pytest.mark.asyncio
+    async def test_sql_injection_pattern_in_id(self):
+        """Test that SQL injection patterns in work item ID are rejected."""
+        service = await self.create_service()
+
+        # Create a valid item first
+        item = await service.create_work_item(
+            project_id="proj-123",
+            title="Test",
+            description="Test"
+        )
+
+        # Attempt to get with malicious ID
+        with pytest.raises((ValueError, KeyError)):
+            await service.get_work_item("'; DROP TABLE items; --")
+
+    @pytest.mark.asyncio
+    async def test_xss_pattern_in_title(self):
+        """Test that XSS patterns in title field are handled safely."""
+        service = await self.create_service()
+
+        # Should either reject or sanitize
+        try:
+            item = await service.create_work_item(
+                project_id="proj-123",
+                title="<script>alert('XSS')</script>",
+                description="Test"
+            )
+            # If it passes, verify script is not executable
+            assert "<script>" not in item.title or "&lt;script&gt;" in item.title
+        except (ValueError, TypeError):
+            # Rejection is also acceptable
+            pass
+
+    @pytest.mark.asyncio
+    async def test_oversized_description_rejected(self):
+        """Test that oversized input is rejected."""
+        service = await self.create_service()
+
+        # Create a 10MB description
+        huge_description = "x" * (10 * 1024 * 1024)
+
+        with pytest.raises((ValueError, MemoryError, AttributeError)):
+            await service.create_work_item(
+                project_id="proj-123",
+                title="Test",
+                description=huge_description
+            )
+
+    @pytest.mark.asyncio
+    async def test_invalid_enum_value_rejected(self):
+        """Test that invalid enum values are rejected."""
+        service = await self.create_service()
+
+        item = await service.create_work_item(
+            project_id="proj-123",
+            title="Test",
+            description="Test"
+        )
+
+        # Attempt to set invalid status
+        with pytest.raises((ValueError, KeyError)):
+            await service.update_work_item(
+                item.id,
+                {"status": "INVALID_STATUS_12345"}
+            )
+
+    @pytest.mark.asyncio
+    async def test_nonexistent_item_not_found(self):
+        """Test that querying nonexistent item raises appropriate error."""
+        service = await self.create_service()
+
+        with pytest.raises((ValueError, KeyError)):
+            await service.get_work_item("nonexistent-id-12345")

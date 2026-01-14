@@ -1,5 +1,6 @@
 """Unit tests for board events."""
 
+import uuid
 import pytest
 
 from codetoreum.domain.events import (
@@ -327,3 +328,105 @@ class TestBoardReconciledEvent:
         assert restored.columns_added == original.columns_added
         assert restored.columns_removed == original.columns_removed
         assert restored.items_moved == original.items_moved
+
+    def test_literal_type_preserved_moved_by(self):
+        """Test that Literal types are preserved for moved_by field."""
+        event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=now_iso(),
+            source="github",
+            work_item_id="123",
+            project_id="proj-1",
+            board_id="board-1",
+            from_column="Backlog",
+            to_column="In Progress",
+            moved_by="orchestrator",
+        )
+
+        data = event.to_dict()
+        restored = WorkItemColumnChangedEvent.from_dict(data)
+
+        assert restored.moved_by == "orchestrator"
+        assert isinstance(restored.moved_by, str)
+
+    def test_tuple_type_preserved_in_board_reconciled(self):
+        """Test that tuple types are preserved through serialization."""
+        event = BoardReconciledEvent(
+            type="board.reconciled",
+            timestamp=now_iso(),
+            source="github",
+            project_id="proj-1",
+            board_id="board-1",
+            columns_added=["Col A", "Col B", "Col C"],
+            columns_removed=["Old Col"],
+            items_moved=5,
+        )
+
+        data = event.to_dict()
+        restored = BoardReconciledEvent.from_dict(data)
+
+        assert isinstance(restored.columns_added, tuple)
+        assert isinstance(restored.columns_removed, tuple)
+        assert restored.columns_added == ("Col A", "Col B", "Col C")
+        assert restored.columns_removed == ("Old Col",)
+
+    def test_uuid_format_preserved_in_board_event(self):
+        """Test that UUID fields preserve format in board events."""
+        event_id = str(uuid.uuid4())
+
+        event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=now_iso(),
+            source="github",
+            correlation_id=event_id,
+            work_item_id="123",
+            project_id="proj-1",
+            board_id="board-1",
+            from_column="Backlog",
+            to_column="In Progress",
+            moved_by="human",
+        )
+
+        data = event.to_dict()
+        restored = WorkItemColumnChangedEvent.from_dict(data)
+
+        assert restored.correlation_id == event_id
+        uuid.UUID(restored.correlation_id)
+
+    def test_optional_field_none_in_board_event(self):
+        """Test that None values are preserved in board events."""
+        # Create event with explicit None for optional fields
+        event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=now_iso(),
+            source="github",
+            correlation_id=None,
+            work_item_id="123",
+            project_id="proj-1",
+            board_id="board-1",
+            from_column="Backlog",
+            to_column="In Progress",
+            moved_by="unknown",
+        )
+
+        data = event.to_dict()
+        restored = WorkItemColumnChangedEvent.from_dict(data)
+
+        assert restored.correlation_id is None
+
+    def test_numeric_type_preserved_in_board_reconciled(self):
+        """Test that numeric types are preserved in board events."""
+        event = BoardReconciledEvent(
+            type="board.reconciled",
+            timestamp=now_iso(),
+            source="github",
+            project_id="proj-1",
+            board_id="board-1",
+            items_moved=42,
+        )
+
+        data = event.to_dict()
+        restored = BoardReconciledEvent.from_dict(data)
+
+        assert restored.items_moved == 42
+        assert isinstance(restored.items_moved, int)

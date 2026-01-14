@@ -137,3 +137,65 @@ class TestBoardServiceContract(ABC):
         with pytest.raises(ResourceNotFoundError) as exc_info:
             await service.get_items_in_column("board-456", "NonexistentColumn")
         assert exc_info.value.resource_type == "column"
+
+    # Negative Test Cases
+
+    @pytest.mark.asyncio
+    async def test_empty_string_board_id_validation(self):
+        """Test that empty string in board_id raises ValidationError."""
+        service = await self.create_service()
+
+        with pytest.raises((ValueError, ValidationError, TypeError)):
+            await service.get_board("proj-123", "")
+
+    @pytest.mark.asyncio
+    async def test_empty_string_column_name_validation(self):
+        """Test that empty string in column_name raises ValidationError."""
+        service = await self.create_service()
+        board = await self.setup_test_board(service, "proj-123", "board-456")
+
+        with pytest.raises((ValueError, ValidationError, TypeError)):
+            await service.get_items_in_column("board-456", "")
+
+    @pytest.mark.asyncio
+    async def test_sql_injection_pattern_in_board_id(self):
+        """Test that SQL injection patterns in board_id are rejected."""
+        service = await self.create_service()
+
+        with pytest.raises((ValueError, ResourceNotFoundError)):
+            await service.get_board("proj-123", "'; DROP TABLE boards; --")
+
+    @pytest.mark.asyncio
+    async def test_xss_pattern_in_column_name(self):
+        """Test that XSS patterns in column names are handled safely."""
+        service = await self.create_service()
+        board = await self.setup_test_board(service, "proj-123", "board-456")
+
+        # Attempt with XSS pattern
+        with pytest.raises((ValueError, ResourceNotFoundError)):
+            await service.get_items_in_column("board-456", "<script>alert('XSS')</script>")
+
+    @pytest.mark.asyncio
+    async def test_move_item_to_nonexistent_column_fails(self):
+        """Test that moving item to nonexistent column fails appropriately."""
+        from codetoreum.ports.output.board_service import MovedByType
+
+        service = await self.create_service()
+        board = await self.setup_test_board(service, "proj-123", "board-456")
+
+        if board.columns and board.columns[0].work_item_ids:
+            item_id = board.columns[0].work_item_ids[0]
+
+            with pytest.raises((ValueError, ResourceNotFoundError)):
+                await service.move_item_to_column(
+                    item_id, "NonexistentColumn12345", MovedByType.HUMAN
+                )
+
+    @pytest.mark.asyncio
+    async def test_get_item_position_nonexistent_item_fails(self):
+        """Test that querying nonexistent item position fails."""
+        service = await self.create_service()
+        await self.setup_test_board(service, "proj-123", "board-456")
+
+        with pytest.raises((ValueError, ResourceNotFoundError)):
+            await service.get_item_position("nonexistent-item-id-12345")

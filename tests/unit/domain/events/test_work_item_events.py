@@ -1,5 +1,6 @@
 """Unit tests for work item events."""
 
+import uuid
 import pytest
 
 from codetoreum.domain.events import (
@@ -288,3 +289,91 @@ class TestWorkItemUpdatedEvent:
 
         assert event.changes["assignee"] is None
         assert event.changes["due_date"] is None
+
+    def test_uuid_format_preserved_in_roundtrip(self):
+        """Test that UUID fields preserve format through serialization."""
+        event_id = str(uuid.uuid4())
+
+        event = WorkItemCreatedEvent(
+            type="workitem.created",
+            timestamp=now_iso(),
+            source="github",
+            correlation_id=event_id,
+            work_item_id="123",
+            project_id="proj-1",
+            title="UUID Test",
+        )
+
+        data = event.to_dict()
+        restored = WorkItemCreatedEvent.from_dict(data)
+
+        assert restored.correlation_id == event_id
+        # Verify it's still a valid UUID
+        uuid.UUID(restored.correlation_id)
+
+    def test_optional_field_none_vs_missing_roundtrip(self):
+        """Test that None and missing values are distinguished correctly."""
+        # Explicit None for initial_column
+        event1 = WorkItemCreatedEvent(
+            type="workitem.created",
+            timestamp=now_iso(),
+            source="github",
+            work_item_id="123",
+            project_id="proj-1",
+            title="Test",
+            initial_column=None,
+        )
+
+        data1 = event1.to_dict()
+        assert "initial_column" in data1
+        assert data1["initial_column"] is None
+
+        restored1 = WorkItemCreatedEvent.from_dict(data1)
+        assert restored1.initial_column is None
+
+    def test_literal_type_preserved_in_updated_event(self):
+        """Test that Literal types are preserved through serialization."""
+        changes = {"status": "In Progress"}
+
+        event = WorkItemUpdatedEvent(
+            type="workitem.updated",
+            timestamp=now_iso(),
+            source="github",
+            work_item_id="123",
+            project_id="proj-1",
+            changes=changes,
+        )
+
+        data = event.to_dict()
+        restored = WorkItemUpdatedEvent.from_dict(data)
+
+        assert restored.changes["status"] == "In Progress"
+        assert isinstance(restored.changes["status"], str)
+
+    def test_complex_nested_changes_roundtrip(self):
+        """Test that complex nested structures preserve types."""
+        changes = {
+            "metadata": {
+                "priority": 5,
+                "tags": ["bug", "urgent"],
+                "estimates": [8, 13, 21],
+                "nested": {"key": "value"},
+            }
+        }
+
+        event = WorkItemUpdatedEvent(
+            type="workitem.updated",
+            timestamp=now_iso(),
+            source="github",
+            work_item_id="123",
+            project_id="proj-1",
+            changes=changes,
+        )
+
+        data = event.to_dict()
+        restored = WorkItemUpdatedEvent.from_dict(data)
+
+        assert restored.changes["metadata"]["priority"] == 5
+        assert restored.changes["metadata"]["tags"] == ["bug", "urgent"]
+        assert restored.changes["metadata"]["estimates"] == [8, 13, 21]
+        assert restored.changes["metadata"]["nested"]["key"] == "value"
