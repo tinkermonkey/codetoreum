@@ -622,6 +622,7 @@ class TestGitHubDiscussionAdapterEventEmission:
         adapter.on("comment.needs_response", handler2)
 
         event = CommentNeedsResponseEvent(
+            type="comment.needs_response",
             work_item_id="123",
             project_id="proj-1",
             comment=Comment("1", "alice", "test", "2025-01-08T10:00:00Z"),

@@ -1,5 +1,6 @@
 """Test configuration and shared fixtures."""
 
+import asyncio
 from typing import Generator
 
 import docker
@@ -171,3 +172,38 @@ def event_bus() -> Generator[EventBus, None, None]:
     for handler in list(bus._wildcard_handlers):
         bus.unregister_handler(handler)
     bus.reset_statistics()
+
+
+@pytest.fixture(scope="function", autouse=True)
+def _cleanup_event_loop() -> Generator[None, None, None]:
+    """Ensure event loop is properly closed to prevent ResourceWarnings.
+
+    With asyncio_default_fixture_loop_scope = "function", pytest-asyncio creates
+    a new event loop for each test. This fixture ensures the loop is properly
+    closed after the test completes to prevent ResourceWarnings from unclosed
+    sockets in the event loop.
+
+    This is a workaround for pytest-asyncio's automatic loop management which
+    sometimes leaves loops in a state where they trigger ResourceWarnings during
+    garbage collection.
+
+    See: https://github.com/pytest-dev/pytest-asyncio/issues
+    """
+    yield
+
+    # After test completes, ensure any event loop is properly closed
+    try:
+        loop = asyncio.get_event_loop()
+        if loop and not loop.is_closed():
+            # Cancel all pending tasks
+            pending = asyncio.all_tasks(loop)
+            for task in pending:
+                task.cancel()
+            # Run loop one more time to process cancellations
+            if pending:
+                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            # Close the loop
+            loop.close()
+    except RuntimeError:
+        # No event loop in current thread, which is fine
+        pass

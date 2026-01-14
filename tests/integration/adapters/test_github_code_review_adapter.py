@@ -185,6 +185,7 @@ class TestEventEmitter:
         adapter.on("review.status_changed", handler2)
 
         event = ReviewStatusChangedEvent(
+            type="review.status_changed",
             timestamp="2024-01-01T10:00:00Z",
             source="github",
             review_id="PR123",
@@ -207,6 +208,7 @@ class TestEventEmitter:
         adapter.on("review.status_changed", handler2)
 
         event = ReviewStatusChangedEvent(
+            type="review.status_changed",
             timestamp="2024-01-01T10:00:00Z",
             source="github",
             review_id="PR123",
