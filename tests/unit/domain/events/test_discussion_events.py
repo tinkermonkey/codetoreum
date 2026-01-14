@@ -1,6 +1,7 @@
 """Unit tests for discussion and comment events."""
 
 import pytest
+from dataclasses import FrozenInstanceError
 
 from codetoreum.domain.events import (
     Comment,
@@ -78,6 +79,63 @@ class TestComment:
 
         assert comment.id == "c1"
         assert comment.parent_id == "c0"
+
+    def test_comment_empty_id_raises_error(self):
+        """Test that empty id raises ValueError."""
+        with pytest.raises(ValueError, match="Comment id is required"):
+            Comment(id="", author="alice", body="text", created_at=now_iso())
+
+    def test_comment_empty_author_raises_error(self):
+        """Test that empty author raises ValueError."""
+        with pytest.raises(ValueError, match="Comment author is required"):
+            Comment(id="c1", author="", body="text", created_at=now_iso())
+
+    def test_comment_empty_body_raises_error(self):
+        """Test that empty body raises ValueError."""
+        with pytest.raises(ValueError, match="Comment body is required"):
+            Comment(id="c1", author="alice", body="", created_at=now_iso())
+
+    def test_comment_empty_created_at_raises_error(self):
+        """Test that empty created_at raises ValueError."""
+        with pytest.raises(ValueError, match="Comment created_at is required"):
+            Comment(id="c1", author="alice", body="text", created_at="")
+
+    def test_comment_invalid_iso8601_format_raises_error(self):
+        """Test that invalid ISO 8601 format raises ValueError."""
+        with pytest.raises(ValueError, match="created_at must be ISO 8601 format"):
+            Comment(id="c1", author="alice", body="text", created_at="not-a-timestamp")
+
+    def test_comment_created_at_with_z_suffix(self):
+        """Test that ISO 8601 format with 'Z' suffix is accepted."""
+        comment = Comment(
+            id="c1",
+            author="alice",
+            body="text",
+            created_at="2024-01-15T10:30:00Z"
+        )
+        assert comment.created_at == "2024-01-15T10:30:00Z"
+
+    def test_comment_created_at_with_timezone_offset(self):
+        """Test that ISO 8601 format with timezone offset is accepted."""
+        comment = Comment(
+            id="c1",
+            author="alice",
+            body="text",
+            created_at="2024-01-15T10:30:00+00:00"
+        )
+        assert comment.created_at == "2024-01-15T10:30:00+00:00"
+
+    def test_comment_immutability(self):
+        """Test that Comment instances are immutable."""
+        comment = Comment(
+            id="c1",
+            author="alice",
+            body="text",
+            created_at=now_iso()
+        )
+
+        with pytest.raises(FrozenInstanceError):
+            comment.id = "c2"
 
 
 class TestCommentContext:
@@ -164,6 +222,50 @@ class TestCommentContext:
         assert context.thread_id == "t1"
         assert context.parent_comment is not None
         assert context.parent_comment.id == "p1"
+
+    def test_context_immutability(self):
+        """Test that CommentContext instances are immutable."""
+        context = CommentContext(
+            thread_id="t1",
+            column_name="Backlog"
+        )
+
+        with pytest.raises(FrozenInstanceError):
+            context.thread_id = "t2"
+
+    def test_context_with_invalid_parent_comment_raises_error(self):
+        """Test that CommentContext with invalid parent Comment raises error."""
+        # The invalid comment will raise during Comment.__post_init__
+        with pytest.raises(ValueError, match="Comment id is required"):
+            CommentContext(
+                parent_comment=Comment(id="", author="alice", body="test", created_at=now_iso())
+            )
+
+    def test_context_serialization_roundtrip(self):
+        """Test context serialization and deserialization roundtrip."""
+        parent = Comment(
+            id="p1",
+            author="alice",
+            body="original",
+            created_at=now_iso(),
+        )
+
+        original = CommentContext(
+            thread_id="t1",
+            parent_comment=parent,
+            is_initial_request=True,
+            column_name="Backlog",
+            agent_assignment="a1",
+        )
+
+        d = original.to_dict()
+        restored = CommentContext.from_dict(d)
+
+        assert restored.thread_id == original.thread_id
+        assert restored.is_initial_request == original.is_initial_request
+        assert restored.column_name == original.column_name
+        assert restored.agent_assignment == original.agent_assignment
+        assert restored.parent_comment.id == original.parent_comment.id
 
 
 class TestCommentNeedsResponseEvent:

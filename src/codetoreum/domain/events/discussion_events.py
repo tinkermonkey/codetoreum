@@ -78,6 +78,15 @@ class CommentContext:
     column_name: str = ""
     agent_assignment: str = ""
 
+    def __post_init__(self) -> None:
+        """Validate comment context after initialization."""
+        # thread_id is optional, no validation needed
+        # parent_comment is optional, but if provided it's a Comment object (validated by Comment)
+        # is_initial_request is bool, no validation needed
+        # column_name is optional (can be empty), no validation needed
+        # agent_assignment is optional (can be empty), no validation needed
+        # No required string fields to validate for CommentContext
+
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         return {
