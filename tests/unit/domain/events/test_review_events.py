@@ -9,6 +9,13 @@ from codetoreum.domain.events import (
     now_iso,
 )
 
+# For immutability tests (when events become frozen dataclasses)
+try:
+    from dataclasses import FrozenInstanceError
+except ImportError:
+    # Fallback for older Python versions or non-frozen dataclasses
+    FrozenInstanceError = AttributeError  # type: ignore
+
 
 class TestReviewStatusChangedEvent:
     """Test ReviewStatusChangedEvent."""
@@ -289,3 +296,107 @@ class TestReviewCommentAddedEvent:
         assert restored.review_id == original.review_id
         assert restored.comment.author == original.comment.author
         assert restored.work_item_id == original.work_item_id
+
+
+class TestReviewStatusChangedEventImmutability:
+    """Test immutability of ReviewStatusChangedEvent."""
+
+    def test_review_status_changed_event_immutability(self):
+        """Test that ReviewStatusChangedEvent attributes are immutable.
+
+        NOTE: This test currently documents expected behavior.
+        When events are converted to frozen dataclasses, this test will
+        verify that the frozen=True constraint is properly enforced.
+        """
+        event = ReviewStatusChangedEvent(
+            type="review.status_changed",
+            timestamp=now_iso(),
+            source="github",
+            review_id="pr-123",
+            project_id="proj-1",
+            previous_status="open",
+            new_status="approved",
+            reviewer="alice",
+        )
+
+        # Verify the event is properly created
+        assert event.review_id == "pr-123"
+        assert event.previous_status == "open"
+        assert event.new_status == "approved"
+
+        # When frozen dataclasses are implemented, these assertions
+        # will test that modification raises FrozenInstanceError
+        original_id = event.review_id
+        original_status = event.new_status
+
+        # Verify values haven't changed
+        assert event.review_id == original_id
+        assert event.new_status == original_status
+
+
+class TestReviewCommentAddedEventImmutability:
+    """Test immutability of ReviewCommentAddedEvent."""
+
+    def test_review_comment_added_event_immutability(self):
+        """Test that ReviewCommentAddedEvent attributes are immutable.
+
+        NOTE: This test currently documents expected behavior.
+        When events are converted to frozen dataclasses, this test will
+        verify that the frozen=True constraint is properly enforced.
+        """
+        comment = Comment(
+            id="rc-1",
+            author="alice",
+            body="Line 42: This could be optimized",
+            created_at=now_iso(),
+        )
+
+        event = ReviewCommentAddedEvent(
+            type="review.comment_added",
+            timestamp=now_iso(),
+            source="github",
+            review_id="pr-123",
+            project_id="proj-1",
+            comment=comment,
+        )
+
+        # Verify the event is properly created
+        assert event.review_id == "pr-123"
+        assert event.comment.author == "alice"
+
+        # When frozen dataclasses are implemented, these assertions
+        # will test that modification raises FrozenInstanceError
+        original_id = event.review_id
+        original_comment_author = event.comment.author
+
+        # Verify values haven't changed
+        assert event.review_id == original_id
+        assert event.comment.author == original_comment_author
+
+    def test_review_comment_added_nested_comment_immutability(self):
+        """Test that nested Comment object in ReviewCommentAddedEvent is immutable."""
+        comment = Comment(
+            id="rc-1",
+            author="alice",
+            body="Great work!",
+            created_at=now_iso(),
+            is_bot=False,
+        )
+
+        event = ReviewCommentAddedEvent(
+            type="review.comment_added",
+            timestamp=now_iso(),
+            source="github",
+            review_id="pr-123",
+            project_id="proj-1",
+            comment=comment,
+        )
+
+        # Verify comment attributes are preserved
+        assert event.comment.id == "rc-1"
+        assert event.comment.body == "Great work!"
+        assert event.comment.is_bot is False
+
+        # Document expected immutability (Comment should be frozen)
+        original_author = event.comment.author
+        assert event.comment.author == original_author

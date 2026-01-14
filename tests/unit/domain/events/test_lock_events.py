@@ -9,6 +9,13 @@ from codetoreum.domain.events import (
     now_iso,
 )
 
+# For immutability tests (lock events are already frozen dataclasses)
+try:
+    from dataclasses import FrozenInstanceError
+except ImportError:
+    # Fallback for older Python versions
+    FrozenInstanceError = AttributeError  # type: ignore
+
 
 class TestLockAcquiredEvent:
     """Test LockAcquiredEvent."""
@@ -306,3 +313,165 @@ class TestLockStaleDetectedEvent:
 
         assert restored.work_item_id == original.work_item_id
         assert restored.lock_acquired_at == original.lock_acquired_at
+
+
+class TestLockAcquiredEventImmutability:
+    """Test immutability of LockAcquiredEvent (frozen dataclass)."""
+
+    def test_lock_acquired_event_is_frozen(self):
+        """Test that LockAcquiredEvent is immutable (frozen dataclass)."""
+        event = LockAcquiredEvent(
+            type="lock.acquired",
+            timestamp=now_iso(),
+            source="github",
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="123",
+            acquisition_method="normal",
+        )
+
+        # Verify the event is properly created
+        assert event.project_id == "proj-1"
+        assert event.work_item_id == "123"
+        assert event.acquisition_method == "normal"
+
+        # LockAcquiredEvent is a frozen dataclass, so attempting to modify
+        # should raise FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
+            event.project_id = "proj-2"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.work_item_id = "456"  # type: ignore
+
+    def test_lock_acquired_event_acquisition_method_immutable(self):
+        """Test that acquisition_method field is immutable."""
+        event = LockAcquiredEvent(
+            type="lock.acquired",
+            timestamp=now_iso(),
+            source="github",
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="123",
+            acquisition_method="stale_recovery",
+        )
+
+        assert event.acquisition_method == "stale_recovery"
+
+        # Should raise FrozenInstanceError when attempting modification
+        with pytest.raises(FrozenInstanceError):
+            event.acquisition_method = "normal"  # type: ignore
+
+
+class TestLockReleasedEventImmutability:
+    """Test immutability of LockReleasedEvent (frozen dataclass)."""
+
+    def test_lock_released_event_is_frozen(self):
+        """Test that LockReleasedEvent is immutable (frozen dataclass)."""
+        event = LockReleasedEvent(
+            type="lock.released",
+            timestamp=now_iso(),
+            source="github",
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="123",
+            reason="completed",
+            next_in_queue="124",
+        )
+
+        # Verify the event is properly created
+        assert event.work_item_id == "123"
+        assert event.reason == "completed"
+        assert event.next_in_queue == "124"
+
+        # LockReleasedEvent is a frozen dataclass, so attempting to modify
+        # should raise FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
+            event.work_item_id = "456"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.reason = "timeout"  # type: ignore
+
+    def test_lock_released_event_reason_immutable(self):
+        """Test that reason field is immutable."""
+        event = LockReleasedEvent(
+            type="lock.released",
+            timestamp=now_iso(),
+            source="github",
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="123",
+            reason="completed",
+        )
+
+        assert event.reason == "completed"
+
+        # Should raise FrozenInstanceError when attempting modification
+        with pytest.raises(FrozenInstanceError):
+            event.reason = "manual"  # type: ignore
+
+    def test_lock_released_event_next_in_queue_immutable(self):
+        """Test that next_in_queue field is immutable."""
+        event = LockReleasedEvent(
+            type="lock.released",
+            timestamp=now_iso(),
+            source="github",
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="123",
+            reason="completed",
+            next_in_queue="124",
+        )
+
+        assert event.next_in_queue == "124"
+
+        # Should raise FrozenInstanceError when attempting modification
+        with pytest.raises(FrozenInstanceError):
+            event.next_in_queue = "125"  # type: ignore
+
+
+class TestLockStaleDetectedEventImmutability:
+    """Test immutability of LockStaleDetectedEvent (frozen dataclass)."""
+
+    def test_lock_stale_detected_event_is_frozen(self):
+        """Test that LockStaleDetectedEvent is immutable (frozen dataclass)."""
+        acquired_at = now_iso()
+        event = LockStaleDetectedEvent(
+            type="lock.stale_detected",
+            timestamp=now_iso(),
+            source="github",
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="123",
+            lock_acquired_at=acquired_at,
+        )
+
+        # Verify the event is properly created
+        assert event.work_item_id == "123"
+        assert event.lock_acquired_at == acquired_at
+
+        # LockStaleDetectedEvent is a frozen dataclass, so attempting to modify
+        # should raise FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
+            event.work_item_id = "456"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.lock_acquired_at = "2024-01-01T00:00:00+00:00"  # type: ignore
+
+    def test_lock_stale_detected_event_lock_acquired_at_immutable(self):
+        """Test that lock_acquired_at field is immutable."""
+        acquired_at = "2024-01-08T10:00:00+00:00"
+        event = LockStaleDetectedEvent(
+            type="lock.stale_detected",
+            timestamp=now_iso(),
+            source="github",
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="123",
+            lock_acquired_at=acquired_at,
+        )
+
+        assert event.lock_acquired_at == acquired_at
+
+        # Should raise FrozenInstanceError when attempting modification
+        with pytest.raises(FrozenInstanceError):
+            event.lock_acquired_at = "2024-01-09T10:00:00+00:00"  # type: ignore

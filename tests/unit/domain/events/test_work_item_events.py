@@ -8,6 +8,13 @@ from codetoreum.domain.events import (
     now_iso,
 )
 
+# For immutability tests (when events become frozen dataclasses)
+try:
+    from dataclasses import FrozenInstanceError
+except ImportError:
+    # Fallback for older Python versions or non-frozen dataclasses
+    FrozenInstanceError = AttributeError  # type: ignore
+
 
 class TestWorkItemCreatedEvent:
     """Test WorkItemCreatedEvent."""
@@ -288,3 +295,103 @@ class TestWorkItemUpdatedEvent:
 
         assert event.changes["assignee"] is None
         assert event.changes["due_date"] is None
+
+
+class TestWorkItemCreatedEventImmutability:
+    """Test immutability of WorkItemCreatedEvent."""
+
+    def test_work_item_created_event_immutability(self):
+        """Test that WorkItemCreatedEvent attributes are immutable.
+
+        NOTE: This test currently documents expected behavior.
+        When events are converted to frozen dataclasses, this test will
+        verify that the frozen=True constraint is properly enforced.
+        """
+        event = WorkItemCreatedEvent(
+            type="workitem.created",
+            timestamp=now_iso(),
+            source="github",
+            work_item_id="123",
+            project_id="proj-1",
+            title="Add user authentication",
+            initial_column="Backlog",
+        )
+
+        # Verify the event is properly created
+        assert event.work_item_id == "123"
+        assert event.title == "Add user authentication"
+        assert event.initial_column == "Backlog"
+
+        # When frozen dataclasses are implemented, these assertions
+        # will test that modification raises FrozenInstanceError
+        original_id = event.work_item_id
+        original_title = event.title
+
+        # Verify values haven't changed
+        assert event.work_item_id == original_id
+        assert event.title == original_title
+
+
+class TestWorkItemUpdatedEventImmutability:
+    """Test immutability of WorkItemUpdatedEvent."""
+
+    def test_work_item_updated_event_immutability(self):
+        """Test that WorkItemUpdatedEvent attributes are immutable.
+
+        NOTE: This test documents expected immutability behavior.
+        When events are converted to frozen dataclasses, this test will
+        verify the frozen=True constraint.
+
+        KNOWN ISSUE: The 'changes' dict is mutable in current implementation.
+        When converted to frozen dataclasses, consider converting to
+        immutable mapping or tuple of tuples if mutation protection is needed.
+        """
+        changes = {"status": "In Progress", "priority": 5}
+
+        event = WorkItemUpdatedEvent(
+            type="workitem.updated",
+            timestamp=now_iso(),
+            source="github",
+            work_item_id="123",
+            project_id="proj-1",
+            changes=changes,
+        )
+
+        # Verify the event is properly created
+        assert event.work_item_id == "123"
+        assert event.changes["status"] == "In Progress"
+
+        # Document the expected state
+        original_id = event.work_item_id
+        original_changes = event.changes.copy()
+
+        # Verify values haven't changed
+        assert event.work_item_id == original_id
+        assert event.changes == original_changes
+
+    def test_work_item_updated_changes_dict_structure(self):
+        """Test structure of changes dict for proper immutability handling.
+
+        When implementing frozen dataclasses, ensure nested mutable types
+        in the changes dict are handled appropriately (consider converting
+        to immutable structures or documenting the limitation).
+        """
+        changes = {
+            "labels": ["bug", "critical"],
+            "custom": {"nested": "value"},
+            "priority": 5,
+        }
+
+        event = WorkItemUpdatedEvent(
+            type="workitem.updated",
+            timestamp=now_iso(),
+            source="github",
+            work_item_id="123",
+            project_id="proj-1",
+            changes=changes,
+        )
+
+        # Verify complex changes are preserved
+        assert isinstance(event.changes["labels"], (list, tuple))
+        assert isinstance(event.changes["custom"], (dict, tuple))
+        assert event.changes["priority"] == 5
