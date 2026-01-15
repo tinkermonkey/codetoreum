@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
-from codetoreum.application.pipeline_lock_service import IQueuedPipelineLockService
 from codetoreum.domain.events import (
     WorkflowStageAdvanced,
     WorkItemStageUpdated,
@@ -304,7 +303,6 @@ class WorkflowOrchestrator:
         event_bus: Optional[EventBus] = None,
         projects_api: Optional[IProjectsAPI] = None,
         board_service: Optional[IBoardService] = None,
-        lock_service: Optional[IQueuedPipelineLockService] = None,
     ):
         """
         Initialize workflow orchestrator.
@@ -319,7 +317,6 @@ class WorkflowOrchestrator:
             event_bus: Event bus for subscribing to adapter events (optional)
             projects_api: Projects API for card movement (optional)
             board_service: Board service for querying item positions (optional)
-            lock_service: Pipeline lock service for coordinating lock operations (optional)
         """
         self.task_queue = task_queue
         self.config = config
@@ -330,7 +327,6 @@ class WorkflowOrchestrator:
         self.event_bus = event_bus
         self.projects_api = projects_api
         self.board_service = board_service
-        self.lock_service = lock_service
 
         # Subscribe to adapter events if event bus is available
         if self.event_bus:
@@ -910,10 +906,15 @@ class WorkflowOrchestrator:
 
         Decision Flow:
         1. Get column configuration
-        2. If automated column: Try to acquire lock and trigger agent
-        3. If exit column: Release lock (triggers next item in queue)
+        2. If automated column: Trigger agent (lock acquisition is handled by BoardEventHandler)
+        3. If exit column: Log for reference (lock release is handled by BoardEventHandler)
         4. If conversational column: Start discussion monitoring
         5. If leaving conversational column: Stop discussion monitoring
+
+        Note: Lock acquisition and release are orchestrated by BoardEventHandler, not here.
+        The WorkflowOrchestrator focuses on task queue management and agent triggering
+        based on column configuration. When a lock is released, the orchestrator reacts
+        via _handle_lock_released() to check for queued items and continue processing.
 
         Args:
             event: workitem.column_changed event
@@ -982,11 +983,13 @@ class WorkflowOrchestrator:
                 except Exception as e:
                     logger.error(f"Failed to enqueue task: {e}")
 
-            # Case 2: Exit column - release lock
+            # Case 2: Exit column - log for reference
             if getattr(target_column_config, 'exit_column', False):
-                logger.debug(f"Column '{to_column}' is exit column, releasing lock")
-                # Lock release is handled by lock service on item completion
-                # This is informational
+                logger.debug(f"Column '{to_column}' is exit column")
+                # Lock release is handled by BoardEventHandler when item moves to exit column.
+                # This ensures all lock cleanup and next-item queue processing happens
+                # in one coordinated place. WorkflowOrchestrator reacts to lock.released
+                # events via _handle_lock_released().
 
             # Case 3: Conversational column - start monitoring (if implemented)
             if getattr(target_column_config, 'discussion_category', None):
@@ -1084,7 +1087,7 @@ class WorkflowOrchestrator:
                 logger.debug("No item queued after lock release")
                 return
 
-            # Board service and lock service required for processing next item
+            # Board service required for processing next item
             if not self.board_service:
                 logger.warning(
                     "Board service not configured, cannot process next queued item"

@@ -135,15 +135,38 @@ class SimulationDecisionEvents(IDecisionEvents):
 
 
 def create_mock_board_service():
-    """Create a mock board service for testing."""
+    """Create a mock board service for testing.
+
+    Returns a mock that simulates work items in different columns
+    based on the requested work_item_id.
+    """
     service = AsyncMock(spec=IBoardService)
-    service.get_item_position = AsyncMock(
-        return_value=WorkItemPosition(
-            work_item_id="issue-2",
-            column_name="Development",
-            position=1,
+
+    async def mock_get_item_position(work_item_id: str) -> WorkItemPosition:
+        """Return position based on work item ID."""
+        # Map work items to their expected positions
+        positions = {
+            "issue-1": WorkItemPosition(
+                work_item_id="issue-1",
+                column_name="Development",
+                position=0,
+            ),
+            "issue-2": WorkItemPosition(
+                work_item_id="issue-2",
+                column_name="Development",
+                position=1,
+            ),
+        }
+        return positions.get(
+            work_item_id,
+            WorkItemPosition(
+                work_item_id=work_item_id,
+                column_name="Development",
+                position=999,
+            ),
         )
-    )
+
+    service.get_item_position = mock_get_item_position
     return service
 
 
