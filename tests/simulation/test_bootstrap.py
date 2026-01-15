@@ -151,17 +151,17 @@ class TestSimulationApplicationBootstrap:
 
         await bootstrap.setup()
 
-        # Create test client
-        client = TestClient(bootstrap.app)
-
-        # Test health endpoint
-        response = client.get("/api/v2/health")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "healthy"
-        assert data["service"] == "codetoreum-api"
-
-        await bootstrap.teardown()
+        try:
+            # Create test client with context manager
+            with TestClient(bootstrap.app) as client:
+                # Test health endpoint
+                response = client.get("/api/v2/health")
+                assert response.status_code == 200
+                data = response.json()
+                assert data["status"] == "healthy"
+                assert data["service"] == "codetoreum-api"
+        finally:
+            await bootstrap.teardown()
 
     async def test_bootstrap_teardown_cleans_up(self):
         """Test that teardown properly cleans up resources."""
@@ -261,9 +261,9 @@ class TestBootstrapWithFixtures:
         assert isinstance(simulation_app, FastAPI)
 
         # Test with client
-        client = TestClient(simulation_app)
-        response = client.get("/api/v2/health")
-        assert response.status_code == 200
+        with TestClient(simulation_app) as client:
+            response = client.get("/api/v2/health")
+            assert response.status_code == 200
 
     async def test_simulation_adapters_fixture(self, simulation_adapters: SimulationAdapters):
         """Test that simulation_adapters fixture provides adapters."""
@@ -422,10 +422,11 @@ class TestBootstrapErrorHandling:
 
         await bootstrap.setup()
 
-        # Test that config service adapter is created
-        # This is verified implicitly by the FastAPI app working
-        client = TestClient(bootstrap.app)
-        response = client.get("/api/v2/health")
-        assert response.status_code == 200
-
-        await bootstrap.teardown()
+        try:
+            # Test that config service adapter is created
+            # This is verified implicitly by the FastAPI app working
+            with TestClient(bootstrap.app) as client:
+                response = client.get("/api/v2/health")
+                assert response.status_code == 200
+        finally:
+            await bootstrap.teardown()

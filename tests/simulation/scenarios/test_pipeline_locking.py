@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 from unittest.mock import AsyncMock
 
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import InMemoryLockService
-from codetoreum.adapters.secondary.in_memory_queue_service import InMemoryQueueService
+from codetoreum.adapters.testing.in_memory_queue_service import InMemoryQueueService
 from codetoreum.domain.events.lock_events import (
     LockAcquiredEvent,
     LockReleasedEvent,

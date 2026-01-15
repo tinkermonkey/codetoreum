@@ -14,6 +14,7 @@ import tempfile
 import time
 from pathlib import Path
 from typing import AsyncGenerator
+from contextlib import contextmanager
 
 import click
 import httpx
@@ -49,9 +50,10 @@ class TestSimulationServerCLI:
         await bootstrap.teardown()
 
     @pytest.fixture
-    def test_client(self, bootstrap) -> TestClient:
-        """Create a TestClient for the bootstrapped app."""
-        return TestClient(bootstrap.app)
+    def test_client(self, bootstrap):
+        """Create a TestClient for the bootstrapped app with proper cleanup."""
+        with TestClient(bootstrap.app) as client:
+            yield client
 
     def test_get_scenario_file_path_default(self):
         """Test getting built-in scenario file path."""
@@ -211,13 +213,12 @@ work_items:
     @pytest.mark.asyncio
     async def test_http_health_check(self, bootstrap):
         """Test HTTP health check endpoint (if available)."""
-        client = TestClient(bootstrap.app)
+        with TestClient(bootstrap.app) as client:
+            response = client.get("/api/health")
 
-        response = client.get("/api/health")
-
-        # Endpoint may or may not be implemented in FastAPI app
-        # Just verify we get a valid response
-        assert response.status_code in [200, 404, 405]
+            # Endpoint may or may not be implemented in FastAPI app
+            # Just verify we get a valid response
+            assert response.status_code in [200, 404, 405]
 
     @pytest.mark.asyncio
     async def test_http_create_work_item(self, bootstrap):
@@ -230,49 +231,46 @@ work_items:
             no_seed=False,
         )
 
-        client = TestClient(bootstrap.app)
+        with TestClient(bootstrap.app) as client:
+            # Create work item
+            work_item_data = {
+                "title": "Test Work Item",
+                "description": "Test description",
+                "labels": ["test"],
+            }
 
-        # Create work item
-        work_item_data = {
-            "title": "Test Work Item",
-            "description": "Test description",
-            "labels": ["test"],
-        }
+            response = client.post("/api/work-items", json=work_item_data)
 
-        response = client.post("/api/work-items", json=work_item_data)
-
-        # Note: Actual response depends on the mock adapter implementation
-        # This test verifies the endpoint is accessible
-        assert response.status_code in [200, 201, 404, 422]  # Depending on implementation
+            # Note: Actual response depends on the mock adapter implementation
+            # This test verifies the endpoint is accessible
+            assert response.status_code in [200, 201, 404, 422]  # Depending on implementation
 
     @pytest.mark.asyncio
     async def test_websocket_connection(self, bootstrap):
         """Test WebSocket connection (if available)."""
-        client = TestClient(bootstrap.app)
-
-        # Test WebSocket connection - may or may not be implemented
-        try:
-            with client.websocket_connect("/ws") as websocket:
-                # Connection successful
-                assert websocket is not None
-        except Exception:
-            # WebSocket endpoint may not be implemented or may reject connection
-            # This is acceptable for simulation mode
-            pass
+        with TestClient(bootstrap.app) as client:
+            # Test WebSocket connection - may or may not be implemented
+            try:
+                with client.websocket_connect("/ws") as websocket:
+                    # Connection successful
+                    assert websocket is not None
+            except Exception:
+                # WebSocket endpoint may not be implemented or may reject connection
+                # This is acceptable for simulation mode
+                pass
 
     @pytest.mark.asyncio
     async def test_api_docs_available(self, bootstrap):
         """Test that API documentation is available."""
-        client = TestClient(bootstrap.app)
+        with TestClient(bootstrap.app) as client:
+            # OpenAPI schema - should be available on FastAPI apps
+            response = client.get("/openapi.json")
+            # May be at different path or disabled
+            assert response.status_code in [200, 404]
 
-        # OpenAPI schema - should be available on FastAPI apps
-        response = client.get("/openapi.json")
-        # May be at different path or disabled
-        assert response.status_code in [200, 404]
-
-        # Swagger UI - may be available
-        response = client.get("/docs")
-        assert response.status_code in [200, 404]
+            # Swagger UI - may be available
+            response = client.get("/docs")
+            assert response.status_code in [200, 404]
 
     @pytest.mark.asyncio
     async def test_graceful_shutdown(self):
@@ -306,17 +304,16 @@ work_items:
             no_seed=False,
         )
 
-        client = TestClient(bootstrap.app)
+        with TestClient(bootstrap.app) as client:
+            # Make multiple requests to root endpoint (should always exist)
+            responses = []
+            for _ in range(10):
+                response = client.get("/")
+                responses.append(response)
 
-        # Make multiple requests to root endpoint (should always exist)
-        responses = []
-        for _ in range(10):
-            response = client.get("/")
-            responses.append(response)
-
-        # All requests should get a response (success or not found)
-        for response in responses:
-            assert response.status_code in [200, 404, 307]  # OK, Not Found, or Redirect
+            # All requests should get a response (success or not found)
+            for response in responses:
+                assert response.status_code in [200, 404, 307]  # OK, Not Found, or Redirect
 
     @pytest.mark.asyncio
     async def test_scenario_stress_test(self):
