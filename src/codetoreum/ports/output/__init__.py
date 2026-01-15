@@ -75,7 +75,8 @@ from codetoreum.ports.output.pipeline_lock_service import (
 )
 from codetoreum.ports.output.pipeline_queue_service import (
     IPipelineQueueService,
-    QueueEntry,
+    PipelineQueueEntry,
+    QueueEntry,  # Backward compatibility alias
 )
 from codetoreum.ports.output.repository import (
     IRepository,
@@ -162,7 +163,8 @@ __all__ = [
     "PipelineLock",
     # Pipeline Queue Service
     "IPipelineQueueService",
-    "QueueEntry",
+    "PipelineQueueEntry",
+    "QueueEntry",  # Backward compatibility alias
     # Repository
     "IRepository",
     "MergeResult",

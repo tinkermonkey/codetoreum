@@ -17,19 +17,23 @@ Queue is synced with board state before selecting next item to ensure order
 matches current board layout.
 
 Immutability:
-Queue entries in external data structures should be treated as read-only once
-returned from port methods. Implementations may mutate internal state structures
-but should never expose mutable external references.
+Queue entries are frozen dataclasses to prevent accidental mutation. Once
+returned from port methods, they should be treated as read-only. Implementations
+may mutate internal state structures but never expose mutable external references.
+
+Naming:
+This module defines PipelineQueueEntry (port interface) to avoid naming conflict
+with the application-layer QueueEntry in pipeline_lock_service.py.
 """
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 
-@dataclass
-class QueueEntry:
+@dataclass(frozen=True)
+class PipelineQueueEntry:
     """Represents a work item in the pipeline queue.
 
     Tracks a work item waiting to acquire or actively holding a pipeline lock.
@@ -37,6 +41,8 @@ class QueueEntry:
     a column has the highest priority.
 
     Attributes:
+        project_id: Project identifier for the pipeline
+        board_id: Board identifier for the pipeline
         work_item_id: Unique identifier of the work item
         position_in_column: Current position in board column (0 = topmost, highest priority)
         status: Queue status - 'waiting' (queued, not holding lock) or 'active' (holds lock)
@@ -44,11 +50,17 @@ class QueueEntry:
         last_position_check: ISO 8601 timestamp when position was last synced with board
     """
 
+    project_id: str
+    board_id: str
     work_item_id: str
     position_in_column: int
     status: str  # 'waiting' or 'active'
     queued_at: datetime
     last_position_check: datetime
+
+
+# Backward compatibility alias for existing code
+QueueEntry = PipelineQueueEntry
 
 
 class IPipelineQueueService(ABC):
@@ -66,8 +78,8 @@ class IPipelineQueueService(ABC):
     - Queues are synced with board state before selecting next item
 
     Priority Ordering:
-    - Queue items sorted by positionInColumn ascending (lowest = highest priority)
-    - Item with positionInColumn=0 (topmost in column) executes next
+    - Queue items sorted by position_in_column in ascending order (lowest = highest priority)
+    - Item with position_in_column=0 (topmost in column) executes next
     - Board position is source of truth - synced before selection
 
     Status Values:
@@ -79,7 +91,7 @@ class IPipelineQueueService(ABC):
         in_queue = await service.is_item_in_queue("item-123")
 
         # Add item to queue when it enters trigger column
-        await service.enqueue_item("item-123", "In Progress", now)
+        await service.enqueue_item("proj-1", "board-1", "item-123", 3, now)
 
         # Get next item before granting lock
         next_item = await service.get_next_waiting_item("proj-1", "board-1")
@@ -87,8 +99,14 @@ class IPipelineQueueService(ABC):
             # Grant lock to top-priority item
             await service.mark_item_active("item-123")
 
+        # Get all queue entries for a pipeline
+        entries = await service.get_queue_entries("proj-1", "board-1")
+
         # Sync queue when board changes (manual reordering, item removed, etc.)
         await service.sync_queue_with_board("proj-1", "board-1", "In Progress")
+
+        # Remove item when lock is released or item is deleted
+        await service.remove_from_queue("item-123")
     """
 
     @abstractmethod
@@ -111,24 +129,27 @@ class IPipelineQueueService(ABC):
 
     @abstractmethod
     async def enqueue_item(
-        self, work_item_id: str, column: str, timestamp: datetime
+        self,
+        project_id: str,
+        board_id: str,
+        work_item_id: str,
+        position_in_column: int,
+        timestamp: datetime,
     ) -> None:
         """Add a work item to the queue for a pipeline.
 
-        Creates a new queue entry with status='waiting'. The column parameter
-        is used to determine which project and board the item belongs to
-        (assumes pipeline scope is (project_id, board_id) derived from column).
-
-        Initial position_in_column should be fetched from board service.
+        Creates a new queue entry with status='waiting'. The initial position_in_column
+        is provided by the caller (typically from IBoardService).
 
         Args:
+            project_id: Project identifier for the pipeline
+            board_id: Board identifier for the pipeline
             work_item_id: Work item identifier
-            column: Board column name (used to determine project_id/board_id)
+            position_in_column: Position in board column (0 = topmost, highest priority)
             timestamp: Time when item was queued (ISO 8601 or datetime object)
 
         Raises:
             ValidationError: Invalid parameters
-            ResourceNotFoundError: Column or board doesn't exist
             DuplicateError: Item already exists in queue
         """
         pass
@@ -152,9 +173,31 @@ class IPipelineQueueService(ABC):
         pass
 
     @abstractmethod
+    async def remove_from_queue(self, work_item_id: str) -> bool:
+        """Remove a work item from the queue.
+
+        Removes a work item from the queue regardless of status (waiting or active).
+        Used when:
+        - Work item is moved out of trigger column before sync
+        - Lock is released and item processing is complete
+        - Work item is deleted from the board
+        - Queue cleanup during synchronization
+
+        Args:
+            work_item_id: Work item identifier to remove
+
+        Returns:
+            bool: True if item was in queue and removed, False if not in queue
+
+        Raises:
+            ValidationError: Invalid work_item_id
+        """
+        pass
+
+    @abstractmethod
     async def get_next_waiting_item(
         self, project_id: str, board_id: str
-    ) -> Optional[QueueEntry]:
+    ) -> Optional[PipelineQueueEntry]:
         """Get the next waiting item from the queue based on board position.
 
         Before selecting the next item, this method syncs with the board state
@@ -175,10 +218,38 @@ class IPipelineQueueService(ABC):
             board_id: Board identifier
 
         Returns:
-            QueueEntry with lowest position_in_column (highest priority),
+            PipelineQueueEntry with lowest position_in_column (highest priority),
             or None if no waiting items in queue.
 
             The returned entry has status='waiting' (not active).
+
+        Raises:
+            ValidationError: Invalid parameters
+            ResourceNotFoundError: Project or board doesn't exist
+        """
+        pass
+
+    @abstractmethod
+    async def get_queue_entries(
+        self, project_id: str, board_id: str
+    ) -> List[PipelineQueueEntry]:
+        """Get all queue entries for a pipeline.
+
+        Returns all queue entries (both waiting and active) for the specified
+        pipeline, sorted by position_in_column in ascending order (lowest = highest priority).
+
+        Useful for:
+        - Displaying queue status in UI
+        - Debugging and observability
+        - Integration tests
+
+        Args:
+            project_id: Project identifier
+            board_id: Board identifier
+
+        Returns:
+            List of PipelineQueueEntry sorted by position_in_column ascending,
+            or empty list if no entries in queue.
 
         Raises:
             ValidationError: Invalid parameters
