@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
+from codetoreum.application.pipeline_lock_service import IQueuedPipelineLockService
 from codetoreum.domain.events import (
     WorkflowStageAdvanced,
     WorkItemStageUpdated,
@@ -17,7 +18,7 @@ from codetoreum.domain.workflow import Workflow, WorkflowStatus
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.event_types import EventTypes
-from codetoreum.ports.output import IEventStore, ITicketSystem
+from codetoreum.ports.output import IEventStore, ITicketSystem, IBoardService
 
 logger = logging.getLogger(__name__)
 
@@ -302,6 +303,8 @@ class WorkflowOrchestrator:
         ticket_system: ITicketSystem,
         event_bus: Optional[EventBus] = None,
         projects_api: Optional[IProjectsAPI] = None,
+        board_service: Optional[IBoardService] = None,
+        lock_service: Optional[IQueuedPipelineLockService] = None,
     ):
         """
         Initialize workflow orchestrator.
@@ -315,6 +318,8 @@ class WorkflowOrchestrator:
             ticket_system: Ticket system for issue operations
             event_bus: Event bus for subscribing to adapter events (optional)
             projects_api: Projects API for card movement (optional)
+            board_service: Board service for querying item positions (optional)
+            lock_service: Pipeline lock service for coordinating lock operations (optional)
         """
         self.task_queue = task_queue
         self.config = config
@@ -324,6 +329,8 @@ class WorkflowOrchestrator:
         self.ticket_system = ticket_system
         self.event_bus = event_bus
         self.projects_api = projects_api
+        self.board_service = board_service
+        self.lock_service = lock_service
 
         # Subscribe to adapter events if event bus is available
         if self.event_bus:
@@ -1054,10 +1061,10 @@ class WorkflowOrchestrator:
         Handle pipeline lock released event.
 
         When a lock is released, check if there's a next item in queue
-        and try to acquire lock for it.
+        and trigger its agent if configured.
 
         Args:
-            event: lock.released event
+            event: lock.released event with project_id, board_id, next_in_queue
         """
         try:
             project_id = event.payload.get("project_id")
@@ -1077,21 +1084,29 @@ class WorkflowOrchestrator:
                 logger.debug("No item queued after lock release")
                 return
 
+            # Board service and lock service required for processing next item
+            if not self.board_service:
+                logger.warning(
+                    "Board service not configured, cannot process next queued item"
+                )
+                return
+
             # Get workflow configuration
             workflow_config = await self.config.get_workflow_config(project_id, board_id)
             if not workflow_config:
-                logger.warning(f"No workflow config found for project {project_id}, board {board_id}")
+                logger.warning(
+                    f"No workflow config found for project {project_id}, board {board_id}"
+                )
                 return
 
-            # Load workflow state to get item position
+            # Get the column where the next item is currently located
             try:
-                # Get the column where the next item is currently located
-                item_position = await self.workflow_state.get_item_position(next_in_queue)
+                item_position = await self.board_service.get_item_position(next_in_queue)
                 if not item_position:
                     logger.warning(f"Could not find position for item {next_in_queue}")
                     return
 
-                current_column_name = item_position.get("column")
+                current_column_name = item_position.column_name
                 column_config = self._find_column_config(workflow_config, current_column_name)
 
                 if not column_config:
@@ -1103,19 +1118,29 @@ class WorkflowOrchestrator:
                     logger.info(
                         f"Triggering agent {column_config.agent} for queued item {next_in_queue}"
                     )
-                    await self.task_queue.enqueue({
-                        "work_item_id": next_in_queue,
-                        "project_id": project_id,
-                        "board_id": board_id,
-                        "column": current_column_name,
-                        "agent": column_config.agent,
-                        "priority": WorkItemPriority.MEDIUM,
-                    })
+                    task = Task(
+                        id=next_in_queue,
+                        agent=column_config.agent,
+                        project=project_id,
+                        priority=WorkItemPriority.MEDIUM,
+                        context={
+                            "board_id": board_id,
+                            "column": current_column_name,
+                            "queued_item": True,
+                        },
+                        created_at=datetime.now(timezone.utc),
+                    )
+                    await self.task_queue.enqueue(task)
                 else:
-                    logger.debug(f"Column {current_column_name} is not automated, no agent to trigger")
+                    logger.debug(
+                        f"Column {current_column_name} is not automated, "
+                        f"no agent to trigger"
+                    )
 
             except Exception as e:
-                logger.error(f"Error processing next item {next_in_queue}: {e}", exc_info=e)
+                logger.error(
+                    f"Error processing next item {next_in_queue}: {e}", exc_info=e
+                )
 
         except Exception as e:
             logger.error(f"Error handling lock released event: {e}", exc_info=e)

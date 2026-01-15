@@ -2,7 +2,7 @@
 
 import asyncio
 from datetime import datetime, timezone
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock
 
 import pytest
 
@@ -20,7 +20,8 @@ from codetoreum.domain.events import DomainEvent, WorkItemCreated
 from codetoreum.domain.work_item import WorkItemPriority
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.metrics_collector import MetricsCollector
-from codetoreum.ports.output import IEventStore, ITicketSystem
+from codetoreum.ports.output import IEventStore, ITicketSystem, IBoardService
+from codetoreum.ports.output.board_service import WorkItemPosition
 
 
 class SimulationTaskQueue(ITaskQueue):
@@ -133,6 +134,19 @@ class SimulationDecisionEvents(IDecisionEvents):
         self.progression_decisions.append(decision)
 
 
+def create_mock_board_service():
+    """Create a mock board service for testing."""
+    service = AsyncMock(spec=IBoardService)
+    service.get_item_position = AsyncMock(
+        return_value=WorkItemPosition(
+            work_item_id="issue-2",
+            column_name="Development",
+            position=1,
+        )
+    )
+    return service
+
+
 @pytest.mark.asyncio
 class TestEventDrivenWorkflow:
     """Simulation tests for event-driven workflow execution."""
@@ -163,8 +177,13 @@ class TestEventDrivenWorkflow:
         return SimulationDecisionEvents()
 
     @pytest.fixture
+    def board_service(self):
+        """Create board service."""
+        return create_mock_board_service()
+
+    @pytest.fixture
     def orchestrator(
-        self, event_bus, task_queue, config, state_manager, decision_events
+        self, event_bus, task_queue, config, state_manager, decision_events, board_service
     ):
         """Create workflow orchestrator."""
         event_store = MagicMock(spec=IEventStore)
@@ -178,6 +197,7 @@ class TestEventDrivenWorkflow:
             event_store=event_store,
             ticket_system=ticket_system,
             event_bus=event_bus,
+            board_service=board_service,
         )
 
     @pytest.fixture
