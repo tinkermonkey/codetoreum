@@ -73,6 +73,10 @@ from codetoreum.ports.output.pipeline_lock_service import (
     IPipelineLockService,
     PipelineLock,
 )
+from codetoreum.ports.output.pipeline_queue_service import (
+    IPipelineQueueService,
+    QueueEntry,
+)
 from codetoreum.ports.output.repository import (
     IRepository,
     MergeResult,
@@ -156,6 +160,9 @@ __all__ = [
     # Pipeline Lock Service
     "IPipelineLockService",
     "PipelineLock",
+    # Pipeline Queue Service
+    "IPipelineQueueService",
+    "QueueEntry",
     # Repository
     "IRepository",
     "MergeResult",
