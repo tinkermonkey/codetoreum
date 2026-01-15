@@ -1,6 +1,7 @@
 """Unit tests for InMemoryLockService event emission."""
 
 import pytest
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, call
 
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
@@ -8,6 +9,7 @@ from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
 )
 from codetoreum.application.pipeline_lock_service import LockStatus
 from codetoreum.domain.events.lock_events import (
+    LockStaleDetectedEvent,
     PipelineLockAcquiredEvent,
     PipelineLockReleasedEvent,
     WorkItemQueuedEvent,
@@ -336,3 +338,308 @@ class TestLockEventEmission:
         assert isinstance(calls[-2][0][0], PipelineLockReleasedEvent)
         assert isinstance(calls[-1][0][0], PipelineLockAcquiredEvent)
         assert calls[-1][0][0].work_item_id == "item-2"
+
+
+class TestStaleLockDetection:
+    """Test stale lock detection and recovery."""
+
+    @pytest.fixture
+    def lock_service_with_short_threshold(self, mock_event_bus):
+        """Create lock service with short stale threshold for testing."""
+        return InMemoryLockService(event_bus=mock_event_bus, stale_threshold_seconds=60)
+
+    @pytest.mark.asyncio
+    async def test_stale_lock_threshold_parameter(self, mock_event_bus):
+        """Should accept configurable stale_threshold_seconds parameter."""
+        # Default threshold should be 2 hours (7200 seconds)
+        service_default = InMemoryLockService(event_bus=mock_event_bus)
+        assert service_default._stale_threshold_seconds == 7200
+
+        # Custom threshold
+        service_custom = InMemoryLockService(
+            event_bus=mock_event_bus, stale_threshold_seconds=3600
+        )
+        assert service_custom._stale_threshold_seconds == 3600
+
+    @pytest.mark.asyncio
+    async def test_lock_not_stale_just_below_threshold(
+        self, lock_service_with_short_threshold, mock_event_bus
+    ):
+        """Lock just below threshold (1h59m) should not be detected as stale."""
+        # Acquire lock
+        await lock_service_with_short_threshold.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+            board_position=0,
+        )
+
+        # Set lock time to 59 seconds ago (below 60 second threshold)
+        now = datetime.now(timezone.utc)
+        old_time = now - timedelta(seconds=59)
+        lock_service_with_short_threshold.set_lock_acquired_at(
+            project_id="proj-1", board_id="board-1", timestamp=old_time
+        )
+
+        # Reset mock
+        mock_event_bus.publish.reset_mock()
+
+        # Try to acquire with different item - should NOT detect stale
+        result = await lock_service_with_short_threshold.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-2",
+            board_position=1,
+        )
+
+        # Should be queued, not stale recovery
+        assert result.status == LockStatus.QUEUED
+        # Should NOT emit stale detected event
+        assert mock_event_bus.publish.call_count == 1
+        event = mock_event_bus.publish.call_args[0][0]
+        assert isinstance(event, WorkItemQueuedEvent)
+
+    @pytest.mark.asyncio
+    async def test_lock_is_stale_just_above_threshold(
+        self, lock_service_with_short_threshold, mock_event_bus
+    ):
+        """Lock just above threshold (2h01m) should be detected as stale."""
+        # Acquire lock
+        await lock_service_with_short_threshold.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+            board_position=0,
+        )
+
+        # Set lock time to 61 seconds ago (above 60 second threshold)
+        now = datetime.now(timezone.utc)
+        old_time = now - timedelta(seconds=61)
+        lock_service_with_short_threshold.set_lock_acquired_at(
+            project_id="proj-1", board_id="board-1", timestamp=old_time
+        )
+
+        # Reset mock
+        mock_event_bus.publish.reset_mock()
+
+        # Try to acquire with different item - should detect stale
+        result = await lock_service_with_short_threshold.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-2",
+            board_position=1,
+        )
+
+        # Should acquire lock (stale recovery)
+        assert result.status == LockStatus.ACQUIRED
+        # Should emit two events: stale detected + lock acquired
+        assert mock_event_bus.publish.call_count == 2
+
+        # First event should be stale detected
+        stale_event = mock_event_bus.publish.call_args_list[0][0][0]
+        assert isinstance(stale_event, LockStaleDetectedEvent)
+        assert stale_event.project_id == "proj-1"
+        assert stale_event.board_id == "board-1"
+        assert stale_event.work_item_id == "item-1"  # Original stale lock holder
+
+        # Second event should be lock acquired
+        acquire_event = mock_event_bus.publish.call_args_list[1][0][0]
+        assert isinstance(acquire_event, PipelineLockAcquiredEvent)
+        assert acquire_event.work_item_id == "item-2"  # New lock holder
+
+    @pytest.mark.asyncio
+    async def test_stale_lock_recovery_at_exact_threshold(
+        self, lock_service_with_short_threshold, mock_event_bus
+    ):
+        """Lock at exactly threshold time should NOT be detected as stale."""
+        # Acquire lock
+        await lock_service_with_short_threshold.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+            board_position=0,
+        )
+
+        # Set lock time to 30 seconds ago (well below 60 second threshold)
+        now = datetime.now(timezone.utc)
+        old_time = now - timedelta(seconds=30)
+        lock_service_with_short_threshold.set_lock_acquired_at(
+            project_id="proj-1", board_id="board-1", timestamp=old_time
+        )
+
+        # Reset mock
+        mock_event_bus.publish.reset_mock()
+
+        # Try to acquire with different item - should NOT detect stale
+        result = await lock_service_with_short_threshold.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-2",
+            board_position=1,
+        )
+
+        # Should be queued, not stale recovery
+        assert result.status == LockStatus.QUEUED
+
+    @pytest.mark.asyncio
+    async def test_stale_lock_detected_event_contains_lock_acquired_at(
+        self, lock_service_with_short_threshold, mock_event_bus
+    ):
+        """LockStaleDetectedEvent should contain lock_acquired_at timestamp."""
+        # Acquire lock
+        await lock_service_with_short_threshold.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+            board_position=0,
+        )
+
+        # Set specific lock time
+        specific_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        lock_service_with_short_threshold.set_lock_acquired_at(
+            project_id="proj-1", board_id="board-1", timestamp=specific_time
+        )
+
+        # Reset mock
+        mock_event_bus.publish.reset_mock()
+
+        # Trigger stale detection
+        await lock_service_with_short_threshold.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-2",
+            board_position=1,
+        )
+
+        # Check stale detected event
+        stale_event = mock_event_bus.publish.call_args_list[0][0][0]
+        assert isinstance(stale_event, LockStaleDetectedEvent)
+        assert stale_event.lock_acquired_at == "2025-01-01T12:00:00+00:00"
+
+    @pytest.mark.asyncio
+    async def test_reentrant_acquisition_does_not_trigger_stale_detection(
+        self, lock_service_with_short_threshold, mock_event_bus
+    ):
+        """Same work item re-acquiring lock should not trigger stale detection."""
+        # Acquire lock with item-1
+        await lock_service_with_short_threshold.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+            board_position=0,
+        )
+
+        # Age the lock
+        now = datetime.now(timezone.utc)
+        old_time = now - timedelta(seconds=61)
+        lock_service_with_short_threshold.set_lock_acquired_at(
+            project_id="proj-1", board_id="board-1", timestamp=old_time
+        )
+
+        # Reset mock
+        mock_event_bus.publish.reset_mock()
+
+        # Same item re-acquires lock - should return ALREADY_HELD
+        result = await lock_service_with_short_threshold.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+            board_position=0,
+        )
+
+        # Should be already held, not stale recovery
+        assert result.status == LockStatus.ALREADY_HELD
+        # No events should be emitted
+        mock_event_bus.publish.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_set_lock_acquired_at_test_helper_works(self, lock_service_with_short_threshold):
+        """Test helper set_lock_acquired_at should update lock timestamp."""
+        # Acquire lock
+        await lock_service_with_short_threshold.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+            board_position=0,
+        )
+
+        # Set specific timestamp
+        new_time = datetime(2024, 12, 25, 10, 30, 0, tzinfo=timezone.utc)
+        lock_service_with_short_threshold.set_lock_acquired_at(
+            project_id="proj-1", board_id="board-1", timestamp=new_time
+        )
+
+        # Verify by getting queue state
+        state = await lock_service_with_short_threshold.get_queue_state(
+            project_id="proj-1", board_id="board-1"
+        )
+        assert state.lock_acquired_at == new_time
+
+    @pytest.mark.asyncio
+    async def test_set_lock_acquired_at_raises_when_no_lock(self, lock_service_with_short_threshold):
+        """Test helper should raise ValueError when no lock exists."""
+        new_time = datetime.now(timezone.utc)
+
+        with pytest.raises(ValueError, match="No lock exists"):
+            lock_service_with_short_threshold.set_lock_acquired_at(
+                project_id="proj-1",
+                board_id="board-1",
+                timestamp=new_time,
+            )
+
+    @pytest.mark.asyncio
+    async def test_stale_recovery_with_queued_items(
+        self, lock_service_with_short_threshold, mock_event_bus
+    ):
+        """Stale recovery should work correctly even when queue has items."""
+        # Acquire lock with item-1
+        await lock_service_with_short_threshold.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+            board_position=0,
+        )
+
+        # Queue items 2 and 3
+        await lock_service_with_short_threshold.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-2",
+            board_position=1,
+        )
+        await lock_service_with_short_threshold.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-3",
+            board_position=2,
+        )
+
+        # Age the lock
+        now = datetime.now(timezone.utc)
+        old_time = now - timedelta(seconds=61)
+        lock_service_with_short_threshold.set_lock_acquired_at(
+            project_id="proj-1", board_id="board-1", timestamp=old_time
+        )
+
+        # Reset mock
+        mock_event_bus.publish.reset_mock()
+
+        # Try to acquire with item-4 - should recover stale lock
+        result = await lock_service_with_short_threshold.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-4",
+            board_position=3,
+        )
+
+        # Item-4 should get lock (stale recovery)
+        assert result.status == LockStatus.ACQUIRED
+
+        # Queue should still have items 2 and 3
+        state = await lock_service_with_short_threshold.get_queue_state(
+            project_id="proj-1", board_id="board-1"
+        )
+        assert state.lock_holder == "item-4"
+        assert len(state.queue) == 2
+        assert state.queue[0].work_item_id == "item-2"
+        assert state.queue[1].work_item_id == "item-3"

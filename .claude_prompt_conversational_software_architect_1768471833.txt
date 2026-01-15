@@ -1,0 +1,665 @@
+
+You are a Software Architect.
+
+I design system architectures considering scalability, maintainability, performance, and security. I create Architecture Decision Records (ADRs) with trade-off analyses and technical implementation plans.
+
+## Task: Initial Analysis
+
+Analyze the following requirement for project codetoreum:
+
+**Title**: Simulation Scenario 09: Pipeline Locking and Queueing
+**Description**: # Simulation Scenario 05: Pipeline Locking and Queueing
+
+## Overview
+Test the pipeline lock manager that ensures only ONE work item executes at a time per pipeline, with queue ordering based on board position.
+
+## Workflow Details
+
+### Lock State Machine
+```
+UNLOCKED ─────────────────────────────────► LOCKED
+    │            try_acquire_lock()            │
+    │                                          │
+    │        ◄─────────────────────────────────┘
+    │              release_lock()
+    │
+    │        ◄─────────────────────────────────┐
+    │              stale lock recovery         │
+    └──────────────────────────────────────────┘
+                   (lock > 2 hours old)
+```
+
+### Lock Data Structure
+```typescript
+interface PipelineLock {
+  projectId: string;          // Project identifier
+  boardId: string;            // Board/pipeline identifier
+  lockedByWorkItem: string;   // Work item ID holding lock
+  lockAcquiredAt: string;     // ISO timestamp
+  lockStatus: 'locked' | 'unlocked';
+}
+```
+
+### Queue State Structure
+```yaml
+# Queue entry
+- workItemId: "work-item-123"
+  positionInColumn: 0         # Board position (topmost = 0)
+  status: waiting             # 'waiting' or 'active'
+  queuedAt: "2026-01-08T..."
+  lastPositionCheck: "2026-01-08T..."
+```
+
+### Queue Priority (Source of Truth: Board Position)
+- Position in board column determines execution order
+- Topmost work item (position 0) has highest priority
+- Queue syncs with board state before selecting next item
+- Items can be reordered by dragging in board interface
+
+### Lock Acquisition Flow
+```
+1. Work item enters trigger column (e.g., "Development")
+2. try_acquire_lock() called:
+   a. If lock doesn't exist → acquire immediately
+   b. If lock held by THIS work item → return success (refresh TTL)
+   c. If lock held by ANOTHER work item:
+      - Check lock age
+      - If > 2 hours → auto-release stale lock → acquire
+      - If < 2 hours → add to queue as 'waiting'
+3. Lock persisted to storage
+```
+
+### Lock Release and Queue Processing
+```
+1. Work item reaches exit column (e.g., "Staged", "Done")
+2. Pipeline progression calls _release_lock_and_process_next():
+   a. release_lock() - removes lock
+   b. get_next_waiting_item() - queries board for position order
+   c. try_acquire_lock() for next work item
+   d. Trigger agent for next work item
+```
+
+## Port Interface: IPipelineLockService
+
+```typescript
+interface IPipelineLockService {
+  getLock(projectId: string, boardId: string): Promise<PipelineLock | null>;
+  tryAcquireLock(projectId: string, boardId: string, workItemId: string): Promise<[boolean, string]>;
+  releaseLock(projectId: string, boardId: string, workItemId: string): Promise<boolean>;
+  getAllLocks(): Promise<PipelineLock[]>;
+}
+
+interface IPipelineQueueService {
+  isItemInQueue(workItemId: string): boolean;
+  enqueueItem(workItemId: string, column: string, timestamp: string): void;
+  markItemActive(workItemId: string): void;
+  getNextWaitingItem(): Promise<QueueEntry | null>;
+  syncQueueWithBoard(): Promise<void>;
+}
+```
+
+### Mock Implementation
+```typescript
+class MockPipelineLockAdapter implements IPipelineLockService {
+  private locks: Map<string, PipelineLock>;  // key: "projectId:boardId"
+  private lockOperations: LockOperation[];   // Audit log
+
+  async tryAcquireLock(projectId: string, boardId: string, workItemId: string): Promise<[boolean, string]> {
+    const key = `${projectId}:${boardId}`;
+    const existing = this.locks.get(key);
+    
+    if (!existing) {
+      this.locks.set(key, { projectId, boardId, lockedByWorkItem: workItemId, ... });
+      return [true, "lock_acquired"];
+    }
+    
+    if (existing.lockedByWorkItem === workItemId) {
+      return [true, "already_holds_lock"];
+    }
+    
+    // Check for stale lock (2 hours)
+    const lockAge = Date.now() - new Date(existing.lockAcquiredAt).getTime();
+    if (lockAge > 2 * 60 * 60 * 1000) {
+      this.locks.set(key, { projectId, boardId, lockedByWorkItem: workItemId, ... });
+      return [true, "stale_lock_recovered"];
+    }
+    
+    return [false, `locked_by_${existing.lockedByWorkItem}`];
+  }
+}
+
+class MockPipelineQueueAdapter implements IPipelineQueueService {
+  private queues: Map<string, QueueEntry[]>;  // key: "projectId:boardId"
+  private boardPositions: Map<string, string[]>;  // Simulated board order
+
+  setBoardOrder(projectId: string, boardId: string, order: string[]): void {
+    this.boardPositions.set(`${projectId}:${boardId}`, order);
+  }
+
+  async getNextWaitingItem(): Promise<QueueEntry | null> {
+    // Sort waiting items by positionInColumn (lowest = highest priority)
+    const waiting = this.queue.filter(i => i.status === 'waiting');
+    waiting.sort((a, b) => a.positionInColumn - b.positionInColumn);
+    return waiting[0] || null;
+  }
+}
+```
+
+## Edge Cases to Test
+
+1. **Stale Lock Recovery**
+   - Lock acquired > 2 hours ago
+   - New work item should acquire lock
+   - Old work item's execution state should be cleaned up
+
+2. **Same Item Re-acquisition**
+   - Work item already holds lock
+   - Should return success with "already_holds_lock"
+   - TTL should be refreshed
+
+3. **Queue Priority Based on Board Order**
+   - Multiple work items waiting
+   - Reorder items in simulated board
+   - Next item selected should match board order
+
+4. **Lock Release Without Waiting Items**
+   - Work item completes, releases lock
+   - No items in queue
+   - Lock should just be removed
+
+5. **Storage Failure Fallback**
+   - Primary storage unavailable
+   - Lock operations should use fallback path
+   - Behavior should be identical
+
+6. **Concurrent Lock Acquisition**
+   - Two work items try to acquire simultaneously
+   - Only one should succeed
+   - Atomic operations prevent race conditions
+
+7. **Exit Column Detection**
+   - Work item moved to exit column
+   - Lock should be automatically released
+   - Next waiting item should be triggered
+
+8. **Force Sync with Board**
+   - Queue becomes stale
+   - force_sync_with_board() removes items not in trigger column
+   - Adds newly discovered items from board
+
+## Test Scenarios
+
+### Scenario A: Normal Lock Flow
+```
+1. Work item #100 enters Development → acquires lock (position 0)
+2. Work item #101 enters Development → goes to queue (position 1)
+3. Work item #102 enters Development → goes to queue (position 2)
+4. #100 completes → lock released → #101 acquires lock
+5. #101 completes → lock released → #102 acquires lock
+```
+
+### Scenario B: Stale Lock Recovery
+```
+1. Work item #100 holds lock (acquired 3 hours ago)
+2. Work item #101 calls try_acquire_lock()
+3. Stale lock detected → auto-released
+4. #101 acquires lock
+5. #100's execution state marked as failed
+```
+
+### Scenario C: Board Reordering
+```
+1. Queue order: [#101 (pos 0), #102 (pos 1), #103 (pos 2)]
+2. User drags #103 to top in board interface
+3. sync_queue_with_board() updates positions
+4. New order: [#103 (pos 0), #101 (pos 1), #102 (pos 2)]
+5. When lock released, #103 executes next
+```
+
+## Acceptance Criteria
+- [ ] Only one work item can hold pipeline lock at a time
+- [ ] Queue priority matches board column order
+- [ ] Stale locks (>2 hours) are auto-released
+- [ ] Lock operations are atomic (no race conditions)
+- [ ] Exit column triggers automatic lock release
+- [ ] Queue syncs with board state
+## Event Integration
+
+This simulation scenario integrates with the event-based architecture defined in **Issue #95**.
+
+### Events Emitted by IPipelineLockService
+
+| Event | When Emitted |
+|-------|-------------|
+| `lock.acquired` | Work item successfully acquires pipeline lock |
+| `lock.released` | Lock released (completed, exit column, timeout, or manual) |
+| `lock.stale_detected` | Lock older than threshold detected during recovery |
+
+### Events Subscribed To
+
+| Event | Handler Action |
+|-------|---------------|
+| `lock.released` | Process next work item in queue, trigger agent if acquired |
+
+### Event Definitions
+
+```typescript
+interface LockAcquiredEvent extends ICodetoreumEvent {
+  type: 'lock.acquired';
+  projectId: string;
+  boardId: string;
+  workItemId: string;
+  acquisitionMethod: 'normal' | 'stale_recovery';
+}
+
+interface LockReleasedEvent extends ICodetoreumEvent {
+  type: 'lock.released';
+  projectId: string;
+  boardId: string;
+  workItemId: string;
+  reason: 'completed' | 'exit_column' | 'timeout' | 'manual';
+  nextInQueue?: string;  // Work item ID of next queued item
+}
+```
+
+### Mock Adapter Event Flow
+
+```typescript
+// Lock service emits events on state changes
+mockLockService.on('lock.released', async (event: LockReleasedEvent) => {
+  if (event.nextInQueue) {
+    // Automatically try to acquire lock for next item
+    const [acquired, message] = await lockService.tryAcquireLock(
+      event.projectId, 
+      event.boardId, 
+      event.nextInQueue
+    );
+    
+    if (acquired) {
+      // Event 'lock.acquired' emitted by tryAcquireLock
+      console.log(`Lock acquired by ${event.nextInQueue}`);
+    }
+  }
+});
+
+// Test verification via events
+const lockEvents: LockAcquiredEvent[] = [];
+mockLockService.on('lock.acquired', (event) => lockEvents.push(event));
+
+// After test
+expect(lockEvents).toHaveLength(3);
+expect(lockEvents[0].workItemId).toBe('work-item-100');
+expect(lockEvents[0].acquisitionMethod).toBe('normal');
+```
+
+**See Issue #95 for complete event type definitions and IPipelineLockService interface.**
+
+---
+
+
+**Labels**: [{'id': 'LA_kwDOQH8CMM8AAAACNxq7YA', 'name': 'enhancement', 'description': 'New feature or request', 'color': 'a2eeef'}]
+
+## Previous Stage Output
+## Output from Business Analyst
+
+# Business Analysis
+
+---
+
+## Executive Summary
+
+This requirement defines the pipeline locking and queueing mechanism to ensure controlled, sequential execution of work items in a multi-project AI orchestration system. The core business value is preventing concurrent agent executions that could conflict (e.g., git merge conflicts, resource contention) while maintaining fairness through board-position-based priority.
+
+**Key Business Capabilities:**
+- **Mutual Exclusion**: Only one work item executes per pipeline at any time
+- **Fair Queueing**: Board position (visual drag-and-drop order) determines execution priority
+- **Stale Lock Recovery**: Automatic cleanup of abandoned locks (>2 hours) prevents indefinite blocking
+- **Atomic Operations**: Thread-safe lock acquisition prevents race conditions
+- **Automatic Flow Control**: Exit column detection triggers lock release and next-item processing
+
+**Primary Stakeholders:**
+- Project managers needing predictable, ordered execution
+- Development teams avoiding merge conflicts
+- System administrators monitoring pipeline health
+
+## Functional Requirements
+
+### FR-1: Pipeline Lock Management
+**Description**: System must maintain exclusive locks per pipeline (project + board combination).
+
+**Requirements:**
+- **FR-1.1**: Lock identified by tuple `(projectId, boardId)`
+- **FR-1.2**: Lock stores: `lockedByWorkItem`, `lockAcquiredAt` (ISO timestamp), `lockStatus` (locked/unlocked)
+- **FR-1.3**: Lock persisted to durable storage for crash recovery
+- **FR-1.4**: Lock operations must be atomic (no race conditions between concurrent acquisitions)
+- **FR-1.5**: Stale lock threshold: 2 hours from `lockAcquiredAt`
+
+### FR-2: Lock Acquisition
+**Description**: Work items entering trigger columns must acquire pipeline lock before execution.
+
+**Requirements:**
+- **FR-2.1**: If no lock exists → acquire immediately, return success
+- **FR-2.2**: If lock held by requesting work item → return success with "already_holds_lock", refresh TTL
+- **FR-2.3**: If lock held by different work item:
+  - Calculate lock age from `lockAcquiredAt`
+  - If age > 2 hours → release stale lock, acquire for requester, return success
+  - If age ≤ 2 hours → add requester to queue, return failure with reason "locked_by_{workItemId}"
+- **FR-2.4**: Return tuple: `(success: boolean, message: string)`
+
+### FR-3: Lock Release
+**Description**: System must release locks when work items exit pipeline or fail.
+
+**Requirements:**
+- **FR-3.1**: Release triggered by: work item reaching exit column, manual release, stale lock recovery
+- **FR-3.2**: Release operation removes lock from storage
+- **FR-3.3**: After release, system must immediately check queue for next waiting item
+- **FR-3.4**: If next item exists, attempt lock acquisition and trigger agent execution
+
+### FR-4: Queue Management
+**Description**: Waiting work items must be queued with priority based on board position.
+
+**Requirements:**
+- **FR-4.1**: Queue entry structure: `{workItemId, positionInColumn, status, queuedAt, lastPositionCheck}`
+- **FR-4.2**: `status` values: "waiting" (in queue), "active" (holds lock)
+- **FR-4.3**: `positionInColumn` synced from board API (0 = topmost)
+- **FR-4.4**: Queue stored per pipeline `(projectId, boardId)`
+
+### FR-5: Queue Priority
+**Description**: Next work item selected from queue must be determined by board position (source of truth).
+
+**Requirements:**
+- **FR-5.1**: Before selecting next item, sync queue with current board state
+- **FR-5.2**: Sort waiting items by `positionInColumn` ascending (lowest = highest priority)
+- **FR-5.3**: Return item with `positionInColumn = 0` (topmost in column)
+- **FR-5.4**: If no waiting items, return null
+- **FR-5.5**: Board reordering (drag-and-drop) must affect next-item selection
+
+### FR-6: Queue Synchronization
+**Description**: Queue state must stay consistent with board column state.
+
+**Requirements:**
+- **FR-6.1**: Synchronization triggered before selecting next item
+- **FR-6.2**: Remove queue entries for work items no longer in trigger column
+- **FR-6.3**: Add queue entries for new work items discovered in trigger column
+- **FR-6.4**: Update `positionInColumn` for existing entries based on board API
+- **FR-6.5**: Update `lastPositionCheck` timestamp after sync
+
+### FR-7: Stale Lock Detection and Recovery
+**Description**: System must automatically recover from abandoned locks.
+
+**Requirements:**
+- **FR-7.1**: During lock acquisition, check `lockAcquiredAt` timestamp
+- **FR-7.2**: If age > 2 hours, treat as stale
+- **FR-7.3**: Release stale lock automatically
+- **FR-7.4**: Acquire lock for requesting work item
+- **FR-7.5**: Mark original work item's execution state as failed/timed-out
+
+### FR-8: Event Emission
+**Description**: Lock service must emit domain events for state changes.
+
+**Requirements:**
+- **FR-8.1**: Emit `lock.acquired` event with: `{projectId, boardId, workItemId, acquisitionMethod: 'normal'|'stale_recovery'}`
+- **FR-8.2**: Emit `lock.released` event with: `{projectId, boardId, workItemId, reason: 'completed'|'exit_column'|'timeout'|'manual', nextInQueue?: workItemId}`
+- **FR-8.3**: Emit `lock.stale_detected` event when recovering stale lock
+- **FR-8.4**: All events must include correlation IDs and timestamps
+
+### FR-9: IPipelineLockService Port Interface
+**Description**: Define contract for pipeline lock adapters.
+
+**Methods:**
+- **FR-9.1**: `getLock(projectId, boardId)` → returns current lock or null
+- **FR-9.2**: `tryAcquireLock(projectId, boardId, workItemId)` → returns `[success, message]`
+- **FR-9.3**: `releaseLock(projectId, boardId, workItemId)` → returns success boolean
+- **FR-9.4**: `getAllLocks()` → returns list of all active locks (admin/monitoring)
+
+### FR-10: IPipelineQueueService Port Interface
+**Description**: Define contract for queue management adapters.
+
+**Methods:**
+- **FR-10.1**: `isItemInQueue(workItemId)` → returns boolean
+- **FR-10.2**: `enqueueItem(workItemId, column, timestamp)` → void
+- **FR-10.3**: `markItemActive(workItemId)` → void (when lock acquired)
+- **FR-10.4**: `getNextWaitingItem()` → returns QueueEntry or null
+- **FR-10.5**: `syncQueueWithBoard()` → void (updates positions from board API)
+
+### FR-11: Mock Adapter Implementation
+**Description**: Provide in-memory mock for simulation testing.
+
+**Requirements:**
+- **FR-11.1**: Store locks in Map keyed by `"projectId:boardId"`
+- **FR-11.2**: Store queues in Map keyed by `"projectId:boardId"`
+- **FR-11.3**: Provide `setBoardOrder(projectId, boardId, order: string[])` for test setup
+- **FR-11.4**: Log all lock operations for audit/verification
+- **FR-11.5**: Support deterministic time manipulation for stale lock testing
+
+### FR-12: Storage Failure Handling
+**Description**: System must gracefully handle storage unavailability.
+
+**Requirements:**
+- **FR-12.1**: Detect storage failures during lock operations
+- **FR-12.2**: Use fallback path (e.g., in-memory cache) if primary storage unavailable
+- **FR-12.3**: Behavior must be functionally identical between primary and fallback
+- **FR-12.4**: Log storage failures with severity=ERROR
+
+## User Stories
+
+### US-1: Sequential Work Item Execution
+**As a** project manager  
+**I want** only one work item to execute at a time per pipeline  
+**So that** agents don't create conflicting changes (e.g., git merge conflicts)
+
+**Acceptance Criteria:**
+```gherkin
+Given work item #100 is executing in the Development stage
+When work item #101 enters the Development stage
+Then work item #101 should be added to the queue with status "waiting"
+And work item #100 should continue executing
+And only one lock should exist for the pipeline
+```
+
+### US-2: Board-Based Queue Priority
+**As a** project manager  
+**I want** work items to execute in the order I arrange them on the board  
+**So that** I can prioritize urgent work by dragging it to the top
+
+**Acceptance Criteria:**
+```gherkin
+Given work items #101, #102, #103 are queued (board positions 0, 1, 2)
+When I drag work item #103 to the top of the column
+And the current work item completes
+Then work item #103 should acquire the lock and execute next
+And work items #101, #102 should remain in queue
+```
+
+### US-3: Stale Lock Recovery
+**As a** system administrator  
+**I want** locks older than 2 hours to be automatically released  
+**So that** failed agents don't block the pipeline indefinitely
+
+**Acceptance Criteria:**
+```gherkin
+Given work item #100 acquired lock 3 hours ago
+And work item #100's agent is no longer responding
+When work item #101 attempts to acquire the lock
+Then the stale lock should be released
+And work item #101 should acquire the lock
+And work item #100's execution should be marked as failed
+And a lock.stale_detected event should be emitted
+```
+
+### US-4: Re-Entrant Lock Acquisition
+**As a** workflow orchestrator  
+**I want** work items to succeed when re-acquiring locks they already hold  
+**So that** idempotent retry logic doesn't fail unnecessarily
+
+**Acceptance Criteria:**
+```gherkin
+Given work item #100 holds the pipeline lock
+When work item #100 calls tryAcquireLock again
+Then the operation should return success
+And the message should be "already_holds_lock"
+And the lock TTL should be refreshed
+```
+
+### US-5: Automatic Lock Release on Exit Column
+**As a** workflow designer  
+**I want** locks to be released when work items reach exit columns  
+**So that** the next queued item starts automatically
+
+**Acceptance Criteria:**
+```gherkin
+Given work item #100 holds the pipeline lock
+And work item #101 is queued with position 0
+When work item #100 is moved to the "Staged" exit column
+Then the lock should be released
+And work item #101 should automatically acquire the lock
+And work item #101's agent should be triggered
+And a lock.released event should include nextInQueue: "#101"
+```
+
+### US-6: Queue Empty State
+**As a** workflow orchestrator  
+**I want** lock release to succeed even when no items are queued  
+**So that** pipelines can idle without errors
+
+**Acceptance Criteria:**
+```gherkin
+Given work item #100 holds the pipeline lock
+And the queue is empty
+When work item #100 releases the lock
+Then the lock should be removed from storage
+And no errors should occur
+And no additional lock acquisitions should be attempted
+```
+
+### US-7: Concurrent Lock Acquisition
+**As a** system architect  
+**I want** lock acquisition to be atomic  
+**So that** race conditions don't result in multiple work items holding the lock
+
+**Acceptance Criteria:**
+```gherkin
+Given the pipeline lock is unlocked
+When work items #100 and #101 call tryAcquireLock simultaneously
+Then exactly one work item should acquire the lock
+And the other work item should be added to the queue
+And storage operations should use atomic compare-and-set
+```
+
+### US-8: Queue Synchronization with Board
+**As a** workflow orchestrator  
+**I want** the queue to sync with board state before selecting next item  
+**So that** removed or moved work items don't cause errors
+
+**Acceptance Criteria:**
+```gherkin
+Given work items #101, #102, #103 are queued
+And work item #102 is manually moved out of the trigger column
+When the current lock is released
+And getNextWaitingItem is called
+Then the queue should sync with the board
+And work item #102 should be removed from the queue
+And work item #101 (position 0) should be selected
+```
+
+### US-9: Lock Status Visibility
+**As a** system administrator  
+**I want** to view all active pipeline locks  
+**So that** I can monitor system health and debug stuck pipelines
+
+**Acceptance Criteria:**
+```gherkin
+Given 3 pipelines have active locks
+When I call getAllLocks()
+Then I should receive 3 lock records
+And each record should include projectId, boardId, lockedByWorkItem, lockAcquiredAt
+And the response should be sorted by lockAcquiredAt descending
+```
+
+### US-10: Event-Driven Next Item Processing
+**As a** workflow orchestrator  
+**I want** lock.released events to trigger next-item processing  
+**So that** queue processing is reactive and decoupled
+
+**Acceptance Criteria:**
+```gherkin
+Given an event handler is subscribed to lock.released events
+And work item #101 is queued
+When work item #100 releases the lock
+Then a lock.released event should be emitted
+And the event handler should call tryAcquireLock for work item #101
+And work item #101 should receive a lock.acquired event
+```
+
+### US-11: Queue Position Tracking
+**As a** project manager  
+**I want** to see each work item's position in the queue  
+**So that** I can communicate accurate wait times to stakeholders
+
+**Acceptance Criteria:**
+```gherkin
+Given work items #101, #102, #103 are queued at positions 0, 1, 2
+When I query the queue state
+Then each work item should have a positionInColumn field
+And positionInColumn should match the board column order
+And the lastPositionCheck timestamp should reflect the last sync
+```
+
+### US-12: Storage Fallback Transparency
+**As a** workflow orchestrator  
+**I want** lock operations to work identically during storage failures  
+**So that** transient outages don't disrupt execution
+
+**Acceptance Criteria:**
+```gherkin
+Given the primary lock storage (Redis) is unavailable
+When work item #100 calls tryAcquireLock
+Then the operation should use fallback storage (in-memory cache)
+And the operation should return success
+And subsequent operations should see the lock in fallback storage
+And storage failures should be logged with ERROR severity
+```
+
+---
+_Generated by Orchestrator Bot 🤖_
+_Processed by the business_analyst agent_
+
+Build upon this previous analysis in your work.
+
+## Quality Standards
+
+- Architecture patterns are appropriate for the problem domain and the application
+- Scalability considerations are clearly defined
+- Security best practices are incorporated
+- Technology choices are justified with ADRs
+- Design supports maintainability and testability
+- No unnecessary complexity is introduced
+- No over-engineering is present
+- No new design patterns that are not important to the project
+
+
+## Output Format
+
+Provide a comprehensive analysis with the following sections:
+- System Architecture
+- Scalability Design
+- Established Patterns
+- Component Reuse
+- Implementation Plan
+
+
+
+**IMPORTANT - OUTPUT FORMAT FOR ANALYSIS**:
+- **PROJECT-SPECIFIC CONVENTIONS OVERRIDE**: Read `/workspace/CLAUDE.md` first. The project's CLAUDE.md file defines project-specific conventions and documentation requirements that take precedence over these general instructions.
+- Output your analysis as markdown text directly in your response
+- DO NOT create any files - this will be posted to GitHub as a comment
+- DO NOT include project name, feature name, or date headers (this info is already in the discussion)
+- **START IMMEDIATELY** with your first section heading (e.g., "## Executive Summary" or "## Problem Abstraction")
+- **NO CONVERSATIONAL PREAMBLES**: Do NOT include statements like "Ok, I'll build...", "I'll analyze...", "Let me create...", etc.
+- **NO SUMMARY SECTIONS**: Do NOT create a "Summary for GitHub Comment" section at the end - your entire output IS the comment
+- **NO INTERNAL DIALOG**: Do NOT include planning statements like "Let me research...", "I'll examine...", "Now let me check..."
+- **NO TOOL USAGE COMMENTARY**: Do not narrate what tools you're using or what you're searching for
+- Focus on WHAT needs to be done, not HOW or WHEN
+- Be specific and factual, avoid hypotheticals and hyperbole
+- Use proper markdown formatting (headers, lists, code blocks)
+
