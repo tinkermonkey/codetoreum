@@ -11,6 +11,13 @@ from codetoreum.domain.events import (
     now_iso,
 )
 
+# For immutability tests (when events become frozen dataclasses)
+try:
+    from dataclasses import FrozenInstanceError
+except ImportError:
+    # Fallback for older Python versions or non-frozen dataclasses
+    FrozenInstanceError = AttributeError  # type: ignore
+
 
 class TestComment:
     """Test the Comment class."""
@@ -478,3 +485,222 @@ class TestCommentPostedEvent:
         assert restored.work_item_id == original.work_item_id
         assert restored.comment.body == original.comment.body
         assert restored.source == "jira"
+
+
+class TestCommentImmutability:
+    """Test immutability of Comment class (frozen dataclass)."""
+
+    def test_comment_is_frozen(self):
+        """Test that Comment is immutable (frozen dataclass)."""
+        comment = Comment(
+            id="comment-123",
+            author="alice",
+            body="This needs clarification",
+            created_at=now_iso(),
+            is_bot=False,
+        )
+
+        # Verify the comment is properly created
+        assert comment.id == "comment-123"
+        assert comment.author == "alice"
+        assert comment.body == "This needs clarification"
+        assert comment.is_bot is False
+
+        # Comment is a frozen dataclass, so attempting to modify
+        # any attribute should raise FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
+            comment.id = "comment-456"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            comment.author = "bob"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            comment.body = "Different text"  # type: ignore
+
+    def test_comment_bot_immutability(self):
+        """Test immutability of bot comment (frozen dataclass)."""
+        comment = Comment(
+            id="bot-comment-1",
+            author="codetoreum-bot",
+            body="I've addressed the issue",
+            created_at=now_iso(),
+            is_bot=True,
+            parent_id="comment-123",
+        )
+
+        # Verify comment attributes
+        assert comment.is_bot is True
+        assert comment.parent_id == "comment-123"
+
+        # Comment is frozen, so modification should raise FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
+            comment.is_bot = False  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            comment.parent_id = "comment-456"  # type: ignore
+
+
+class TestCommentContextImmutability:
+    """Test immutability of CommentContext class (frozen dataclass)."""
+
+    def test_comment_context_is_frozen(self):
+        """Test that CommentContext is immutable (frozen dataclass)."""
+        context = CommentContext(
+            thread_id="thread-1",
+            is_initial_request=False,
+            column_name="In Progress",
+            agent_assignment="agent-123",
+        )
+
+        # Verify the context is properly created
+        assert context.thread_id == "thread-1"
+        assert context.is_initial_request is False
+        assert context.column_name == "In Progress"
+
+        # CommentContext is a frozen dataclass, so attempting to modify
+        # any attribute should raise FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
+            context.thread_id = "thread-2"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            context.column_name = "Done"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            context.is_initial_request = True  # type: ignore
+
+    def test_comment_context_with_parent_comment_immutability(self):
+        """Test immutability of CommentContext with nested parent comment."""
+        parent = Comment(
+            id="p1",
+            author="alice",
+            body="original",
+            created_at=now_iso(),
+        )
+
+        context = CommentContext(
+            parent_comment=parent,
+            is_initial_request=False,
+        )
+
+        # Verify nested comment is preserved
+        assert context.parent_comment == parent
+        assert context.parent_comment.id == "p1"
+
+        # Nested comment is also frozen, so modification should fail
+        with pytest.raises(FrozenInstanceError):
+            context.parent_comment.author = "bob"  # type: ignore
+
+        # And the context field itself cannot be reassigned
+        with pytest.raises(FrozenInstanceError):
+            context.parent_comment = Comment("p2", "alice", "different", now_iso())  # type: ignore
+
+
+class TestCommentNeedsResponseEventImmutability:
+    """Test immutability of CommentNeedsResponseEvent (frozen dataclass)."""
+
+    def test_comment_needs_response_event_is_frozen(self):
+        """Test that CommentNeedsResponseEvent is immutable (frozen dataclass)."""
+        comment = Comment(
+            id="c1",
+            author="alice",
+            body="How will this scale?",
+            created_at=now_iso(),
+        )
+
+        context = CommentContext(
+            thread_id="t1",
+            column_name="Review",
+            agent_assignment="reviewer",
+        )
+
+        event = CommentNeedsResponseEvent(
+            type="comment.needs_response",
+            timestamp=now_iso(),
+            source="github",
+            work_item_id="123",
+            project_id="proj-1",
+            comment=comment,
+            context=context,
+        )
+
+        # Verify the event is properly created
+        assert event.work_item_id == "123"
+        assert event.comment.author == "alice"
+        assert event.context.column_name == "Review"
+
+        # CommentNeedsResponseEvent is a frozen dataclass, so attempting to modify
+        # any attribute should raise FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
+            event.work_item_id = "456"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.comment = Comment("c2", "bob", "Different comment", now_iso())  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.context = CommentContext(thread_id="t2")  # type: ignore
+
+
+class TestCommentPostedEventImmutability:
+    """Test immutability of CommentPostedEvent (frozen dataclass)."""
+
+    def test_comment_posted_event_is_frozen(self):
+        """Test that CommentPostedEvent is immutable (frozen dataclass)."""
+        comment = Comment(
+            id="c1",
+            author="alice",
+            body="This looks good",
+            created_at=now_iso(),
+            is_bot=False,
+        )
+
+        event = CommentPostedEvent(
+            type="comment.posted",
+            timestamp=now_iso(),
+            source="github",
+            work_item_id="123",
+            project_id="proj-1",
+            comment=comment,
+        )
+
+        # Verify the event is properly created
+        assert event.work_item_id == "123"
+        assert event.comment.author == "alice"
+        assert event.comment.is_bot is False
+
+        # CommentPostedEvent is a frozen dataclass, so attempting to modify
+        # any attribute should raise FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
+            event.work_item_id = "456"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.comment = Comment("c2", "bob", "Different comment", now_iso())  # type: ignore
+
+    def test_comment_posted_event_bot_comment_immutability(self):
+        """Test immutability of CommentPostedEvent with bot comment (frozen dataclass)."""
+        comment = Comment(
+            id="c1",
+            author="codetoreum-bot",
+            body="Fix applied",
+            created_at=now_iso(),
+            is_bot=True,
+        )
+
+        event = CommentPostedEvent(
+            type="comment.posted",
+            timestamp=now_iso(),
+            source="github",
+            work_item_id="123",
+            project_id="proj-1",
+            comment=comment,
+        )
+
+        # Verify bot comment is properly stored
+        assert event.comment.is_bot is True
+        assert event.comment.author == "codetoreum-bot"
+
+        # Nested comment is frozen, so modification should fail
+        with pytest.raises(FrozenInstanceError):
+            event.comment.is_bot = False  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.comment.author = "alice"  # type: ignore

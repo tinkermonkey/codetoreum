@@ -9,6 +9,13 @@ from codetoreum.domain.events import (
     now_iso,
 )
 
+# For immutability tests (when events become frozen dataclasses)
+try:
+    from dataclasses import FrozenInstanceError
+except ImportError:
+    # Fallback for older Python versions or non-frozen dataclasses
+    FrozenInstanceError = AttributeError  # type: ignore
+
 
 class TestReviewStatusChangedEvent:
     """Test ReviewStatusChangedEvent."""
@@ -289,3 +296,102 @@ class TestReviewCommentAddedEvent:
         assert restored.review_id == original.review_id
         assert restored.comment.author == original.comment.author
         assert restored.work_item_id == original.work_item_id
+
+
+class TestReviewStatusChangedEventImmutability:
+    """Test immutability of ReviewStatusChangedEvent (frozen dataclass)."""
+
+    def test_review_status_changed_event_is_frozen(self):
+        """Test that ReviewStatusChangedEvent is immutable (frozen dataclass)."""
+        event = ReviewStatusChangedEvent(
+            type="review.status_changed",
+            timestamp=now_iso(),
+            source="github",
+            review_id="pr-123",
+            project_id="proj-1",
+            previous_status="open",
+            new_status="approved",
+            reviewer="alice",
+        )
+
+        # Verify the event is properly created
+        assert event.review_id == "pr-123"
+        assert event.previous_status == "open"
+        assert event.new_status == "approved"
+
+        # ReviewStatusChangedEvent is a frozen dataclass, so attempting to modify
+        # any attribute should raise FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
+            event.review_id = "pr-456"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.previous_status = "closed"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.new_status = "rejected"  # type: ignore
+
+
+class TestReviewCommentAddedEventImmutability:
+    """Test immutability of ReviewCommentAddedEvent (frozen dataclass)."""
+
+    def test_review_comment_added_event_is_frozen(self):
+        """Test that ReviewCommentAddedEvent is immutable (frozen dataclass)."""
+        comment = Comment(
+            id="rc-1",
+            author="alice",
+            body="Line 42: This could be optimized",
+            created_at=now_iso(),
+        )
+
+        event = ReviewCommentAddedEvent(
+            type="review.comment_added",
+            timestamp=now_iso(),
+            source="github",
+            review_id="pr-123",
+            project_id="proj-1",
+            comment=comment,
+        )
+
+        # Verify the event is properly created
+        assert event.review_id == "pr-123"
+        assert event.comment.author == "alice"
+
+        # ReviewCommentAddedEvent is a frozen dataclass, so attempting to modify
+        # any attribute should raise FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
+            event.review_id = "pr-456"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.comment = Comment("rc-2", "bob", "Different comment", now_iso())  # type: ignore
+
+    def test_review_comment_added_nested_comment_immutability(self):
+        """Test that nested Comment object in ReviewCommentAddedEvent is immutable."""
+        comment = Comment(
+            id="rc-1",
+            author="alice",
+            body="Great work!",
+            created_at=now_iso(),
+            is_bot=False,
+        )
+
+        event = ReviewCommentAddedEvent(
+            type="review.comment_added",
+            timestamp=now_iso(),
+            source="github",
+            review_id="pr-123",
+            project_id="proj-1",
+            comment=comment,
+        )
+
+        # Verify comment attributes are preserved
+        assert event.comment.id == "rc-1"
+        assert event.comment.body == "Great work!"
+        assert event.comment.is_bot is False
+
+        # Comment is a frozen dataclass, so attempting to modify
+        # its attributes should raise FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
+            event.comment.author = "bob"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.comment.body = "Different feedback"  # type: ignore

@@ -145,6 +145,9 @@ class ReviewCommentAddedEvent(CodetoreumEvent):
             raise ValueError("review_id is required")
         if not self.project_id:
             raise ValueError("project_id is required")
+        # Ensure comment is initialized if None
+        if self.comment is None:
+            object.__setattr__(self, "comment", Comment("", "", "", ""))
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""

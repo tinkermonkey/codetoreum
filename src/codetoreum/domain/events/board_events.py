@@ -151,17 +151,17 @@ class BoardReconciledEvent(CodetoreumEvent):
     items_moved: int = 0
 
     def __post_init__(self) -> None:
-        """Validate event after initialization."""
+        """Validate event after initialization and convert lists to tuples."""
         super().__post_init__()
+        if not self.project_id:
+            raise ValueError("project_id is required")
+        if not self.board_id:
+            raise ValueError("board_id is required")
         # Convert lists to tuples for immutability
         if isinstance(self.columns_added, list):
             object.__setattr__(self, "columns_added", tuple(self.columns_added))
         if isinstance(self.columns_removed, list):
             object.__setattr__(self, "columns_removed", tuple(self.columns_removed))
-        if not self.project_id:
-            raise ValueError("project_id is required")
-        if not self.board_id:
-            raise ValueError("board_id is required")
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -178,6 +178,8 @@ class BoardReconciledEvent(CodetoreumEvent):
     @classmethod
     def from_dict(cls, data: dict) -> "BoardReconciledEvent":
         """Deserialize from dictionary."""
+        columns_added = data.get("columns_added", [])
+        columns_removed = data.get("columns_removed", [])
         return cls(
             type=data.get("type", "board.reconciled"),
             timestamp=data.get("timestamp", ""),
@@ -186,7 +188,7 @@ class BoardReconciledEvent(CodetoreumEvent):
             event_id=data.get("event_id") or str(uuid4()),
             project_id=data.get("project_id", ""),
             board_id=data.get("board_id", ""),
-            columns_added=tuple(data.get("columns_added", [])),
-            columns_removed=tuple(data.get("columns_removed", [])),
+            columns_added=tuple(columns_added) if columns_added else (),
+            columns_removed=tuple(columns_removed) if columns_removed else (),
             items_moved=data.get("items_moved", 0),
         )
