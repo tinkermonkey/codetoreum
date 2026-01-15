@@ -19,7 +19,7 @@ Intended for:
 
 import threading
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 from codetoreum.ports.output.pipeline_queue_service import (
     IPipelineQueueService,
@@ -36,24 +36,47 @@ class InMemoryQueueService(IPipelineQueueService):
 
     Thread-safe via internal locking mechanism for concurrent access.
 
+    Features:
+        - Board position-based queue ordering (lowest position = highest priority)
+        - Test helpers for deterministic simulation testing
+        - Audit log for operational verification
+        - Configurable time source for time manipulation in simulation scenarios
+
     Attributes:
         _queues: Dict mapping "project_id:board_id" to list of PipelineQueueEntry
+        _board_positions: Dict mapping "project_id:board_id" to ordered work item IDs (from set_board_order)
+        _operations_log: List of dicts recording all operations for audit trail
         _lock: Threading lock for thread-safe access
         _board_service: Optional board service for queue synchronization
+        _time_source: Optional callable returning current datetime (for simulation)
     """
 
-    def __init__(self, board_service: Optional[IBoardService] = None) -> None:
+    def __init__(
+        self,
+        board_service: Optional[IBoardService] = None,
+        time_source: Optional[Callable[[], datetime]] = None,
+    ) -> None:
         """Initialize empty queue service.
 
         Args:
             board_service: Optional IBoardService for queue synchronization with board state
+            time_source: Optional callable returning datetime.datetime for deterministic time
+                        manipulation in simulation testing. Defaults to datetime.now(timezone.utc)
         """
         self._queues: Dict[str, List[PipelineQueueEntry]] = {}
+        self._board_positions: Dict[str, List[str]] = {}  # For set_board_order test helper
+        self._operations_log: List[Dict] = []  # Audit log for test verification
         self._lock = threading.Lock()
         self._board_service = board_service
+        self._time_source = time_source or (lambda: datetime.now(timezone.utc))
 
     async def is_item_in_queue(self, work_item_id: str) -> bool:
         """Check if a work item is currently in any queue.
+
+        Searches across ALL queues in the system (all project_id:board_id combinations).
+        Returns True if the work item appears in any queue. Note: this is a cross-queue
+        search, so if the same work_item_id exists in multiple pipelines, it will return
+        True. This assumes work_item_ids are globally unique identifiers.
 
         Args:
             work_item_id: Work item identifier to check
@@ -144,6 +167,18 @@ class InMemoryQueueService(IPipelineQueueService):
             # Update the queue in the dictionary with sorted version
             self._queues[queue_key] = queue
 
+            # Log operation for audit trail
+            self._operations_log.append(
+                {
+                    "operation": "enqueue",
+                    "timestamp": timestamp,
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "work_item_id": work_item_id,
+                    "position": position_in_column,
+                }
+            )
+
     async def mark_item_active(self, work_item_id: str) -> None:
         """Mark a queued item as active (holding the lock).
 
@@ -184,6 +219,17 @@ class InMemoryQueueService(IPipelineQueueService):
 
                         # Replace in queue
                         self._queues[queue_key][i] = new_entry
+
+                        # Log operation for audit trail
+                        self._operations_log.append(
+                            {
+                                "operation": "mark_active",
+                                "timestamp": self._time_source(),
+                                "work_item_id": work_item_id,
+                                "project_id": entry.project_id,
+                                "board_id": entry.board_id,
+                            }
+                        )
                         return
 
             # Item not found in any queue
@@ -209,6 +255,17 @@ class InMemoryQueueService(IPipelineQueueService):
                 for i, entry in enumerate(queue):
                     if entry.work_item_id == work_item_id:
                         self._queues[queue_key].pop(i)
+
+                        # Log operation for audit trail
+                        self._operations_log.append(
+                            {
+                                "operation": "remove",
+                                "timestamp": self._time_source(),
+                                "work_item_id": work_item_id,
+                                "project_id": entry.project_id,
+                                "board_id": entry.board_id,
+                            }
+                        )
                         return True
             return False
 
@@ -346,7 +403,7 @@ class InMemoryQueueService(IPipelineQueueService):
                 ]
 
                 # Step 2: Add new items discovered in column
-                now = datetime.now(timezone.utc)
+                now = self._time_source()
                 for position, work_item_id in enumerate(
                     target_column.work_item_ids
                 ):
@@ -388,12 +445,77 @@ class InMemoryQueueService(IPipelineQueueService):
                 updated_queue.sort(key=lambda e: e.position_in_column)
                 self._queues[queue_key] = updated_queue
 
+                # Log operation for audit trail
+                self._operations_log.append(
+                    {
+                        "operation": "sync_queue",
+                        "timestamp": now,
+                        "project_id": project_id,
+                        "board_id": board_id,
+                        "column": column,
+                        "items_in_queue": len(updated_queue),
+                    }
+                )
+
         except Exception as e:
             # Log error but don't fail - queue remains in current state
             # Implementations should handle these failures appropriately
             raise
 
     # ===== Test Helper Methods =====
+
+    def set_board_order(
+        self, project_id: str, board_id: str, ordered_work_items: List[str]
+    ) -> None:
+        """Test helper to set simulated board order for queue position simulation.
+
+        Allows tests to directly configure board position ordering without requiring
+        a full IBoardService implementation. The InMemoryQueueService can use this
+        ordering for simulating board position-based priority during sync operations.
+
+        Args:
+            project_id: Project identifier
+            board_id: Board identifier
+            ordered_work_items: List of work item IDs in board position order
+                               (index 0 = topmost position, highest priority)
+
+        Raises:
+            ValueError: Invalid parameters
+        """
+        if not project_id:
+            raise ValueError("project_id cannot be empty")
+        if not board_id:
+            raise ValueError("board_id cannot be empty")
+        if ordered_work_items is None:
+            raise ValueError("ordered_work_items cannot be None")
+
+        with self._lock:
+            queue_key = f"{project_id}:{board_id}"
+            self._board_positions[queue_key] = ordered_work_items.copy()
+
+            # Log operation for audit trail
+            self._operations_log.append(
+                {
+                    "operation": "set_board_order",
+                    "timestamp": self._time_source(),
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "ordered_items": ordered_work_items.copy(),
+                }
+            )
+
+    def get_operations_log(self) -> List[Dict]:
+        """Test helper to retrieve audit log of all operations.
+
+        Returns a copy of the operations log containing records of all queue operations
+        (set_board_order, enqueue, mark_active, remove, sync_queue) for test verification
+        and debugging.
+
+        Returns:
+            List of operation records with timestamps and details
+        """
+        with self._lock:
+            return self._operations_log.copy()
 
     def get_queue_state_for_testing(
         self, project_id: str, board_id: str

@@ -268,11 +268,11 @@ async def test_scenario_09_with_board_service_sync():
     # Sync should remove item-1
     await queue_service.sync_queue_with_board("proj-1", "board-1", "Trigger")
 
-    # item-1 should still be in queue since we manually enqueued it
-    # (In real scenario, sync would be called by orchestrator when board changes)
+    # After sync, item-1 should be removed (it's no longer in the Trigger column)
+    # Only item-2 and item-3 should remain
     entries_after_move = await queue_service.get_queue_entries("proj-1", "board-1")
-    # Our simple test doesn't remove items during sync, just demonstrates the interface
-    assert len(entries_after_move) >= 2
+    assert len(entries_after_move) == 2
+    assert all(e.work_item_id != "item-1" for e in entries_after_move)
 
 
 if __name__ == "__main__":
