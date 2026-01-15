@@ -365,7 +365,7 @@ class TestStaleLockDetection:
     async def test_lock_not_stale_just_below_threshold(
         self, lock_service_with_short_threshold, mock_event_bus
     ):
-        """Lock just below threshold (1h59m) should not be detected as stale."""
+        """Lock just below threshold (59s of 60s test threshold) should not be detected as stale."""
         # Acquire lock
         await lock_service_with_short_threshold.try_acquire_lock(
             project_id="proj-1",
@@ -451,7 +451,7 @@ class TestStaleLockDetection:
     async def test_stale_lock_recovery_at_exact_threshold(
         self, lock_service_with_short_threshold, mock_event_bus
     ):
-        """Lock at exactly threshold time should NOT be detected as stale."""
+        """Lock just below threshold boundary (59.5s of 60s test threshold) should not be stale."""
         # Acquire lock
         await lock_service_with_short_threshold.try_acquire_lock(
             project_id="proj-1",
@@ -460,9 +460,9 @@ class TestStaleLockDetection:
             board_position=0,
         )
 
-        # Set lock time to 30 seconds ago (well below 60 second threshold)
+        # Set lock time to 59.5 seconds ago (clearly below 60 second threshold)
         now = datetime.now(timezone.utc)
-        old_time = now - timedelta(seconds=30)
+        old_time = now - timedelta(seconds=59.5)
         lock_service_with_short_threshold.set_lock_acquired_at(
             project_id="proj-1", board_id="board-1", timestamp=old_time
         )
@@ -478,7 +478,7 @@ class TestStaleLockDetection:
             board_position=1,
         )
 
-        # Should be queued, not stale recovery
+        # Should be queued, not stale recovery (lock age well below threshold)
         assert result.status == LockStatus.QUEUED
 
     @pytest.mark.asyncio
@@ -643,3 +643,43 @@ class TestStaleLockDetection:
         assert len(state.queue) == 2
         assert state.queue[0].work_item_id == "item-2"
         assert state.queue[1].work_item_id == "item-3"
+
+    @pytest.mark.asyncio
+    async def test_stale_lock_detected_without_event_bus(self, lock_service_with_short_threshold):
+        """Stale lock recovery should work even when event_bus is None."""
+        # Create service without event bus
+        service_no_bus = InMemoryLockService(
+            event_bus=None, stale_threshold_seconds=60
+        )
+
+        # Acquire lock
+        await service_no_bus.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+            board_position=0,
+        )
+
+        # Age the lock to be stale
+        now = datetime.now(timezone.utc)
+        old_time = now - timedelta(seconds=61)
+        service_no_bus.set_lock_acquired_at(
+            project_id="proj-1", board_id="board-1", timestamp=old_time
+        )
+
+        # Try to acquire with different item - should recover stale lock
+        result = await service_no_bus.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-2",
+            board_position=1,
+        )
+
+        # Should acquire lock (stale recovery)
+        assert result.status == LockStatus.ACQUIRED
+
+        # Verify new lock holder
+        state = await service_no_bus.get_queue_state(
+            project_id="proj-1", board_id="board-1"
+        )
+        assert state.lock_holder == "item-2"
