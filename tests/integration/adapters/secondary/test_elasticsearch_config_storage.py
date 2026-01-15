@@ -9,7 +9,6 @@ from uuid import uuid4
 
 import pytest
 from elasticsearch import AsyncElasticsearch
-from testcontainers.elasticsearch import ElasticSearchContainer
 
 from codetoreum.adapters.secondary.elasticsearch_config_storage import (
     ElasticsearchConfigStorage,
@@ -21,7 +20,7 @@ from codetoreum.ports.output.config_store import (
     ProjectConfig,
     WorkflowTemplate,
 )
-from tests.conftest import docker_available
+from tests.conftest import docker_available, ModernElasticsearchContainer
 
 # Mark all tests in this module as requiring Docker
 pytestmark = docker_available
@@ -30,10 +29,8 @@ pytestmark = docker_available
 @pytest.fixture(scope="module")
 def elasticsearch_container():
     """Create Elasticsearch testcontainer with resource limits."""
-    # Use Elasticsearch 8.x
-    container = ElasticSearchContainer("elasticsearch:8.11.0")
-    container.with_env("xpack.security.enabled", "false")
-    container.with_env("discovery.type", "single-node")
+    # Use Elasticsearch 8.x with modern wait strategy (no deprecation warnings)
+    container = ModernElasticsearchContainer("elasticsearch:8.11.0")
     # Add resource limits to prevent memory exhaustion
     container.with_env("ES_JAVA_OPTS", "-Xms512m -Xmx512m")  # Limit ES heap to 512MB
     container.start()

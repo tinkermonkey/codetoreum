@@ -152,6 +152,14 @@ class EventBus:
                 )
 
         except Exception as e:
+            logger.error(
+                f"Failed to register handler {handler.__class__.__name__}: {e}",
+                exc_info=True,
+                extra={
+                    "handler_class": handler.__class__.__name__,
+                    "error_id": "ERR_HANDLER_REGISTRATION"
+                }
+            )
             raise EventBusError(f"Failed to register handler: {e}") from e
 
     def unregister_handler(self, handler: EventHandler) -> None:
@@ -203,6 +211,15 @@ class EventBus:
                 logger.info(f"Subscribed callback to event type: {event_type}")
 
         except Exception as e:
+            logger.error(
+                f"Failed to subscribe callback to event {event_type}: {e}",
+                exc_info=True,
+                extra={
+                    "event_type": event_type,
+                    "callback": callback.__name__ if hasattr(callback, '__name__') else str(callback),
+                    "error_id": "ERR_CALLBACK_SUBSCRIPTION"
+                }
+            )
             raise EventBusError(f"Failed to subscribe callback: {e}") from e
 
     def unsubscribe(
@@ -235,11 +252,18 @@ class EventBus:
 
         Also persists event to Redis Streams if Redis client is configured.
 
+        Error Handling:
+        - asyncio.CancelledError: Always propagated (not caught)
+        - ConnectionError/TimeoutError: Logged with retry hint (transient)
+        - ValueError: Logged with validation hint (permanent)
+        - Unexpected exceptions: Logged as critical
+
         Args:
             event: Domain event to publish
 
         Raises:
-            EventBusError: If publishing fails
+            EventBusError: If publishing fails (with context about error type)
+            asyncio.CancelledError: Always propagated without catching
         """
         self._stats["events_published"] += 1
 
@@ -268,11 +292,18 @@ class EventBus:
                 results = await asyncio.gather(*tasks, return_exceptions=True)
 
                 # Check for errors
-                for result in results:
+                for idx, result in enumerate(results):
                     if isinstance(result, Exception):
+                        handler_name = f"handler_{idx}"
                         logger.error(
-                            f"Handler failed for event {event.event_type}: {result}",
+                            f"Handler {handler_name} failed for event {event.event_type}: {result}",
                             exc_info=result,
+                            extra={
+                                "event_type": event.event_type,
+                                "event_id": event.event_id,
+                                "handler_index": idx,
+                                "error_type": type(result).__name__
+                            }
                         )
                         self._stats["handler_errors"] += 1
 
@@ -283,8 +314,50 @@ class EventBus:
                 f"{len(handlers)} handlers and {len(callbacks)} callbacks"
             )
 
+        except asyncio.CancelledError:
+            # Always propagate cancellation - don't suppress system signals
+            logger.info(f"Event publishing cancelled for {event.event_type}")
+            raise
+        except (ConnectionError, TimeoutError) as e:
+            # Network/Redis issues - transient errors that may resolve on retry
+            logger.error(
+                f"Connection error publishing event {event.event_type}: {e}",
+                exc_info=True,
+                extra={
+                    "event_id": event.event_id,
+                    "event_type": event.event_type,
+                    "error_id": "ERR_EVENT_BUS_CONNECTION"
+                }
+            )
+            raise EventBusError(
+                f"Connection error publishing event: {e}. This may be transient - please retry."
+            ) from e
+        except ValueError as e:
+            # Validation errors - permanent issues with event data
+            logger.error(
+                f"Validation error publishing event {event.event_type}: {e}",
+                exc_info=True,
+                extra={
+                    "event_id": event.event_id,
+                    "event_type": event.event_type,
+                    "error_id": "ERR_EVENT_BUS_VALIDATION"
+                }
+            )
+            raise EventBusError(
+                f"Invalid event data: {e}. Please check event structure."
+            ) from e
         except Exception as e:
-            raise EventBusError(f"Failed to publish event: {e}") from e
+            # Unexpected errors that don't fit other categories
+            logger.critical(
+                f"Unexpected error publishing event {event.event_type}: {e}",
+                exc_info=True,
+                extra={
+                    "event_id": event.event_id,
+                    "event_type": event.event_type,
+                    "error_id": "ERR_EVENT_BUS_UNEXPECTED"
+                }
+            )
+            raise EventBusError(f"Unexpected error publishing event: {e}") from e
 
     async def publish_batch(self, events: List[DomainEvent]) -> None:
         """
@@ -407,6 +480,7 @@ class EventBus:
             event: Domain event to persist
 
         Raises:
+            asyncio.CancelledError: Always propagated
             Exception: If persistence fails
         """
         if not self.redis_client:
@@ -438,11 +512,31 @@ class EventBus:
                 f"(ID: {event.event_id}) to Redis stream {stream_key}"
             )
 
-        except Exception as e:
+        except asyncio.CancelledError:
+            # Always propagate cancellation - don't suppress system signals
+            raise
+        except ConnectionError as e:
             self._stats["persistence_errors"] += 1
             logger.error(
-                f"Failed to persist event {event.event_type} to Redis: {e}",
-                exc_info=e,
+                f"Redis connection error persisting event {event.event_type}: {e}",
+                exc_info=True,
+                extra={
+                    "event_id": event.event_id,
+                    "event_type": event.event_type,
+                    "error_type": "redis_connection"
+                }
+            )
+            # Don't raise - persistence failure shouldn't block event handling
+        except Exception as e:
+            self._stats["persistence_errors"] += 1
+            logger.critical(
+                f"Unexpected error persisting event {event.event_type}: {e}",
+                exc_info=True,
+                extra={
+                    "event_id": event.event_id,
+                    "event_type": event.event_type,
+                    "error_type": "unexpected"
+                }
             )
             # Don't raise - persistence failure shouldn't block event handling
 

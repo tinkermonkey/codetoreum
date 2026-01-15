@@ -185,6 +185,7 @@ class TestEventEmitter:
         adapter.on("review.status_changed", handler2)
 
         event = ReviewStatusChangedEvent(
+            type="review.status_changed",
             timestamp="2024-01-01T10:00:00Z",
             source="github",
             review_id="PR123",
@@ -207,6 +208,7 @@ class TestEventEmitter:
         adapter.on("review.status_changed", handler2)
 
         event = ReviewStatusChangedEvent(
+            type="review.status_changed",
             timestamp="2024-01-01T10:00:00Z",
             source="github",
             review_id="PR123",
@@ -219,6 +221,207 @@ class TestEventEmitter:
 
         handler1.assert_called_once()
         handler2.assert_called_once()
+
+    def test_emit_handles_validation_error(self, adapter, caplog):
+        """Test emit properly logs validation errors (ValueError) with exc_info."""
+        handler = MagicMock(side_effect=ValueError("Invalid data"))
+        adapter.on("review.status_changed", handler)
+
+        event = ReviewStatusChangedEvent(
+            type="review.status_changed",
+            timestamp="2024-01-01T10:00:00Z",
+            source="github",
+            review_id="PR123",
+            project_id="proj-1",
+            previous_status="open",
+            new_status="approved",
+        )
+
+        # Should not raise, but should log error
+        adapter.emit(event)
+
+        handler.assert_called_once()
+        # Verify error was logged at ERROR level (not WARNING)
+        error_logs = [record for record in caplog.records if record.levelname == "ERROR"]
+        assert len(error_logs) > 0
+        assert "validation error" in error_logs[0].message.lower()
+        # Check extra context
+        assert error_logs[0].__dict__.get("error_id") == "ERR_HANDLER_VALIDATION"
+
+    def test_emit_handles_type_error(self, adapter, caplog):
+        """Test emit properly logs type errors (TypeError) with exc_info."""
+        handler = MagicMock(side_effect=TypeError("Type mismatch"))
+        adapter.on("review.status_changed", handler)
+
+        event = ReviewStatusChangedEvent(
+            type="review.status_changed",
+            timestamp="2024-01-01T10:00:00Z",
+            source="github",
+            review_id="PR123",
+            project_id="proj-1",
+            previous_status="open",
+            new_status="approved",
+        )
+
+        # Should not raise, but should log error
+        adapter.emit(event)
+
+        handler.assert_called_once()
+        # Verify error was logged at ERROR level
+        error_logs = [record for record in caplog.records if record.levelname == "ERROR"]
+        assert len(error_logs) > 0
+        assert "validation error" in error_logs[0].message.lower()
+
+    def test_emit_handles_unexpected_error(self, adapter, caplog):
+        """Test emit properly logs unexpected errors with exc_info."""
+        handler = MagicMock(side_effect=RuntimeError("Unexpected failure"))
+        adapter.on("review.status_changed", handler)
+
+        event = ReviewStatusChangedEvent(
+            type="review.status_changed",
+            timestamp="2024-01-01T10:00:00Z",
+            source="github",
+            review_id="PR123",
+            project_id="proj-1",
+            previous_status="open",
+            new_status="approved",
+        )
+
+        # Should not raise, but should log error
+        adapter.emit(event)
+
+        handler.assert_called_once()
+        # Verify error was logged at ERROR level with "Unexpected" message
+        error_logs = [record for record in caplog.records if record.levelname == "ERROR"]
+        assert len(error_logs) > 0
+        assert "unexpected error" in error_logs[0].message.lower()
+        # Check extra context
+        assert error_logs[0].__dict__.get("error_id") == "ERR_HANDLER_UNEXPECTED"
+
+    def test_emit_multiple_handlers_one_fails(self, adapter):
+        """Test emit continues to next handler when one fails."""
+        handler1 = MagicMock(side_effect=ValueError("Handler 1 fails"))
+        handler2 = MagicMock()  # Should still be called
+        handler3 = MagicMock(side_effect=RuntimeError("Handler 3 fails"))
+        handler4 = MagicMock()  # Should still be called
+
+        adapter.on("review.status_changed", handler1)
+        adapter.on("review.status_changed", handler2)
+        adapter.on("review.status_changed", handler3)
+        adapter.on("review.status_changed", handler4)
+
+        event = ReviewStatusChangedEvent(
+            type="review.status_changed",
+            timestamp="2024-01-01T10:00:00Z",
+            source="github",
+            review_id="PR123",
+            project_id="proj-1",
+            previous_status="open",
+            new_status="approved",
+        )
+
+        adapter.emit(event)
+
+        # All handlers should be called, even if some failed
+        handler1.assert_called_once()
+        handler2.assert_called_once()
+        handler3.assert_called_once()
+        handler4.assert_called_once()
+
+    def test_emit_logs_handler_context(self, adapter, caplog):
+        """Test emit logs structured context with event_type and handler name."""
+        def named_handler(event):
+            raise ValueError("Test error")
+
+        adapter.on("review.status_changed", named_handler)
+
+        event = ReviewStatusChangedEvent(
+            type="review.status_changed",
+            timestamp="2024-01-01T10:00:00Z",
+            source="github",
+            review_id="PR123",
+            project_id="proj-1",
+            previous_status="open",
+            new_status="approved",
+        )
+
+        adapter.emit(event)
+
+        error_logs = [record for record in caplog.records if record.levelname == "ERROR"]
+        assert len(error_logs) > 0
+        assert "named_handler" in error_logs[0].message
+        assert "review.status_changed" in error_logs[0].message
+
+    def test_emit_propagates_cancelled_error(self, adapter):
+        """Test emit propagates asyncio.CancelledError instead of suppressing it."""
+        def handler_with_cancel(event):
+            raise asyncio.CancelledError("Task cancelled")
+
+        adapter.on("review.status_changed", handler_with_cancel)
+
+        event = ReviewStatusChangedEvent(
+            type="review.status_changed",
+            timestamp="2024-01-01T10:00:00Z",
+            source="github",
+            review_id="PR123",
+            project_id="proj-1",
+            previous_status="open",
+            new_status="approved",
+        )
+
+        # CancelledError should be propagated, not suppressed
+        with pytest.raises(asyncio.CancelledError):
+            adapter.emit(event)
+
+    def test_emit_no_handlers_for_event(self, adapter):
+        """Test emit returns gracefully when no handlers registered for event."""
+        event = ReviewStatusChangedEvent(
+            type="review.status_changed",
+            timestamp="2024-01-01T10:00:00Z",
+            source="github",
+            review_id="PR123",
+            project_id="proj-1",
+            previous_status="open",
+            new_status="approved",
+        )
+
+        # Should not raise
+        adapter.emit(event)
+
+    def test_emit_logs_failure_summary(self, adapter, caplog):
+        """Test emit logs a summary when multiple handlers fail."""
+        handler1 = MagicMock(side_effect=ValueError("Handler 1 fails"))
+        handler2 = MagicMock()  # Success
+        handler3 = MagicMock(side_effect=RuntimeError("Handler 3 fails"))
+
+        adapter.on("review.status_changed", handler1)
+        adapter.on("review.status_changed", handler2)
+        adapter.on("review.status_changed", handler3)
+
+        event = ReviewStatusChangedEvent(
+            type="review.status_changed",
+            timestamp="2024-01-01T10:00:00Z",
+            source="github",
+            review_id="PR123",
+            project_id="proj-1",
+            previous_status="open",
+            new_status="approved",
+        )
+
+        adapter.emit(event)
+
+        # Should have logged individual handler errors and a summary
+        error_logs = [record for record in caplog.records if record.levelname == "ERROR"]
+        assert len(error_logs) >= 3  # 2 handler errors + 1 summary
+
+        # Verify summary log exists
+        summary_logs = [
+            record for record in error_logs
+            if "completed with" in record.message and "handler failure(s)" in record.message
+        ]
+        assert len(summary_logs) == 1
+        assert summary_logs[0].__dict__.get("failure_count") == 2
+        assert summary_logs[0].__dict__.get("error_id") == "ERR_HANDLER_FAILURES"
 
     def test_on_rejects_non_callable(self, adapter):
         """Test on() rejects non-callable handlers."""

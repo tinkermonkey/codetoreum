@@ -9,30 +9,64 @@ Terminology (vendor-agnostic):
 - Comment Context: Metadata about where and how a comment was made
 """
 
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
 
 
+@dataclass(frozen=True)
 class Comment:
-    """Represents a comment in the system."""
+    """Represents a comment in the system.
 
-    def __init__(
-        self,
-        id: str,
-        author: str,
-        body: str,
-        created_at: str,
-        parent_id: Optional[str] = None,
-        is_bot: bool = False,
-    ):
-        self.id = id
-        self.author = author
-        self.body = body
-        self.created_at = created_at
-        self.parent_id = parent_id
-        self.is_bot = is_bot
+    **Immutability**: This is an immutable object (frozen dataclass). All fields
+    are read-only after construction to ensure data integrity and thread safety.
+    Events and value objects in the event sourcing system must be immutable to
+    prevent accidental modifications. Attempting to modify any field will raise
+    `FrozenInstanceError`.
+
+    Attributes:
+        id (str): Unique identifier for the comment
+        author (str): Username of the comment author
+        body (str): The text content of the comment
+        created_at (str): ISO 8601 timestamp when the comment was created
+        parent_id (Optional[str]): ID of parent comment if this is a reply, None if top-level
+        is_bot (bool): Whether the comment was authored by a bot (default: False)
+
+    Example:
+        >>> comment = Comment(
+        ...     id="comment-1",
+        ...     author="user123",
+        ...     body="This is a comment",
+        ...     created_at="2025-01-14T10:30:00+00:00"
+        ... )
+        >>> comment.body = "Modified text"  # ❌ Raises FrozenInstanceError
+    """
+
+    id: str
+    author: str
+    body: str
+    created_at: str
+    parent_id: Optional[str] = None
+    is_bot: bool = False
+
+    def __post_init__(self) -> None:
+        """Validate comment after initialization."""
+        if not self.id:
+            raise ValueError("Comment id is required")
+        if not self.author:
+            raise ValueError("Comment author is required")
+        if not self.body:
+            raise ValueError("Comment body is required")
+        if not self.created_at:
+            raise ValueError("Comment created_at is required")
+        # Validate ISO 8601 timestamp
+        try:
+            datetime.fromisoformat(self.created_at.replace("Z", "+00:00"))
+        except (ValueError, AttributeError) as e:
+            raise ValueError(f"created_at must be ISO 8601 format: {e}")
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -58,22 +92,46 @@ class Comment:
         )
 
 
+@dataclass(frozen=True)
 class CommentContext:
-    """Context information about a comment's location and purpose."""
+    """Context information about a comment's location and purpose.
 
-    def __init__(
-        self,
-        thread_id: Optional[str] = None,
-        parent_comment: Optional[Comment] = None,
-        is_initial_request: bool = False,
-        column_name: str = "",
-        agent_assignment: str = "",
-    ):
-        self.thread_id = thread_id
-        self.parent_comment = parent_comment
-        self.is_initial_request = is_initial_request
-        self.column_name = column_name
-        self.agent_assignment = agent_assignment
+    **Immutability**: This is an immutable object (frozen dataclass). All fields
+    are read-only after construction to ensure data integrity and thread safety.
+    Events and value objects in the event sourcing system must be immutable to
+    prevent accidental modifications. Attempting to modify any field will raise
+    `FrozenInstanceError`.
+
+    Attributes:
+        thread_id (Optional[str]): ID of the discussion thread, None if not part of thread
+        parent_comment (Optional[Comment]): The parent comment if this is a reply, None otherwise
+        is_initial_request (bool): Whether this is the initial request comment (default: False)
+        column_name (str): Name of the board column where comment was made (empty if not applicable)
+        agent_assignment (str): Agent assigned to handle the comment (empty if unassigned)
+
+    Example:
+        >>> context = CommentContext(
+        ...     thread_id="thread-1",
+        ...     is_initial_request=True,
+        ...     column_name="In Progress"
+        ... )
+        >>> context.column_name = "Review"  # ❌ Raises FrozenInstanceError
+    """
+
+    thread_id: Optional[str] = None
+    parent_comment: Optional[Comment] = None
+    is_initial_request: bool = False
+    column_name: str = ""
+    agent_assignment: str = ""
+
+    def __post_init__(self) -> None:
+        """Validate comment context after initialization."""
+        # thread_id is optional, no validation needed
+        # parent_comment is optional, but if provided it's a Comment object (validated by Comment)
+        # is_initial_request is bool, no validation needed
+        # column_name is optional (can be empty), no validation needed
+        # agent_assignment is optional (can be empty), no validation needed
+        # No required string fields to validate for CommentContext
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -101,40 +159,52 @@ class CommentContext:
         )
 
 
+@dataclass(frozen=True)
 class CommentNeedsResponseEvent(CodetoreumEvent):
-    """Emitted when a comment requires a response from the system."""
+    """Emitted when a comment requires a response from the system.
 
-    def __init__(
-        self,
-        type: str = "comment.needs_response",
-        timestamp: str = "",
-        source: str = "",
-        correlation_id: Optional[str] = None,
-        event_id: Optional[str] = None,
-        work_item_id: str = "",
-        project_id: str = "",
-        comment: Optional[Comment] = None,
-        context: Optional[CommentContext] = None,
-    ):
-        super().__init__(
-            type=type,
-            timestamp=timestamp,
-            source=source,
-            correlation_id=correlation_id,
-            event_id=event_id or str(uuid4()),
-        )
-        self.work_item_id = work_item_id
-        self.project_id = project_id
-        self.comment = comment or Comment("", "", "", "")
-        self.context = context or CommentContext()
-        self._validate()
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Events represent immutable facts—attempting to modify any field
+    will raise `FrozenInstanceError`. This immutability is essential because
+    events are the permanent record of state changes in the system and must
+    never be altered once created.
 
-    def _validate(self) -> None:
-        """Validate event fields."""
+    Attributes:
+        type (str): Fixed to "comment.needs_response"
+        work_item_id (str): ID of the work item containing the comment
+        project_id (str): ID of the project containing the work item
+        comment (Optional[Comment]): The comment object requiring response, None if not available
+        context (Optional[CommentContext]): Context information about the comment, None if not available
+
+    Example:
+        >>> event = CommentNeedsResponseEvent(
+        ...     type="comment.needs_response",
+        ...     timestamp="2025-01-14T10:30:00+00:00",
+        ...     source="github",
+        ...     work_item_id="issue-1",
+        ...     project_id="proj-1"
+        ... )
+        >>> event.work_item_id = "issue-2"  # ❌ Raises FrozenInstanceError
+    """
+
+    work_item_id: str = ""
+    project_id: str = ""
+    comment: Optional[Comment] = None
+    context: Optional[CommentContext] = None
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
         if not self.project_id:
             raise ValueError("project_id is required")
+        # Ensure comment and context are initialized if None
+        if self.comment is None:
+            object.__setattr__(self, "comment", Comment("", "", "", ""))
+        if self.context is None:
+            object.__setattr__(self, "context", CommentContext())
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -142,23 +212,23 @@ class CommentNeedsResponseEvent(CodetoreumEvent):
         d.update({
             "work_item_id": self.work_item_id,
             "project_id": self.project_id,
-            "comment": self.comment.to_dict(),
-            "context": self.context.to_dict(),
+            "comment": self.comment.to_dict() if self.comment else None,
+            "context": self.context.to_dict() if self.context else None,
         })
         return d
 
     @classmethod
     def from_dict(cls, data: dict) -> "CommentNeedsResponseEvent":
         """Deserialize from dictionary."""
-        comment = Comment.from_dict(data.get("comment", {}))
-        context = CommentContext.from_dict(data.get("context", {}))
+        comment = Comment.from_dict(data.get("comment", {})) if data.get("comment") else None
+        context = CommentContext.from_dict(data.get("context", {})) if data.get("context") else None
 
         return cls(
             type=data.get("type", "comment.needs_response"),
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
-            event_id=data.get("event_id"),
+            event_id=data.get("event_id") or str(uuid4()),
             work_item_id=data.get("work_item_id", ""),
             project_id=data.get("project_id", ""),
             comment=comment,
@@ -166,38 +236,48 @@ class CommentNeedsResponseEvent(CodetoreumEvent):
         )
 
 
+@dataclass(frozen=True)
 class CommentPostedEvent(CodetoreumEvent):
-    """Emitted when a comment is posted to a work item."""
+    """Emitted when a comment is posted to a work item.
 
-    def __init__(
-        self,
-        type: str = "comment.posted",
-        timestamp: str = "",
-        source: str = "",
-        correlation_id: Optional[str] = None,
-        event_id: Optional[str] = None,
-        work_item_id: str = "",
-        project_id: str = "",
-        comment: Optional[Comment] = None,
-    ):
-        super().__init__(
-            type=type,
-            timestamp=timestamp,
-            source=source,
-            correlation_id=correlation_id,
-            event_id=event_id or str(uuid4()),
-        )
-        self.work_item_id = work_item_id
-        self.project_id = project_id
-        self.comment = comment or Comment("", "", "", "")
-        self._validate()
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Events represent immutable facts—attempting to modify any field
+    will raise `FrozenInstanceError`. This immutability is essential because
+    events are the permanent record of state changes in the system and must
+    never be altered once created.
 
-    def _validate(self) -> None:
-        """Validate event fields."""
+    Attributes:
+        type (str): Fixed to "comment.posted"
+        work_item_id (str): ID of the work item where comment was posted
+        project_id (str): ID of the project containing the work item
+        comment (Optional[Comment]): The comment object that was posted, None if not available
+
+    Example:
+        >>> event = CommentPostedEvent(
+        ...     type="comment.posted",
+        ...     timestamp="2025-01-14T10:30:00+00:00",
+        ...     source="github",
+        ...     work_item_id="issue-1",
+        ...     project_id="proj-1"
+        ... )
+        >>> event.project_id = "proj-2"  # ❌ Raises FrozenInstanceError
+    """
+
+    work_item_id: str = ""
+    project_id: str = ""
+    comment: Optional[Comment] = None
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
         if not self.project_id:
             raise ValueError("project_id is required")
+        # Ensure comment is initialized if None
+        if self.comment is None:
+            object.__setattr__(self, "comment", Comment("", "", "", ""))
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -205,21 +285,21 @@ class CommentPostedEvent(CodetoreumEvent):
         d.update({
             "work_item_id": self.work_item_id,
             "project_id": self.project_id,
-            "comment": self.comment.to_dict(),
+            "comment": self.comment.to_dict() if self.comment else None,
         })
         return d
 
     @classmethod
     def from_dict(cls, data: dict) -> "CommentPostedEvent":
         """Deserialize from dictionary."""
-        comment = Comment.from_dict(data.get("comment", {}))
+        comment = Comment.from_dict(data.get("comment", {})) if data.get("comment") else None
 
         return cls(
             type=data.get("type", "comment.posted"),
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
-            event_id=data.get("event_id"),
+            event_id=data.get("event_id") or str(uuid4()),
             work_item_id=data.get("work_item_id", ""),
             project_id=data.get("project_id", ""),
             comment=comment,

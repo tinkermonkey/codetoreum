@@ -25,6 +25,14 @@ from uuid import UUID, uuid4
 class CodetoreumEvent:
     """Base event interface for vendor-agnostic adapters.
 
+    **Immutability**: All events are immutable (frozen dataclasses). This
+    is a foundational architectural principle ensuring event sourcing audit
+    trail integrity. Events represent immutable facts about state changes—
+    they cannot and must not be modified after creation. Attempting to modify
+    any field will raise `FrozenInstanceError`. This immutability guarantee
+    is critical for maintaining a reliable event sourcing system where events
+    serve as the single source of truth for the system's history.
+
     All events emitted from adapters conform to this interface,
     ensuring consistent routing, tracing, and handling by the
     orchestrator regardless of the source vendor.
@@ -39,6 +47,16 @@ class CodetoreumEvent:
                        Useful for correlating events from multiple adapters
                        handling the same work item.
         event_id: Unique identifier for this event (UUID). Generated if not provided.
+
+    Example:
+        >>> from datetime import datetime, timezone
+        >>> event = CodetoreumEvent(
+        ...     type="example.event",
+        ...     timestamp=datetime.now(timezone.utc).isoformat(),
+        ...     source="test_adapter"
+        ... )
+        >>> event.type = "modified.event"  # ❌ Raises FrozenInstanceError
+        >>> # Events are read-only after construction—this is enforced by the frozen dataclass
     """
 
     type: str

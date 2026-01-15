@@ -201,7 +201,13 @@ class EventBusWiring:
         try:
             task.result()
         except Exception as e:
-            logger.error(f"Error publishing event: {e}", exc_info=True)
+            logger.error(
+                f"Error publishing event in background task: {e}",
+                exc_info=True,
+                extra={"task_id": id(task)}
+            )
+            # TODO: Track metric for background task failures
+            # TODO: Consider emitting system event for monitoring
 
 
 def wire_adapters_to_event_bus(

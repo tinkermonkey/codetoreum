@@ -1,5 +1,6 @@
 """Unit tests for board events."""
 
+import uuid
 import pytest
 
 from codetoreum.domain.events import (
@@ -7,6 +8,13 @@ from codetoreum.domain.events import (
     WorkItemColumnChangedEvent,
     now_iso,
 )
+
+# For immutability tests (when events become frozen dataclasses)
+try:
+    from dataclasses import FrozenInstanceError
+except ImportError:
+    # Fallback for older Python versions or non-frozen dataclasses
+    FrozenInstanceError = AttributeError  # type: ignore
 
 
 class TestWorkItemColumnChangedEvent:
@@ -219,14 +227,14 @@ class TestBoardReconciledEvent:
             source="github",
             project_id="proj-1",
             board_id="board-1",
-            columns_added=["New Column"],
-            columns_removed=["Old Column"],
+            columns_added=("New Column",),
+            columns_removed=("Old Column",),
             items_moved=5,
         )
 
         assert event.project_id == "proj-1"
-        assert event.columns_added == ["New Column"]
-        assert event.columns_removed == ["Old Column"]
+        assert event.columns_added == ("New Column",)
+        assert event.columns_removed == ("Old Column",)
         assert event.items_moved == 5
 
     def test_board_reconciled_no_changes(self):
@@ -239,8 +247,8 @@ class TestBoardReconciledEvent:
             board_id="board-1",
         )
 
-        assert event.columns_added == []
-        assert event.columns_removed == []
+        assert event.columns_added == ()
+        assert event.columns_removed == ()
         assert event.items_moved == 0
 
     def test_board_reconciled_columns_added(self):
@@ -251,12 +259,12 @@ class TestBoardReconciledEvent:
             source="github",
             project_id="proj-1",
             board_id="board-1",
-            columns_added=["Ready", "In Review", "Done"],
+            columns_added=("Ready", "In Review", "Done"),
             items_moved=10,
         )
 
-        assert event.columns_added == ["Ready", "In Review", "Done"]
-        assert event.columns_removed == []
+        assert event.columns_added == ("Ready", "In Review", "Done")
+        assert event.columns_removed == ()
         assert event.items_moved == 10
 
     def test_missing_project_id(self):
@@ -290,8 +298,8 @@ class TestBoardReconciledEvent:
             source="github",
             project_id="proj-1",
             board_id="board-1",
-            columns_added=["New"],
-            columns_removed=["Old"],
+            columns_added=("New",),
+            columns_removed=("Old",),
             items_moved=3,
         )
 
@@ -312,8 +320,8 @@ class TestBoardReconciledEvent:
             correlation_id="corr-456",
             project_id="proj-2",
             board_id="board-2",
-            columns_added=["Backlog", "Ready"],
-            columns_removed=["Archived"],
+            columns_added=("Backlog", "Ready"),
+            columns_removed=("Archived",),
             items_moved=7,
         )
 
@@ -321,6 +329,214 @@ class TestBoardReconciledEvent:
         restored = BoardReconciledEvent.from_dict(d)
 
         assert restored.project_id == original.project_id
+        # Verify tuples are preserved through serialization
+        assert isinstance(restored.columns_added, tuple)
+        assert isinstance(restored.columns_removed, tuple)
         assert restored.columns_added == original.columns_added
         assert restored.columns_removed == original.columns_removed
         assert restored.items_moved == original.items_moved
+
+    def test_literal_type_preserved_moved_by(self):
+        """Test that Literal types are preserved for moved_by field."""
+        event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=now_iso(),
+            source="github",
+            work_item_id="123",
+            project_id="proj-1",
+            board_id="board-1",
+            from_column="Backlog",
+            to_column="In Progress",
+            moved_by="orchestrator",
+        )
+
+        data = event.to_dict()
+        restored = WorkItemColumnChangedEvent.from_dict(data)
+
+        assert restored.moved_by == "orchestrator"
+        assert isinstance(restored.moved_by, str)
+
+    def test_tuple_type_preserved_in_board_reconciled(self):
+        """Test that tuple types are preserved through serialization."""
+        event = BoardReconciledEvent(
+            type="board.reconciled",
+            timestamp=now_iso(),
+            source="github",
+            project_id="proj-1",
+            board_id="board-1",
+            columns_added=["Col A", "Col B", "Col C"],
+            columns_removed=["Old Col"],
+            items_moved=5,
+        )
+
+        data = event.to_dict()
+        restored = BoardReconciledEvent.from_dict(data)
+
+        assert isinstance(restored.columns_added, tuple)
+        assert isinstance(restored.columns_removed, tuple)
+        assert restored.columns_added == ("Col A", "Col B", "Col C")
+        assert restored.columns_removed == ("Old Col",)
+
+    def test_uuid_format_preserved_in_board_event(self):
+        """Test that UUID fields preserve format in board events."""
+        event_id = str(uuid.uuid4())
+
+        event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=now_iso(),
+            source="github",
+            correlation_id=event_id,
+            work_item_id="123",
+            project_id="proj-1",
+            board_id="board-1",
+            from_column="Backlog",
+            to_column="In Progress",
+            moved_by="human",
+        )
+
+        data = event.to_dict()
+        restored = WorkItemColumnChangedEvent.from_dict(data)
+
+        assert restored.correlation_id == event_id
+        uuid.UUID(restored.correlation_id)
+
+    def test_optional_field_none_in_board_event(self):
+        """Test that None values are preserved in board events."""
+        # Create event with explicit None for optional fields
+        event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=now_iso(),
+            source="github",
+            correlation_id=None,
+            work_item_id="123",
+            project_id="proj-1",
+            board_id="board-1",
+            from_column="Backlog",
+            to_column="In Progress",
+            moved_by="unknown",
+        )
+
+        data = event.to_dict()
+        restored = WorkItemColumnChangedEvent.from_dict(data)
+
+        assert restored.correlation_id is None
+
+    def test_numeric_type_preserved_in_board_reconciled(self):
+        """Test that numeric types are preserved in board events."""
+        event = BoardReconciledEvent(
+            type="board.reconciled",
+            timestamp=now_iso(),
+            source="github",
+            project_id="proj-1",
+            board_id="board-1",
+            items_moved=42,
+        )
+
+        data = event.to_dict()
+        restored = BoardReconciledEvent.from_dict(data)
+
+        assert restored.items_moved == 42
+        assert isinstance(restored.items_moved, int)
+
+
+class TestWorkItemColumnChangedEventImmutability:
+    """Test immutability of WorkItemColumnChangedEvent (frozen dataclass)."""
+
+    def test_work_item_column_changed_event_is_frozen(self):
+        """Test that WorkItemColumnChangedEvent is immutable (frozen dataclass)."""
+        event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=now_iso(),
+            source="github",
+            work_item_id="123",
+            project_id="proj-1",
+            board_id="board-1",
+            from_column="Backlog",
+            to_column="In Progress",
+        )
+
+        # Verify the event is properly created
+        assert event.work_item_id == "123"
+        assert event.from_column == "Backlog"
+        assert event.to_column == "In Progress"
+
+        # WorkItemColumnChangedEvent is a frozen dataclass, so attempting to modify
+        # any attribute should raise FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
+            event.work_item_id = "456"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.from_column = "Done"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.to_column = "Review"  # type: ignore
+
+
+class TestBoardReconciledEventImmutability:
+    """Test immutability of BoardReconciledEvent (frozen dataclass)."""
+
+    def test_board_reconciled_event_is_frozen(self):
+        """Test that BoardReconciledEvent is immutable (frozen dataclass)."""
+        event = BoardReconciledEvent(
+            type="board.reconciled",
+            timestamp=now_iso(),
+            source="github",
+            project_id="proj-1",
+            board_id="board-1",
+            columns_added=["New Column"],
+            columns_removed=["Old Column"],
+        )
+
+        # Verify the event is properly created
+        assert event.board_id == "board-1"
+        assert event.project_id == "proj-1"
+
+        # BoardReconciledEvent is a frozen dataclass, so attempting to modify
+        # any attribute should raise FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
+            event.board_id = "board-2"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.project_id = "proj-2"  # type: ignore
+
+    def test_board_reconciled_event_columns_immutable(self):
+        """Test that BoardReconciledEvent column tuples are immutable."""
+        event = BoardReconciledEvent(
+            type="board.reconciled",
+            timestamp=now_iso(),
+            source="github",
+            project_id="proj-1",
+            board_id="board-1",
+            columns_added=["New Column"],
+            columns_removed=["Old Column"],
+        )
+
+        # Verify columns are stored as tuples (immutable)
+        assert isinstance(event.columns_added, tuple)
+        assert isinstance(event.columns_removed, tuple)
+        assert event.columns_added == ("New Column",)
+        assert event.columns_removed == ("Old Column",)
+
+        # Attempt to modify tuple should fail (tuples are immutable)
+        with pytest.raises(TypeError):
+            event.columns_added[0] = "Modified"  # type: ignore
+
+    def test_board_reconciled_event_base_attributes(self):
+        """Test that base event attributes are preserved."""
+        timestamp = now_iso()
+        event = BoardReconciledEvent(
+            type="board.reconciled",
+            timestamp=timestamp,
+            source="github",
+            correlation_id="corr-1",
+            project_id="proj-1",
+            board_id="board-1",
+            items_moved=3,
+        )
+
+        # Verify base attributes are set correctly
+        assert event.type == "board.reconciled"
+        assert event.timestamp == timestamp
+        assert event.source == "github"
+        assert event.correlation_id == "corr-1"
+        assert event.items_moved == 3

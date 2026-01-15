@@ -8,42 +8,51 @@ Terminology (vendor-agnostic):
 - Work Item ID: The identifier of a work item (issue number, key, etc.)
 """
 
+from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
 
 
+@dataclass(frozen=True)
 class WorkItemCreatedEvent(CodetoreumEvent):
-    """Emitted when a work item is created."""
+    """Emitted when a work item is created.
 
-    def __init__(
-        self,
-        type: str = "workitem.created",
-        timestamp: str = "",
-        source: str = "",
-        correlation_id: Optional[str] = None,
-        event_id: Optional[str] = None,
-        work_item_id: str = "",
-        project_id: str = "",
-        title: str = "",
-        initial_column: Optional[str] = None,
-    ):
-        super().__init__(
-            type=type,
-            timestamp=timestamp,
-            source=source,
-            correlation_id=correlation_id,
-            event_id=event_id or str(uuid4()),
-        )
-        self.work_item_id = work_item_id
-        self.project_id = project_id
-        self.title = title
-        self.initial_column = initial_column
-        self._validate()
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Events represent immutable facts—attempting to modify any field
+    will raise `FrozenInstanceError`. This immutability is essential because
+    events are the permanent record of state changes in the system and must
+    never be altered once created.
 
-    def _validate(self) -> None:
-        """Validate event fields."""
+    Attributes:
+        type (str): Fixed to "workitem.created"
+        work_item_id (str): ID of the newly created work item
+        project_id (str): ID of the project containing the work item
+        title (str): Title or name of the work item
+        initial_column (Optional[str]): Name of initial board column, None if not on board
+
+    Example:
+        >>> event = WorkItemCreatedEvent(
+        ...     type="workitem.created",
+        ...     timestamp="2025-01-14T10:30:00+00:00",
+        ...     source="github",
+        ...     work_item_id="123",
+        ...     project_id="proj-1",
+        ...     title="Implement new feature"
+        ... )
+        >>> event.title = "Updated title"  # ❌ Raises FrozenInstanceError
+    """
+
+    work_item_id: str = ""
+    project_id: str = ""
+    title: str = ""
+    initial_column: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
         if not self.project_id:
@@ -70,7 +79,7 @@ class WorkItemCreatedEvent(CodetoreumEvent):
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
-            event_id=data.get("event_id"),
+            event_id=data.get("event_id") or str(uuid4()),
             work_item_id=data.get("work_item_id", ""),
             project_id=data.get("project_id", ""),
             title=data.get("title", ""),
@@ -78,38 +87,52 @@ class WorkItemCreatedEvent(CodetoreumEvent):
         )
 
 
+@dataclass(frozen=True)
 class WorkItemUpdatedEvent(CodetoreumEvent):
-    """Emitted when a work item's properties are updated."""
+    """Emitted when a work item's properties are updated.
 
-    def __init__(
-        self,
-        type: str = "workitem.updated",
-        timestamp: str = "",
-        source: str = "",
-        correlation_id: Optional[str] = None,
-        event_id: Optional[str] = None,
-        work_item_id: str = "",
-        project_id: str = "",
-        changes: Optional[Dict[str, Any]] = None,
-    ):
-        super().__init__(
-            type=type,
-            timestamp=timestamp,
-            source=source,
-            correlation_id=correlation_id,
-            event_id=event_id or str(uuid4()),
-        )
-        self.work_item_id = work_item_id
-        self.project_id = project_id
-        self.changes = changes or {}
-        self._validate()
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Events represent immutable facts—attempting to modify any field
+    will raise `FrozenInstanceError`. This immutability is essential because
+    events are the permanent record of state changes in the system and must
+    never be altered once created. The `changes` dict field reference is
+    immutable (cannot be reassigned), though the dict itself is mutable for
+    flexible change tracking.
 
-    def _validate(self) -> None:
-        """Validate event fields."""
+    Attributes:
+        type (str): Fixed to "workitem.updated"
+        work_item_id (str): ID of the updated work item
+        project_id (str): ID of the project containing the work item
+        changes (Dict[str, Any]): Dictionary of field names to new values that were changed.
+            Field reference is immutable (frozen), though dict contents are mutable.
+
+    Example:
+        >>> event = WorkItemUpdatedEvent(
+        ...     type="workitem.updated",
+        ...     timestamp="2025-01-14T10:30:00+00:00",
+        ...     source="github",
+        ...     work_item_id="123",
+        ...     project_id="proj-1",
+        ...     changes={"status": "In Progress"}
+        ... )
+        >>> event.changes = {"status": "Done"}  # ❌ Raises FrozenInstanceError
+    """
+
+    work_item_id: str = ""
+    project_id: str = ""
+    changes: Dict[str, Any] = field(default_factory=dict)  # type: ignore
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
         if not self.project_id:
             raise ValueError("project_id is required")
+        # Ensure changes dict is initialized
+        if self.changes is None:
+            object.__setattr__(self, "changes", {})
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -129,7 +152,7 @@ class WorkItemUpdatedEvent(CodetoreumEvent):
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
-            event_id=data.get("event_id"),
+            event_id=data.get("event_id") or str(uuid4()),
             work_item_id=data.get("work_item_id", ""),
             project_id=data.get("project_id", ""),
             changes=data.get("changes", {}),

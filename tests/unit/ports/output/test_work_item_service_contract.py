@@ -209,3 +209,376 @@ class TestWorkItemServiceContract(ABC):
         assert updated.title == "Updated Title"
         assert updated.status == "in_progress"
         assert updated.id == item.id  # Same item
+
+    # Negative Test Cases
+
+    @pytest.mark.asyncio
+    async def test_empty_string_title_validation(self):
+        """Test that empty string in required title field raises ValidationError."""
+        service = await self.create_service()
+
+        with pytest.raises((ValueError, AttributeError, TypeError)):
+            await service.create_work_item(
+                project_id="proj-123",
+                title="",  # Empty string - should fail
+                description="Test Description"
+            )
+
+    @pytest.mark.asyncio
+    async def test_empty_string_project_id_validation(self):
+        """Test that empty string in project_id raises ValidationError."""
+        service = await self.create_service()
+
+        with pytest.raises((ValueError, AttributeError, TypeError)):
+            await service.create_work_item(
+                project_id="",  # Empty - should fail
+                title="Test Title",
+                description="Test Description"
+            )
+
+    @pytest.mark.asyncio
+    async def test_sql_injection_pattern_in_id(self):
+        """Test that SQL injection patterns in work item ID are rejected."""
+        service = await self.create_service()
+
+        # Create a valid item first
+        item = await service.create_work_item(
+            project_id="proj-123",
+            title="Test",
+            description="Test"
+        )
+
+        # Attempt to get with malicious ID
+        with pytest.raises((ValueError, KeyError)):
+            await service.get_work_item("'; DROP TABLE items; --")
+
+    @pytest.mark.asyncio
+    async def test_xss_pattern_in_title(self):
+        """Test that XSS patterns in title field are handled safely."""
+        service = await self.create_service()
+
+        # Should either reject or sanitize
+        try:
+            item = await service.create_work_item(
+                project_id="proj-123",
+                title="<script>alert('XSS')</script>",
+                description="Test"
+            )
+            # If it passes, verify script is not executable
+            assert "<script>" not in item.title or "&lt;script&gt;" in item.title
+        except (ValueError, TypeError):
+            # Rejection is also acceptable
+            pass
+
+    @pytest.mark.asyncio
+    async def test_oversized_description_rejected(self):
+        """Test that oversized input is rejected."""
+        service = await self.create_service()
+
+        # Create a 10MB description
+        huge_description = "x" * (10 * 1024 * 1024)
+
+        with pytest.raises((ValueError, MemoryError, AttributeError)):
+            await service.create_work_item(
+                project_id="proj-123",
+                title="Test",
+                description=huge_description
+            )
+
+    @pytest.mark.asyncio
+    async def test_invalid_enum_value_rejected(self):
+        """Test that invalid enum values are rejected."""
+        service = await self.create_service()
+
+        item = await service.create_work_item(
+            project_id="proj-123",
+            title="Test",
+            description="Test"
+        )
+
+        # Attempt to set invalid status
+        with pytest.raises((ValueError, KeyError)):
+            await service.update_work_item(
+                item.id,
+                {"status": "INVALID_STATUS_12345"}
+            )
+
+    @pytest.mark.asyncio
+    async def test_nonexistent_item_not_found(self):
+        """Test that querying nonexistent item raises appropriate error."""
+        service = await self.create_service()
+
+        with pytest.raises((ValueError, KeyError)):
+            await service.get_work_item("nonexistent-id-12345")
+
+    # Boundary Value Tests
+
+    @pytest.mark.asyncio
+    async def test_priority_minimum_boundary(self):
+        """Test that priority field accepts minimum valid value (1)."""
+        service = await self.create_service()
+
+        item = await service.create_work_item(
+            project_id="proj-123",
+            title="Test Item",
+            description="Test Description"
+        )
+
+        # Update to minimum valid priority (1 = LOW)
+        updated = await service.update_work_item(item.id, {"priority": 1})
+        assert updated.priority == 1
+
+    @pytest.mark.asyncio
+    async def test_priority_maximum_boundary(self):
+        """Test that priority field accepts maximum valid value (4)."""
+        service = await self.create_service()
+
+        item = await service.create_work_item(
+            project_id="proj-123",
+            title="Test Item",
+            description="Test Description"
+        )
+
+        # Update to maximum valid priority (4 = CRITICAL)
+        updated = await service.update_work_item(item.id, {"priority": 4})
+        assert updated.priority == 4
+
+    @pytest.mark.asyncio
+    async def test_priority_zero_rejected(self):
+        """Test that priority value of zero is rejected as invalid."""
+        service = await self.create_service()
+
+        item = await service.create_work_item(
+            project_id="proj-123",
+            title="Test Item",
+            description="Test Description"
+        )
+
+        # Zero priority should fail
+        with pytest.raises((ValueError, KeyError)):
+            await service.update_work_item(item.id, {"priority": 0})
+
+    @pytest.mark.asyncio
+    async def test_priority_negative_rejected(self):
+        """Test that negative priority values are rejected."""
+        service = await self.create_service()
+
+        item = await service.create_work_item(
+            project_id="proj-123",
+            title="Test Item",
+            description="Test Description"
+        )
+
+        # Negative priority should fail
+        with pytest.raises((ValueError, KeyError)):
+            await service.update_work_item(item.id, {"priority": -1})
+
+    @pytest.mark.asyncio
+    async def test_priority_excessive_rejected(self):
+        """Test that priority values exceeding maximum are rejected."""
+        service = await self.create_service()
+
+        item = await service.create_work_item(
+            project_id="proj-123",
+            title="Test Item",
+            description="Test Description"
+        )
+
+        # Priority > 4 should fail
+        with pytest.raises((ValueError, KeyError)):
+            await service.update_work_item(item.id, {"priority": 5})
+
+    @pytest.mark.asyncio
+    async def test_title_at_maximum_length(self):
+        """Test that title field accepts string at maximum length boundary (255 chars)."""
+        service = await self.create_service()
+
+        # Create title exactly at 255 character boundary
+        max_title = "x" * 255
+        item = await service.create_work_item(
+            project_id="proj-123",
+            title=max_title,
+            description="Test Description"
+        )
+
+        assert len(item.title) == 255
+        assert item.title == max_title
+
+    @pytest.mark.asyncio
+    async def test_title_exceeds_maximum_length_rejected(self):
+        """Test that title exceeding maximum length is rejected."""
+        service = await self.create_service()
+
+        # Create title exceeding 255 character boundary
+        oversized_title = "x" * 256
+
+        with pytest.raises((ValueError, AttributeError)):
+            await service.create_work_item(
+                project_id="proj-123",
+                title=oversized_title,
+                description="Test Description"
+            )
+
+    @pytest.mark.asyncio
+    async def test_description_with_boundary_length(self):
+        """Test that description field handles reasonable length boundaries."""
+        service = await self.create_service()
+
+        # Create description at a reasonable boundary (e.g., 1000 chars)
+        long_description = "y" * 1000
+        item = await service.create_work_item(
+            project_id="proj-123",
+            title="Test Item",
+            description=long_description
+        )
+
+        assert len(item.description) == 1000
+
+    @pytest.mark.asyncio
+    async def test_emoji_in_title(self):
+        """Test that emoji characters in title are handled correctly."""
+        service = await self.create_service()
+
+        item = await service.create_work_item(
+            project_id="proj-123",
+            title="Fix bug 🐛 in login",
+            description="Test Description"
+        )
+
+        assert "🐛" in item.title
+        assert "Fix bug" in item.title
+
+    @pytest.mark.asyncio
+    async def test_emoji_in_description(self):
+        """Test that emoji characters in description are handled correctly."""
+        service = await self.create_service()
+
+        item = await service.create_work_item(
+            project_id="proj-123",
+            title="Test Item",
+            description="Deploy to production 🚀 ASAP ⚡"
+        )
+
+        assert "🚀" in item.description
+        assert "⚡" in item.description
+
+    @pytest.mark.asyncio
+    async def test_rtl_text_in_title(self):
+        """Test that right-to-left (RTL) text in title is handled correctly."""
+        service = await self.create_service()
+
+        item = await service.create_work_item(
+            project_id="proj-123",
+            title="مرحبا بك Test",  # Arabic + English
+            description="Test Description"
+        )
+
+        assert "مرحبا" in item.title
+        assert "Test" in item.title
+
+    @pytest.mark.asyncio
+    async def test_rtl_text_in_description(self):
+        """Test that right-to-left (RTL) text in description is handled correctly."""
+        service = await self.create_service()
+
+        item = await service.create_work_item(
+            project_id="proj-123",
+            title="Test Item",
+            description="مرحبا بك في النظام Test description"
+        )
+
+        assert "مرحبا" in item.description
+
+    @pytest.mark.asyncio
+    async def test_combining_characters_in_title(self):
+        """Test that combining characters (accents) in title are preserved."""
+        service = await self.create_service()
+
+        item = await service.create_work_item(
+            project_id="proj-123",
+            title="Café résumé",
+            description="Test Description"
+        )
+
+        assert "Café" in item.title
+        assert "résumé" in item.title
+
+    @pytest.mark.asyncio
+    async def test_combining_characters_in_description(self):
+        """Test that combining characters (accents) in description are preserved."""
+        service = await self.create_service()
+
+        item = await service.create_work_item(
+            project_id="proj-123",
+            title="Test Item",
+            description="Implement naïve algorithm for Zürich café"
+        )
+
+        assert "naïve" in item.description
+        assert "Zürich" in item.description
+
+    @pytest.mark.asyncio
+    async def test_zero_width_characters_in_title(self):
+        """Test that zero-width characters in title are handled appropriately."""
+        service = await self.create_service()
+
+        # Zero-width space: U+200B
+        item = await service.create_work_item(
+            project_id="proj-123",
+            title="Test\u200Bwith\u200Bzero-width",
+            description="Test Description"
+        )
+
+        # Item should be created (handling could be preservation or stripping)
+        assert "Test" in item.title
+
+    @pytest.mark.asyncio
+    async def test_zero_width_characters_in_description(self):
+        """Test that zero-width characters in description are handled appropriately."""
+        service = await self.create_service()
+
+        # Zero-width space: U+200B
+        item = await service.create_work_item(
+            project_id="proj-123",
+            title="Test Item",
+            description="Description\u200Bwith\u200Bzero-width"
+        )
+
+        # Item should be created (handling could be preservation or stripping)
+        assert "Description" in item.description
+
+    @pytest.mark.asyncio
+    async def test_null_byte_in_title_rejected(self):
+        """Test that null bytes in title are rejected or sanitized."""
+        service = await self.create_service()
+
+        # Null byte: U+0000
+        try:
+            item = await service.create_work_item(
+                project_id="proj-123",
+                title="Test\x00Null",
+                description="Test Description"
+            )
+            # If accepted, verify null byte is not preserved as-is
+            assert "\x00" not in item.title
+        except (ValueError, AttributeError):
+            # Rejection is acceptable
+            pass
+
+    @pytest.mark.asyncio
+    async def test_null_byte_in_description_rejected(self):
+        """Test that null bytes in description are rejected or sanitized."""
+        service = await self.create_service()
+
+        # Null byte: U+0000
+        try:
+            item = await service.create_work_item(
+                project_id="proj-123",
+                title="Test Item",
+                description="Description\x00Null"
+            )
+            # If accepted, verify null byte is not preserved as-is
+            assert "\x00" not in item.description
+        except (ValueError, AttributeError):
+            # Rejection is acceptable
+            pass

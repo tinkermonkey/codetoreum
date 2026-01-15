@@ -25,6 +25,7 @@ from codetoreum.infrastructure.http.github_graphql_client import (
     GitHubGraphQLClient,
 )
 from codetoreum.ports.exceptions import (
+    AuthenticationError,
     ExternalServiceError,
     PermissionError,
     ResourceNotFoundError,
@@ -143,21 +144,69 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
     def emit(self, event: Any) -> None:
         """Emit event to all registered handlers.
 
+        Handler failures are logged at ERROR level with full stack traces but do not
+        prevent other handlers from executing. This allows event processing to continue
+        while ensuring failures are visible in logs for monitoring and debugging.
+
+        Critical exceptions like asyncio.CancelledError and KeyboardInterrupt are
+        never suppressed - they propagate immediately to the caller. Only application-
+        level exceptions (ValueError, TypeError, and other Exception subclasses) are
+        caught and logged.
+
         Args:
             event: Event to emit (should be CodetoreumEvent or subclass)
 
         Raises:
-            ValueError: If event is invalid
+            asyncio.CancelledError: If a handler is cancelled
+            KeyboardInterrupt: If interrupted by user (via BaseException, not caught)
+            SystemExit: If system exit is requested (via BaseException, not caught)
         """
         event_type = getattr(event, "type", None)
         if event_type not in self._event_handlers:
             return
 
+        failures = []
         for handler in self._event_handlers[event_type]:
+            handler_name = getattr(handler, "__name__", str(handler))
             try:
                 handler(event)
+            except asyncio.CancelledError:
+                # Never suppress cancellation - propagate immediately
+                raise
+            except (ValueError, TypeError) as e:
+                # Expected validation errors from handlers
+                logger.error(
+                    f"Handler {handler_name} validation error for {event_type}: {e}",
+                    exc_info=True,
+                    extra={
+                        "event_type": event_type,
+                        "handler": handler_name,
+                        "error_id": "ERR_HANDLER_VALIDATION"
+                    }
+                )
+                failures.append((handler, e))
             except Exception as e:
-                logger.warning(f"Error in event handler for {event_type}: {e}")
+                # Unexpected errors - critical issue
+                logger.error(
+                    f"Unexpected error in handler {handler_name} for {event_type}: {e}",
+                    exc_info=True,
+                    extra={
+                        "event_type": event_type,
+                        "handler": handler_name,
+                        "error_id": "ERR_HANDLER_UNEXPECTED"
+                    }
+                )
+                failures.append((handler, e))
+
+        if failures:
+            logger.error(
+                f"Event emission for {event_type} completed with {len(failures)} handler failure(s)",
+                extra={
+                    "event_type": event_type,
+                    "failure_count": len(failures),
+                    "error_id": "ERR_HANDLER_FAILURES"
+                }
+            )
 
     # IMonitoredService implementation
 
@@ -863,8 +912,28 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
                 # Query open PRs
                 try:
                     open_prs = await self._get_open_prs(project_id)
+                except asyncio.CancelledError:
+                    logger.info(f"PR polling cancelled for {project_id}")
+                    raise
+                except (AuthenticationError, ResourceNotFoundError, ValidationError) as e:
+                    logger.error(
+                        f"Permanent error in PR polling for {project_id}: {e}",
+                        exc_info=True,
+                        extra={"project_id": project_id, "error_type": "permanent"}
+                    )
+                    break
+                except ExternalServiceError as e:
+                    logger.warning(
+                        f"Transient error in PR polling for {project_id}: {e}",
+                        extra={"project_id": project_id, "error_type": "transient"}
+                    )
+                    continue
                 except Exception as e:
-                    logger.warning(f"Failed to poll PRs for {project_id}: {e}")
+                    logger.critical(
+                        f"Unexpected error in PR polling for {project_id}: {e}",
+                        exc_info=True,
+                        extra={"project_id": project_id, "error_type": "unexpected"}
+                    )
                     continue
 
                 changes_detected = 0

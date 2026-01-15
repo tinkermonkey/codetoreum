@@ -10,8 +10,6 @@ from uuid import uuid4
 import pytest
 from elasticsearch import AsyncElasticsearch
 from redis import asyncio as aioredis
-from testcontainers.elasticsearch import ElasticSearchContainer
-from testcontainers.redis import RedisContainer
 
 from codetoreum.adapters.secondary.cached_config_store import CachedConfigStore
 from codetoreum.adapters.secondary.elasticsearch_config_storage import (
@@ -25,7 +23,7 @@ from codetoreum.ports.output.config_store import (
     ProjectConfig,
     WorkflowTemplate,
 )
-from tests.conftest import docker_available
+from tests.conftest import docker_available, ModernElasticsearchContainer, ModernRedisContainer
 
 # Mark all tests in this module as requiring Docker
 pytestmark = docker_available
@@ -33,8 +31,12 @@ pytestmark = docker_available
 
 @pytest.fixture(scope="module")
 def redis_container():
-    """Create Redis testcontainer with resource limits."""
-    container = RedisContainer("redis:7-alpine")
+    """Create Redis testcontainer with resource limits.
+
+    Uses ModernRedisContainer to avoid deprecation warnings from the
+    testcontainers library's @wait_container_is_ready decorator.
+    """
+    container = ModernRedisContainer("redis:7-alpine")
     # Redis is lightweight but we still set a reasonable limit
     container.with_kwargs(mem_limit="128m")
     container.start()
@@ -47,9 +49,8 @@ def redis_container():
 @pytest.fixture(scope="module")
 def elasticsearch_container():
     """Create Elasticsearch testcontainer with resource limits."""
-    container = ElasticSearchContainer("elasticsearch:8.11.0")
-    container.with_env("xpack.security.enabled", "false")
-    container.with_env("discovery.type", "single-node")
+    # Use modern wait strategy (no deprecation warnings)
+    container = ModernElasticsearchContainer("elasticsearch:8.11.0")
     # Add resource limits to prevent memory exhaustion
     container.with_env("ES_JAVA_OPTS", "-Xms512m -Xmx512m")  # Limit ES heap to 512MB
     container.start()

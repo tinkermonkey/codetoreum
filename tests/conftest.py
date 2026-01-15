@@ -1,9 +1,12 @@
 """Test configuration and shared fixtures."""
 
+import asyncio
 from typing import Generator
 
 import docker
 import pytest
+from testcontainers.core.container import DockerContainer
+from testcontainers.core.wait_strategies import HttpWaitStrategy, PortWaitStrategy
 
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
@@ -171,3 +174,115 @@ def event_bus() -> Generator[EventBus, None, None]:
     for handler in list(bus._wildcard_handlers):
         bus.unregister_handler(handler)
     bus.reset_statistics()
+
+
+class ModernElasticsearchContainer(DockerContainer):
+    """Elasticsearch container using modern wait strategy API.
+
+    This class replaces testcontainers.elasticsearch.ElasticSearchContainer to avoid
+    the DeprecationWarning from @wait_container_is_ready decorator. Uses structured
+    wait strategies (HttpWaitStrategy) instead of the deprecated decorator approach.
+
+    Example:
+        >>> container = ModernElasticsearchContainer("elasticsearch:8.11.0")
+        >>> container.start()
+        >>> url = container.get_url()
+        >>> # ... use Elasticsearch ...
+        >>> container.stop()
+    """
+
+    def __init__(self, image: str = "elasticsearch:8.11.0", port: int = 9200) -> None:
+        """Initialize Elasticsearch container.
+
+        Args:
+            image: Docker image name (must include version). Defaults to "elasticsearch:8.11.0"
+            port: Container port to expose. Defaults to 9200
+        """
+        super().__init__(image)
+        self.port = port
+        self.with_exposed_ports(self.port)
+        self.with_env("transport.host", "127.0.0.1")
+        self.with_env("http.host", "0.0.0.0")
+        self.with_env("xpack.security.enabled", "false")
+        self.with_env("discovery.type", "single-node")
+        # Use HttpWaitStrategy instead of deprecated @wait_container_is_ready decorator
+        self.waiting_for(HttpWaitStrategy(port=self.port).for_status_code(200))
+
+    def get_url(self) -> str:
+        """Get the URL to access Elasticsearch.
+
+        Returns:
+            Full URL to Elasticsearch instance (http://host:port)
+        """
+        host = self.get_container_host_ip()
+        port = self.get_exposed_port(self.port)
+        return f"http://{host}:{port}"
+
+
+class ModernRedisContainer(DockerContainer):
+    """Redis container using modern wait strategy API.
+
+    This class replaces testcontainers.redis.RedisContainer to avoid
+    the DeprecationWarning from @wait_container_is_ready decorator. Uses structured
+    wait strategies (PortWaitStrategy) instead of the deprecated decorator approach.
+
+    Example:
+        >>> container = ModernRedisContainer("redis:7-alpine")
+        >>> container.start()
+        >>> host = container.get_container_host_ip()
+        >>> port = container.get_exposed_port(6379)
+        >>> # ... use Redis ...
+        >>> container.stop()
+    """
+
+    def __init__(self, image: str = "redis:latest", port: int = 6379, password: str | None = None) -> None:
+        """Initialize Redis container.
+
+        Args:
+            image: Docker image name. Defaults to "redis:latest"
+            port: Container port to expose. Defaults to 6379
+            password: Optional Redis password. If provided, starts Redis with requirepass
+        """
+        super().__init__(image)
+        self.port = port
+        self.password = password
+        self.with_exposed_ports(self.port)
+        if self.password:
+            self.with_command(f"redis-server --requirepass {self.password}")
+        # Use PortWaitStrategy instead of deprecated @wait_container_is_ready decorator
+        self.waiting_for(PortWaitStrategy(self.port))
+
+
+@pytest.fixture(scope="function", autouse=True)
+def _cleanup_event_loop() -> Generator[None, None, None]:
+    """Ensure event loop is properly closed to prevent ResourceWarnings.
+
+    With asyncio_default_fixture_loop_scope = "function", pytest-asyncio creates
+    a new event loop for each test. This fixture ensures the loop is properly
+    closed after the test completes to prevent ResourceWarnings from unclosed
+    sockets in the event loop.
+
+    This is a workaround for pytest-asyncio's automatic loop management which
+    sometimes leaves loops in a state where they trigger ResourceWarnings during
+    garbage collection.
+
+    See: https://github.com/pytest-dev/pytest-asyncio/issues
+    """
+    yield
+
+    # After test completes, ensure any event loop is properly closed
+    try:
+        loop = asyncio.get_event_loop()
+        if loop and not loop.is_closed():
+            # Cancel all pending tasks
+            pending = asyncio.all_tasks(loop)
+            for task in pending:
+                task.cancel()
+            # Run loop one more time to process cancellations
+            if pending:
+                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            # Close the loop
+            loop.close()
+    except RuntimeError:
+        # No event loop in current thread, which is fine
+        pass
