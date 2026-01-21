@@ -232,3 +232,9 @@ artifacts/
 config.local.yaml
 .env.local
 .env.production
+
+# Claude Code prompt files
+.claude_prompt_*.txt
+
+# Virtual environment testing
+.venv_test/
