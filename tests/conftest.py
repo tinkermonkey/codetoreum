@@ -28,6 +28,10 @@ def is_docker_available() -> bool:
             client.ping()
             return True
         finally:
+            # Close the client and explicitly close the underlying session
+            # to avoid ResourceWarnings from unclosed sockets
+            if hasattr(client, 'api') and hasattr(client.api, 'close'):
+                client.api.close()
             client.close()
     except (docker.errors.DockerException, Exception):
         return False
@@ -57,6 +61,10 @@ def docker_client() -> Generator[docker.DockerClient, None, None]:
     try:
         yield client
     finally:
+        # Close the client and explicitly close the underlying session
+        # to avoid ResourceWarnings from unclosed sockets
+        if hasattr(client, 'api') and hasattr(client.api, 'close'):
+            client.api.close()
         client.close()
 
 
