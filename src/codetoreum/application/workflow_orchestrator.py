@@ -471,7 +471,20 @@ class WorkflowOrchestrator:
             task_id = await self.task_queue.enqueue(task)
             logger.info(f"Enqueued task {task_id} for agent {column_config.agent}")
         except Exception as e:
-            logger.error(f"Failed to enqueue task: {e}")
+            logger.error(
+                f"CRITICAL: Failed to enqueue agent task for work_item={event.issue_number}, "
+                f"column='{event.to_column}', agent='{column_config.agent}'. "
+                f"Work item has been moved to column but will not be processed automatically.",
+                exc_info=True,
+                extra={
+                    "work_item_id": event.issue_number,
+                    "project_id": event.project,
+                    "board_id": event.board,
+                    "column": event.to_column,
+                    "agent": column_config.agent,
+                    "error_type": type(e).__name__,
+                }
+            )
             return WorkflowResult(
                 success=False,
                 action=WorkflowAction.NO_ACTION,
