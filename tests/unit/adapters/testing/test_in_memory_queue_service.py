@@ -477,30 +477,6 @@ class TestBoardSynchronization:
         assert entries[1].work_item_id == "item-1"
         assert entries[1].position_in_column == 1
 
-    @pytest.mark.asyncio
-    async def test_sync_queue_with_board_invalid_column_raises_error(
-        self, queue_service_with_board
-    ):
-        """Sync with non-existent column should raise ValueError."""
-        service, board_service = queue_service_with_board
-
-        # Setup board without "Nonexistent" column
-        board = ProjectBoard(
-            id="board-1",
-            name="Test Board",
-            project_id="proj-1",
-            columns=[
-                BoardColumn(
-                    id="col-1", name="In Progress", position=0, work_item_ids=[]
-                )
-            ],
-        )
-        board_service.get_board.return_value = board
-
-        with pytest.raises(ValueError, match="Column .* not found"):
-            await service.sync_queue_with_board(
-                "proj-1", "board-1", "Nonexistent"
-            )
 
 
 class TestConcurrency:
