@@ -464,7 +464,20 @@ class WorkflowOrchestrator:
             task_id = await self.task_queue.enqueue(task)
             logger.info(f"Enqueued task {task_id} for agent {column_config.agent}")
         except Exception as e:
-            logger.error(f"Failed to enqueue task: {e}")
+            logger.error(
+                f"CRITICAL: Failed to enqueue agent task for work_item={work_item_id}, "
+                f"column='{to_column}', agent='{column_config.agent}'. "
+                f"Work item has been moved to column but will not be processed automatically.",
+                exc_info=True,
+                extra={
+                    "work_item_id": work_item_id,
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "column": to_column,
+                    "agent": column_config.agent,
+                    "error_type": type(e).__name__,
+                }
+            )
             return WorkflowResult(
                 success=False,
                 action=WorkflowAction.NO_ACTION,
@@ -995,7 +1008,20 @@ class WorkflowOrchestrator:
                         f"Enqueued agent task {task_id} for column '{to_column}'"
                     )
                 except Exception as e:
-                    logger.error(f"Failed to enqueue task: {e}")
+                    logger.error(
+                        f"CRITICAL: Failed to enqueue agent task for work_item={work_item_id}, "
+                        f"column='{to_column}', agent='{column_config.agent}'. "
+                        f"Work item has been moved to column but will not be processed automatically.",
+                        exc_info=True,
+                        extra={
+                            "work_item_id": work_item_id,
+                            "project_id": project_id,
+                            "board_id": board_id,
+                            "column": to_column,
+                            "agent": column_config.agent,
+                            "error_type": type(e).__name__,
+                        }
+                    )
 
             # Case 2: Exit column - log for reference
             if getattr(target_column_config, 'exit_column', False):
