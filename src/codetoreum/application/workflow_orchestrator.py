@@ -251,6 +251,10 @@ class IWorkflowStateManager:
         """Update workflow state."""
         raise NotImplementedError
 
+    async def get_item_position(self, work_item_id: str) -> Optional[Dict[str, Any]]:
+        """Get current position information for a work item."""
+        raise NotImplementedError
+
 
 class IDecisionEvents:
     """Interface to decision event emission."""
@@ -859,7 +863,7 @@ class WorkflowOrchestrator:
 
         return await self.task_queue.enqueue(task)
 
-    # Event Bus Integration (Phase 7)
+    # Event Bus Integration
 
     def _subscribe_to_events(self) -> None:
         """
@@ -1159,88 +1163,126 @@ class WorkflowOrchestrator:
         Args:
             event: review.status_changed event
         """
-        try:
-            work_item_id = event.payload.get("work_item_id")
-            project_id = event.payload.get("project_id")
-            new_status = event.payload.get("new_status")
-            previous_status = event.payload.get("previous_status")
+        work_item_id = event.payload.get("work_item_id")
+        project_id = event.payload.get("project_id")
+        new_status = event.payload.get("new_status")
+        previous_status = event.payload.get("previous_status")
 
-            if not all([work_item_id, project_id, new_status]):
-                logger.warning(
-                    f"Review event missing required fields: {event.payload}"
-                )
-                return
-
-            logger.info(
-                f"Review status changed for item {work_item_id}: "
-                f"{previous_status} -> {new_status}"
+        if not all([work_item_id, project_id, new_status]):
+            logger.warning(
+                f"Review event missing required fields: {event.payload}"
             )
+            return
 
-            if new_status == "approved":
-                # Move to next column
-                if self.projects_api:
-                    try:
-                        # Get workflow to find next column
-                        board_id = event.payload.get("board_id", "default")
-                        workflow_config = await self.config.get_workflow_config(
-                            project_id, board_id
+        logger.info(
+            f"Review status changed for item {work_item_id}: "
+            f"{previous_status} -> {new_status}"
+        )
+
+        if new_status == "approved":
+            # Move to next column
+            if self.projects_api:
+                try:
+                    # Get workflow to find next column
+                    board_id = event.payload.get("board_id", "default")
+                    workflow_config = await self.config.get_workflow_config(
+                        project_id, board_id
+                    )
+
+                    # Find current column
+                    item_position = await self.workflow_state.get_item_position(work_item_id)
+                    if not item_position:
+                        logger.warning(f"Could not find position for item {work_item_id}")
+                        return
+
+                    current_column_name = item_position.get("column")
+                    current_column = self._find_column_config(workflow_config, current_column_name)
+                    if not current_column:
+                        logger.warning(f"No config for column {current_column_name}")
+                        return
+
+                    # Find next column
+                    next_column = self._get_next_column(workflow_config, current_column)
+                    if next_column:
+                        logger.info(
+                            f"Moving approved item {work_item_id} from {current_column.name} to {next_column.name}"
                         )
-
-                        # Find current column
-                        item_position = await self.workflow_state.get_item_position(work_item_id)
-                        if not item_position:
-                            logger.warning(f"Could not find position for item {work_item_id}")
-                            return
-
-                        current_column_name = item_position.get("column")
-                        current_column = self._find_column_config(workflow_config, current_column_name)
-                        if not current_column:
-                            logger.warning(f"No config for column {current_column_name}")
-                            return
-
-                        # Find next column
-                        next_column = self._get_next_column(workflow_config, current_column)
-                        if next_column:
-                            logger.info(
-                                f"Moving approved item {work_item_id} from {current_column.name} to {next_column.name}"
-                            )
-                            await self.projects_api.move_card_to_column(
-                                project_id, board_id, work_item_id, next_column.name
-                            )
-                        else:
-                            logger.info(
-                                f"No next column found for item {work_item_id} in workflow"
-                            )
-                    except Exception as e:
-                        logger.error(f"Failed to move approved item: {e}", exc_info=e)
-
-            elif new_status == "changes_requested":
-                # Move back to development column
-                if self.projects_api:
-                    try:
-                        board_id = event.payload.get("board_id", "default")
-                        workflow_config = await self.config.get_workflow_config(
-                            project_id, board_id
+                        await self.projects_api.move_card_to_column(
+                            project_id, work_item_id, next_column.name
                         )
+                    else:
+                        logger.info(
+                            f"No next column found for item {work_item_id} in workflow"
+                        )
+                except PortTimeoutError as e:
+                    logger.error(
+                        f"Failed to move approved item (timeout): {e}",
+                        exc_info=True,
+                        extra={
+                            "work_item_id": work_item_id,
+                            "project_id": project_id,
+                            "board_id": board_id,
+                            "error_type": type(e).__name__,
+                        }
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"Failed to move approved item: {e}",
+                        exc_info=True,
+                        extra={
+                            "work_item_id": work_item_id,
+                            "project_id": project_id,
+                            "board_id": board_id,
+                            "error_type": type(e).__name__,
+                        }
+                    )
+                    raise
 
-                        # Find development column (typically first column or has "dev" in name)
-                        dev_column = None
-                        for col in workflow_config.columns:
-                            if col.position == 0 or "dev" in col.name.lower():
-                                dev_column = col
-                                break
+        elif new_status == "changes_requested":
+            # Move back to development column
+            if self.projects_api:
+                try:
+                    board_id = event.payload.get("board_id", "default")
+                    workflow_config = await self.config.get_workflow_config(
+                        project_id, board_id
+                    )
 
-                        if dev_column:
-                            logger.info(
-                                f"Moving item {work_item_id} back to development column {dev_column.name}"
-                            )
-                            await self.projects_api.move_card_to_column(
-                                project_id, board_id, work_item_id, dev_column.name
-                            )
-                        else:
-                            logger.warning(f"No development column found for item {work_item_id}")
-                    except Exception as e:
-                        logger.error(f"Failed to move item back to development: {e}", exc_info=e)
+                    # Find development column (typically first column or has "dev" in name)
+                    dev_column = None
+                    for col in workflow_config.columns:
+                        if col.position == 0 or "dev" in col.name.lower():
+                            dev_column = col
+                            break
 
-        except Exception as e:
-            logger.error(f"Error handling review status event: {e}", exc_info=e)
+                    if dev_column:
+                        logger.info(
+                            f"Moving item {work_item_id} back to development column {dev_column.name}"
+                        )
+                        await self.projects_api.move_card_to_column(
+                            project_id, work_item_id, dev_column.name
+                        )
+                    else:
+                        logger.warning(f"No development column found for item {work_item_id}")
+                except PortTimeoutError as e:
+                    logger.error(
+                        f"Failed to move item back to development (timeout): {e}",
+                        exc_info=True,
+                        extra={
+                            "work_item_id": work_item_id,
+                            "project_id": project_id,
+                            "board_id": board_id,
+                            "error_type": type(e).__name__,
+                        }
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"Failed to move item back to development: {e}",
+                        exc_info=True,
+                        extra={
+                            "work_item_id": work_item_id,
+                            "project_id": project_id,
+                            "board_id": board_id,
+                            "error_type": type(e).__name__,
+                        }
+                    )
+                    raise
