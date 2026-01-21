@@ -7,6 +7,7 @@ sorting by board position when items are enqueued or positions update.
 Thread-safe via internal locking mechanism.
 """
 
+import logging
 import threading
 from datetime import datetime, timezone
 from typing import Dict, Optional
@@ -26,6 +27,8 @@ from codetoreum.domain.events.lock_events import (
     WorkItemQueuedEvent,
 )
 from codetoreum.infrastructure.event_bus import EventBus
+
+logger = logging.getLogger(__name__)
 
 
 class InMemoryLockService(IPipelineLockService):
@@ -135,7 +138,20 @@ class InMemoryLockService(IPipelineLockService):
                             work_item_id=stale_work_item_id,
                             lock_acquired_at=state.lock_acquired_at.isoformat(),
                         )
-                        await self._event_bus.publish(stale_event)
+                        try:
+                            await self._event_bus.publish(stale_event)
+                        except Exception as e:
+                            logger.error(
+                                f"CRITICAL: Failed to publish stale lock detected event for work_item={stale_work_item_id}, "
+                                f"project={project_id}, board={board_id}. Stale lock was detected but event notification failed.",
+                                exc_info=True,
+                                extra={
+                                    "work_item_id": stale_work_item_id,
+                                    "project_id": project_id,
+                                    "board_id": board_id,
+                                    "event_type": "lock.stale_detected",
+                                }
+                            )
 
                     # Force release stale lock and acquire for requester
                     state.lock_holder = work_item_id
@@ -152,7 +168,20 @@ class InMemoryLockService(IPipelineLockService):
                             board_id=board_id,
                             queue_length_at_acquire=len(state.queue),
                         )
-                        await self._event_bus.publish(event)
+                        try:
+                            await self._event_bus.publish(event)
+                        except Exception as e:
+                            logger.error(
+                                f"CRITICAL: Failed to publish lock acquired event (stale recovery) for work_item={work_item_id}, "
+                                f"project={project_id}, board={board_id}. Lock was acquired but event was lost.",
+                                exc_info=True,
+                                extra={
+                                    "work_item_id": work_item_id,
+                                    "project_id": project_id,
+                                    "board_id": board_id,
+                                    "event_type": "pipeline.lock_acquired",
+                                }
+                            )
 
                     return LockAcquisitionResult(
                         status=LockStatus.ACQUIRED,
@@ -176,7 +205,20 @@ class InMemoryLockService(IPipelineLockService):
                         board_id=board_id,
                         queue_length_at_acquire=len(state.queue),
                     )
-                    await self._event_bus.publish(event)
+                    try:
+                        await self._event_bus.publish(event)
+                    except Exception as e:
+                        logger.error(
+                            f"CRITICAL: Failed to publish lock acquired event for work_item={work_item_id}, "
+                            f"project={project_id}, board={board_id}. Lock was acquired but event was lost.",
+                            exc_info=True,
+                            extra={
+                                "work_item_id": work_item_id,
+                                "project_id": project_id,
+                                "board_id": board_id,
+                                "event_type": "pipeline.lock_acquired",
+                            }
+                        )
 
                 return LockAcquisitionResult(
                     status=LockStatus.ACQUIRED,
@@ -225,7 +267,21 @@ class InMemoryLockService(IPipelineLockService):
                     board_id=board_id,
                     queue_position=queue_position,
                 )
-                await self._event_bus.publish(event)
+                try:
+                    await self._event_bus.publish(event)
+                except Exception as e:
+                    logger.error(
+                        f"CRITICAL: Failed to publish workitem queued event for work_item={work_item_id}, "
+                        f"project={project_id}, board={board_id}. Item was queued but event notification failed.",
+                        exc_info=True,
+                        extra={
+                            "work_item_id": work_item_id,
+                            "project_id": project_id,
+                            "board_id": board_id,
+                            "queue_position": queue_position,
+                            "event_type": "workitem.queued",
+                        }
+                    )
 
             return LockAcquisitionResult(
                 status=LockStatus.QUEUED,
@@ -295,7 +351,21 @@ class InMemoryLockService(IPipelineLockService):
                     board_id=board_id,
                     next_work_item_id=next_item_id,
                 )
-                await self._event_bus.publish(release_event)
+                try:
+                    await self._event_bus.publish(release_event)
+                except Exception as e:
+                    logger.error(
+                        f"CRITICAL: Failed to publish lock released event for work_item={work_item_id}, "
+                        f"project={project_id}, board={board_id}. Lock was released but event was lost.",
+                        exc_info=True,
+                        extra={
+                            "work_item_id": work_item_id,
+                            "project_id": project_id,
+                            "board_id": board_id,
+                            "next_work_item_id": next_item_id,
+                            "event_type": "pipeline.lock_released",
+                        }
+                    )
 
                 # If next item acquired lock, emit acquisition event
                 if next_item_id:
@@ -308,7 +378,20 @@ class InMemoryLockService(IPipelineLockService):
                         board_id=board_id,
                         queue_length_at_acquire=len(state.queue),
                     )
-                    await self._event_bus.publish(acquire_event)
+                    try:
+                        await self._event_bus.publish(acquire_event)
+                    except Exception as e:
+                        logger.error(
+                            f"CRITICAL: Failed to publish lock acquired event (after release) for work_item={next_item_id}, "
+                            f"project={project_id}, board={board_id}. Lock was acquired by next item but event was lost.",
+                            exc_info=True,
+                            extra={
+                                "work_item_id": next_item_id,
+                                "project_id": project_id,
+                                "board_id": board_id,
+                                "event_type": "pipeline.lock_acquired",
+                            }
+                        )
 
             return LockReleaseResult(
                 released_work_item_id=work_item_id,
