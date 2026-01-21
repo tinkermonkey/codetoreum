@@ -948,8 +948,18 @@ class WorkflowOrchestrator:
                 workflow_config = await self.config.get_workflow_config(
                     project_id, board_id
                 )
-            except Exception as e:
-                logger.error(f"Failed to get workflow config: {e}")
+            except (PortTimeoutError, ConfigNotFoundError) as e:
+                logger.error(
+                    f"Failed to get workflow config for project={project_id}, "
+                    f"board={board_id}: {e}",
+                    exc_info=True,
+                    extra={
+                        "project_id": project_id,
+                        "board_id": board_id,
+                        "work_item_id": work_item_id,
+                        "error_type": type(e).__name__,
+                    }
+                )
                 return
 
             # Find target column configuration
@@ -1012,7 +1022,17 @@ class WorkflowOrchestrator:
                     )
 
         except Exception as e:
-            logger.error(f"Error handling column change event: {e}", exc_info=e)
+            logger.error(
+                f"Error handling column change event for work_item={work_item_id}, "
+                f"project={project_id}, board={board_id}",
+                exc_info=True,
+                extra={
+                    "work_item_id": work_item_id,
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "error_type": type(e).__name__,
+                }
+            )
 
     async def _handle_comment_needs_response(self, event: DomainEvent) -> None:
         """
@@ -1058,10 +1078,30 @@ class WorkflowOrchestrator:
                 task_id = await self.task_queue.enqueue(task)
                 logger.info(f"Enqueued comment response task {task_id}")
             except Exception as e:
-                logger.error(f"Failed to enqueue comment response task: {e}")
+                logger.error(
+                    f"Failed to enqueue comment response task for work_item={work_item_id}, "
+                    f"project={project_id}: {e}",
+                    exc_info=True,
+                    extra={
+                        "work_item_id": work_item_id,
+                        "project_id": project_id,
+                        "agent_name": agent_name,
+                        "error_type": type(e).__name__,
+                    }
+                )
+                raise
 
         except Exception as e:
-            logger.error(f"Error handling comment event: {e}", exc_info=e)
+            logger.error(
+                f"Error handling comment event for work_item={work_item_id}, "
+                f"project={project_id}",
+                exc_info=True,
+                extra={
+                    "work_item_id": work_item_id,
+                    "project_id": project_id,
+                    "error_type": type(e).__name__,
+                }
+            )
 
     async def _handle_lock_released(self, event: DomainEvent) -> None:
         """
@@ -1146,11 +1186,30 @@ class WorkflowOrchestrator:
 
             except Exception as e:
                 logger.error(
-                    f"Error processing next item {next_in_queue}: {e}", exc_info=e
+                    f"Error processing next queued item={next_in_queue} after lock release "
+                    f"for project={project_id}, board={board_id}: {e}",
+                    exc_info=True,
+                    extra={
+                        "work_item_id": next_in_queue,
+                        "project_id": project_id,
+                        "board_id": board_id,
+                        "error_type": type(e).__name__,
+                    }
                 )
+                raise
 
         except Exception as e:
-            logger.error(f"Error handling lock released event: {e}", exc_info=e)
+            logger.error(
+                f"Error handling lock released event for project={project_id}, "
+                f"board={board_id}: {e}",
+                exc_info=True,
+                extra={
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "next_in_queue": next_in_queue,
+                    "error_type": type(e).__name__,
+                }
+            )
 
     async def _handle_review_status_changed(self, event: DomainEvent) -> None:
         """
