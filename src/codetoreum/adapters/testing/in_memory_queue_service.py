@@ -17,6 +17,7 @@ Intended for:
 - Single-orchestrator deployments without persistence requirements
 """
 
+import logging
 import threading
 from datetime import datetime, timezone
 from typing import Callable, Dict, List, Optional, Tuple
@@ -26,6 +27,8 @@ from codetoreum.ports.output.pipeline_queue_service import (
     PipelineQueueEntry,
 )
 from codetoreum.ports.output.board_service import IBoardService
+
+logger = logging.getLogger(__name__)
 
 
 class InMemoryQueueService(IPipelineQueueService):
@@ -458,9 +461,21 @@ class InMemoryQueueService(IPipelineQueueService):
                 )
 
         except Exception as e:
-            # Log error but don't fail - queue remains in current state
-            # Implementations should handle these failures appropriately
-            raise
+            # Graceful degradation: log error but don't fail
+            # Queue remains in current state until next sync attempt
+            logger.error(
+                f"Failed to sync queue with board for {project_id}/{board_id}/{column}. "
+                f"Queue will remain in current state until next sync attempt.",
+                exc_info=True,
+                extra={
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "column": column,
+                    "error_type": type(e).__name__,
+                }
+            )
+            # Don't raise - allow queue to remain in current state
+            # Next sync or lock operation will retry
 
     # ===== Test Helper Methods =====
 

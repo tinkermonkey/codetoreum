@@ -32,8 +32,7 @@ class TestApiKeyRepository:
             id=key_id,
             user_id=user_id,
             name="Test Key",
-            secret_hash="hashed-secret-123",
-            revoked=False
+            key="hashed-secret-123"
         )
 
         await repo.save(api_key)
@@ -58,9 +57,9 @@ class TestApiKeyRepository:
         user_id_1 = uuid4()
         user_id_2 = uuid4()
 
-        key1 = APIKey(uuid4(), user_id_1, "Key 1", "secret-1", False)
-        key2 = APIKey(uuid4(), user_id_1, "Key 2", "secret-2", False)
-        key3 = APIKey(uuid4(), user_id_2, "Key 3", "secret-3", False)
+        key1 = APIKey(id=uuid4(), user_id=user_id_1, name="Key 1", key="secret-1")
+        key2 = APIKey(id=uuid4(), user_id=user_id_1, name="Key 2", key="secret-2")
+        key3 = APIKey(id=uuid4(), user_id=user_id_2, name="Key 3", key="secret-3")
 
         await repo.save(key1)
         await repo.save(key2)
@@ -89,9 +88,9 @@ class TestApiKeyRepository:
         user_id_1 = uuid4()
         user_id_2 = uuid4()
 
-        await repo.save(APIKey(uuid4(), user_id_1, "Key 1", "secret-1", False))
-        await repo.save(APIKey(uuid4(), user_id_1, "Key 2", "secret-2", False))
-        await repo.save(APIKey(uuid4(), user_id_2, "Key 3", "secret-3", False))
+        await repo.save(APIKey(id=uuid4(), user_id=user_id_1, name="Key 1", key="secret-1"))
+        await repo.save(APIKey(id=uuid4(), user_id=user_id_1, name="Key 2", key="secret-2"))
+        await repo.save(APIKey(id=uuid4(), user_id=user_id_2, name="Key 3", key="secret-3"))
 
         all_keys = await repo.list_all()
 
@@ -104,7 +103,7 @@ class TestApiKeyRepository:
         user_id = uuid4()
         key_id = uuid4()
 
-        api_key = APIKey(key_id, user_id, "Test Key", "secret", False)
+        api_key = APIKey(id=key_id, user_id=user_id, name="Test Key", key="secret")
         await repo.save(api_key)
 
         await repo.delete(key_id)
@@ -126,8 +125,8 @@ class TestApiKeyRepository:
         repo = InMemoryAPIKeyRepository()
         user_id = uuid4()
 
-        key1 = APIKey(uuid4(), user_id, "Key 1", "secret-1", False)
-        key2 = APIKey(uuid4(), user_id, "Key 2", "secret-2", False)
+        key1 = APIKey(id=uuid4(), user_id=user_id, name="Key 1", key="secret-1")
+        key2 = APIKey(id=uuid4(), user_id=user_id, name="Key 2", key="secret-2")
 
         await repo.save(key1)
         await repo.save(key2)
@@ -147,7 +146,7 @@ class TestApiKeyRepository:
         user_id = uuid4()
 
         for i in range(5):
-            key = APIKey(uuid4(), user_id, f"Key {i}", f"secret-{i}", False)
+            key = APIKey(id=uuid4(), user_id=user_id, name=f"Key {i}", key=f"secret-{i}")
             await repo.save(key)
 
         user_keys = await repo.list_by_user(user_id)
@@ -158,8 +157,8 @@ class TestApiKeyRepository:
         """Test clearing all keys."""
         repo = InMemoryAPIKeyRepository()
 
-        await repo.save(APIKey(uuid4(), uuid4(), "Key", "secret", False))
-        await repo.save(APIKey(uuid4(), uuid4(), "Key", "secret", False))
+        await repo.save(APIKey(id=uuid4(), user_id=uuid4(), name="Key", key="secret"))
+        await repo.save(APIKey(id=uuid4(), user_id=uuid4(), name="Key", key="secret"))
 
         repo.clear()
 
@@ -180,7 +179,7 @@ class TestUserRepository:
             id=user_id,
             username="testuser",
             email="test@example.com",
-            password_hash="hashed-password"
+            hashed_password="hashed-password"
         )
 
         await repo.save(user)
@@ -204,7 +203,7 @@ class TestUserRepository:
         repo = InMemoryUserRepository()
         user_id = uuid4()
 
-        user = User(user_id, "testuser", "test@example.com", "hashed")
+        user = User(id=user_id, username="testuser", email="test@example.com", hashed_password="hashed")
         await repo.save(user)
 
         retrieved = await repo.get_by_username("testuser")
@@ -226,7 +225,7 @@ class TestUserRepository:
         repo = InMemoryUserRepository()
         user_id = uuid4()
 
-        user = User(user_id, "testuser", "test@example.com", "hashed")
+        user = User(id=user_id, username="testuser", email="test@example.com", hashed_password="hashed")
         await repo.save(user)
 
         retrieved = await repo.get_by_email("test@example.com")
@@ -247,9 +246,9 @@ class TestUserRepository:
         """Test listing all users."""
         repo = InMemoryUserRepository()
 
-        await repo.save(User(uuid4(), "user1", "user1@example.com", "hash"))
-        await repo.save(User(uuid4(), "user2", "user2@example.com", "hash"))
-        await repo.save(User(uuid4(), "user3", "user3@example.com", "hash"))
+        await repo.save(User(id=uuid4(), username="user1", email="user1@example.com", hashed_password="hash"))
+        await repo.save(User(id=uuid4(), username="user2", email="user2@example.com", hashed_password="hash"))
+        await repo.save(User(id=uuid4(), username="user3", email="user3@example.com", hashed_password="hash"))
 
         users = await repo.list_all()
 
@@ -270,7 +269,7 @@ class TestUserRepository:
         repo = InMemoryUserRepository()
         user_id = uuid4()
 
-        user = User(user_id, "testuser", "test@example.com", "hashed")
+        user = User(id=user_id, username="testuser", email="test@example.com", hashed_password="hashed")
         await repo.save(user)
 
         await repo.delete(user_id)
@@ -292,7 +291,7 @@ class TestUserRepository:
         repo = InMemoryUserRepository()
         user_id = uuid4()
 
-        user = User(user_id, "testuser", "test@example.com", "hashed")
+        user = User(id=user_id, username="testuser", email="test@example.com", hashed_password="hashed")
         await repo.save(user)
 
         await repo.delete(user_id)
@@ -306,7 +305,7 @@ class TestUserRepository:
         repo = InMemoryUserRepository()
         user_id = uuid4()
 
-        user = User(user_id, "testuser", "test@example.com", "hashed")
+        user = User(id=user_id, username="testuser", email="test@example.com", hashed_password="hashed")
         await repo.save(user)
 
         await repo.delete(user_id)
@@ -319,8 +318,8 @@ class TestUserRepository:
         """Test clearing all users."""
         repo = InMemoryUserRepository()
 
-        await repo.save(User(uuid4(), "user1", "user1@example.com", "hash"))
-        await repo.save(User(uuid4(), "user2", "user2@example.com", "hash"))
+        await repo.save(User(id=uuid4(), username="user1", email="user1@example.com", hashed_password="hash"))
+        await repo.save(User(id=uuid4(), username="user2", email="user2@example.com", hashed_password="hash"))
 
         repo.clear()
 
@@ -337,11 +336,11 @@ class TestRepositoryErrorHandling:
         repo = InMemoryUserRepository()
         user_id = uuid4()
 
-        user1 = User(user_id, "testuser", "test@example.com", "hash1")
+        user1 = User(id=user_id, username="testuser", email="test@example.com", hashed_password="hash1")
         await repo.save(user1)
 
         # Overwrite with same ID but different data
-        user2 = User(user_id, "testuser", "newemail@example.com", "hash2")
+        user2 = User(id=user_id, username="testuser", email="newemail@example.com", hashed_password="hash2")
         await repo.save(user2)
 
         retrieved = await repo.get(user_id)
@@ -352,7 +351,7 @@ class TestRepositoryErrorHandling:
         """Test username index stays consistent."""
         repo = InMemoryUserRepository()
 
-        user1 = User(uuid4(), "testuser", "user1@example.com", "hash")
+        user1 = User(id=uuid4(), username="testuser", email="user1@example.com", hashed_password="hash")
         await repo.save(user1)
 
         # Verify can retrieve by username
@@ -364,7 +363,7 @@ class TestRepositoryErrorHandling:
         """Test email index stays consistent."""
         repo = InMemoryUserRepository()
 
-        user1 = User(uuid4(), "testuser", "test@example.com", "hash")
+        user1 = User(id=uuid4(), username="testuser", email="test@example.com", hashed_password="hash")
         await repo.save(user1)
 
         # Verify can retrieve by email
@@ -378,11 +377,11 @@ class TestRepositoryErrorHandling:
         user_id = uuid4()
 
         # Save first key
-        key1 = APIKey(uuid4(), user_id, "Key 1", "secret-1", False)
+        key1 = APIKey(id=uuid4(), user_id=user_id, name="Key 1", key="secret-1")
         await repo.save(key1)
 
         # Save second key - index should be updated
-        key2 = APIKey(uuid4(), user_id, "Key 2", "secret-2", False)
+        key2 = APIKey(id=uuid4(), user_id=user_id, name="Key 2", key="secret-2")
         await repo.save(key2)
 
         # Verify both keys are indexed
@@ -403,16 +402,16 @@ class TestRepositoryIntegration:
         user1_id = uuid4()
         user2_id = uuid4()
 
-        user1 = User(user1_id, "alice", "alice@example.com", "hash1")
-        user2 = User(user2_id, "bob", "bob@example.com", "hash2")
+        user1 = User(id=user1_id, username="alice", email="alice@example.com", hashed_password="hash1")
+        user2 = User(id=user2_id, username="bob", email="bob@example.com", hashed_password="hash2")
 
         await user_repo.save(user1)
         await user_repo.save(user2)
 
         # Create API keys for each user
-        alice_key = APIKey(uuid4(), user1_id, "Alice Key", "secret-a", False)
-        bob_key1 = APIKey(uuid4(), user2_id, "Bob Key 1", "secret-b1", False)
-        bob_key2 = APIKey(uuid4(), user2_id, "Bob Key 2", "secret-b2", False)
+        alice_key = APIKey(id=uuid4(), user_id=user1_id, name="Alice Key", key="secret-a")
+        bob_key1 = APIKey(id=uuid4(), user_id=user2_id, name="Bob Key 1", key="secret-b1")
+        bob_key2 = APIKey(id=uuid4(), user_id=user2_id, name="Bob Key 2", key="secret-b2")
 
         await key_repo.save(alice_key)
         await key_repo.save(bob_key1)
@@ -437,8 +436,8 @@ class TestRepositoryIntegration:
         user_id = uuid4()
         key_id = uuid4()
 
-        user = User(user_id, "testuser", "test@example.com", "hash")
-        key = APIKey(key_id, user_id, "Test Key", "secret", False)
+        user = User(id=user_id, username="testuser", email="test@example.com", hashed_password="hash")
+        key = APIKey(id=key_id, user_id=user_id, name="Test Key", key="secret")
 
         await user_repo.save(user)
         await key_repo.save(key)
@@ -462,7 +461,7 @@ class TestRepositoryIntegration:
         # Create many users
         user_ids = [uuid4() for _ in range(100)]
         for i, user_id in enumerate(user_ids):
-            user = User(user_id, f"user{i}", f"user{i}@example.com", "hash")
+            user = User(id=user_id, username=f"user{i}", email=f"user{i}@example.com", hashed_password="hash")
             await repo.save(user)
 
         # Verify all created
