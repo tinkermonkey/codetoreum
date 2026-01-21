@@ -13,10 +13,12 @@ from codetoreum.domain.events import (
     WorkItemStageUpdated,
     DomainEvent,
 )
+from codetoreum.domain.exceptions import ConfigNotFoundError
 from codetoreum.domain.workflow import Workflow, WorkflowStatus
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.event_types import EventTypes
+from codetoreum.infrastructure.resilience.exceptions import TimeoutError
 from codetoreum.ports.output import IEventStore, ITicketSystem
 
 logger = logging.getLogger(__name__)
@@ -911,94 +913,148 @@ class WorkflowOrchestrator:
         Args:
             event: workitem.column_changed event
         """
-        try:
-            # Extract event data
-            work_item_id = event.payload.get("work_item_id")
-            project_id = event.payload.get("project_id")
-            board_id = event.payload.get("board_id")
-            to_column = event.payload.get("to_column")
-            from_column = event.payload.get("from_column")
-            moved_by = event.payload.get("moved_by", "unknown")
+        # Extract event data - let KeyError propagate if structure is malformed
+        work_item_id = event.payload["work_item_id"]
+        project_id = event.payload["project_id"]
+        board_id = event.payload["board_id"]
+        to_column = event.payload["to_column"]
+        from_column = event.payload.get("from_column")
+        moved_by = event.payload.get("moved_by", "unknown")
 
-            if not all([work_item_id, project_id, board_id, to_column]):
-                logger.warning(
-                    f"Column change event missing required fields: {event.payload}"
-                )
-                return
-
-            logger.info(
-                f"Handling column change: item {work_item_id} "
-                f"from '{from_column}' to '{to_column}'"
-            )
-
-            # Get workflow configuration
-            try:
-                workflow_config = await self.config.get_workflow_config(
-                    project_id, board_id
-                )
-            except Exception as e:
-                logger.error(f"Failed to get workflow config: {e}")
-                return
-
-            # Find target column configuration
-            target_column_config = self._find_column_config(workflow_config, to_column)
-            if not target_column_config:
-                logger.warning(f"Column '{to_column}' not found in workflow config")
-                return
-
-            # Case 1: Automated column - trigger agent
-            if target_column_config.agent:
-                # Create task context
-                task_context = {
+        if not all([work_item_id, project_id, board_id, to_column]):
+            logger.warning(
+                f"Column change event has empty required fields",
+                extra={
                     "work_item_id": work_item_id,
-                    "column": to_column,
                     "project_id": project_id,
                     "board_id": board_id,
-                    "moved_by": moved_by,
+                    "to_column": to_column,
+                    "event_payload": event.payload,
                 }
+            )
+            return
 
-                # Create and enqueue task
-                task = Task(
-                    id=f"auto_{project_id}_{work_item_id}_{int(time.time())}",
-                    agent=target_column_config.agent,
-                    project=project_id,
-                    priority=WorkItemPriority.MEDIUM,
-                    context=task_context,
-                    created_at=datetime.now(timezone.utc),
+        logger.info(
+            f"Handling column change: item {work_item_id} to '{to_column}'",
+            extra={
+                "work_item_id": work_item_id,
+                "project_id": project_id,
+                "board_id": board_id,
+                "from_column": from_column,
+                "to_column": to_column,
+            }
+        )
+
+        # Get workflow configuration - catch only expected errors
+        try:
+            workflow_config = await self.config.get_workflow_config(
+                project_id, board_id
+            )
+        except ConfigNotFoundError as e:
+            logger.error(
+                f"Workflow config not found for {project_id}/{board_id}: {e}",
+                exc_info=True,
+                extra={
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "work_item_id": work_item_id,
+                    "error_type": "ConfigNotFoundError",
+                }
+            )
+            return
+        except (OSError, TimeoutError) as e:
+            logger.error(
+                f"Failed to get workflow config for {project_id}/{board_id} due to {type(e).__name__}: {e}",
+                exc_info=True,
+                extra={
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "work_item_id": work_item_id,
+                    "error_type": type(e).__name__,
+                }
+            )
+            return
+
+        # Find target column configuration
+        target_column_config = self._find_column_config(workflow_config, to_column)
+        if not target_column_config:
+            logger.warning(
+                f"Column '{to_column}' not found in workflow config",
+                extra={
+                    "to_column": to_column,
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "work_item_id": work_item_id,
+                }
+            )
+            return
+
+        # Case 1: Automated column - trigger agent
+        if target_column_config.agent:
+            # Create task context
+            task_context = {
+                "work_item_id": work_item_id,
+                "column": to_column,
+                "project_id": project_id,
+                "board_id": board_id,
+                "moved_by": moved_by,
+            }
+
+            # Create and enqueue task
+            task = Task(
+                id=f"auto_{project_id}_{work_item_id}_{int(time.time())}",
+                agent=target_column_config.agent,
+                project=project_id,
+                priority=WorkItemPriority.MEDIUM,
+                context=task_context,
+                created_at=datetime.now(timezone.utc),
+            )
+
+            try:
+                task_id = await self.task_queue.enqueue(task)
+                logger.info(
+                    f"Enqueued agent task {task_id} for column '{to_column}'",
+                    extra={
+                        "task_id": task_id,
+                        "agent": target_column_config.agent,
+                        "work_item_id": work_item_id,
+                        "column": to_column,
+                    }
+                )
+            except (OSError, TimeoutError) as e:
+                logger.error(
+                    f"Failed to enqueue task for work_item={work_item_id}, column={to_column}: {e}",
+                    exc_info=True,
+                    extra={
+                        "work_item_id": work_item_id,
+                        "project_id": project_id,
+                        "board_id": board_id,
+                        "column": to_column,
+                        "error_type": type(e).__name__,
+                    }
                 )
 
-                try:
-                    task_id = await self.task_queue.enqueue(task)
-                    logger.info(
-                        f"Enqueued agent task {task_id} for column '{to_column}'"
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to enqueue task: {e}")
+        # Case 2: Exit column - release lock
+        if getattr(target_column_config, 'exit_column', False):
+            logger.debug(f"Column '{to_column}' is exit column, releasing lock")
+            # Lock release is handled by lock service on item completion
+            # This is informational
 
-            # Case 2: Exit column - release lock
-            if getattr(target_column_config, 'exit_column', False):
-                logger.debug(f"Column '{to_column}' is exit column, releasing lock")
-                # Lock release is handled by lock service on item completion
-                # This is informational
+        # Case 3: Conversational column - start monitoring (if implemented)
+        if getattr(target_column_config, 'discussion_category', None):
+            logger.debug(
+                f"Column '{to_column}' has discussion, "
+                f"would start monitoring (implementation pending)"
+            )
 
-            # Case 3: Conversational column - start monitoring (if implemented)
-            if getattr(target_column_config, 'discussion_category', None):
+        # Case 4: Leaving conversational column - stop monitoring
+        if from_column:
+            from_column_config = self._find_column_config(workflow_config, from_column)
+            if from_column_config and getattr(from_column_config, 'discussion_category', None):
                 logger.debug(
-                    f"Column '{to_column}' has discussion, "
-                    f"would start monitoring (implementation pending)"
+                    f"Leaving discussion column '{from_column}', "
+                    f"would stop monitoring (implementation pending)"
                 )
-
-            # Case 4: Leaving conversational column - stop monitoring
-            if from_column:
-                from_column_config = self._find_column_config(workflow_config, from_column)
-                if from_column_config and getattr(from_column_config, 'discussion_category', None):
-                    logger.debug(
-                        f"Leaving discussion column '{from_column}', "
-                        f"would stop monitoring (implementation pending)"
-                    )
-
-        except Exception as e:
-            logger.error(f"Error handling column change event: {e}", exc_info=e)
 
     async def _handle_comment_needs_response(self, event: DomainEvent) -> None:
         """
@@ -1009,45 +1065,63 @@ class WorkflowOrchestrator:
         Args:
             event: comment.needs_response event
         """
+        # Extract event data - let KeyError propagate if structure is malformed
+        work_item_id = event.payload.get("work_item_id")
+        project_id = event.payload.get("project_id")
+        agent_name = event.payload.get("agent_assignment")
+        comment_text = event.payload.get("comment")
+
+        if not all([work_item_id, project_id, agent_name]):
+            logger.warning(
+                f"Comment event missing required fields",
+                extra={"event_payload": event.payload}
+            )
+            return
+
+        logger.info(
+            f"Handling comment response for item {work_item_id} with agent {agent_name}",
+            extra={
+                "work_item_id": work_item_id,
+                "project_id": project_id,
+                "agent_name": agent_name,
+            }
+        )
+
+        # Create task for conversational agent
+        task = Task(
+            id=f"comment_{project_id}_{work_item_id}_{int(time.time())}",
+            agent=agent_name,
+            project=project_id,
+            priority=WorkItemPriority.MEDIUM,
+            context={
+                "work_item_id": work_item_id,
+                "comment": comment_text,
+                "project_id": project_id,
+            },
+            created_at=datetime.now(timezone.utc),
+        )
+
         try:
-            work_item_id = event.payload.get("work_item_id")
-            project_id = event.payload.get("project_id")
-            agent_name = event.payload.get("agent_assignment")
-            comment_text = event.payload.get("comment")
-
-            if not all([work_item_id, project_id, agent_name]):
-                logger.warning(
-                    f"Comment event missing required fields: {event.payload}"
-                )
-                return
-
+            task_id = await self.task_queue.enqueue(task)
             logger.info(
-                f"Handling comment response for item {work_item_id} "
-                f"with agent {agent_name}"
-            )
-
-            # Create task for conversational agent
-            task = Task(
-                id=f"comment_{project_id}_{work_item_id}_{int(time.time())}",
-                agent=agent_name,
-                project=project_id,
-                priority=WorkItemPriority.MEDIUM,
-                context={
+                f"Enqueued comment response task {task_id}",
+                extra={
+                    "task_id": task_id,
                     "work_item_id": work_item_id,
-                    "comment": comment_text,
-                    "project_id": project_id,
-                },
-                created_at=datetime.now(timezone.utc),
+                    "agent": agent_name,
+                }
             )
-
-            try:
-                task_id = await self.task_queue.enqueue(task)
-                logger.info(f"Enqueued comment response task {task_id}")
-            except Exception as e:
-                logger.error(f"Failed to enqueue comment response task: {e}")
-
-        except Exception as e:
-            logger.error(f"Error handling comment event: {e}", exc_info=e)
+        except (OSError, TimeoutError) as e:
+            logger.error(
+                f"Failed to enqueue comment response task: {e}",
+                exc_info=True,
+                extra={
+                    "work_item_id": work_item_id,
+                    "project_id": project_id,
+                    "agent": agent_name,
+                    "error_type": type(e).__name__,
+                }
+            )
 
     async def _handle_lock_released(self, event: DomainEvent) -> None:
         """
@@ -1059,66 +1133,154 @@ class WorkflowOrchestrator:
         Args:
             event: lock.released event
         """
-        try:
-            project_id = event.payload.get("project_id")
-            board_id = event.payload.get("board_id")
-            next_in_queue = event.payload.get("next_in_queue")
+        # Extract event data - let KeyError propagate if structure is malformed
+        project_id = event.payload.get("project_id")
+        board_id = event.payload.get("board_id")
+        next_in_queue = event.payload.get("next_in_queue")
 
-            if not all([project_id, board_id]):
-                logger.warning(f"Lock event missing required fields: {event.payload}")
-                return
-
-            logger.info(
-                f"Lock released for {project_id}/{board_id}, "
-                f"next in queue: {next_in_queue}"
+        if not all([project_id, board_id]):
+            logger.warning(
+                f"Lock event missing required fields",
+                extra={"event_payload": event.payload}
             )
+            return
 
-            if not next_in_queue:
-                logger.debug("No item queued after lock release")
-                return
+        logger.info(
+            f"Lock released for {project_id}/{board_id}, next in queue: {next_in_queue}",
+            extra={
+                "project_id": project_id,
+                "board_id": board_id,
+                "next_in_queue": next_in_queue,
+            }
+        )
 
-            # Get workflow configuration
+        if not next_in_queue:
+            logger.debug("No item queued after lock release")
+            return
+
+        # Get workflow configuration - catch only expected errors
+        try:
             workflow_config = await self.config.get_workflow_config(project_id, board_id)
-            if not workflow_config:
-                logger.warning(f"No workflow config found for project {project_id}, board {board_id}")
-                return
+        except ConfigNotFoundError as e:
+            logger.error(
+                f"Workflow config not found for {project_id}/{board_id}: {e}",
+                exc_info=True,
+                extra={
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "next_in_queue": next_in_queue,
+                    "error_type": "ConfigNotFoundError",
+                }
+            )
+            return
+        except (OSError, TimeoutError) as e:
+            logger.error(
+                f"Failed to get workflow config for {project_id}/{board_id} due to {type(e).__name__}: {e}",
+                exc_info=True,
+                extra={
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "next_in_queue": next_in_queue,
+                    "error_type": type(e).__name__,
+                }
+            )
+            return
 
-            # Load workflow state to get item position
+        if not workflow_config:
+            logger.warning(
+                f"No workflow config found for project {project_id}, board {board_id}",
+                extra={
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "next_in_queue": next_in_queue,
+                }
+            )
+            return
+
+        # Get the column where the next item is currently located
+        try:
+            item_position = await self.workflow_state.get_item_position(next_in_queue)
+        except (ConfigNotFoundError, OSError, TimeoutError) as e:
+            logger.error(
+                f"Error getting item position for {next_in_queue}: {e}",
+                exc_info=True,
+                extra={
+                    "work_item_id": next_in_queue,
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "error_type": type(e).__name__,
+                }
+            )
+            return
+
+        if not item_position:
+            logger.warning(
+                f"Could not find position for item {next_in_queue}",
+                extra={
+                    "work_item_id": next_in_queue,
+                    "project_id": project_id,
+                    "board_id": board_id,
+                }
+            )
+            return
+
+        current_column_name = item_position.get("column")
+        column_config = self._find_column_config(workflow_config, current_column_name)
+
+        if not column_config:
+            logger.warning(
+                f"No config found for column {current_column_name}",
+                extra={
+                    "column": current_column_name,
+                    "work_item_id": next_in_queue,
+                    "project_id": project_id,
+                    "board_id": board_id,
+                }
+            )
+            return
+
+        # If this is an automated column, trigger the agent
+        if column_config.agent:
+            logger.info(
+                f"Triggering agent {column_config.agent} for queued item {next_in_queue}",
+                extra={
+                    "agent": column_config.agent,
+                    "work_item_id": next_in_queue,
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "column": current_column_name,
+                }
+            )
             try:
-                # Get the column where the next item is currently located
-                item_position = await self.workflow_state.get_item_position(next_in_queue)
-                if not item_position:
-                    logger.warning(f"Could not find position for item {next_in_queue}")
-                    return
-
-                current_column_name = item_position.get("column")
-                column_config = self._find_column_config(workflow_config, current_column_name)
-
-                if not column_config:
-                    logger.warning(f"No config found for column {current_column_name}")
-                    return
-
-                # If this is an automated column, trigger the agent
-                if column_config.agent:
-                    logger.info(
-                        f"Triggering agent {column_config.agent} for queued item {next_in_queue}"
-                    )
-                    await self.task_queue.enqueue({
+                await self.task_queue.enqueue({
+                    "work_item_id": next_in_queue,
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "column": current_column_name,
+                    "agent": column_config.agent,
+                    "priority": WorkItemPriority.MEDIUM,
+                })
+            except (OSError, TimeoutError) as e:
+                logger.error(
+                    f"Failed to enqueue task for queued item {next_in_queue}: {e}",
+                    exc_info=True,
+                    extra={
                         "work_item_id": next_in_queue,
                         "project_id": project_id,
                         "board_id": board_id,
-                        "column": current_column_name,
                         "agent": column_config.agent,
-                        "priority": WorkItemPriority.MEDIUM,
-                    })
-                else:
-                    logger.debug(f"Column {current_column_name} is not automated, no agent to trigger")
-
-            except Exception as e:
-                logger.error(f"Error processing next item {next_in_queue}: {e}", exc_info=e)
-
-        except Exception as e:
-            logger.error(f"Error handling lock released event: {e}", exc_info=e)
+                        "column": current_column_name,
+                        "error_type": type(e).__name__,
+                    }
+                )
+        else:
+            logger.debug(
+                f"Column {current_column_name} is not automated, no agent to trigger",
+                extra={
+                    "column": current_column_name,
+                    "work_item_id": next_in_queue,
+                }
+            )
 
     async def _handle_review_status_changed(self, event: DomainEvent) -> None:
         """
@@ -1131,88 +1293,213 @@ class WorkflowOrchestrator:
         Args:
             event: review.status_changed event
         """
-        try:
-            work_item_id = event.payload.get("work_item_id")
-            project_id = event.payload.get("project_id")
-            new_status = event.payload.get("new_status")
-            previous_status = event.payload.get("previous_status")
+        # Extract event data - let KeyError propagate if structure is malformed
+        work_item_id = event.payload.get("work_item_id")
+        project_id = event.payload.get("project_id")
+        new_status = event.payload.get("new_status")
+        previous_status = event.payload.get("previous_status")
 
-            if not all([work_item_id, project_id, new_status]):
-                logger.warning(
-                    f"Review event missing required fields: {event.payload}"
-                )
-                return
-
-            logger.info(
-                f"Review status changed for item {work_item_id}: "
-                f"{previous_status} -> {new_status}"
+        if not all([work_item_id, project_id, new_status]):
+            logger.warning(
+                f"Review event missing required fields",
+                extra={"event_payload": event.payload}
             )
+            return
 
-            if new_status == "approved":
-                # Move to next column
-                if self.projects_api:
+        logger.info(
+            f"Review status changed for item {work_item_id}: {previous_status} -> {new_status}",
+            extra={
+                "work_item_id": work_item_id,
+                "project_id": project_id,
+                "new_status": new_status,
+                "previous_status": previous_status,
+            }
+        )
+
+        if new_status == "approved":
+            # Move to next column
+            if self.projects_api:
+                board_id = event.payload.get("board_id", "default")
+
+                # Get workflow to find next column
+                try:
+                    workflow_config = await self.config.get_workflow_config(
+                        project_id, board_id
+                    )
+                except ConfigNotFoundError as e:
+                    logger.error(
+                        f"Workflow config not found for {project_id}/{board_id}: {e}",
+                        exc_info=True,
+                        extra={
+                            "project_id": project_id,
+                            "board_id": board_id,
+                            "work_item_id": work_item_id,
+                            "error_type": "ConfigNotFoundError",
+                        }
+                    )
+                    return
+                except (OSError, TimeoutError) as e:
+                    logger.error(
+                        f"Failed to get workflow config for {project_id}/{board_id}: {e}",
+                        exc_info=True,
+                        extra={
+                            "project_id": project_id,
+                            "board_id": board_id,
+                            "work_item_id": work_item_id,
+                            "error_type": type(e).__name__,
+                        }
+                    )
+                    return
+
+                # Find current column
+                try:
+                    item_position = await self.workflow_state.get_item_position(work_item_id)
+                except (ConfigNotFoundError, OSError, TimeoutError) as e:
+                    logger.error(
+                        f"Error getting item position for {work_item_id}: {e}",
+                        exc_info=True,
+                        extra={
+                            "work_item_id": work_item_id,
+                            "project_id": project_id,
+                            "board_id": board_id,
+                            "error_type": type(e).__name__,
+                        }
+                    )
+                    return
+
+                if not item_position:
+                    logger.warning(
+                        f"Could not find position for item {work_item_id}",
+                        extra={
+                            "work_item_id": work_item_id,
+                            "project_id": project_id,
+                        }
+                    )
+                    return
+
+                current_column_name = item_position.get("column")
+                current_column = self._find_column_config(workflow_config, current_column_name)
+                if not current_column:
+                    logger.warning(
+                        f"No config for column {current_column_name}",
+                        extra={
+                            "column": current_column_name,
+                            "work_item_id": work_item_id,
+                        }
+                    )
+                    return
+
+                # Find next column
+                next_column = self._get_next_column(workflow_config, current_column)
+                if next_column:
+                    logger.info(
+                        f"Moving approved item {work_item_id} from {current_column.name} to {next_column.name}",
+                        extra={
+                            "work_item_id": work_item_id,
+                            "from_column": current_column.name,
+                            "to_column": next_column.name,
+                            "project_id": project_id,
+                            "board_id": board_id,
+                        }
+                    )
                     try:
-                        # Get workflow to find next column
-                        board_id = event.payload.get("board_id", "default")
-                        workflow_config = await self.config.get_workflow_config(
-                            project_id, board_id
+                        await self.projects_api.move_card_to_column(
+                            project_id, board_id, work_item_id, next_column.name
                         )
+                    except (OSError, TimeoutError) as e:
+                        logger.error(
+                            f"Failed to move approved item {work_item_id}: {e}",
+                            exc_info=True,
+                            extra={
+                                "work_item_id": work_item_id,
+                                "project_id": project_id,
+                                "board_id": board_id,
+                                "to_column": next_column.name,
+                                "error_type": type(e).__name__,
+                            }
+                        )
+                else:
+                    logger.info(
+                        f"No next column found for item {work_item_id} in workflow",
+                        extra={
+                            "work_item_id": work_item_id,
+                            "current_column": current_column.name,
+                        }
+                    )
 
-                        # Find current column
-                        item_position = await self.workflow_state.get_item_position(work_item_id)
-                        if not item_position:
-                            logger.warning(f"Could not find position for item {work_item_id}")
-                            return
+        elif new_status == "changes_requested":
+            # Move back to development column
+            if self.projects_api:
+                board_id = event.payload.get("board_id", "default")
 
-                        current_column_name = item_position.get("column")
-                        current_column = self._find_column_config(workflow_config, current_column_name)
-                        if not current_column:
-                            logger.warning(f"No config for column {current_column_name}")
-                            return
+                try:
+                    workflow_config = await self.config.get_workflow_config(
+                        project_id, board_id
+                    )
+                except ConfigNotFoundError as e:
+                    logger.error(
+                        f"Workflow config not found for {project_id}/{board_id}: {e}",
+                        exc_info=True,
+                        extra={
+                            "project_id": project_id,
+                            "board_id": board_id,
+                            "work_item_id": work_item_id,
+                            "error_type": "ConfigNotFoundError",
+                        }
+                    )
+                    return
+                except (OSError, TimeoutError) as e:
+                    logger.error(
+                        f"Failed to get workflow config for {project_id}/{board_id}: {e}",
+                        exc_info=True,
+                        extra={
+                            "project_id": project_id,
+                            "board_id": board_id,
+                            "work_item_id": work_item_id,
+                            "error_type": type(e).__name__,
+                        }
+                    )
+                    return
 
-                        # Find next column
-                        next_column = self._get_next_column(workflow_config, current_column)
-                        if next_column:
-                            logger.info(
-                                f"Moving approved item {work_item_id} from {current_column.name} to {next_column.name}"
-                            )
-                            await self.projects_api.move_card_to_column(
-                                project_id, board_id, work_item_id, next_column.name
-                            )
-                        else:
-                            logger.info(
-                                f"No next column found for item {work_item_id} in workflow"
-                            )
-                    except Exception as e:
-                        logger.error(f"Failed to move approved item: {e}", exc_info=e)
+                # Find development column (typically first column or has "dev" in name)
+                dev_column = None
+                for col in workflow_config.columns:
+                    if col.position == 0 or "dev" in col.name.lower():
+                        dev_column = col
+                        break
 
-            elif new_status == "changes_requested":
-                # Move back to development column
-                if self.projects_api:
+                if dev_column:
+                    logger.info(
+                        f"Moving item {work_item_id} back to development column {dev_column.name}",
+                        extra={
+                            "work_item_id": work_item_id,
+                            "dev_column": dev_column.name,
+                            "project_id": project_id,
+                            "board_id": board_id,
+                        }
+                    )
                     try:
-                        board_id = event.payload.get("board_id", "default")
-                        workflow_config = await self.config.get_workflow_config(
-                            project_id, board_id
+                        await self.projects_api.move_card_to_column(
+                            project_id, board_id, work_item_id, dev_column.name
                         )
-
-                        # Find development column (typically first column or has "dev" in name)
-                        dev_column = None
-                        for col in workflow_config.columns:
-                            if col.position == 0 or "dev" in col.name.lower():
-                                dev_column = col
-                                break
-
-                        if dev_column:
-                            logger.info(
-                                f"Moving item {work_item_id} back to development column {dev_column.name}"
-                            )
-                            await self.projects_api.move_card_to_column(
-                                project_id, board_id, work_item_id, dev_column.name
-                            )
-                        else:
-                            logger.warning(f"No development column found for item {work_item_id}")
-                    except Exception as e:
-                        logger.error(f"Failed to move item back to development: {e}", exc_info=e)
-
-        except Exception as e:
-            logger.error(f"Error handling review status event: {e}", exc_info=e)
+                    except (OSError, TimeoutError) as e:
+                        logger.error(
+                            f"Failed to move item {work_item_id} back to development: {e}",
+                            exc_info=True,
+                            extra={
+                                "work_item_id": work_item_id,
+                                "project_id": project_id,
+                                "board_id": board_id,
+                                "dev_column": dev_column.name,
+                                "error_type": type(e).__name__,
+                            }
+                        )
+                else:
+                    logger.warning(
+                        f"No development column found for item {work_item_id}",
+                        extra={
+                            "work_item_id": work_item_id,
+                            "project_id": project_id,
+                            "board_id": board_id,
+                        }
+                    )

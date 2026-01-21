@@ -1,6 +1,8 @@
 # Project specific
 documentation/claude_thoughts/
 .dr/
+.venv_test/
+.claude_prompt_*.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
