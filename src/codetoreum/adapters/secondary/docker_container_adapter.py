@@ -1,6 +1,7 @@
 """Docker adapter for IContainer interface."""
 
 import asyncio
+import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -9,6 +10,8 @@ from typing import Any, Callable, Dict, List, Optional
 from dateutil import parser as dateparser
 
 from codetoreum.domain.types import ContainerId
+
+logger = logging.getLogger(__name__)
 from codetoreum.ports.exceptions import (
     AuthenticationError,
     ContainerError,
@@ -216,8 +219,12 @@ class DockerContainerAdapter(IContainer):
                             # Kill container if it's still running
                             try:
                                 container.kill()
-                            except Exception:
-                                pass
+                            except Exception as kill_error:
+                                logger.warning(
+                                    f"Failed to kill container on timeout: {kill_error}",
+                                    exc_info=True,
+                                    extra={"container_id": container.short_id}
+                                )
                             raise ContainerTimeoutError(f"Container execution timed out after {timeout}s")
 
                         decoded_line = line.decode("utf-8", errors="replace")
@@ -268,8 +275,12 @@ class DockerContainerAdapter(IContainer):
                 if container:
                     try:
                         container.remove(force=True)
-                    except Exception:
-                        pass  # Ignore cleanup errors (might already be removed)
+                    except Exception as cleanup_error:
+                        logger.warning(
+                            f"Failed to remove container during cleanup: {cleanup_error}",
+                            exc_info=True,
+                            extra={"container_id": container.short_id if container else "unknown"}
+                        )
 
                 if "timeout" in str(e).lower():
                     raise ContainerTimeoutError(f"Container execution timed out after {timeout}s")
@@ -474,15 +485,23 @@ class DockerContainerAdapter(IContainer):
                 if state.get("StartedAt"):
                     try:
                         started_at = dateparser.isoparse(state["StartedAt"])
-                    except Exception:
-                        pass  # Invalid date
+                    except Exception as parse_error:
+                        logger.warning(
+                            f"Failed to parse StartedAt date: {parse_error}",
+                            exc_info=True,
+                            extra={"date_value": state.get("StartedAt")}
+                        )
 
                 finished_at = None
                 if state.get("FinishedAt") and state["FinishedAt"] != "0001-01-01T00:00:00Z":
                     try:
                         finished_at = dateparser.isoparse(state["FinishedAt"])
-                    except Exception:
-                        pass  # Invalid date
+                    except Exception as parse_error:
+                        logger.warning(
+                            f"Failed to parse FinishedAt date: {parse_error}",
+                            exc_info=True,
+                            extra={"date_value": state.get("FinishedAt")}
+                        )
 
                 try:
                     created_at = dateparser.isoparse(attrs["Created"])
@@ -580,19 +599,32 @@ class DockerContainerAdapter(IContainer):
                     if state.get("StartedAt"):
                         try:
                             started_at = dateparser.isoparse(state["StartedAt"])
-                        except Exception:
-                            pass  # Invalid date
+                        except Exception as parse_error:
+                            logger.warning(
+                                f"Failed to parse StartedAt date: {parse_error}",
+                                exc_info=True,
+                                extra={"date_value": state.get("StartedAt")}
+                            )
 
                     finished_at = None
                     if state.get("FinishedAt") and state["FinishedAt"] != "0001-01-01T00:00:00Z":
                         try:
                             finished_at = dateparser.isoparse(state["FinishedAt"])
-                        except Exception:
-                            pass  # Invalid date
+                        except Exception as parse_error:
+                            logger.warning(
+                                f"Failed to parse FinishedAt date: {parse_error}",
+                                exc_info=True,
+                                extra={"date_value": state.get("FinishedAt")}
+                            )
 
                     try:
                         created_at = dateparser.isoparse(attrs["Created"])
-                    except Exception:
+                    except Exception as parse_error:
+                        logger.warning(
+                            f"Failed to parse Created date, using current time: {parse_error}",
+                            exc_info=True,
+                            extra={"date_value": attrs.get("Created")}
+                        )
                         created_at = datetime.now(timezone.utc)  # Fallback
 
                     statuses.append(
