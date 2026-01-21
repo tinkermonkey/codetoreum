@@ -253,6 +253,10 @@ class IWorkflowStateManager:
         """Update workflow state."""
         raise NotImplementedError
 
+    async def get_item_position(self, work_item_id: str) -> Optional[Dict[str, Any]]:
+        """Get current position information for a work item."""
+        raise NotImplementedError
+
 
 class IDecisionEvents:
     """Interface to decision event emission."""
@@ -362,8 +366,16 @@ class WorkflowOrchestrator:
             workflow_config = await self.config.get_workflow_config(
                 event.project, event.board
             )
-        except Exception as e:
-            logger.error(f"Failed to load workflow config: {e}")
+        except (ConfigNotFoundError, OSError, TimeoutError) as e:
+            logger.error(
+                f"Failed to load workflow config for {event.project}/{event.board}: {e}",
+                exc_info=True,
+                extra={
+                    "project": event.project,
+                    "board": event.board,
+                    "error_type": type(e).__name__,
+                }
+            )
             return WorkflowResult(
                 success=False,
                 action=WorkflowAction.NO_ACTION,
@@ -858,7 +870,7 @@ class WorkflowOrchestrator:
 
         return await self.task_queue.enqueue(task)
 
-    # Event Bus Integration (Phase 7)
+    # Event Bus Integration
 
     def _subscribe_to_events(self) -> None:
         """
@@ -1404,7 +1416,7 @@ class WorkflowOrchestrator:
                     )
                     try:
                         await self.projects_api.move_card_to_column(
-                            project_id, board_id, work_item_id, next_column.name
+                            project_id, work_item_id, next_column.name
                         )
                     except (OSError, TimeoutError) as e:
                         logger.error(
@@ -1480,7 +1492,7 @@ class WorkflowOrchestrator:
                     )
                     try:
                         await self.projects_api.move_card_to_column(
-                            project_id, board_id, work_item_id, dev_column.name
+                            project_id, work_item_id, dev_column.name
                         )
                     except (OSError, TimeoutError) as e:
                         logger.error(
