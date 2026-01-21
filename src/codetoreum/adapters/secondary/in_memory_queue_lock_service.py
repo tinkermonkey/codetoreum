@@ -479,6 +479,9 @@ class InMemoryLockService(IPipelineLockService):
             if not state or not state.queue:
                 return
 
+            # Track what changed for logging
+            old_order = [e.work_item_id for e in state.queue]
+
             # Update positions for queued items
             for entry in state.queue:
                 if entry.work_item_id in updated_positions:
@@ -486,6 +489,22 @@ class InMemoryLockService(IPipelineLockService):
 
             # Re-sort queue by updated positions
             state.queue.sort(key=lambda e: e.board_position)
+
+            new_order = [e.work_item_id for e in state.queue]
+
+            # Log changes
+            if old_order != new_order:
+                logger.info(
+                    f"Queue reordered for {project_id}/{board_id}: "
+                    f"{len(updated_positions)} items updated",
+                    extra={
+                        "project_id": project_id,
+                        "board_id": board_id,
+                        "updated_items": list(updated_positions.keys()),
+                        "old_order": old_order,
+                        "new_order": new_order,
+                    }
+                )
 
     def set_lock_acquired_at(
         self, project_id: str, board_id: str, timestamp: datetime

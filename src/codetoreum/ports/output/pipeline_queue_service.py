@@ -29,7 +29,48 @@ with the application-layer QueueEntry in pipeline_lock_service.py.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Optional
+from enum import Enum
+from typing import Dict, List, Optional, Tuple
+
+# Type aliases for improved clarity
+PipelineId = Tuple[str, str]  # (project_id, board_id)
+NonNegativeInt = int  # Used for positions, counts, etc.
+
+
+class QueueStatus(str, Enum):
+    """Queue entry status enumeration.
+
+    Provides type-safe status values for queue entries, preventing typos and
+    enabling IDE autocomplete.
+    """
+    WAITING = "waiting"  # Work item in queue, waiting for lock
+    ACTIVE = "active"    # Work item holds the pipeline lock
+
+
+# Domain-specific exceptions for queue service operations
+class QueueServiceError(Exception):
+    """Base exception for queue service errors."""
+    pass
+
+
+class QueueValidationError(QueueServiceError):
+    """Invalid parameters provided to queue service."""
+    pass
+
+
+class DuplicateQueueEntryError(QueueServiceError):
+    """Work item already exists in queue."""
+    pass
+
+
+class QueueItemNotFoundError(QueueServiceError):
+    """Work item not found in queue."""
+    pass
+
+
+class InvalidQueueStateError(QueueServiceError):
+    """Invalid state transition attempted."""
+    pass
 
 
 @dataclass(frozen=True)
@@ -45,7 +86,7 @@ class PipelineQueueEntry:
         board_id: Board identifier for the pipeline
         work_item_id: Unique identifier of the work item
         position_in_column: Current position in board column (0 = topmost, highest priority)
-        status: Queue status - 'waiting' (queued, not holding lock) or 'active' (holds lock)
+        status: Queue status (WAITING or ACTIVE)
         queued_at: ISO 8601 timestamp when item was added to queue
         last_position_check: ISO 8601 timestamp when position was last synced with board
     """
@@ -54,7 +95,7 @@ class PipelineQueueEntry:
     board_id: str
     work_item_id: str
     position_in_column: int
-    status: str  # 'waiting' or 'active'
+    status: QueueStatus
     queued_at: datetime
     last_position_check: datetime
 
@@ -83,8 +124,8 @@ class IPipelineQueueService(ABC):
     - Board position is source of truth - synced before selection
 
     Status Values:
-    - 'waiting': Work item is in queue, waiting for lock
-    - 'active': Work item holds the pipeline lock
+    - QueueStatus.WAITING: Work item is in queue, waiting for lock
+    - QueueStatus.ACTIVE: Work item holds the pipeline lock
 
     Example:
         # Check if item is in any queue
@@ -123,7 +164,7 @@ class IPipelineQueueService(ABC):
             bool: True if item is in any queue, False otherwise
 
         Raises:
-            ValidationError: Invalid work_item_id
+            QueueValidationError: Invalid work_item_id
         """
         pass
 
@@ -138,7 +179,7 @@ class IPipelineQueueService(ABC):
     ) -> None:
         """Add a work item to the queue for a pipeline.
 
-        Creates a new queue entry with status='waiting'. The initial position_in_column
+        Creates a new queue entry with status=QueueStatus.WAITING. The initial position_in_column
         is provided by the caller (typically from IBoardService).
 
         Args:
@@ -149,8 +190,8 @@ class IPipelineQueueService(ABC):
             timestamp: Time when item was queued (ISO 8601 or datetime object)
 
         Raises:
-            ValidationError: Invalid parameters
-            DuplicateError: Item already exists in queue
+            QueueValidationError: Invalid parameters
+            DuplicateQueueEntryError: Item already exists in queue
         """
         pass
 
@@ -158,7 +199,7 @@ class IPipelineQueueService(ABC):
     async def mark_item_active(self, work_item_id: str) -> None:
         """Mark a queued item as active (holding the lock).
 
-        Changes item status from 'waiting' to 'active', indicating it now
+        Changes item status from WAITING to ACTIVE, indicating it now
         holds the pipeline lock. Does not remove from queue - the item
         remains tracked until lock is released.
 
@@ -166,9 +207,9 @@ class IPipelineQueueService(ABC):
             work_item_id: Work item that acquired the lock
 
         Raises:
-            ValidationError: Invalid work_item_id
-            NotFoundError: Item not in queue
-            InvalidStateError: Item already marked active
+            QueueValidationError: Invalid work_item_id
+            QueueItemNotFoundError: Item not in queue
+            InvalidQueueStateError: Item already marked active
         """
         pass
 
@@ -190,7 +231,7 @@ class IPipelineQueueService(ABC):
             bool: True if item was in queue and removed, False if not in queue
 
         Raises:
-            ValidationError: Invalid work_item_id
+            QueueValidationError: Invalid work_item_id
         """
         pass
 
@@ -221,11 +262,11 @@ class IPipelineQueueService(ABC):
             PipelineQueueEntry with lowest position_in_column (highest priority),
             or None if no waiting items in queue.
 
-            The returned entry has status='waiting' (not active).
+            The returned entry has status=QueueStatus.WAITING (not ACTIVE).
 
         Raises:
-            ValidationError: Invalid parameters
-            ResourceNotFoundError: Project or board doesn't exist
+            QueueValidationError: Invalid parameters
+            QueueServiceError: Board service communication failure
         """
         pass
 
@@ -235,7 +276,7 @@ class IPipelineQueueService(ABC):
     ) -> List[PipelineQueueEntry]:
         """Get all queue entries for a pipeline.
 
-        Returns all queue entries (both waiting and active) for the specified
+        Returns all queue entries (both WAITING and ACTIVE) for the specified
         pipeline, sorted by position_in_column in ascending order (lowest = highest priority).
 
         Useful for:
@@ -252,8 +293,7 @@ class IPipelineQueueService(ABC):
             or empty list if no entries in queue.
 
         Raises:
-            ValidationError: Invalid parameters
-            ResourceNotFoundError: Project or board doesn't exist
+            QueueValidationError: Invalid parameters
         """
         pass
 
@@ -284,8 +324,7 @@ class IPipelineQueueService(ABC):
             column: Board column name to sync with
 
         Raises:
-            ValidationError: Invalid parameters
-            ResourceNotFoundError: Project, board, or column doesn't exist
-            ExternalServiceError: Board service communication failure
+            QueueValidationError: Invalid parameters
+            QueueServiceError: Board service communication failure
         """
         pass

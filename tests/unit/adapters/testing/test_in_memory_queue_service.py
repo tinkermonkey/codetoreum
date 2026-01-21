@@ -14,7 +14,14 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 from codetoreum.adapters.testing.in_memory_queue_service import InMemoryQueueService
-from codetoreum.ports.output.pipeline_queue_service import PipelineQueueEntry
+from codetoreum.ports.output.pipeline_queue_service import (
+    PipelineQueueEntry,
+    QueueStatus,
+    DuplicateQueueEntryError,
+    QueueItemNotFoundError,
+    InvalidQueueStateError,
+    QueueValidationError,
+)
 from codetoreum.ports.output.board_service import (
     IBoardService,
     ProjectBoard,
@@ -54,7 +61,7 @@ class TestEnqueueOperations:
         entries = await queue_service.get_queue_entries("proj-1", "board-1")
         assert len(entries) == 1
         assert entries[0].work_item_id == "item-1"
-        assert entries[0].status == "waiting"
+        assert entries[0].status == QueueStatus.WAITING
         assert entries[0].position_in_column == 0
 
     @pytest.mark.asyncio
@@ -79,7 +86,7 @@ class TestEnqueueOperations:
 
     @pytest.mark.asyncio
     async def test_enqueue_duplicate_item_raises_error(self, queue_service):
-        """Enqueuing same item twice should raise RuntimeError."""
+        """Enqueuing same item twice should raise DuplicateQueueEntryError."""
         now = datetime.now(timezone.utc)
 
         await queue_service.enqueue_item(
@@ -90,7 +97,7 @@ class TestEnqueueOperations:
             timestamp=now,
         )
 
-        with pytest.raises(RuntimeError, match="already exists in queue"):
+        with pytest.raises(DuplicateQueueEntryError, match="already in queue"):
             await queue_service.enqueue_item(
                 project_id="proj-1",
                 board_id="board-1",
@@ -101,10 +108,10 @@ class TestEnqueueOperations:
 
     @pytest.mark.asyncio
     async def test_enqueue_empty_project_id_raises_error(self, queue_service):
-        """Enqueue with empty project_id should raise ValueError."""
+        """Enqueue with empty project_id should raise QueueValidationError."""
         now = datetime.now(timezone.utc)
 
-        with pytest.raises(ValueError, match="project_id cannot be empty"):
+        with pytest.raises(QueueValidationError, match="project_id cannot be empty"):
             await queue_service.enqueue_item(
                 project_id="",
                 board_id="board-1",
@@ -115,10 +122,10 @@ class TestEnqueueOperations:
 
     @pytest.mark.asyncio
     async def test_enqueue_negative_position_raises_error(self, queue_service):
-        """Enqueue with negative position should raise ValueError."""
+        """Enqueue with negative position should raise QueueValidationError."""
         now = datetime.now(timezone.utc)
 
-        with pytest.raises(ValueError, match="position_in_column cannot be negative"):
+        with pytest.raises(QueueValidationError, match="position_in_column cannot be negative"):
             await queue_service.enqueue_item(
                 project_id="proj-1",
                 board_id="board-1",
@@ -223,7 +230,7 @@ class TestStatusManagement:
 
     @pytest.mark.asyncio
     async def test_mark_item_active_changes_status(self, queue_service):
-        """mark_item_active should change status to 'active'."""
+        """mark_item_active should change status to ACTIVE."""
         now = datetime.now(timezone.utc)
 
         await queue_service.enqueue_item(
@@ -233,17 +240,17 @@ class TestStatusManagement:
         await queue_service.mark_item_active("item-1")
 
         entries = await queue_service.get_queue_entries("proj-1", "board-1")
-        assert entries[0].status == "active"
+        assert entries[0].status == QueueStatus.ACTIVE
 
     @pytest.mark.asyncio
     async def test_mark_item_active_not_found_raises_error(self, queue_service):
-        """mark_item_active with non-existent item should raise KeyError."""
-        with pytest.raises(KeyError, match="not found in any queue"):
+        """mark_item_active with non-existent item should raise QueueItemNotFoundError."""
+        with pytest.raises(QueueItemNotFoundError, match="not found in any queue"):
             await queue_service.mark_item_active("nonexistent-item")
 
     @pytest.mark.asyncio
     async def test_mark_item_active_twice_raises_error(self, queue_service):
-        """mark_item_active twice should raise RuntimeError."""
+        """mark_item_active twice should raise InvalidQueueStateError."""
         now = datetime.now(timezone.utc)
 
         await queue_service.enqueue_item(
@@ -252,7 +259,7 @@ class TestStatusManagement:
 
         await queue_service.mark_item_active("item-1")
 
-        with pytest.raises(RuntimeError, match="already marked active"):
+        with pytest.raises(InvalidQueueStateError, match="already marked active"):
             await queue_service.mark_item_active("item-1")
 
 
@@ -282,8 +289,8 @@ class TestRemovalOperations:
 
     @pytest.mark.asyncio
     async def test_remove_from_queue_empty_id_raises_error(self, queue_service):
-        """Removing with empty item_id should raise ValueError."""
-        with pytest.raises(ValueError, match="work_item_id cannot be empty"):
+        """Removing with empty item_id should raise QueueValidationError."""
+        with pytest.raises(QueueValidationError, match="work_item_id cannot be empty"):
             await queue_service.remove_from_queue("")
 
 

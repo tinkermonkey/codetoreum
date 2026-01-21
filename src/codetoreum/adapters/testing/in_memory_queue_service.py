@@ -25,6 +25,11 @@ from typing import Callable, Dict, List, Optional, Tuple
 from codetoreum.ports.output.pipeline_queue_service import (
     IPipelineQueueService,
     PipelineQueueEntry,
+    QueueStatus,
+    DuplicateQueueEntryError,
+    QueueItemNotFoundError,
+    InvalidQueueStateError,
+    QueueValidationError,
 )
 from codetoreum.ports.output.board_service import IBoardService
 
@@ -88,10 +93,10 @@ class InMemoryQueueService(IPipelineQueueService):
             bool: True if item is in any queue, False otherwise
 
         Raises:
-            ValueError: Invalid work_item_id
+            QueueValidationError: Invalid work_item_id
         """
         if not work_item_id:
-            raise ValueError("work_item_id cannot be empty")
+            raise QueueValidationError("work_item_id cannot be empty")
 
         with self._lock:
             for queue in self._queues.values():
@@ -109,8 +114,8 @@ class InMemoryQueueService(IPipelineQueueService):
     ) -> None:
         """Add a work item to the queue for a pipeline.
 
-        Creates a new queue entry with status='waiting'. If item is already
-        in queue, raises DuplicateError.
+        Creates a new queue entry with status=QueueStatus.WAITING. If item is already
+        in queue, raises DuplicateQueueEntryError.
 
         Args:
             project_id: Project identifier for the pipeline
@@ -120,17 +125,30 @@ class InMemoryQueueService(IPipelineQueueService):
             timestamp: Time when item was queued
 
         Raises:
-            ValueError: Invalid parameters
-            RuntimeError: Item already exists in queue (DuplicateError)
+            QueueValidationError: Invalid parameters
+            DuplicateQueueEntryError: Item already exists in queue
         """
         if not project_id:
-            raise ValueError("project_id cannot be empty")
+            raise QueueValidationError("project_id cannot be empty")
         if not board_id:
-            raise ValueError("board_id cannot be empty")
+            raise QueueValidationError("board_id cannot be empty")
         if not work_item_id:
-            raise ValueError("work_item_id cannot be empty")
+            raise QueueValidationError("work_item_id cannot be empty")
         if position_in_column < 0:
-            raise ValueError("position_in_column cannot be negative")
+            raise QueueValidationError("position_in_column cannot be negative")
+
+        # Warn about suspiciously high positions
+        if position_in_column > 1000:
+            logger.warning(
+                f"Unusually high position_in_column={position_in_column} for {work_item_id}. "
+                f"This may indicate a bug in board position calculation.",
+                extra={
+                    "work_item_id": work_item_id,
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "position": position_in_column,
+                }
+            )
 
         # Normalize timestamp to datetime if needed
         if isinstance(timestamp, str):
@@ -147,8 +165,8 @@ class InMemoryQueueService(IPipelineQueueService):
 
             # Check if item already in queue
             if any(entry.work_item_id == work_item_id for entry in queue):
-                raise RuntimeError(
-                    f"Item {work_item_id} already exists in queue for {queue_key}"
+                raise DuplicateQueueEntryError(
+                    f"Work item {work_item_id} already in queue for {queue_key}"
                 )
 
             # Create new queue entry (frozen dataclass)
@@ -157,7 +175,7 @@ class InMemoryQueueService(IPipelineQueueService):
                 board_id=board_id,
                 work_item_id=work_item_id,
                 position_in_column=position_in_column,
-                status="waiting",
+                status=QueueStatus.WAITING,
                 queued_at=timestamp,
                 last_position_check=timestamp,
             )
@@ -185,28 +203,28 @@ class InMemoryQueueService(IPipelineQueueService):
     async def mark_item_active(self, work_item_id: str) -> None:
         """Mark a queued item as active (holding the lock).
 
-        Changes item status from 'waiting' to 'active'. Item remains in queue
+        Changes item status from WAITING to ACTIVE. Item remains in queue
         until lock is released.
 
         Args:
             work_item_id: Work item that acquired the lock
 
         Raises:
-            ValueError: Invalid work_item_id
-            KeyError: Item not in queue (NotFoundError)
-            RuntimeError: Item already marked active (InvalidStateError)
+            QueueValidationError: Invalid work_item_id
+            QueueItemNotFoundError: Item not in queue
+            InvalidQueueStateError: Item already marked active
         """
         if not work_item_id:
-            raise ValueError("work_item_id cannot be empty")
+            raise QueueValidationError("work_item_id cannot be empty")
 
         with self._lock:
             # Find the item across all queues
             for queue_key, queue in self._queues.items():
                 for i, entry in enumerate(queue):
                     if entry.work_item_id == work_item_id:
-                        if entry.status == "active":
-                            raise RuntimeError(
-                                f"Item {work_item_id} is already marked active"
+                        if entry.status == QueueStatus.ACTIVE:
+                            raise InvalidQueueStateError(
+                                f"Work item {work_item_id} is already marked active"
                             )
 
                         # Create new entry with updated status (immutable pattern)
@@ -215,7 +233,7 @@ class InMemoryQueueService(IPipelineQueueService):
                             board_id=entry.board_id,
                             work_item_id=entry.work_item_id,
                             position_in_column=entry.position_in_column,
-                            status="active",
+                            status=QueueStatus.ACTIVE,
                             queued_at=entry.queued_at,
                             last_position_check=entry.last_position_check,
                         )
@@ -236,7 +254,7 @@ class InMemoryQueueService(IPipelineQueueService):
                         return
 
             # Item not found in any queue
-            raise KeyError(f"Item {work_item_id} not found in any queue")
+            raise QueueItemNotFoundError(f"Work item {work_item_id} not found in any queue")
 
     async def remove_from_queue(self, work_item_id: str) -> bool:
         """Remove a work item from the queue.
@@ -248,10 +266,10 @@ class InMemoryQueueService(IPipelineQueueService):
             bool: True if item was removed, False if not in queue
 
         Raises:
-            ValueError: Invalid work_item_id
+            QueueValidationError: Invalid work_item_id
         """
         if not work_item_id:
-            raise ValueError("work_item_id cannot be empty")
+            raise QueueValidationError("work_item_id cannot be empty")
 
         with self._lock:
             for queue_key, queue in self._queues.items():
@@ -290,12 +308,12 @@ class InMemoryQueueService(IPipelineQueueService):
             or None if no waiting items in queue.
 
         Raises:
-            ValueError: Invalid parameters
+            QueueValidationError: Invalid parameters
         """
         if not project_id:
-            raise ValueError("project_id cannot be empty")
+            raise QueueValidationError("project_id cannot be empty")
         if not board_id:
-            raise ValueError("board_id cannot be empty")
+            raise QueueValidationError("board_id cannot be empty")
 
         with self._lock:
             queue_key = f"{project_id}:{board_id}"
@@ -306,7 +324,7 @@ class InMemoryQueueService(IPipelineQueueService):
 
             # Find first waiting item (queue is sorted by position)
             for entry in queue:
-                if entry.status == "waiting":
+                if entry.status == QueueStatus.WAITING:
                     return entry
 
             return None
@@ -316,7 +334,7 @@ class InMemoryQueueService(IPipelineQueueService):
     ) -> List[PipelineQueueEntry]:
         """Get all queue entries for a pipeline.
 
-        Returns all queue entries (both waiting and active) for the specified
+        Returns all queue entries (both WAITING and ACTIVE) for the specified
         pipeline, sorted by position_in_column in ascending order.
 
         Args:
@@ -328,12 +346,12 @@ class InMemoryQueueService(IPipelineQueueService):
             or empty list if no entries in queue.
 
         Raises:
-            ValueError: Invalid parameters
+            QueueValidationError: Invalid parameters
         """
         if not project_id:
-            raise ValueError("project_id cannot be empty")
+            raise QueueValidationError("project_id cannot be empty")
         if not board_id:
-            raise ValueError("board_id cannot be empty")
+            raise QueueValidationError("board_id cannot be empty")
 
         with self._lock:
             queue_key = f"{project_id}:{board_id}"
@@ -358,14 +376,14 @@ class InMemoryQueueService(IPipelineQueueService):
             column: Board column name to sync with
 
         Raises:
-            ValueError: Invalid parameters
+            QueueValidationError: Invalid parameters
         """
         if not project_id:
-            raise ValueError("project_id cannot be empty")
+            raise QueueValidationError("project_id cannot be empty")
         if not board_id:
-            raise ValueError("board_id cannot be empty")
+            raise QueueValidationError("board_id cannot be empty")
         if not column:
-            raise ValueError("column cannot be empty")
+            raise QueueValidationError("column cannot be empty")
 
         if not self._board_service:
             # If no board service, we can't sync - just return
@@ -417,7 +435,7 @@ class InMemoryQueueService(IPipelineQueueService):
                             board_id=board_id,
                             work_item_id=work_item_id,
                             position_in_column=position,
-                            status="waiting",
+                            status=QueueStatus.WAITING,
                             queued_at=now,
                             last_position_check=now,
                         )
@@ -495,14 +513,14 @@ class InMemoryQueueService(IPipelineQueueService):
                                (index 0 = topmost position, highest priority)
 
         Raises:
-            ValueError: Invalid parameters
+            QueueValidationError: Invalid parameters
         """
         if not project_id:
-            raise ValueError("project_id cannot be empty")
+            raise QueueValidationError("project_id cannot be empty")
         if not board_id:
-            raise ValueError("board_id cannot be empty")
+            raise QueueValidationError("board_id cannot be empty")
         if ordered_work_items is None:
-            raise ValueError("ordered_work_items cannot be None")
+            raise QueueValidationError("ordered_work_items cannot be None")
 
         with self._lock:
             queue_key = f"{project_id}:{board_id}"
