@@ -1,347 +1,369 @@
-"""Unit tests for IRepairCycleService port interface and data classes.
+"""Unit tests for IRepairCycle port interface and RepairCycleContext Protocol.
 
 Tests validate:
-1. Data class immutability (frozen dataclasses)
-2. Data class validation (constraints in __post_init__)
-3. Interface contract (abstract methods exist)
-4. Event emission capability (inherited from IEventEmitter)
-5. Monitoring capability (inherited from IMonitoredService)
+1. RepairCycleContext Protocol interface contract
+2. IRepairCycle Protocol interface contract
+3. Protocol can be implemented by concrete classes
+4. All methods have correct signatures and return types
 """
 
+from datetime import datetime
+from typing import Dict, Tuple
+
 import pytest
-from dataclasses import FrozenInstanceError
-from unittest.mock import MagicMock
 
 from codetoreum.domain.repair_cycle_types import (
+    CycleResult,
+    RepairCycleResult,
     RepairTestFailure,
+    RepairTestResult,
+    RepairTestRunConfig,
     RepairTestType,
-    RepairTestWarning,
 )
-from codetoreum import ports as output_ports
+from codetoreum.ports.output import IRepairCycle, RepairCycleContext
 
 
 # =============================================================================
-# RepairCycleStatus Tests
+# RepairCycleContext Protocol Tests
 # =============================================================================
 
 
-class TestRepairCycleStatusDC:
-    """Tests for RepairCycleStatus data class."""
+class MockRepairCycleContext:
+    """Concrete implementation satisfying RepairCycleContext Protocol."""
 
-    def test_create_valid_status(self) -> None:
-        """Test creating a valid RepairCycleStatus."""
-        status = output_ports.output.RepairCycleStatus(
-            cycle_id="cycle-123",
-            project_id="proj-456",
-            stage_name="fix_failures",
-            state="IN_PROGRESS",
-            test_type_index=0,
-            test_type_count=3,
-            current_iteration=2,
-            max_iterations=5,
-            agent_call_count=10,
-            max_agent_calls=100,
-            started_at="2025-10-26T10:00:00Z",
-            completed_at=None,
-            checkpoint_iteration=1,
-        )
-
-        assert status.cycle_id == "cycle-123"
-        assert status.project_id == "proj-456"
-        assert status.state == "IN_PROGRESS"
-
-    def test_repair_cycle_status_is_immutable(self) -> None:
-        """Test that RepairCycleStatus is frozen (immutable)."""
-        status = output_ports.output.RepairCycleStatus(
-            cycle_id="cycle-123",
-            project_id="proj-456",
-            stage_name="fix_failures",
-            state="IN_PROGRESS",
-            test_type_index=0,
-            test_type_count=3,
-            current_iteration=2,
-            max_iterations=5,
-            agent_call_count=10,
-            max_agent_calls=100,
-            started_at="2025-10-26T10:00:00Z",
-        )
-
-        with pytest.raises(FrozenInstanceError):
-            status.state = "COMPLETED"  # type: ignore
-
-    def test_repair_cycle_status_missing_cycle_id(self) -> None:
-        """Test that missing cycle_id raises ValueError."""
-        with pytest.raises(ValueError, match="cycle_id is required"):
-            output_ports.output.RepairCycleStatus(
-                cycle_id="",
-                project_id="proj-456",
-                stage_name="fix_failures",
-                state="IN_PROGRESS",
-                test_type_index=0,
-                test_type_count=3,
-                current_iteration=2,
-                max_iterations=5,
-                agent_call_count=10,
-                max_agent_calls=100,
-                started_at="2025-10-26T10:00:00Z",
-            )
-
-    def test_repair_cycle_status_negative_test_type_index(self) -> None:
-        """Test that negative test_type_index raises ValueError."""
-        with pytest.raises(ValueError, match="test_type_index must be >= 0"):
-            output_ports.output.RepairCycleStatus(
-                cycle_id="cycle-123",
-                project_id="proj-456",
-                stage_name="fix_failures",
-                state="IN_PROGRESS",
-                test_type_index=-1,
-                test_type_count=3,
-                current_iteration=2,
-                max_iterations=5,
-                agent_call_count=10,
-                max_agent_calls=100,
-                started_at="2025-10-26T10:00:00Z",
-            )
+    def __init__(
+        self,
+        stage_name: str = "fix_failures",
+        pipeline_run_id: str = "pipeline-123",
+        test_configs: Tuple[RepairTestRunConfig, ...] = (),
+        agent_name: str = "repair-agent",
+        max_total_agent_calls: int = 100,
+        checkpoint_interval: int = 5,
+    ):
+        self.stage_name = stage_name
+        self.pipeline_run_id = pipeline_run_id
+        self.test_configs = test_configs
+        self.agent_name = agent_name
+        self.max_total_agent_calls = max_total_agent_calls
+        self.checkpoint_interval = checkpoint_interval
 
 
-# =============================================================================
-# TestExecutionRequest Tests
-# =============================================================================
+class TestRepairCycleContextProtocol:
+    """Tests for RepairCycleContext Protocol."""
 
+    def test_context_has_required_attributes(self) -> None:
+        """Test that RepairCycleContext Protocol has all required attributes."""
+        ctx = MockRepairCycleContext()
 
-class TestExecutionRequestDCTests:
-    """Tests for TestExecutionRequest data class."""
+        # All attributes should be accessible
+        assert ctx.stage_name == "fix_failures"
+        assert ctx.pipeline_run_id == "pipeline-123"
+        assert ctx.test_configs == ()
+        assert ctx.agent_name == "repair-agent"
+        assert ctx.max_total_agent_calls == 100
+        assert ctx.checkpoint_interval == 5
 
-    def test_create_valid_test_execution_request(self) -> None:
-        """Test creating a valid TestExecutionRequest."""
-        request = output_ports.output.TestExecutionRequest(
-            cycle_id="cycle-123",
+    def test_context_with_test_configs(self) -> None:
+        """Test RepairCycleContext with test configurations."""
+        unit_config = RepairTestRunConfig(
             test_type=RepairTestType.UNIT,
-            iteration=1,
             timeout=900,
-            container_id="container-456",
+            max_iterations=10,
+        )
+        configs = (unit_config,)
+
+        ctx = MockRepairCycleContext(
+            stage_name="test_phase",
+            test_configs=configs,
         )
 
-        assert request.cycle_id == "cycle-123"
-        assert request.test_type == RepairTestType.UNIT
-        assert request.iteration == 1
+        assert ctx.stage_name == "test_phase"
+        assert len(ctx.test_configs) == 1
+        assert ctx.test_configs[0].test_type == RepairTestType.UNIT
 
-    def test_test_execution_request_is_immutable(self) -> None:
-        """Test that TestExecutionRequest is frozen."""
-        request = output_ports.output.TestExecutionRequest(
-            cycle_id="cycle-123",
+
+# =============================================================================
+# IRepairCycle Protocol Tests
+# =============================================================================
+
+
+class MockRepairCycle:
+    """Concrete implementation satisfying IRepairCycle Protocol."""
+
+    async def execute(self, context: RepairCycleContext) -> RepairCycleResult:
+        """Execute complete repair cycle."""
+        # Create a simple CycleResult for UNIT test type
+        from codetoreum.domain.repair_cycle_types import CycleResult
+
+        final_result = RepairTestResult(
             test_type=RepairTestType.UNIT,
             iteration=1,
+            passed=5,
+            failed=0,
+            warnings=0,
+            failures=(),
+            warning_list=(),
+            raw_output="All tests passed",
+            timestamp=datetime.utcnow().isoformat(),
+        )
+
+        cycle_result = CycleResult(
+            test_type=RepairTestType.UNIT,
+            passed=True,
+            iterations=1,
+            final_result=final_result,
+            error=None,
+            files_fixed=0,
+            warnings_reviewed=0,
+            duration_seconds=5.0,
+        )
+
+        return RepairCycleResult(
+            stage="test_phase",
+            test_results=(cycle_result,),
+            overall_success=True,
+            total_agent_calls=0,
+            duration_seconds=5.0,
+            timestamp=datetime.utcnow().isoformat(),
+        )
+
+    async def run_tests(
+        self,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ) -> RepairTestResult:
+        """Execute tests for a specific test type."""
+        return RepairTestResult(
+            test_type=config.test_type,
+            iteration=1,
+            passed=5,
+            failed=0,
+            warnings=0,
+            failures=(),
+            warning_list=(),
+            raw_output="Tests completed successfully",
+            timestamp=datetime.utcnow().isoformat(),
+        )
+
+    async def fix_failures_by_file(
+        self,
+        grouped_failures: Dict[str, Tuple[RepairTestFailure, ...]],
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ) -> int:
+        """Fix test failures grouped by file."""
+        return len(grouped_failures)
+
+    async def handle_warnings(
+        self,
+        test_result: RepairTestResult,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ) -> int:
+        """Review and fix warnings from test execution."""
+        return 0
+
+    async def checkpoint(
+        self,
+        test_type: RepairTestType,
+        iteration: int,
+        context: RepairCycleContext,
+    ) -> None:
+        """Save repair cycle state for resume after failures."""
+        pass
+
+
+class TestIRepairCycleProtocol:
+    """Tests for IRepairCycle Protocol."""
+
+    def test_protocol_has_execute_method(self) -> None:
+        """Test that IRepairCycle Protocol has execute method."""
+        assert hasattr(IRepairCycle, "execute")
+
+    def test_protocol_has_run_tests_method(self) -> None:
+        """Test that IRepairCycle Protocol has run_tests method."""
+        assert hasattr(IRepairCycle, "run_tests")
+
+    def test_protocol_has_fix_failures_by_file_method(self) -> None:
+        """Test that IRepairCycle Protocol has fix_failures_by_file method."""
+        assert hasattr(IRepairCycle, "fix_failures_by_file")
+
+    def test_protocol_has_handle_warnings_method(self) -> None:
+        """Test that IRepairCycle Protocol has handle_warnings method."""
+        assert hasattr(IRepairCycle, "handle_warnings")
+
+    def test_protocol_has_checkpoint_method(self) -> None:
+        """Test that IRepairCycle Protocol has checkpoint method."""
+        assert hasattr(IRepairCycle, "checkpoint")
+
+    def test_protocol_has_exactly_five_methods(self) -> None:
+        """Test that IRepairCycle Protocol has exactly 5 methods."""
+        methods = [
+            m
+            for m in dir(IRepairCycle)
+            if not m.startswith("_") and callable(getattr(IRepairCycle, m))
+        ]
+        assert len(methods) == 5
+        assert set(methods) == {"execute", "run_tests", "fix_failures_by_file", "handle_warnings", "checkpoint"}
+
+    @pytest.mark.asyncio
+    async def test_concrete_implementation_satisfies_protocol(self) -> None:
+        """Test that concrete implementation satisfies IRepairCycle Protocol."""
+        impl: IRepairCycle = MockRepairCycle()
+
+        ctx = MockRepairCycleContext()
+
+        # All methods should be callable and return correct types
+        result = await impl.execute(ctx)
+        assert isinstance(result, RepairCycleResult)
+        assert result.overall_success is True
+
+    @pytest.mark.asyncio
+    async def test_execute_returns_repair_cycle_result(self) -> None:
+        """Test that execute returns RepairCycleResult."""
+        impl = MockRepairCycle()
+        ctx = MockRepairCycleContext()
+
+        result = await impl.execute(ctx)
+
+        assert isinstance(result, RepairCycleResult)
+        assert hasattr(result, "stage")
+        assert hasattr(result, "test_results")
+        assert hasattr(result, "total_agent_calls")
+        assert hasattr(result, "overall_success")
+        assert hasattr(result, "duration_seconds")
+
+    @pytest.mark.asyncio
+    async def test_run_tests_returns_repair_test_result(self) -> None:
+        """Test that run_tests returns RepairTestResult."""
+        impl = MockRepairCycle()
+        ctx = MockRepairCycleContext()
+        config = RepairTestRunConfig(
+            test_type=RepairTestType.UNIT,
             timeout=900,
-            container_id="container-456",
         )
 
-        with pytest.raises(FrozenInstanceError):
-            request.iteration = 2  # type: ignore
+        result = await impl.run_tests(config, ctx)
 
-    def test_test_execution_request_missing_cycle_id(self) -> None:
-        """Test that missing cycle_id raises ValueError."""
-        with pytest.raises(ValueError, match="cycle_id is required"):
-            output_ports.output.TestExecutionRequest(
-                cycle_id="",
-                test_type=RepairTestType.UNIT,
-                iteration=1,
-                timeout=900,
-                container_id="container-456",
-            )
+        assert isinstance(result, RepairTestResult)
+        assert result.test_type == RepairTestType.UNIT
 
-    def test_test_execution_request_iteration_zero(self) -> None:
-        """Test that iteration < 1 raises ValueError."""
-        with pytest.raises(ValueError, match="iteration must be >= 1"):
-            output_ports.output.TestExecutionRequest(
-                cycle_id="cycle-123",
-                test_type=RepairTestType.UNIT,
-                iteration=0,
-                timeout=900,
-                container_id="container-456",
-            )
-
-    def test_test_execution_request_negative_timeout(self) -> None:
-        """Test that timeout <= 0 raises ValueError."""
-        with pytest.raises(ValueError, match="timeout must be > 0"):
-            output_ports.output.TestExecutionRequest(
-                cycle_id="cycle-123",
-                test_type=RepairTestType.UNIT,
-                iteration=1,
-                timeout=0,
-                container_id="container-456",
-            )
-
-
-# =============================================================================
-# FixRequest Tests
-# =============================================================================
-
-
-class TestFixRequestDCTests:
-    """Tests for FixRequest data class."""
-
-    def test_create_valid_fix_request(self) -> None:
-        """Test creating a valid FixRequest."""
-        failures = (
-            RepairTestFailure(
-                file="test_auth.py", test="test_login", message="Expected True but got False"
+    @pytest.mark.asyncio
+    async def test_fix_failures_by_file_returns_int(self) -> None:
+        """Test that fix_failures_by_file returns int."""
+        impl = MockRepairCycle()
+        ctx = MockRepairCycleContext()
+        config = RepairTestRunConfig(
+            test_type=RepairTestType.UNIT,
+            timeout=900,
+        )
+        failures = {
+            "test_auth.py": (
+                RepairTestFailure(
+                    file="test_auth.py",
+                    test="test_login",
+                    message="Expected True",
+                ),
             ),
-        )
-        request = output_ports.output.FixRequest(
-            cycle_id="cycle-123",
-            test_file="test_auth.py",
+        }
+
+        result = await impl.fix_failures_by_file(failures, config, ctx)
+
+        assert isinstance(result, int)
+        assert result == 1
+
+    @pytest.mark.asyncio
+    async def test_handle_warnings_returns_int(self) -> None:
+        """Test that handle_warnings returns int."""
+        impl = MockRepairCycle()
+        ctx = MockRepairCycleContext()
+        config = RepairTestRunConfig(
             test_type=RepairTestType.UNIT,
-            failures=failures,
-            iteration=1,
-            container_id="container-456",
+            timeout=900,
         )
-
-        assert request.cycle_id == "cycle-123"
-        assert request.test_file == "test_auth.py"
-
-    def test_fix_request_is_immutable(self) -> None:
-        """Test that FixRequest is frozen."""
-        failures = (
-            RepairTestFailure(
-                file="test_auth.py", test="test_login", message="Expected True but got False"
-            ),
-        )
-        request = output_ports.output.FixRequest(
-            cycle_id="cycle-123",
-            test_file="test_auth.py",
+        test_result = RepairTestResult(
             test_type=RepairTestType.UNIT,
-            failures=failures,
             iteration=1,
-            container_id="container-456",
+            passed=5,
+            failed=0,
+            warnings=1,
+            failures=(),
+            warning_list=(),
+            raw_output="Test output with warnings",
+            timestamp=datetime.utcnow().isoformat(),
         )
 
-        with pytest.raises(FrozenInstanceError):
-            request.iteration = 2  # type: ignore
+        result = await impl.handle_warnings(test_result, config, ctx)
 
-    def test_fix_request_empty_failures(self) -> None:
-        """Test that empty failures tuple raises ValueError."""
-        with pytest.raises(ValueError, match="failures must not be empty"):
-            output_ports.output.FixRequest(
-                cycle_id="cycle-123",
-                test_file="test_auth.py",
-                test_type=RepairTestType.UNIT,
-                failures=(),
-                iteration=1,
-                container_id="container-456",
-            )
+        assert isinstance(result, int)
 
-    def test_fix_request_multiple_failures(self) -> None:
-        """Test FixRequest with multiple failures."""
-        failures = (
-            RepairTestFailure(
-                file="test_auth.py", test="test_login", message="Expected True but got False"
-            ),
-            RepairTestFailure(
-                file="test_auth.py",
-                test="test_logout",
-                message="AssertionError: User not logged out",
-            ),
-        )
-        request = output_ports.output.FixRequest(
-            cycle_id="cycle-123",
-            test_file="test_auth.py",
-            test_type=RepairTestType.UNIT,
-            failures=failures,
-            iteration=1,
-            container_id="container-456",
-        )
+    @pytest.mark.asyncio
+    async def test_checkpoint_returns_none(self) -> None:
+        """Test that checkpoint returns None."""
+        impl = MockRepairCycle()
+        ctx = MockRepairCycleContext()
 
-        assert len(request.failures) == 2
+        result = await impl.checkpoint(RepairTestType.UNIT, 5, ctx)
+
+        assert result is None
 
 
 # =============================================================================
-# WarningReviewRequest Tests
+# Integration Tests
 # =============================================================================
 
 
-class TestWarningReviewRequestDCTests:
-    """Tests for WarningReviewRequest data class."""
+class TestProtocolIntegration:
+    """Integration tests for Protocol implementations."""
 
-    def test_create_valid_warning_review_request(self) -> None:
-        """Test creating a valid WarningReviewRequest."""
-        warnings = (
-            RepairTestWarning(file="auth.py", message="DeprecationWarning: use_new_api() is deprecated"),
+    @pytest.mark.asyncio
+    async def test_full_repair_cycle_workflow(self) -> None:
+        """Test full repair cycle workflow with Protocol implementation."""
+        cycle_impl: IRepairCycle = MockRepairCycle()
+        context = MockRepairCycleContext(
+            stage_name="test_phase",
+            pipeline_run_id="pipeline-abc",
+            agent_name="test-agent",
+            max_total_agent_calls=50,
+            checkpoint_interval=3,
         )
-        request = output_ports.output.WarningReviewRequest(
-            cycle_id="cycle-123",
-            source_file="auth.py",
+
+        # Execute full cycle
+        result = await cycle_impl.execute(context)
+        assert result.overall_success is True
+        assert result.total_agent_calls == 0
+
+        # Checkpoint at iteration 3
+        await cycle_impl.checkpoint(RepairTestType.UNIT, 3, context)
+
+        # Run tests
+        unit_config = RepairTestRunConfig(
             test_type=RepairTestType.UNIT,
-            warnings=warnings,
-            iteration=1,
-            container_id="container-456",
+            timeout=900,
+        )
+        test_result = await cycle_impl.run_tests(unit_config, context)
+        assert isinstance(test_result, RepairTestResult)
+
+    @pytest.mark.asyncio
+    async def test_context_attributes_are_accessible(self) -> None:
+        """Test that context attributes are accessible from implementation."""
+        configs = (
+            RepairTestRunConfig(test_type=RepairTestType.UNIT, timeout=900),
+            RepairTestRunConfig(test_type=RepairTestType.INTEGRATION, timeout=1800),
+        )
+        context = MockRepairCycleContext(
+            stage_name="validation",
+            pipeline_run_id="pipeline-xyz",
+            test_configs=configs,
+            agent_name="validator",
+            max_total_agent_calls=200,
+            checkpoint_interval=10,
         )
 
-        assert request.cycle_id == "cycle-123"
-        assert request.source_file == "auth.py"
-
-    def test_warning_review_request_is_immutable(self) -> None:
-        """Test that WarningReviewRequest is frozen."""
-        warnings = (
-            RepairTestWarning(file="auth.py", message="DeprecationWarning: use_new_api() is deprecated"),
-        )
-        request = output_ports.output.WarningReviewRequest(
-            cycle_id="cycle-123",
-            source_file="auth.py",
-            test_type=RepairTestType.UNIT,
-            warnings=warnings,
-            iteration=1,
-            container_id="container-456",
-        )
-
-        with pytest.raises(FrozenInstanceError):
-            request.iteration = 2  # type: ignore
-
-    def test_warning_review_request_empty_warnings(self) -> None:
-        """Test that empty warnings tuple raises ValueError."""
-        with pytest.raises(ValueError, match="warnings must not be empty"):
-            output_ports.output.WarningReviewRequest(
-                cycle_id="cycle-123",
-                source_file="auth.py",
-                test_type=RepairTestType.UNIT,
-                warnings=(),
-                iteration=1,
-                container_id="container-456",
-            )
-
-
-# =============================================================================
-# IRepairCycleService Interface Tests
-# =============================================================================
-
-
-class TestIRepairCycleServiceInterface:
-    """Tests for IRepairCycleService interface."""
-
-    def test_interface_has_query_methods(self) -> None:
-        """Test that interface defines query methods."""
-        service_class = output_ports.output.IRepairCycleService
-        assert hasattr(service_class, "get_repair_cycle_status")
-        assert hasattr(service_class, "get_test_results")
-        assert hasattr(service_class, "get_cycle_result")
-        assert hasattr(service_class, "get_checkpoint")
-
-    def test_interface_has_command_methods(self) -> None:
-        """Test that interface defines command methods."""
-        service_class = output_ports.output.IRepairCycleService
-        assert hasattr(service_class, "start_repair_cycle")
-        assert hasattr(service_class, "execute_test")
-        assert hasattr(service_class, "coordinate_fix")
-        assert hasattr(service_class, "coordinate_warning_review")
-        assert hasattr(service_class, "record_test_cycle_result")
-        assert hasattr(service_class, "abort_cycle")
-        assert hasattr(service_class, "complete_cycle")
-        assert hasattr(service_class, "save_checkpoint")
-
-    def test_interface_extends_event_emitter_and_monitored_service(self) -> None:
-        """Test that IRepairCycleService extends correct interfaces."""
-        from codetoreum.ports.output import IEventEmitter, IMonitoredService
-
-        # IRepairCycleService should be a subclass of both
-        assert issubclass(output_ports.output.IRepairCycleService, IEventEmitter)
-        assert issubclass(output_ports.output.IRepairCycleService, IMonitoredService)
+        # All attributes should be accessible
+        assert context.stage_name == "validation"
+        assert context.pipeline_run_id == "pipeline-xyz"
+        assert len(context.test_configs) == 2
+        assert context.agent_name == "validator"
+        assert context.max_total_agent_calls == 200
+        assert context.checkpoint_interval == 10
