@@ -29,29 +29,8 @@ This test validates repair cycle-specific error handling for
 infrastructure failures per issue #88 specification.
 """
 
-import asyncio
 import pytest
 from typing import Dict, List, Any, Optional
-
-from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
-    InMemoryLockService,
-)
-from codetoreum.adapters.testing.in_memory_workflow_config_service import (
-    InMemoryWorkflowConfigService,
-)
-from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
-from codetoreum.application.event_handlers.board_event_handler import (
-    BoardColumnEventHandler,
-)
-from codetoreum.domain.board_workflow_template import (
-    BoardWorkflowTemplate,
-    ColumnTemplate,
-    ColumnType,
-)
-from codetoreum.infrastructure.event_bus import EventBus
-from tests.simulation.conftest import (
-    MockAgentExecutor as BaseAgentExecutor,
-)
 
 
 class InfrastructureFailureSimulator:
@@ -148,162 +127,43 @@ class InfrastructureFailureSimulator:
         self._logged_errors.clear()
 
 
-class TestScenarioE_InfrastructureFailures:
+class TestInfrastructureFailureSimulator:
     """
-    Scenario E: Infrastructure Failure Handling in Repair Cycles
+    Unit tests for InfrastructureFailureSimulator helper class.
 
-    Tests repair cycle behavior when JSON parse errors and timeouts occur:
-    - JSON parse errors in agent responses
-    - Retry logic with enhanced prompts
-    - Graceful failure after 3 retries
+    This simulator models the infrastructure failure handling logic used in
+    repair cycles per issue #88 specification:
+    - JSON parse errors in agent responses with retry logic
     - Timeout detection and error logging
-    - Recovery on successful retry
-    - Event emission with error context
+    - Recovery on retry attempts
+    - Error tracking with exc_info flag per CLAUDE.md guidelines
+
+    Note: These are unit tests for the simulator class itself, which validates
+    the failure detection and retry logic patterns that repair cycles use.
     """
 
     @pytest.fixture
-    async def setup(self):
-        """Set up test environment with failure simulation."""
-        # Create services
-        board_service = MockBoardAdapter()
-        lock_service = InMemoryLockService()
-        config_service = InMemoryWorkflowConfigService()
-        event_bus = EventBus()
-        agent_executor = BaseAgentExecutor()
-        failure_simulator = InfrastructureFailureSimulator()
+    def failure_simulator(self):
+        """Create failure simulator for testing."""
+        return InfrastructureFailureSimulator()
 
-        # Set current project
-        board_service.current_project = "proj-1"
-        board_service.current_board = "board-1"
+    async def test_scenario_infrastructure_json_parse_failure(self, failure_simulator):
+        """Test JSON parse error detection, logging, and graceful failure after retries.
 
-        # Create event handler
-        event_handler = BoardColumnEventHandler(
-            board_service=board_service,
-            lock_service=lock_service,
-            workflow_config=config_service,
-            agent_executor=agent_executor,
-            event_bus=event_bus,
-        )
+        Requirement (issue #88): Agent returns invalid JSON, system retries and fails gracefully.
 
-        # Register event handler
-        event_bus.register_handler(event_handler)
-
-        # Register with board service
-        def handle_column_change_event(event):
-            """Sync wrapper for async event handler."""
-            try:
-                loop = asyncio.get_running_loop()
-                loop.create_task(event_handler.handle_column_change(event))
-            except RuntimeError:
-                pass
-
-        board_service.on("workitem.column_changed", handle_column_change_event)
-
-        # Create board
-        board_service.create_board(
-            project_id="proj-1",
-            board_id="board-1",
-            board_name="Infrastructure Failure Test Board",
-            column_names=["Backlog", "Development", "Code Review", "Testing", "Staged", "Done"],
-        )
-
-        # Create workflow template
-        template = BoardWorkflowTemplate(
-            id="workflow-1",
-            name="SDLC with Repair",
-            pipeline_trigger_columns=["Development"],
-            exit_columns=["Staged"],
-            columns=[
-                ColumnTemplate(
-                    name="Backlog",
-                    type=ColumnType.MANUAL,
-                    agent_id=None,
-                    is_pipeline_trigger=False,
-                    is_exit_column=False,
-                    position=0,
-                    auto_progress_on_completion=False,
-                ),
-                ColumnTemplate(
-                    name="Development",
-                    type=ColumnType.AUTOMATED,
-                    agent_id="senior_software_engineer",
-                    is_pipeline_trigger=True,
-                    is_exit_column=False,
-                    position=1,
-                    auto_progress_on_completion=True,
-                ),
-                ColumnTemplate(
-                    name="Code Review",
-                    type=ColumnType.AUTOMATED,
-                    agent_id="code_reviewer",
-                    is_pipeline_trigger=False,
-                    is_exit_column=False,
-                    position=2,
-                    auto_progress_on_completion=True,
-                ),
-                ColumnTemplate(
-                    name="Testing",
-                    type=ColumnType.AUTOMATED,
-                    agent_id="test_runner",
-                    is_pipeline_trigger=False,
-                    is_exit_column=False,
-                    position=3,
-                    auto_progress_on_completion=True,
-                ),
-                ColumnTemplate(
-                    name="Staged",
-                    type=ColumnType.MANUAL,
-                    agent_id=None,
-                    is_pipeline_trigger=False,
-                    is_exit_column=True,
-                    position=4,
-                    auto_progress_on_completion=False,
-                ),
-                ColumnTemplate(
-                    name="Done",
-                    type=ColumnType.MANUAL,
-                    agent_id=None,
-                    is_pipeline_trigger=False,
-                    is_exit_column=False,
-                    position=5,
-                    auto_progress_on_completion=False,
-                ),
-            ],
-        )
-
-        config_service.register_template("board-1", template)
-
-        return {
-            "board_service": board_service,
-            "lock_service": lock_service,
-            "config_service": config_service,
-            "event_bus": event_bus,
-            "agent_executor": agent_executor,
-            "failure_simulator": failure_simulator,
-            "event_handler": event_handler,
-        }
-
-    @pytest.mark.asyncio
-    async def test_scenario_infrastructure_json_parse_failure(self, setup):
-        """Test repair cycle handles JSON parse errors with retry and graceful failure.
-
-        Requirement: Agent returns invalid JSON, system retries and fails gracefully.
-
-        Verifies:
-        - Invalid JSON responses are detected
+        This test verifies the failure detection logic used by repair cycles:
+        - Invalid JSON responses are detected on each attempt
         - Errors logged with exc_info=True per CLAUDE.md guidelines
-        - Retry attempted with enhanced prompt after JSON parse failure
+        - Retry attempted after JSON parse failure
         - Graceful failure after 3 retries exhausted
-        - RepairCycleTestExecutionCompletedEvent emitted with file="__infrastructure__"
 
-        Acceptance Criteria (from issue #88):
-        ✓ Invalid JSON is detected
-        ✓ Error logged with exc_info=True
-        ✓ Retry triggered with enhanced prompt
-        ✓ Graceful failure after 3 retries
-        ✓ Event emitted with proper error context
+        The simulator models the pattern where repair cycles:
+        1. Detect JSON parse error in agent response
+        2. Log error with exc_info=True
+        3. Retry with enhanced prompt (tracked by attempt counter)
+        4. Fail gracefully after 3 attempts without valid response
         """
-        failure_simulator = setup["failure_simulator"]
 
         # Configure JSON parse failure: fail all 3 retries
         failure_simulator.configure_json_parse_failure(
@@ -344,27 +204,25 @@ class TestScenarioE_InfrastructureFailures:
         # Verify graceful failure after retries exhausted
         assert len(logged_errors) == 3, "Should have exhausted 3 retry attempts"
 
-    @pytest.mark.asyncio
-    async def test_scenario_infrastructure_json_parse_recovery(self, setup):
-        """Test repair cycle recovers from JSON parse error on retry.
+    async def test_scenario_infrastructure_json_parse_recovery(self, failure_simulator):
+        """Test recovery from JSON parse error on second retry attempt.
 
-        Requirement: First call returns invalid JSON, second call succeeds.
+        Requirement (issue #88): First call returns invalid JSON, second call succeeds.
 
-        Verifies:
+        This test verifies the retry logic used by repair cycles:
         - First execution returns invalid JSON and fails
         - System logs error with exc_info=True per CLAUDE.md
-        - Retry is attempted with enhanced prompt
+        - Retry is attempted with enhanced prompt (tracked by attempt counter)
         - Second attempt returns valid JSON and succeeds
-        - Repair cycle continues after recovery
+        - Repair cycle continues processing after recovery
 
-        Acceptance Criteria (from issue #88):
-        ✓ First attempt fails with JSON parse error
-        ✓ Error logged with exc_info=True
-        ✓ Enhanced prompt sent on retry
-        ✓ Second attempt returns valid JSON
-        ✓ System recovers and continues
+        The simulator models the pattern where:
+        1. First attempt triggers JSON parse error detection and logging
+        2. Error recorded with exc_info=True
+        3. Retry loop increments attempt counter and rechecks failure condition
+        4. Second attempt succeeds (no JSON parse error thrown)
+        5. System continues processing normally
         """
-        failure_simulator = setup["failure_simulator"]
 
         # Configure JSON parse failure: fail once, recover on second attempt
         failure_simulator.configure_json_parse_failure(
@@ -405,25 +263,24 @@ class TestScenarioE_InfrastructureFailures:
         assert len(logged_errors) == 1, "Should still have only 1 error (from first attempt)"
         assert logged_errors[0]["work_item_id"] == "work-item-101"
 
-    @pytest.mark.asyncio
-    async def test_scenario_infrastructure_timeout(self, setup):
-        """Test repair cycle handles agent execution timeout.
+    async def test_scenario_infrastructure_timeout(self, failure_simulator):
+        """Test timeout detection and error logging in repair cycles.
 
-        Requirement: Agent execution exceeds configured timeout, TimeoutError raised.
+        Requirement (issue #88): Agent execution exceeds configured timeout, TimeoutError raised.
 
-        Verifies:
-        - Timeout detected when operation exceeds time limit
-        - TimeoutError is raised and logged with exc_info=True
-        - System error logging follows CLAUDE.md guidelines
-        - System recovers without hanging
+        This test verifies the timeout handling logic used by repair cycles:
+        - Timeout detected when operation exceeds configured time limit
+        - TimeoutError is raised and caught
+        - Error is logged with exc_info=True per CLAUDE.md guidelines
+        - System recovers without hanging (no infinite wait loops)
 
-        Acceptance Criteria (from issue #88):
-        ✓ TimeoutError is raised
-        ✓ Error is caught and logged with exc_info=True
-        ✓ System recovers without hanging
-        ✓ Clear error message provided
+        The simulator models the pattern where:
+        1. Agent execution is initiated with timeout configuration
+        2. Timeout condition is detected (wall clock time exceeded)
+        3. TimeoutError is raised and caught
+        4. Error logged with exc_info=True and clear message
+        5. Repair cycle fails gracefully with error context
         """
-        failure_simulator = setup["failure_simulator"]
 
         # Configure timeout failure
         failure_simulator.configure_timeout_failure("work-item-300")
@@ -464,5 +321,3 @@ class TestScenarioE_InfrastructureFailures:
 
 
 
-if __name__ == "__main__":
-    pytest.main([__file__, "-v", "-s"])
