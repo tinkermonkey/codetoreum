@@ -13,7 +13,7 @@ The mock adapter:
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 from codetoreum.domain.repair_cycle_types import (
@@ -98,6 +98,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         self.max_total_agent_calls = 100
         self.event_log: List[Dict[str, Any]] = []
         self.test_results: Dict[RepairTestType, List[RepairTestResult]] = {}
+        self.default_total_tests = 10  # Default total test count for generated results
 
     # Configuration methods (FR-11.2, FR-11.3, FR-11.4)
 
@@ -335,12 +336,14 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 timestamp=self.clock.now().isoformat(),
             )
         else:
-            # Default: success
+            # Default: success - passed = total - failed
+            default_failed = 0
+            default_passed = self.default_total_tests - default_failed
             result = RepairTestResult(
                 test_type=config.test_type,
                 iteration=iteration,
-                passed=10,
-                failed=0,
+                passed=default_passed,
+                failed=default_failed,
                 warnings=0,
                 failures=(),
                 warning_list=(),
