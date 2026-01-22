@@ -15,8 +15,6 @@ Comprehensive scenarios cover:
 """
 
 import pytest
-from datetime import timedelta
-
 from dataclasses import dataclass
 from typing import Tuple
 
@@ -31,7 +29,7 @@ from codetoreum.infrastructure.simulation.simulation_clock import SimulationCloc
 
 
 @dataclass
-class TestRepairCycleContext:
+class RepairCycleTestContext:
     """Test implementation of RepairCycleContext protocol."""
 
     stage_name: str
@@ -59,9 +57,9 @@ def create_repair_context(
     test_configs: tuple,
     stage_name: str = "testing",
     max_total_agent_calls: int = 100,
-) -> TestRepairCycleContext:
+) -> RepairCycleTestContext:
     """Create repair cycle context from config."""
-    return TestRepairCycleContext(
+    return RepairCycleTestContext(
         stage_name=stage_name,
         pipeline_run_id="test-run-123",
         test_configs=test_configs,
