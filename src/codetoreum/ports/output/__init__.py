@@ -172,7 +172,7 @@ __all__ = [
     "IPipelineQueueService",
     "PipelineQueueEntry",
     "QueueEntry",  # Backward compatibility alias
-    # Repair Cycle
+    # Repair Cycle Service
     "IRepairCycle",
     "RepairCycleContext",
     "IRepairCycleCheckpointStore",
