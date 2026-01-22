@@ -1,0 +1,805 @@
+"""Unit tests for repair cycle domain types.
+
+Tests verify immutability, validation, and behavior of all repair cycle
+domain types following the event sourcing pattern.
+"""
+
+import pytest
+from dataclasses import FrozenInstanceError
+from datetime import datetime
+
+from codetoreum.domain.repair_cycle_types import (
+    RepairTestType,
+    RepairTestFailure,
+    RepairTestWarning,
+    RepairTestResult,
+    CycleResult,
+    RepairCycleResult,
+    RepairTestRunConfig,
+    RepairCycleStageConfig,
+)
+
+
+# ============================================================================
+# RepairTestType Enum Tests
+# ============================================================================
+
+
+class TestRepairTestType:
+    """Test RepairTestType enum."""
+
+    def test_enum_values(self):
+        """Test that all required test types exist."""
+        assert RepairTestType.UNIT.value == "UNIT"
+        assert RepairTestType.INTEGRATION.value == "INTEGRATION"
+        assert RepairTestType.E2E.value == "E2E"
+
+    def test_enum_ordering(self):
+        """Test execution order is UNIT → INTEGRATION → E2E."""
+        types = list(RepairTestType)
+        assert len(types) == 3
+        assert types[0] == RepairTestType.UNIT
+        assert types[1] == RepairTestType.INTEGRATION
+        assert types[2] == RepairTestType.E2E
+
+    def test_enum_comparison(self):
+        """Test enum equality."""
+        unit1 = RepairTestType.UNIT
+        unit2 = RepairTestType.UNIT
+        assert unit1 == unit2
+        assert unit1 != RepairTestType.INTEGRATION
+
+
+# ============================================================================
+# RepairTestFailure Immutability Tests
+# ============================================================================
+
+
+class TestRepairTestFailure:
+    """Test RepairTestFailure value object."""
+
+    def test_create_failure(self):
+        """Test creating a test failure."""
+        failure = RepairTestFailure(
+            file="test_auth.py",
+            test="test_login_success",
+            message="Expected True, got False",
+        )
+        assert failure.file == "test_auth.py"
+        assert failure.test == "test_login_success"
+        assert failure.message == "Expected True, got False"
+
+    def test_immutability_raises_frozen_error(self):
+        """Test that frozen dataclass prevents modification."""
+        failure = RepairTestFailure(
+            file="test_auth.py",
+            test="test_login",
+            message="Failed",
+        )
+        with pytest.raises(FrozenInstanceError):
+            failure.file = "test_other.py"
+
+        with pytest.raises(FrozenInstanceError):
+            failure.test = "test_other"
+
+        with pytest.raises(FrozenInstanceError):
+            failure.message = "Different message"
+
+    def test_empty_file_raises_error(self):
+        """Test that empty file raises ValueError."""
+        with pytest.raises(ValueError, match="file is required"):
+            RepairTestFailure(
+                file="",
+                test="test_login",
+                message="Failed",
+            )
+
+    def test_empty_test_raises_error(self):
+        """Test that empty test raises ValueError."""
+        with pytest.raises(ValueError, match="test is required"):
+            RepairTestFailure(
+                file="test_auth.py",
+                test="",
+                message="Failed",
+            )
+
+    def test_empty_message_raises_error(self):
+        """Test that empty message raises ValueError."""
+        with pytest.raises(ValueError, match="message is required"):
+            RepairTestFailure(
+                file="test_auth.py",
+                test="test_login",
+                message="",
+            )
+
+    def test_equality(self):
+        """Test value object equality."""
+        failure1 = RepairTestFailure(
+            file="test_auth.py",
+            test="test_login",
+            message="Failed",
+        )
+        failure2 = RepairTestFailure(
+            file="test_auth.py",
+            test="test_login",
+            message="Failed",
+        )
+        assert failure1 == failure2
+
+    def test_inequality(self):
+        """Test value object inequality."""
+        failure1 = RepairTestFailure(
+            file="test_auth.py",
+            test="test_login",
+            message="Failed",
+        )
+        failure2 = RepairTestFailure(
+            file="test_auth.py",
+            test="test_logout",
+            message="Failed",
+        )
+        assert failure1 != failure2
+
+
+# ============================================================================
+# RepairTestWarning Immutability Tests
+# ============================================================================
+
+
+class TestRepairTestWarning:
+    """Test RepairTestWarning value object."""
+
+    def test_create_warning(self):
+        """Test creating a test warning."""
+        warning = RepairTestWarning(
+            file="auth.py",
+            message="DeprecationWarning: use_new_api() is deprecated",
+        )
+        assert warning.file == "auth.py"
+        assert warning.message == "DeprecationWarning: use_new_api() is deprecated"
+
+    def test_immutability_raises_frozen_error(self):
+        """Test that frozen dataclass prevents modification."""
+        warning = RepairTestWarning(
+            file="auth.py",
+            message="DeprecationWarning",
+        )
+        with pytest.raises(FrozenInstanceError):
+            warning.file = "other.py"
+
+        with pytest.raises(FrozenInstanceError):
+            warning.message = "Different warning"
+
+    def test_empty_file_raises_error(self):
+        """Test that empty file raises ValueError."""
+        with pytest.raises(ValueError, match="file is required"):
+            RepairTestWarning(
+                file="",
+                message="Warning",
+            )
+
+    def test_empty_message_raises_error(self):
+        """Test that empty message raises ValueError."""
+        with pytest.raises(ValueError, match="message is required"):
+            RepairTestWarning(
+                file="auth.py",
+                message="",
+            )
+
+    def test_equality(self):
+        """Test value object equality."""
+        warning1 = RepairTestWarning(
+            file="auth.py",
+            message="DeprecationWarning",
+        )
+        warning2 = RepairTestWarning(
+            file="auth.py",
+            message="DeprecationWarning",
+        )
+        assert warning1 == warning2
+
+
+# ============================================================================
+# RepairTestResult Immutability Tests
+# ============================================================================
+
+
+class TestRepairTestResult:
+    """Test RepairTestResult value object."""
+
+    def test_create_test_result_no_failures(self):
+        """Test creating a test result with no failures."""
+        result = RepairTestResult(
+            test_type=RepairTestType.UNIT,
+            iteration=1,
+            passed=10,
+            failed=0,
+            warnings=0,
+            failures=(),
+            warning_list=(),
+            raw_output="All tests passed",
+            timestamp="2025-01-22T10:00:00Z",
+        )
+        assert result.test_type == RepairTestType.UNIT
+        assert result.iteration == 1
+        assert result.passed == 10
+        assert result.failed == 0
+        assert result.warnings == 0
+        assert result.failures == ()
+        assert result.warning_list == ()
+
+    def test_create_test_result_with_failures(self):
+        """Test creating a test result with failures."""
+        failure = RepairTestFailure(
+            file="test_auth.py",
+            test="test_login",
+            message="Failed",
+        )
+        result = RepairTestResult(
+            test_type=RepairTestType.UNIT,
+            iteration=2,
+            passed=9,
+            failed=1,
+            warnings=0,
+            failures=(failure,),
+            warning_list=(),
+            raw_output="1 test failed",
+            timestamp="2025-01-22T10:05:00Z",
+        )
+        assert result.failed == 1
+        assert len(result.failures) == 1
+        assert result.failures[0] == failure
+
+    def test_failures_tuple_immutable(self):
+        """Test that failures tuple is immutable."""
+        result = RepairTestResult(
+            test_type=RepairTestType.UNIT,
+            iteration=1,
+            passed=10,
+            failed=0,
+            warnings=0,
+            failures=(),
+            warning_list=(),
+            raw_output="OK",
+            timestamp="2025-01-22T10:00:00Z",
+        )
+        with pytest.raises((TypeError, AttributeError)):
+            result.failures.append(None)  # type: ignore
+
+    def test_result_immutability_raises_frozen_error(self):
+        """Test that frozen dataclass prevents modification."""
+        result = RepairTestResult(
+            test_type=RepairTestType.UNIT,
+            iteration=1,
+            passed=10,
+            failed=0,
+            warnings=0,
+            failures=(),
+            warning_list=(),
+            raw_output="OK",
+            timestamp="2025-01-22T10:00:00Z",
+        )
+        with pytest.raises(FrozenInstanceError):
+            result.passed = 11
+
+        with pytest.raises(FrozenInstanceError):
+            result.iteration = 2
+
+    def test_invalid_iteration_raises_error(self):
+        """Test that iteration < 1 raises ValueError."""
+        with pytest.raises(ValueError, match="iteration must be >= 1"):
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=0,
+                passed=10,
+                failed=0,
+                warnings=0,
+                failures=(),
+                warning_list=(),
+                raw_output="OK",
+                timestamp="2025-01-22T10:00:00Z",
+            )
+
+    def test_negative_passed_raises_error(self):
+        """Test that negative passed count raises ValueError."""
+        with pytest.raises(ValueError, match="passed must be >= 0"):
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=1,
+                passed=-1,
+                failed=0,
+                warnings=0,
+                failures=(),
+                warning_list=(),
+                raw_output="OK",
+                timestamp="2025-01-22T10:00:00Z",
+            )
+
+    def test_negative_failed_raises_error(self):
+        """Test that negative failed count raises ValueError."""
+        with pytest.raises(ValueError, match="failed must be >= 0"):
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=1,
+                passed=10,
+                failed=-1,
+                warnings=0,
+                failures=(),
+                warning_list=(),
+                raw_output="OK",
+                timestamp="2025-01-22T10:00:00Z",
+            )
+
+    def test_negative_warnings_raises_error(self):
+        """Test that negative warnings count raises ValueError."""
+        with pytest.raises(ValueError, match="warnings must be >= 0"):
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=1,
+                passed=10,
+                failed=0,
+                warnings=-1,
+                failures=(),
+                warning_list=(),
+                raw_output="OK",
+                timestamp="2025-01-22T10:00:00Z",
+            )
+
+    def test_empty_timestamp_raises_error(self):
+        """Test that empty timestamp raises ValueError."""
+        with pytest.raises(ValueError, match="timestamp is required"):
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=1,
+                passed=10,
+                failed=0,
+                warnings=0,
+                failures=(),
+                warning_list=(),
+                raw_output="OK",
+                timestamp="",
+            )
+
+
+# ============================================================================
+# CycleResult Immutability Tests
+# ============================================================================
+
+
+class TestCycleResult:
+    """Test CycleResult value object."""
+
+    def test_create_successful_cycle(self):
+        """Test creating a successful cycle result."""
+        test_result = RepairTestResult(
+            test_type=RepairTestType.UNIT,
+            iteration=1,
+            passed=10,
+            failed=0,
+            warnings=0,
+            failures=(),
+            warning_list=(),
+            raw_output="OK",
+            timestamp="2025-01-22T10:00:00Z",
+        )
+        cycle = CycleResult(
+            test_type=RepairTestType.UNIT,
+            passed=True,
+            iterations=1,
+            final_result=test_result,
+            error=None,
+            files_fixed=0,
+            warnings_reviewed=0,
+            duration_seconds=5.5,
+        )
+        assert cycle.passed is True
+        assert cycle.test_type == RepairTestType.UNIT
+        assert cycle.iterations == 1
+        assert cycle.final_result == test_result
+        assert cycle.error is None
+        assert cycle.files_fixed == 0
+        assert cycle.warnings_reviewed == 0
+        assert cycle.duration_seconds == 5.5
+
+    def test_create_failed_cycle(self):
+        """Test creating a failed cycle result."""
+        cycle = CycleResult(
+            test_type=RepairTestType.INTEGRATION,
+            passed=False,
+            iterations=3,
+            final_result=None,
+            error="Test execution timeout",
+            files_fixed=0,
+            warnings_reviewed=0,
+            duration_seconds=900.0,
+        )
+        assert cycle.passed is False
+        assert cycle.error == "Test execution timeout"
+        assert cycle.final_result is None
+
+    def test_cycle_immutability_raises_frozen_error(self):
+        """Test that frozen dataclass prevents modification."""
+        cycle = CycleResult(
+            test_type=RepairTestType.UNIT,
+            passed=True,
+            iterations=1,
+            final_result=None,
+            error=None,
+            files_fixed=0,
+            warnings_reviewed=0,
+            duration_seconds=5.5,
+        )
+        with pytest.raises(FrozenInstanceError):
+            cycle.passed = False
+
+        with pytest.raises(FrozenInstanceError):
+            cycle.iterations = 2
+
+    def test_negative_iterations_raises_error(self):
+        """Test that negative iterations raises ValueError."""
+        with pytest.raises(ValueError, match="iterations must be >= 0"):
+            CycleResult(
+                test_type=RepairTestType.UNIT,
+                passed=False,
+                iterations=-1,
+                final_result=None,
+                error="Failed",
+                files_fixed=0,
+                warnings_reviewed=0,
+                duration_seconds=10.0,
+            )
+
+    def test_negative_files_fixed_raises_error(self):
+        """Test that negative files_fixed raises ValueError."""
+        with pytest.raises(ValueError, match="files_fixed must be >= 0"):
+            CycleResult(
+                test_type=RepairTestType.UNIT,
+                passed=False,
+                iterations=1,
+                final_result=None,
+                error="Failed",
+                files_fixed=-1,
+                warnings_reviewed=0,
+                duration_seconds=10.0,
+            )
+
+    def test_negative_warnings_reviewed_raises_error(self):
+        """Test that negative warnings_reviewed raises ValueError."""
+        with pytest.raises(ValueError, match="warnings_reviewed must be >= 0"):
+            CycleResult(
+                test_type=RepairTestType.UNIT,
+                passed=False,
+                iterations=1,
+                final_result=None,
+                error="Failed",
+                files_fixed=0,
+                warnings_reviewed=-1,
+                duration_seconds=10.0,
+            )
+
+    def test_negative_duration_raises_error(self):
+        """Test that negative duration raises ValueError."""
+        with pytest.raises(ValueError, match="duration_seconds must be >= 0"):
+            CycleResult(
+                test_type=RepairTestType.UNIT,
+                passed=False,
+                iterations=1,
+                final_result=None,
+                error="Failed",
+                files_fixed=0,
+                warnings_reviewed=0,
+                duration_seconds=-1.0,
+            )
+
+
+# ============================================================================
+# RepairCycleResult Immutability Tests
+# ============================================================================
+
+
+class TestRepairCycleResult:
+    """Test RepairCycleResult value object."""
+
+    def test_create_cycle_result(self):
+        """Test creating a repair cycle result."""
+        cycle1 = CycleResult(
+            test_type=RepairTestType.UNIT,
+            passed=True,
+            iterations=1,
+            final_result=None,
+            error=None,
+            files_fixed=0,
+            warnings_reviewed=0,
+            duration_seconds=5.0,
+        )
+        cycle2 = CycleResult(
+            test_type=RepairTestType.INTEGRATION,
+            passed=True,
+            iterations=2,
+            final_result=None,
+            error=None,
+            files_fixed=2,
+            warnings_reviewed=1,
+            duration_seconds=15.0,
+        )
+        result = RepairCycleResult(
+            stage="fix_failures",
+            test_results=(cycle1, cycle2),
+            overall_success=True,
+            total_agent_calls=5,
+            duration_seconds=20.0,
+            timestamp="2025-01-22T10:30:00Z",
+        )
+        assert result.stage == "fix_failures"
+        assert len(result.test_results) == 2
+        assert result.overall_success is True
+        assert result.total_agent_calls == 5
+        assert result.duration_seconds == 20.0
+
+    def test_test_results_tuple_immutable(self):
+        """Test that test_results tuple is immutable."""
+        result = RepairCycleResult(
+            stage="fix_failures",
+            test_results=(),
+            overall_success=False,
+            total_agent_calls=0,
+            duration_seconds=0.0,
+            timestamp="2025-01-22T10:00:00Z",
+        )
+        with pytest.raises((TypeError, AttributeError)):
+            result.test_results.append(None)  # type: ignore
+
+    def test_cycle_result_immutability_raises_frozen_error(self):
+        """Test that frozen dataclass prevents modification."""
+        result = RepairCycleResult(
+            stage="fix_failures",
+            test_results=(),
+            overall_success=True,
+            total_agent_calls=5,
+            duration_seconds=20.0,
+            timestamp="2025-01-22T10:00:00Z",
+        )
+        with pytest.raises(FrozenInstanceError):
+            result.overall_success = False
+
+        with pytest.raises(FrozenInstanceError):
+            result.total_agent_calls = 10
+
+    def test_empty_stage_raises_error(self):
+        """Test that empty stage raises ValueError."""
+        with pytest.raises(ValueError, match="stage is required"):
+            RepairCycleResult(
+                stage="",
+                test_results=(),
+                overall_success=False,
+                total_agent_calls=0,
+                duration_seconds=0.0,
+                timestamp="2025-01-22T10:00:00Z",
+            )
+
+    def test_negative_total_agent_calls_raises_error(self):
+        """Test that negative total_agent_calls raises ValueError."""
+        with pytest.raises(ValueError, match="total_agent_calls must be >= 0"):
+            RepairCycleResult(
+                stage="fix_failures",
+                test_results=(),
+                overall_success=False,
+                total_agent_calls=-1,
+                duration_seconds=0.0,
+                timestamp="2025-01-22T10:00:00Z",
+            )
+
+    def test_negative_duration_raises_error(self):
+        """Test that negative duration raises ValueError."""
+        with pytest.raises(ValueError, match="duration_seconds must be >= 0"):
+            RepairCycleResult(
+                stage="fix_failures",
+                test_results=(),
+                overall_success=False,
+                total_agent_calls=0,
+                duration_seconds=-1.0,
+                timestamp="2025-01-22T10:00:00Z",
+            )
+
+    def test_empty_timestamp_raises_error(self):
+        """Test that empty timestamp raises ValueError."""
+        with pytest.raises(ValueError, match="timestamp is required"):
+            RepairCycleResult(
+                stage="fix_failures",
+                test_results=(),
+                overall_success=False,
+                total_agent_calls=0,
+                duration_seconds=0.0,
+                timestamp="",
+            )
+
+
+# ============================================================================
+# RepairTestRunConfig Tests
+# ============================================================================
+
+
+class TestRepairTestRunConfig:
+    """Test RepairTestRunConfig value object."""
+
+    def test_create_config_with_defaults(self):
+        """Test creating config with default values."""
+        config = RepairTestRunConfig(test_type=RepairTestType.UNIT)
+        assert config.test_type == RepairTestType.UNIT
+        assert config.timeout == 900
+        assert config.max_iterations == 5
+        assert config.review_warnings is True
+        assert config.max_file_iterations == 3
+
+    def test_create_config_with_custom_values(self):
+        """Test creating config with custom values."""
+        config = RepairTestRunConfig(
+            test_type=RepairTestType.E2E,
+            timeout=1800,
+            max_iterations=10,
+            review_warnings=False,
+            max_file_iterations=5,
+        )
+        assert config.test_type == RepairTestType.E2E
+        assert config.timeout == 1800
+        assert config.max_iterations == 10
+        assert config.review_warnings is False
+        assert config.max_file_iterations == 5
+
+    def test_config_immutability_raises_frozen_error(self):
+        """Test that frozen dataclass prevents modification."""
+        config = RepairTestRunConfig(test_type=RepairTestType.UNIT)
+        with pytest.raises(FrozenInstanceError):
+            config.timeout = 1800
+
+        with pytest.raises(FrozenInstanceError):
+            config.max_iterations = 10
+
+    def test_invalid_timeout_raises_error(self):
+        """Test that invalid timeout raises ValueError."""
+        with pytest.raises(ValueError, match="timeout must be > 0"):
+            RepairTestRunConfig(
+                test_type=RepairTestType.UNIT,
+                timeout=0,
+            )
+
+        with pytest.raises(ValueError, match="timeout must be > 0"):
+            RepairTestRunConfig(
+                test_type=RepairTestType.UNIT,
+                timeout=-1,
+            )
+
+    def test_invalid_max_iterations_raises_error(self):
+        """Test that invalid max_iterations raises ValueError."""
+        with pytest.raises(ValueError, match="max_iterations must be > 0"):
+            RepairTestRunConfig(
+                test_type=RepairTestType.UNIT,
+                max_iterations=0,
+            )
+
+        with pytest.raises(ValueError, match="max_iterations must be > 0"):
+            RepairTestRunConfig(
+                test_type=RepairTestType.UNIT,
+                max_iterations=-1,
+            )
+
+    def test_invalid_max_file_iterations_raises_error(self):
+        """Test that invalid max_file_iterations raises ValueError."""
+        with pytest.raises(ValueError, match="max_file_iterations must be > 0"):
+            RepairTestRunConfig(
+                test_type=RepairTestType.UNIT,
+                max_file_iterations=0,
+            )
+
+        with pytest.raises(ValueError, match="max_file_iterations must be > 0"):
+            RepairTestRunConfig(
+                test_type=RepairTestType.UNIT,
+                max_file_iterations=-1,
+            )
+
+
+# ============================================================================
+# RepairCycleStageConfig Tests
+# ============================================================================
+
+
+class TestRepairCycleStageConfig:
+    """Test RepairCycleStageConfig value object."""
+
+    def test_create_config_with_defaults(self):
+        """Test creating stage config with default values."""
+        test_config = RepairTestRunConfig(test_type=RepairTestType.UNIT)
+        config = RepairCycleStageConfig(
+            name="fix_failures",
+            test_configs=(test_config,),
+        )
+        assert config.name == "fix_failures"
+        assert len(config.test_configs) == 1
+        assert config.agent_name == "senior_software_engineer"
+        assert config.max_total_agent_calls == 100
+        assert config.checkpoint_interval == 5
+
+    def test_create_config_with_all_test_types(self):
+        """Test creating config with all test types."""
+        configs = (
+            RepairTestRunConfig(test_type=RepairTestType.UNIT),
+            RepairTestRunConfig(test_type=RepairTestType.INTEGRATION),
+            RepairTestRunConfig(test_type=RepairTestType.E2E),
+        )
+        config = RepairCycleStageConfig(
+            name="full_cycle",
+            test_configs=configs,
+        )
+        assert len(config.test_configs) == 3
+        assert config.test_configs[0].test_type == RepairTestType.UNIT
+        assert config.test_configs[1].test_type == RepairTestType.INTEGRATION
+        assert config.test_configs[2].test_type == RepairTestType.E2E
+
+    def test_create_config_with_custom_values(self):
+        """Test creating config with custom values."""
+        test_config = RepairTestRunConfig(test_type=RepairTestType.UNIT)
+        config = RepairCycleStageConfig(
+            name="fix_warnings",
+            test_configs=(test_config,),
+            agent_name="code_reviewer",
+            max_total_agent_calls=200,
+            checkpoint_interval=10,
+        )
+        assert config.agent_name == "code_reviewer"
+        assert config.max_total_agent_calls == 200
+        assert config.checkpoint_interval == 10
+
+    def test_test_configs_tuple_immutable(self):
+        """Test that test_configs tuple is immutable."""
+        config = RepairCycleStageConfig(
+            name="fix_failures",
+            test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+        )
+        with pytest.raises((TypeError, AttributeError)):
+            config.test_configs.append(None)  # type: ignore
+
+    def test_config_immutability_raises_frozen_error(self):
+        """Test that frozen dataclass prevents modification."""
+        config = RepairCycleStageConfig(
+            name="fix_failures",
+            test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+        )
+        with pytest.raises(FrozenInstanceError):
+            config.name = "fix_warnings"
+
+        with pytest.raises(FrozenInstanceError):
+            config.max_total_agent_calls = 50
+
+    def test_empty_name_raises_error(self):
+        """Test that empty name raises ValueError."""
+        with pytest.raises(ValueError, match="name is required"):
+            RepairCycleStageConfig(
+                name="",
+                test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+            )
+
+    def test_empty_test_configs_raises_error(self):
+        """Test that empty test_configs raises ValueError."""
+        with pytest.raises(ValueError, match="test_configs must not be empty"):
+            RepairCycleStageConfig(
+                name="fix_failures",
+                test_configs=(),
+            )
+
+    def test_invalid_max_total_agent_calls_raises_error(self):
+        """Test that invalid max_total_agent_calls raises ValueError."""
+        with pytest.raises(ValueError, match="max_total_agent_calls must be > 0"):
+            RepairCycleStageConfig(
+                name="fix_failures",
+                test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+                max_total_agent_calls=0,
+            )
+
+    def test_invalid_checkpoint_interval_raises_error(self):
+        """Test that invalid checkpoint_interval raises ValueError."""
+        with pytest.raises(ValueError, match="checkpoint_interval must be > 0"):
+            RepairCycleStageConfig(
+                name="fix_failures",
+                test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+                checkpoint_interval=0,
+            )
