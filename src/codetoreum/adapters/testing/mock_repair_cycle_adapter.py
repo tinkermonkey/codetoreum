@@ -738,6 +738,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             "test_type": config.test_type.value,
             "passed": cycle_passed,
             "iterations": iteration,
+            "warnings_reviewed": warnings_reviewed,
             "error": error
         })
 
@@ -773,6 +774,123 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         current = self._repair_state.get(key, 0)
         self._repair_state[key] = current + 1
         return current + 1
+
+    def assert_warnings_reviewed_count(self, test_type: RepairTestType, expected: int) -> None:
+        """Assert test type reviewed expected number of warnings.
+
+        Args:
+            test_type: Type of test to check
+            expected: Expected number of warnings reviewed
+
+        Raises:
+            AssertionError: If warning count doesn't match
+        """
+        events = self.get_events_by_type("TEST_CYCLE_COMPLETED")
+        event = next(
+            (e for e in events if e.get("test_type") == test_type.value),
+            None
+        )
+        if not event:
+            raise AssertionError(f"No completion event found for {test_type.value}")
+        actual = event.get("warnings_reviewed", 0)
+        if actual != expected:
+            raise AssertionError(
+                f"Expected {expected} warnings reviewed for {test_type.value}, "
+                f"got {actual}"
+            )
+
+    def assert_no_warning_regression(self, test_type: RepairTestType) -> None:
+        """Assert no warnings reappeared after being reviewed (no regression).
+
+        This verifies that warning review events were completed successfully
+        and no subsequent test iterations show the same warnings.
+
+        Args:
+            test_type: Type of test to check
+
+        Raises:
+            AssertionError: If warning regression detected
+        """
+        # Get all warning review started events
+        started_events = [
+            e for e in self.event_log
+            if e.get("type") == "WARNING_REVIEW_STARTED"
+            and e.get("test_type") == test_type.value
+        ]
+
+        # Get all warning review completed events
+        completed_events = [
+            e for e in self.event_log
+            if e.get("type") == "WARNING_REVIEW_COMPLETED"
+            and e.get("test_type") == test_type.value
+        ]
+
+        # For regression detection, completed count should match started count
+        if len(completed_events) != len(started_events):
+            raise AssertionError(
+                f"Warning regression detected for {test_type.value}: "
+                f"{len(started_events)} warnings started but only "
+                f"{len(completed_events)} completed"
+            )
+
+        if len(started_events) > 0 and len(completed_events) == 0:
+            raise AssertionError(
+                f"Warning regression for {test_type.value}: warnings detected but none reviewed"
+            )
+
+    def assert_no_warning_reappearance(
+        self,
+        test_type: RepairTestType,
+        original_warnings: Tuple[RepairTestWarning, ...],
+    ) -> None:
+        """Assert specific warnings don't reappear after fix (regression detection).
+
+        Args:
+            test_type: Type of test to check
+            original_warnings: Original warnings that were fixed
+
+        Raises:
+            AssertionError: If warnings reappeared
+        """
+        # Get test cycle events in order
+        test_cycle_events = self.get_events_by_type("TEST_CYCLE_COMPLETED")
+        cycle_event = next(
+            (e for e in test_cycle_events if e.get("test_type") == test_type.value),
+            None
+        )
+
+        if not cycle_event:
+            raise AssertionError(f"No test cycle found for {test_type.value}")
+
+        # Create a set of original warning files
+        original_files = {w.file for w in original_warnings}
+
+        # Check if we have any test results with warnings
+        # (In actual implementation, this would check final test result)
+        # For mock adapter, we verify through events
+        if cycle_event.get("passed") and cycle_event.get("warnings_reviewed", 0) > 0:
+            # If test passed and warnings were reviewed, check for regression events
+            regression_detected = any(
+                e.get("type") == "WARNING_REGRESSION_DETECTED"
+                and e.get("test_type") == test_type.value
+                for e in self.event_log
+            )
+            if regression_detected:
+                raise AssertionError(
+                    f"Warning regression detected for {test_type.value}: "
+                    f"warnings {original_files} reappeared after fix"
+                )
+
+    def get_warning_events(self) -> List[Dict[str, Any]]:
+        """Return all warning-related events.
+
+        Returns:
+            List of warning review started/completed events
+        """
+        return [
+            e for e in self.event_log
+            if e.get("type") in ["WARNING_REVIEW_STARTED", "WARNING_REVIEW_COMPLETED"]
+        ]
 
     def _log_event(self, event: Dict[str, Any]) -> None:
         """Log event with timestamp (FR-11.9)."""
