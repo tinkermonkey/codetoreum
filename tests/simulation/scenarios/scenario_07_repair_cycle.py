@@ -9,7 +9,7 @@ Comprehensive scenarios cover:
 2. Multiple iterations: gradual convergence
 3. Max iterations failure: circuit breaker at max iterations
 4. Fast-fail integration: INTEGRATION fails, E2E skipped
-5. Warning review: success with warnings after tests pass (TODO)
+5. Warning review: success with warnings after tests pass
 6. Circuit breaker: max agent calls exceeded
 7. Full sequence: UNIT → INTEGRATION → E2E all passing
 """
@@ -21,6 +21,8 @@ from typing import Tuple
 from codetoreum.domain.repair_cycle_types import (
     RepairTestType,
     RepairTestRunConfig,
+    RepairTestResult,
+    RepairTestWarning,
 )
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
@@ -207,9 +209,90 @@ async def test_scenario_04_fast_fail_integration():
 
 
 async def test_scenario_05_warning_review():
-    """Test warning review after tests pass."""
-    # TODO: Implement after establishing warning configuration in test results
-    pass
+    """Test warning review after tests pass.
+
+    Tests the warning review flow:
+    - Tests pass with warnings
+    - Agent reviews warnings and makes fixes
+    - Re-test passes without warnings
+    """
+    clock = SimulationClock(speed_multiplier=100.0)
+    adapter = MockRepairCycleAdapter(clock)
+    adapter.current_project = "test-proj"
+
+    # Configure: Tests pass immediately but with warnings
+    # First result: passed=10, failed=0, warnings=2 (with warnings)
+    # Second result (after warning fixes): passed=10, failed=0, warnings=0
+    warning_list = (
+        RepairTestWarning(file="auth.py", message="Deprecation warning: use new_method instead"),
+        RepairTestWarning(file="utils.py", message="Performance warning: consider using async"),
+    )
+
+    adapter.set_test_result_sequence(
+        RepairTestType.UNIT,
+        [
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=1,
+                passed=10,
+                failed=0,
+                warnings=2,
+                failures=(),
+                warning_list=warning_list,
+                raw_output="Tests passed but with warnings",
+                timestamp=clock.now().isoformat()
+            ),
+            # After warning fixes, re-test passes without warnings
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=1,
+                passed=10,
+                failed=0,
+                warnings=0,
+                failures=(),
+                warning_list=(),
+                raw_output="All tests passed, no warnings",
+                timestamp=clock.now().isoformat()
+            ),
+        ]
+    )
+
+    # Test config with review_warnings=True
+    test_configs = (
+        RepairTestRunConfig(test_type=RepairTestType.UNIT, review_warnings=True),
+    )
+    context = create_repair_context(test_configs)
+    result = await adapter.execute(context)
+
+    # Assertions
+    assert result.overall_success is True
+    assert len(result.test_results) == 1
+    assert result.test_results[0].passed is True
+    assert result.test_results[0].iterations == 1
+
+    # Verify warning review happened
+    assert result.test_results[0].warnings_reviewed == 2, "Expected 2 warnings to be reviewed"
+
+    # Verify adapter assertions
+    adapter.assert_test_type_passed(RepairTestType.UNIT)
+    adapter.assert_overall_success()
+
+    # Verify test cycle completed event passes
+    test_cycle_events = adapter.get_events_by_type("TEST_CYCLE_COMPLETED")
+    cycle_event = next(
+        (e for e in test_cycle_events if e.get("test_type") == RepairTestType.UNIT.value),
+        None
+    )
+    assert cycle_event is not None, "Expected TEST_CYCLE_COMPLETED event for UNIT tests"
+    assert cycle_event.get("passed") is True, "Expected test cycle to pass"
+
+    # Verify completion time (3 min 30s simulated → <2.1s real at 100x)
+    # 30s test + 2min warning fix (2 files) + 30s retest = 3 min 30s
+    assert result.duration_seconds < 210, f"Expected duration < 210s, got {result.duration_seconds}s"
+
+    # Verify agent was called for tests and warning reviews
+    # 1st test (with warnings) + 2 warning reviews + 1 retest = 4 calls
+    assert result.total_agent_calls == 4, f"Expected 4 agent calls, got {result.total_agent_calls}"
 
 
 async def test_scenario_06_circuit_breaker():
@@ -277,7 +360,7 @@ async def run_scenario(runner: SimulationRunner) -> None:
     await test_scenario_02_multiple_iterations_success()
     await test_scenario_03_max_iterations_failure()
     await test_scenario_04_fast_fail_integration()
-    # await test_scenario_05_warning_review()  # TODO
+    await test_scenario_05_warning_review()
     await test_scenario_06_circuit_breaker()
     await test_scenario_07_all_three_test_types()
 
