@@ -2,7 +2,7 @@
 
 import asyncio
 from datetime import datetime, timezone
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock
 
 import pytest
 
@@ -20,7 +20,8 @@ from codetoreum.domain.events import DomainEvent, WorkItemCreated
 from codetoreum.domain.work_item import WorkItemPriority
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.metrics_collector import MetricsCollector
-from codetoreum.ports.output import IEventStore, ITicketSystem
+from codetoreum.ports.output import IEventStore, ITicketSystem, IBoardService
+from codetoreum.ports.output.board_service import WorkItemPosition
 
 
 class SimulationTaskQueue(ITaskQueue):
@@ -133,6 +134,42 @@ class SimulationDecisionEvents(IDecisionEvents):
         self.progression_decisions.append(decision)
 
 
+def create_mock_board_service():
+    """Create a mock board service for testing.
+
+    Returns a mock that simulates work items in different columns
+    based on the requested work_item_id.
+    """
+    service = AsyncMock(spec=IBoardService)
+
+    async def mock_get_item_position(work_item_id: str) -> WorkItemPosition:
+        """Return position based on work item ID."""
+        # Map work items to their expected positions
+        positions = {
+            "issue-1": WorkItemPosition(
+                work_item_id="issue-1",
+                column_name="Development",
+                position=0,
+            ),
+            "issue-2": WorkItemPosition(
+                work_item_id="issue-2",
+                column_name="Development",
+                position=1,
+            ),
+        }
+        return positions.get(
+            work_item_id,
+            WorkItemPosition(
+                work_item_id=work_item_id,
+                column_name="Development",
+                position=999,
+            ),
+        )
+
+    service.get_item_position = mock_get_item_position
+    return service
+
+
 @pytest.mark.asyncio
 class TestEventDrivenWorkflow:
     """Simulation tests for event-driven workflow execution."""
@@ -163,8 +200,13 @@ class TestEventDrivenWorkflow:
         return SimulationDecisionEvents()
 
     @pytest.fixture
+    def board_service(self):
+        """Create board service."""
+        return create_mock_board_service()
+
+    @pytest.fixture
     def orchestrator(
-        self, event_bus, task_queue, config, state_manager, decision_events
+        self, event_bus, task_queue, config, state_manager, decision_events, board_service
     ):
         """Create workflow orchestrator."""
         event_store = MagicMock(spec=IEventStore)
@@ -178,6 +220,7 @@ class TestEventDrivenWorkflow:
             event_store=event_store,
             ticket_system=ticket_system,
             event_bus=event_bus,
+            board_service=board_service,
         )
 
     @pytest.fixture
@@ -524,3 +567,267 @@ class TestEventDrivenWorkflow:
         # Assert: Metrics collector statistics
         metrics = metrics_collector.get_metrics()
         assert metrics["column_changes"]["Development"] == num_events
+
+
+# ============================================================================
+# WorkflowOrchestrator Lock Release Failure Scenario Tests (Issue #2)
+# ============================================================================
+
+
+class TestWorkflowOrchestratorLockReleaseFailures:
+    """Integration tests for WorkflowOrchestrator lock release error handling."""
+
+    @pytest.fixture
+    def orchestrator_with_mocks(self):
+        """Create orchestrator with mocked dependencies."""
+        event_bus = EventBus()
+        config = SimulationProjectConfiguration()
+        task_queue = SimulationTaskQueue()
+        decision_events = SimulationDecisionEvents()
+        state_manager = SimulationWorkflowStateManager()
+        event_store = MagicMock(spec=IEventStore)
+        ticket_system = MagicMock(spec=ITicketSystem)
+
+        # Mock the board service
+        board_service = AsyncMock(spec=IBoardService)
+
+        orchestrator = WorkflowOrchestrator(
+            task_queue=task_queue,
+            config=config,
+            workflow_state=state_manager,
+            decision_events=decision_events,
+            event_store=event_store,
+            ticket_system=ticket_system,
+            event_bus=event_bus,
+            board_service=board_service,
+        )
+
+        return orchestrator, board_service, task_queue, config
+
+    @pytest.mark.asyncio
+    async def test_lock_release_with_failed_get_item_position(
+        self, orchestrator_with_mocks, caplog
+    ):
+        """
+        Verify lock release handles gracefully when get_item_position() fails.
+
+        Scenario: Next queued item exists but board service fails to find its position.
+        Expected: Error is logged with context, system continues without stalling.
+        """
+        orchestrator, board_service, task_queue, config = orchestrator_with_mocks
+
+        # Setup: Workflow config with automated column
+        config.workflows["proj1:board1"] = WorkflowConfig(
+            name="test_workflow",
+            columns=[
+                ColumnConfig(
+                    name="Development",
+                    position=0,
+                    agent="dev_agent",
+                    auto_advance_on_approval=False,
+                    discussion_category=None,
+                    stage_type="work",
+                    review_required=False,
+                    reviewer_agent=None,
+                )
+            ],
+            workspace_type="dev_container",
+        )
+
+        # Setup: board_service.get_item_position() raises exception
+        board_service.get_item_position.side_effect = Exception("Board service unavailable")
+
+        # Create lock released event with queued item
+        event = DomainEvent(
+            aggregate_id="lock_proj1_board1",
+            aggregate_type="PipelineLock",
+            payload={
+                "project_id": "proj1",
+                "board_id": "board1",
+                "next_in_queue": "item_123",
+            }
+        )
+
+        # Act: Handle lock released event
+        await orchestrator._handle_lock_released(event)
+
+        # Assert: Error logged with full context
+        assert "Error processing next queued item" in caplog.text
+        assert "item_123" in caplog.text
+        assert "Board service unavailable" in caplog.text
+
+        # Assert: No task queued (failed to get position)
+        assert len(task_queue.enqueued_tasks) == 0
+
+    @pytest.mark.asyncio
+    async def test_lock_release_with_failed_enqueue(
+        self, orchestrator_with_mocks, caplog
+    ):
+        """
+        Verify lock release handles gracefully when task_queue.enqueue() fails.
+
+        Scenario: Item position found, but enqueuing task fails.
+        Expected: Error logged with context including work_item_id and column.
+        """
+        orchestrator, board_service, task_queue, config = orchestrator_with_mocks
+
+        # Setup: Workflow config with automated column
+        config.workflows["proj1:board1"] = WorkflowConfig(
+            name="test_workflow",
+            columns=[
+                ColumnConfig(
+                    name="Review",
+                    position=0,
+                    agent="reviewer_agent",
+                    auto_advance_on_approval=False,
+                    discussion_category=None,
+                    stage_type="review",
+                    review_required=False,
+                    reviewer_agent=None,
+                )
+            ],
+            workspace_type="dev_container",
+        )
+
+        # Setup: board_service returns position successfully
+        board_service.get_item_position.return_value = WorkItemPosition(
+            work_item_id="item_456",
+            column_name="Review",
+            position=0,
+        )
+
+        # Setup: task_queue.enqueue() raises exception
+        task_queue.enqueue = AsyncMock(side_effect=Exception("Queue service error"))
+
+        # Create lock released event
+        event = DomainEvent(
+            aggregate_id="lock_proj1_board1",
+            aggregate_type="PipelineLock",
+            payload={
+                "project_id": "proj1",
+                "board_id": "board1",
+                "next_in_queue": "item_456",
+            }
+        )
+
+        # Act: Handle lock released event
+        await orchestrator._handle_lock_released(event)
+
+        # Assert: Error logged with comprehensive context
+        assert "Error processing next queued item" in caplog.text
+        assert "item_456" in caplog.text
+        assert "proj1" in caplog.text
+        assert "Queue service error" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_lock_release_with_deleted_work_item(
+        self, orchestrator_with_mocks, caplog
+    ):
+        """
+        Verify lock release handles gracefully when next queued item is deleted.
+
+        Scenario: Item was in queue but no longer exists in workflow state.
+        Expected: Warning logged, lock not stuck, processing continues.
+        """
+        orchestrator, board_service, task_queue, config = orchestrator_with_mocks
+
+        # Setup: Workflow config
+        config.workflows["proj1:board1"] = WorkflowConfig(
+            name="test_workflow",
+            columns=[
+                ColumnConfig(
+                    name="Backlog",
+                    position=0,
+                    agent="backlog_agent",
+                    auto_advance_on_approval=False,
+                    discussion_category=None,
+                    stage_type="work",
+                    review_required=False,
+                    reviewer_agent=None,
+                )
+            ],
+            workspace_type="dev_container",
+        )
+
+        # Setup: board_service.get_item_position() returns None (item deleted)
+        board_service.get_item_position.return_value = None
+
+        # Create lock released event with queued item that no longer exists
+        event = DomainEvent(
+            aggregate_id="lock_proj1_board1",
+            aggregate_type="PipelineLock",
+            payload={
+                "project_id": "proj1",
+                "board_id": "board1",
+                "next_in_queue": "deleted_item_789",
+            }
+        )
+
+        # Act: Handle lock released event
+        await orchestrator._handle_lock_released(event)
+
+        # Assert: Warning logged (item not found, but graceful)
+        assert "Could not find position for item" in caplog.text
+        assert "deleted_item_789" in caplog.text
+
+        # Assert: No task queued (item doesn't exist)
+        assert len(task_queue.enqueued_tasks) == 0
+
+    @pytest.mark.asyncio
+    async def test_lock_release_successful_with_agent_trigger(
+        self, orchestrator_with_mocks, caplog
+    ):
+        """
+        Verify lock release successfully triggers agent when all services work.
+
+        Scenario: Item exists, position found, config valid, agent configured.
+        Expected: Agent task enqueued successfully.
+        """
+        orchestrator, board_service, task_queue, config = orchestrator_with_mocks
+
+        # Setup: Workflow config with automated column
+        config.workflows["proj1:board1"] = WorkflowConfig(
+            name="test_workflow",
+            columns=[
+                ColumnConfig(
+                    name="Testing",
+                    position=0,
+                    agent="test_agent",
+                    auto_advance_on_approval=False,
+                    discussion_category=None,
+                    stage_type="work",
+                    review_required=False,
+                    reviewer_agent=None,
+                )
+            ],
+            workspace_type="dev_container",
+        )
+
+        # Setup: board_service returns valid position
+        board_service.get_item_position.return_value = WorkItemPosition(
+            work_item_id="item_success",
+            column_name="Testing",
+            position=0,
+        )
+
+        # Create lock released event
+        event = DomainEvent(
+            aggregate_id="lock_proj1_board1",
+            aggregate_type="PipelineLock",
+            payload={
+                "project_id": "proj1",
+                "board_id": "board1",
+                "next_in_queue": "item_success",
+            }
+        )
+
+        # Act: Handle lock released event
+        await orchestrator._handle_lock_released(event)
+
+        # Assert: Task successfully enqueued
+        assert len(task_queue.enqueued_tasks) == 1
+        enqueued_task = task_queue.enqueued_tasks[0]
+        assert enqueued_task.agent == "test_agent"
+        assert enqueued_task.context["queued_item"] is True
+        # Verify the orchestrator processed the queued item
+        assert enqueued_task.context["board_id"] == "board1"

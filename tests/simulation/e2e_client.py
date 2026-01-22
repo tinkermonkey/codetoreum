@@ -220,6 +220,11 @@ class SimulationE2EClient:
         self.client = TestClient(app)
         self.clock: SimulationClock = bootstrap.infrastructure.clock
 
+    def close(self):
+        """Close the test client and release socket resources."""
+        if self.client:
+            self.client.close()
+
     # ========================================================================
     # REST API Methods
     # ========================================================================

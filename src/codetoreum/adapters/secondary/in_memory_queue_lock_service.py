@@ -21,6 +21,7 @@ from codetoreum.application.pipeline_lock_service import (
     QueueEntry,
 )
 from codetoreum.domain.events.lock_events import (
+    LockStaleDetectedEvent,
     PipelineLockAcquiredEvent,
     PipelineLockReleasedEvent,
     WorkItemQueuedEvent,
@@ -44,15 +45,22 @@ class InMemoryLockService(IPipelineLockService):
         _event_bus: Optional event bus for emitting domain events
     """
 
-    def __init__(self, event_bus: Optional[EventBus] = None) -> None:
+    def __init__(
+        self,
+        event_bus: Optional[EventBus] = None,
+        stale_threshold_seconds: int = 7200
+    ) -> None:
         """Initialize empty lock service.
 
         Args:
             event_bus: Optional event bus for emitting lock lifecycle events
+            stale_threshold_seconds: Threshold in seconds for detecting stale locks
+                                   (default 7200 = 2 hours)
         """
         self._lock_state: Dict[str, PipelineQueueState] = {}
         self._lock = threading.Lock()
         self._event_bus = event_bus
+        self._stale_threshold_seconds = stale_threshold_seconds
 
     async def try_acquire_lock(
         self,
@@ -111,6 +119,75 @@ class InMemoryLockService(IPipelineLockService):
                     work_item_id=work_item_id,
                     queue_length=len(state.queue)
                 )
+
+            # Check for stale lock (older than threshold)
+            if state.lock_holder is not None and state.lock_acquired_at is not None:
+                lock_age_seconds = (datetime.now(timezone.utc) - state.lock_acquired_at).total_seconds()
+                if lock_age_seconds > self._stale_threshold_seconds:
+                    # Stale lock detected - force release
+                    stale_work_item_id = state.lock_holder
+
+                    # Emit stale detected event
+                    if self._event_bus:
+                        stale_event = LockStaleDetectedEvent(
+                            type="lock.stale_detected",
+                            timestamp=datetime.now(timezone.utc).isoformat(),
+                            source="in_memory_lock_service",
+                            project_id=project_id,
+                            board_id=board_id,
+                            work_item_id=stale_work_item_id,
+                            lock_acquired_at=state.lock_acquired_at.isoformat(),
+                        )
+                        try:
+                            await self._event_bus.publish(stale_event)
+                        except Exception as e:
+                            logger.error(
+                                f"CRITICAL: Failed to publish stale lock detected event for work_item={stale_work_item_id}, "
+                                f"project={project_id}, board={board_id}. Stale lock was detected but event notification failed.",
+                                exc_info=True,
+                                extra={
+                                    "work_item_id": stale_work_item_id,
+                                    "project_id": project_id,
+                                    "board_id": board_id,
+                                    "event_type": "lock.stale_detected",
+                                }
+                            )
+
+                    # Force release stale lock and acquire for requester
+                    state.lock_holder = work_item_id
+                    state.lock_acquired_at = datetime.now(timezone.utc)
+
+                    # Emit lock acquired event with stale_recovery method
+                    if self._event_bus:
+                        event = PipelineLockAcquiredEvent(
+                            type="pipeline.lock_acquired",
+                            timestamp=datetime.now(timezone.utc).isoformat(),
+                            source="in_memory_lock_service",
+                            project_id=project_id,
+                            work_item_id=work_item_id,
+                            board_id=board_id,
+                            queue_length_at_acquire=len(state.queue),
+                        )
+                        try:
+                            await self._event_bus.publish(event)
+                        except Exception as e:
+                            logger.error(
+                                f"CRITICAL: Failed to publish lock acquired event (stale recovery) for work_item={work_item_id}, "
+                                f"project={project_id}, board={board_id}. Lock was acquired but event was lost.",
+                                exc_info=True,
+                                extra={
+                                    "work_item_id": work_item_id,
+                                    "project_id": project_id,
+                                    "board_id": board_id,
+                                    "event_type": "pipeline.lock_acquired",
+                                }
+                            )
+
+                    return LockAcquisitionResult(
+                        status=LockStatus.ACQUIRED,
+                        work_item_id=work_item_id,
+                        queue_length=len(state.queue)
+                    )
 
             # Try to acquire lock
             if state.lock_holder is None:
@@ -194,8 +271,8 @@ class InMemoryLockService(IPipelineLockService):
                     await self._event_bus.publish(event)
                 except Exception as e:
                     logger.error(
-                        f"CRITICAL: Failed to publish work item queued event for work_item={work_item_id}, "
-                        f"project={project_id}, board={board_id}. Item was queued but event was lost.",
+                        f"CRITICAL: Failed to publish workitem queued event for work_item={work_item_id}, "
+                        f"project={project_id}, board={board_id}. Item was queued but event notification failed.",
                         exc_info=True,
                         extra={
                             "work_item_id": work_item_id,
@@ -305,14 +382,13 @@ class InMemoryLockService(IPipelineLockService):
                         await self._event_bus.publish(acquire_event)
                     except Exception as e:
                         logger.error(
-                            f"CRITICAL: Failed to publish lock acquired event for next work_item={next_item_id}, "
-                            f"project={project_id}, board={board_id}. Next item has lock but event was lost.",
+                            f"CRITICAL: Failed to publish lock acquired event (after release) for work_item={next_item_id}, "
+                            f"project={project_id}, board={board_id}. Lock was acquired by next item but event was lost.",
                             exc_info=True,
                             extra={
                                 "work_item_id": next_item_id,
                                 "project_id": project_id,
                                 "board_id": board_id,
-                                "queue_length": len(state.queue),
                                 "event_type": "pipeline.lock_acquired",
                             }
                         )
@@ -403,6 +479,9 @@ class InMemoryLockService(IPipelineLockService):
             if not state or not state.queue:
                 return
 
+            # Track what changed for logging
+            old_order = [e.work_item_id for e in state.queue]
+
             # Update positions for queued items
             for entry in state.queue:
                 if entry.work_item_id in updated_positions:
@@ -410,3 +489,54 @@ class InMemoryLockService(IPipelineLockService):
 
             # Re-sort queue by updated positions
             state.queue.sort(key=lambda e: e.board_position)
+
+            new_order = [e.work_item_id for e in state.queue]
+
+            # Log changes
+            if old_order != new_order:
+                logger.info(
+                    f"Queue reordered for {project_id}/{board_id}: "
+                    f"{len(updated_positions)} items updated",
+                    extra={
+                        "project_id": project_id,
+                        "board_id": board_id,
+                        "updated_items": list(updated_positions.keys()),
+                        "old_order": old_order,
+                        "new_order": new_order,
+                    }
+                )
+
+    def set_lock_acquired_at(
+        self, project_id: str, board_id: str, timestamp: datetime
+    ) -> None:
+        """Test helper to manipulate lock timestamp for stale lock testing.
+
+        Allows tests to set the lock acquisition timestamp to simulate
+        locks of different ages without waiting for real time to pass.
+        This enables deterministic testing of stale lock detection.
+
+        Args:
+            project_id: Project ID
+            board_id: Board ID
+            timestamp: Datetime to set as lock acquisition time
+
+        Raises:
+            ValueError: If lock doesn't exist for the given board
+        """
+        with self._lock:
+            board_key = f"{project_id}:{board_id}"
+            state = self._lock_state.get(board_key)
+
+            if not state or state.lock_holder is None:
+                raise ValueError(
+                    f"No lock exists for {board_key}"
+                )
+
+            # Create new state with updated timestamp (immutable pattern)
+            self._lock_state[board_key] = PipelineQueueState(
+                project_id=state.project_id,
+                board_id=state.board_id,
+                lock_holder=state.lock_holder,
+                lock_acquired_at=timestamp,
+                queue=state.queue
+            )

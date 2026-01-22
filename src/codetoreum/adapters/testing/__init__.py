@@ -11,6 +11,7 @@ from codetoreum.adapters.testing.in_memory_metrics_adapter import InMemoryMetric
 from codetoreum.adapters.testing.mock_notifier_adapter import MockNotifierAdapter
 from codetoreum.adapters.testing.simple_encryption_adapter import SimpleEncryptionAdapter
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter, MovementEvent
+from codetoreum.adapters.testing.in_memory_queue_service import InMemoryQueueService
 
 __all__ = [
     "InMemoryEventStore",
@@ -23,4 +24,5 @@ __all__ = [
     "SimpleEncryptionAdapter",
     "MockBoardAdapter",
     "MovementEvent",
+    "InMemoryQueueService",
 ]

@@ -233,8 +233,8 @@ config.local.yaml
 .env.local
 .env.production
 
-# Claude Code prompt files
+# Claude Code generated prompts
 .claude_prompt_*.txt
 
-# Virtual environment testing
+# Test virtual environments
 .venv_test/

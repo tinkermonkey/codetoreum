@@ -28,7 +28,23 @@ def is_docker_available() -> bool:
             client.ping()
             return True
         finally:
-            client.close()
+            # Properly close all resources to avoid ResourceWarnings
+            try:
+                if hasattr(client, 'api'):
+                    api = client.api
+                    # Close the API client's session and adapter connection pools
+                    if hasattr(api, '_session') and api._session:
+                        api._session.close()
+                    if hasattr(api, 'close'):
+                        api.close()
+            except Exception:
+                # Ignore cleanup errors
+                pass
+            try:
+                client.close()
+            except Exception:
+                # Ignore cleanup errors
+                pass
     except (docker.errors.DockerException, Exception):
         return False
 
@@ -57,7 +73,23 @@ def docker_client() -> Generator[docker.DockerClient, None, None]:
     try:
         yield client
     finally:
-        client.close()
+        # Properly close all resources to avoid ResourceWarnings
+        try:
+            if hasattr(client, 'api'):
+                api = client.api
+                # Close the API client's session and adapter connection pools
+                if hasattr(api, '_session') and api._session:
+                    api._session.close()
+                if hasattr(api, 'close'):
+                    api.close()
+        except Exception:
+            # Ignore cleanup errors
+            pass
+        try:
+            client.close()
+        except Exception:
+            # Ignore cleanup errors
+            pass
 
 
 @pytest.fixture
