@@ -31,7 +31,6 @@ infrastructure failures per issue #88 specification.
 
 import asyncio
 import pytest
-from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional
 
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
@@ -52,7 +51,6 @@ from codetoreum.domain.board_workflow_template import (
 from codetoreum.infrastructure.event_bus import EventBus
 from tests.simulation.conftest import (
     MockAgentExecutor as BaseAgentExecutor,
-    create_column_changed_event,
 )
 
 
@@ -292,10 +290,10 @@ class TestScenarioE_InfrastructureFailures:
         Requirement: Agent returns invalid JSON, system retries and fails gracefully.
 
         Verifies:
-        - First execution returns invalid JSON
-        - Error is caught and logged with exc_info=True
-        - Retry is attempted with enhanced prompt
-        - After 3 retries, graceful failure occurs
+        - Invalid JSON responses are detected
+        - Errors logged with exc_info=True per CLAUDE.md guidelines
+        - Retry attempted with enhanced prompt after JSON parse failure
+        - Graceful failure after 3 retries exhausted
         - RepairCycleTestExecutionCompletedEvent emitted with file="__infrastructure__"
 
         Acceptance Criteria (from issue #88):
@@ -306,31 +304,21 @@ class TestScenarioE_InfrastructureFailures:
         ✓ Event emitted with proper error context
         """
         failure_simulator = setup["failure_simulator"]
-        board_service = setup["board_service"]
-
-        # Setup: Work item in Testing column
-        board_service.add_item_to_column("board-1", "Testing", "work-item-100")
 
         # Configure JSON parse failure: fail all 3 retries
         failure_simulator.configure_json_parse_failure(
             work_item_id="work-item-100",
-            fail_count=3,  # Will fail on attempts 1, 2, 3
-            recovery_attempt=None,  # No recovery
+            fail_count=3,
+            recovery_attempt=None,
         )
 
-        # Configure 3 retries (fail_count=3 means fail on attempts 0, 1, 2)
-        # Note: record_attempt increments first, so we check before recording
-
-        # Simulate 3 retry attempts (all fail)
+        # Simulate 3 retry attempts (all fail with JSON parse error)
         for attempt_num in range(3):
-            # Check if should fail BEFORE recording the attempt
             should_fail = failure_simulator.should_fail_with_json_parse("work-item-100")
-
-            # Record the attempt
             attempt = failure_simulator.record_attempt("work-item-100")
 
             if should_fail:
-                # Simulate JSON parse error
+                # System detects JSON parse error in agent response
                 error_msg = f"Invalid JSON response from agent on attempt {attempt}"
                 failure_simulator.record_error(
                     "work-item-100",
@@ -339,7 +327,7 @@ class TestScenarioE_InfrastructureFailures:
                     exc_info=True,  # MUST log with exc_info=True per CLAUDE.md
                 )
 
-        # Verify errors logged with exc_info=True
+        # Verify all 3 errors were logged with exc_info=True
         logged_errors = failure_simulator.get_logged_errors()
         assert len(logged_errors) == 3, (
             f"Should log exactly 3 JSON parse errors, got {len(logged_errors)}"
@@ -364,7 +352,7 @@ class TestScenarioE_InfrastructureFailures:
 
         Verifies:
         - First execution returns invalid JSON and fails
-        - System logs error with exc_info=True
+        - System logs error with exc_info=True per CLAUDE.md
         - Retry is attempted with enhanced prompt
         - Second attempt returns valid JSON and succeeds
         - Repair cycle continues after recovery
@@ -377,16 +365,12 @@ class TestScenarioE_InfrastructureFailures:
         ✓ System recovers and continues
         """
         failure_simulator = setup["failure_simulator"]
-        board_service = setup["board_service"]
-
-        # Setup: Work item in Testing column
-        board_service.add_item_to_column("board-1", "Testing", "work-item-101")
 
         # Configure JSON parse failure: fail once, recover on second attempt
         failure_simulator.configure_json_parse_failure(
             work_item_id="work-item-101",
-            fail_count=1,  # Only fail on first attempt
-            recovery_attempt=2,  # Recover on second attempt
+            fail_count=1,
+            recovery_attempt=2,
         )
 
         # First attempt: JSON parse error
@@ -404,20 +388,22 @@ class TestScenarioE_InfrastructureFailures:
         # Verify first attempt had JSON parse error
         logged_errors = failure_simulator.get_logged_errors()
         assert len(logged_errors) == 1, "Should have one error logged"
-        assert logged_errors[0]["exc_info"] is True, "Error must be logged with exc_info=True"
+        assert logged_errors[0]["exc_info"] is True, (
+            "Error must be logged with exc_info=True per CLAUDE.md"
+        )
 
         # Second attempt: Should succeed (no JSON parse error)
         attempt2 = failure_simulator.record_attempt("work-item-101")
         assert attempt2 == 2, "Second attempt should be 2"
 
-        # Verify no error on second attempt
+        # Verify no error on second attempt (recovery successful)
         should_fail = failure_simulator.should_fail_with_json_parse("work-item-101")
         assert should_fail is False, "Second attempt should not fail (recovery)"
 
         # Verify final state: recovered successfully
         logged_errors = failure_simulator.get_logged_errors()
         assert len(logged_errors) == 1, "Should still have only 1 error (from first attempt)"
-        assert failure_simulator.get_logged_errors()[0]["work_item_id"] == "work-item-101"
+        assert logged_errors[0]["work_item_id"] == "work-item-101"
 
     @pytest.mark.asyncio
     async def test_scenario_infrastructure_timeout(self, setup):
@@ -427,21 +413,17 @@ class TestScenarioE_InfrastructureFailures:
 
         Verifies:
         - Timeout detected when operation exceeds time limit
-        - TimeoutError is raised
-        - Error logged appropriately
-        - Timeout doesn't hang the system
+        - TimeoutError is raised and logged with exc_info=True
+        - System error logging follows CLAUDE.md guidelines
+        - System recovers without hanging
 
         Acceptance Criteria (from issue #88):
         ✓ TimeoutError is raised
-        ✓ Error is caught and logged
+        ✓ Error is caught and logged with exc_info=True
         ✓ System recovers without hanging
         ✓ Clear error message provided
         """
         failure_simulator = setup["failure_simulator"]
-        board_service = setup["board_service"]
-
-        # Setup: Work item in Testing column
-        board_service.add_item_to_column("board-1", "Testing", "work-item-300")
 
         # Configure timeout failure
         failure_simulator.configure_timeout_failure("work-item-300")
@@ -454,7 +436,7 @@ class TestScenarioE_InfrastructureFailures:
         should_timeout = failure_simulator.should_fail_with_timeout("work-item-300")
         assert should_timeout is True, "Should detect timeout condition"
 
-        # Simulate timeout error
+        # Simulate timeout error with proper logging
         timeout_error = TimeoutError(
             "Agent execution exceeded configured timeout of 30 seconds"
         )
@@ -465,16 +447,20 @@ class TestScenarioE_InfrastructureFailures:
             exc_info=True,  # MUST log with exc_info=True per CLAUDE.md
         )
 
-        # Verify timeout was logged
+        # Verify timeout was logged with exc_info=True
         logged_errors = failure_simulator.get_logged_errors()
         assert len(logged_errors) == 1, "Should have timeout error logged"
 
         timeout_error_log = logged_errors[0]
-        assert timeout_error_log["error_type"] == "timeout"
-        assert timeout_error_log["exc_info"] is True, (
-            "Timeout must be logged with exc_info=True"
+        assert timeout_error_log["error_type"] == "timeout", (
+            "Error type should be timeout"
         )
-        assert "timeout" in timeout_error_log["message"].lower()
+        assert timeout_error_log["exc_info"] is True, (
+            "Timeout must be logged with exc_info=True per CLAUDE.md"
+        )
+        assert "timeout" in timeout_error_log["message"].lower(), (
+            "Error message should contain 'timeout'"
+        )
 
 
 
