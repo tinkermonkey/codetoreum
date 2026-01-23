@@ -232,9 +232,32 @@ class RepairTestRunConfig:
     Immutable configuration controlling how a single test type (UNIT, INTEGRATION, E2E)
     is executed within the repair cycle.
 
-<<<<<<< Updated upstream
     **Immutability**: Frozen dataclass - all fields read-only after construction.
-=======
+
+    Attributes:
+        test_type: Type of test to run (UNIT, INTEGRATION, E2E)
+        timeout: Timeout in seconds for a single test execution (default 900s = 15min)
+        max_iterations: Maximum iterations to attempt (test-fix-validate cycles)
+        review_warnings: Whether to review and fix warnings in addition to failures
+        max_file_iterations: Maximum times to attempt fixing a single file before giving up
+    """
+
+    test_type: RepairTestType
+    timeout: int = 900  # Timeout in seconds
+    max_iterations: int = 5  # Max test-fix-validate iterations
+    review_warnings: bool = True  # Whether to review/fix warnings
+    max_file_iterations: int = 3  # Max times to attempt fixing a single file
+
+    def __post_init__(self) -> None:
+        """Validate configuration after initialization."""
+        if self.timeout <= 0:
+            raise ValueError("timeout must be > 0")
+        if self.max_iterations <= 0:
+            raise ValueError("max_iterations must be > 0")
+        if self.max_file_iterations <= 0:
+            raise ValueError("max_file_iterations must be > 0")
+
+
 @dataclass(frozen=True)
 class RepairCycleCheckpoint:
     """Checkpoint state for repair cycle recovery.
@@ -284,37 +307,6 @@ class RepairCycleCheckpoint:
             raise ValueError("elapsed_seconds cannot be negative")
         if not isinstance(self.test_results, tuple):
             raise ValueError("test_results must be a tuple (immutable)")
-
-
-@dataclass
-class RepairCycleContext:
-    """Context for repair cycle execution (mutable, passed by reference).
-
-    This is NOT frozen - it's a mutable context object passed between services.
->>>>>>> Stashed changes
-
-    Attributes:
-        test_type: Type of test to run (UNIT, INTEGRATION, E2E)
-        timeout: Timeout in seconds for a single test execution (default 900s = 15min)
-        max_iterations: Maximum iterations to attempt (test-fix-validate cycles)
-        review_warnings: Whether to review and fix warnings in addition to failures
-        max_file_iterations: Maximum times to attempt fixing a single file before giving up
-    """
-
-    test_type: RepairTestType
-    timeout: int = 900  # Timeout in seconds
-    max_iterations: int = 5  # Max test-fix-validate iterations
-    review_warnings: bool = True  # Whether to review/fix warnings
-    max_file_iterations: int = 3  # Max times to attempt fixing a single file
-
-    def __post_init__(self) -> None:
-        """Validate configuration after initialization."""
-        if self.timeout <= 0:
-            raise ValueError("timeout must be > 0")
-        if self.max_iterations <= 0:
-            raise ValueError("max_iterations must be > 0")
-        if self.max_file_iterations <= 0:
-            raise ValueError("max_file_iterations must be > 0")
 
 
 @dataclass(frozen=True)

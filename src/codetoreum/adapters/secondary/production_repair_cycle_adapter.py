@@ -32,6 +32,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from codetoreum.domain.repair_cycle_types import (
     CycleResult,
+    RepairCycleCheckpoint,
     RepairCycleResult,
     RepairTestFailure,
     RepairTestResult,
@@ -44,6 +45,7 @@ from codetoreum.domain.events.repair_cycle_events import (
     RepairCycleFileFixCompletedEvent,
     RepairCycleFileFixStartedEvent,
     RepairCycleFastFailEvent,
+    RepairCycleResumedEvent,
     RepairCycleStartedEvent,
     RepairCycleTestCycleCompletedEvent,
     RepairCycleTestExecutionCompletedEvent,
@@ -54,6 +56,7 @@ from codetoreum.ports.output.repair_cycle_service import (
     IRepairCycle,
     RepairCycleContext,
 )
+from codetoreum.ports.output.repair_cycle_checkpoint_store import IRepairCycleCheckpointStore
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +121,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         llm_provider: Any,
         config: RepairCycleConfig = None,
         event_emitter: Any = None,
+        checkpoint_store: IRepairCycleCheckpointStore = None,
     ) -> None:
         """Initialize production repair cycle adapter.
 
@@ -125,10 +129,12 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             llm_provider: ILLMProvider implementation (e.g., Claude Code adapter)
             config: Optional RepairCycleConfig (uses defaults if not provided)
             event_emitter: Optional event emitter (uses null-object if not provided)
+            checkpoint_store: Optional checkpoint store for resumable repairs
         """
         self.llm_provider = llm_provider
         self.config = config or RepairCycleConfig()
         self.event_emitter = event_emitter or NullEventEmitter()
+        self.checkpoint_store = checkpoint_store
         self.agent_call_count = 0
 
     async def execute(self, context: RepairCycleContext) -> RepairCycleResult:
@@ -617,25 +623,64 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             iteration: Current iteration number
             context: Repair cycle context
         """
-        logger.info(
-            "Saving checkpoint",
-            extra={
-                "pipeline_run_id": context.pipeline_run_id,
-                "test_type": test_type.value,
-                "iteration": iteration,
-                "agent_calls": self.agent_call_count,
-            },
-            exc_info=False,
-        )
+        if not self.checkpoint_store:
+            logger.debug(
+                "Checkpoint skipped: no checkpoint store configured",
+                extra={
+                    "pipeline_run_id": context.pipeline_run_id,
+                    "test_type": test_type.value,
+                    "iteration": iteration,
+                },
+                exc_info=False,
+            )
+            return
 
-        # TODO: Implement checkpoint persistence to Redis/PostgreSQL
-        # This would save:
-        # - pipeline_run_id
-        # - test_type
-        # - iteration
-        # - agent_call_count
-        # - timestamp
-        # Data structure: checkpoint:{pipeline_run_id}:{test_type} = {...}
+        try:
+            from datetime import datetime, timedelta
+
+            # Create checkpoint with current state
+            now = datetime.utcnow()
+            expires_at = (now + timedelta(hours=24)).isoformat()
+
+            checkpoint = RepairCycleCheckpoint(
+                pipeline_run_id=context.pipeline_run_id,
+                test_type=test_type.value,
+                iteration=iteration,
+                total_agent_calls=self.agent_call_count,
+                files_fixed=0,  # Would be tracked by application layer
+                warnings_reviewed=0,  # Would be tracked by application layer
+                elapsed_seconds=0.0,  # Would be tracked by application layer
+                test_results=(),  # Would contain completed test results
+                timestamp=now.isoformat(),
+                expires_at=expires_at,
+            )
+
+            # Save to checkpoint store
+            await self.checkpoint_store.save_checkpoint(checkpoint)
+
+            logger.info(
+                "Checkpoint saved successfully",
+                extra={
+                    "pipeline_run_id": context.pipeline_run_id,
+                    "test_type": test_type.value,
+                    "iteration": iteration,
+                    "agent_calls": self.agent_call_count,
+                    "expires_at": expires_at,
+                },
+                exc_info=False,
+            )
+
+        except Exception as e:
+            logger.error(
+                "Failed to save checkpoint",
+                extra={
+                    "pipeline_run_id": context.pipeline_run_id,
+                    "test_type": test_type.value,
+                    "iteration": iteration,
+                    "error": str(e),
+                },
+                exc_info=True,
+            )
 
     # Private helper methods
 
