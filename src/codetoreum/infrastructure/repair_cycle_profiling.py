@@ -12,12 +12,45 @@ import logging
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Callable, Any
+from typing import Dict, List, Optional, Any
 from datetime import datetime
 import psutil
 import tracemalloc
 
 logger = logging.getLogger(__name__)
+
+__all__ = [
+    "ProfileData",
+    "RepairCycleProfiler",
+    "PerformanceThresholdMonitor",
+    "RepairCycleProfilerContext",
+    "ThresholdCheckingContext",
+]
+
+
+class ThresholdCheckingContext:
+    """Context manager to check performance thresholds on profile completion."""
+
+    def __init__(self, ctx, monitor):
+        """Initialize threshold checking context."""
+        self.ctx = ctx
+        self.monitor = monitor
+        self.profile = None
+
+    def __enter__(self):
+        """Enter context and get profile."""
+        self.profile = self.ctx.__enter__()
+        return self.profile
+
+    def __exit__(self, *args):
+        """Exit context and check thresholds."""
+        result = self.ctx.__exit__(*args)
+        if self.profile:
+            violations = self.monitor.check_thresholds(self.profile)
+            if violations:
+                operation = self.profile.operation
+                logger.warning(f"Performance threshold violations for {operation}: {violations}")
+        return result
 
 
 @dataclass
@@ -62,16 +95,23 @@ class ProfileData:
 class RepairCycleProfiler:
     """Performance profiler for repair cycle stages."""
 
-    def __init__(self, enable_memory_tracking: bool = True, enable_cpu_tracking: bool = True):
+    def __init__(
+        self,
+        enable_memory_tracking: bool = True,
+        enable_cpu_tracking: bool = True,
+        max_profiles: int = 1000,
+    ):
         """
         Initialize repair cycle profiler.
 
         Args:
             enable_memory_tracking: Enable memory profiling
             enable_cpu_tracking: Enable CPU profiling
+            max_profiles: Maximum number of profiles to keep (prevents memory leaks)
         """
         self.enable_memory_tracking = enable_memory_tracking
         self.enable_cpu_tracking = enable_cpu_tracking
+        self.max_profiles = max_profiles
         self._profiles: List[ProfileData] = []
         self._process = psutil.Process()
         self._memory_tracker = None
@@ -101,8 +141,6 @@ class RepairCycleProfiler:
         if self.enable_memory_tracking:
             tracemalloc.reset_peak()
             start_memory = tracemalloc.get_traced_memory()[0]
-
-        start_cpu = self._process.cpu_num() if self.enable_cpu_tracking else 0
 
         profile = ProfileData(
             operation=operation,
@@ -134,6 +172,11 @@ class RepairCycleProfiler:
                     logger.debug(f"Error getting CPU percent: {e}")
 
             self._profiles.append(profile)
+
+            # Prevent memory leak by maintaining ring buffer
+            if len(self._profiles) > self.max_profiles:
+                self._profiles.pop(0)
+
             del self._active_profiles[operation]
 
             duration = profile.duration_seconds
@@ -257,9 +300,11 @@ class PerformanceThresholdMonitor:
         Initialize performance threshold monitor.
 
         Args:
-            thresholds: Dict mapping operation to thresholds (duration_seconds, memory_delta_mb, etc.)
+            thresholds: Dict mapping operation to thresholds (duration_seconds, memory_delta_mb, etc.).
+                       If None, uses default thresholds.
+                       Example: {"test_execution": {"duration_seconds": 300.0, "memory_delta_mb": 500.0}}
         """
-        self.thresholds = thresholds or self._default_thresholds()
+        self.thresholds = thresholds if thresholds is not None else self._default_thresholds()
         self._violations: List[Dict[str, Any]] = []
 
     @staticmethod
@@ -349,37 +394,34 @@ class RepairCycleProfilerContext:
         enable_memory_tracking: bool = True,
         enable_cpu_tracking: bool = True,
         threshold_monitoring: bool = True,
+        custom_thresholds: Optional[Dict[str, Dict[str, float]]] = None,
+        max_profiles: int = 1000,
     ):
-        """Initialize profiler context."""
-        self.profiler = RepairCycleProfiler(enable_memory_tracking, enable_cpu_tracking)
-        self.threshold_monitor = PerformanceThresholdMonitor() if threshold_monitoring else None
+        """
+        Initialize profiler context.
+
+        Args:
+            enable_memory_tracking: Enable memory profiling
+            enable_cpu_tracking: Enable CPU profiling
+            threshold_monitoring: Enable threshold monitoring
+            custom_thresholds: Optional custom performance thresholds
+            max_profiles: Maximum number of profiles to keep in memory
+        """
+        self.profiler = RepairCycleProfiler(
+            enable_memory_tracking,
+            enable_cpu_tracking,
+            max_profiles=max_profiles,
+        )
+        threshold_monitor = None
+        if threshold_monitoring:
+            threshold_monitor = PerformanceThresholdMonitor(thresholds=custom_thresholds)
+        self.threshold_monitor = threshold_monitor
 
     def profile(self, operation: str, metadata: Optional[Dict[str, Any]] = None):
         """Profile an operation."""
         context = self.profiler.profile_operation(operation, metadata)
 
         if self.threshold_monitor:
-            # Wrap context to check thresholds on exit
-            class ThresholdCheckingContext:
-                def __init__(self, ctx, monitor):
-                    self.ctx = ctx
-                    self.monitor = monitor
-                    self.profile = None
-
-                def __enter__(self):
-                    self.profile = self.ctx.__enter__()
-                    return self.profile
-
-                def __exit__(self, *args):
-                    result = self.ctx.__exit__(*args)
-                    if self.profile:
-                        violations = self.monitor.check_thresholds(self.profile)
-                        if violations:
-                            logger.warning(
-                                f"Performance threshold violations for {operation}: {violations}"
-                            )
-                    return result
-
             return ThresholdCheckingContext(context, self.threshold_monitor)
         else:
             return context

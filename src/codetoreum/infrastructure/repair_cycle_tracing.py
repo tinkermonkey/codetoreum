@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 
 try:
-    from opentelemetry import trace, metrics
+    from opentelemetry import trace
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor
     from opentelemetry.exporter.jaeger.thrift import JaegerExporter
@@ -25,6 +25,16 @@ except ImportError:
     OTEL_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
+
+__all__ = [
+    "RepairCycleTracer",
+    "NullRepairCycleTracer",
+    "get_repair_cycle_tracer",
+    "OTEL_AVAILABLE",
+]
+
+# Track if instrumentation has been applied to prevent double instrumentation
+_INSTRUMENTATION_APPLIED = False
 
 
 class RepairCycleTracer:
@@ -66,6 +76,7 @@ class RepairCycleTracer:
         jaeger_port: int = 6831,
     ) -> None:
         """Initialize OpenTelemetry tracer."""
+        global _INSTRUMENTATION_APPLIED
         try:
             if jaeger_host:
                 jaeger_exporter = JaegerExporter(
@@ -80,9 +91,14 @@ class RepairCycleTracer:
             trace.set_tracer_provider(self.tracer_provider)
             self.tracer = trace.get_tracer(__name__)
 
-            # Instrument HTTP libraries
-            RequestsInstrumentor().instrument()
-            URLLib3Instrumentor().instrument()
+            # Instrument HTTP libraries (guard against double instrumentation)
+            if not _INSTRUMENTATION_APPLIED:
+                try:
+                    RequestsInstrumentor().instrument()
+                    URLLib3Instrumentor().instrument()
+                    _INSTRUMENTATION_APPLIED = True
+                except Exception as e:
+                    logger.debug(f"HTTP instrumentation skipped (may already be applied): {e}")
 
             logger.info(f"OpenTelemetry tracer initialized for {service_name}")
 

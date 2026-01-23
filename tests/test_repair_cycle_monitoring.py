@@ -13,7 +13,10 @@ import logging
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from codetoreum.adapters.secondary.prometheus_metrics_adapter import PrometheusMetricsAdapter
+from codetoreum.adapters.secondary.prometheus_metrics_adapter import (
+    PrometheusMetricsAdapter,
+    PROMETHEUS_AVAILABLE,
+)
 from codetoreum.infrastructure.repair_cycle_metrics_collector import (
     RepairCycleMetricsCollector,
     RepairCycleMetrics,
@@ -44,7 +47,7 @@ from codetoreum.infrastructure.repair_cycle_profiling import (
 class TestPrometheusMetricsAdapter:
     """Test Prometheus metrics adapter."""
 
-    @pytest.mark.skipif(True, reason="Requires prometheus_client installed")
+    @pytest.mark.skipif(not PROMETHEUS_AVAILABLE, reason="Requires prometheus_client installed")
     async def test_increment_counter(self):
         """Test counter increment."""
         adapter = PrometheusMetricsAdapter()
@@ -54,7 +57,7 @@ class TestPrometheusMetricsAdapter:
         )
         assert await adapter.health_check()
 
-    @pytest.mark.skipif(True, reason="Requires prometheus_client installed")
+    @pytest.mark.skipif(not PROMETHEUS_AVAILABLE, reason="Requires prometheus_client installed")
     async def test_set_gauge(self):
         """Test gauge setting."""
         adapter = PrometheusMetricsAdapter()
@@ -65,7 +68,7 @@ class TestPrometheusMetricsAdapter:
         )
         assert await adapter.health_check()
 
-    @pytest.mark.skipif(True, reason="Requires prometheus_client installed")
+    @pytest.mark.skipif(not PROMETHEUS_AVAILABLE, reason="Requires prometheus_client installed")
     async def test_record_histogram(self):
         """Test histogram recording."""
         adapter = PrometheusMetricsAdapter()
@@ -76,7 +79,7 @@ class TestPrometheusMetricsAdapter:
         )
         assert await adapter.health_check()
 
-    @pytest.mark.skipif(True, reason="Requires prometheus_client installed")
+    @pytest.mark.skipif(not PROMETHEUS_AVAILABLE, reason="Requires prometheus_client installed")
     async def test_timer_context(self):
         """Test timer functionality."""
         adapter = PrometheusMetricsAdapter()
@@ -85,7 +88,7 @@ class TestPrometheusMetricsAdapter:
         duration = await adapter.stop_timer(timer_id, labels={"operation": "test"})
         assert duration >= 0
 
-    @pytest.mark.skipif(True, reason="Requires prometheus_client installed")
+    @pytest.mark.skipif(not PROMETHEUS_AVAILABLE, reason="Requires prometheus_client installed")
     async def test_batch_recording(self):
         """Test batch metric recording."""
         adapter = PrometheusMetricsAdapter()
@@ -96,6 +99,7 @@ class TestPrometheusMetricsAdapter:
         await adapter.record_batch(metrics)
         assert await adapter.health_check()
 
+    @pytest.mark.skipif(not PROMETHEUS_AVAILABLE, reason="Requires prometheus_client installed")
     async def test_metrics_registry(self):
         """Test metrics registry."""
         adapter = PrometheusMetricsAdapter()
@@ -103,6 +107,7 @@ class TestPrometheusMetricsAdapter:
         assert len(names) > 0
         assert any("repair_cycle" in name for name in names)
 
+    @pytest.mark.skipif(not PROMETHEUS_AVAILABLE, reason="Requires prometheus_client installed")
     async def test_health_check(self):
         """Test health check."""
         adapter = PrometheusMetricsAdapter()

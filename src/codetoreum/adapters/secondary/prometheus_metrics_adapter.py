@@ -10,7 +10,7 @@ Provides detailed metrics for:
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 try:
@@ -22,6 +22,11 @@ except ImportError:
 from codetoreum.ports.output.metrics import IMetrics, MetricData
 
 logger = logging.getLogger(__name__)
+
+__all__ = [
+    "PrometheusMetricsAdapter",
+    "PROMETHEUS_AVAILABLE",
+]
 
 
 class PrometheusMetricsAdapter(IMetrics):
@@ -89,12 +94,12 @@ class PrometheusMetricsAdapter(IMetrics):
         self._files_fixed_total = Counter(
             f"{prefix}_files_fixed_total",
             "Total files fixed",
-            ["agent_name", "file_extension"],
+            ["file_extension"],
         )
         self._warnings_reviewed_total = Counter(
             f"{prefix}_warnings_reviewed_total",
             "Total warnings reviewed",
-            ["agent_name", "severity"],
+            ["severity"],
         )
 
         # Gauges
