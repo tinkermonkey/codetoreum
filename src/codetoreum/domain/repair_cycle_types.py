@@ -232,7 +232,66 @@ class RepairTestRunConfig:
     Immutable configuration controlling how a single test type (UNIT, INTEGRATION, E2E)
     is executed within the repair cycle.
 
+<<<<<<< Updated upstream
     **Immutability**: Frozen dataclass - all fields read-only after construction.
+=======
+@dataclass(frozen=True)
+class RepairCycleCheckpoint:
+    """Checkpoint state for repair cycle recovery.
+
+    Saved periodically during execution to allow resuming after crashes.
+    All fields are immutable for audit integrity.
+
+    Attributes:
+        pipeline_run_id: Unique identifier for this pipeline run
+        test_type: Current test type being executed
+        iteration: Current iteration number (1-indexed)
+        total_agent_calls: Number of agent calls so far
+        files_fixed: Number of files fixed so far
+        warnings_reviewed: Number of warnings reviewed so far
+        elapsed_seconds: Time already spent on this cycle
+        test_results: Completed test results for each test type
+        timestamp: ISO 8601 timestamp of checkpoint creation
+        expires_at: ISO 8601 timestamp when checkpoint should expire (24 hours)
+    """
+
+    pipeline_run_id: str
+    test_type: str
+    iteration: int
+    total_agent_calls: int
+    files_fixed: int
+    warnings_reviewed: int
+    elapsed_seconds: float
+    test_results: Tuple[CycleResult, ...]
+    timestamp: str
+    expires_at: str
+
+    def __post_init__(self) -> None:
+        """Validate checkpoint fields."""
+        if not self.pipeline_run_id or not self.pipeline_run_id.strip():
+            raise ValueError("pipeline_run_id cannot be empty")
+        if not self.test_type or not self.test_type.strip():
+            raise ValueError("test_type cannot be empty")
+        if self.iteration < 1:
+            raise ValueError("iteration must be >= 1 (1-indexed)")
+        if self.total_agent_calls < 0:
+            raise ValueError("total_agent_calls cannot be negative")
+        if self.files_fixed < 0:
+            raise ValueError("files_fixed cannot be negative")
+        if self.warnings_reviewed < 0:
+            raise ValueError("warnings_reviewed cannot be negative")
+        if self.elapsed_seconds < 0:
+            raise ValueError("elapsed_seconds cannot be negative")
+        if not isinstance(self.test_results, tuple):
+            raise ValueError("test_results must be a tuple (immutable)")
+
+
+@dataclass
+class RepairCycleContext:
+    """Context for repair cycle execution (mutable, passed by reference).
+
+    This is NOT frozen - it's a mutable context object passed between services.
+>>>>>>> Stashed changes
 
     Attributes:
         test_type: Type of test to run (UNIT, INTEGRATION, E2E)

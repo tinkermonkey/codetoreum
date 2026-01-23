@@ -82,6 +82,9 @@ from codetoreum.ports.output.repair_cycle_service import (
     IRepairCycle,
     RepairCycleContext,
 )
+from codetoreum.ports.output.repair_cycle_checkpoint_store import (
+    IRepairCycleCheckpointStore,
+)
 from codetoreum.ports.output.repository import (
     IRepository,
     MergeResult,
@@ -172,6 +175,7 @@ __all__ = [
     # Repair Cycle
     "IRepairCycle",
     "RepairCycleContext",
+    "IRepairCycleCheckpointStore",
     # Repository
     "IRepository",
     "MergeResult",

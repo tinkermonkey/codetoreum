@@ -743,6 +743,64 @@ class RepairCycleFastFailEvent(CodetoreumEvent):
 
 
 @dataclass(frozen=True)
+class RepairCycleResumedEvent(CodetoreumEvent):
+    """Emitted when repair cycle resumes from a checkpoint.
+
+    Attributes:
+        type: Fixed to "repair_cycle.resumed"
+        pipeline_run_id: Unique identifier for this pipeline run
+        test_type: Test type being resumed
+        iteration: Iteration number being resumed from
+        elapsed_time: Time already spent on this cycle
+        agent_calls_so_far: Number of agent calls already made
+    """
+
+    pipeline_run_id: str = ""
+    test_type: str = ""
+    iteration: int = 0
+    elapsed_time: float = 0.0
+    agent_calls_so_far: int = 0
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.pipeline_run_id:
+            raise ValueError("pipeline_run_id is required")
+        if not self.test_type:
+            raise ValueError("test_type is required")
+        if self.iteration < 1:
+            raise ValueError("iteration must be >= 1")
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update({
+            "pipeline_run_id": self.pipeline_run_id,
+            "test_type": self.test_type,
+            "iteration": self.iteration,
+            "elapsed_time": self.elapsed_time,
+            "agent_calls_so_far": self.agent_calls_so_far,
+        })
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "RepairCycleResumedEvent":
+        """Deserialize from dictionary."""
+        return cls(
+            type=data.get("type", "repair_cycle.resumed"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            pipeline_run_id=data.get("pipeline_run_id", ""),
+            test_type=data.get("test_type", ""),
+            iteration=data.get("iteration", 0),
+            elapsed_time=data.get("elapsed_time", 0.0),
+            agent_calls_so_far=data.get("agent_calls_so_far", 0),
+        )
+
+
+@dataclass(frozen=True)
 class RepairCycleCompletedEvent(CodetoreumEvent):
     """Emitted when entire repair cycle completes (FR-9.1).
 

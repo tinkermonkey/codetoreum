@@ -43,6 +43,19 @@ class MetricsCollector:
             "comments_processed": 0,
             "agents_triggered": 0,
             "errors": 0,
+            # Repair cycle metrics
+            "repair_cycles_started": 0,
+            "repair_cycles_completed": 0,
+            "repair_cycles_successful": 0,
+            "repair_cycles_failed": 0,
+            "repair_cycles_fast_failed": 0,
+            "repair_cycle_duration_seconds": [],  # List of durations
+            "repair_cycle_test_iterations": {},  # {test_type: count}
+            "repair_cycle_files_fixed": [],  # List of file counts per cycle
+            "repair_cycle_agent_calls": [],  # List of agent call counts per cycle
+            "repair_cycle_test_executions": {},  # {test_type: count}
+            "repair_cycle_file_fixes": {},  # {file_path: count}
+            "repair_cycle_warnings_reviewed": 0,
         }
 
         # Subscribe to events if bus provided
@@ -84,6 +97,32 @@ class MetricsCollector:
         self.event_bus.subscribe(
             EventTypes.COMMENT_NEEDS_RESPONSE,
             self._record_comment_needs_response
+        )
+
+        # Repair cycle events
+        self.event_bus.subscribe(
+            EventTypes.REPAIR_CYCLE_STARTED,
+            self._record_repair_cycle_started
+        )
+        self.event_bus.subscribe(
+            EventTypes.REPAIR_CYCLE_TEST_EXECUTION_COMPLETED,
+            self._record_repair_cycle_test_execution
+        )
+        self.event_bus.subscribe(
+            EventTypes.REPAIR_CYCLE_FILE_FIX_COMPLETED,
+            self._record_repair_cycle_file_fix
+        )
+        self.event_bus.subscribe(
+            EventTypes.REPAIR_CYCLE_WARNING_REVIEW_COMPLETED,
+            self._record_repair_cycle_warning_review
+        )
+        self.event_bus.subscribe(
+            EventTypes.REPAIR_CYCLE_FAST_FAIL,
+            self._record_repair_cycle_fast_fail
+        )
+        self.event_bus.subscribe(
+            EventTypes.REPAIR_CYCLE_COMPLETED,
+            self._record_repair_cycle_completed
         )
 
         logger.info("MetricsCollector subscribed to adapter events")
@@ -252,6 +291,155 @@ class MetricsCollector:
             logger.error(f"Error recording comment response metric: {e}")
             self._metrics["errors"] += 1
 
+    async def _record_repair_cycle_started(self, event: DomainEvent) -> None:
+        """
+        Record repair cycle started metric.
+
+        Args:
+            event: repair_cycle.started event
+        """
+        try:
+            self._metrics["repair_cycles_started"] += 1
+            stage_name = self._get_event_attribute(event, "stage_name")
+            logger.debug(
+                f"Recorded repair cycle started for stage '{stage_name}' "
+                f"(total: {self._metrics['repair_cycles_started']})"
+            )
+
+        except Exception as e:
+            logger.error(f"Error recording repair cycle started metric: {e}")
+            self._metrics["errors"] += 1
+
+    async def _record_repair_cycle_test_execution(self, event: DomainEvent) -> None:
+        """
+        Record repair cycle test execution metric.
+
+        Args:
+            event: repair_cycle.test_execution_completed event
+        """
+        try:
+            test_type = self._get_event_attribute(event, "test_type")
+            passed_count = self._get_event_attribute(event, "passed_count", 0)
+            failed_count = self._get_event_attribute(event, "failed_count", 0)
+            iteration = self._get_event_attribute(event, "iteration", 0)
+
+            if test_type not in self._metrics["repair_cycle_test_executions"]:
+                self._metrics["repair_cycle_test_executions"][test_type] = 0
+
+            self._metrics["repair_cycle_test_executions"][test_type] += 1
+
+            logger.debug(
+                f"Recorded repair cycle test execution: {test_type} iteration {iteration} "
+                f"(passed: {passed_count}, failed: {failed_count})"
+            )
+
+        except Exception as e:
+            logger.error(f"Error recording repair cycle test execution metric: {e}")
+            self._metrics["errors"] += 1
+
+    async def _record_repair_cycle_file_fix(self, event: DomainEvent) -> None:
+        """
+        Record repair cycle file fix metric.
+
+        Args:
+            event: repair_cycle.file_fix_completed event
+        """
+        try:
+            file_path = self._get_event_attribute(event, "file_path")
+            fixed = self._get_event_attribute(event, "fixed", False)
+            iterations_used = self._get_event_attribute(event, "iterations_used", 0)
+
+            if file_path not in self._metrics["repair_cycle_file_fixes"]:
+                self._metrics["repair_cycle_file_fixes"][file_path] = 0
+
+            if fixed:
+                self._metrics["repair_cycle_file_fixes"][file_path] += 1
+
+            logger.debug(
+                f"Recorded repair cycle file fix: {file_path} "
+                f"(fixed: {fixed}, iterations: {iterations_used})"
+            )
+
+        except Exception as e:
+            logger.error(f"Error recording repair cycle file fix metric: {e}")
+            self._metrics["errors"] += 1
+
+    async def _record_repair_cycle_warning_review(self, event: DomainEvent) -> None:
+        """
+        Record repair cycle warning review metric.
+
+        Args:
+            event: repair_cycle.warning_review_completed event
+        """
+        try:
+            warnings_reviewed = self._get_event_attribute(event, "warnings_reviewed", 0)
+            self._metrics["repair_cycle_warnings_reviewed"] += warnings_reviewed
+
+            logger.debug(
+                f"Recorded repair cycle warning review "
+                f"(warnings reviewed: {warnings_reviewed})"
+            )
+
+        except Exception as e:
+            logger.error(f"Error recording repair cycle warning review metric: {e}")
+            self._metrics["errors"] += 1
+
+    async def _record_repair_cycle_fast_fail(self, event: DomainEvent) -> None:
+        """
+        Record repair cycle fast-fail metric.
+
+        Args:
+            event: repair_cycle.fast_fail event
+        """
+        try:
+            reason = self._get_event_attribute(event, "reason")
+            self._metrics["repair_cycles_fast_failed"] += 1
+
+            logger.debug(
+                f"Recorded repair cycle fast-fail "
+                f"(reason: {reason}, total: {self._metrics['repair_cycles_fast_failed']})"
+            )
+
+        except Exception as e:
+            logger.error(f"Error recording repair cycle fast-fail metric: {e}")
+            self._metrics["errors"] += 1
+
+    async def _record_repair_cycle_completed(self, event: DomainEvent) -> None:
+        """
+        Record repair cycle completed metric.
+
+        Args:
+            event: repair_cycle.completed event
+        """
+        try:
+            overall_success = self._get_event_attribute(event, "overall_success", False)
+            total_iterations = self._get_event_attribute(event, "total_iterations", 0)
+            total_agent_calls = self._get_event_attribute(event, "total_agent_calls", 0)
+            duration_seconds = self._get_event_attribute(event, "duration_seconds", 0.0)
+
+            self._metrics["repair_cycles_completed"] += 1
+
+            if overall_success:
+                self._metrics["repair_cycles_successful"] += 1
+            else:
+                self._metrics["repair_cycles_failed"] += 1
+
+            self._metrics["repair_cycle_duration_seconds"].append(duration_seconds)
+            self._metrics["repair_cycle_test_iterations"][str(total_iterations)] = (
+                self._metrics["repair_cycle_test_iterations"].get(str(total_iterations), 0) + 1
+            )
+            self._metrics["repair_cycle_agent_calls"].append(total_agent_calls)
+
+            logger.debug(
+                f"Recorded repair cycle completed "
+                f"(success: {overall_success}, iterations: {total_iterations}, "
+                f"agent_calls: {total_agent_calls}, duration: {duration_seconds}s)"
+            )
+
+        except Exception as e:
+            logger.error(f"Error recording repair cycle completed metric: {e}")
+            self._metrics["errors"] += 1
+
     def get_metrics(self) -> Dict[str, Any]:
         """
         Get collected metrics.
@@ -266,6 +454,29 @@ class MetricsCollector:
                 self._metrics["lock_wait_time_ms"]
             )
 
+        # Calculate repair cycle averages
+        avg_repair_cycle_duration_seconds = None
+        if self._metrics["repair_cycle_duration_seconds"]:
+            avg_repair_cycle_duration_seconds = (
+                sum(self._metrics["repair_cycle_duration_seconds"]) /
+                len(self._metrics["repair_cycle_duration_seconds"])
+            )
+
+        avg_repair_cycle_agent_calls = None
+        if self._metrics["repair_cycle_agent_calls"]:
+            avg_repair_cycle_agent_calls = (
+                sum(self._metrics["repair_cycle_agent_calls"]) /
+                len(self._metrics["repair_cycle_agent_calls"])
+            )
+
+        # Calculate repair cycle success rate
+        repair_cycle_success_rate = None
+        if self._metrics["repair_cycles_completed"] > 0:
+            repair_cycle_success_rate = (
+                self._metrics["repair_cycles_successful"] /
+                self._metrics["repair_cycles_completed"] * 100
+            )
+
         return {
             "column_changes": self._metrics["column_changes"],
             "lock_acquisitions": self._metrics["lock_acquisitions"],
@@ -276,6 +487,19 @@ class MetricsCollector:
             "comments_processed": self._metrics["comments_processed"],
             "agents_triggered": self._metrics["agents_triggered"],
             "errors": self._metrics["errors"],
+            # Repair cycle metrics
+            "repair_cycles_started": self._metrics["repair_cycles_started"],
+            "repair_cycles_completed": self._metrics["repair_cycles_completed"],
+            "repair_cycles_successful": self._metrics["repair_cycles_successful"],
+            "repair_cycles_failed": self._metrics["repair_cycles_failed"],
+            "repair_cycles_fast_failed": self._metrics["repair_cycles_fast_failed"],
+            "repair_cycle_success_rate_percent": repair_cycle_success_rate,
+            "avg_repair_cycle_duration_seconds": avg_repair_cycle_duration_seconds,
+            "repair_cycle_test_executions": self._metrics["repair_cycle_test_executions"],
+            "repair_cycle_test_iterations": self._metrics["repair_cycle_test_iterations"],
+            "avg_repair_cycle_agent_calls": avg_repair_cycle_agent_calls,
+            "repair_cycle_file_fixes": self._metrics["repair_cycle_file_fixes"],
+            "repair_cycle_warnings_reviewed": self._metrics["repair_cycle_warnings_reviewed"],
         }
 
     def reset_metrics(self) -> None:
@@ -290,5 +514,18 @@ class MetricsCollector:
             "comments_processed": 0,
             "agents_triggered": 0,
             "errors": 0,
+            # Repair cycle metrics
+            "repair_cycles_started": 0,
+            "repair_cycles_completed": 0,
+            "repair_cycles_successful": 0,
+            "repair_cycles_failed": 0,
+            "repair_cycles_fast_failed": 0,
+            "repair_cycle_duration_seconds": [],
+            "repair_cycle_test_iterations": {},
+            "repair_cycle_files_fixed": [],
+            "repair_cycle_agent_calls": [],
+            "repair_cycle_test_executions": {},
+            "repair_cycle_file_fixes": {},
+            "repair_cycle_warnings_reviewed": 0,
         }
         logger.info("Metrics collector reset")

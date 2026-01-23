@@ -2130,6 +2130,40 @@ def create_development_app() -> FastAPI:
                 session_remaining_minutes=45,
             )
 
+        async def get_repair_cycle_metrics(self, agent_name=None, start_time=None, end_time=None):
+            """Return mock repair cycle metrics."""
+            return {
+                "cycles_started": 10,
+                "cycles_completed": 10,
+                "cycles_successful": 8,
+                "cycles_failed": 2,
+                "cycles_fast_failed": 0,
+                "durations": [30.0, 45.0, 60.0, 25.0, 35.0, 50.0, 40.0, 55.0, 32.0, 48.0],
+                "test_types": {
+                    "unit": {"executions": 10, "iterations": 20},
+                    "integration": {"executions": 8, "iterations": 15},
+                    "e2e": {"executions": 5, "iterations": 10},
+                },
+                "agents": {
+                    "reviewer": {
+                        "started": 10,
+                        "completed": 10,
+                        "successful": 8,
+                        "failed": 2,
+                        "fast_failed": 0,
+                    }
+                },
+                "files_fixed": {
+                    "src/main.py": 1,
+                    "src/utils.py": 2,
+                    "tests/test_main.py": 1,
+                },
+                "files_fixed_total": 4,
+                "warnings_reviewed_total": 12,
+                "avg_duration_seconds": 42.0,
+                "avg_agent_calls_per_cycle": 1.5,
+            }
+
     class MockWorkspaceQueryPort(IWorkspaceQueryPort):
         """Mock workspace query port for development."""
 
