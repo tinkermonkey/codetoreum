@@ -5,18 +5,44 @@ integration with checkpointing.
 """
 
 import pytest
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from codetoreum.adapters.testing.in_memory_checkpoint_store import InMemoryCheckpointStore
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
 from codetoreum.domain.repair_cycle_types import (
     RepairCycleCheckpoint,
-    RepairCycleContext,
     RepairTestFailure,
     RepairTestRunConfig,
     RepairTestType,
 )
+from codetoreum.ports.output.repair_cycle_service import RepairCycleContext
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
+
+
+@dataclass
+class _RepairCycleContextImpl:
+    """Concrete implementation of RepairCycleContext Protocol for testing."""
+    stage_name: str
+    pipeline_run_id: str
+    test_configs: tuple
+    agent_name: str
+    max_total_agent_calls: int
+    checkpoint_interval: int
+
+
+def _create_repair_cycle_context(**kwargs) -> RepairCycleContext:
+    """Factory function to create RepairCycleContext instances for testing."""
+    defaults = {
+        "stage_name": "code_review",
+        "pipeline_run_id": "run-123",
+        "test_configs": (),
+        "agent_name": "reviewer",
+        "max_total_agent_calls": 10,
+        "checkpoint_interval": 1,
+    }
+    defaults.update(kwargs)
+    return _RepairCycleContextImpl(**defaults)
 
 
 @pytest.mark.asyncio
@@ -34,7 +60,7 @@ class TestCheckpointStorage:
         now = datetime.now(timezone.utc)
         return RepairCycleCheckpoint(
             pipeline_run_id="run-123",
-            test_type="unit",
+            test_type="UNIT",
             iteration=2,
             total_agent_calls=5,
             files_fixed=2,
@@ -48,41 +74,41 @@ class TestCheckpointStorage:
     async def test_save_checkpoint(self, store, checkpoint):
         """Test saving checkpoint."""
         await store.save_checkpoint(checkpoint)
-        assert await store.checkpoint_exists("run-123", "unit")
+        assert await store.checkpoint_exists("run-123", "UNIT")
 
     async def test_retrieve_checkpoint(self, store, checkpoint):
         """Test retrieving saved checkpoint."""
         await store.save_checkpoint(checkpoint)
-        retrieved = await store.get_checkpoint("run-123", "unit")
+        retrieved = await store.get_checkpoint("run-123", "UNIT")
         assert retrieved is not None
         assert retrieved.pipeline_run_id == "run-123"
-        assert retrieved.test_type == "unit"
+        assert retrieved.test_type == "UNIT"
         assert retrieved.iteration == 2
         assert retrieved.total_agent_calls == 5
 
     async def test_checkpoint_not_found(self, store):
         """Test retrieving non-existent checkpoint."""
-        result = await store.get_checkpoint("run-999", "unit")
+        result = await store.get_checkpoint("run-999", "UNIT")
         assert result is None
 
     async def test_checkpoint_exists_false_for_missing(self, store):
         """Test checkpoint_exists returns False for missing checkpoint."""
-        exists = await store.checkpoint_exists("run-999", "unit")
+        exists = await store.checkpoint_exists("run-999", "UNIT")
         assert exists is False
 
     async def test_delete_checkpoint_specific(self, store, checkpoint):
         """Test deleting specific checkpoint."""
         await store.save_checkpoint(checkpoint)
-        assert await store.checkpoint_exists("run-123", "unit")
-        await store.delete_checkpoint("run-123", "unit")
-        assert not await store.checkpoint_exists("run-123", "unit")
+        assert await store.checkpoint_exists("run-123", "UNIT")
+        await store.delete_checkpoint("run-123", "UNIT")
+        assert not await store.checkpoint_exists("run-123", "UNIT")
 
     async def test_delete_checkpoint_all_for_pipeline(self, store):
         """Test deleting all checkpoints for pipeline run."""
         now = datetime.now(timezone.utc)
 
         # Create checkpoints for multiple test types
-        for test_type in ["unit", "integration", "e2e"]:
+        for test_type in ["UNIT", "INTEGRATION", "E2E"]:
             checkpoint = RepairCycleCheckpoint(
                 pipeline_run_id="run-123",
                 test_type=test_type,
@@ -101,14 +127,14 @@ class TestCheckpointStorage:
         await store.delete_checkpoint("run-123")
 
         # Verify all deleted
-        for test_type in ["unit", "integration", "e2e"]:
+        for test_type in ["UNIT", "INTEGRATION", "E2E"]:
             exists = await store.checkpoint_exists("run-123", test_type)
             assert not exists
 
     async def test_delete_checkpoint_idempotent(self, store):
         """Test that deleting non-existent checkpoint is safe."""
         # Should not raise
-        await store.delete_checkpoint("run-999", "unit")
+        await store.delete_checkpoint("run-999", "UNIT")
 
     async def test_multiple_checkpoints_different_pipeline_runs(self, store):
         """Test storing checkpoints for different pipeline runs."""
@@ -118,7 +144,7 @@ class TestCheckpointStorage:
         for i in range(1, 4):
             checkpoint = RepairCycleCheckpoint(
                 pipeline_run_id=f"run-{i}",
-                test_type="unit",
+                test_type="UNIT",
                 iteration=i,
                 total_agent_calls=i,
                 files_fixed=0,
@@ -132,7 +158,7 @@ class TestCheckpointStorage:
 
         # Verify each can be retrieved correctly
         for i in range(1, 4):
-            retrieved = await store.get_checkpoint(f"run-{i}", "unit")
+            retrieved = await store.get_checkpoint(f"run-{i}", "UNIT")
             assert retrieved is not None
             assert retrieved.total_agent_calls == i
 
@@ -141,7 +167,7 @@ class TestCheckpointStorage:
         with pytest.raises(ValueError):
             checkpoint = RepairCycleCheckpoint(
                 pipeline_run_id="",  # Empty - invalid
-                test_type="unit",
+                test_type="UNIT",
                 iteration=1,
                 total_agent_calls=0,
                 files_fixed=0,
@@ -175,7 +201,7 @@ class TestRepairCycleCheckpoint:
     @pytest.fixture
     def context(self):
         """Create repair cycle context."""
-        return RepairCycleContext(
+        return _create_repair_cycle_context(
             stage_name="code_review",
             pipeline_run_id="run-123",
             test_configs=(
@@ -191,10 +217,10 @@ class TestRepairCycleCheckpoint:
         adapter.set_iterations_until_success(RepairTestType.UNIT, 2)
 
         # Manually call checkpoint
-        await adapter.checkpoint("unit", 1, context)
+        await adapter.checkpoint(RepairTestType.UNIT, 1, context)
 
         # Verify checkpoint was saved
-        checkpoint = await store.get_checkpoint("run-123", "unit")
+        checkpoint = await store.get_checkpoint("run-123", "UNIT")
         assert checkpoint is not None
         assert checkpoint.iteration == 1
 
@@ -203,24 +229,24 @@ class TestRepairCycleCheckpoint:
         adapter.total_agent_calls = 5
         adapter.set_iterations_until_success(RepairTestType.UNIT, 2)
 
-        await adapter.checkpoint("unit", 1, context)
+        await adapter.checkpoint(RepairTestType.UNIT, 1, context)
 
-        checkpoint = await store.get_checkpoint("run-123", "unit")
+        checkpoint = await store.get_checkpoint("run-123", "UNIT")
         assert checkpoint.total_agent_calls == 5
 
     async def test_checkpoint_includes_files_fixed(self, adapter, context, store):
         """Test checkpoint includes files fixed count."""
         adapter._files_fixed = 3
-        await adapter.checkpoint("unit", 1, context)
+        await adapter.checkpoint(RepairTestType.UNIT, 1, context)
 
-        checkpoint = await store.get_checkpoint("run-123", "unit")
+        checkpoint = await store.get_checkpoint("run-123", "UNIT")
         assert checkpoint.files_fixed == 3
 
     async def test_checkpoint_without_store_is_safe(self, clock, context):
         """Test checkpoint without store configured is safe (no-op)."""
         adapter = MockRepairCycleAdapter(clock=clock, checkpoint_store=None)
         # Should not raise
-        await adapter.checkpoint("unit", 1, context)
+        await adapter.checkpoint(RepairTestType.UNIT, 1, context)
 
 
 @pytest.mark.asyncio
@@ -245,7 +271,7 @@ class TestRepairCycleResume:
     @pytest.fixture
     def context(self):
         """Create repair cycle context."""
-        return RepairCycleContext(
+        return _create_repair_cycle_context(
             stage_name="code_review",
             pipeline_run_id="run-123",
             test_configs=(
@@ -262,7 +288,7 @@ class TestRepairCycleResume:
         now = datetime.now(timezone.utc)
         checkpoint = RepairCycleCheckpoint(
             pipeline_run_id="run-123",
-            test_type="unit",
+            test_type="UNIT",
             iteration=2,
             total_agent_calls=3,
             files_fixed=2,
@@ -286,7 +312,7 @@ class TestRepairCycleResume:
         now = datetime.now(timezone.utc)
         checkpoint = RepairCycleCheckpoint(
             pipeline_run_id="run-123",
-            test_type="unit",
+            test_type="UNIT",
             iteration=2,
             total_agent_calls=5,
             files_fixed=3,
@@ -310,7 +336,7 @@ class TestRepairCycleResume:
         now = datetime.now(timezone.utc)
         checkpoint = RepairCycleCheckpoint(
             pipeline_run_id="run-123",
-            test_type="unit",
+            test_type="UNIT",
             iteration=2,
             total_agent_calls=3,
             files_fixed=1,
@@ -332,7 +358,7 @@ class TestRepairCycleResume:
         assert len(resumed_events) > 0
         resumed_event = resumed_events[0]["event"]
         assert resumed_event.pipeline_run_id == "run-123"
-        assert resumed_event.test_type == "unit"
+        assert resumed_event.test_type == "UNIT"
         assert resumed_event.iteration == 2
         assert resumed_event.agent_calls_so_far == 3
 
@@ -352,7 +378,7 @@ class TestRepairCycleResume:
         now = datetime.now(timezone.utc)
         checkpoint = RepairCycleCheckpoint(
             pipeline_run_id="run-123",
-            test_type="unit",
+            test_type="UNIT",
             iteration=1,
             total_agent_calls=1,
             files_fixed=0,
@@ -370,7 +396,7 @@ class TestRepairCycleResume:
 
         assert result.overall_success
         # Checkpoint should be deleted
-        assert not await store.checkpoint_exists("run-123", "unit")
+        assert not await store.checkpoint_exists("run-123", "UNIT")
 
     async def test_checkpoint_persists_on_failure(self, adapter, context, store):
         """Test checkpoint persists after failed execution."""
@@ -378,7 +404,7 @@ class TestRepairCycleResume:
         now = datetime.now(timezone.utc)
         checkpoint = RepairCycleCheckpoint(
             pipeline_run_id="run-123",
-            test_type="unit",
+            test_type="UNIT",
             iteration=1,
             total_agent_calls=1,
             files_fixed=0,
@@ -402,12 +428,12 @@ class TestRepairCycleResume:
 
         assert not result.overall_success
         # Checkpoint should still exist
-        assert await store.checkpoint_exists("run-123", "unit")
+        assert await store.checkpoint_exists("run-123", "UNIT")
 
     async def test_resume_after_circuit_breaker(self, adapter, context, store):
         """Test resuming after circuit breaker is triggered."""
         # Create context with low agent call limit
-        context = RepairCycleContext(
+        context = _create_repair_cycle_context(
             stage_name="code_review",
             pipeline_run_id="run-456",
             test_configs=(
@@ -422,7 +448,7 @@ class TestRepairCycleResume:
         now = datetime.now(timezone.utc)
         checkpoint = RepairCycleCheckpoint(
             pipeline_run_id="run-456",
-            test_type="unit",
+            test_type="UNIT",
             iteration=2,
             total_agent_calls=2,
             files_fixed=1,
@@ -464,7 +490,7 @@ class TestCheckpointIntegration:
     @pytest.fixture
     def context(self):
         """Create repair cycle context."""
-        return RepairCycleContext(
+        return _create_repair_cycle_context(
             stage_name="code_review",
             pipeline_run_id="integration-test-run",
             test_configs=(

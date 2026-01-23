@@ -111,7 +111,6 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestRunConfig,
     CycleResult,
     RepairCycleResult,
-    RepairCycleContext,
     RepairCycleStageConfig,
 )
 
@@ -241,6 +240,5 @@ __all__ = [
     "RepairTestResult",
     "CycleResult",
     "RepairCycleResult",
-    "RepairCycleContext",
     "RepairCycleStageConfig",
 ]
