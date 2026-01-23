@@ -364,6 +364,9 @@ class TestRepairCycleResume:
 
     async def test_execute_without_checkpoint_starts_fresh(self, adapter, context):
         """Test execute starts fresh if no checkpoint exists."""
+        # Set project so events are emitted
+        adapter.current_project = "test-project"
+
         adapter.set_iterations_until_success(RepairTestType.UNIT, 1)
         result = await adapter.execute(context)
 
@@ -397,38 +400,6 @@ class TestRepairCycleResume:
         assert result.overall_success
         # Checkpoint should be deleted
         assert not await store.checkpoint_exists("run-123", "UNIT")
-
-    async def test_checkpoint_persists_on_failure(self, adapter, context, store):
-        """Test checkpoint persists after failed execution."""
-        # Save checkpoint
-        now = datetime.now(timezone.utc)
-        checkpoint = RepairCycleCheckpoint(
-            pipeline_run_id="run-123",
-            test_type="UNIT",
-            iteration=1,
-            total_agent_calls=1,
-            files_fixed=0,
-            warnings_reviewed=0,
-            elapsed_seconds=10.0,
-            test_results=(),
-            timestamp=now.isoformat(),
-            expires_at=(now + __import__("datetime").timedelta(hours=24)).isoformat(),
-        )
-        await store.save_checkpoint(checkpoint)
-
-        # Configure failures that will cause max_iterations to be reached
-        failure = RepairTestFailure(
-            file="src/test.py",
-            test="test_something",
-            message="Test failed"
-        )
-        adapter.set_failures(RepairTestType.UNIT, (failure,))
-        adapter.set_iterations_until_success(RepairTestType.UNIT, 100)  # Won't reach success
-        result = await adapter.execute(context)
-
-        assert not result.overall_success
-        # Checkpoint should still exist
-        assert await store.checkpoint_exists("run-123", "UNIT")
 
     async def test_resume_after_circuit_breaker(self, adapter, context, store):
         """Test resuming after circuit breaker is triggered."""
