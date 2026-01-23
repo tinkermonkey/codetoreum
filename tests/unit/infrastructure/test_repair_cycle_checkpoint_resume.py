@@ -519,7 +519,7 @@ class TestCheckpointIntegration:
         now = datetime.now(timezone.utc)
         checkpoint = RepairCycleCheckpoint(
             pipeline_run_id=context.pipeline_run_id,
-            test_type="integration",
+            test_type="INTEGRATION",
             iteration=1,
             total_agent_calls=3,
             files_fixed=2,
@@ -550,4 +550,4 @@ class TestCheckpointIntegration:
         assert resumed_event.agent_calls_so_far == 3
 
         # On success, checkpoint should be deleted
-        assert not await store.checkpoint_exists(context.pipeline_run_id, "integration")
+        assert not await store.checkpoint_exists(context.pipeline_run_id, "INTEGRATION")
