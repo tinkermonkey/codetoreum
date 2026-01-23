@@ -103,16 +103,6 @@ from codetoreum.domain.user import (
     User,
     UserRole,
 )
-from codetoreum.domain.repair_cycle_types import (
-    CycleResult,
-    RepairCycleContext,
-    RepairCycleResult,
-    RepairTestFailure,
-    RepairTestResult,
-    RepairTestRunConfig,
-    RepairTestType,
-    RepairTestWarning,
-)
 
 __all__ = [
     # Base classes
@@ -232,13 +222,4 @@ __all__ = [
     "ROLE_PERMISSIONS",
     "APIKey",
     "AuthContext",
-    # Repair Cycle Types
-    "RepairTestType",
-    "RepairTestRunConfig",
-    "RepairTestFailure",
-    "RepairTestWarning",
-    "RepairTestResult",
-    "CycleResult",
-    "RepairCycleResult",
-    "RepairCycleContext",
 ]
