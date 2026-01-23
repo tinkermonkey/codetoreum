@@ -22,6 +22,7 @@ Architecture:
 - Circuit breaker preventing exceeding max_total_agent_calls
 """
 
+import asyncio
 import json
 import logging
 import re
@@ -301,7 +302,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
             result = RepairTestResult(
                 test_type=config.test_type,
-                iteration=0,  # Updated by caller
+                iteration=1,  # Each run_tests call represents one iteration
                 passed=test_output.get("passed", 0),
                 failed=test_output.get("failed", 0),
                 warnings=len(warnings),
@@ -318,8 +319,8 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     timestamp=timestamp,
                     source="production_repair_cycle",
                     test_type=config.test_type,
-                    test_type_index=1,  # Will be set by caller
-                    test_cycle_iteration=0,  # Will be set by caller
+                    test_type_index=1,  # Test type sequence position
+                    test_cycle_iteration=result.iteration,
                     passed=result.passed,
                     failed=result.failed,
                     warnings=result.warnings,
@@ -717,8 +718,8 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 )
 
                 if attempt < self.config.max_json_parse_retries:
-                    # Wait before retry (in production, would use async sleep)
-                    pass
+                    # Wait before retry with configured delay
+                    await asyncio.sleep(self.config.json_parse_retry_delay_ms / 1000.0)
 
         raise JSONParseError(
             f"Failed to parse test output after {self.config.max_json_parse_retries} attempts: {last_error}"
@@ -992,7 +993,7 @@ Return a JSON response with the status of fixes applied."""
                 source="production_repair_cycle",
                 test_type=config.test_type,
                 test_type_index=test_type_index,
-                passed=1 if cycle_passed else 0,
+                passed=cycle_passed,
                 test_cycle_iterations=iteration,
                 files_fixed=files_fixed,
                 warnings_reviewed=warnings_reviewed,
