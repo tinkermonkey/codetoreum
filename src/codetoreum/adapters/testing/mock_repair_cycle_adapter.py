@@ -127,6 +127,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         self._events: List[dict] = []
         self._event_handlers: Dict[str, List] = {}
         self._monitoring: Dict[str, MonitoringStatus] = {}
+        self._handler_errors: List[Dict[str, Any]] = []
         self._lock = threading.Lock()
 
     # Configuration methods (FR-11.2, FR-11.3, FR-11.4)
@@ -337,6 +338,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                             source="mock_repair_cycle",
                             test_type=config.test_type,
                             reason="cycle_failed",
+                            pipeline_run_id=context.pipeline_run_id,
                         ))
                     break
         except Exception as e:
@@ -414,7 +416,38 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             return None
 
     def _restore_checkpoint_state(self, checkpoint: RepairCycleCheckpoint) -> None:
-        """Restore internal state from checkpoint."""
+        """Restore internal state from checkpoint with validation.
+
+        Raises:
+            ValueError: If checkpoint contains invalid data
+        """
+        # Validate numeric fields
+        if checkpoint.total_agent_calls < 0:
+            raise ValueError(
+                f"Invalid checkpoint: total_agent_calls={checkpoint.total_agent_calls} must be >= 0"
+            )
+
+        if checkpoint.files_fixed < 0:
+            raise ValueError(f"Invalid checkpoint: files_fixed must be >= 0")
+
+        if checkpoint.warnings_reviewed < 0:
+            raise ValueError(f"Invalid checkpoint: warnings_reviewed must be >= 0")
+
+        if checkpoint.elapsed_seconds < 0:
+            raise ValueError(f"Invalid checkpoint: elapsed_seconds must be >= 0")
+
+        if checkpoint.iteration < 1:
+            raise ValueError(f"Invalid checkpoint: iteration must be >= 1")
+
+        # Validate test_type is valid enum
+        try:
+            RepairTestType(checkpoint.test_type)
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid checkpoint: test_type '{checkpoint.test_type}' is not valid"
+            ) from e
+
+        # All validations passed, restore state atomically
         with self._lock:
             self.total_agent_calls = checkpoint.total_agent_calls
             self.agent_call_count = checkpoint.total_agent_calls
@@ -422,6 +455,14 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             self._warnings_reviewed = checkpoint.warnings_reviewed
             self._elapsed_time = checkpoint.elapsed_seconds
             self._cycle_results = list(checkpoint.test_results)
+
+        logger.info(
+            "Checkpoint state restored and validated",
+            extra={
+                "pipeline_run_id": checkpoint.pipeline_run_id,
+                "iteration": checkpoint.iteration,
+            }
+        )
 
     def _emit_event(self, event_type: str, event: object) -> None:
         """Emit an event and call handlers."""
@@ -439,6 +480,13 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 try:
                     handler(event)
                 except Exception as e:
+                    error_record = {
+                        "event_type": event_type,
+                        "handler": handler.__name__ if hasattr(handler, '__name__') else str(handler),
+                        "error": str(e),
+                        "timestamp": self.clock.now().isoformat(),
+                    }
+                    self._handler_errors.append(error_record)
                     logger.error(f"Error in event handler for {event_type}: {e}", exc_info=True)
 
     # ==================== IEventEmitter Implementation ====================
@@ -655,6 +703,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                     warning_count=1,
                     test_type=config.test_type,
                     warnings=(warning,),
+                    pipeline_run_id=context.pipeline_run_id,
                 ))
 
                 self.emit(RepairCycleWarningReviewCompletedEvent(
@@ -665,6 +714,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                     warning_count=1,
                     test_type=config.test_type,
                     success=True,
+                    pipeline_run_id=context.pipeline_run_id,
                 ))
 
             reviewed += 1
@@ -741,6 +791,26 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             List of events matching the type
         """
         return [e for e in self.event_log if e.get("type") == event_type]
+
+    def get_handler_errors(self) -> List[Dict[str, Any]]:
+        """Get all handler errors that occurred during repair cycle."""
+        with self._lock:
+            return list(self._handler_errors)
+
+    def assert_no_handler_errors(self) -> None:
+        """Assert no event handler errors occurred.
+
+        Raises:
+            AssertionError: If any handler errors were recorded
+        """
+        errors = self.get_handler_errors()
+        if errors:
+            error_summary = "\n".join(
+                f"  - {e['event_type']}: {e['error']}" for e in errors
+            )
+            raise AssertionError(
+                f"Expected no handler errors, but found {len(errors)}:\n{error_summary}"
+            )
 
     # Assertion helpers (FR-12.1-12.7)
 
@@ -871,6 +941,85 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 f"got {actual}"
             )
 
+    def assert_no_warning_regression(self, test_type: RepairTestType) -> None:
+        """Assert test type completed without new warnings appearing.
+
+        Verifies final test execution had 0 warnings, indicating no
+        regression introduced during the repair cycle.
+
+        Args:
+            test_type: Type of test to check
+
+        Raises:
+            AssertionError: If warnings were found in final execution
+        """
+        events = self.get_events_by_type("TEST_CYCLE_COMPLETED")
+        event = next(
+            (e for e in events if e.get("test_type") == test_type.value),
+            None
+        )
+        if not event:
+            raise AssertionError(f"No completion event found for {test_type.value}")
+
+        final_warnings = event.get("final_warnings", 0)
+        if final_warnings > 0:
+            raise AssertionError(
+                f"Expected no warning regression for {test_type.value}, "
+                f"but found {final_warnings} warnings in final execution"
+            )
+
+    def assert_no_warning_reappearance(
+        self,
+        test_type: RepairTestType,
+        original_warnings: Tuple[RepairTestWarning, ...]
+    ) -> None:
+        """Assert previously fixed warnings didn't reappear.
+
+        Compares final test execution warnings against original warnings
+        that should have been fixed, ensuring none reappeared.
+
+        Args:
+            test_type: Type of test to check
+            original_warnings: Warnings that were originally present and fixed
+
+        Raises:
+            AssertionError: If any original warnings reappeared
+        """
+        events = self.get_events_by_type("TEST_CYCLE_COMPLETED")
+        event = next(
+            (e for e in events if e.get("test_type") == test_type.value),
+            None
+        )
+        if not event:
+            raise AssertionError(f"No completion event found for {test_type.value}")
+
+        current_warnings = event.get("warning_list", ())
+
+        if not original_warnings:
+            return
+
+        # Build set of original warning signatures (file, message)
+        original_sigs = {
+            (w.file, w.message) for w in original_warnings
+        }
+
+        # Check if any current warnings match original ones
+        reappeared = []
+        for current_warning in current_warnings:
+            if isinstance(current_warning, dict):
+                sig = (current_warning.get("file", ""), current_warning.get("message", ""))
+            else:
+                sig = (current_warning.file, current_warning.message)
+
+            if sig in original_sigs:
+                reappeared.append(sig)
+
+        if reappeared:
+            raise AssertionError(
+                f"Expected no warning reappearance for {test_type.value}, "
+                f"but {len(reappeared)} warning(s) reappeared: {reappeared}"
+            )
+
     def get_agent_call_count(self) -> int:
         """Return total agent calls made.
 
@@ -901,6 +1050,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         error = None
         start_time = self.clock.now()
         test_type_index = len(self._cycle_results) + 1
+        last_test_result = None
 
         self._log_event({
             "type": "TEST_CYCLE_STARTED",
@@ -918,12 +1068,14 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                         source="mock_repair_cycle",
                         test_type=config.test_type,
                         reason="circuit_breaker_triggered",
+                        pipeline_run_id=context.pipeline_run_id,
                     ))
                 error = "Circuit breaker: max agent calls reached"
                 break
 
             # Run tests
             test_result = await self.run_tests(config, context)
+            last_test_result = test_result
 
             # Check for success
             if test_result.failed == 0:
@@ -937,6 +1089,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
                     # Re-test after warning fixes
                     retest = await self.run_tests(config, context)
+                    last_test_result = retest
                     if retest.failed > 0:
                         # Warning fixes broke something, continue fixing
                         cycle_passed = False
@@ -982,6 +1135,8 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             "passed": cycle_passed,
             "iterations": iteration,
             "warnings_reviewed": warnings_reviewed,
+            "final_warnings": last_test_result.warnings if last_test_result else 0,
+            "warning_list": last_test_result.warning_list if last_test_result else (),
             "error": error
         })
 

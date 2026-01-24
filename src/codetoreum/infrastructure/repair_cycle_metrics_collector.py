@@ -148,6 +148,11 @@ class RepairCycleMetricsCollector:
         # Track active cycles for gauges
         self._active_cycles_by_agent: Dict[str, int] = {}
 
+        # Circuit breaker for metrics backend
+        self._backend_consecutive_failures = 0
+        self._backend_circuit_open = False
+        self._max_consecutive_failures = 5
+
         # Subscribe to events if bus provided
         if self.event_bus:
             self._subscribe_to_events()
@@ -219,6 +224,33 @@ class RepairCycleMetricsCollector:
             self._metrics.per_agent_metrics[agent_name] = RepairCycleMetrics()
         return self._metrics.per_agent_metrics[agent_name]
 
+    def _record_backend_success(self) -> None:
+        """Record successful backend call and potentially close circuit."""
+        if self._backend_circuit_open:
+            self._backend_consecutive_failures = 0
+            self._backend_circuit_open = False
+            logger.info("Metrics backend circuit breaker closed - backend recovered")
+
+    def _record_backend_failure(self, operation: str, error: Exception) -> None:
+        """Record backend failure and potentially open circuit."""
+        self._backend_consecutive_failures += 1
+
+        if (not self._backend_circuit_open and
+            self._backend_consecutive_failures >= self._max_consecutive_failures):
+            self._backend_circuit_open = True
+            logger.error(
+                f"Metrics backend circuit breaker OPENED after "
+                f"{self._max_consecutive_failures} consecutive failures",
+                extra={
+                    "last_operation": operation,
+                    "last_error": str(error),
+                },
+            )
+
+    def is_backend_healthy(self) -> bool:
+        """Check if metrics backend is healthy (circuit closed)."""
+        return not self._backend_circuit_open
+
     async def _on_repair_cycle_started(self, event: DomainEvent) -> None:
         """Record repair cycle started."""
         try:
@@ -241,10 +273,12 @@ class RepairCycleMetricsCollector:
                     float(self._active_cycles_by_agent.get(agent_name, 0)),
                     labels={"agent_name": agent_name},
                 )
+                self._record_backend_success()
 
             logger.debug(f"Repair cycle started: agent={agent_name}, stage={stage_name}")
 
         except Exception as e:
+            self._record_backend_failure("repair_cycle_started", e)
             logger.error(f"Error recording repair cycle started: {e}", exc_info=True)
 
     async def _on_repair_cycle_completed(self, event: DomainEvent) -> None:
@@ -300,6 +334,7 @@ class RepairCycleMetricsCollector:
                     float(self._active_cycles_by_agent.get(agent_name, 0)),
                     labels={"agent_name": agent_name},
                 )
+                self._record_backend_success()
 
             logger.debug(
                 f"Repair cycle completed: agent={agent_name}, status={status}, "
@@ -307,6 +342,7 @@ class RepairCycleMetricsCollector:
             )
 
         except Exception as e:
+            self._record_backend_failure("repair_cycle_completed", e)
             logger.error(f"Error recording repair cycle completed: {e}", exc_info=True)
 
     async def _on_repair_cycle_fast_fail(self, event: DomainEvent) -> None:
@@ -333,10 +369,12 @@ class RepairCycleMetricsCollector:
                     f"{self.metrics_backend.namespace}_{self.metrics_backend.subsystem}_fast_failed_total",
                     labels={"agent_name": agent_name, "reason": reason},
                 )
+                self._record_backend_success()
 
             logger.warning(f"Repair cycle fast-failed: agent={agent_name}, reason={reason}")
 
         except Exception as e:
+            self._record_backend_failure("repair_cycle_fast_fail", e)
             logger.error(f"Error recording repair cycle fast-fail: {e}", exc_info=True)
 
     async def _on_test_execution_started(self, event: DomainEvent) -> None:
@@ -348,6 +386,7 @@ class RepairCycleMetricsCollector:
             logger.debug(f"Test execution started: test_type={test_type}, iteration={iteration}")
 
         except Exception as e:
+            self._record_backend_failure("test_execution_started", e)
             logger.error(f"Error recording test execution started: {e}", exc_info=True)
 
     async def _on_test_execution_completed(self, event: DomainEvent) -> None:
@@ -392,6 +431,7 @@ class RepairCycleMetricsCollector:
                         duration_seconds,
                         labels={"test_type": test_type},
                     )
+                self._record_backend_success()
 
             logger.debug(
                 f"Test execution completed: test_type={test_type}, passed={passed_count}, "
@@ -399,6 +439,7 @@ class RepairCycleMetricsCollector:
             )
 
         except Exception as e:
+            self._record_backend_failure("test_execution_completed", e)
             logger.error(f"Error recording test execution completed: {e}", exc_info=True)
 
     async def _on_file_fix_started(self, event: DomainEvent) -> None:
@@ -410,6 +451,7 @@ class RepairCycleMetricsCollector:
             logger.debug(f"File fix started: file_path={file_path}, failures={failure_count}")
 
         except Exception as e:
+            self._record_backend_failure("file_fix_started", e)
             logger.error(f"Error recording file fix started: {e}", exc_info=True)
 
     async def _on_file_fix_completed(self, event: DomainEvent) -> None:
@@ -444,10 +486,12 @@ class RepairCycleMetricsCollector:
                             duration_seconds,
                             labels={"file_extension": file_ext},
                         )
+                    self._record_backend_success()
 
             logger.debug(f"File fix completed: file_path={file_path}, fixed={fixed}")
 
         except Exception as e:
+            self._record_backend_failure("file_fix_completed", e)
             logger.error(f"Error recording file fix completed: {e}", exc_info=True)
 
     async def _on_warning_review_started(self, event: DomainEvent) -> None:
@@ -459,6 +503,7 @@ class RepairCycleMetricsCollector:
             logger.debug(f"Warning review started: file={source_file}, warnings={warning_count}")
 
         except Exception as e:
+            self._record_backend_failure("warning_review_started", e)
             logger.error(f"Error recording warning review started: {e}", exc_info=True)
 
     async def _on_warning_review_completed(self, event: DomainEvent) -> None:
@@ -482,9 +527,13 @@ class RepairCycleMetricsCollector:
                         labels={"severity": severity},
                     )
 
+            if self.metrics_backend and warnings:
+                self._record_backend_success()
+
             logger.debug(f"Warning review completed: warnings_reviewed={warnings_reviewed}")
 
         except Exception as e:
+            self._record_backend_failure("warning_review_completed", e)
             logger.error(f"Error recording warning review completed: {e}", exc_info=True)
 
     def get_metrics(self) -> RepairCycleMetrics:

@@ -136,6 +136,8 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         self.event_emitter = event_emitter or NullEventEmitter()
         self.checkpoint_store = checkpoint_store
         self.agent_call_count = 0
+        self._unparseable_failures: List[Dict[str, Any]] = []
+        self._unparseable_warnings: List[Dict[str, Any]] = []
 
     async def execute(self, context: RepairCycleContext) -> RepairCycleResult:
         """Execute complete repair cycle for all configured test types.
@@ -612,7 +614,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         test_type: RepairTestType,
         iteration: int,
         context: RepairCycleContext,
-    ) -> None:
+    ) -> bool:
         """Save repair cycle state for resume after failures.
 
         Called at checkpoint_interval iterations. Saves sufficient state to
@@ -620,8 +622,11 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
         Args:
             test_type: Current test type being executed
-            iteration: Current iteration number
+            iteration: current iteration number
             context: Repair cycle context
+
+        Returns:
+            bool: True if checkpoint saved successfully, False otherwise
         """
         if not self.checkpoint_store:
             logger.debug(
@@ -633,7 +638,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 },
                 exc_info=False,
             )
-            return
+            return True
 
         try:
             from datetime import datetime, timedelta
@@ -669,6 +674,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 },
                 exc_info=False,
             )
+            return True
 
         except Exception as e:
             logger.error(
@@ -681,6 +687,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 },
                 exc_info=True,
             )
+            return False
 
     # Private helper methods
 
@@ -806,8 +813,24 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 )
                 failures.append(failure)
             except ValueError as e:
+                unparseable = {
+                    "raw_data": failure_data,
+                    "error": str(e),
+                    "test_type": test_type.value,
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
+                self._unparseable_failures.append(unparseable)
+
+                # Create synthetic failure so data isn't completely lost
+                synthetic = RepairTestFailure(
+                    file=failure_data.get("file", "unknown_file"),
+                    test=failure_data.get("test", "unknown_test"),
+                    message=f"[PARSE ERROR] {failure_data.get('message', '')} | Error: {e}",
+                )
+                failures.append(synthetic)
+
                 logger.warning(
-                    "Failed to parse failure",
+                    "Failed to parse failure - created synthetic entry",
                     extra={
                         "test_type": test_type.value,
                         "failure_data": failure_data,
@@ -850,8 +873,23 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 )
                 warnings.append(warning)
             except ValueError as e:
+                unparseable = {
+                    "raw_data": warning_data,
+                    "error": str(e),
+                    "test_type": test_type.value,
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
+                self._unparseable_warnings.append(unparseable)
+
+                # Create synthetic warning so data isn't completely lost
+                synthetic = RepairTestWarning(
+                    file=warning_data.get("file", "unknown_file"),
+                    message=f"[PARSE ERROR] {warning_data.get('message', '')} | Error: {e}",
+                )
+                warnings.append(synthetic)
+
                 logger.warning(
-                    "Failed to parse warning",
+                    "Failed to parse warning - created synthetic entry",
                     extra={
                         "test_type": test_type.value,
                         "warning_data": warning_data,
@@ -922,6 +960,21 @@ Return a JSON response with the status of fixes applied."""
             grouped[failure.file].append(failure)
 
         return {file: tuple(fs) for file, fs in grouped.items()}
+
+    def get_unparseable_failures(self) -> List[Dict[str, Any]]:
+        """Get all unparseable failure data encountered."""
+        return list(self._unparseable_failures)
+
+    def get_unparseable_warnings(self) -> List[Dict[str, Any]]:
+        """Get all unparseable warning data encountered."""
+        return list(self._unparseable_warnings)
+
+    def get_parse_error_count(self) -> Dict[str, int]:
+        """Get count of parse errors by type."""
+        return {
+            "failures": len(self._unparseable_failures),
+            "warnings": len(self._unparseable_warnings),
+        }
 
     async def _run_test_cycle(
         self,
@@ -1012,7 +1065,12 @@ Return a JSON response with the status of fixes applied."""
 
                 # Checkpoint at interval
                 if iteration % context.checkpoint_interval == 0:
-                    await self.checkpoint(config.test_type, iteration, context)
+                    success = await self.checkpoint(config.test_type, iteration, context)
+                    if not success:
+                        logger.warning(
+                            "Checkpoint save failed, continuing without checkpoint",
+                            extra={"pipeline_run_id": context.pipeline_run_id}
+                        )
 
             except Exception as e:
                 error = str(e)

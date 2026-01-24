@@ -27,6 +27,7 @@ class EventTypes:
 
     # Repair cycle events
     REPAIR_CYCLE_STARTED = "repair_cycle.started"
+    REPAIR_CYCLE_TEST_EXECUTION_STARTED = "repair_cycle.test_execution_started"
     REPAIR_CYCLE_TEST_EXECUTION_COMPLETED = "repair_cycle.test_execution_completed"
     REPAIR_CYCLE_TEST_CYCLE_COMPLETED = "repair_cycle.test_cycle_completed"
     REPAIR_CYCLE_FILE_FIX_STARTED = "repair_cycle.file_fix_started"

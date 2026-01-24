@@ -1037,6 +1037,112 @@ async def run_scenario(runner: SimulationRunner) -> None:
 
 
 @pytest.mark.asyncio
+async def test_scenario_16_json_parse_retry_logic():
+    """Test JSON parse error with retry logic.
+
+    Edge Case #8 from issue #88: Agent returns invalid JSON,
+    system retries with delay, eventually fails gracefully.
+    """
+    import time
+    from unittest.mock import Mock
+    from codetoreum.adapters.secondary.production_repair_cycle_adapter import (
+        ProductionRepairCycleAdapter,
+        RepairCycleConfig,
+        JSONParseError,
+    )
+
+    config = RepairCycleConfig(
+        max_json_parse_retries=3,
+        json_parse_retry_delay_ms=100,
+    )
+
+    # Mock LLM that returns non-JSON
+    mock_llm = Mock()
+    adapter = ProductionRepairCycleAdapter(llm_provider=mock_llm, config=config)
+
+    start_time = time.time()
+
+    with pytest.raises(JSONParseError) as exc_info:
+        await adapter._parse_test_output_with_retry(
+            "This is not JSON at all!",
+            RepairTestType.UNIT
+        )
+
+    elapsed = time.time() - start_time
+
+    # Should retry 3 times with 100ms delay between retries
+    assert "Failed to parse test output after 3 attempts" in str(exc_info.value)
+    assert elapsed >= 0.2  # 2 retries * 100ms = 200ms minimum
+
+
+@pytest.mark.asyncio
+async def test_scenario_17_json_parse_success_after_retry():
+    """Test successful JSON extraction from mixed content.
+
+    Tests that embedded JSON is found and parsed correctly
+    even when surrounded by other text.
+    """
+    from unittest.mock import Mock
+    from codetoreum.adapters.secondary.production_repair_cycle_adapter import (
+        ProductionRepairCycleAdapter,
+        RepairCycleConfig,
+    )
+
+    config = RepairCycleConfig(max_json_parse_retries=3)
+    mock_llm = Mock()
+    adapter = ProductionRepairCycleAdapter(llm_provider=mock_llm, config=config)
+
+    # Test with embedded JSON in mixed content
+    mixed_content = """
+    Here is some text before the JSON.
+
+    {"passed": 10, "failed": 0, "warnings": [], "failures": []}
+
+    And some text after.
+    """
+
+    result = await adapter._parse_test_output_with_retry(
+        mixed_content,
+        RepairTestType.UNIT
+    )
+
+    assert result["passed"] == 10
+    assert result["failed"] == 0
+    assert result["warnings"] == []
+    assert result["failures"] == []
+
+
+@pytest.mark.asyncio
+async def test_scenario_18_json_parse_malformed_structure():
+    """Test that structurally invalid JSON fails gracefully.
+
+    Tests partial/malformed JSON (missing closing braces, etc.)
+    fails after all retries with clear error message.
+    """
+    from unittest.mock import Mock
+    from codetoreum.adapters.secondary.production_repair_cycle_adapter import (
+        ProductionRepairCycleAdapter,
+        RepairCycleConfig,
+        JSONParseError,
+    )
+
+    config = RepairCycleConfig(max_json_parse_retries=2)
+    mock_llm = Mock()
+    adapter = ProductionRepairCycleAdapter(llm_provider=mock_llm, config=config)
+
+    # Test with malformed JSON (missing closing brace)
+    malformed_json = '{"passed": 10, "failed": 0'
+
+    with pytest.raises(JSONParseError) as exc_info:
+        await adapter._parse_test_output_with_retry(
+            malformed_json,
+            RepairTestType.UNIT
+        )
+
+    assert "Failed to parse test output after 2 attempts" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
 async def test_repair_cycle_scenario():
     """Test complete repair cycle simulation scenario."""
     config = create_config()

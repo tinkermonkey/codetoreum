@@ -387,6 +387,7 @@ class TestRepairCycleWarningReviewStartedEvent:
             warning_count=1,
             test_type=RepairTestType.UNIT,
             warnings=(warning,),
+            pipeline_run_id="test-run-123",
         )
 
         assert event.source_file == "auth.py"
@@ -421,6 +422,7 @@ class TestRepairCycleWarningReviewStartedEvent:
             warning_count=1,
             test_type=RepairTestType.UNIT,
             warnings=(warning,),
+            pipeline_run_id="test-run-123",
         )
 
         d = event.to_dict()
@@ -442,6 +444,7 @@ class TestRepairCycleWarningReviewCompletedEvent:
             warning_count=1,
             test_type=RepairTestType.UNIT,
             success=True,
+            pipeline_run_id="test-run-123",
         )
 
         assert event.source_file == "auth.py"
@@ -507,6 +510,7 @@ class TestRepairCycleFastFailEvent:
             source="repair_cycle",
             test_type=RepairTestType.UNIT,
             reason="max_agent_calls_exceeded",
+            pipeline_run_id="test-run-123",
         )
 
         assert event.test_type == RepairTestType.UNIT
@@ -642,6 +646,7 @@ class TestRepairCycleEventsImmutability:
             source="repair_cycle",
             test_type=RepairTestType.UNIT,
             reason="max_agent_calls_exceeded",
+            pipeline_run_id="test-run-123",
         )
 
         with pytest.raises(FrozenInstanceError):

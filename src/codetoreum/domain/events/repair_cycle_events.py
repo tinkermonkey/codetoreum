@@ -223,7 +223,10 @@ class RepairCycleTestExecutionCompletedEvent(CodetoreumEvent):
             "failed": self.failed,
             "warnings": self.warnings,
             "has_failures": self.has_failures,
-            "failures": [f.__dict__ if hasattr(f, '__dict__') else f.to_dict() for f in self.failures],
+            "failures": [
+                {"file": f.file, "test": f.test, "message": f.message}
+                for f in self.failures
+            ],
             "pipeline_run_id": self.pipeline_run_id,
         })
         return d
@@ -484,6 +487,7 @@ class RepairCycleWarningReviewStartedEvent(CodetoreumEvent):
         warning_count (int): Number of warnings found in file
         test_type (RepairTestType): Type of test that found warnings
         warnings (Tuple[RepairTestWarning, ...]): Details of each warning
+        pipeline_run_id (str): ID of the pipeline run
         timestamp (str): ISO 8601 timestamp when warning review started
     """
 
@@ -491,6 +495,7 @@ class RepairCycleWarningReviewStartedEvent(CodetoreumEvent):
     warning_count: int = 0
     test_type: RepairTestType = RepairTestType.UNIT
     warnings: Tuple[RepairTestWarning, ...] = ()
+    pipeline_run_id: str = ""
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""
@@ -499,6 +504,8 @@ class RepairCycleWarningReviewStartedEvent(CodetoreumEvent):
             raise ValueError("source_file is required")
         if self.warning_count < 1:
             raise ValueError("warning_count must be >= 1")
+        if not self.pipeline_run_id:
+            raise ValueError("pipeline_run_id is required")
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -507,7 +514,11 @@ class RepairCycleWarningReviewStartedEvent(CodetoreumEvent):
             "source_file": self.source_file,
             "warning_count": self.warning_count,
             "test_type": self.test_type.value,
-            "warnings": [w.__dict__ if hasattr(w, '__dict__') else w.to_dict() for w in self.warnings],
+            "warnings": [
+                {"file": w.file, "message": w.message}
+                for w in self.warnings
+            ],
+            "pipeline_run_id": self.pipeline_run_id,
         })
         return d
 
@@ -536,6 +547,7 @@ class RepairCycleWarningReviewStartedEvent(CodetoreumEvent):
             warning_count=data.get("warning_count", 0),
             test_type=test_type,
             warnings=warnings,
+            pipeline_run_id=data.get("pipeline_run_id", ""),
         )
 
 
@@ -553,6 +565,7 @@ class RepairCycleWarningReviewCompletedEvent(CodetoreumEvent):
         warning_count (int): Number of warnings that were reviewed
         test_type (RepairTestType): Type of test
         success (bool): True if warning review was successful
+        pipeline_run_id (str): ID of the pipeline run
         timestamp (str): ISO 8601 timestamp when warning review completed
     """
 
@@ -560,6 +573,7 @@ class RepairCycleWarningReviewCompletedEvent(CodetoreumEvent):
     warning_count: int = 0
     test_type: RepairTestType = RepairTestType.UNIT
     success: bool = False
+    pipeline_run_id: str = ""
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""
@@ -568,6 +582,8 @@ class RepairCycleWarningReviewCompletedEvent(CodetoreumEvent):
             raise ValueError("source_file is required")
         if self.warning_count < 1:
             raise ValueError("warning_count must be >= 1")
+        if not self.pipeline_run_id:
+            raise ValueError("pipeline_run_id is required")
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -577,6 +593,7 @@ class RepairCycleWarningReviewCompletedEvent(CodetoreumEvent):
             "warning_count": self.warning_count,
             "test_type": self.test_type.value,
             "success": self.success,
+            "pipeline_run_id": self.pipeline_run_id,
         })
         return d
 
@@ -598,6 +615,7 @@ class RepairCycleWarningReviewCompletedEvent(CodetoreumEvent):
             warning_count=data.get("warning_count", 0),
             test_type=test_type,
             success=data.get("success", False),
+            pipeline_run_id=data.get("pipeline_run_id", ""),
         )
 
 
@@ -702,17 +720,21 @@ class RepairCycleFastFailEvent(CodetoreumEvent):
         type (str): Fixed to "repair_cycle.fast_fail"
         test_type (RepairTestType): Type of test that triggered fast-fail
         reason (str): Reason for fast-fail (e.g., "max_iterations_exceeded")
+        pipeline_run_id (str): ID of the pipeline run
         timestamp (str): ISO 8601 timestamp when fast-fail was triggered
     """
 
     test_type: RepairTestType = RepairTestType.UNIT
     reason: str = ""
+    pipeline_run_id: str = ""
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""
         super().__post_init__()
         if not self.reason:
             raise ValueError("reason is required")
+        if not self.pipeline_run_id:
+            raise ValueError("pipeline_run_id is required")
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -720,6 +742,7 @@ class RepairCycleFastFailEvent(CodetoreumEvent):
         d.update({
             "test_type": self.test_type.value,
             "reason": self.reason,
+            "pipeline_run_id": self.pipeline_run_id,
         })
         return d
 
@@ -739,6 +762,7 @@ class RepairCycleFastFailEvent(CodetoreumEvent):
             event_id=data.get("event_id") or str(uuid4()),
             test_type=test_type,
             reason=data.get("reason", ""),
+            pipeline_run_id=data.get("pipeline_run_id", ""),
         )
 
 
@@ -841,7 +865,18 @@ class RepairCycleCompletedEvent(CodetoreumEvent):
         d = super().to_dict()
         d.update({
             "overall_success": self.overall_success,
-            "test_results": [r.__dict__ if hasattr(r, '__dict__') else r.to_dict() for r in self.test_results],
+            "test_results": [
+                {
+                    "test_type": r.test_type.value,
+                    "passed": r.passed,
+                    "iterations": r.iterations,
+                    "files_fixed": r.files_fixed,
+                    "warnings_reviewed": r.warnings_reviewed,
+                    "duration_seconds": r.duration_seconds,
+                    "error": r.error,
+                }
+                for r in self.test_results
+            ],
             "total_agent_calls": self.total_agent_calls,
             "duration_seconds": self.duration_seconds,
             "pipeline_run_id": self.pipeline_run_id,
