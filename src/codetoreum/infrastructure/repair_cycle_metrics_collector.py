@@ -12,10 +12,12 @@ Supports multiple metrics backends (in-memory, Prometheus, etc.)
 """
 
 import logging
+from datetime import datetime
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 
 from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events.repair_cycle_events import RepairCycleMetricsBackendFailedEvent
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.event_types import EventTypes
 from codetoreum.ports.output.metrics import IMetrics
@@ -232,12 +234,14 @@ class RepairCycleMetricsCollector:
             logger.info("Metrics backend circuit breaker closed - backend recovered")
 
     def _record_backend_failure(self, operation: str, error: Exception) -> None:
-        """Record backend failure and potentially open circuit."""
+        """Record backend failure and emit event for visibility."""
         self._backend_consecutive_failures += 1
 
+        circuit_opened = False
         if (not self._backend_circuit_open and
             self._backend_consecutive_failures >= self._max_consecutive_failures):
             self._backend_circuit_open = True
+            circuit_opened = True
             logger.error(
                 f"Metrics backend circuit breaker OPENED after "
                 f"{self._max_consecutive_failures} consecutive failures",
@@ -245,6 +249,23 @@ class RepairCycleMetricsCollector:
                     "last_operation": operation,
                     "last_error": str(error),
                 },
+                exc_info=True,
+            )
+
+        # Emit event for external visibility (alerting, monitoring)
+        if self.event_bus:
+            self.event_bus.emit(
+                RepairCycleMetricsBackendFailedEvent(
+                    type="repair_cycle.metrics_backend_failed",
+                    timestamp=datetime.utcnow().isoformat(),
+                    source="repair_cycle_metrics_collector",
+                    operation=operation,
+                    error_type=type(error).__name__,
+                    error_message=str(error),
+                    consecutive_failures=self._backend_consecutive_failures,
+                    circuit_breaker_open=self._backend_circuit_open,
+                    pipeline_run_id=getattr(error, 'pipeline_run_id', ''),
+                )
             )
 
     def is_backend_healthy(self) -> bool:
@@ -279,7 +300,17 @@ class RepairCycleMetricsCollector:
 
         except Exception as e:
             self._record_backend_failure("repair_cycle_started", e)
-            logger.error(f"Error recording repair cycle started: {e}", exc_info=True)
+
+            # Use ERROR level if circuit is open (critical degradation)
+            log_level = logger.error if self._backend_circuit_open else logger.warning
+            log_level(
+                f"Metrics backend failure during repair_cycle_started: {e}",
+                exc_info=True,
+                extra={
+                    "circuit_breaker_open": self._backend_circuit_open,
+                    "consecutive_failures": self._backend_consecutive_failures,
+                }
+            )
 
     async def _on_repair_cycle_completed(self, event: DomainEvent) -> None:
         """Record repair cycle completed."""
@@ -343,7 +374,17 @@ class RepairCycleMetricsCollector:
 
         except Exception as e:
             self._record_backend_failure("repair_cycle_completed", e)
-            logger.error(f"Error recording repair cycle completed: {e}", exc_info=True)
+
+            # Use ERROR level if circuit is open (critical degradation)
+            log_level = logger.error if self._backend_circuit_open else logger.warning
+            log_level(
+                f"Metrics backend failure during repair_cycle_completed: {e}",
+                exc_info=True,
+                extra={
+                    "circuit_breaker_open": self._backend_circuit_open,
+                    "consecutive_failures": self._backend_consecutive_failures,
+                }
+            )
 
     async def _on_repair_cycle_fast_fail(self, event: DomainEvent) -> None:
         """Record repair cycle fast-fail."""
@@ -375,7 +416,17 @@ class RepairCycleMetricsCollector:
 
         except Exception as e:
             self._record_backend_failure("repair_cycle_fast_fail", e)
-            logger.error(f"Error recording repair cycle fast-fail: {e}", exc_info=True)
+
+            # Use ERROR level if circuit is open (critical degradation)
+            log_level = logger.error if self._backend_circuit_open else logger.warning
+            log_level(
+                f"Metrics backend failure during repair_cycle_fast_fail: {e}",
+                exc_info=True,
+                extra={
+                    "circuit_breaker_open": self._backend_circuit_open,
+                    "consecutive_failures": self._backend_consecutive_failures,
+                }
+            )
 
     async def _on_test_execution_started(self, event: DomainEvent) -> None:
         """Record test execution started."""
@@ -387,7 +438,17 @@ class RepairCycleMetricsCollector:
 
         except Exception as e:
             self._record_backend_failure("test_execution_started", e)
-            logger.error(f"Error recording test execution started: {e}", exc_info=True)
+
+            # Use ERROR level if circuit is open (critical degradation)
+            log_level = logger.error if self._backend_circuit_open else logger.warning
+            log_level(
+                f"Metrics backend failure during test_execution_started: {e}",
+                exc_info=True,
+                extra={
+                    "circuit_breaker_open": self._backend_circuit_open,
+                    "consecutive_failures": self._backend_consecutive_failures,
+                }
+            )
 
     async def _on_test_execution_completed(self, event: DomainEvent) -> None:
         """Record test execution completed."""
@@ -440,7 +501,17 @@ class RepairCycleMetricsCollector:
 
         except Exception as e:
             self._record_backend_failure("test_execution_completed", e)
-            logger.error(f"Error recording test execution completed: {e}", exc_info=True)
+
+            # Use ERROR level if circuit is open (critical degradation)
+            log_level = logger.error if self._backend_circuit_open else logger.warning
+            log_level(
+                f"Metrics backend failure during test_execution_completed: {e}",
+                exc_info=True,
+                extra={
+                    "circuit_breaker_open": self._backend_circuit_open,
+                    "consecutive_failures": self._backend_consecutive_failures,
+                }
+            )
 
     async def _on_file_fix_started(self, event: DomainEvent) -> None:
         """Record file fix started."""
@@ -452,7 +523,17 @@ class RepairCycleMetricsCollector:
 
         except Exception as e:
             self._record_backend_failure("file_fix_started", e)
-            logger.error(f"Error recording file fix started: {e}", exc_info=True)
+
+            # Use ERROR level if circuit is open (critical degradation)
+            log_level = logger.error if self._backend_circuit_open else logger.warning
+            log_level(
+                f"Metrics backend failure during file_fix_started: {e}",
+                exc_info=True,
+                extra={
+                    "circuit_breaker_open": self._backend_circuit_open,
+                    "consecutive_failures": self._backend_consecutive_failures,
+                }
+            )
 
     async def _on_file_fix_completed(self, event: DomainEvent) -> None:
         """Record file fix completed."""
@@ -492,7 +573,17 @@ class RepairCycleMetricsCollector:
 
         except Exception as e:
             self._record_backend_failure("file_fix_completed", e)
-            logger.error(f"Error recording file fix completed: {e}", exc_info=True)
+
+            # Use ERROR level if circuit is open (critical degradation)
+            log_level = logger.error if self._backend_circuit_open else logger.warning
+            log_level(
+                f"Metrics backend failure during file_fix_completed: {e}",
+                exc_info=True,
+                extra={
+                    "circuit_breaker_open": self._backend_circuit_open,
+                    "consecutive_failures": self._backend_consecutive_failures,
+                }
+            )
 
     async def _on_warning_review_started(self, event: DomainEvent) -> None:
         """Record warning review started."""
@@ -504,7 +595,17 @@ class RepairCycleMetricsCollector:
 
         except Exception as e:
             self._record_backend_failure("warning_review_started", e)
-            logger.error(f"Error recording warning review started: {e}", exc_info=True)
+
+            # Use ERROR level if circuit is open (critical degradation)
+            log_level = logger.error if self._backend_circuit_open else logger.warning
+            log_level(
+                f"Metrics backend failure during warning_review_started: {e}",
+                exc_info=True,
+                extra={
+                    "circuit_breaker_open": self._backend_circuit_open,
+                    "consecutive_failures": self._backend_consecutive_failures,
+                }
+            )
 
     async def _on_warning_review_completed(self, event: DomainEvent) -> None:
         """Record warning review completed."""
@@ -534,7 +635,17 @@ class RepairCycleMetricsCollector:
 
         except Exception as e:
             self._record_backend_failure("warning_review_completed", e)
-            logger.error(f"Error recording warning review completed: {e}", exc_info=True)
+
+            # Use ERROR level if circuit is open (critical degradation)
+            log_level = logger.error if self._backend_circuit_open else logger.warning
+            log_level(
+                f"Metrics backend failure during warning_review_completed: {e}",
+                exc_info=True,
+                extra={
+                    "circuit_breaker_open": self._backend_circuit_open,
+                    "consecutive_failures": self._backend_consecutive_failures,
+                }
+            )
 
     def get_metrics(self) -> RepairCycleMetrics:
         """Get aggregated repair cycle metrics."""

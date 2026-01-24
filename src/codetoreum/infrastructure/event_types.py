@@ -35,4 +35,7 @@ class EventTypes:
     REPAIR_CYCLE_WARNING_REVIEW_STARTED = "repair_cycle.warning_review_started"
     REPAIR_CYCLE_WARNING_REVIEW_COMPLETED = "repair_cycle.warning_review_completed"
     REPAIR_CYCLE_FAST_FAIL = "repair_cycle.fast_fail"
+    REPAIR_CYCLE_RESUMED = "repair_cycle.resumed"
+    REPAIR_CYCLE_CHECKPOINT_FAILED = "repair_cycle.checkpoint_failed"
+    REPAIR_CYCLE_METRICS_BACKEND_FAILED = "repair_cycle.metrics_backend_failed"
     REPAIR_CYCLE_COMPLETED = "repair_cycle.completed"

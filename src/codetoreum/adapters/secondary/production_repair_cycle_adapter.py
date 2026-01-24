@@ -40,7 +40,9 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestType,
     RepairTestWarning,
 )
+from codetoreum.domain.exceptions import TestOutputParseError
 from codetoreum.domain.events.repair_cycle_events import (
+    RepairCycleCheckpointFailedEvent,
     RepairCycleCompletedEvent,
     RepairCycleFileFixCompletedEvent,
     RepairCycleFileFixStartedEvent,
@@ -136,8 +138,6 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         self.event_emitter = event_emitter or NullEventEmitter()
         self.checkpoint_store = checkpoint_store
         self.agent_call_count = 0
-        self._unparseable_failures: List[Dict[str, Any]] = []
-        self._unparseable_warnings: List[Dict[str, Any]] = []
 
     async def execute(self, context: RepairCycleContext) -> RepairCycleResult:
         """Execute complete repair cycle for all configured test types.
@@ -678,15 +678,33 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
         except Exception as e:
             logger.error(
-                "Failed to save checkpoint",
+                "Failed to save checkpoint - repair cycle may not be resumable",
                 extra={
                     "pipeline_run_id": context.pipeline_run_id,
                     "test_type": test_type.value,
                     "iteration": iteration,
                     "error": str(e),
+                    "error_type": type(e).__name__,
                 },
                 exc_info=True,
             )
+
+            # Emit event so users/monitoring can be alerted
+            if self.event_emitter:
+                self.event_emitter.emit(
+                    RepairCycleCheckpointFailedEvent(
+                        type="repair_cycle.checkpoint_failed",
+                        timestamp=datetime.utcnow().isoformat(),
+                        source="production_repair_cycle",
+                        pipeline_run_id=context.pipeline_run_id,
+                        test_type=test_type.value,
+                        iteration=iteration,
+                        error_type=type(e).__name__,
+                        error_message=str(e),
+                        checkpoint_store_type=type(self.checkpoint_store).__name__ if self.checkpoint_store else "none",
+                    )
+                )
+
             return False
 
     # Private helper methods
@@ -813,31 +831,26 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 )
                 failures.append(failure)
             except ValueError as e:
-                unparseable = {
-                    "raw_data": failure_data,
-                    "error": str(e),
-                    "test_type": test_type.value,
-                    "timestamp": datetime.utcnow().isoformat(),
-                }
-                self._unparseable_failures.append(unparseable)
-
-                # Create synthetic failure so data isn't completely lost
-                synthetic = RepairTestFailure(
-                    file=failure_data.get("file", "unknown_file"),
-                    test=failure_data.get("test", "unknown_test"),
-                    message=f"[PARSE ERROR] {failure_data.get('message', '')} | Error: {e}",
-                )
-                failures.append(synthetic)
-
-                logger.warning(
-                    "Failed to parse failure - created synthetic entry",
+                # Parse error indicates agent returned invalid format or parser bug
+                logger.error(
+                    "PARSE ERROR: Test failure data is invalid - agent may be malfunctioning",
                     extra={
                         "test_type": test_type.value,
                         "failure_data": failure_data,
-                        "error": str(e),
+                        "validation_error": str(e),
                     },
                     exc_info=True,
                 )
+
+                # Don't create synthetic data - fail loudly
+                raise TestOutputParseError(
+                    f"Invalid test failure data for {test_type.value}. "
+                    f"This indicates either: (1) Test framework output changed, "
+                    f"(2) Agent prompt needs updating, or (3) Agent is malfunctioning. "
+                    f"Validation error: {e}",
+                    test_type=test_type.value,
+                    raw_data=failure_data,
+                ) from e
 
         return failures
 
@@ -873,30 +886,26 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 )
                 warnings.append(warning)
             except ValueError as e:
-                unparseable = {
-                    "raw_data": warning_data,
-                    "error": str(e),
-                    "test_type": test_type.value,
-                    "timestamp": datetime.utcnow().isoformat(),
-                }
-                self._unparseable_warnings.append(unparseable)
-
-                # Create synthetic warning so data isn't completely lost
-                synthetic = RepairTestWarning(
-                    file=warning_data.get("file", "unknown_file"),
-                    message=f"[PARSE ERROR] {warning_data.get('message', '')} | Error: {e}",
-                )
-                warnings.append(synthetic)
-
-                logger.warning(
-                    "Failed to parse warning - created synthetic entry",
+                # Parse error indicates agent returned invalid format or parser bug
+                logger.error(
+                    "PARSE ERROR: Test warning data is invalid - agent may be malfunctioning",
                     extra={
                         "test_type": test_type.value,
                         "warning_data": warning_data,
-                        "error": str(e),
+                        "validation_error": str(e),
                     },
                     exc_info=True,
                 )
+
+                # Don't create synthetic data - fail loudly
+                raise TestOutputParseError(
+                    f"Invalid test warning data for {test_type.value}. "
+                    f"This indicates either: (1) Test framework output changed, "
+                    f"(2) Agent prompt needs updating, or (3) Agent is malfunctioning. "
+                    f"Validation error: {e}",
+                    test_type=test_type.value,
+                    raw_data=warning_data,
+                ) from e
 
         return warnings
 
@@ -960,21 +969,6 @@ Return a JSON response with the status of fixes applied."""
             grouped[failure.file].append(failure)
 
         return {file: tuple(fs) for file, fs in grouped.items()}
-
-    def get_unparseable_failures(self) -> List[Dict[str, Any]]:
-        """Get all unparseable failure data encountered."""
-        return list(self._unparseable_failures)
-
-    def get_unparseable_warnings(self) -> List[Dict[str, Any]]:
-        """Get all unparseable warning data encountered."""
-        return list(self._unparseable_warnings)
-
-    def get_parse_error_count(self) -> Dict[str, int]:
-        """Get count of parse errors by type."""
-        return {
-            "failures": len(self._unparseable_failures),
-            "warnings": len(self._unparseable_warnings),
-        }
 
     async def _run_test_cycle(
         self,

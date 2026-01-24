@@ -360,6 +360,45 @@ class TestRepairTestResult:
                 timestamp="",
             )
 
+    def test_failed_count_mismatch_raises_error(self):
+        """Test that failed count mismatch with failures list raises ValueError."""
+        failure = RepairTestFailure(
+            file="test_auth.py",
+            test="test_login",
+            message="Failed",
+        )
+        with pytest.raises(ValueError, match="failed count mismatch"):
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=1,
+                passed=10,
+                failed=2,  # Mismatch: says 2 but only 1 in list
+                warnings=0,
+                failures=(failure,),  # Only 1 failure
+                warning_list=(),
+                raw_output="OK",
+                timestamp="2025-01-22T10:00:00Z",
+            )
+
+    def test_warnings_count_mismatch_raises_error(self):
+        """Test that warnings count mismatch with warning_list raises ValueError."""
+        warning = RepairTestWarning(
+            file="auth.py",
+            message="DeprecationWarning",
+        )
+        with pytest.raises(ValueError, match="warnings count mismatch"):
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=1,
+                passed=10,
+                failed=0,
+                warnings=2,  # Mismatch: says 2 but only 1 in list
+                failures=(),
+                warning_list=(warning,),  # Only 1 warning
+                raw_output="OK",
+                timestamp="2025-01-22T10:00:00Z",
+            )
+
 
 # ============================================================================
 # CycleResult Immutability Tests
@@ -491,6 +530,45 @@ class TestCycleResult:
                 duration_seconds=-1.0,
             )
 
+    def test_passed_true_with_no_final_result_raises_error(self):
+        """Test that passed=True without final_result raises ValueError."""
+        with pytest.raises(ValueError, match="passed=True but final_result is None"):
+            CycleResult(
+                test_type=RepairTestType.UNIT,
+                passed=True,
+                iterations=1,
+                final_result=None,  # Inconsistency: passed but no result
+                error=None,
+                files_fixed=0,
+                warnings_reviewed=0,
+                duration_seconds=5.0,
+            )
+
+    def test_passed_true_with_error_raises_error(self):
+        """Test that passed=True with error set raises ValueError."""
+        test_result = RepairTestResult(
+            test_type=RepairTestType.UNIT,
+            iteration=1,
+            passed=10,
+            failed=0,
+            warnings=0,
+            failures=(),
+            warning_list=(),
+            raw_output="OK",
+            timestamp="2025-01-22T10:00:00Z",
+        )
+        with pytest.raises(ValueError, match="passed=True but error is set"):
+            CycleResult(
+                test_type=RepairTestType.UNIT,
+                passed=True,
+                iterations=1,
+                final_result=test_result,
+                error="Test execution timeout",  # Inconsistency: passed but has error
+                files_fixed=0,
+                warnings_reviewed=0,
+                duration_seconds=5.0,
+            )
+
 
 # ============================================================================
 # RepairCycleResult Immutability Tests
@@ -611,6 +689,70 @@ class TestRepairCycleResult:
                 total_agent_calls=0,
                 duration_seconds=0.0,
                 timestamp="",
+            )
+
+    def test_overall_success_true_with_failed_tests_raises_error(self):
+        """Test that overall_success=True with failed test results raises ValueError."""
+        cycle1 = CycleResult(
+            test_type=RepairTestType.UNIT,
+            passed=True,
+            iterations=1,
+            final_result=None,
+            error=None,
+            files_fixed=0,
+            warnings_reviewed=0,
+            duration_seconds=5.0,
+        )
+        cycle2 = CycleResult(
+            test_type=RepairTestType.INTEGRATION,
+            passed=False,  # This one failed
+            iterations=3,
+            final_result=None,
+            error="Test execution timeout",
+            files_fixed=0,
+            warnings_reviewed=0,
+            duration_seconds=900.0,
+        )
+        with pytest.raises(ValueError, match="overall_success=True but some test types failed"):
+            RepairCycleResult(
+                stage="fix_failures",
+                test_results=(cycle1, cycle2),
+                overall_success=True,  # Inconsistency: says success but cycle2 failed
+                total_agent_calls=5,
+                duration_seconds=905.0,
+                timestamp="2025-01-22T10:30:00Z",
+            )
+
+    def test_overall_success_false_with_all_passed_raises_error(self):
+        """Test that overall_success=False with all passed test results raises ValueError."""
+        cycle1 = CycleResult(
+            test_type=RepairTestType.UNIT,
+            passed=True,
+            iterations=1,
+            final_result=None,
+            error=None,
+            files_fixed=0,
+            warnings_reviewed=0,
+            duration_seconds=5.0,
+        )
+        cycle2 = CycleResult(
+            test_type=RepairTestType.INTEGRATION,
+            passed=True,
+            iterations=2,
+            final_result=None,
+            error=None,
+            files_fixed=2,
+            warnings_reviewed=1,
+            duration_seconds=15.0,
+        )
+        with pytest.raises(ValueError, match="overall_success=False but all test results passed"):
+            RepairCycleResult(
+                stage="fix_failures",
+                test_results=(cycle1, cycle2),
+                overall_success=False,  # Inconsistency: says failed but all passed
+                total_agent_calls=5,
+                duration_seconds=20.0,
+                timestamp="2025-01-22T10:30:00Z",
             )
 
 

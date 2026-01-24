@@ -543,3 +543,214 @@ class TestMockRepairCycleAdapterContract(TestRepairCycleDomainTypesContract):
             pipeline_run_id=pipeline_run_id,
             max_total_agent_calls=max_total_agent_calls,
         )
+
+
+# =============================================================================
+# ADAPTER METHOD CONTRACT TESTS (WITHOUT SIMULATION CLOCK)
+# =============================================================================
+
+
+class TestRepairCycleAdapterMethodContract:
+    """Contract tests for repair cycle adapter methods.
+
+    These tests validate adapter method signatures and basic behavior without
+    using SimulationClock (which has async coordination issues). Tests use real
+    time and focus on verifying the contract is satisfied:
+    - Method exists and is callable
+    - Accepts correct parameter types
+    - Returns correct return types
+    - Handles basic error conditions
+
+    Full behavior testing with time manipulation is covered by simulation
+    scenario tests (scenario_07_repair_cycle.py).
+    """
+
+    @pytest.mark.asyncio
+    async def test_run_tests_method_exists_and_callable(self) -> None:
+        """Verify run_tests() method exists with correct signature."""
+        from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
+
+        adapter = MockRepairCycleAdapter()
+        adapter.current_project = "test-proj"
+
+        # Configure simple test sequence
+        adapter.set_iterations_until_success(RepairTestType.UNIT, 1)
+
+        config = RepairTestRunConfig(
+            test_type=RepairTestType.UNIT,
+            timeout=30,
+            max_iterations=1,
+        )
+        context = MockRepairCycleContext(
+            pipeline_run_id="test-run",
+            test_configs=(config,),
+        )
+
+        # Verify method is callable and returns RepairTestResult
+        result = await adapter.run_tests(config, context)
+        assert isinstance(result, RepairTestResult)
+        assert result.test_type == RepairTestType.UNIT
+        assert result.iteration > 0
+
+    @pytest.mark.asyncio
+    async def test_fix_failures_by_file_method_exists(self) -> None:
+        """Verify fix_failures_by_file() method exists with correct signature."""
+        from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
+
+        adapter = MockRepairCycleAdapter()
+        adapter.current_project = "test-proj"
+
+        failures_by_file = {
+            "test_auth.py": (
+                RepairTestFailure(
+                    file="test_auth.py",
+                    test="test_login",
+                    message="Expected True, got False",
+                ),
+            )
+        }
+
+        config = RepairTestRunConfig(
+            test_type=RepairTestType.UNIT,
+            timeout=30,
+            max_iterations=1,
+        )
+        context = MockRepairCycleContext(
+            pipeline_run_id="test-run",
+            test_configs=(config,),
+        )
+
+        # Verify method is callable and returns int (files fixed count)
+        files_fixed = await adapter.fix_failures_by_file(failures_by_file, config, context)
+        assert isinstance(files_fixed, int)
+        assert files_fixed >= 0  # Count must be non-negative
+
+    @pytest.mark.asyncio
+    async def test_handle_warnings_method_exists(self) -> None:
+        """Verify handle_warnings() method exists with correct signature."""
+        from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
+
+        adapter = MockRepairCycleAdapter()
+        adapter.current_project = "test-proj"
+
+        test_result = RepairTestResult(
+            test_type=RepairTestType.UNIT,
+            iteration=1,
+            passed=10,
+            failed=0,
+            warnings=2,
+            failures=(),
+            warning_list=(
+                RepairTestWarning(file="auth.py", message="DeprecationWarning: use new API"),
+                RepairTestWarning(file="db.py", message="PendingDeprecationWarning"),
+            ),
+            raw_output="Tests passed with warnings",
+            timestamp=datetime.utcnow().isoformat(),
+        )
+
+        config = RepairTestRunConfig(
+            test_type=RepairTestType.UNIT,
+            timeout=30,
+            max_iterations=1,
+            review_warnings=True,
+        )
+        context = MockRepairCycleContext(
+            pipeline_run_id="test-run",
+            test_configs=(config,),
+        )
+
+        # Verify method is callable and returns int (warnings reviewed count)
+        warnings_reviewed = await adapter.handle_warnings(test_result, config, context)
+        assert isinstance(warnings_reviewed, int)
+        assert warnings_reviewed >= 0  # Count must be non-negative
+
+    @pytest.mark.asyncio
+    async def test_checkpoint_method_exists(self) -> None:
+        """Verify checkpoint() method exists with correct signature."""
+        from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
+        from codetoreum.adapters.testing.in_memory_checkpoint_store import InMemoryCheckpointStore
+
+        checkpoint_store = InMemoryCheckpointStore()
+        adapter = MockRepairCycleAdapter(checkpoint_store=checkpoint_store)
+        adapter.current_project = "test-proj"
+
+        config = RepairTestRunConfig(
+            test_type=RepairTestType.UNIT,
+            timeout=30,
+            max_iterations=5,
+        )
+        context = MockRepairCycleContext(
+            pipeline_run_id="test-checkpoint",
+            test_configs=(config,),
+            checkpoint_interval=1,
+        )
+
+        # Verify method is callable (returns None)
+        await adapter.checkpoint(RepairTestType.UNIT, 1, context)
+
+        # Verify checkpoint was saved
+        saved_checkpoint = await checkpoint_store.get_checkpoint(
+            "test-checkpoint",
+            RepairTestType.UNIT.value,
+        )
+        assert saved_checkpoint is not None
+        assert saved_checkpoint.iteration == 1
+
+    @pytest.mark.asyncio
+    async def test_run_tests_respects_timeout_contract(self) -> None:
+        """Verify run_tests() honors timeout configuration (contract requirement)."""
+        from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
+        import time
+
+        adapter = MockRepairCycleAdapter()
+        adapter.current_project = "test-proj"
+
+        # Configure test to succeed immediately
+        adapter.set_iterations_until_success(RepairTestType.UNIT, 1)
+
+        config = RepairTestRunConfig(
+            test_type=RepairTestType.UNIT,
+            timeout=1,  # Very short timeout
+            max_iterations=1,
+        )
+        context = MockRepairCycleContext(
+            pipeline_run_id="test-run",
+            test_configs=(config,),
+        )
+
+        # Measure execution time
+        start = time.time()
+        result = await adapter.run_tests(config, context)
+        elapsed = time.time() - start
+
+        # Mock adapter should complete quickly (under timeout)
+        assert elapsed < 5.0  # Should complete much faster than 5 seconds
+        assert isinstance(result, RepairTestResult)
+
+    @pytest.mark.asyncio
+    async def test_execute_returns_repair_cycle_result(self) -> None:
+        """Verify execute() method returns RepairCycleResult."""
+        from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
+
+        adapter = MockRepairCycleAdapter()
+        adapter.current_project = "test-proj"
+
+        # Configure simple successful scenario
+        adapter.set_iterations_until_success(RepairTestType.UNIT, 1)
+
+        config = RepairTestRunConfig(
+            test_type=RepairTestType.UNIT,
+            timeout=30,
+            max_iterations=1,
+        )
+        context = MockRepairCycleContext(
+            pipeline_run_id="test-run",
+            test_configs=(config,),
+        )
+
+        # Verify execute returns correct type
+        result = await adapter.execute(context)
+        assert isinstance(result, RepairCycleResult)
+        assert result.overall_success is True
+        assert len(result.test_results) == 1
+        assert result.total_agent_calls >= 0

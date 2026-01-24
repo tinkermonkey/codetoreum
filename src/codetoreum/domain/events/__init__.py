@@ -85,6 +85,9 @@ from .repair_cycle_events import (
     RepairCycleWarningReviewCompletedEvent,
     RepairCycleTestCycleCompletedEvent,
     RepairCycleFastFailEvent,
+    RepairCycleResumedEvent,
+    RepairCycleCheckpointFailedEvent,
+    RepairCycleMetricsBackendFailedEvent,
     RepairCycleCompletedEvent,
 )
 
@@ -189,5 +192,8 @@ __all__ = [
     "RepairCycleWarningReviewCompletedEvent",
     "RepairCycleTestCycleCompletedEvent",
     "RepairCycleFastFailEvent",
+    "RepairCycleResumedEvent",
+    "RepairCycleCheckpointFailedEvent",
+    "RepairCycleMetricsBackendFailedEvent",
     "RepairCycleCompletedEvent",
 ]

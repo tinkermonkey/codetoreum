@@ -825,6 +825,146 @@ class RepairCycleResumedEvent(CodetoreumEvent):
 
 
 @dataclass(frozen=True)
+class RepairCycleCheckpointFailedEvent(CodetoreumEvent):
+    """Emitted when checkpoint save fails (recovery may not be possible).
+
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Attempting to modify any field will raise `FrozenInstanceError`.
+
+    Attributes:
+        type (str): Fixed to "repair_cycle.checkpoint_failed"
+        pipeline_run_id (str): ID of the pipeline run
+        test_type (str): RepairTestType value
+        iteration (int): Current iteration number (1-based)
+        error_type (str): Type of error (e.g., "ConnectionError")
+        error_message (str): Error message details
+        checkpoint_store_type (str): Type of checkpoint store (e.g., "RedisCheckpointStore")
+        timestamp (str): ISO 8601 timestamp when checkpoint failed
+    """
+
+    pipeline_run_id: str = ""
+    test_type: str = ""
+    iteration: int = 0
+    error_type: str = ""
+    error_message: str = ""
+    checkpoint_store_type: str = ""
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.pipeline_run_id:
+            raise ValueError("pipeline_run_id is required")
+        if not self.test_type:
+            raise ValueError("test_type is required")
+        if self.iteration < 0:
+            raise ValueError("iteration must be >= 0")
+        if not self.error_type:
+            raise ValueError("error_type is required")
+        if not self.error_message:
+            raise ValueError("error_message is required")
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update({
+            "pipeline_run_id": self.pipeline_run_id,
+            "test_type": self.test_type,
+            "iteration": self.iteration,
+            "error_type": self.error_type,
+            "error_message": self.error_message,
+            "checkpoint_store_type": self.checkpoint_store_type,
+        })
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "RepairCycleCheckpointFailedEvent":
+        """Deserialize from dictionary."""
+        return cls(
+            type=data.get("type", "repair_cycle.checkpoint_failed"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            pipeline_run_id=data.get("pipeline_run_id", ""),
+            test_type=data.get("test_type", ""),
+            iteration=data.get("iteration", 0),
+            error_type=data.get("error_type", ""),
+            error_message=data.get("error_message", ""),
+            checkpoint_store_type=data.get("checkpoint_store_type", ""),
+        )
+
+
+@dataclass(frozen=True)
+class RepairCycleMetricsBackendFailedEvent(CodetoreumEvent):
+    """Emitted when metrics backend fails (critical observability degradation).
+
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Attempting to modify any field will raise `FrozenInstanceError`.
+
+    Attributes:
+        type (str): Fixed to "repair_cycle.metrics_backend_failed"
+        operation (str): Operation that failed (e.g., "repair_cycle_started")
+        error_type (str): Type of error (e.g., "ConnectionError")
+        error_message (str): Error message details
+        consecutive_failures (int): Number of consecutive failures so far
+        circuit_breaker_open (bool): True if circuit breaker is now open
+        pipeline_run_id (str): ID of the pipeline run (may be empty if unknown)
+        timestamp (str): ISO 8601 timestamp when backend failure occurred
+    """
+
+    operation: str = ""
+    error_type: str = ""
+    error_message: str = ""
+    consecutive_failures: int = 0
+    circuit_breaker_open: bool = False
+    pipeline_run_id: str = ""
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.operation:
+            raise ValueError("operation is required")
+        if not self.error_type:
+            raise ValueError("error_type is required")
+        if not self.error_message:
+            raise ValueError("error_message is required")
+        if self.consecutive_failures < 0:
+            raise ValueError("consecutive_failures must be >= 0")
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update({
+            "operation": self.operation,
+            "error_type": self.error_type,
+            "error_message": self.error_message,
+            "consecutive_failures": self.consecutive_failures,
+            "circuit_breaker_open": self.circuit_breaker_open,
+            "pipeline_run_id": self.pipeline_run_id,
+        })
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "RepairCycleMetricsBackendFailedEvent":
+        """Deserialize from dictionary."""
+        return cls(
+            type=data.get("type", "repair_cycle.metrics_backend_failed"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            operation=data.get("operation", ""),
+            error_type=data.get("error_type", ""),
+            error_message=data.get("error_message", ""),
+            consecutive_failures=data.get("consecutive_failures", 0),
+            circuit_breaker_open=data.get("circuit_breaker_open", False),
+            pipeline_run_id=data.get("pipeline_run_id", ""),
+        )
+
+
+@dataclass(frozen=True)
 class RepairCycleCompletedEvent(CodetoreumEvent):
     """Emitted when entire repair cycle completes (FR-9.1).
 

@@ -24,9 +24,12 @@ The repair cycle automates iterative testing and fixing:
 Reference: review_events.py for event sourcing immutability patterns
 """
 
+import logging
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 
 class RepairTestType(Enum):
@@ -145,6 +148,20 @@ class RepairTestResult:
         if not self.timestamp:
             raise ValueError("timestamp is required")
 
+        # Consistency check: failed count must match failures list length
+        if len(self.failures) != self.failed:
+            raise ValueError(
+                f"failed count mismatch: {len(self.failures)} failures in list "
+                f"but failed={self.failed}"
+            )
+
+        # Consistency check: warnings count must match warning_list length
+        if len(self.warning_list) != self.warnings:
+            raise ValueError(
+                f"warnings count mismatch: {len(self.warning_list)} warnings in list "
+                f"but warnings={self.warnings}"
+            )
+
 
 @dataclass(frozen=True)
 class CycleResult:
@@ -186,6 +203,19 @@ class CycleResult:
         if self.duration_seconds < 0:
             raise ValueError("duration_seconds must be >= 0")
 
+        # Consistency check: passed state must align with final_result/error
+        if self.passed and self.final_result is None:
+            raise ValueError(
+                "passed=True but final_result is None (expected successful test result)"
+            )
+        if self.passed and self.error is not None:
+            raise ValueError(
+                f"passed=True but error is set: '{self.error}' (contradiction)"
+            )
+
+        # Note: passed=False with final_result is allowed (failed but completed)
+        # Note: passed=False with error is the expected failure case
+
 
 @dataclass(frozen=True)
 class RepairCycleResult:
@@ -223,6 +253,27 @@ class RepairCycleResult:
             raise ValueError("duration_seconds must be >= 0")
         if not self.timestamp:
             raise ValueError("timestamp is required")
+
+        # Consistency check: overall_success must match all test results
+        if self.test_results:
+            all_passed = all(r.passed for r in self.test_results)
+            if self.overall_success and not all_passed:
+                failed_types = [r.test_type.value for r in self.test_results if not r.passed]
+                raise ValueError(
+                    f"overall_success=True but some test types failed: {failed_types}"
+                )
+            if not self.overall_success and all_passed:
+                raise ValueError(
+                    "overall_success=False but all test results passed (inconsistency)"
+                )
+        else:
+            # Empty test_results with overall_success=True is suspicious but may be valid
+            # (e.g., no tests configured). Log warning but don't raise.
+            if self.overall_success:
+                logger.warning(
+                    "overall_success=True but test_results is empty",
+                    extra={"stage": self.stage}
+                )
 
 
 @dataclass(frozen=True)

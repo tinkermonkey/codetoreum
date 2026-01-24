@@ -30,6 +30,7 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestWarning,
 )
 from codetoreum.domain.events.repair_cycle_events import (
+    RepairCycleCheckpointFailedEvent,
     RepairCycleCompletedEvent,
     RepairCycleFileFixCompletedEvent,
     RepairCycleFileFixStartedEvent,
@@ -123,6 +124,10 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         self._files_fixed = 0  # Accumulated files fixed
         self._warnings_reviewed = 0  # Accumulated warnings reviewed
 
+        # Interrupt simulation for testing checkpoint/resume
+        self._interrupt_after_iteration: Optional[int] = None
+        self._interrupt_test_type: Optional[RepairTestType] = None
+
         # Event system
         self._events: List[dict] = []
         self._event_handlers: Dict[str, List] = {}
@@ -144,6 +149,23 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             results: List of test results in sequence order
         """
         self.test_results[test_type] = results
+
+    def set_interrupt_after_iteration(
+        self,
+        iteration: int,
+        test_type: Optional[RepairTestType] = None
+    ) -> None:
+        """Configure adapter to simulate interruption after specified iteration.
+
+        This simulates a container crash or system failure after completing
+        the specified iteration, allowing testing of checkpoint/resume flow.
+
+        Args:
+            iteration: Iteration number after which to interrupt (1-based)
+            test_type: Optional test type to interrupt during, or None for any
+        """
+        self._interrupt_after_iteration = iteration
+        self._interrupt_test_type = test_type
 
     def set_iterations_until_success(
         self,
@@ -769,7 +791,32 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 f"agent_calls={self.total_agent_calls}"
             )
         except Exception as e:
-            logger.error(f"Failed to save checkpoint: {e}", exc_info=True)
+            logger.error(
+                "Failed to save checkpoint - repair cycle may not be resumable",
+                extra={
+                    "pipeline_run_id": context.pipeline_run_id,
+                    "test_type": test_type.value,
+                    "iteration": iteration,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                },
+                exc_info=True,
+            )
+
+            # Emit event so users/monitoring can be alerted
+            self._emit_event(
+                RepairCycleCheckpointFailedEvent(
+                    type="repair_cycle.checkpoint_failed",
+                    timestamp=self.clock.now().isoformat(),
+                    source="mock_repair_cycle",
+                    pipeline_run_id=context.pipeline_run_id,
+                    test_type=test_type.value,
+                    iteration=iteration,
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                    checkpoint_store_type=type(self._checkpoint_store).__name__ if self._checkpoint_store else "none",
+                )
+            )
 
     # Event log retrieval (FR-11.10)
 
@@ -1111,6 +1158,20 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             # Checkpoint at interval
             if iteration % context.checkpoint_interval == 0:
                 await self.checkpoint(config.test_type, iteration, context)
+
+            # Check for simulated interruption (for testing checkpoint/resume)
+            if (self._interrupt_after_iteration is not None and
+                iteration == self._interrupt_after_iteration and
+                (self._interrupt_test_type is None or self._interrupt_test_type == config.test_type)):
+                # Simulate interruption (e.g., container crash)
+                logger.info(
+                    f"Simulated interruption after iteration {iteration} "
+                    f"for test_type={config.test_type.value}"
+                )
+                raise InterruptedError(
+                    f"Simulated interruption after iteration {iteration} "
+                    f"(checkpoint saved, testing resume functionality)"
+                )
 
         # Emit test cycle completed
         if self._current_project is not None:
