@@ -8,6 +8,7 @@ from codetoreum.domain.events import (
     CommentContext,
     CommentNeedsResponseEvent,
     CommentPostedEvent,
+    AgentResponsePostedEvent,
     now_iso,
 )
 
@@ -704,3 +705,218 @@ class TestCommentPostedEventImmutability:
 
         with pytest.raises(FrozenInstanceError):
             event.comment.author = "alice"  # type: ignore
+
+
+class TestAgentResponsePostedEvent:
+    """Test AgentResponsePostedEvent."""
+
+    def test_create_valid_event(self):
+        """Test creating a valid agent response posted event."""
+        event = AgentResponsePostedEvent(
+            type="agent.response_posted",
+            timestamp=now_iso(),
+            source="orchestrator",
+            work_item_id="issue-1",
+            project_id="proj-1",
+            comment_id="comment-42",
+            agent_name="code-reviewer",
+            conversation_id="conv-session-123",
+        )
+
+        assert event.work_item_id == "issue-1"
+        assert event.project_id == "proj-1"
+        assert event.comment_id == "comment-42"
+        assert event.agent_name == "code-reviewer"
+        assert event.conversation_id == "conv-session-123"
+
+    def test_create_without_conversation_id(self):
+        """Test creating event without conversation_id (optional field)."""
+        event = AgentResponsePostedEvent(
+            type="agent.response_posted",
+            timestamp=now_iso(),
+            source="orchestrator",
+            work_item_id="issue-1",
+            project_id="proj-1",
+            comment_id="comment-42",
+            agent_name="code-reviewer",
+        )
+
+        assert event.conversation_id is None
+
+    def test_missing_work_item_id(self):
+        """Test that work_item_id is required."""
+        with pytest.raises(ValueError, match="work_item_id is required"):
+            AgentResponsePostedEvent(
+                type="agent.response_posted",
+                timestamp=now_iso(),
+                source="orchestrator",
+                work_item_id="",  # Empty
+                project_id="proj-1",
+                comment_id="comment-42",
+                agent_name="code-reviewer",
+            )
+
+    def test_missing_project_id(self):
+        """Test that project_id is required."""
+        with pytest.raises(ValueError, match="project_id is required"):
+            AgentResponsePostedEvent(
+                type="agent.response_posted",
+                timestamp=now_iso(),
+                source="orchestrator",
+                work_item_id="issue-1",
+                project_id="",  # Empty
+                comment_id="comment-42",
+                agent_name="code-reviewer",
+            )
+
+    def test_missing_comment_id(self):
+        """Test that comment_id is required."""
+        with pytest.raises(ValueError, match="comment_id is required"):
+            AgentResponsePostedEvent(
+                type="agent.response_posted",
+                timestamp=now_iso(),
+                source="orchestrator",
+                work_item_id="issue-1",
+                project_id="proj-1",
+                comment_id="",  # Empty
+                agent_name="code-reviewer",
+            )
+
+    def test_missing_agent_name(self):
+        """Test that agent_name is required."""
+        with pytest.raises(ValueError, match="agent_name is required"):
+            AgentResponsePostedEvent(
+                type="agent.response_posted",
+                timestamp=now_iso(),
+                source="orchestrator",
+                work_item_id="issue-1",
+                project_id="proj-1",
+                comment_id="comment-42",
+                agent_name="",  # Empty
+            )
+
+    def test_agent_response_posted_serialization(self):
+        """Test agent response posted event serialization."""
+        timestamp = now_iso()
+        event = AgentResponsePostedEvent(
+            type="agent.response_posted",
+            timestamp=timestamp,
+            source="orchestrator",
+            correlation_id="corr-1",
+            work_item_id="issue-1",
+            project_id="proj-1",
+            comment_id="comment-42",
+            agent_name="code-reviewer",
+            conversation_id="conv-abc123",
+        )
+
+        d = event.to_dict()
+
+        assert d["work_item_id"] == "issue-1"
+        assert d["project_id"] == "proj-1"
+        assert d["comment_id"] == "comment-42"
+        assert d["agent_name"] == "code-reviewer"
+        assert d["conversation_id"] == "conv-abc123"
+        assert d["timestamp"] == timestamp
+
+    def test_agent_response_posted_roundtrip(self):
+        """Test agent response posted event roundtrip."""
+        timestamp = now_iso()
+        event = AgentResponsePostedEvent(
+            type="agent.response_posted",
+            timestamp=timestamp,
+            source="orchestrator",
+            correlation_id="corr-2",
+            work_item_id="issue-1",
+            project_id="proj-1",
+            comment_id="comment-42",
+            agent_name="code-reviewer",
+            conversation_id="conv-session-123",
+        )
+
+        d = event.to_dict()
+        restored = AgentResponsePostedEvent.from_dict(d)
+
+        assert restored.work_item_id == event.work_item_id
+        assert restored.project_id == event.project_id
+        assert restored.comment_id == event.comment_id
+        assert restored.agent_name == event.agent_name
+        assert restored.conversation_id == event.conversation_id
+        assert restored.timestamp == event.timestamp
+
+    def test_agent_response_posted_roundtrip_without_conversation_id(self):
+        """Test agent response posted event roundtrip without conversation_id."""
+        timestamp = now_iso()
+        event = AgentResponsePostedEvent(
+            type="agent.response_posted",
+            timestamp=timestamp,
+            source="orchestrator",
+            work_item_id="issue-2",
+            project_id="proj-2",
+            comment_id="comment-99",
+            agent_name="bug-fixer",
+        )
+
+        d = event.to_dict()
+        restored = AgentResponsePostedEvent.from_dict(d)
+
+        assert restored.work_item_id == event.work_item_id
+        assert restored.conversation_id is None
+
+
+class TestAgentResponsePostedEventImmutability:
+    """Test immutability of AgentResponsePostedEvent (frozen dataclass)."""
+
+    def test_agent_response_posted_event_is_frozen(self):
+        """Test that AgentResponsePostedEvent is immutable (frozen dataclass)."""
+        event = AgentResponsePostedEvent(
+            type="agent.response_posted",
+            timestamp=now_iso(),
+            source="orchestrator",
+            work_item_id="issue-1",
+            project_id="proj-1",
+            comment_id="comment-42",
+            agent_name="code-reviewer",
+            conversation_id="conv-session-123",
+        )
+
+        # Verify the event is properly created
+        assert event.work_item_id == "issue-1"
+        assert event.project_id == "proj-1"
+        assert event.comment_id == "comment-42"
+        assert event.agent_name == "code-reviewer"
+        assert event.conversation_id == "conv-session-123"
+
+        # AgentResponsePostedEvent is a frozen dataclass, so attempting to modify
+        # any attribute should raise FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
+            event.work_item_id = "issue-2"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.project_id = "proj-2"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.comment_id = "comment-99"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.agent_name = "bug-fixer"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.conversation_id = "conv-different"  # type: ignore
+
+    def test_agent_response_posted_event_multiple_modifications_fail(self):
+        """Test that multiple attempts to modify frozen event all fail."""
+        event = AgentResponsePostedEvent(
+            type="agent.response_posted",
+            timestamp=now_iso(),
+            source="orchestrator",
+            work_item_id="issue-1",
+            project_id="proj-1",
+            comment_id="comment-42",
+            agent_name="code-reviewer",
+        )
+
+        # All modification attempts should fail consistently
+        for attempt in range(3):
+            with pytest.raises(FrozenInstanceError):
+                event.work_item_id = f"issue-{attempt}"  # type: ignore

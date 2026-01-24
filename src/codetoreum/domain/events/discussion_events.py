@@ -304,3 +304,88 @@ class CommentPostedEvent(CodetoreumEvent):
             project_id=data.get("project_id", ""),
             comment=comment,
         )
+
+
+@dataclass(frozen=True)
+class AgentResponsePostedEvent(CodetoreumEvent):
+    """Emitted when an agent posts a response to a human comment.
+
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Events represent immutable facts—attempting to modify any field
+    will raise `FrozenInstanceError`. This immutability is essential because
+    events are the permanent record of state changes in the system and must
+    never be altered once created.
+
+    **Purpose**: This event tracks the posting of agent responses in conversational
+    feedback loops, enabling session persistence and audit trail reconstruction. It
+    includes LLM conversation context for session continuity across interactions.
+
+    Attributes:
+        type (str): Fixed to "agent.response_posted"
+        work_item_id (str): ID of the work item the response was posted to
+        project_id (str): ID of the project containing the work item
+        comment_id (str): ID of the human comment being responded to
+        agent_name (str): Name of the agent posting the response
+        conversation_id (Optional[str]): LLM conversation session ID for context continuity
+        timestamp (str): ISO 8601 timestamp when response was posted
+
+    Example:
+        >>> event = AgentResponsePostedEvent(
+        ...     type="agent.response_posted",
+        ...     timestamp="2025-01-14T10:35:00+00:00",
+        ...     source="orchestrator",
+        ...     work_item_id="issue-1",
+        ...     project_id="proj-1",
+        ...     comment_id="comment-42",
+        ...     agent_name="code-reviewer",
+        ...     conversation_id="conv-session-123"
+        ... )
+        >>> event.agent_name = "different-agent"  # ❌ Raises FrozenInstanceError
+    """
+
+    work_item_id: str = ""
+    project_id: str = ""
+    comment_id: str = ""
+    agent_name: str = ""
+    conversation_id: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.work_item_id:
+            raise ValueError("work_item_id is required")
+        if not self.project_id:
+            raise ValueError("project_id is required")
+        if not self.comment_id:
+            raise ValueError("comment_id is required")
+        if not self.agent_name:
+            raise ValueError("agent_name is required")
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update({
+            "work_item_id": self.work_item_id,
+            "project_id": self.project_id,
+            "comment_id": self.comment_id,
+            "agent_name": self.agent_name,
+            "conversation_id": self.conversation_id,
+        })
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "AgentResponsePostedEvent":
+        """Deserialize from dictionary."""
+        return cls(
+            type=data.get("type", "agent.response_posted"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            work_item_id=data.get("work_item_id", ""),
+            project_id=data.get("project_id", ""),
+            comment_id=data.get("comment_id", ""),
+            agent_name=data.get("agent_name", ""),
+            conversation_id=data.get("conversation_id"),
+        )
