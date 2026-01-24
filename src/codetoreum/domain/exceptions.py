@@ -48,6 +48,22 @@ class WorkspaceNotFoundError(DomainError):
         self.workspace_id = workspace_id
 
 
+# Test Output Parsing Exceptions
+class TestOutputParseError(DomainError):
+    """Raised when test output structure is invalid.
+
+    This indicates either:
+    - Test framework output format changed
+    - Agent prompt needs updating
+    - Agent is malfunctioning
+    """
+
+    def __init__(self, message: str, test_type: str, raw_data: any):
+        super().__init__(message)
+        self.test_type = test_type
+        self.raw_data = raw_data
+
+
 class PipelineNotFoundError(DomainError):
     """Raised when a pipeline configuration cannot be found."""
 

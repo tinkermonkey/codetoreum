@@ -29,6 +29,10 @@ from .scenarios.scenario_05_complex_workflow import (
     create_config as create_complex_config,
     run_scenario as run_complex_scenario,
 )
+from .scenarios.scenario_07_repair_cycle import (
+    create_config as create_repair_config,
+    run_scenario as run_repair_scenario,
+)
 
 from .helpers import (
     AssertionHelpers,
@@ -191,6 +195,58 @@ async def test_scenario_05_complex_workflow():
 
 
 @pytest.mark.simulation
+@pytest.mark.scenario
+@pytest.mark.asyncio
+async def test_scenario_07_repair_cycle():
+    """Test Scenario 7: Repair Cycle with Iterative Fixing."""
+    config = create_repair_config()
+    runner = SimulationRunner(config)
+
+    result = await runner.run(run_repair_scenario)
+
+    # Print diagnostics
+    print_event_timeline(runner)
+
+    # Verify success
+    assert result.success, f"Scenario failed with errors: {result.errors}"
+
+    # Verify repair cycle events
+    cycle_started_events = runner.get_events_by_type("repair_cycle.started")
+    cycle_completed_events = runner.get_events_by_type("repair_cycle.completed")
+
+    assert len(cycle_started_events) == 1, "Expected exactly 1 cycle start"
+    assert len(cycle_completed_events) == 1, "Expected exactly 1 cycle completion"
+
+    # Verify test execution events
+    test_started_events = runner.get_events_by_type("repair_cycle.test_execution_started")
+    test_completed_events = runner.get_events_by_type(
+        "repair_cycle.test_execution_completed"
+    )
+
+    assert len(test_started_events) == 2, "Expected 2 test executions (fail then pass)"
+    assert len(test_completed_events) == 2, "Expected 2 test completions"
+
+    # Verify fix cycle events
+    fix_cycle_started = runner.get_events_by_type("repair_cycle.fix_cycle_started")
+    file_fix_started = runner.get_events_by_type("repair_cycle.file_fix_started")
+    file_fix_completed = runner.get_events_by_type("repair_cycle.file_fix_completed")
+
+    assert len(fix_cycle_started) == 1, "Expected exactly 1 fix cycle"
+    assert len(file_fix_started) == 1, "Expected 1 file to be fixed"
+    assert len(file_fix_completed) == 1, "Expected 1 file fix completion"
+
+    # Verify test cycle completed
+    test_cycle_completed = runner.get_events_by_type("repair_cycle.test_cycle_completed")
+    assert len(test_cycle_completed) == 1, "Expected exactly 1 test cycle completion"
+
+    # Verify performance
+    assert result.speed_multiplier >= 10.0
+
+    # Verify assertions passed
+    assert result.assertions_passed >= 10, "Expected at least 10 assertions to pass"
+
+
+@pytest.mark.simulation
 @pytest.mark.asyncio
 async def test_all_scenarios_meet_performance_target():
     """
@@ -202,6 +258,7 @@ async def test_all_scenarios_meet_performance_target():
         ("Review Cycle", create_review_config, run_review_scenario),
         ("Execution Failure", create_failure_config, run_failure_scenario),
         ("Complex Workflow", create_complex_config, run_complex_scenario),
+        ("Repair Cycle", create_repair_config, run_repair_scenario),
     ]
 
     results = []

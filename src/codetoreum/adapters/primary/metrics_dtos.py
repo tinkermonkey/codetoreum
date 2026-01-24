@@ -309,3 +309,61 @@ class ClaudeApiUsageInfo(BaseModel):
     session_quota: int
     session_usage_percent: float
     session_remaining_minutes: int
+
+
+# ============================================================================
+# Repair Cycle Metrics DTOs
+# ============================================================================
+
+
+class RepairCycleMetricsItem(BaseModel):
+    """Per-agent repair cycle metrics"""
+    agent_name: str = Field(..., description="Agent name")
+    cycles_started: int = Field(..., description="Total cycles started")
+    cycles_completed: int = Field(..., description="Total cycles completed")
+    cycles_successful: int = Field(..., description="Successful cycles")
+    cycles_failed: int = Field(..., description="Failed cycles")
+    cycles_fast_failed: int = Field(..., description="Fast-failed cycles")
+    success_rate_percent: Optional[float] = Field(None, description="Success rate percentage")
+
+
+class TestTypeMetricsItem(BaseModel):
+    """Per-test-type repair cycle metrics"""
+    test_type: str = Field(..., description="Test type (unit, integration, e2e)")
+    total_executions: int = Field(..., description="Total test executions")
+    total_iterations: int = Field(..., description="Total iterations run")
+    avg_iterations_per_cycle: Optional[float] = Field(None, description="Average iterations per cycle")
+
+
+class RepairCycleMetricsResponse(BaseModel):
+    """Repair cycle metrics response"""
+    # Overall metrics
+    cycles_started: int = Field(..., description="Total repair cycles started")
+    cycles_completed: int = Field(..., description="Total repair cycles completed")
+    cycles_successful: int = Field(..., description="Successful repair cycles")
+    cycles_failed: int = Field(..., description="Failed repair cycles")
+    cycles_fast_failed: int = Field(..., description="Fast-failed repair cycles (circuit breaker)")
+    overall_success_rate_percent: Optional[float] = Field(None, description="Overall success rate percentage")
+
+    # Timing metrics
+    avg_duration_seconds: Optional[float] = Field(None, description="Average repair cycle duration")
+    min_duration_seconds: Optional[float] = Field(None, description="Minimum repair cycle duration")
+    max_duration_seconds: Optional[float] = Field(None, description="Maximum repair cycle duration")
+
+    # Test and iteration metrics
+    test_type_metrics: List[TestTypeMetricsItem] = Field(..., description="Per-test-type metrics")
+    avg_agent_calls_per_cycle: Optional[float] = Field(None, description="Average agent calls per cycle")
+
+    # File fix metrics
+    files_fixed_total: int = Field(..., description="Total files successfully fixed")
+    unique_files_fixed: int = Field(..., description="Number of unique files fixed")
+
+    # Warning metrics
+    warnings_reviewed_total: int = Field(..., description="Total warnings reviewed")
+
+    # Per-agent metrics
+    agent_metrics: List[RepairCycleMetricsItem] = Field(default_factory=list, description="Per-agent repair cycle metrics")
+
+    # Time range
+    start_time: datetime = Field(..., description="Start of time range")
+    end_time: datetime = Field(..., description="End of time range")

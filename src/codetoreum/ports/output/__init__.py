@@ -78,6 +78,13 @@ from codetoreum.ports.output.pipeline_queue_service import (
     PipelineQueueEntry,
     QueueEntry,  # Backward compatibility alias
 )
+from codetoreum.ports.output.repair_cycle_service import (
+    IRepairCycle,
+    RepairCycleContext,
+)
+from codetoreum.ports.output.repair_cycle_checkpoint_store import (
+    IRepairCycleCheckpointStore,
+)
 from codetoreum.ports.output.repository import (
     IRepository,
     MergeResult,
@@ -165,6 +172,10 @@ __all__ = [
     "IPipelineQueueService",
     "PipelineQueueEntry",
     "QueueEntry",  # Backward compatibility alias
+    # Repair Cycle Service
+    "IRepairCycle",
+    "RepairCycleContext",
+    "IRepairCycleCheckpointStore",
     # Repository
     "IRepository",
     "MergeResult",

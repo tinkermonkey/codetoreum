@@ -512,6 +512,181 @@ class MetricsService(IMetricsQueryPort):
             "checked_at": datetime.now().isoformat(),
         }
 
+    async def get_repair_cycle_metrics(
+        self,
+        agent_name: Optional[str] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None
+    ) -> Dict[str, Any]:
+        """
+        Get repair cycle metrics.
+
+        Args:
+            agent_name: Optional filter by specific agent
+            start_time: Start of time range (default: last hour)
+            end_time: End of time range (default: now)
+
+        Returns:
+            Dict with repair cycle statistics
+        """
+        if start_time is None:
+            start_time = datetime.now() - timedelta(hours=1)
+        if end_time is None:
+            end_time = datetime.now()
+
+        logger.debug(
+            f"Getting repair cycle metrics for {agent_name or 'all agents'} "
+            f"from {start_time} to {end_time}"
+        )
+
+        # Query repair cycle events
+        started_events = await self.event_store.get_events_by_type(
+            event_type="repair_cycle.started",
+            since=start_time,
+            limit=10000,
+        )
+
+        completed_events = await self.event_store.get_events_by_type(
+            event_type="repair_cycle.completed",
+            since=start_time,
+            limit=10000,
+        )
+
+        test_execution_events = await self.event_store.get_events_by_type(
+            event_type="repair_cycle.test_execution_completed",
+            since=start_time,
+            limit=10000,
+        )
+
+        file_fix_events = await self.event_store.get_events_by_type(
+            event_type="repair_cycle.file_fix_completed",
+            since=start_time,
+            limit=10000,
+        )
+
+        warning_review_events = await self.event_store.get_events_by_type(
+            event_type="repair_cycle.warning_review_completed",
+            since=start_time,
+            limit=10000,
+        )
+
+        fast_fail_events = await self.event_store.get_events_by_type(
+            event_type="repair_cycle.fast_fail",
+            since=start_time,
+            limit=10000,
+        )
+
+        # Filter by agent if specified
+        if agent_name:
+            started_events = [e for e in started_events if e.payload.get("agent_name") == agent_name]
+            completed_events = [e for e in completed_events if e.payload.get("agent_name") == agent_name]
+            test_execution_events = [e for e in test_execution_events if e.payload.get("agent_name") == agent_name]
+            file_fix_events = [e for e in file_fix_events if e.payload.get("agent_name") == agent_name]
+            warning_review_events = [e for e in warning_review_events if e.payload.get("agent_name") == agent_name]
+            fast_fail_events = [e for e in fast_fail_events if e.payload.get("agent_name") == agent_name]
+
+        # Calculate basic counts
+        cycles_started = len(started_events)
+        cycles_completed = len(completed_events)
+        cycles_fast_failed = len(fast_fail_events)
+
+        cycles_successful = 0
+        cycles_failed = 0
+        durations = []
+        agent_calls = []
+
+        for event in completed_events:
+            if event.payload.get("overall_success"):
+                cycles_successful += 1
+            else:
+                cycles_failed += 1
+
+            duration = event.payload.get("duration_seconds", 0)
+            if duration:
+                durations.append(duration)
+
+            agent_calls_count = event.payload.get("total_agent_calls", 0)
+            if agent_calls_count:
+                agent_calls.append(agent_calls_count)
+
+        # Calculate per-test-type metrics
+        test_types: Dict[str, Dict[str, int]] = {}
+        for event in test_execution_events:
+            test_type = event.payload.get("test_type", "unknown")
+            if test_type not in test_types:
+                test_types[test_type] = {"executions": 0, "iterations": 0}
+            test_types[test_type]["executions"] += 1
+
+        for event in completed_events:
+            # Get total iterations from the completion event
+            total_iterations = event.payload.get("total_iterations", 0)
+            # Distribute across test types (this is approximate)
+            if total_iterations > 0 and test_types:
+                iterations_per_type = total_iterations // len(test_types)
+                for test_type in test_types:
+                    test_types[test_type]["iterations"] += iterations_per_type
+
+        # Calculate file fix metrics
+        files_fixed: Dict[str, int] = {}
+        files_fixed_total = 0
+        for event in file_fix_events:
+            if event.payload.get("fixed"):
+                file_path = event.payload.get("file_path", "unknown")
+                files_fixed[file_path] = files_fixed.get(file_path, 0) + 1
+                files_fixed_total += 1
+
+        # Calculate warning metrics
+        warnings_reviewed_total = sum(
+            event.payload.get("warnings_reviewed", 0)
+            for event in warning_review_events
+        )
+
+        # Calculate per-agent metrics
+        agents: Dict[str, Dict[str, int]] = {}
+        for event in started_events:
+            agent = event.payload.get("agent_name", "unknown")
+            if agent not in agents:
+                agents[agent] = {"started": 0, "completed": 0, "successful": 0, "failed": 0, "fast_failed": 0}
+            agents[agent]["started"] += 1
+
+        for event in completed_events:
+            agent = event.payload.get("agent_name", "unknown")
+            if agent not in agents:
+                agents[agent] = {"started": 0, "completed": 0, "successful": 0, "failed": 0, "fast_failed": 0}
+            agents[agent]["completed"] += 1
+            if event.payload.get("overall_success"):
+                agents[agent]["successful"] += 1
+            else:
+                agents[agent]["failed"] += 1
+
+        for event in fast_fail_events:
+            agent = event.payload.get("agent_name", "unknown")
+            if agent not in agents:
+                agents[agent] = {"started": 0, "completed": 0, "successful": 0, "failed": 0, "fast_failed": 0}
+            agents[agent]["fast_failed"] += 1
+
+        # Calculate averages
+        avg_duration = sum(durations) / len(durations) if durations else None
+        avg_agent_calls = sum(agent_calls) / len(agent_calls) if agent_calls else None
+
+        return {
+            "cycles_started": cycles_started,
+            "cycles_completed": cycles_completed,
+            "cycles_successful": cycles_successful,
+            "cycles_failed": cycles_failed,
+            "cycles_fast_failed": cycles_fast_failed,
+            "durations": durations,
+            "test_types": test_types,
+            "agents": agents,
+            "files_fixed": files_fixed,
+            "files_fixed_total": files_fixed_total,
+            "warnings_reviewed_total": warnings_reviewed_total,
+            "avg_duration_seconds": avg_duration,
+            "avg_agent_calls_per_cycle": avg_agent_calls,
+            "start_time": start_time.isoformat(),
+            "end_time": end_time.isoformat(),
+        }
+
     # Private helper methods
 
     async def _check_event_store_health(self) -> ComponentHealthInfo:

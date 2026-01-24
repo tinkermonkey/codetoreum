@@ -10,7 +10,10 @@ from datetime import datetime, timezone
 
 import pytest
 
-from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService
+from codetoreum.ports.output.pipeline_queue_service import (
+    IPipelineQueueService,
+    QueueValidationError,
+)
 
 
 class TestPipelineQueueServiceContract(ABC):
@@ -74,7 +77,7 @@ class TestPipelineQueueServiceContract(ABC):
         """is_item_in_queue should validate non-empty work_item_id."""
         service = await self.create_service()
 
-        with pytest.raises(ValueError):
+        with pytest.raises(QueueValidationError):
             await service.is_item_in_queue("")
 
     # ===== enqueue_item Tests =====
@@ -129,7 +132,7 @@ class TestPipelineQueueServiceContract(ABC):
         service = await self.create_service()
         now = datetime.now(timezone.utc)
 
-        with pytest.raises(ValueError):
+        with pytest.raises(QueueValidationError):
             await service.enqueue_item(
                 "", "board-1", "item-123", position_in_column=0, timestamp=now
             )
@@ -140,7 +143,7 @@ class TestPipelineQueueServiceContract(ABC):
         service = await self.create_service()
         now = datetime.now(timezone.utc)
 
-        with pytest.raises(ValueError):
+        with pytest.raises(QueueValidationError):
             await service.enqueue_item(
                 "proj-1", "", "item-123", position_in_column=0, timestamp=now
             )
@@ -151,7 +154,7 @@ class TestPipelineQueueServiceContract(ABC):
         service = await self.create_service()
         now = datetime.now(timezone.utc)
 
-        with pytest.raises(ValueError):
+        with pytest.raises(QueueValidationError):
             await service.enqueue_item(
                 "proj-1", "board-1", "", position_in_column=0, timestamp=now
             )
@@ -162,7 +165,7 @@ class TestPipelineQueueServiceContract(ABC):
         service = await self.create_service()
         now = datetime.now(timezone.utc)
 
-        with pytest.raises(ValueError):
+        with pytest.raises(QueueValidationError):
             await service.enqueue_item(
                 "proj-1", "board-1", "item-123", position_in_column=-1, timestamp=now
             )
@@ -213,7 +216,7 @@ class TestPipelineQueueServiceContract(ABC):
         """mark_item_active should validate non-empty work_item_id."""
         service = await self.create_service()
 
-        with pytest.raises(ValueError):
+        with pytest.raises(QueueValidationError):
             await service.mark_item_active("")
 
     # ===== remove_from_queue Tests =====
@@ -244,7 +247,7 @@ class TestPipelineQueueServiceContract(ABC):
         """remove_from_queue should validate non-empty work_item_id."""
         service = await self.create_service()
 
-        with pytest.raises(ValueError):
+        with pytest.raises(QueueValidationError):
             await service.remove_from_queue("")
 
     @pytest.mark.asyncio
@@ -328,7 +331,7 @@ class TestPipelineQueueServiceContract(ABC):
         """get_next_waiting_item should validate non-empty project_id."""
         service = await self.create_service()
 
-        with pytest.raises(ValueError):
+        with pytest.raises(QueueValidationError):
             await service.get_next_waiting_item("", "board-1")
 
     @pytest.mark.asyncio
@@ -336,7 +339,7 @@ class TestPipelineQueueServiceContract(ABC):
         """get_next_waiting_item should validate non-empty board_id."""
         service = await self.create_service()
 
-        with pytest.raises(ValueError):
+        with pytest.raises(QueueValidationError):
             await service.get_next_waiting_item("proj-1", "")
 
     # ===== get_queue_entries Tests =====
@@ -407,7 +410,7 @@ class TestPipelineQueueServiceContract(ABC):
         """get_queue_entries should validate non-empty project_id."""
         service = await self.create_service()
 
-        with pytest.raises(ValueError):
+        with pytest.raises(QueueValidationError):
             await service.get_queue_entries("", "board-1")
 
     @pytest.mark.asyncio
@@ -415,7 +418,7 @@ class TestPipelineQueueServiceContract(ABC):
         """get_queue_entries should validate non-empty board_id."""
         service = await self.create_service()
 
-        with pytest.raises(ValueError):
+        with pytest.raises(QueueValidationError):
             await service.get_queue_entries("proj-1", "")
 
     # ===== sync_queue_with_board Tests =====
@@ -425,7 +428,7 @@ class TestPipelineQueueServiceContract(ABC):
         """sync_queue_with_board should validate non-empty project_id."""
         service = await self.create_service()
 
-        with pytest.raises(ValueError):
+        with pytest.raises(QueueValidationError):
             await service.sync_queue_with_board("", "board-1", "In Progress")
 
     @pytest.mark.asyncio
@@ -433,7 +436,7 @@ class TestPipelineQueueServiceContract(ABC):
         """sync_queue_with_board should validate non-empty board_id."""
         service = await self.create_service()
 
-        with pytest.raises(ValueError):
+        with pytest.raises(QueueValidationError):
             await service.sync_queue_with_board("proj-1", "", "In Progress")
 
     @pytest.mark.asyncio
@@ -441,7 +444,7 @@ class TestPipelineQueueServiceContract(ABC):
         """sync_queue_with_board should validate non-empty column."""
         service = await self.create_service()
 
-        with pytest.raises(ValueError):
+        with pytest.raises(QueueValidationError):
             await service.sync_queue_with_board("proj-1", "board-1", "")
 
     # ===== Queue Entry Immutability Tests =====

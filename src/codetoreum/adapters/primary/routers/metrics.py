@@ -26,6 +26,7 @@ from codetoreum.adapters.primary.metrics_dtos import (
     IntegrationStatusResponse,
     MetricNamesResponse,
     PerformanceMetricsResponse,
+    RepairCycleMetricsResponse,
     ResilienceMetricsResponse,
     SimulationModeResponse,
     SystemHealthResponse,
@@ -761,6 +762,136 @@ def create_metrics_router(
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to retrieve API usage: {str(e)}",
+            )
+
+    # ========================================================================
+    # Repair Cycle Metrics
+    # ========================================================================
+
+    @router.get(
+        "/repair-cycles",
+        response_model=RepairCycleMetricsResponse,
+        summary="Get repair cycle metrics",
+        response_description="Repair cycle execution statistics",
+        dependencies=auth_dependency,
+    )
+    async def get_repair_cycle_metrics(
+        agent_name: Optional[str] = Query(None, description="Filter by specific agent"),
+        start_time: Optional[datetime] = Query(None, description="Start of time range (default: last hour)"),
+        end_time: Optional[datetime] = Query(None, description="End of time range (default: now)"),
+    ) -> RepairCycleMetricsResponse:
+        """
+        Get repair cycle metrics.
+
+        Returns execution counts, success rates, duration statistics, and
+        test-level metrics for repair cycles.
+
+        **Query Parameters:**
+        - agent_name: Optional filter by specific agent
+        - start_time: Start of time range (default: 1 hour ago)
+        - end_time: End of time range (default: now)
+
+        **Returns:**
+        - 200 OK: Repair cycle metrics
+        - 401 Unauthorized: Authentication required
+
+        **Metrics Include:**
+        - Cycle counts (started, completed, successful, failed, fast-failed)
+        - Success rates and duration statistics
+        - Per-test-type execution metrics (unit, integration, e2e)
+        - File fixing statistics
+        - Warning review statistics
+        - Per-agent metrics breakdown
+        """
+        try:
+            # Default to last hour
+            if not end_time:
+                end_time = datetime.utcnow()
+            if not start_time:
+                start_time = end_time - timedelta(hours=1)
+
+            metrics_dict = await metrics_query_port.get_repair_cycle_metrics(
+                agent_name=agent_name,
+                start_time=start_time,
+                end_time=end_time,
+            )
+
+            # Calculate per-test-type metrics
+            test_type_metrics = []
+            for test_type, test_data in metrics_dict.get("test_types", {}).items():
+                executions = test_data.get("executions", 0)
+                iterations = test_data.get("iterations", 0)
+                avg_iterations = (iterations / executions) if executions > 0 else None
+
+                test_type_metrics.append({
+                    "test_type": test_type,
+                    "total_executions": executions,
+                    "total_iterations": iterations,
+                    "avg_iterations_per_cycle": avg_iterations,
+                })
+
+            # Calculate overall success rate
+            overall_success_rate = None
+            completed = metrics_dict.get("cycles_completed", 0)
+            successful = metrics_dict.get("cycles_successful", 0)
+            if completed > 0:
+                overall_success_rate = (successful / completed) * 100
+
+            # Calculate per-agent metrics
+            agent_metrics = []
+            for agent_name_item, agent_data in metrics_dict.get("agents", {}).items():
+                agent_completed = agent_data.get("completed", 0)
+                agent_successful = agent_data.get("successful", 0)
+                agent_success_rate = (agent_successful / agent_completed * 100) if agent_completed > 0 else None
+
+                agent_metrics.append({
+                    "agent_name": agent_name_item,
+                    "cycles_started": agent_data.get("started", 0),
+                    "cycles_completed": agent_completed,
+                    "cycles_successful": agent_successful,
+                    "cycles_failed": agent_data.get("failed", 0),
+                    "cycles_fast_failed": agent_data.get("fast_failed", 0),
+                    "success_rate_percent": agent_success_rate,
+                })
+
+            # Calculate duration statistics
+            durations = metrics_dict.get("durations", [])
+            avg_duration = None
+            min_duration = None
+            max_duration = None
+            if durations:
+                avg_duration = sum(durations) / len(durations)
+                min_duration = min(durations)
+                max_duration = max(durations)
+
+            # Count unique files fixed
+            files_fixed_dict = metrics_dict.get("files_fixed", {})
+            unique_files = len(files_fixed_dict)
+
+            return RepairCycleMetricsResponse(
+                cycles_started=metrics_dict.get("cycles_started", 0),
+                cycles_completed=completed,
+                cycles_successful=successful,
+                cycles_failed=metrics_dict.get("cycles_failed", 0),
+                cycles_fast_failed=metrics_dict.get("cycles_fast_failed", 0),
+                overall_success_rate_percent=overall_success_rate,
+                avg_duration_seconds=avg_duration,
+                min_duration_seconds=min_duration,
+                max_duration_seconds=max_duration,
+                test_type_metrics=test_type_metrics,
+                avg_agent_calls_per_cycle=metrics_dict.get("avg_agent_calls_per_cycle"),
+                files_fixed_total=metrics_dict.get("files_fixed_total", 0),
+                unique_files_fixed=unique_files,
+                warnings_reviewed_total=metrics_dict.get("warnings_reviewed_total", 0),
+                agent_metrics=agent_metrics,
+                start_time=start_time,
+                end_time=end_time,
+            )
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to retrieve repair cycle metrics: {str(e)}",
             )
 
     return router

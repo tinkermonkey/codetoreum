@@ -73,6 +73,24 @@ from .work_item_events import (
     WorkItemUpdatedEvent,
 )
 
+# Repair cycle events
+from .repair_cycle_events import (
+    RepairCycleStartedEvent,
+    RepairCycleTestExecutionStartedEvent,
+    RepairCycleTestExecutionCompletedEvent,
+    RepairCycleFixCycleStartedEvent,
+    RepairCycleFileFixStartedEvent,
+    RepairCycleFileFixCompletedEvent,
+    RepairCycleWarningReviewStartedEvent,
+    RepairCycleWarningReviewCompletedEvent,
+    RepairCycleTestCycleCompletedEvent,
+    RepairCycleFastFailEvent,
+    RepairCycleResumedEvent,
+    RepairCycleCheckpointFailedEvent,
+    RepairCycleMetricsBackendFailedEvent,
+    RepairCycleCompletedEvent,
+)
+
 __all__ = [
     # Legacy domain events (from events.py)
     "DomainEvent",
@@ -163,4 +181,19 @@ __all__ = [
     # Work item events
     "WorkItemCreatedEvent",
     "WorkItemUpdatedEvent",
+    # Repair cycle events
+    "RepairCycleStartedEvent",
+    "RepairCycleTestExecutionStartedEvent",
+    "RepairCycleTestExecutionCompletedEvent",
+    "RepairCycleFixCycleStartedEvent",
+    "RepairCycleFileFixStartedEvent",
+    "RepairCycleFileFixCompletedEvent",
+    "RepairCycleWarningReviewStartedEvent",
+    "RepairCycleWarningReviewCompletedEvent",
+    "RepairCycleTestCycleCompletedEvent",
+    "RepairCycleFastFailEvent",
+    "RepairCycleResumedEvent",
+    "RepairCycleCheckpointFailedEvent",
+    "RepairCycleMetricsBackendFailedEvent",
+    "RepairCycleCompletedEvent",
 ]

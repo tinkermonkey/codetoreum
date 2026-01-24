@@ -364,3 +364,28 @@ class IMetricsQueryPort(ABC):
             Dict with usage statistics for external APIs (Claude, etc.)
         """
         pass
+
+    @abstractmethod
+    async def get_repair_cycle_metrics(
+        self,
+        agent_name: Optional[str] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None
+    ) -> Dict[str, Any]:
+        """
+        Get repair cycle metrics.
+
+        Args:
+            agent_name: Optional filter by specific agent
+            start_time: Start of time range (default: last hour)
+            end_time: End of time range (default: now)
+
+        Returns:
+            Dict with repair cycle statistics including:
+            - Cycle counts (started, completed, successful, failed, fast-failed)
+            - Duration statistics
+            - Per-test-type metrics (unit, integration, e2e)
+            - Per-agent metrics
+            - File fixing and warning review statistics
+        """
+        pass
