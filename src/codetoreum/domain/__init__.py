@@ -113,6 +113,7 @@ from codetoreum.domain.repair_cycle_types import (
     RepairCycleResult,
     RepairCycleStageConfig,
 )
+from codetoreum.domain.conversational_session import ConversationalSessionState
 
 __all__ = [
     # Base classes
@@ -241,4 +242,6 @@ __all__ = [
     "CycleResult",
     "RepairCycleResult",
     "RepairCycleStageConfig",
+    # Conversational Session
+    "ConversationalSessionState",
 ]

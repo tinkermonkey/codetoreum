@@ -12,13 +12,6 @@ from codetoreum.domain.events import (
     now_iso,
 )
 
-# For immutability tests (when events become frozen dataclasses)
-try:
-    from dataclasses import FrozenInstanceError
-except ImportError:
-    # Fallback for older Python versions or non-frozen dataclasses
-    FrozenInstanceError = AttributeError  # type: ignore
-
 
 class TestComment:
     """Test the Comment class."""
