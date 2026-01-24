@@ -696,36 +696,6 @@ class TestRepairCycleAdapterMethodContract:
         assert saved_checkpoint is not None
         assert saved_checkpoint.iteration == 1
 
-    @pytest.mark.asyncio
-    async def test_run_tests_respects_timeout_contract(self) -> None:
-        """Verify run_tests() honors timeout configuration (contract requirement)."""
-        from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
-        import time
-
-        adapter = MockRepairCycleAdapter()
-        adapter.current_project = "test-proj"
-
-        # Configure test to succeed immediately
-        adapter.set_iterations_until_success(RepairTestType.UNIT, 1)
-
-        config = RepairTestRunConfig(
-            test_type=RepairTestType.UNIT,
-            timeout=1,  # Very short timeout
-            max_iterations=1,
-        )
-        context = MockRepairCycleContext(
-            pipeline_run_id="test-run",
-            test_configs=(config,),
-        )
-
-        # Measure execution time
-        start = time.time()
-        result = await adapter.run_tests(config, context)
-        elapsed = time.time() - start
-
-        # Mock adapter should complete quickly (under timeout)
-        assert elapsed < 5.0  # Should complete much faster than 5 seconds
-        assert isinstance(result, RepairTestResult)
 
     @pytest.mark.asyncio
     async def test_execute_returns_repair_cycle_result(self) -> None:

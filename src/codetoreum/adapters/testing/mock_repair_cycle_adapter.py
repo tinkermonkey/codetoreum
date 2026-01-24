@@ -187,13 +187,23 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             results.append(RepairTestResult(
                 test_type=test_type,
                 iteration=i,
-                passed=10 if is_last else 7,
+                passed=7 if is_last else 7,
                 failed=0 if is_last else 3,
                 warnings=0,
                 failures=() if is_last else (
                     RepairTestFailure(
                         file="test_example.py",
-                        test=f"test_case_{i}",
+                        test=f"test_case_{i}_1",
+                        message="Simulated failure"
+                    ),
+                    RepairTestFailure(
+                        file="test_example.py",
+                        test=f"test_case_{i}_2",
+                        message="Simulated failure"
+                    ),
+                    RepairTestFailure(
+                        file="test_example.py",
+                        test=f"test_case_{i}_3",
                         message="Simulated failure"
                     ),
                 ),
@@ -228,7 +238,17 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 failures=(
                     RepairTestFailure(
                         file="test_stubborn.py",
-                        test="test_always_fails",
+                        test="test_always_fails_1",
+                        message="Cannot be fixed"
+                    ),
+                    RepairTestFailure(
+                        file="test_stubborn.py",
+                        test="test_always_fails_2",
+                        message="Cannot be fixed"
+                    ),
+                    RepairTestFailure(
+                        file="test_stubborn.py",
+                        test="test_always_fails_3",
                         message="Cannot be fixed"
                     ),
                 ),
@@ -1208,7 +1228,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             test_type=config.test_type,
             passed=cycle_passed,
             iterations=iteration,
-            final_result=None,
+            final_result=last_test_result if cycle_passed else None,
             error=error,
             files_fixed=files_fixed,
             warnings_reviewed=warnings_reviewed,

@@ -275,6 +275,8 @@ class TestIRepairCycleProtocol:
     @pytest.mark.asyncio
     async def test_handle_warnings_returns_int(self) -> None:
         """Test that handle_warnings returns int."""
+        from codetoreum.domain.repair_cycle_types import RepairTestWarning
+
         impl = MockRepairCycle()
         ctx = MockRepairCycleContext()
         config = RepairTestRunConfig(
@@ -288,7 +290,12 @@ class TestIRepairCycleProtocol:
             failed=0,
             warnings=1,
             failures=(),
-            warning_list=(),
+            warning_list=(
+                RepairTestWarning(
+                    file="test_auth.py",
+                    message="DeprecationWarning: use new_method instead",
+                ),
+            ),
             raw_output="Test output with warnings",
             timestamp=datetime.utcnow().isoformat(),
         )

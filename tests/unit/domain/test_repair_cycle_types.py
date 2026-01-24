@@ -458,11 +458,22 @@ class TestCycleResult:
 
     def test_cycle_immutability_raises_frozen_error(self):
         """Test that frozen dataclass prevents modification."""
+        test_result = RepairTestResult(
+            test_type=RepairTestType.UNIT,
+            iteration=1,
+            passed=10,
+            failed=0,
+            warnings=0,
+            failures=(),
+            warning_list=(),
+            raw_output="OK",
+            timestamp="2025-01-22T10:00:00Z",
+        )
         cycle = CycleResult(
             test_type=RepairTestType.UNIT,
             passed=True,
             iterations=1,
-            final_result=None,
+            final_result=test_result,
             error=None,
             files_fixed=0,
             warnings_reviewed=0,
@@ -580,21 +591,43 @@ class TestRepairCycleResult:
 
     def test_create_cycle_result(self):
         """Test creating a repair cycle result."""
+        test_result1 = RepairTestResult(
+            test_type=RepairTestType.UNIT,
+            iteration=1,
+            passed=10,
+            failed=0,
+            warnings=0,
+            failures=(),
+            warning_list=(),
+            raw_output="OK",
+            timestamp="2025-01-22T10:00:00Z",
+        )
         cycle1 = CycleResult(
             test_type=RepairTestType.UNIT,
             passed=True,
             iterations=1,
-            final_result=None,
+            final_result=test_result1,
             error=None,
             files_fixed=0,
             warnings_reviewed=0,
             duration_seconds=5.0,
         )
+        test_result2 = RepairTestResult(
+            test_type=RepairTestType.INTEGRATION,
+            iteration=2,
+            passed=8,
+            failed=0,
+            warnings=0,
+            failures=(),
+            warning_list=(),
+            raw_output="OK",
+            timestamp="2025-01-22T10:15:00Z",
+        )
         cycle2 = CycleResult(
             test_type=RepairTestType.INTEGRATION,
             passed=True,
             iterations=2,
-            final_result=None,
+            final_result=test_result2,
             error=None,
             files_fixed=2,
             warnings_reviewed=1,
@@ -693,11 +726,22 @@ class TestRepairCycleResult:
 
     def test_overall_success_true_with_failed_tests_raises_error(self):
         """Test that overall_success=True with failed test results raises ValueError."""
+        test_result1 = RepairTestResult(
+            test_type=RepairTestType.UNIT,
+            iteration=1,
+            passed=10,
+            failed=0,
+            warnings=0,
+            failures=(),
+            warning_list=(),
+            raw_output="OK",
+            timestamp="2025-01-22T10:00:00Z",
+        )
         cycle1 = CycleResult(
             test_type=RepairTestType.UNIT,
             passed=True,
             iterations=1,
-            final_result=None,
+            final_result=test_result1,
             error=None,
             files_fixed=0,
             warnings_reviewed=0,
@@ -725,21 +769,43 @@ class TestRepairCycleResult:
 
     def test_overall_success_false_with_all_passed_raises_error(self):
         """Test that overall_success=False with all passed test results raises ValueError."""
+        test_result1 = RepairTestResult(
+            test_type=RepairTestType.UNIT,
+            iteration=1,
+            passed=10,
+            failed=0,
+            warnings=0,
+            failures=(),
+            warning_list=(),
+            raw_output="OK",
+            timestamp="2025-01-22T10:00:00Z",
+        )
         cycle1 = CycleResult(
             test_type=RepairTestType.UNIT,
             passed=True,
             iterations=1,
-            final_result=None,
+            final_result=test_result1,
             error=None,
             files_fixed=0,
             warnings_reviewed=0,
             duration_seconds=5.0,
         )
+        test_result2 = RepairTestResult(
+            test_type=RepairTestType.INTEGRATION,
+            iteration=2,
+            passed=8,
+            failed=0,
+            warnings=0,
+            failures=(),
+            warning_list=(),
+            raw_output="OK",
+            timestamp="2025-01-22T10:15:00Z",
+        )
         cycle2 = CycleResult(
             test_type=RepairTestType.INTEGRATION,
             passed=True,
             iterations=2,
-            final_result=None,
+            final_result=test_result2,
             error=None,
             files_fixed=2,
             warnings_reviewed=1,
