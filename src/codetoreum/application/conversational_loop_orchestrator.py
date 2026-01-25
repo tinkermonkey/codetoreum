@@ -134,7 +134,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
         session_id = f"conv_session_{work_item_id}_{int(datetime.now(timezone.utc).timestamp())}"
 
         # Initialize session state
-        now_iso = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        now_iso = datetime.now(timezone.utc).isoformat()
         session_state = ConversationalSessionState(
             session_id=session_id,
             work_item_id=work_item_id,
@@ -142,7 +142,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
             agent_assignment=agent_assignment,
             column_name=column_name,
             llm_conversation_id=None,  # Will be created on first agent execution
-            last_processed_comment_id="",  # No comments processed yet
+            last_processed_comment_id="__checkpoint_start",  # Sentinel: no comments processed yet
             last_interaction_timestamp=now_iso,
             status="active",
         )
@@ -266,6 +266,15 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
         )
 
         try:
+            # Prevent duplicate responses (FR-4.4)
+            if event.comment.id <= session_state.last_processed_comment_id:
+                logger.debug(
+                    "Comment %s already processed (checkpoint: %s), skipping",
+                    event.comment.id,
+                    session_state.last_processed_comment_id,
+                )
+                return
+
             # Build thread context message
             thread_message = self._build_thread_message(event, session_state)
 
@@ -290,7 +299,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
             )
 
             # Update session state
-            now_iso = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            now_iso = datetime.now(timezone.utc).isoformat()
             updated_session = ConversationalSessionState(
                 session_id=session_state.session_id,
                 work_item_id=session_state.work_item_id,
@@ -306,10 +315,27 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
             # Persist updated session state
             await self.save_session_state(updated_session)
 
+            # Emit response posted event for audit trail
+            response_comment_id = response_comment.get("id") if isinstance(response_comment, dict) else str(uuid4())
+            event_payload = AgentResponsePostedEvent(
+                work_item_id=event.work_item_id,
+                project_id=event.project_id,
+                comment_id=response_comment_id,
+                agent_name=session_state.agent_assignment,
+                conversation_id=execution_result.conversation_id or session_state.llm_conversation_id,
+                timestamp=now_iso,
+            ).to_dict()
+
+            await self.event_store.append({
+                "type": "agent.response_posted",
+                "aggregate_id": event.work_item_id,
+                "data": event_payload,
+            })
+
             logger.info(
                 "Posted agent response to work item %s, comment %s",
                 work_item_id,
-                response_comment.get("id") if isinstance(response_comment, dict) else "unknown",
+                response_comment_id,
             )
 
         except Exception as e:
@@ -389,7 +415,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 )
 
             # Mark session as terminated
-            now_iso = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            now_iso = datetime.now(timezone.utc).isoformat()
             terminated_session = ConversationalSessionState(
                 session_id=session_state.session_id,
                 work_item_id=session_state.work_item_id,
@@ -417,6 +443,30 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 "Terminated conversational session for work item %s",
                 work_item_id,
             )
+
+        # Check if we're entering a conversational column (new session)
+        elif not session_state and to_column.lower() in ["conversational", "feedback"]:
+            # Initialize new session for this column
+            try:
+                await self.initialize_loop(
+                    work_item_id=work_item_id,
+                    project_id=project_id,
+                    column_config={
+                        "column_name": to_column,
+                        "agent_assignment": getattr(event.context, "agent_assignment", "default-agent") if hasattr(event, "context") else "default-agent",
+                    },
+                )
+                logger.info(
+                    "Initialized conversational session on column entry for work item %s",
+                    work_item_id,
+                )
+            except Exception as e:
+                logger.error(
+                    "Failed to initialize conversational loop on column entry for work item %s: %s",
+                    work_item_id,
+                    str(e),
+                    exc_info=True,
+                )
 
     async def cleanup_loop(
         self,
@@ -473,7 +523,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
 
             # Mark session as terminated if not already
             if session_state.status != "terminated":
-                now_iso = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+                now_iso = datetime.now(timezone.utc).isoformat()
                 terminated_session = ConversationalSessionState(
                     session_id=session_state.session_id,
                     work_item_id=session_state.work_item_id,

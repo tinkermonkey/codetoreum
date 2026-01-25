@@ -113,6 +113,7 @@ class TestInitializeLoop:
         assert result.agent_assignment == "code-reviewer"
         assert result.status == "active"
         assert result.session_id is not None
+        assert result.last_processed_comment_id == "__checkpoint_start"  # Sentinel value
 
         # Verify discussion adapter was started
         mock_discussion_adapter.start_monitoring.assert_called_once()
@@ -122,6 +123,26 @@ class TestInitializeLoop:
 
         # Verify session state was persisted
         mock_event_store.append.assert_called_once()
+
+    async def test_initialize_loop_domain_validation(self, orchestrator, mock_discussion_adapter, mock_event_store):
+        """Test that initialized session state passes domain model validation."""
+        work_item_id = "issue-42"
+        project_id = "proj-1"
+        column_config = {
+            "column_name": "In Review",
+            "agent_assignment": "code-reviewer",
+        }
+
+        # This should not raise ValueError for empty last_processed_comment_id
+        result = await orchestrator.initialize_loop(work_item_id, project_id, column_config)
+
+        # Verify the state object is valid and can be serialized/deserialized
+        state_dict = result.to_dict()
+        assert state_dict["last_processed_comment_id"] == "__checkpoint_start"
+
+        # Verify we can reconstruct from dict
+        reconstructed = ConversationalSessionState.from_dict(state_dict)
+        assert reconstructed.last_processed_comment_id == "__checkpoint_start"
 
     async def test_initialize_loop_missing_work_item_id(self, orchestrator):
         """Test initialization fails with missing work_item_id."""
@@ -316,6 +337,63 @@ class TestHandleCommentEvent:
 
         # Should handle gracefully
         await orchestrator.handle_comment_event(event)
+
+    async def test_handle_comment_duplicate_prevention(
+        self,
+        orchestrator,
+        mock_discussion_adapter,
+        mock_llm_provider,
+        mock_event_store,
+        sample_session_state,
+        sample_comment,
+    ):
+        """Test duplicate response prevention (FR-4.4)."""
+        # Create session where the comment has already been processed
+        processed_state = ConversationalSessionState(
+            session_id=sample_session_state.session_id,
+            work_item_id=sample_session_state.work_item_id,
+            project_id=sample_session_state.project_id,
+            agent_assignment=sample_session_state.agent_assignment,
+            column_name=sample_session_state.column_name,
+            llm_conversation_id=sample_session_state.llm_conversation_id,
+            last_processed_comment_id="comment-11",  # Same as incoming comment
+            last_interaction_timestamp=sample_session_state.last_interaction_timestamp,
+            status="active",
+        )
+
+        def mock_get_events(aggregate_id):
+            return [
+                MagicMock(
+                    data={
+                        "conversational_session_state": processed_state.to_dict()
+                    }
+                )
+            ]
+
+        mock_event_store.get_events = AsyncMock(side_effect=mock_get_events)
+
+        # Create event with same comment ID
+        event = CommentNeedsResponseEvent(
+            type="comment.needs_response",
+            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            source="github",
+            work_item_id="issue-42",
+            project_id="proj-1",
+            comment=sample_comment,  # ID: "comment-11"
+            context=CommentContext(
+                column_name="In Review",
+                agent_assignment="code-reviewer",
+            ),
+        )
+
+        # Handle comment event - should skip due to duplicate
+        await orchestrator.handle_comment_event(event)
+
+        # Verify agent was NOT executed
+        mock_llm_provider.continue_conversation.assert_not_called()
+
+        # Verify comment was NOT posted
+        mock_discussion_adapter.add_comment.assert_not_called()
 
 
 class TestHandleColumnChangeEvent:

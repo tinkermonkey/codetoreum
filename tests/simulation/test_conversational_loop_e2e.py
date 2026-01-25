@@ -195,7 +195,6 @@ class TestConversationalLoopSimulation:
         )
 
         assert session.status == "active"
-        print(f"✓ Initialized session {session.session_id}")
 
         # Step 2: Engineer posts first question
         q1 = Comment(
@@ -219,7 +218,6 @@ class TestConversationalLoopSimulation:
         )
 
         await orchestrator.handle_comment_event(event1)
-        print("✓ First question answered")
 
         # Verify response was posted
         assert len(discussion_adapter.comments[work_item_id]) >= 1
@@ -248,7 +246,6 @@ class TestConversationalLoopSimulation:
         )
 
         await orchestrator.handle_comment_event(event2)
-        print("✓ Follow-up question answered")
 
         # Verify LLM maintains conversation context
         assert len(llm_provider.conversations) > 0
@@ -267,7 +264,6 @@ class TestConversationalLoopSimulation:
         )
 
         await orchestrator.handle_column_change_event(column_change)
-        print("✓ Session terminated on column change")
 
         # Verify session is terminated
         final_session = await orchestrator.load_session_state(work_item_id)
@@ -301,7 +297,6 @@ class TestConversationalLoopSimulation:
             )
 
             sessions[work_item_id] = session
-            print(f"✓ Initialized session for {work_item_id}")
 
         # Each issue gets a question
         for issue_num in range(1, 4):
@@ -332,8 +327,6 @@ class TestConversationalLoopSimulation:
             assert loaded.status == "active"
             assert loaded.agent_assignment == f"reviewer-{work_item_id[-1]}"
 
-        print(f"✓ {len(sessions)} concurrent sessions running independently")
-
         # Progress some issues to completion
         for issue_num in [1, 3]:
             work_item_id = f"issue-{issue_num}"
@@ -359,8 +352,6 @@ class TestConversationalLoopSimulation:
         # Issue 2 should still be active
         session2 = await orchestrator.load_session_state("issue-2")
         assert session2.status == "active"
-
-        print("✓ Independent session lifecycle management verified")
 
     async def test_session_recovery_after_restart(self, simulated_orchestrator):
         """Simulate orchestrator restart and session recovery.
@@ -406,7 +397,6 @@ class TestConversationalLoopSimulation:
         # Get checkpoint
         checkpoint1 = await orchestrator.load_session_state(work_item_id)
         assert checkpoint1.last_processed_comment_id == "c1"
-        print(f"✓ Checkpoint 1: {checkpoint1.last_processed_comment_id}")
 
         # Second message
         c2 = Comment(
@@ -429,7 +419,6 @@ class TestConversationalLoopSimulation:
 
         checkpoint2 = await orchestrator.load_session_state(work_item_id)
         assert checkpoint2.last_processed_comment_id == "c2"
-        print(f"✓ Checkpoint 2: {checkpoint2.last_processed_comment_id}")
 
         # Step 2: Simulate restart - create new orchestrator with same event store
         orchestrator_restarted = ConversationalLoopOrchestrator(
@@ -467,7 +456,6 @@ class TestConversationalLoopSimulation:
         # Verify conversation continued
         final_session = await orchestrator_restarted.load_session_state(work_item_id)
         assert final_session.last_processed_comment_id == "c3"
-        print(f"✓ Continued after restart: {final_session.last_processed_comment_id}")
 
     async def test_graceful_cleanup_on_errors(self, simulated_orchestrator):
         """Simulate graceful error handling and cleanup.
@@ -490,11 +478,8 @@ class TestConversationalLoopSimulation:
             {"column_name": "Review", "agent_assignment": "reviewer"},
         )
 
-        print(f"✓ Initialized session {session.session_id}")
-
         # Simulate error and cleanup
         await orchestrator.cleanup_loop(work_item_id, "Simulated error condition")
-        print("✓ First cleanup completed")
 
         # Verify session is terminated
         terminated = await orchestrator.load_session_state(work_item_id)
@@ -502,7 +487,6 @@ class TestConversationalLoopSimulation:
 
         # Cleanup again - should be idempotent
         await orchestrator.cleanup_loop(work_item_id, "Second cleanup attempt")
-        print("✓ Second cleanup completed (idempotent)")
 
         # Verify still terminated
         still_terminated = await orchestrator.load_session_state(work_item_id)
@@ -554,7 +538,6 @@ class TestConversationalLoopSimulation:
         # Get checkpoint
         checkpoint = await orchestrator.load_session_state(work_item_id)
         assert checkpoint.last_processed_comment_id == "comment-5"
-        print(f"✓ Processed 5 comments, checkpoint: {checkpoint.last_processed_comment_id}")
 
         # Simulate restart
         orchestrator_restarted = ConversationalLoopOrchestrator(
@@ -566,7 +549,6 @@ class TestConversationalLoopSimulation:
         # Resume
         restored = await orchestrator_restarted.load_session_state(work_item_id)
         assert restored.last_processed_comment_id == "comment-5"
-        print(f"✓ Resumed from checkpoint: {restored.last_processed_comment_id}")
 
         # Continue from checkpoint
         comment6 = Comment(
@@ -589,4 +571,3 @@ class TestConversationalLoopSimulation:
 
         final = await orchestrator_restarted.load_session_state(work_item_id)
         assert final.last_processed_comment_id == "comment-6"
-        print(f"✓ Continued from checkpoint: {final.last_processed_comment_id}")
