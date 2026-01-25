@@ -85,6 +85,7 @@ class SimulatedLLMProvider:
             "Regarding your point about {context}, I agree.",
         ]
         self.response_counter = 0
+        self.generated_conversation_ids: Dict[str, str] = {}  # Map from empty/None to generated ID
 
     async def execute_prompt(self, prompt: str, context=None, stream_callback=None):
         """Execute a one-time prompt."""
@@ -102,6 +103,12 @@ class SimulatedLLMProvider:
         stream_callback=None,
     ):
         """Continue a conversation."""
+        # Handle empty string as "create new conversation"
+        if not conversation_id:
+            # Generate a unique conversation ID on first call
+            # Use a deterministic ID based on the message
+            conversation_id = f"conv-sim-{hash(message) % 10000}"
+
         # Track conversation
         if conversation_id not in self.conversations:
             self.conversations[conversation_id] = []
@@ -112,9 +119,12 @@ class SimulatedLLMProvider:
         template = self.response_templates[self.response_counter % len(self.response_templates)]
         response = template.format(context=message[:30])
 
+        # Store conversation_id in a local var for use in Result class
+        final_conv_id = conversation_id
+
         class Result:
             content = response
-            conversation_id = conversation_id or "conv-session-generated"
+            conversation_id = final_conv_id
             duration_ms = 100
 
         return Result()
@@ -259,6 +269,7 @@ class TestConversationalLoopSimulation:
             source="github",
             work_item_id=work_item_id,
             project_id=project_id,
+            board_id="board-main",
             from_column="Code Review",
             to_column="Merged",
         )
@@ -337,6 +348,7 @@ class TestConversationalLoopSimulation:
                 source="github",
                 work_item_id=work_item_id,
                 project_id=project_id,
+                board_id="board-main",
                 from_column="Code Review",
                 to_column="Merged",
             )

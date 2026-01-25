@@ -64,6 +64,11 @@ class MockMetricsQueryPort(IMetricsQueryPort):
     async def get_api_usage(self):
         return await self._get_api_usage()
 
+    async def get_repair_cycle_metrics(self, agent_name=None, start_time=None, end_time=None):
+        if not hasattr(self, '_get_repair_cycle_metrics'):
+            self._get_repair_cycle_metrics = AsyncMock()
+        return await self._get_repair_cycle_metrics(agent_name, start_time, end_time)
+
 
 @pytest.fixture
 def mock_query_port():

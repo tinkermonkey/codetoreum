@@ -200,11 +200,8 @@ class CommentNeedsResponseEvent(CodetoreumEvent):
             raise ValueError("work_item_id is required")
         if not self.project_id:
             raise ValueError("project_id is required")
-        # Ensure comment and context are initialized if None
-        if self.comment is None:
-            object.__setattr__(self, "comment", Comment("", "", "", ""))
-        if self.context is None:
-            object.__setattr__(self, "context", CommentContext())
+        # Note: comment and context are optional and can be None
+        # Do not auto-initialize them as this prevents tests from checking None handling
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -275,9 +272,7 @@ class CommentPostedEvent(CodetoreumEvent):
             raise ValueError("work_item_id is required")
         if not self.project_id:
             raise ValueError("project_id is required")
-        # Ensure comment is initialized if None
-        if self.comment is None:
-            object.__setattr__(self, "comment", Comment("", "", "", ""))
+        # Note: comment is optional and can be None
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""

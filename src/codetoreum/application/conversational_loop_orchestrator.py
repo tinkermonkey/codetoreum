@@ -317,19 +317,21 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
 
             # Emit response posted event for audit trail
             response_comment_id = response_comment.get("id") if isinstance(response_comment, dict) else str(uuid4())
-            event_payload = AgentResponsePostedEvent(
+            response_event = AgentResponsePostedEvent(
+                type="agent.response_posted",
+                timestamp=now_iso,
+                source="orchestrator",
                 work_item_id=event.work_item_id,
                 project_id=event.project_id,
                 comment_id=response_comment_id,
                 agent_name=session_state.agent_assignment,
                 conversation_id=execution_result.conversation_id or session_state.llm_conversation_id,
-                timestamp=now_iso,
-            ).to_dict()
+            )
 
             await self.event_store.append({
                 "type": "agent.response_posted",
                 "aggregate_id": event.work_item_id,
-                "data": event_payload,
+                "data": response_event.to_dict(),
             })
 
             logger.info(
@@ -590,10 +592,16 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
             # (Simplified: in production, would use event replay pattern)
             session_data = None
             for event in reversed(events):
-                if hasattr(event, "data") and isinstance(event.data, dict):
-                    if "conversational_session_state" in event.data:
-                        session_data = event.data["conversational_session_state"]
-                        break
+                # Handle both object events (with .data attribute) and dict events
+                event_data = None
+                if isinstance(event, dict):
+                    event_data = event.get("data", {})
+                elif hasattr(event, "data"):
+                    event_data = event.data if isinstance(event.data, dict) else None
+
+                if event_data and "conversational_session_state" in event_data:
+                    session_data = event_data["conversational_session_state"]
+                    break
 
             if session_data:
                 return ConversationalSessionState.from_dict(session_data)

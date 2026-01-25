@@ -264,6 +264,14 @@ class TestHandleCommentEvent:
         # Verify session state was persisted with updated checkpoint
         assert mock_event_store.append.called
 
+        # Verify response posted event was emitted with correct fields
+        event_append_calls = mock_event_store.append.call_args_list
+        # Last call should be the response posted event
+        response_event = event_append_calls[-1][0][0]
+        assert response_event["type"] == "agent.response_posted"
+        assert response_event["data"]["work_item_id"] == "issue-42"
+        assert response_event["data"]["comment_id"] == "comment-12"
+
     async def test_handle_comment_no_session(self, orchestrator, mock_event_store, sample_comment):
         """Test comment handling when no session exists."""
         mock_event_store.get_events = AsyncMock(return_value=[])
@@ -324,8 +332,10 @@ class TestHandleCommentEvent:
         # Should handle gracefully - no exception
         await orchestrator.handle_comment_event(event)
 
-    async def test_handle_comment_missing_comment_body(self, orchestrator, sample_session_state):
+    async def test_handle_comment_missing_comment_body(self, orchestrator, mock_event_store):
         """Test comment event without comment body is skipped."""
+        mock_event_store.get_events = AsyncMock(return_value=[])
+
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
             timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -335,7 +345,7 @@ class TestHandleCommentEvent:
             comment=None,  # No comment
         )
 
-        # Should handle gracefully
+        # Should handle gracefully (log warning and return)
         await orchestrator.handle_comment_event(event)
 
     async def test_handle_comment_duplicate_prevention(
@@ -424,6 +434,7 @@ class TestHandleColumnChangeEvent:
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
+            board_id="board-1",
             from_column="In Review",
             to_column="Testing",
         )
@@ -449,6 +460,7 @@ class TestHandleColumnChangeEvent:
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
+            board_id="board-1",
             from_column="In Progress",
             to_column="Testing",
         )
@@ -461,16 +473,17 @@ class TestHandleColumnChangeEvent:
 
     async def test_handle_column_change_missing_work_item_id(self, orchestrator):
         """Test column change event validation."""
-        event = WorkItemColumnChangedEvent(
-            type="workitem.column_changed",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            source="github",
-            work_item_id="",  # Missing
-            project_id="proj-1",
-        )
-
-        with pytest.raises(ValueError, match="work_item_id and project_id are required"):
-            await orchestrator.handle_column_change_event(event)
+        with pytest.raises(ValueError, match="work_item_id is required"):
+            WorkItemColumnChangedEvent(
+                type="workitem.column_changed",
+                timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                source="github",
+                work_item_id="",  # Missing - caught at event creation
+                project_id="proj-1",
+                board_id="board-1",
+                from_column="In Progress",
+                to_column="Testing",
+            )
 
 
 class TestCleanupLoop:

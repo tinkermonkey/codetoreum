@@ -10,6 +10,7 @@ These tests verify the orchestrator's integration with adapter implementations:
 import pytest
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
+from unittest.mock import AsyncMock
 
 from codetoreum.application.conversational_loop_orchestrator import (
     ConversationalLoopOrchestrator,
@@ -118,6 +119,17 @@ class MockLLMProvider:
         }
 
 
+class EventObject:
+    """Simple event object wrapper for mock event store."""
+    def __init__(self, event_dict: dict):
+        # Store just the 'data' field of the event, matching what the orchestrator expects
+        self.data = event_dict.get("data", {})
+
+    def get(self, key, default=None):
+        """Dict-like access for backwards compatibility."""
+        return self.data.get(key, default)
+
+
 class MockEventStore:
     """Mock implementation of IEventStore for testing."""
 
@@ -135,12 +147,14 @@ class MockEventStore:
             if aggregate_id and state_data:
                 self.snapshots[aggregate_id] = state_data
 
-    async def get_events(self, aggregate_id: str, from_version: int = 0) -> List[dict]:
+    async def get_events(self, aggregate_id: str, from_version: int = 0) -> List:
         """Get events for an aggregate."""
-        return [
+        matching_events = [
             e for e in self.events
             if e.get("aggregate_id") == aggregate_id or e.get("work_item_id") == aggregate_id
         ]
+        # Wrap dict events in EventObject to provide .data attribute
+        return [EventObject(e) for e in matching_events]
 
     async def get_all_events(self, from_timestamp=None, to_timestamp=None) -> List[dict]:
         """Get all events in time range."""
@@ -251,6 +265,14 @@ class TestFullConversationFlow:
             parent_id=response1["id"],
         )
 
+        # Create a Comment object for the parent instead of using dict
+        parent_comment = Comment(
+            id=response1["id"],
+            author="bot",
+            body=response1["content"],
+            created_at=response1["posted_at"],
+        )
+
         event2 = CommentNeedsResponseEvent(
             type="comment.needs_response",
             timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -261,7 +283,7 @@ class TestFullConversationFlow:
             context=CommentContext(
                 column_name="In Review",
                 agent_assignment="code-reviewer",
-                parent_comment=response1,
+                parent_comment=parent_comment,
             ),
         )
 
@@ -286,6 +308,7 @@ class TestFullConversationFlow:
             source="github",
             work_item_id=work_item_id,
             project_id=project_id,
+            board_id="board-1",
             from_column="In Review",
             to_column="Testing",
         )
@@ -362,7 +385,7 @@ class TestErrorRecovery:
         )
 
         # Make LLM provider fail
-        mock_llm_provider.continue_conversation = pytest.AsyncMock(
+        mock_llm_provider.continue_conversation = AsyncMock(
             side_effect=Exception("Agent execution failed")
         )
 
@@ -567,7 +590,7 @@ class TestAdapterInteraction:
             agent_assignment=session.agent_assignment,
             column_name=session.column_name,
             llm_conversation_id="conv-abc123",
-            last_processed_comment_id="",
+            last_processed_comment_id="__checkpoint_start",
             last_interaction_timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             status="active",
         )
