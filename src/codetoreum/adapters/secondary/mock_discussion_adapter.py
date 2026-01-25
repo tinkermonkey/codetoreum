@@ -8,6 +8,7 @@ for simulating discussion updates via event emission.
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.domain.events.discussion_events import (
     Comment,
     CommentContext,
@@ -36,7 +37,10 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
     Intended for testing and simulation without external discussion systems
     (GitHub issues, PRs, Jira comments, etc.).
 
-    Test Helper Methods:
+    Test Helper Methods (FR-8.3, FR-9.1):
+        - simulate_column_change() - Simulate column changes (emits WorkItemColumnChangedEvent)
+        - get_processed_comment_ids() - Get processed comment IDs (duplicate prevention)
+        - reset_monitoring_state() - Reset monitoring for restart simulation
         - simulate_comment() - Simulate human comment requiring response
         - simulate_bot_comment() - Simulate bot/system comment
         - create_thread() - Create discussion thread with initial comment
@@ -45,7 +49,7 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
         - thread_exists() - Check if thread exists
         - is_monitoring() - Check monitoring state
         - clear_threads() - Clear all threads (cleanup)
-        - clear_monitoring() - Clear monitoring state (cleanup)
+        - clear_monitoring() - Clear all monitoring state (cleanup)
         - get_thread_info() - Get diagnostic thread info
 
     Example: Basic Event Simulation
@@ -104,6 +108,7 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
         super().__init__()
         self._threads: Dict[str, List[Comment]] = {}  # work_item_id -> comments
         self._monitoring: Dict[str, DiscussionMonitoringConfig] = {}  # work_item_id -> config
+        self._processed_comment_ids: Dict[str, set] = {}  # work_item_id -> set of comment IDs
         self._identity_service = identity_service
 
     # Query Operations
@@ -258,6 +263,12 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
         # Only emit event if monitoring this item and comment is from human
         if not comment.is_bot and work_item_id in self._monitoring:
             config = self._monitoring[work_item_id]
+
+            # Track processed comment
+            if work_item_id not in self._processed_comment_ids:
+                self._processed_comment_ids[work_item_id] = set()
+            self._processed_comment_ids[work_item_id].add(comment.id)
+
             context = CommentContext(
                 thread_id=f"thread-{work_item_id}",
                 parent_comment=None,
@@ -480,6 +491,90 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
                 c.author for c in self._threads.get(work_item_id, [])
             ))
         }
+
+    def simulate_column_change(
+        self,
+        work_item_id: str,
+        from_column: str,
+        to_column: str
+    ) -> None:
+        """Test helper: Simulate work item column change.
+
+        Emits WorkItemColumnChangedEvent to trigger loop exit/entry.
+
+        Args:
+            work_item_id: Work item being moved
+            from_column: Source column name
+            to_column: Destination column name
+
+        Raises:
+            ValueError: Work item is not being monitored
+
+        Example:
+            adapter.start_monitoring("item-1", config)
+            adapter.simulate_column_change("item-1", "Backlog", "In Review")
+            # WorkItemColumnChangedEvent is emitted
+        """
+        if work_item_id not in self._monitoring:
+            raise ValueError(f"Not monitoring work item: {work_item_id}")
+
+        config = self._monitoring[work_item_id]
+
+        event = WorkItemColumnChangedEvent(
+            type='workitem.column_changed',
+            work_item_id=work_item_id,
+            project_id=config.project_id,
+            board_id=f"board-{config.project_id}",
+            from_column=from_column,
+            to_column=to_column,
+            moved_by="unknown",
+            timestamp=self._get_iso_timestamp(),
+            source='mock'
+        )
+
+        self.emit(event)
+
+    def get_processed_comment_ids(self, work_item_id: str) -> set:
+        """Test helper: Get set of processed comment IDs for verification.
+
+        Used in tests to verify duplicate prevention logic.
+
+        Args:
+            work_item_id: Work item to query
+
+        Returns:
+            Set of processed comment IDs (empty set if no comments processed)
+
+        Example:
+            adapter.simulate_comment("item-1", "alice", "Review this")
+            processed = adapter.get_processed_comment_ids("item-1")
+            assert len(processed) == 1
+        """
+        return self._processed_comment_ids.get(work_item_id, set()).copy()
+
+    def reset_monitoring_state(self, work_item_id: str) -> None:
+        """Test helper: Reset monitoring state for restart simulation.
+
+        Used to simulate orchestrator restart - clears in-memory state
+        but preserves comment queue.
+
+        Args:
+            work_item_id: Work item to reset monitoring for
+
+        Raises:
+            ValueError: Work item is not being monitored
+
+        Example:
+            adapter.start_monitoring("item-1", config)
+            adapter.simulate_comment("item-1", "alice", "Comment")
+            adapter.reset_monitoring_state("item-1")
+            assert not adapter.is_monitoring("item-1")
+            assert adapter.thread_exists("item-1")  # Thread still exists
+        """
+        if work_item_id not in self._monitoring:
+            raise ValueError(f"Not monitoring work item: {work_item_id}")
+
+        del self._monitoring[work_item_id]
 
     # Helper Methods
 

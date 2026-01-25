@@ -439,6 +439,150 @@ class TestMockDiscussionAdapter:
         adapter.clear_threads()
         assert adapter.get_comment_count("item-1") == 0
 
+    # Required Test Helpers (FR-8.3, FR-9.1)
+
+    async def test_simulate_column_change_emits_event(self, adapter):
+        """Test simulate_column_change emits WorkItemColumnChangedEvent."""
+        config = DiscussionMonitoringConfig(
+            project_id="proj-1",
+            column_name="In Review",
+            agent_assignment="agent-1"
+        )
+        adapter.start_monitoring("item-1", config)
+
+        events = []
+        adapter.on("workitem.column_changed", events.append)
+
+        adapter.simulate_column_change("item-1", "Backlog", "In Review")
+
+        assert len(events) == 1
+        event = events[0]
+        assert isinstance(event, WorkItemColumnChangedEvent)
+        assert event.work_item_id == "item-1"
+        assert event.project_id == "proj-1"
+        assert event.from_column == "Backlog"
+        assert event.to_column == "In Review"
+        assert event.moved_by == "unknown"
+        assert event.source == "mock"
+
+    async def test_simulate_column_change_not_monitoring_raises_error(self, adapter):
+        """Test simulate_column_change raises error if not monitoring."""
+        with pytest.raises(ValueError, match="Not monitoring work item"):
+            adapter.simulate_column_change("item-1", "Backlog", "In Review")
+
+    async def test_get_processed_comment_ids_empty(self, adapter):
+        """Test get_processed_comment_ids returns empty set initially."""
+        processed = adapter.get_processed_comment_ids("item-1")
+        assert processed == set()
+
+    async def test_get_processed_comment_ids_tracks_human_comments(self, adapter):
+        """Test get_processed_comment_ids tracks processed human comments."""
+        config = DiscussionMonitoringConfig(
+            project_id="proj-1",
+            column_name="In Review",
+            agent_assignment="agent-1"
+        )
+        adapter.start_monitoring("item-1", config)
+
+        # Simulate human comments
+        adapter.simulate_comment("item-1", "alice", "First comment")
+        adapter.simulate_comment("item-1", "bob", "Second comment")
+
+        # Get processed comment IDs
+        processed = adapter.get_processed_comment_ids("item-1")
+
+        assert len(processed) == 2
+
+    async def test_get_processed_comment_ids_excludes_bot_comments(self, adapter):
+        """Test get_processed_comment_ids doesn't track bot comments."""
+        config = DiscussionMonitoringConfig(
+            project_id="proj-1",
+            column_name="In Review",
+            agent_assignment="agent-1"
+        )
+        adapter.start_monitoring("item-1", config)
+
+        # Simulate human comment
+        adapter.simulate_comment("item-1", "alice", "Review this")
+
+        # Add bot comment (doesn't emit event, not tracked as processed)
+        adapter.simulate_bot_comment("item-1", "Acknowledged")
+
+        processed = adapter.get_processed_comment_ids("item-1")
+
+        # Only human comment tracked
+        assert len(processed) == 1
+
+    async def test_get_processed_comment_ids_returns_copy(self, adapter):
+        """Test get_processed_comment_ids returns a copy (not reference)."""
+        config = DiscussionMonitoringConfig(
+            project_id="proj-1",
+            column_name="In Review",
+            agent_assignment="agent-1"
+        )
+        adapter.start_monitoring("item-1", config)
+        adapter.simulate_comment("item-1", "alice", "Comment")
+
+        processed1 = adapter.get_processed_comment_ids("item-1")
+        processed2 = adapter.get_processed_comment_ids("item-1")
+
+        # Should be equal but not the same object
+        assert processed1 == processed2
+        assert processed1 is not processed2
+
+    async def test_reset_monitoring_state_clears_monitoring(self, adapter):
+        """Test reset_monitoring_state clears monitoring config."""
+        config = DiscussionMonitoringConfig(
+            project_id="proj-1",
+            column_name="In Review",
+            agent_assignment="agent-1"
+        )
+        adapter.start_monitoring("item-1", config)
+        assert adapter.is_monitoring("item-1")
+
+        adapter.reset_monitoring_state("item-1")
+
+        assert not adapter.is_monitoring("item-1")
+
+    async def test_reset_monitoring_state_preserves_thread(self, adapter):
+        """Test reset_monitoring_state preserves comment queue."""
+        config = DiscussionMonitoringConfig(
+            project_id="proj-1",
+            column_name="In Review",
+            agent_assignment="agent-1"
+        )
+        adapter.start_monitoring("item-1", config)
+        adapter.create_thread("item-1", "Initial comment")
+
+        assert adapter.get_comment_count("item-1") == 1
+
+        adapter.reset_monitoring_state("item-1")
+
+        # Thread still exists with comments
+        assert adapter.thread_exists("item-1")
+        assert adapter.get_comment_count("item-1") == 1
+
+    async def test_reset_monitoring_state_not_monitoring_raises_error(self, adapter):
+        """Test reset_monitoring_state raises error if not monitoring."""
+        with pytest.raises(ValueError, match="Not monitoring work item"):
+            adapter.reset_monitoring_state("item-1")
+
+    async def test_reset_monitoring_state_vs_clear_monitoring(self, adapter):
+        """Test reset_monitoring_state only clears one item vs clear_monitoring all."""
+        config = DiscussionMonitoringConfig(
+            project_id="proj-1",
+            column_name="In Review",
+            agent_assignment="agent-1"
+        )
+        adapter.start_monitoring("item-1", config)
+        adapter.start_monitoring("item-2", config)
+
+        adapter.reset_monitoring_state("item-1")
+
+        # Only item-1 cleared
+        assert not adapter.is_monitoring("item-1")
+        assert adapter.is_monitoring("item-2")
+
 
 class TestMockCodeReviewAdapter:
     """Tests for MockCodeReviewAdapter event simulation."""
