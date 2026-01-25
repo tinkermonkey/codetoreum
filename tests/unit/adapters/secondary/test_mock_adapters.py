@@ -258,6 +258,187 @@ class TestMockDiscussionAdapter:
         adapter.stop_monitoring("item-1")
         assert "item-1" not in adapter._monitoring
 
+    # Test Helper Methods
+
+    async def test_simulate_bot_comment(self, adapter):
+        """Test simulate_bot_comment helper."""
+        comment = adapter.simulate_bot_comment("item-1", "This looks good")
+        assert comment.author == "codetoreum-bot"
+        assert comment.body == "This looks good"
+        assert comment.is_bot is True
+        assert adapter.get_comment_count("item-1") == 1
+
+    async def test_simulate_bot_comment_emits_event_when_monitored(self, adapter):
+        """Test simulate_bot_comment emits event when monitoring."""
+        config = DiscussionMonitoringConfig(
+            project_id="proj-1",
+            column_name="In Review",
+            agent_assignment="agent-1"
+        )
+        adapter.start_monitoring("item-1", config)
+
+        events = []
+        adapter.on("comment.posted", events.append)
+
+        comment = adapter.simulate_bot_comment("item-1", "Processing...")
+        assert len(events) == 1
+        assert events[0].comment.id == comment.id
+        assert events[0].source == "mock"
+
+    async def test_create_thread(self, adapter):
+        """Test create_thread helper."""
+        initial = adapter.create_thread("item-1", "Please review this")
+        assert initial.author == "requester"
+        assert initial.body == "Please review this"
+        assert initial.parent_id is None
+        assert adapter.thread_exists("item-1")
+
+    async def test_create_thread_with_custom_author(self, adapter):
+        """Test create_thread with custom author."""
+        initial = adapter.create_thread("item-1", "Comment", author="alice")
+        assert initial.author == "alice"
+        assert adapter.get_comment_count("item-1") == 1
+
+    async def test_get_comments_by_author(self, adapter):
+        """Test get_comments_by_author helper."""
+        adapter.create_thread("item-1", "First", author="alice")
+        adapter.simulate_comment("item-1", "bob", "Second")
+        adapter.simulate_comment("item-1", "alice", "Third")
+
+        alice_comments = adapter.get_comments_by_author("item-1", "alice")
+        bob_comments = adapter.get_comments_by_author("item-1", "bob")
+
+        assert len(alice_comments) == 2
+        assert len(bob_comments) == 1
+        assert all(c.author == "alice" for c in alice_comments)
+
+    async def test_get_comments_by_author_nonexistent_item(self, adapter):
+        """Test get_comments_by_author returns empty list for nonexistent item."""
+        comments = adapter.get_comments_by_author("item-999", "alice")
+        assert comments == []
+
+    async def test_get_comment_count(self, adapter):
+        """Test get_comment_count helper."""
+        assert adapter.get_comment_count("item-1") == 0
+
+        adapter.create_thread("item-1", "First")
+        assert adapter.get_comment_count("item-1") == 1
+
+        adapter.simulate_comment("item-1", "bob", "Second")
+        assert adapter.get_comment_count("item-1") == 2
+
+    async def test_thread_exists(self, adapter):
+        """Test thread_exists helper."""
+        assert not adapter.thread_exists("item-1")
+
+        adapter.create_thread("item-1", "First")
+        assert adapter.thread_exists("item-1")
+
+    async def test_is_monitoring(self, adapter):
+        """Test is_monitoring helper."""
+        assert not adapter.is_monitoring("item-1")
+
+        config = DiscussionMonitoringConfig(
+            project_id="proj-1",
+            column_name="In Review",
+            agent_assignment="agent-1"
+        )
+        adapter.start_monitoring("item-1", config)
+        assert adapter.is_monitoring("item-1")
+
+    async def test_clear_threads(self, adapter):
+        """Test clear_threads helper."""
+        adapter.create_thread("item-1", "First")
+        adapter.create_thread("item-2", "Second")
+
+        assert adapter.get_comment_count("item-1") == 1
+        assert adapter.get_comment_count("item-2") == 1
+
+        adapter.clear_threads()
+
+        assert adapter.get_comment_count("item-1") == 0
+        assert adapter.get_comment_count("item-2") == 0
+        assert not adapter.thread_exists("item-1")
+
+    async def test_clear_monitoring(self, adapter):
+        """Test clear_monitoring helper."""
+        config = DiscussionMonitoringConfig(
+            project_id="proj-1",
+            column_name="In Review",
+            agent_assignment="agent-1"
+        )
+        adapter.start_monitoring("item-1", config)
+        adapter.start_monitoring("item-2", config)
+
+        assert adapter.is_monitoring("item-1")
+        assert adapter.is_monitoring("item-2")
+
+        adapter.clear_monitoring()
+
+        assert not adapter.is_monitoring("item-1")
+        assert not adapter.is_monitoring("item-2")
+
+    async def test_get_thread_info(self, adapter):
+        """Test get_thread_info helper."""
+        # Non-existent thread
+        info = adapter.get_thread_info("item-1")
+        assert info['exists'] is False
+        assert info['comment_count'] == 0
+        assert info['is_monitored'] is False
+        assert info['authors'] == []
+
+        # Create thread with multiple comments
+        adapter.create_thread("item-1", "First", author="alice")
+        adapter.simulate_comment("item-1", "bob", "Second")
+        adapter.simulate_comment("item-1", "alice", "Third")
+
+        info = adapter.get_thread_info("item-1")
+        assert info['exists'] is True
+        assert info['comment_count'] == 3
+        assert info['is_monitored'] is False
+        assert set(info['authors']) == {"alice", "bob"}
+
+    async def test_get_thread_info_with_monitoring(self, adapter):
+        """Test get_thread_info shows monitoring state."""
+        config = DiscussionMonitoringConfig(
+            project_id="proj-1",
+            column_name="In Review",
+            agent_assignment="agent-1"
+        )
+        adapter.create_thread("item-1", "Initial")
+        adapter.start_monitoring("item-1", config)
+
+        info = adapter.get_thread_info("item-1")
+        assert info['is_monitored'] is True
+
+    async def test_helper_methods_integration(self, adapter):
+        """Test multiple helper methods working together."""
+        # Setup
+        adapter.create_thread("item-1", "Please review", author="requester")
+
+        config = DiscussionMonitoringConfig(
+            project_id="proj-1",
+            column_name="Review",
+            agent_assignment="agent-1"
+        )
+        adapter.start_monitoring("item-1", config)
+
+        # Add various comments
+        adapter.simulate_comment("item-1", "reviewer", "I reviewed it")
+        adapter.simulate_bot_comment("item-1", "Thanks for the review")
+
+        # Verify with helpers
+        info = adapter.get_thread_info("item-1")
+        assert info['comment_count'] == 3
+        assert info['is_monitored'] is True
+
+        reviewer_comments = adapter.get_comments_by_author("item-1", "reviewer")
+        assert len(reviewer_comments) == 1
+
+        # Cleanup
+        adapter.clear_threads()
+        assert adapter.get_comment_count("item-1") == 0
+
 
 class TestMockCodeReviewAdapter:
     """Tests for MockCodeReviewAdapter event simulation."""
