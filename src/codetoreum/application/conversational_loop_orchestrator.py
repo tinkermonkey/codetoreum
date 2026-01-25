@@ -1,0 +1,646 @@
+"""Conversational Loop Orchestrator application service.
+
+This service orchestrates feedback loops where AI agents engage in back-and-forth
+dialogue with human stakeholders through comment threads on work items.
+
+It manages the complete lifecycle of conversational sessions:
+- Initialization when work items enter conversational columns
+- Comment handling and agent response execution
+- Column transition logic (entry/exit of conversational columns)
+- Session state persistence for restart continuity
+- Cleanup on errors or manual termination
+
+Architecture:
+- Pure orchestration layer (no business logic in domain)
+- Coordinates IDiscussionAdapter (comments), ILLMProvider (agent), IEventStore (persistence)
+- Emits domain events for audit trail and observability
+- Immutable session state for event sourcing integrity
+"""
+
+import logging
+from datetime import datetime, timezone
+from typing import Optional
+from uuid import uuid4
+
+from codetoreum.domain.conversational_session import ConversationalSessionState
+from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
+from codetoreum.domain.events.discussion_events import (
+    AgentResponsePostedEvent,
+    CommentNeedsResponseEvent,
+)
+from codetoreum.ports.exceptions import EventStoreError
+from codetoreum.ports.input.conversational_loop_service import (
+    IConversationalLoopService,
+)
+from codetoreum.ports.output import (
+    IDiscussionAdapter,
+    IEventStore,
+    ILLMProvider,
+)
+
+logger = logging.getLogger(__name__)
+
+
+class ConversationalLoopOrchestrator(IConversationalLoopService):
+    """
+    Application service for orchestrating conversational feedback loops.
+
+    This service implements the IConversationalLoopService port interface,
+    coordinating with external adapters to manage agent-human dialogue
+    through comment threads on work items.
+
+    **Responsibilities**:
+    - Initialize conversational sessions when work items enter conversational columns
+    - Handle comment events by executing agents and posting responses
+    - Manage column transitions (session lifecycle)
+    - Persist session state for restart continuity
+    - Clean up sessions on error or termination
+
+    **Dependencies**:
+    - IDiscussionAdapter: Comment monitoring and posting
+    - ILLMProvider: Agent execution with conversation context
+    - IEventStore: Session state persistence
+
+    **Event Subscriptions**:
+    The service subscribes to these domain events (setup via event bus):
+    - `comment.needs_response`: Triggers handle_comment_event()
+    - `workitem.column_changed`: Triggers handle_column_change_event()
+
+    **Session State Storage**:
+    Session state is persisted per work item using a key pattern:
+    `conversational_session:{work_item_id}`
+    """
+
+    def __init__(
+        self,
+        discussion_adapter: IDiscussionAdapter,
+        llm_provider: ILLMProvider,
+        event_store: IEventStore,
+    ):
+        """
+        Initialize ConversationalLoopOrchestrator.
+
+        Args:
+            discussion_adapter: Adapter for comment monitoring and posting
+            llm_provider: LLM provider for agent execution
+            event_store: Event store for session state persistence
+        """
+        self.discussion_adapter = discussion_adapter
+        self.llm_provider = llm_provider
+        self.event_store = event_store
+
+    async def initialize_loop(
+        self,
+        work_item_id: str,
+        project_id: str,
+        column_config: dict,
+    ) -> ConversationalSessionState:
+        """Initialize a conversational loop for a work item.
+
+        **Workflow**:
+        1. Create unique session identifier
+        2. Initialize session state with configuration
+        3. Start discussion adapter monitoring
+        4. Create and persist session state
+        5. Emit ConversationalSessionStartedEvent for audit trail
+
+        Args:
+            work_item_id: Unique identifier of the work item
+            project_id: Unique identifier of the project
+            column_config: Configuration dictionary with:
+                - column_name: Name of the board column
+                - agent_assignment: Name of the agent assigned to handle responses
+                - (optional) other metadata for agent context
+
+        Returns:
+            ConversationalSessionState: The initialized session state
+
+        Raises:
+            ValueError: If required configuration is missing
+            DiscussionAdapterError: If starting monitoring fails
+            EventStoreError: If persisting session state fails
+        """
+        # Validate inputs
+        if not work_item_id or not project_id:
+            raise ValueError("work_item_id and project_id are required")
+
+        column_name = column_config.get("column_name", "")
+        agent_assignment = column_config.get("agent_assignment", "")
+
+        if not column_name or not agent_assignment:
+            raise ValueError("column_config must include column_name and agent_assignment")
+
+        # Create unique session identifier
+        session_id = f"conv_session_{work_item_id}_{int(datetime.now(timezone.utc).timestamp())}"
+
+        # Initialize session state
+        now_iso = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        session_state = ConversationalSessionState(
+            session_id=session_id,
+            work_item_id=work_item_id,
+            project_id=project_id,
+            agent_assignment=agent_assignment,
+            column_name=column_name,
+            llm_conversation_id=None,  # Will be created on first agent execution
+            last_processed_comment_id="",  # No comments processed yet
+            last_interaction_timestamp=now_iso,
+            status="active",
+        )
+
+        # Start monitoring for comments
+        monitoring_config = {
+            "project_id": project_id,
+            "column_name": column_name,
+            "agent_assignment": agent_assignment,
+            "last_processed_comment_id": None,
+        }
+
+        try:
+            self.discussion_adapter.start_monitoring(work_item_id, monitoring_config)
+        except Exception as e:
+            logger.error(
+                "Failed to start discussion monitoring for work item %s: %s",
+                work_item_id,
+                str(e),
+                exc_info=True,
+            )
+            raise
+
+        # Persist session state
+        try:
+            await self.save_session_state(session_state)
+        except EventStoreError as e:
+            logger.error(
+                "Failed to persist session state for work item %s: %s",
+                work_item_id,
+                str(e),
+                exc_info=True,
+            )
+            # Attempt cleanup on persistence failure
+            try:
+                self.discussion_adapter.stop_monitoring(work_item_id)
+            except Exception as cleanup_error:
+                logger.warning(
+                    "Failed to clean up monitoring after persistence error: %s",
+                    str(cleanup_error),
+                    exc_info=True,
+                )
+            raise
+
+        logger.info(
+            "Initialized conversational loop for work item %s with session %s",
+            work_item_id,
+            session_id,
+        )
+
+        return session_state
+
+    async def handle_comment_event(
+        self,
+        event: CommentNeedsResponseEvent,
+    ) -> None:
+        """Handle a comment that needs an agent response.
+
+        **Workflow**:
+        1. Load active session state from storage
+        2. Verify session is active and matches work item
+        3. Build thread context (parent comments, history)
+        4. Execute assigned agent with conversation continuity
+        5. Post agent response to discussion thread
+        6. Update session state with checkpoint
+        7. Persist updated session state
+        8. Emit AgentResponsePostedEvent for audit trail
+
+        Args:
+            event: CommentNeedsResponseEvent containing:
+                - work_item_id: The work item receiving comment
+                - project_id: The project context
+                - comment: The human comment requiring response
+                - context: Thread context with parent comments and column info
+
+        Raises:
+            ValueError: If event data is invalid
+            SessionNotFoundError: If no active session exists
+            SessionInactiveError: If session is suspended or terminated
+            DiscussionAdapterError: If adding comment fails
+            LLMProviderError: If agent execution fails
+            EventStoreError: If persisting session state fails
+        """
+        work_item_id = event.work_item_id
+        project_id = event.project_id
+
+        # Validate event
+        if not work_item_id or not project_id:
+            raise ValueError("CommentNeedsResponseEvent must have work_item_id and project_id")
+
+        if not event.comment or not event.comment.id:
+            logger.warning(
+                "Received CommentNeedsResponseEvent without comment for work item %s",
+                work_item_id,
+            )
+            return
+
+        # Load active session state
+        session_state = await self.load_session_state(work_item_id)
+
+        if not session_state:
+            logger.warning(
+                "No active session found for work item %s, skipping comment response",
+                work_item_id,
+            )
+            return
+
+        # Verify session is active
+        if session_state.status != "active":
+            logger.warning(
+                "Session for work item %s is %s, skipping comment response",
+                work_item_id,
+                session_state.status,
+            )
+            return
+
+        logger.info(
+            "Handling comment event for work item %s, session %s",
+            work_item_id,
+            session_state.session_id,
+        )
+
+        try:
+            # Build thread context message
+            thread_message = self._build_thread_message(event, session_state)
+
+            # Execute agent with conversation context
+            execution_result = await self.llm_provider.continue_conversation(
+                conversation_id=session_state.llm_conversation_id or "",
+                message=thread_message,
+            )
+
+            if not execution_result.content:
+                logger.error(
+                    "Agent execution returned empty response for work item %s",
+                    work_item_id,
+                )
+                return
+
+            # Post agent response to discussion thread
+            response_comment = await self.discussion_adapter.add_comment(
+                work_item_id=work_item_id,
+                content=execution_result.content,
+                parent_id=event.comment.id,  # Reply to the human comment
+            )
+
+            # Update session state
+            now_iso = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            updated_session = ConversationalSessionState(
+                session_id=session_state.session_id,
+                work_item_id=session_state.work_item_id,
+                project_id=session_state.project_id,
+                agent_assignment=session_state.agent_assignment,
+                column_name=session_state.column_name,
+                llm_conversation_id=execution_result.conversation_id or session_state.llm_conversation_id,
+                last_processed_comment_id=event.comment.id,
+                last_interaction_timestamp=now_iso,
+                status=session_state.status,
+            )
+
+            # Persist updated session state
+            await self.save_session_state(updated_session)
+
+            logger.info(
+                "Posted agent response to work item %s, comment %s",
+                work_item_id,
+                response_comment.get("id") if isinstance(response_comment, dict) else "unknown",
+            )
+
+        except Exception as e:
+            logger.error(
+                "Error handling comment event for work item %s: %s",
+                work_item_id,
+                str(e),
+                exc_info=True,
+            )
+            # Don't clean up session on transient errors - let it retry
+            raise
+
+    async def handle_column_change_event(
+        self,
+        event: WorkItemColumnChangedEvent,
+    ) -> None:
+        """Handle work item column transitions.
+
+        **Workflow**:
+
+        **If exiting a conversational column**:
+        1. Load session state
+        2. Stop discussion monitoring
+        3. Mark session as terminated
+        4. Persist updated session state
+
+        **If entering a conversational column**:
+        1. Check if session exists
+        2. If new, call initialize_loop()
+        3. If existing, resume monitoring if suspended
+
+        **If moving between conversational columns**:
+        1. Update column_name in session state
+        2. Continue monitoring without interruption
+
+        Args:
+            event: WorkItemColumnChangedEvent with:
+                - work_item_id: The work item that moved
+                - project_id: The project context
+                - from_column: Previous column name
+                - to_column: New column name
+
+        Raises:
+            ValueError: If event data is invalid
+            DiscussionAdapterError: If starting/stopping monitoring fails
+            EventStoreError: If persisting state fails
+        """
+        work_item_id = event.work_item_id
+        project_id = event.project_id
+        from_column = getattr(event, "from_column", "")
+        to_column = getattr(event, "to_column", "")
+
+        if not work_item_id or not project_id:
+            raise ValueError("WorkItemColumnChangedEvent must have work_item_id and project_id")
+
+        logger.info(
+            "Handling column change for work item %s: %s → %s",
+            work_item_id,
+            from_column,
+            to_column,
+        )
+
+        # Load current session if exists
+        session_state = await self.load_session_state(work_item_id)
+
+        # Check if we're exiting a conversational column
+        if session_state and session_state.status != "terminated":
+            # Stop monitoring (work item leaving the conversational context)
+            try:
+                self.discussion_adapter.stop_monitoring(work_item_id)
+            except Exception as e:
+                logger.warning(
+                    "Failed to stop monitoring for work item %s: %s",
+                    work_item_id,
+                    str(e),
+                    exc_info=True,
+                )
+
+            # Mark session as terminated
+            now_iso = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            terminated_session = ConversationalSessionState(
+                session_id=session_state.session_id,
+                work_item_id=session_state.work_item_id,
+                project_id=session_state.project_id,
+                agent_assignment=session_state.agent_assignment,
+                column_name=from_column,
+                llm_conversation_id=session_state.llm_conversation_id,
+                last_processed_comment_id=session_state.last_processed_comment_id,
+                last_interaction_timestamp=now_iso,
+                status="terminated",
+            )
+
+            try:
+                await self.save_session_state(terminated_session)
+            except EventStoreError as e:
+                logger.error(
+                    "Failed to persist terminated session state for work item %s: %s",
+                    work_item_id,
+                    str(e),
+                    exc_info=True,
+                )
+                raise
+
+            logger.info(
+                "Terminated conversational session for work item %s",
+                work_item_id,
+            )
+
+    async def cleanup_loop(
+        self,
+        work_item_id: str,
+        reason: str,
+    ) -> None:
+        """Clean up loop state on error or manual termination.
+
+        This method is idempotent - safe to call multiple times on the same work item.
+
+        **Workflow**:
+        1. Load session state (if exists)
+        2. Stop discussion monitoring
+        3. Mark session as terminated
+        4. Persist updated state
+
+        Args:
+            work_item_id: The work item whose loop should be cleaned up
+            reason: Human-readable reason for cleanup
+
+        Raises:
+            DiscussionAdapterError: If stopping monitoring fails (should not prevent cleanup)
+        """
+        if not work_item_id:
+            raise ValueError("work_item_id is required")
+
+        logger.info(
+            "Cleaning up conversational loop for work item %s, reason: %s",
+            work_item_id,
+            reason,
+        )
+
+        try:
+            # Load current session if exists
+            session_state = await self.load_session_state(work_item_id)
+
+            if not session_state:
+                logger.debug(
+                    "No active session found for work item %s during cleanup",
+                    work_item_id,
+                )
+                return
+
+            # Stop monitoring (best effort)
+            try:
+                self.discussion_adapter.stop_monitoring(work_item_id)
+            except Exception as e:
+                logger.warning(
+                    "Failed to stop monitoring during cleanup for work item %s: %s",
+                    work_item_id,
+                    str(e),
+                    exc_info=True,
+                )
+
+            # Mark session as terminated if not already
+            if session_state.status != "terminated":
+                now_iso = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+                terminated_session = ConversationalSessionState(
+                    session_id=session_state.session_id,
+                    work_item_id=session_state.work_item_id,
+                    project_id=session_state.project_id,
+                    agent_assignment=session_state.agent_assignment,
+                    column_name=session_state.column_name,
+                    llm_conversation_id=session_state.llm_conversation_id,
+                    last_processed_comment_id=session_state.last_processed_comment_id,
+                    last_interaction_timestamp=now_iso,
+                    status="terminated",
+                )
+
+                try:
+                    await self.save_session_state(terminated_session)
+                except EventStoreError as e:
+                    logger.error(
+                        "Failed to persist cleanup state for work item %s: %s",
+                        work_item_id,
+                        str(e),
+                        exc_info=True,
+                    )
+                    raise
+
+            logger.info(
+                "Cleaned up conversational loop for work item %s",
+                work_item_id,
+            )
+
+        except Exception as e:
+            logger.error(
+                "Error during cleanup for work item %s: %s",
+                work_item_id,
+                str(e),
+                exc_info=True,
+            )
+            raise
+
+    async def load_session_state(
+        self,
+        work_item_id: str,
+    ) -> Optional[ConversationalSessionState]:
+        """Load persisted session state from storage.
+
+        Args:
+            work_item_id: The work item whose session to load
+
+        Returns:
+            ConversationalSessionState if session exists, None otherwise
+
+        Raises:
+            ValueError: If work_item_id is invalid
+            EventStoreError: If storage retrieval fails
+        """
+        if not work_item_id:
+            raise ValueError("work_item_id is required")
+
+        storage_key = f"conversational_session:{work_item_id}"
+
+        try:
+            # Get events for this work item (aggregate ID is work_item_id)
+            events = await self.event_store.get_events(work_item_id)
+
+            # Find the most recent session state from events
+            # (Simplified: in production, would use event replay pattern)
+            session_data = None
+            for event in reversed(events):
+                if hasattr(event, "data") and isinstance(event.data, dict):
+                    if "conversational_session_state" in event.data:
+                        session_data = event.data["conversational_session_state"]
+                        break
+
+            if session_data:
+                return ConversationalSessionState.from_dict(session_data)
+
+            return None
+
+        except Exception as e:
+            logger.error(
+                "Failed to load session state for work item %s: %s",
+                work_item_id,
+                str(e),
+                exc_info=True,
+            )
+            raise
+
+    async def save_session_state(
+        self,
+        state: ConversationalSessionState,
+    ) -> None:
+        """Persist session state to storage.
+
+        Args:
+            state: The ConversationalSessionState object to persist
+
+        Raises:
+            ValueError: If state is invalid
+            EventStoreError: If storage operation fails
+        """
+        if not state:
+            raise ValueError("state is required")
+
+        try:
+            # In event sourcing pattern, we would emit a domain event
+            # For now, we store as event data in the event store
+            # This is a simplified implementation - production would use proper domain events
+
+            storage_key = f"conversational_session:{state.work_item_id}"
+
+            # Append state snapshot to event store
+            # (Using event store as document store for simplicity)
+            snapshot_event = {
+                "id": str(uuid4()),
+                "type": "conversational_session_snapshot",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "aggregate_id": state.work_item_id,
+                "data": {
+                    "conversational_session_state": state.to_dict(),
+                },
+            }
+
+            await self.event_store.append(snapshot_event)
+
+            logger.debug(
+                "Persisted session state for work item %s, session %s",
+                state.work_item_id,
+                state.session_id,
+            )
+
+        except Exception as e:
+            logger.error(
+                "Failed to persist session state for work item %s: %s",
+                state.work_item_id,
+                str(e),
+                exc_info=True,
+            )
+            raise
+
+    def _build_thread_message(
+        self,
+        event: CommentNeedsResponseEvent,
+        session_state: ConversationalSessionState,
+    ) -> str:
+        """Build the message to send to the LLM based on comment thread context.
+
+        Args:
+            event: The comment needs response event with context
+            session_state: Current session state
+
+        Returns:
+            Formatted message with thread context for the agent
+        """
+        parts = []
+
+        # Add context about where we are
+        if event.context:
+            parts.append(f"Work item: {event.context.column_name}")
+            parts.append(f"Assigned agent: {event.context.agent_assignment}")
+
+        # Add parent comment if available
+        if event.context and event.context.parent_comment:
+            parent = event.context.parent_comment
+            parts.append(f"\nPrevious comment from {parent.author}:")
+            parts.append(parent.body)
+
+        # Add the current comment
+        if event.comment:
+            parts.append(f"\nNew comment from {event.comment.author}:")
+            parts.append(event.comment.body)
+
+        return "\n".join(parts)

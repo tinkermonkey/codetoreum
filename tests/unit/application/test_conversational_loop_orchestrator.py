@@ -1,0 +1,605 @@
+"""Unit tests for ConversationalLoopOrchestrator application service.
+
+Tests verify the core orchestration logic without external dependencies:
+- Session initialization and lifecycle
+- Comment handling and agent response execution
+- Column transition handling
+- Session state persistence and recovery
+- Error handling and edge cases
+"""
+
+import pytest
+from datetime import datetime, timezone
+from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
+
+from codetoreum.application.conversational_loop_orchestrator import (
+    ConversationalLoopOrchestrator,
+)
+from codetoreum.domain.conversational_session import ConversationalSessionState
+from codetoreum.domain.events.discussion_events import (
+    Comment,
+    CommentContext,
+    CommentNeedsResponseEvent,
+    AgentResponsePostedEvent,
+)
+from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
+
+
+@pytest.fixture
+def mock_discussion_adapter():
+    """Create a mock discussion adapter."""
+    adapter = MagicMock()
+    adapter.start_monitoring = MagicMock()
+    adapter.stop_monitoring = MagicMock()
+    adapter.add_comment = AsyncMock()
+    return adapter
+
+
+@pytest.fixture
+def mock_llm_provider():
+    """Create a mock LLM provider."""
+    provider = MagicMock()
+    provider.continue_conversation = AsyncMock()
+    return provider
+
+
+@pytest.fixture
+def mock_event_store():
+    """Create a mock event store."""
+    store = MagicMock()
+    store.append = AsyncMock()
+    store.get_events = AsyncMock(return_value=[])
+    return store
+
+
+@pytest.fixture
+def orchestrator(mock_discussion_adapter, mock_llm_provider, mock_event_store):
+    """Create a ConversationalLoopOrchestrator instance with mocks."""
+    return ConversationalLoopOrchestrator(
+        discussion_adapter=mock_discussion_adapter,
+        llm_provider=mock_llm_provider,
+        event_store=mock_event_store,
+    )
+
+
+@pytest.fixture
+def sample_session_state():
+    """Create a sample session state for testing."""
+    return ConversationalSessionState(
+        session_id="sess-001",
+        work_item_id="issue-42",
+        project_id="proj-1",
+        agent_assignment="code-reviewer",
+        column_name="In Review",
+        llm_conversation_id="conv-abc123",
+        last_processed_comment_id="comment-10",
+        last_interaction_timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        status="active",
+    )
+
+
+@pytest.fixture
+def sample_comment():
+    """Create a sample comment for testing."""
+    return Comment(
+        id="comment-11",
+        author="user123",
+        body="Can you explain section 2 in more detail?",
+        created_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        parent_id=None,
+        is_bot=False,
+    )
+
+
+class TestInitializeLoop:
+    """Test suite for initialize_loop method."""
+
+    async def test_initialize_loop_success(self, orchestrator, mock_discussion_adapter, mock_event_store):
+        """Test successful loop initialization."""
+        work_item_id = "issue-42"
+        project_id = "proj-1"
+        column_config = {
+            "column_name": "In Review",
+            "agent_assignment": "code-reviewer",
+        }
+
+        result = await orchestrator.initialize_loop(work_item_id, project_id, column_config)
+
+        # Verify session was initialized
+        assert result.work_item_id == work_item_id
+        assert result.project_id == project_id
+        assert result.column_name == "In Review"
+        assert result.agent_assignment == "code-reviewer"
+        assert result.status == "active"
+        assert result.session_id is not None
+
+        # Verify discussion adapter was started
+        mock_discussion_adapter.start_monitoring.assert_called_once()
+        call_args = mock_discussion_adapter.start_monitoring.call_args
+        assert call_args[0][0] == work_item_id  # First positional arg
+        assert call_args[0][1]["column_name"] == "In Review"  # Config
+
+        # Verify session state was persisted
+        mock_event_store.append.assert_called_once()
+
+    async def test_initialize_loop_missing_work_item_id(self, orchestrator):
+        """Test initialization fails with missing work_item_id."""
+        with pytest.raises(ValueError, match="work_item_id and project_id are required"):
+            await orchestrator.initialize_loop(
+                "",
+                "proj-1",
+                {"column_name": "In Review", "agent_assignment": "reviewer"}
+            )
+
+    async def test_initialize_loop_missing_column_name(self, orchestrator):
+        """Test initialization fails with missing column_name."""
+        with pytest.raises(ValueError, match="column_name and agent_assignment"):
+            await orchestrator.initialize_loop(
+                "issue-42",
+                "proj-1",
+                {"agent_assignment": "reviewer"}  # Missing column_name
+            )
+
+    async def test_initialize_loop_monitoring_failure(self, orchestrator, mock_discussion_adapter, mock_event_store):
+        """Test initialization cleanup on monitoring start failure."""
+        mock_discussion_adapter.start_monitoring.side_effect = Exception("Monitoring failed")
+
+        with pytest.raises(Exception, match="Monitoring failed"):
+            await orchestrator.initialize_loop(
+                "issue-42",
+                "proj-1",
+                {"column_name": "In Review", "agent_assignment": "reviewer"}
+            )
+
+        # Verify monitoring was attempted
+        mock_discussion_adapter.start_monitoring.assert_called_once()
+        # Event store should NOT be called since monitoring failed
+        mock_event_store.append.assert_not_called()
+
+    async def test_initialize_loop_persistence_failure(self, orchestrator, mock_discussion_adapter, mock_event_store):
+        """Test initialization cleanup on persistence failure."""
+        from codetoreum.ports.exceptions import EventStoreError
+
+        mock_event_store.append.side_effect = EventStoreError("Storage failed")
+
+        with pytest.raises(EventStoreError, match="Storage failed"):
+            await orchestrator.initialize_loop(
+                "issue-42",
+                "proj-1",
+                {"column_name": "In Review", "agent_assignment": "reviewer"}
+            )
+
+        # Verify cleanup was attempted
+        mock_discussion_adapter.start_monitoring.assert_called_once()
+        mock_discussion_adapter.stop_monitoring.assert_called_once_with("issue-42")
+
+
+class TestHandleCommentEvent:
+    """Test suite for handle_comment_event method."""
+
+    async def test_handle_comment_success(
+        self,
+        orchestrator,
+        mock_discussion_adapter,
+        mock_llm_provider,
+        mock_event_store,
+        sample_session_state,
+        sample_comment,
+    ):
+        """Test successful comment handling and response posting."""
+        # Mock session state loading
+        def mock_get_events(aggregate_id):
+            # Return event with session state snapshot
+            return [
+                MagicMock(
+                    data={
+                        "conversational_session_state": sample_session_state.to_dict()
+                    }
+                )
+            ]
+
+        mock_event_store.get_events = AsyncMock(side_effect=mock_get_events)
+
+        # Mock agent execution
+        mock_execution_result = MagicMock()
+        mock_execution_result.content = "This is the agent's response."
+        mock_execution_result.conversation_id = "conv-abc123"
+        mock_llm_provider.continue_conversation.return_value = mock_execution_result
+
+        # Mock comment posting
+        mock_discussion_adapter.add_comment.return_value = {"id": "comment-12"}
+
+        # Create event with comment
+        event = CommentNeedsResponseEvent(
+            type="comment.needs_response",
+            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            source="github",
+            work_item_id="issue-42",
+            project_id="proj-1",
+            comment=sample_comment,
+            context=CommentContext(
+                column_name="In Review",
+                agent_assignment="code-reviewer",
+            ),
+        )
+
+        # Handle comment event
+        await orchestrator.handle_comment_event(event)
+
+        # Verify agent execution
+        mock_llm_provider.continue_conversation.assert_called_once()
+        call_kwargs = mock_llm_provider.continue_conversation.call_args[1]
+        assert call_kwargs["conversation_id"] == "conv-abc123"
+        assert "Can you explain section 2" in call_kwargs["message"]
+
+        # Verify response posting
+        mock_discussion_adapter.add_comment.assert_called_once()
+        call_kwargs = mock_discussion_adapter.add_comment.call_args[1]
+        assert call_kwargs["work_item_id"] == "issue-42"
+        assert call_kwargs["content"] == "This is the agent's response."
+        assert call_kwargs["parent_id"] == sample_comment.id
+
+        # Verify session state was persisted with updated checkpoint
+        assert mock_event_store.append.called
+
+    async def test_handle_comment_no_session(self, orchestrator, mock_event_store, sample_comment):
+        """Test comment handling when no session exists."""
+        mock_event_store.get_events = AsyncMock(return_value=[])
+
+        event = CommentNeedsResponseEvent(
+            type="comment.needs_response",
+            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            source="github",
+            work_item_id="issue-42",
+            project_id="proj-1",
+            comment=sample_comment,
+        )
+
+        # Should handle gracefully - no exception, just skip
+        await orchestrator.handle_comment_event(event)
+
+    async def test_handle_comment_suspended_session(
+        self,
+        orchestrator,
+        mock_event_store,
+        sample_session_state,
+        sample_comment,
+    ):
+        """Test comment handling skips suspended sessions."""
+        # Create suspended session
+        suspended_state = ConversationalSessionState(
+            session_id=sample_session_state.session_id,
+            work_item_id=sample_session_state.work_item_id,
+            project_id=sample_session_state.project_id,
+            agent_assignment=sample_session_state.agent_assignment,
+            column_name=sample_session_state.column_name,
+            llm_conversation_id=sample_session_state.llm_conversation_id,
+            last_processed_comment_id=sample_session_state.last_processed_comment_id,
+            last_interaction_timestamp=sample_session_state.last_interaction_timestamp,
+            status="suspended",
+        )
+
+        def mock_get_events(aggregate_id):
+            return [
+                MagicMock(
+                    data={
+                        "conversational_session_state": suspended_state.to_dict()
+                    }
+                )
+            ]
+
+        mock_event_store.get_events = AsyncMock(side_effect=mock_get_events)
+
+        event = CommentNeedsResponseEvent(
+            type="comment.needs_response",
+            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            source="github",
+            work_item_id="issue-42",
+            project_id="proj-1",
+            comment=sample_comment,
+        )
+
+        # Should handle gracefully - no exception
+        await orchestrator.handle_comment_event(event)
+
+    async def test_handle_comment_missing_comment_body(self, orchestrator, sample_session_state):
+        """Test comment event without comment body is skipped."""
+        event = CommentNeedsResponseEvent(
+            type="comment.needs_response",
+            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            source="github",
+            work_item_id="issue-42",
+            project_id="proj-1",
+            comment=None,  # No comment
+        )
+
+        # Should handle gracefully
+        await orchestrator.handle_comment_event(event)
+
+
+class TestHandleColumnChangeEvent:
+    """Test suite for handle_column_change_event method."""
+
+    async def test_handle_column_change_exit_conversational(
+        self,
+        orchestrator,
+        mock_discussion_adapter,
+        mock_event_store,
+        sample_session_state,
+    ):
+        """Test column change when exiting conversational column."""
+        def mock_get_events(aggregate_id):
+            return [
+                MagicMock(
+                    data={
+                        "conversational_session_state": sample_session_state.to_dict()
+                    }
+                )
+            ]
+
+        mock_event_store.get_events = AsyncMock(side_effect=mock_get_events)
+
+        event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            source="github",
+            work_item_id="issue-42",
+            project_id="proj-1",
+            from_column="In Review",
+            to_column="Testing",
+        )
+
+        await orchestrator.handle_column_change_event(event)
+
+        # Verify monitoring was stopped
+        mock_discussion_adapter.stop_monitoring.assert_called_once_with("issue-42")
+
+        # Verify session state was persisted as terminated
+        assert mock_event_store.append.called
+        call_args = mock_event_store.append.call_args[0]
+        event_data = call_args[0]
+        assert event_data["data"]["conversational_session_state"]["status"] == "terminated"
+
+    async def test_handle_column_change_no_session(self, orchestrator, mock_event_store, mock_discussion_adapter):
+        """Test column change when no session exists."""
+        mock_event_store.get_events = AsyncMock(return_value=[])
+
+        event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            source="github",
+            work_item_id="issue-42",
+            project_id="proj-1",
+            from_column="In Progress",
+            to_column="Testing",
+        )
+
+        # Should handle gracefully
+        await orchestrator.handle_column_change_event(event)
+
+        # Monitoring should NOT be stopped if no session
+        mock_discussion_adapter.stop_monitoring.assert_not_called()
+
+    async def test_handle_column_change_missing_work_item_id(self, orchestrator):
+        """Test column change event validation."""
+        event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            source="github",
+            work_item_id="",  # Missing
+            project_id="proj-1",
+        )
+
+        with pytest.raises(ValueError, match="work_item_id and project_id are required"):
+            await orchestrator.handle_column_change_event(event)
+
+
+class TestCleanupLoop:
+    """Test suite for cleanup_loop method."""
+
+    async def test_cleanup_loop_success(
+        self,
+        orchestrator,
+        mock_discussion_adapter,
+        mock_event_store,
+        sample_session_state,
+    ):
+        """Test successful loop cleanup."""
+        def mock_get_events(aggregate_id):
+            return [
+                MagicMock(
+                    data={
+                        "conversational_session_state": sample_session_state.to_dict()
+                    }
+                )
+            ]
+
+        mock_event_store.get_events = AsyncMock(side_effect=mock_get_events)
+
+        await orchestrator.cleanup_loop("issue-42", "Agent execution error")
+
+        # Verify monitoring was stopped
+        mock_discussion_adapter.stop_monitoring.assert_called_once_with("issue-42")
+
+        # Verify session was marked terminated
+        assert mock_event_store.append.called
+
+    async def test_cleanup_loop_no_session(self, orchestrator, mock_event_store, mock_discussion_adapter):
+        """Test cleanup loop when no session exists (idempotent)."""
+        mock_event_store.get_events = AsyncMock(return_value=[])
+
+        # Should not raise
+        await orchestrator.cleanup_loop("issue-42", "Cleanup reason")
+
+        # Monitoring should not be stopped if no session
+        mock_discussion_adapter.stop_monitoring.assert_not_called()
+
+    async def test_cleanup_loop_idempotent(
+        self,
+        orchestrator,
+        mock_event_store,
+        sample_session_state,
+    ):
+        """Test cleanup loop is idempotent - safe to call multiple times."""
+        # Session already terminated
+        terminated_state = ConversationalSessionState(
+            session_id=sample_session_state.session_id,
+            work_item_id=sample_session_state.work_item_id,
+            project_id=sample_session_state.project_id,
+            agent_assignment=sample_session_state.agent_assignment,
+            column_name=sample_session_state.column_name,
+            llm_conversation_id=sample_session_state.llm_conversation_id,
+            last_processed_comment_id=sample_session_state.last_processed_comment_id,
+            last_interaction_timestamp=sample_session_state.last_interaction_timestamp,
+            status="terminated",
+        )
+
+        def mock_get_events(aggregate_id):
+            return [
+                MagicMock(
+                    data={
+                        "conversational_session_state": terminated_state.to_dict()
+                    }
+                )
+            ]
+
+        mock_event_store.get_events = AsyncMock(side_effect=mock_get_events)
+
+        # Should handle gracefully - no exception
+        await orchestrator.cleanup_loop("issue-42", "Already terminated")
+
+    async def test_cleanup_loop_monitoring_failure_continues(
+        self,
+        orchestrator,
+        mock_discussion_adapter,
+        mock_event_store,
+        sample_session_state,
+    ):
+        """Test cleanup continues even if monitoring stop fails."""
+        def mock_get_events(aggregate_id):
+            return [
+                MagicMock(
+                    data={
+                        "conversational_session_state": sample_session_state.to_dict()
+                    }
+                )
+            ]
+
+        mock_event_store.get_events = AsyncMock(side_effect=mock_get_events)
+        mock_discussion_adapter.stop_monitoring.side_effect = Exception("Monitoring stop failed")
+
+        # Should not raise - cleanup continues
+        await orchestrator.cleanup_loop("issue-42", "Error cleanup")
+
+        # But should still attempt to persist state
+        assert mock_event_store.append.called
+
+
+class TestLoadSessionState:
+    """Test suite for load_session_state method."""
+
+    async def test_load_session_state_exists(self, orchestrator, mock_event_store, sample_session_state):
+        """Test loading existing session state."""
+        def mock_get_events(aggregate_id):
+            return [
+                MagicMock(
+                    data={
+                        "conversational_session_state": sample_session_state.to_dict()
+                    }
+                )
+            ]
+
+        mock_event_store.get_events = AsyncMock(side_effect=mock_get_events)
+
+        result = await orchestrator.load_session_state("issue-42")
+
+        assert result is not None
+        assert result.work_item_id == "issue-42"
+        assert result.session_id == sample_session_state.session_id
+
+    async def test_load_session_state_not_exists(self, orchestrator, mock_event_store):
+        """Test loading session state when none exists."""
+        mock_event_store.get_events = AsyncMock(return_value=[])
+
+        result = await orchestrator.load_session_state("issue-42")
+
+        assert result is None
+
+    async def test_load_session_state_invalid_work_item_id(self, orchestrator):
+        """Test loading session with invalid work_item_id."""
+        with pytest.raises(ValueError, match="work_item_id is required"):
+            await orchestrator.load_session_state("")
+
+
+class TestSaveSessionState:
+    """Test suite for save_session_state method."""
+
+    async def test_save_session_state_success(self, orchestrator, mock_event_store, sample_session_state):
+        """Test successful session state persistence."""
+        await orchestrator.save_session_state(sample_session_state)
+
+        # Verify event was appended
+        mock_event_store.append.assert_called_once()
+        call_args = mock_event_store.append.call_args[0]
+        event = call_args[0]
+
+        assert event["type"] == "conversational_session_snapshot"
+        assert event["data"]["conversational_session_state"]["work_item_id"] == "issue-42"
+
+    async def test_save_session_state_none(self, orchestrator):
+        """Test saving None session state."""
+        with pytest.raises(ValueError, match="state is required"):
+            await orchestrator.save_session_state(None)
+
+    async def test_save_session_state_failure(self, orchestrator, mock_event_store, sample_session_state):
+        """Test session state persistence failure."""
+        from codetoreum.ports.exceptions import EventStoreError
+
+        mock_event_store.append.side_effect = EventStoreError("Storage failed")
+
+        with pytest.raises(EventStoreError, match="Storage failed"):
+            await orchestrator.save_session_state(sample_session_state)
+
+
+class TestBuildThreadMessage:
+    """Test suite for _build_thread_message helper method."""
+
+    def test_build_thread_message_with_context(self, orchestrator, sample_comment, sample_session_state):
+        """Test building thread message with full context."""
+        event = CommentNeedsResponseEvent(
+            type="comment.needs_response",
+            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            source="github",
+            work_item_id="issue-42",
+            project_id="proj-1",
+            comment=sample_comment,
+            context=CommentContext(
+                column_name="In Review",
+                agent_assignment="code-reviewer",
+            ),
+        )
+
+        message = orchestrator._build_thread_message(event, sample_session_state)
+
+        assert "In Review" in message
+        assert "code-reviewer" in message
+        assert "Can you explain section 2" in message
+        assert "user123" in message
+
+    def test_build_thread_message_without_context(self, orchestrator, sample_comment, sample_session_state):
+        """Test building thread message without context."""
+        event = CommentNeedsResponseEvent(
+            type="comment.needs_response",
+            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            source="github",
+            work_item_id="issue-42",
+            project_id="proj-1",
+            comment=sample_comment,
+            context=None,
+        )
+
+        message = orchestrator._build_thread_message(event, sample_session_state)
+
+        assert "Can you explain section 2" in message
+        assert "user123" in message

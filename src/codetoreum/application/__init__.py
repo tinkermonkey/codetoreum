@@ -6,6 +6,9 @@ from codetoreum.application.context_builder import (
     ContextFile,
     WorkspaceContextResult,
 )
+from codetoreum.application.conversational_loop_orchestrator import (
+    ConversationalLoopOrchestrator,
+)
 from codetoreum.application.execution_service import (
     ExecutionFailureReason,
     ExecutionService,
@@ -46,6 +49,7 @@ __all__ = [
     "ContextBuilder",
     "ContextFile",
     "WorkspaceContextResult",
+    "ConversationalLoopOrchestrator",
     "ExecutionService",
     "ExecutionServiceResult",
     "ExecutionFailureReason",
