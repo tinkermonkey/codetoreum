@@ -269,13 +269,21 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
                 self._processed_comment_ids[work_item_id] = set()
             self._processed_comment_ids[work_item_id].add(comment.id)
 
-            context = CommentContext(
-                thread_id=f"thread-{work_item_id}",
-                parent_comment=None,
-                is_initial_request=is_initial,
-                column_name=config.column_name,
-                agent_assignment=config.agent_assignment
-            )
+            # Use factory method to create context based on whether this is initial
+            if is_initial:
+                context = CommentContext.for_initial_request(
+                    column_name=config.column_name,
+                    agent_assignment=config.agent_assignment
+                )
+            else:
+                context = CommentContext(
+                    thread_id=f"thread-{work_item_id}",
+                    parent_comment=None,
+                    is_initial_request=False,
+                    column_name=config.column_name,
+                    agent_assignment=config.agent_assignment
+                )
+
             self.emit(CommentNeedsResponseEvent(
                 type='comment.needs_response',
                 work_item_id=work_item_id,

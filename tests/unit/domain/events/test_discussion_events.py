@@ -156,7 +156,7 @@ class TestCommentContext:
         assert context.column_name == "In Progress"
 
     def test_context_with_parent_comment(self):
-        """Test context with parent comment."""
+        """Test context with parent comment using factory method."""
         parent = Comment(
             id="p1",
             author="alice",
@@ -164,12 +164,15 @@ class TestCommentContext:
             created_at=now_iso(),
         )
 
-        context = CommentContext(
+        # Use factory method which properly handles threading
+        context = CommentContext.for_reply(
+            thread_id="t1",
             parent_comment=parent,
-            is_initial_request=False,
         )
 
         assert context.parent_comment == parent
+        assert context.thread_id == "t1"
+        assert context.is_initial_request is False
 
     def test_context_initial_request(self):
         """Test context marked as initial request."""
@@ -189,10 +192,10 @@ class TestCommentContext:
             created_at=now_iso(),
         )
 
-        context = CommentContext(
+        # Use factory method to create valid context
+        context = CommentContext.for_reply(
             thread_id="t1",
             parent_comment=parent,
-            is_initial_request=True,
             column_name="Backlog",
             agent_assignment="a1",
         )
@@ -200,7 +203,7 @@ class TestCommentContext:
         d = context.to_dict()
 
         assert d["thread_id"] == "t1"
-        assert d["is_initial_request"] is True
+        assert d["is_initial_request"] is False
         assert d["parent_comment"]["id"] == "p1"
 
     def test_context_deserialization(self):
@@ -213,7 +216,7 @@ class TestCommentContext:
                 "body": "test",
                 "created_at": now_iso(),
             },
-            "is_initial_request": True,
+            "is_initial_request": False,  # Must be False when parent_comment is set
             "column_name": "Backlog",
             "agent_assignment": "a1",
         }
@@ -223,6 +226,7 @@ class TestCommentContext:
         assert context.thread_id == "t1"
         assert context.parent_comment is not None
         assert context.parent_comment.id == "p1"
+        assert context.is_initial_request is False
 
     def test_context_immutability(self):
         """Test that CommentContext instances are immutable."""
@@ -242,6 +246,51 @@ class TestCommentContext:
                 parent_comment=Comment(id="", author="alice", body="test", created_at=now_iso())
             )
 
+    def test_context_initial_request_with_parent_raises_error(self):
+        """Test that is_initial_request=True with parent_comment raises ValueError."""
+        parent = Comment(
+            id="p1",
+            author="alice",
+            body="original",
+            created_at=now_iso(),
+        )
+
+        with pytest.raises(ValueError, match="Initial requests cannot have parent comments"):
+            CommentContext(
+                parent_comment=parent,
+                is_initial_request=True,
+            )
+
+    def test_context_parent_comment_without_thread_id_raises_error(self):
+        """Test that parent_comment without thread_id raises ValueError."""
+        parent = Comment(
+            id="p1",
+            author="alice",
+            body="original",
+            created_at=now_iso(),
+        )
+
+        with pytest.raises(ValueError, match="Replies with parent comments must have thread_id"):
+            CommentContext(
+                parent_comment=parent,
+                thread_id=None,  # Missing thread_id
+            )
+
+    def test_context_parent_comment_with_empty_thread_id_raises_error(self):
+        """Test that parent_comment with empty thread_id raises ValueError."""
+        parent = Comment(
+            id="p1",
+            author="alice",
+            body="original",
+            created_at=now_iso(),
+        )
+
+        with pytest.raises(ValueError, match="Replies with parent comments must have thread_id"):
+            CommentContext(
+                parent_comment=parent,
+                thread_id="",  # Empty string
+            )
+
     def test_context_serialization_roundtrip(self):
         """Test context serialization and deserialization roundtrip."""
         parent = Comment(
@@ -254,7 +303,7 @@ class TestCommentContext:
         original = CommentContext(
             thread_id="t1",
             parent_comment=parent,
-            is_initial_request=True,
+            is_initial_request=False,
             column_name="Backlog",
             agent_assignment="a1",
         )
@@ -267,6 +316,74 @@ class TestCommentContext:
         assert restored.column_name == original.column_name
         assert restored.agent_assignment == original.agent_assignment
         assert restored.parent_comment.id == original.parent_comment.id
+
+    def test_context_factory_for_initial_request(self):
+        """Test factory method for creating initial request context."""
+        context = CommentContext.for_initial_request(
+            column_name="Backlog",
+            agent_assignment="agent-1",
+        )
+
+        assert context.is_initial_request is True
+        assert context.parent_comment is None
+        assert context.thread_id is None
+        assert context.column_name == "Backlog"
+        assert context.agent_assignment == "agent-1"
+
+    def test_context_factory_for_initial_request_minimal(self):
+        """Test factory method for initial request with minimal parameters."""
+        context = CommentContext.for_initial_request()
+
+        assert context.is_initial_request is True
+        assert context.parent_comment is None
+        assert context.thread_id is None
+        assert context.column_name == ""
+        assert context.agent_assignment == ""
+
+    def test_context_factory_for_reply(self):
+        """Test factory method for creating reply context."""
+        parent = Comment(
+            id="p1",
+            author="alice",
+            body="original",
+            created_at=now_iso(),
+        )
+
+        context = CommentContext.for_reply(
+            thread_id="t1",
+            parent_comment=parent,
+            column_name="Review",
+            agent_assignment="agent-2",
+        )
+
+        assert context.is_initial_request is False
+        assert context.parent_comment == parent
+        assert context.thread_id == "t1"
+        assert context.column_name == "Review"
+        assert context.agent_assignment == "agent-2"
+
+    def test_context_factory_for_reply_missing_thread_id(self):
+        """Test that factory raises error if thread_id is empty."""
+        parent = Comment(
+            id="p1",
+            author="alice",
+            body="original",
+            created_at=now_iso(),
+        )
+
+        with pytest.raises(ValueError, match="thread_id cannot be empty"):
+            CommentContext.for_reply(
+                thread_id="",
+                parent_comment=parent,
+            )
+
+    def test_context_factory_for_reply_missing_parent_comment(self):
+        """Test that factory raises error if parent_comment is None."""
+        with pytest.raises(ValueError, match="parent_comment cannot be None"):
+            CommentContext.for_reply(
+                thread_id="t1",
+                parent_comment=None,
+            )
 
 
 class TestCommentNeedsResponseEvent:
@@ -571,9 +688,10 @@ class TestCommentContextImmutability:
             created_at=now_iso(),
         )
 
-        context = CommentContext(
+        # Use factory method to create valid context
+        context = CommentContext.for_reply(
+            thread_id="t1",
             parent_comment=parent,
-            is_initial_request=False,
         )
 
         # Verify nested comment is preserved
