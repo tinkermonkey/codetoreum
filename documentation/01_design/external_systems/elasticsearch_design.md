@@ -2,29 +2,97 @@
 
 ## Overview
 
-Elasticsearch serves as the **primary persistence layer** for the Codetoreum platform, providing distributed search, analytics, and storage capabilities. This external system is responsible for:
+Elasticsearch serves as the **optional persistence layer** for the Codetoreum platform, providing distributed search, analytics, and storage capabilities. This external system is designed for use in production environments requiring durable event storage and full-text search capabilities.
 
-- **Event Sourcing**: Persistent storage of all domain events
-- **Logging**: Application and execution logs
-- **Configuration**: Project, workflow, and agent configurations
-- **Metrics**: Performance and business metrics
-- **Search**: Full-text search across all data
+**Current Implementation Status**:
+- **Event Sourcing Adapter**: Implemented (`ElasticsearchEventStore`) but not yet integrated into production
+- **Configuration Storage**: Actively used (`ElasticsearchConfigStorage`) with Redis caching
+- **Production Readiness**: Design complete and tested; deployment requires configuration
+
+**Planned Functions**:
+- **Event Sourcing**: Persistent storage of all domain events (not yet in production)
+- **Logging**: Application and execution logs (design only)
+- **Configuration**: Project, workflow, and agent configurations (configuration only, not events)
+- **Metrics**: Performance and business metrics (design only)
+- **Search**: Full-text search across all data (design only)
 
 **Architecture Pattern**: Elasticsearch is accessed via Redis buffering for high-throughput writes:
 ```
 Application → Redis Streams (buffer) → Background Workers → Elasticsearch (persistence)
 ```
 
+**Note**: Current production deployments use `InMemoryEventStore` for event persistence. To enable Elasticsearch-backed persistence, configure the adapter factory to register `ElasticsearchEventStore` and wire up the `RedisEventBuffer` with background worker threads.
+
 ## System Purpose
 
-**Primary Functions**:
-1. **Event Sourcing Storage**: Complete audit trail of all domain events
-2. **Log Aggregation**: Centralized logging from all services and agent executions
-3. **Configuration Management**: Database replacement for YAML configurations
-4. **Metrics Storage**: Time-series performance and business metrics
-5. **Full-Text Search**: Search across events, logs, configurations
-6. **Analytics**: Pattern detection, aggregations, anomaly analysis
-7. **Debugging**: Historical replay and troubleshooting
+**Planned Primary Functions**:
+1. **Event Sourcing Storage**: Complete audit trail of all domain events (when enabled)
+2. **Log Aggregation**: Centralized logging from all services and agent executions (design phase)
+3. **Configuration Management**: Database replacement for YAML configurations (partially implemented)
+4. **Metrics Storage**: Time-series performance and business metrics (design phase)
+5. **Full-Text Search**: Search across events, logs, configurations (design phase)
+6. **Analytics**: Pattern detection, aggregations, anomaly analysis (design phase)
+7. **Debugging**: Historical replay and troubleshooting (when event storage enabled)
+
+**Current Implementation**:
+- ✅ Configuration storage with versioning and history tracking
+- ✅ Redis caching layer for performance (CachedConfigStore)
+- ⏳ Event storage adapter implemented but not active (see "Migration Path" section)
+- ❌ Logging aggregation (design only)
+- ❌ Metrics storage (design only)
+- ❌ Full-text search capabilities (design only)
+
+## Migration Path: From InMemory to Elasticsearch
+
+### Current State (v1.0)
+The system currently uses `InMemoryEventStore` for all event persistence:
+- All events stored in memory
+- No persistence across restarts
+- Suitable for development, testing, and simulation
+- Suitable for stateless deployments with external event log coordination
+
+### Production Deployment Path
+To enable Elasticsearch-backed event persistence:
+
+1. **Register ElasticsearchEventStore in adapter factory** (`infrastructure/adapters/factory.py`):
+   ```python
+   self._event_store_registry.register(
+       name="elasticsearch",
+       adapter_type=ElasticsearchEventStore,
+       description="Elasticsearch-based event store with Redis buffering",
+       version="1.0.0",
+       tags=["production"],
+       set_as_default=True  # Enable for production
+   )
+   ```
+
+2. **Configure Elasticsearch connection** in environment:
+   ```
+   ELASTICSEARCH_HOSTS=elasticsearch:9200
+   ELASTICSEARCH_INDEX_PREFIX=events
+   ```
+
+3. **Start Redis event buffer workers**:
+   ```python
+   # In application startup
+   buffer = RedisEventBuffer(redis_client)
+   worker = EventPersistenceWorker(
+       redis_client=redis_client,
+       elasticsearch_store=es_store,
+       worker_id="worker-1"
+   )
+   await worker.process_events_loop()  # Run in background
+   ```
+
+4. **Verify indices and ILM policies** exist in Elasticsearch (see Index Architecture section)
+
+### Benefits of Migration
+- ✅ Persistent event log survives application restarts
+- ✅ Event replay for debugging and audit
+- ✅ Full-text search across events
+- ✅ ILM-managed data retention
+- ✅ High-throughput writes with Redis buffering
+- ✅ Horizontal scaling with multiple worker threads
 
 ## Data Flow Architecture
 

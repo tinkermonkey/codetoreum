@@ -2,16 +2,31 @@
 
 ## Overview
 
-Redis serves as the **high-performance buffering and caching layer** for the Codetoreum platform. It provides the critical bridge between the application and Elasticsearch, enabling high write throughput while maintaining data durability.
+Redis serves as the **high-performance caching and buffering layer** for the Codetoreum platform. It provides critical infrastructure for performance optimization and real-time coordination.
 
-**Architecture Role**: Redis is NOT the primary persistence layer. It serves as:
-- **Write Buffer**: Events, logs, and metrics are written to Redis first, then asynchronously persisted to Elasticsearch
-- **Read Cache**: Frequently accessed configurations and projections are cached for fast access
+**Architecture Role**: Redis serves as:
+- **Configuration Cache**: Frequently accessed configurations cached for sub-millisecond access
+- **Write Buffer** (when Elasticsearch enabled): Events, logs, and metrics buffered before Elasticsearch persistence
+- **Read Cache**: Read model projections cached to reduce database queries
 - **Real-Time Layer**: Pub/sub for real-time event broadcasting and task queuing
+- **Task Queue**: Priority-based agent execution scheduling
 
-**Data Flow**:
+**Current Implementation**:
+- ✅ Configuration caching (actively used)
+- ✅ Event buffer architecture designed (awaiting Elasticsearch integration)
+- ✅ Pub/sub infrastructure implemented
+- ✅ Task queue operations available
+
+**Data Flow** (when Elasticsearch enabled):
 ```
 Application → Redis (buffer/cache) → Background Workers → Elasticsearch (persistent storage)
+```
+
+**Data Flow** (current v1.0):
+```
+Application → InMemoryEventStore (all events in memory)
+               ↓
+            Redis (caching for configuration only)
 ```
 
 ## System Purpose
