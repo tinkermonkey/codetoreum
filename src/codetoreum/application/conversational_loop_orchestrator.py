@@ -274,7 +274,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
 
         try:
             # Prevent duplicate responses (FR-4.4)
-            if event.comment.id <= session_state.last_processed_comment_id:
+            if event.comment.id == session_state.last_processed_comment_id:
                 logger.debug(
                     "Comment %s already processed (checkpoint: %s), skipping",
                     event.comment.id,
