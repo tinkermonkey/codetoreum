@@ -477,6 +477,33 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                     extra={"error_id": "ERR_CONVERSATIONAL_LOOP_INIT_FAILURE"}
                 )
 
+                # Post error comment to work item so user is notified
+                try:
+                    error_comment = (
+                        f"❌ **Conversational Mode Failed to Initialize**\n\n"
+                        f"The AI agent failed to start monitoring this work item for conversational feedback.\n\n"
+                        f"**Error Details**: {str(e)}\n\n"
+                        f"**Next Steps**:\n"
+                        f"1. Move the work item to a different column\n"
+                        f"2. Contact support if the issue persists\n\n"
+                        f"*This notification was generated because monitoring initialization failed.*"
+                    )
+                    await self.discussion_adapter.add_comment(
+                        work_item_id=work_item_id,
+                        content=error_comment,
+                    )
+                except Exception as comment_error:
+                    logger.error(
+                        "Failed to post error notification comment for work item %s: %s",
+                        work_item_id,
+                        str(comment_error),
+                        exc_info=True,
+                        extra={"error_id": "ERR_CONVERSATIONAL_LOOP_INIT_NOTIFICATION_FAILURE"}
+                    )
+
+                # Re-raise to trigger alerts and prevent execution from continuing
+                raise
+
     async def cleanup_loop(
         self,
         work_item_id: str,
