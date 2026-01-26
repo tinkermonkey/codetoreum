@@ -26,6 +26,7 @@ from codetoreum.domain.conversational_session import ConversationalSessionState
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.domain.events.discussion_events import (
     AgentResponsePostedEvent,
+    Comment,
     CommentNeedsResponseEvent,
 )
 from codetoreum.ports.exceptions import EmptyAgentResponseError
@@ -395,6 +396,32 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 parent_id=event.comment.id,  # Reply to the human comment
             )
 
+            # Validate adapter response (ensure comment object is valid)
+            if response_comment is None:
+                logger.error(
+                    "Discussion adapter returned None for add_comment for work item %s",
+                    work_item_id,
+                    extra={"error_id": "ERR_CONVERSATIONAL_ADAPTER_RETURNED_NONE"}
+                )
+                raise ValueError(f"Discussion adapter returned None comment for work item {work_item_id}")
+
+            if not isinstance(response_comment, Comment):
+                logger.error(
+                    "Discussion adapter returned invalid comment type %s for work item %s",
+                    type(response_comment).__name__,
+                    work_item_id,
+                    extra={"error_id": "ERR_CONVERSATIONAL_ADAPTER_INVALID_COMMENT_TYPE"}
+                )
+                raise ValueError(f"Discussion adapter returned invalid comment type for work item {work_item_id}")
+
+            if not response_comment.id:
+                logger.error(
+                    "Discussion adapter returned comment with empty ID for work item %s",
+                    work_item_id,
+                    extra={"error_id": "ERR_CONVERSATIONAL_ADAPTER_EMPTY_COMMENT_ID"}
+                )
+                raise ValueError(f"Discussion adapter returned comment with empty ID for work item {work_item_id}")
+
             # Update session state
             now_iso = datetime.now(timezone.utc).isoformat()
             updated_session = ConversationalSessionState(
@@ -420,6 +447,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 work_item_id=work_item_id,
                 project_id=project_id,
                 comment_id=event.comment.id,
+                response_comment_id=response_comment.id,
                 agent_name=session_state.agent_assignment,
                 conversation_id=execution_result.conversation_id,
             )

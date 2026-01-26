@@ -321,6 +321,7 @@ class AgentResponsePostedEvent(CodetoreumEvent):
         work_item_id (str): ID of the work item the response was posted to
         project_id (str): ID of the project containing the work item
         comment_id (str): ID of the human comment being responded to
+        response_comment_id (str): ID of the agent's response comment posted by the adapter
         agent_name (str): Name of the agent posting the response
         conversation_id (Optional[str]): LLM conversation session ID for context continuity
         timestamp (str): ISO 8601 timestamp when response was posted
@@ -333,6 +334,7 @@ class AgentResponsePostedEvent(CodetoreumEvent):
         ...     work_item_id="issue-1",
         ...     project_id="proj-1",
         ...     comment_id="comment-42",
+        ...     response_comment_id="comment-43",
         ...     agent_name="code-reviewer",
         ...     conversation_id="conv-session-123"
         ... )
@@ -342,6 +344,7 @@ class AgentResponsePostedEvent(CodetoreumEvent):
     work_item_id: str = ""
     project_id: str = ""
     comment_id: str = ""
+    response_comment_id: str = ""
     agent_name: str = ""
     conversation_id: Optional[str] = None
 
@@ -354,6 +357,8 @@ class AgentResponsePostedEvent(CodetoreumEvent):
             raise ValueError("project_id is required")
         if not self.comment_id:
             raise ValueError("comment_id is required")
+        if not self.response_comment_id:
+            raise ValueError("response_comment_id is required")
         if not self.agent_name:
             raise ValueError("agent_name is required")
 
@@ -364,6 +369,7 @@ class AgentResponsePostedEvent(CodetoreumEvent):
             "work_item_id": self.work_item_id,
             "project_id": self.project_id,
             "comment_id": self.comment_id,
+            "response_comment_id": self.response_comment_id,
             "agent_name": self.agent_name,
             "conversation_id": self.conversation_id,
         })
@@ -381,6 +387,7 @@ class AgentResponsePostedEvent(CodetoreumEvent):
             work_item_id=data.get("work_item_id", ""),
             project_id=data.get("project_id", ""),
             comment_id=data.get("comment_id", ""),
+            response_comment_id=data.get("response_comment_id", ""),
             agent_name=data.get("agent_name", ""),
             conversation_id=data.get("conversation_id"),
         )

@@ -712,6 +712,7 @@ class TestAgentResponsePostedEvent:
             work_item_id="issue-1",
             project_id="proj-1",
             comment_id="comment-42",
+            response_comment_id="comment-43",
             agent_name="code-reviewer",
             conversation_id="conv-session-123",
         )
@@ -719,6 +720,7 @@ class TestAgentResponsePostedEvent:
         assert event.work_item_id == "issue-1"
         assert event.project_id == "proj-1"
         assert event.comment_id == "comment-42"
+        assert event.response_comment_id == "comment-43"
         assert event.agent_name == "code-reviewer"
         assert event.conversation_id == "conv-session-123"
 
@@ -731,6 +733,7 @@ class TestAgentResponsePostedEvent:
             work_item_id="issue-1",
             project_id="proj-1",
             comment_id="comment-42",
+            response_comment_id="comment-43",
             agent_name="code-reviewer",
         )
 
@@ -746,6 +749,7 @@ class TestAgentResponsePostedEvent:
                 work_item_id="",  # Empty
                 project_id="proj-1",
                 comment_id="comment-42",
+                response_comment_id="comment-43",
                 agent_name="code-reviewer",
             )
 
@@ -759,6 +763,7 @@ class TestAgentResponsePostedEvent:
                 work_item_id="issue-1",
                 project_id="",  # Empty
                 comment_id="comment-42",
+                response_comment_id="comment-43",
                 agent_name="code-reviewer",
             )
 
@@ -772,6 +777,21 @@ class TestAgentResponsePostedEvent:
                 work_item_id="issue-1",
                 project_id="proj-1",
                 comment_id="",  # Empty
+                response_comment_id="comment-43",
+                agent_name="code-reviewer",
+            )
+
+    def test_missing_response_comment_id(self):
+        """Test that response_comment_id is required."""
+        with pytest.raises(ValueError, match="response_comment_id is required"):
+            AgentResponsePostedEvent(
+                type="agent.response_posted",
+                timestamp=now_iso(),
+                source="orchestrator",
+                work_item_id="issue-1",
+                project_id="proj-1",
+                comment_id="comment-42",
+                response_comment_id="",  # Empty
                 agent_name="code-reviewer",
             )
 
@@ -785,6 +805,7 @@ class TestAgentResponsePostedEvent:
                 work_item_id="issue-1",
                 project_id="proj-1",
                 comment_id="comment-42",
+                response_comment_id="comment-43",
                 agent_name="",  # Empty
             )
 
@@ -799,6 +820,7 @@ class TestAgentResponsePostedEvent:
             work_item_id="issue-1",
             project_id="proj-1",
             comment_id="comment-42",
+            response_comment_id="comment-43",
             agent_name="code-reviewer",
             conversation_id="conv-abc123",
         )
@@ -808,6 +830,7 @@ class TestAgentResponsePostedEvent:
         assert d["work_item_id"] == "issue-1"
         assert d["project_id"] == "proj-1"
         assert d["comment_id"] == "comment-42"
+        assert d["response_comment_id"] == "comment-43"
         assert d["agent_name"] == "code-reviewer"
         assert d["conversation_id"] == "conv-abc123"
         assert d["timestamp"] == timestamp
@@ -823,6 +846,7 @@ class TestAgentResponsePostedEvent:
             work_item_id="issue-1",
             project_id="proj-1",
             comment_id="comment-42",
+            response_comment_id="comment-43",
             agent_name="code-reviewer",
             conversation_id="conv-session-123",
         )
@@ -833,6 +857,7 @@ class TestAgentResponsePostedEvent:
         assert restored.work_item_id == event.work_item_id
         assert restored.project_id == event.project_id
         assert restored.comment_id == event.comment_id
+        assert restored.response_comment_id == event.response_comment_id
         assert restored.agent_name == event.agent_name
         assert restored.conversation_id == event.conversation_id
         assert restored.timestamp == event.timestamp
@@ -847,6 +872,7 @@ class TestAgentResponsePostedEvent:
             work_item_id="issue-2",
             project_id="proj-2",
             comment_id="comment-99",
+            response_comment_id="comment-100",
             agent_name="bug-fixer",
         )
 
@@ -869,6 +895,7 @@ class TestAgentResponsePostedEventImmutability:
             work_item_id="issue-1",
             project_id="proj-1",
             comment_id="comment-42",
+            response_comment_id="comment-43",
             agent_name="code-reviewer",
             conversation_id="conv-session-123",
         )
@@ -877,6 +904,7 @@ class TestAgentResponsePostedEventImmutability:
         assert event.work_item_id == "issue-1"
         assert event.project_id == "proj-1"
         assert event.comment_id == "comment-42"
+        assert event.response_comment_id == "comment-43"
         assert event.agent_name == "code-reviewer"
         assert event.conversation_id == "conv-session-123"
 
@@ -890,6 +918,9 @@ class TestAgentResponsePostedEventImmutability:
 
         with pytest.raises(FrozenInstanceError):
             event.comment_id = "comment-99"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.response_comment_id = "comment-100"  # type: ignore
 
         with pytest.raises(FrozenInstanceError):
             event.agent_name = "bug-fixer"  # type: ignore
@@ -906,6 +937,7 @@ class TestAgentResponsePostedEventImmutability:
             work_item_id="issue-1",
             project_id="proj-1",
             comment_id="comment-42",
+            response_comment_id="comment-43",
             agent_name="code-reviewer",
         )
 

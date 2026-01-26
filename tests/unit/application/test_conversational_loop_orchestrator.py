@@ -224,9 +224,15 @@ class TestHandleCommentEvent:
         mock_execution_result.conversation_id = "conv-abc123"
         mock_llm_provider.continue_conversation = AsyncMock(return_value=mock_execution_result)
 
-        # Mock comment posting
-        mock_response_comment = MagicMock()
-        mock_response_comment.id = "comment-12"
+        # Mock comment posting with proper Comment object
+        mock_response_comment = Comment(
+            id="comment-12",
+            author="codetoreum-bot",
+            body="This is the agent's response.",
+            created_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            parent_id=None,
+            is_bot=True
+        )
         mock_discussion_adapter.add_comment = AsyncMock(return_value=mock_response_comment)
 
         # Create event with comment
@@ -272,6 +278,7 @@ class TestHandleCommentEvent:
         assert events[0].work_item_id == "issue-42"
         assert events[0].project_id == "proj-1"
         assert events[0].comment_id == sample_comment.id  # Human comment being responded to
+        assert events[0].response_comment_id == "comment-12"  # Agent's response comment ID
         assert events[0].agent_name == "code-reviewer"
         assert events[0].conversation_id == "conv-abc123"
 
@@ -451,6 +458,135 @@ class TestHandleCommentEvent:
 
         # Verify comment was NOT posted
         mock_discussion_adapter.add_comment.assert_not_called()
+
+    async def test_handle_comment_adapter_returns_none(
+        self,
+        orchestrator,
+        mock_discussion_adapter,
+        mock_llm_provider,
+        mock_event_store,
+        sample_session_state,
+        sample_comment,
+    ):
+        """Test error handling when adapter returns None for add_comment."""
+        # Mock session state loading
+        snapshot_data = {
+            "conversational_session_state": sample_session_state.to_dict()
+        }
+        mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
+
+        # Mock agent execution
+        mock_execution_result = MagicMock()
+        mock_execution_result.content = "This is the agent's response."
+        mock_execution_result.conversation_id = "conv-abc123"
+        mock_llm_provider.continue_conversation = AsyncMock(return_value=mock_execution_result)
+
+        # Mock adapter returning None (invalid response)
+        mock_discussion_adapter.add_comment = AsyncMock(return_value=None)
+
+        event = CommentNeedsResponseEvent(
+            type="comment.needs_response",
+            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            source="github",
+            work_item_id="issue-42",
+            project_id="proj-1",
+            comment=sample_comment,
+            context=CommentContext(
+                column_name="In Review",
+                agent_assignment="code-reviewer",
+            ),
+        )
+
+        # Should raise ValueError when adapter returns None
+        with pytest.raises(ValueError, match="returned None"):
+            await orchestrator.handle_comment_event(event)
+
+    async def test_handle_comment_adapter_returns_invalid_type(
+        self,
+        orchestrator,
+        mock_discussion_adapter,
+        mock_llm_provider,
+        mock_event_store,
+        sample_session_state,
+        sample_comment,
+    ):
+        """Test error handling when adapter returns invalid comment type."""
+        # Mock session state loading
+        snapshot_data = {
+            "conversational_session_state": sample_session_state.to_dict()
+        }
+        mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
+
+        # Mock agent execution
+        mock_execution_result = MagicMock()
+        mock_execution_result.content = "This is the agent's response."
+        mock_execution_result.conversation_id = "conv-abc123"
+        mock_llm_provider.continue_conversation = AsyncMock(return_value=mock_execution_result)
+
+        # Mock adapter returning invalid type
+        mock_discussion_adapter.add_comment = AsyncMock(return_value={"id": "comment-12"})  # dict instead of Comment
+
+        event = CommentNeedsResponseEvent(
+            type="comment.needs_response",
+            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            source="github",
+            work_item_id="issue-42",
+            project_id="proj-1",
+            comment=sample_comment,
+            context=CommentContext(
+                column_name="In Review",
+                agent_assignment="code-reviewer",
+            ),
+        )
+
+        # Should raise ValueError when adapter returns wrong type
+        with pytest.raises(ValueError, match="invalid comment type"):
+            await orchestrator.handle_comment_event(event)
+
+    async def test_handle_comment_adapter_returns_comment_no_id(
+        self,
+        orchestrator,
+        mock_discussion_adapter,
+        mock_llm_provider,
+        mock_event_store,
+        sample_session_state,
+        sample_comment,
+    ):
+        """Test error handling when adapter returns comment with no ID."""
+        # Mock session state loading
+        snapshot_data = {
+            "conversational_session_state": sample_session_state.to_dict()
+        }
+        mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
+
+        # Mock agent execution
+        mock_execution_result = MagicMock()
+        mock_execution_result.content = "This is the agent's response."
+        mock_execution_result.conversation_id = "conv-abc123"
+        mock_llm_provider.continue_conversation = AsyncMock(return_value=mock_execution_result)
+
+        # Mock adapter returning comment with empty ID
+        # Create a mock that will pass isinstance(obj, Comment) check
+        bad_comment = MagicMock(spec=Comment)
+        bad_comment.id = ""  # Empty ID
+        mock_discussion_adapter.add_comment = AsyncMock(return_value=bad_comment)
+
+        event = CommentNeedsResponseEvent(
+            type="comment.needs_response",
+            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            source="github",
+            work_item_id="issue-42",
+            project_id="proj-1",
+            comment=sample_comment,
+            context=CommentContext(
+                column_name="In Review",
+                agent_assignment="code-reviewer",
+            ),
+        )
+
+        # Should raise ValueError when comment has no ID
+        with pytest.raises(ValueError, match="empty ID"):
+            await orchestrator.handle_comment_event(event)
 
 
 class TestHandleColumnChangeEvent:
