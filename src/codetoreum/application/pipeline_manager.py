@@ -149,7 +149,7 @@ class PipelineManager:
         try:
             # Use aggregate_id as stream_id and wrap event in a list
             await self.event_store.append(event.aggregate_id, [event])
-        except EventStoreError as e:
+        except Exception as e:
             self._logger.error(
                 f"Failed to emit event {type(event).__name__}: {e}",
                 exc_info=True,
