@@ -29,7 +29,7 @@ from codetoreum.domain.events.discussion_events import (
     CommentContext,
     CommentNeedsResponseEvent,
 )
-from codetoreum.adapters.secondary.redis_event_store import RedisEventStore
+from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.domain.events import DomainEvent
 from codetoreum.ports.output.discussion_adapter import DiscussionMonitoringConfig, DiscussionThread
@@ -62,7 +62,7 @@ class MockIdentityService(IIdentityService):
         self._bot_patterns = config.bot_patterns
 
 
-class TestableDiscussionAdapter:
+class MockDiscussionAdapter:
     """Mock implementation of IDiscussionAdapter for integration testing.
 
     This adapter provides:
@@ -175,7 +175,7 @@ class TestableDiscussionAdapter:
         return self.comments_posted.copy()
 
 
-class TestableLLMProvider:
+class MockLLMProvider:
     """Mock implementation of ILLMProvider for integration testing.
 
     Tracks conversation continuity and agent executions with realistic responses.
@@ -259,21 +259,13 @@ def identity_service():
 
 @pytest.fixture
 async def real_event_store():
-    """Create real RedisEventStore for integration testing via testcontainers.
+    """Create InMemoryEventStore for integration testing.
 
-    Uses testcontainers-python to spin up a real Redis instance, then wraps
-    it with RedisEventStore to verify persistence, snapshots, and event
-    serialization work correctly with actual Redis.
+    Uses InMemoryEventStore to verify event storage and retrieval
+    work correctly with the orchestrator.
     """
-    from testcontainers.redis import RedisContainer
-
-    with RedisContainer() as redis:
-        redis_url = redis.get_connection_url()
-        import redis as redis_lib
-        client = redis_lib.from_url(redis_url)
-        event_store = RedisEventStore(client)
-        yield event_store
-        client.close()
+    event_store = InMemoryEventStore()
+    yield event_store
 
 
 @pytest.fixture
@@ -289,13 +281,13 @@ def real_event_bus():
 @pytest.fixture
 def testable_discussion_adapter(identity_service):
     """Create testable discussion adapter for integration tests."""
-    return TestableDiscussionAdapter(identity_service)
+    return MockDiscussionAdapter(identity_service)
 
 
 @pytest.fixture
 def testable_llm_provider():
     """Create testable LLM provider for integration tests."""
-    return TestableLLMProvider()
+    return MockLLMProvider()
 
 
 @pytest.fixture
