@@ -289,7 +289,6 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 logger.error(
                     "Agent execution returned empty response for work item %s",
                     work_item_id,
-                    exc_info=True,
                 )
                 raise EmptyAgentResponseError(work_item_id)
 

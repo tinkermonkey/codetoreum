@@ -175,10 +175,10 @@ def map_exception_to_http(exc: Exception, default_detail: Optional[str] = None) 
             detail=detail,
         )
 
-    # Empty Agent Response (400) - Agent returned no content
+    # Empty Agent Response (502) - External LLM provider returned invalid response
     if isinstance(exc, EmptyAgentResponseError):
         return HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_502_BAD_GATEWAY,
             detail=detail,
         )
 
