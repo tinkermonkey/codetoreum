@@ -892,18 +892,22 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
 
         # Add context about where we are
         if event.context:
-            parts.append(f"Work item: {event.context.column_name}")
-            parts.append(f"Assigned agent: {event.context.agent_assignment}")
+            if hasattr(event.context, "column_name") and event.context.column_name:
+                parts.append(f"Work item: {event.context.column_name}")
+            if hasattr(event.context, "agent_assignment") and event.context.agent_assignment:
+                parts.append(f"Assigned agent: {event.context.agent_assignment}")
 
         # Add parent comment if available
-        if event.context and event.context.parent_comment:
+        if event.context and hasattr(event.context, "parent_comment") and event.context.parent_comment:
             parent = event.context.parent_comment
-            parts.append(f"\nPrevious comment from {parent.author}:")
-            parts.append(parent.body)
+            if hasattr(parent, "author") and hasattr(parent, "body"):
+                parts.append(f"\nPrevious comment from {parent.author}:")
+                parts.append(parent.body)
 
         # Add the current comment
         if event.comment:
-            parts.append(f"\nNew comment from {event.comment.author}:")
-            parts.append(event.comment.body)
+            if hasattr(event.comment, "author") and hasattr(event.comment, "body"):
+                parts.append(f"\nNew comment from {event.comment.author}:")
+                parts.append(event.comment.body)
 
         return "\n".join(parts)

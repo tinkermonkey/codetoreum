@@ -558,8 +558,13 @@ class WorkflowOrchestrator:
             f"Handling stage completion: {event.stage_name} for issue #{event.issue_number}"
         )
 
+        # Validate context is not None and is a dictionary before accessing
+        if event.context is None:
+            raise ValueError("StageCompletedEvent.context cannot be None")
+
+        board_name = event.context.get("board", "default") if isinstance(event.context, dict) else "default"
         workflow_config = await self.config.get_workflow_config(
-            event.project, event.context.get("board", "default")
+            event.project, board_name
         )
 
         # Find current column
@@ -657,10 +662,16 @@ class WorkflowOrchestrator:
             f"approved={event.approved}, iteration={event.iteration}"
         )
 
+        # Validate context is not None and is a dictionary before accessing
+        if event.context is None:
+            raise ValueError("ReviewCycleCompletedEvent.context cannot be None")
+
+        board_name = event.context.get("board", "default") if isinstance(event.context, dict) else "default"
+
         if event.approved:
             # Review approved, check auto-advance
             workflow_config = await self.config.get_workflow_config(
-                event.project, event.context.get("board", "default")
+                event.project, board_name
             )
 
             current_column = self._find_column_by_agent(
@@ -693,7 +704,7 @@ class WorkflowOrchestrator:
             )
         else:
             # Check if max iterations reached
-            max_iterations = event.context.get("max_iterations", 3)
+            max_iterations = event.context.get("max_iterations", 3) if isinstance(event.context, dict) else 3
             if event.iteration >= max_iterations:
                 # Escalate to human
                 if self.projects_api:

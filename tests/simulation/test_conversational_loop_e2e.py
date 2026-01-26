@@ -279,10 +279,11 @@ class TestConversationalLoopSimulation:
             work_item_id=work_item_id,
             project_id=project_id,
             comment=q2,
-            context=CommentContext(
+            context=CommentContext.for_reply(
+                thread_id="thread-issue-123",
+                parent_comment=q1,
                 column_name="Code Review",
                 agent_assignment="senior-engineer",
-                parent_comment=q1,
             ),
         )
 
