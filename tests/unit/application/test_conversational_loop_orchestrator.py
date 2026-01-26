@@ -275,6 +275,62 @@ class TestHandleCommentEvent:
         assert events[0].agent_name == "code-reviewer"
         assert events[0].conversation_id == "conv-abc123"
 
+    async def test_handle_comment_empty_response(
+        self,
+        orchestrator,
+        mock_discussion_adapter,
+        mock_llm_provider,
+        mock_event_store,
+        sample_session_state,
+        sample_comment,
+    ):
+        """Test that empty agent responses raise EmptyAgentResponseError."""
+        from codetoreum.ports.exceptions import EmptyAgentResponseError
+
+        # Mock session state loading
+        snapshot_data = {
+            "conversational_session_state": sample_session_state.to_dict()
+        }
+        mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
+
+        # Mock agent execution returning empty content
+        mock_execution_result = MagicMock()
+        mock_execution_result.content = ""  # Empty response
+        mock_execution_result.conversation_id = "conv-abc123"
+        mock_llm_provider.continue_conversation = AsyncMock(
+            return_value=mock_execution_result
+        )
+
+        # Create event with comment
+        event = CommentNeedsResponseEvent(
+            type="comment.needs_response",
+            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            source="github",
+            work_item_id="issue-42",
+            project_id="proj-1",
+            comment=sample_comment,
+            context=CommentContext(
+                column_name="In Review",
+                agent_assignment="code-reviewer",
+            ),
+        )
+
+        # Handle comment event should raise EmptyAgentResponseError
+        with pytest.raises(EmptyAgentResponseError) as exc_info:
+            await orchestrator.handle_comment_event(event)
+
+        assert exc_info.value.work_item_id == "issue-42"
+        assert "empty response" in str(exc_info.value).lower()
+
+        # Verify agent execution was called
+        mock_llm_provider.continue_conversation.assert_called_once()
+
+        # Verify no comment was posted (agent response never reached posting stage)
+        mock_discussion_adapter.add_comment.assert_not_called()
+
+        # Verify no success event was emitted
+        mock_event_store.append.assert_not_called()
+
     async def test_handle_comment_no_session(self, orchestrator, mock_event_store, sample_comment):
         """Test comment handling when no session exists."""
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=None)

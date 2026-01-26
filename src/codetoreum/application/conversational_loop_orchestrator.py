@@ -28,6 +28,7 @@ from codetoreum.domain.events.discussion_events import (
     AgentResponsePostedEvent,
     CommentNeedsResponseEvent,
 )
+from codetoreum.ports.exceptions import EmptyAgentResponseError
 from codetoreum.ports.exceptions import EventStoreError
 from codetoreum.ports.input.conversational_loop_service import (
     IConversationalLoopService,
@@ -288,8 +289,9 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 logger.error(
                     "Agent execution returned empty response for work item %s",
                     work_item_id,
+                    exc_info=True,
                 )
-                return
+                raise EmptyAgentResponseError(work_item_id)
 
             # Post agent response to discussion thread
             response_comment = await self.discussion_adapter.add_comment(
