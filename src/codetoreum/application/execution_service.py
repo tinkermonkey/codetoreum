@@ -24,6 +24,7 @@ from codetoreum.ports.exceptions import (
     EventStoreError,
     ExternalServiceError,
     LLMProviderError,
+    PortError,
     RateLimitError,
     StorageError,
 )
@@ -681,7 +682,7 @@ class ExecutionService:
                 extra={"error_id": "ERR_EXECUTION_GET_LOGS_CONTAINER_ERROR"}
             )
             # Return empty list on container errors
-        except Exception as e:
+        except PortError as e:
             logger.error(
                 f"Unexpected error getting logs for execution {execution.id}: {e}",
                 exc_info=True,
@@ -720,7 +721,7 @@ class ExecutionService:
                         source="container",
                     )
 
-        except Exception as e:
+        except PortError as e:
             logger.error(
                 f"Error streaming logs for execution {execution.id}: {e}",
                 exc_info=True,
@@ -860,7 +861,7 @@ class ExecutionService:
                 if log_line.strip():
                     callback(log_line)
 
-        except Exception as e:
+        except PortError as e:
             logger.error(
                 f"Error streaming container logs: {e}",
                 exc_info=True,

@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional
 
 from codetoreum.domain.agent import Agent
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority
+from codetoreum.ports.exceptions import PortError
 from codetoreum.ports.output import IEventStore
 
 logger = logging.getLogger(__name__)
@@ -198,7 +199,7 @@ class AgentScheduler:
         # Load agent configuration
         try:
             agent_config = await self.config.get_agent_config(agent.id)
-        except Exception as e:
+        except PortError as e:
             logger.error(
                 f"Failed to load agent config: {e}",
                 exc_info=True,
@@ -278,7 +279,7 @@ class AgentScheduler:
         try:
             task_id = await self.task_queue.enqueue(task)
             logger.info(f"Enqueued task {task_id} for agent {agent.id}")
-        except Exception as e:
+        except PortError as e:
             logger.error(
                 f"Failed to enqueue task: {e}",
                 exc_info=True,

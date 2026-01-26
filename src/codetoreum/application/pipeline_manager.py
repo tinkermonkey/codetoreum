@@ -15,6 +15,7 @@ from codetoreum.domain.events import (
 )
 from codetoreum.domain.pipeline_stage import PipelineStage, StageStatus
 from codetoreum.domain.workflow import Workflow
+from codetoreum.ports.exceptions import PortError, EventStoreError
 from codetoreum.ports.output import IEventStore
 
 logger = logging.getLogger(__name__)
@@ -148,7 +149,7 @@ class PipelineManager:
         try:
             # Use aggregate_id as stream_id and wrap event in a list
             await self.event_store.append(event.aggregate_id, [event])
-        except Exception as e:
+        except EventStoreError as e:
             self._logger.error(
                 f"Failed to emit event {type(event).__name__}: {e}",
                 exc_info=True,

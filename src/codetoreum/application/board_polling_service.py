@@ -10,6 +10,7 @@ from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.exceptions import (
     AuthenticationError,
     ExternalServiceError,
+    PortError,
     ResourceNotFoundError,
     ValidationError,
 )
@@ -125,7 +126,7 @@ class BoardPollingService:
         while self._running:
             try:
                 await self._poll_all_boards()
-            except Exception as e:
+            except PortError as e:
                 logger.error(
                     f"Error in polling loop: {e}",
                     exc_info=True,
@@ -140,7 +141,7 @@ class BoardPollingService:
             try:
                 project_id, board_id = board_key.split(":")
                 await self._poll_board(project_id, board_id)
-            except Exception as e:
+            except PortError as e:
                 logger.error(
                     f"Error polling board {board_key}: {e}",
                     exc_info=True,
@@ -186,7 +187,7 @@ class BoardPollingService:
                 },
             )
             return
-        except Exception as e:
+        except PortError as e:
             # Unexpected errors - disable polling and alert
             logger.critical(
                 f"Unexpected error polling board {board_id}: {e}",
@@ -223,7 +224,7 @@ class BoardPollingService:
                 },
             )
             return
-        except Exception as e:
+        except PortError as e:
             # Unexpected error processing columns
             logger.error(
                 f"Unexpected error processing columns for board {board_id}: {e}",
@@ -262,7 +263,7 @@ class BoardPollingService:
                         f"Detected column change: {change['work_item_id']} "
                         f"{change['from_column']} -> {change['to_column']}"
                     )
-                except Exception as e:
+                except PortError as e:
                     logger.error(
                         f"Failed to emit column change event for {change['work_item_id']}: {e}",
                         exc_info=True,

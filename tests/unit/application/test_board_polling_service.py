@@ -313,9 +313,11 @@ class TestPollingIntegration:
         self, polling_service, mock_board_service
     ):
         """Test that polling loop continues even when board service fails."""
+        from codetoreum.ports.exceptions import ExternalServiceError
+
         # First call raises error, second succeeds
         mock_board_service.get_board.side_effect = [
-            Exception("Service error"),
+            ExternalServiceError("board_service", "Service error"),
             ProjectBoard(id="board-1", name="Test", project_id="proj-1", columns=[]),
         ]
 
