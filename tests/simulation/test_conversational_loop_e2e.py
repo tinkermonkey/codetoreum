@@ -49,18 +49,20 @@ class SimulatedDiscussionAdapter:
         work_item_id: str,
         content: str,
         parent_id: Optional[str] = None,
-    ) -> dict:
+    ) -> Comment:
         """Post a comment."""
         if work_item_id not in self.comments:
             self.comments[work_item_id] = []
 
         comment_id = f"comment-{len(self.comments[work_item_id]) + 1}"
-        comment = {
-            "id": comment_id,
-            "content": content,
-            "parent_id": parent_id,
-            "posted_at": datetime.now(timezone.utc).isoformat(),
-        }
+        comment = Comment(
+            id=comment_id,
+            author="agent",
+            body=content,
+            created_at=datetime.now(timezone.utc).isoformat(),
+            parent_id=parent_id,
+            is_bot=True,
+        )
 
         self.comments[work_item_id].append(comment)
         return comment
