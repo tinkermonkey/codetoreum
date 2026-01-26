@@ -140,6 +140,7 @@ class SimulatedEventStore:
     def __init__(self):
         self.events: List[dict] = []
         self.snapshots: Dict[str, dict] = {}
+        self.stream_versions: Dict[str, int] = {}  # Track current version per stream
 
     async def append(self, event: dict) -> None:
         """Append event."""
@@ -158,6 +159,23 @@ class SimulatedEventStore:
     async def get_all_events(self, from_timestamp=None, to_timestamp=None) -> List[dict]:
         """Get all events."""
         return self.events
+
+    async def get_stream_version(self, stream_id: str) -> int:
+        """Get current version of a stream."""
+        # Count events for this stream
+        events_for_stream = [e for e in self.events if e.get("aggregate_id") == stream_id]
+        return len(events_for_stream)
+
+    async def save_snapshot(self, stream_id: str, version: int, snapshot: dict) -> None:
+        """Save a snapshot."""
+        self.snapshots[stream_id] = snapshot
+        self.stream_versions[stream_id] = version
+
+    async def get_latest_snapshot(self, stream_id: str) -> Optional[Dict]:
+        """Get latest snapshot."""
+        if stream_id in self.snapshots:
+            return {"data": self.snapshots[stream_id]}
+        return None
 
 
 @pytest.fixture

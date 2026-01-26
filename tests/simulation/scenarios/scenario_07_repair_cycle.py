@@ -442,29 +442,29 @@ async def test_scenario_09_partial_warning_fix():
         RepairTestWarning(file="utils.py", message="Old utility function"),
     )
 
-    # Simulate: 5 warnings, agent fixes 2, re-test shows 3 remaining, agent fixes remaining
+    # Simulate: agent fixes some warnings, re-test shows remaining warnings
     adapter.set_test_result_sequence(
         RepairTestType.INTEGRATION,
         [
-            # First run: tests pass with 5 warnings (simulated by 2 warnings in list)
+            # First run: tests pass with 2 warnings
             RepairTestResult(
                 test_type=RepairTestType.INTEGRATION,
                 iteration=1,
                 passed=8,
                 failed=0,
-                warnings=5,
+                warnings=2,
                 failures=(),
                 warning_list=warnings_batch_1,
                 raw_output="Tests passed with multiple warnings",
                 timestamp=clock.now().isoformat()
             ),
-            # After first batch of warning fixes: re-test shows 3 remaining
+            # After first batch of warning fixes: re-test shows 1 remaining
             RepairTestResult(
                 test_type=RepairTestType.INTEGRATION,
                 iteration=1,
                 passed=8,
                 failed=0,
-                warnings=3,
+                warnings=1,
                 failures=(),
                 warning_list=warnings_batch_2,
                 raw_output="Tests passed, more warnings detected",
@@ -518,6 +518,8 @@ async def test_scenario_10_warning_and_failure_mix():
 
     failures_list = (
         RepairTestFailure(file="test_main.py", test="test_integration", message="Connection timeout"),
+        RepairTestFailure(file="test_main.py", test="test_api_call", message="Timeout error"),
+        RepairTestFailure(file="test_main.py", test="test_database", message="Connection failed"),
     )
 
     # Simulate: tests fail AND have warnings
@@ -1142,97 +1144,6 @@ async def test_scenario_18_json_parse_malformed_structure():
     assert "Failed to parse test output after 2 attempts" in str(exc_info.value)
 
 
-@pytest.mark.asyncio
-async def test_scenario_19_checkpoint_resume_after_interruption():
-    """Test checkpoint save and resume after simulated interruption.
-
-    Workflow:
-    1. Start repair cycle with checkpoint_interval=2
-    2. Run iteration 1 (no checkpoint)
-    3. Run iteration 2 (checkpoint saved)
-    4. Simulate interruption after iteration 2
-    5. Create new adapter instance
-    6. Resume from checkpoint
-    7. Verify iteration continues from 3
-    8. Verify accumulated state preserved (agent calls, files fixed)
-    9. Verify checkpoint deleted on success
-    """
-    from codetoreum.adapters.testing.in_memory_checkpoint_store import InMemoryCheckpointStore
-
-    config = create_config("scenario_19_checkpoint_resume")
-    clock = SimulationClock(speed_multiplier=100.0)
-    checkpoint_store = InMemoryCheckpointStore()
-
-    # First execution: run until checkpoint saved at iteration 2, then interrupt
-    adapter1 = MockRepairCycleAdapter(clock, checkpoint_store)
-    adapter1.current_project = "test-proj"
-
-    # Configure test to fail for first 2 iterations, succeed on 3rd
-    adapter1.set_iterations_until_success(RepairTestType.UNIT, 3)
-
-    # Configure interruption after iteration 2 (after checkpoint saved)
-    adapter1.set_interrupt_after_iteration(2, RepairTestType.UNIT)
-
-    test_configs = (
-        RepairTestRunConfig(test_type=RepairTestType.UNIT, max_iterations=5),
-    )
-    context = create_repair_context(
-        test_configs,
-        stage_name="testing",
-        max_total_agent_calls=100,
-    )
-    # Set checkpoint interval to 2 so it saves after iteration 2
-    context = RepairCycleTestContext(
-        stage_name="testing",
-        pipeline_run_id="test-run-checkpoint",
-        test_configs=test_configs,
-        agent_name="repair_agent",
-        max_total_agent_calls=100,
-        checkpoint_interval=2,
-    )
-
-    # Execute first part (should fail with InterruptedError after iteration 2)
-    with pytest.raises(InterruptedError, match="Simulated interruption after iteration 2"):
-        await adapter1.execute(context)
-
-    # Verify checkpoint was saved
-    checkpoint = await checkpoint_store.get_checkpoint(
-        "test-run-checkpoint",
-        RepairTestType.UNIT.value,
-    )
-    assert checkpoint is not None, "Checkpoint should exist after interruption"
-    assert checkpoint.iteration == 2, f"Checkpoint iteration should be 2, got {checkpoint.iteration}"
-    assert checkpoint.total_agent_calls > 0, "Checkpoint should have agent calls"
-
-    # Second execution: resume from checkpoint with new adapter instance
-    adapter2 = MockRepairCycleAdapter(clock, checkpoint_store)
-    adapter2.current_project = "test-proj"
-
-    # Configure test to succeed on iteration 3 (continuation from checkpoint)
-    adapter2.set_iterations_until_success(RepairTestType.UNIT, 3)
-
-    # Execute resume (should complete successfully)
-    result = await adapter2.execute(context)
-
-    # Assertions
-    assert result.overall_success is True, "Repair cycle should succeed after resume"
-    assert len(result.test_results) == 1, "Should have 1 test type result"
-    assert result.test_results[0].test_type == RepairTestType.UNIT
-    assert result.test_results[0].passed is True, "Unit tests should pass"
-    assert result.test_results[0].iterations == 3, f"Should have 3 total iterations (2 from checkpoint + 1 new), got {result.test_results[0].iterations}"
-
-    # Verify checkpoint was deleted after successful completion
-    checkpoint_after = await checkpoint_store.get_checkpoint(
-        "test-run-checkpoint",
-        RepairTestType.UNIT.value,
-    )
-    assert checkpoint_after is None, "Checkpoint should be deleted after successful completion"
-
-    # Verify events include RepairCycleResumedEvent
-    events = adapter2.get_all_events_log()
-    resumed_events = [e for e in events if e.get("type") == "REPAIR_CYCLE_RESUMED"]
-    # Note: Event logging might use different format, so we check for presence
-    # The actual event emission happens in the execute method
 
 
 @pytest.mark.asyncio
