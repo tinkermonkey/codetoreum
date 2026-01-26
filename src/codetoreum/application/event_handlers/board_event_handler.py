@@ -118,6 +118,7 @@ class BoardColumnEventHandler(EventHandler):
             logger.error(
                 f"Error handling column change for {event.payload.get('work_item_id')}: {e}",
                 exc_info=True,
+                extra={"error_id": "ERR_BOARD_EVENT_HANDLE_COLUMN_CHANGE_FAILURE"},
             )
 
     async def handle_column_change(self, event: WorkItemColumnChanged) -> None:
@@ -209,7 +210,7 @@ class BoardColumnEventHandler(EventHandler):
             logger.error(
                 f"Cannot acquire lock for {work_item_id}: work item not found on board",
                 exc_info=True,
-                extra={"work_item_id": work_item_id, "board_id": board_id},
+                extra={"error_id": "ERR_BOARD_EVENT_ITEM_NOT_FOUND", "work_item_id": work_item_id, "board_id": board_id},
             )
             # TODO: Emit WorkItemNotFoundEvent
             return
@@ -217,7 +218,7 @@ class BoardColumnEventHandler(EventHandler):
             logger.error(
                 f"Board service error while getting position for {work_item_id}: {e}",
                 exc_info=True,
-                extra={"work_item_id": work_item_id, "board_id": board_id},
+                extra={"error_id": "ERR_BOARD_EVENT_BOARD_SERVICE_ERROR", "work_item_id": work_item_id, "board_id": board_id},
             )
             # Could retry or emit error event
             return
@@ -236,6 +237,7 @@ class BoardColumnEventHandler(EventHandler):
                 f"Invalid parameters for lock acquisition on {work_item_id}: {e}",
                 exc_info=True,
                 extra={
+                    "error_id": "ERR_BOARD_EVENT_INVALID_LOCK_PARAMS",
                     "work_item_id": work_item_id,
                     "board_id": board_id,
                     "position": position.position,
@@ -247,6 +249,7 @@ class BoardColumnEventHandler(EventHandler):
                 f"Lock service failed for {work_item_id}: {e}",
                 exc_info=True,
                 extra={
+                    "error_id": "ERR_BOARD_EVENT_LOCK_ACQUISITION_FAILURE",
                     "work_item_id": work_item_id,
                     "board_id": board_id,
                     "project_id": project_id,
@@ -312,14 +315,14 @@ class BoardColumnEventHandler(EventHandler):
             logger.warning(
                 f"Cannot release lock for {work_item_id}: {e}",
                 exc_info=True,
-                extra={"work_item_id": work_item_id, "board_id": board_id},
+                extra={"error_id": "ERR_BOARD_EVENT_LOCK_NOT_HELD", "work_item_id": work_item_id, "board_id": board_id},
             )
             return
         except Exception as e:
             logger.critical(
                 f"Lock service failed to release lock for {work_item_id}: {e}",
                 exc_info=True,
-                extra={"work_item_id": work_item_id, "board_id": board_id},
+                extra={"error_id": "ERR_BOARD_EVENT_LOCK_RELEASE_CRITICAL_FAILURE", "work_item_id": work_item_id, "board_id": board_id},
             )
             # CRITICAL: Lock may be stuck
             # TODO: Emit LockStuckEvent for manual intervention
@@ -351,14 +354,14 @@ class BoardColumnEventHandler(EventHandler):
                 logger.warning(
                     f"Next queued item {release_result.next_work_item_id} not found: {e}",
                     exc_info=True,
-                    extra={"work_item_id": release_result.next_work_item_id},
+                    extra={"error_id": "ERR_BOARD_EVENT_NEXT_ITEM_NOT_FOUND", "work_item_id": release_result.next_work_item_id},
                 )
                 # Item was deleted - OK, lock is released
             except Exception as e:
                 logger.error(
                     f"Failed to trigger next item {release_result.next_work_item_id}: {e}",
                     exc_info=True,
-                    extra={"work_item_id": release_result.next_work_item_id},
+                    extra={"error_id": "ERR_BOARD_EVENT_NEXT_AGENT_TRIGGER_FAILURE", "work_item_id": release_result.next_work_item_id},
                 )
                 # Next item holds lock but agent never triggered - PROBLEM
 
@@ -392,6 +395,7 @@ class BoardColumnEventHandler(EventHandler):
             logger.error(
                 f"Agent execution failed for {work_item_id}: {e}",
                 exc_info=True,
+                extra={"error_id": "ERR_BOARD_EVENT_AGENT_EXECUTION_FAILURE", "work_item_id": work_item_id},
             )
 
     async def handle_agent_completion(
@@ -463,4 +467,5 @@ class BoardColumnEventHandler(EventHandler):
             logger.error(
                 f"Error during auto-progression for {work_item_id}: {e}",
                 exc_info=True,
+                extra={"error_id": "ERR_BOARD_EVENT_AUTO_PROGRESSION_FAILURE", "work_item_id": work_item_id},
             )
