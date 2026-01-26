@@ -407,10 +407,11 @@ class TestFullLoopLifecycleIntegration:
             work_item_id=work_item_id,
             project_id=project_id,
             comment=second_comment,
-            context=CommentContext(
+            context=CommentContext.for_reply(
+                thread_id=f"thread-{work_item_id}",
+                parent_comment=response1,
                 column_name="In Review",
                 agent_assignment="code-reviewer",
-                parent_comment=response1,
             ),
         )
 
