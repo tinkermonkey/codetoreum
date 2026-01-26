@@ -30,6 +30,7 @@ from codetoreum.domain.events.discussion_events import (
 )
 from codetoreum.ports.exceptions import EmptyAgentResponseError
 from codetoreum.ports.exceptions import EventStoreError
+from codetoreum.ports.exceptions import PortError
 from codetoreum.ports.input.conversational_loop_service import (
     IConversationalLoopService,
 )
@@ -158,7 +159,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
 
         try:
             self.discussion_adapter.start_monitoring(work_item_id, monitoring_config)
-        except Exception as e:
+        except PortError as e:
             logger.error(
                 "Failed to start discussion monitoring for work item %s: %s",
                 work_item_id,
@@ -182,12 +183,20 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
             # Attempt cleanup on persistence failure
             try:
                 self.discussion_adapter.stop_monitoring(work_item_id)
-            except Exception as cleanup_error:
+            except PortError as cleanup_error:
                 logger.warning(
                     "Failed to clean up monitoring after persistence error: %s",
                     str(cleanup_error),
                     exc_info=True,
                     extra={"error_id": "ERR_CONVERSATIONAL_CLEANUP_AFTER_PERSIST_FAILURE"}
+                )
+            except Exception as cleanup_error:
+                # Unexpected error during cleanup - log but re-raise original persistence error
+                logger.warning(
+                    "UNEXPECTED error during cleanup after persistence error: %s",
+                    str(cleanup_error),
+                    exc_info=True,
+                    extra={"error_id": "ERR_CONVERSATIONAL_CLEANUP_AFTER_PERSIST_UNEXPECTED"}
                 )
             raise
 
@@ -342,7 +351,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 event.comment.id,
             )
 
-        except Exception as e:
+        except (PortError, ValueError, AttributeError) as e:
             logger.error(
                 "Error handling comment event for work item %s: %s",
                 work_item_id,
@@ -352,6 +361,16 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
             )
             # FR-7.1: Error is logged with full context (exc_info=True) for observability
             # Don't clean up session on transient errors - let it retry
+            raise
+        except Exception as e:
+            # Catch unexpected programming errors and system-level errors
+            logger.critical(
+                "UNEXPECTED error in comment event handler for work item %s - programming bug: %s",
+                work_item_id,
+                str(e),
+                exc_info=True,
+                extra={"error_id": "ERR_CONVERSATIONAL_COMMENT_HANDLER_UNEXPECTED"}
+            )
             raise
 
     async def handle_column_change_event(
@@ -412,13 +431,22 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
             # Stop monitoring (work item leaving the conversational context)
             try:
                 self.discussion_adapter.stop_monitoring(work_item_id)
-            except Exception as e:
+            except PortError as e:
                 logger.warning(
                     "Failed to stop monitoring for work item %s: %s",
                     work_item_id,
                     str(e),
                     exc_info=True,
                     extra={"error_id": "ERR_CONVERSATIONAL_MONITORING_STOP_FAILURE"}
+                )
+            except Exception as e:
+                # Unexpected error during monitoring stop - log but continue
+                logger.warning(
+                    "UNEXPECTED error stopping monitoring for work item %s: %s",
+                    work_item_id,
+                    str(e),
+                    exc_info=True,
+                    extra={"error_id": "ERR_CONVERSATIONAL_MONITORING_STOP_UNEXPECTED"}
                 )
 
             # Mark session as terminated
@@ -468,7 +496,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                     "Initialized conversational session on column entry for work item %s",
                     work_item_id,
                 )
-            except Exception as e:
+            except (PortError, ValueError) as e:
                 logger.error(
                     "Failed to initialize conversational loop on column entry for work item %s: %s",
                     work_item_id,
@@ -492,13 +520,22 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                         work_item_id=work_item_id,
                         content=error_comment,
                     )
-                except Exception as comment_error:
+                except PortError as comment_error:
                     logger.error(
                         "Failed to post error notification comment for work item %s: %s",
                         work_item_id,
                         str(comment_error),
                         exc_info=True,
                         extra={"error_id": "ERR_CONVERSATIONAL_LOOP_INIT_NOTIFICATION_FAILURE"}
+                    )
+                except Exception as comment_error:
+                    # Unexpected error posting comment - log but continue
+                    logger.error(
+                        "UNEXPECTED error posting error notification comment for work item %s: %s",
+                        work_item_id,
+                        str(comment_error),
+                        exc_info=True,
+                        extra={"error_id": "ERR_CONVERSATIONAL_LOOP_INIT_NOTIFICATION_UNEXPECTED"}
                     )
 
                 # Re-raise to trigger alerts and prevent execution from continuing
@@ -546,16 +583,25 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 )
                 return
 
-            # Stop monitoring (best effort)
+            # Stop monitoring (best effort - don't let failures prevent cleanup continuation)
             try:
                 self.discussion_adapter.stop_monitoring(work_item_id)
-            except Exception as e:
+            except PortError as e:
                 logger.warning(
                     "Failed to stop monitoring during cleanup for work item %s: %s",
                     work_item_id,
                     str(e),
                     exc_info=True,
                     extra={"error_id": "ERR_CONVERSATIONAL_CLEANUP_MONITORING_STOP_FAILURE"}
+                )
+            except Exception as e:
+                # Unexpected error during best-effort cleanup - log but continue
+                logger.warning(
+                    "UNEXPECTED error stopping monitoring during cleanup for work item %s: %s",
+                    work_item_id,
+                    str(e),
+                    exc_info=True,
+                    extra={"error_id": "ERR_CONVERSATIONAL_CLEANUP_MONITORING_STOP_UNEXPECTED"}
                 )
 
             # Mark session as terminated if not already
@@ -590,13 +636,23 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 work_item_id,
             )
 
-        except Exception as e:
+        except (PortError, ValueError) as e:
             logger.error(
                 "Error during cleanup for work item %s: %s",
                 work_item_id,
                 str(e),
                 exc_info=True,
                 extra={"error_id": "ERR_CONVERSATIONAL_CLEANUP_HANDLER_FAILURE"}
+            )
+            raise
+        except Exception as e:
+            # Catch unexpected programming errors and system-level errors
+            logger.critical(
+                "UNEXPECTED error in cleanup handler for work item %s - programming bug: %s",
+                work_item_id,
+                str(e),
+                exc_info=True,
+                extra={"error_id": "ERR_CONVERSATIONAL_CLEANUP_HANDLER_UNEXPECTED"}
             )
             raise
 
@@ -641,13 +697,23 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
             # No snapshot found - session doesn't exist
             return None
 
-        except Exception as e:
+        except (EventStoreError, ValueError, AttributeError, KeyError, TypeError) as e:
             logger.error(
                 "Failed to load session state for work item %s: %s",
                 work_item_id,
                 str(e),
                 exc_info=True,
                 extra={"error_id": "ERR_CONVERSATIONAL_LOAD_SESSION_FAILURE"}
+            )
+            raise
+        except Exception as e:
+            # Catch unexpected programming errors and system-level errors
+            logger.critical(
+                "UNEXPECTED error loading session state for work item %s - programming bug: %s",
+                work_item_id,
+                str(e),
+                exc_info=True,
+                extra={"error_id": "ERR_CONVERSATIONAL_LOAD_SESSION_UNEXPECTED"}
             )
             raise
 
