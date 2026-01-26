@@ -262,6 +262,19 @@ class TestHandleCommentEvent:
         # Verify session state was persisted with updated checkpoint
         mock_event_store.save_snapshot.assert_called_once()
 
+        # Verify AgentResponsePostedEvent was emitted
+        mock_event_store.append.assert_called_once()
+        call_args = mock_event_store.append.call_args
+        assert call_args[0][0] == "issue-42"  # stream_id
+        events = call_args[0][1]
+        assert len(events) == 1
+        assert isinstance(events[0], AgentResponsePostedEvent)
+        assert events[0].work_item_id == "issue-42"
+        assert events[0].project_id == "proj-1"
+        assert events[0].comment_id == sample_comment.id  # Human comment being responded to
+        assert events[0].agent_name == "code-reviewer"
+        assert events[0].conversation_id == "conv-abc123"
+
     async def test_handle_comment_no_session(self, orchestrator, mock_event_store, sample_comment):
         """Test comment handling when no session exists."""
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=None)

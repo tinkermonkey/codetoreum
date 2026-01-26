@@ -316,23 +316,22 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
             await self.save_session_state(updated_session)
 
             # Emit audit event
-            response_comment_id = response_comment.id if hasattr(response_comment, 'id') else str(uuid4())
             response_event = AgentResponsePostedEvent(
                 type="agent.response_posted",
                 timestamp=now_iso,
                 source="orchestrator",
                 work_item_id=work_item_id,
                 project_id=project_id,
-                comment_id=response_comment_id,
+                comment_id=event.comment.id,
                 agent_name=session_state.agent_assignment,
                 conversation_id=execution_result.conversation_id,
             )
             await self.event_store.append(work_item_id, [response_event])
 
             logger.info(
-                "Posted agent response to work item %s, comment %s",
+                "Posted agent response to work item %s, responding to comment %s",
                 work_item_id,
-                response_comment_id,
+                event.comment.id,
             )
 
         except Exception as e:
