@@ -242,8 +242,10 @@ class IEventStore(ABC):
 - Data: Serialized `ConversationalSessionState.to_dict()`
 - Used for quick state recovery (vs. full event replay)
 
-**Implementation**: Elasticsearch Event Store
-- Stores snapshots in daily indices
+**Implementation**: Event Store (abstracted via IEventStore)
+- Production: Redis-based event store (RedisEventStore) with background persistence
+- Testing: In-memory event store (InMemoryEventStore)
+- Future: Elasticsearch for advanced querying and time-series indices
 - Enables checkpoint-based resume
 - Provides audit trail for compliance
 

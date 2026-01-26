@@ -73,29 +73,29 @@ self._event_store_registry.register(
 
 ## Migration Checklist: InMemory → Elasticsearch
 
-### Phase 1: Setup Infrastructure
+### Setup Infrastructure
 - [ ] Deploy Elasticsearch cluster
 - [ ] Deploy Redis cluster
 - [ ] Configure network connectivity
 
-### Phase 2: Enable in Production
+### Enable in Production
 - [ ] Update adapter factory to register `ElasticsearchEventStore`
 - [ ] Set `set_as_default=True` in registration
 - [ ] Configure Elasticsearch connection (env vars)
 - [ ] Configure Redis connection (env vars)
 
-### Phase 3: Deploy Background Workers
+### Deploy Background Workers
 - [ ] Start `EventPersistenceWorker` threads
 - [ ] Configure worker count and batch sizes
 - [ ] Add monitoring and alerting
 
-### Phase 4: Validate
+### Validate
 - [ ] Verify events persisting to Elasticsearch
 - [ ] Validate Redis buffer draining
 - [ ] Monitor performance metrics
 - [ ] Test recovery scenarios
 
-### Phase 5: Optimize (Optional)
+### Optimize (Optional)
 - [ ] Adjust ILM policies based on retention needs
 - [ ] Optimize shard count for query patterns
 - [ ] Tune Redis buffer batch sizes

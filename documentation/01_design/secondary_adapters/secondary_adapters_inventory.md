@@ -254,19 +254,25 @@ Based on the high-level architecture and legacy system analysis, secondary adapt
 
 ## 5. Event Store Adapters
 
-### 5.1 Elasticsearch Event Store with Redis Buffering (Production)
+### 5.1 Event Store Adapters
 
-**Purpose**: Store events in Elasticsearch with Redis buffering for high-throughput writes
+**Purpose**: Abstract event storage with multiple implementations for different scenarios
 
 **Interface**: `IEventStore`
 
-**Architecture**: Two-tier design
+**Current Implementation**:
+- **Production (v1.0)**: In-memory event store (`InMemoryEventStore`)
+- **Testing**: In-memory event store (`InMemoryEventStore`)
+- **Planned**: Elasticsearch with Redis buffering for durability and querying
+
+**Architecture** (when Elasticsearch is enabled):
 - **Write Path**: Application → Redis Streams → Background Workers → Elasticsearch
 - **Read Path**: Application → Elasticsearch (queries) + Redis (recent events if needed)
 
 **Key Capabilities**:
-- High-throughput event writes (buffered in Redis)
-- Durable persistence in Elasticsearch
+- High-throughput event writes (when using Redis buffering)
+- Flexible storage backends via plugin architecture
+- Full audit trail and event replay capability
 - Full-text search across all events
 - Complex queries and aggregations
 - Event replay capabilities

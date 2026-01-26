@@ -43,11 +43,16 @@ Update the agent design with the following interface changes.
 
 ## Persistence Architecture
 
-### Elasticsearch + Redis Architecture
+### Event Storage Design
 
-**Decision**: Use Elasticsearch as the primary persistence layer with Redis as a buffering and caching layer.
+**Decision**: Implement pluggable event storage via `IEventStore` interface. Currently using in-memory storage for v1.0, with Elasticsearch + Redis planned for future production deployment.
 
-**Rationale**:
+**Current Status (v1.0)**:
+- Event storage: In-memory only (`InMemoryEventStore`)
+- Configuration storage: Elasticsearch + Redis (active)
+- Trade-off: Simplicity and simulation support over durability
+
+**Planned Benefits** (when Elasticsearch is enabled):
 
 1. **Unified Observability Stack**
    - Elasticsearch provides a single platform for events, logs, and metrics
