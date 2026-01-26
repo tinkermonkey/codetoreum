@@ -263,6 +263,44 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 work_item_id,
                 extra={"error_id": "ERR_CONVERSATIONAL_NO_ACTIVE_SESSION"}
             )
+
+            # Notify user that no session exists for this work item
+            try:
+                notification = (
+                    "⚠️ **No Active Conversational Session Found**\n\n"
+                    "This work item is not currently in a conversational workflow column. "
+                    "The AI agent cannot respond to comments at this time.\n\n"
+                    "**Possible Reasons**:\n"
+                    "- This work item may have been moved out of the conversational column\n"
+                    "- The conversational session may have been terminated\n\n"
+                    "**Next Steps**:\n"
+                    "1. Move the work item back to a conversational workflow column to continue\n"
+                    "2. Contact support if you believe this is unexpected\n\n"
+                    "*This notification was generated because no active conversational session was found.*"
+                )
+                await self.discussion_adapter.add_comment(
+                    work_item_id=work_item_id,
+                    content=notification,
+                    parent_id=event.comment.id if event.comment else None,
+                )
+            except PortError as e:
+                logger.error(
+                    "Failed to post session-not-found notification for work item %s: %s",
+                    work_item_id,
+                    str(e),
+                    exc_info=True,
+                    extra={"error_id": "ERR_CONVERSATIONAL_NO_SESSION_NOTIFICATION_FAILURE"}
+                )
+            except Exception as e:
+                # Unexpected error posting notification - log but continue
+                logger.error(
+                    "UNEXPECTED error posting session-not-found notification for work item %s: %s",
+                    work_item_id,
+                    str(e),
+                    exc_info=True,
+                    extra={"error_id": "ERR_CONVERSATIONAL_NO_SESSION_NOTIFICATION_UNEXPECTED"}
+                )
+
             return
 
         # Verify session is active
@@ -273,6 +311,48 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 session_state.status,
                 extra={"error_id": "ERR_CONVERSATIONAL_SESSION_NOT_ACTIVE"}
             )
+
+            # Notify user that session is not active
+            try:
+                status_display = {
+                    "suspended": "suspended",
+                    "terminated": "terminated",
+                    "paused": "paused",
+                }.get(session_state.status, session_state.status)
+
+                notification = (
+                    f"⚠️ **Conversational Session {status_display.title()}**\n\n"
+                    f"The conversational session for this work item is currently {status_display} "
+                    f"and cannot process new comments at this time.\n\n"
+                    "**Next Steps**:\n"
+                    "1. Check the work item's workflow column status\n"
+                    "2. If needed, move the work item back to an active conversational column\n"
+                    "3. Or create a new conversational session by moving the work item to a conversational column\n\n"
+                    "*This notification was generated because the conversational session is not in an active state.*"
+                )
+                await self.discussion_adapter.add_comment(
+                    work_item_id=work_item_id,
+                    content=notification,
+                    parent_id=event.comment.id if event.comment else None,
+                )
+            except PortError as e:
+                logger.error(
+                    "Failed to post session-inactive notification for work item %s: %s",
+                    work_item_id,
+                    str(e),
+                    exc_info=True,
+                    extra={"error_id": "ERR_CONVERSATIONAL_SESSION_INACTIVE_NOTIFICATION_FAILURE"}
+                )
+            except Exception as e:
+                # Unexpected error posting notification - log but continue
+                logger.error(
+                    "UNEXPECTED error posting session-inactive notification for work item %s: %s",
+                    work_item_id,
+                    str(e),
+                    exc_info=True,
+                    extra={"error_id": "ERR_CONVERSATIONAL_SESSION_INACTIVE_NOTIFICATION_UNEXPECTED"}
+                )
+
             return
 
         logger.info(
