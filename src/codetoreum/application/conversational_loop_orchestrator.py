@@ -27,6 +27,7 @@ from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.domain.events.discussion_events import (
     AgentResponsePostedEvent,
     Comment,
+    CommentContext,
     CommentNeedsResponseEvent,
 )
 from codetoreum.ports.exceptions import EmptyAgentResponseError
@@ -254,6 +255,14 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 extra={"error_id": "ERR_CONVERSATIONAL_COMMENT_EVENT_VALIDATION_FAILURE"}
             )
             return
+
+        if not event.context:
+            logger.error(
+                "[%s] CommentNeedsResponseEvent missing context for work item %s",
+                "ERR_CONVERSATIONAL_MISSING_CONTEXT",
+                work_item_id,
+            )
+            raise ValueError("CommentNeedsResponseEvent must have context")
 
         # Load active session state
         session_state = await self.load_session_state(work_item_id)
@@ -891,23 +900,21 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
         parts = []
 
         # Add context about where we are
-        if event.context:
-            if hasattr(event.context, "column_name") and event.context.column_name:
+        if isinstance(event.context, CommentContext):
+            if event.context.column_name:
                 parts.append(f"Work item: {event.context.column_name}")
-            if hasattr(event.context, "agent_assignment") and event.context.agent_assignment:
+            if event.context.agent_assignment:
                 parts.append(f"Assigned agent: {event.context.agent_assignment}")
 
-        # Add parent comment if available
-        if event.context and hasattr(event.context, "parent_comment") and event.context.parent_comment:
-            parent = event.context.parent_comment
-            if hasattr(parent, "author") and hasattr(parent, "body"):
+            # Add parent comment if available
+            if event.context.parent_comment:
+                parent = event.context.parent_comment
                 parts.append(f"\nPrevious comment from {parent.author}:")
                 parts.append(parent.body)
 
         # Add the current comment
-        if event.comment:
-            if hasattr(event.comment, "author") and hasattr(event.comment, "body"):
-                parts.append(f"\nNew comment from {event.comment.author}:")
-                parts.append(event.comment.body)
+        if isinstance(event.comment, Comment):
+            parts.append(f"\nNew comment from {event.comment.author}:")
+            parts.append(event.comment.body)
 
         return "\n".join(parts)

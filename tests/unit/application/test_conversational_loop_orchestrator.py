@@ -349,6 +349,10 @@ class TestHandleCommentEvent:
             work_item_id="issue-42",
             project_id="proj-1",
             comment=sample_comment,
+            context=CommentContext(
+                column_name="In Review",
+                agent_assignment="code-reviewer",
+            ),
         )
 
         # Should handle gracefully - no exception, just skip
@@ -387,6 +391,10 @@ class TestHandleCommentEvent:
             work_item_id="issue-42",
             project_id="proj-1",
             comment=sample_comment,
+            context=CommentContext(
+                column_name="In Review",
+                agent_assignment="code-reviewer",
+            ),
         )
 
         # Should handle gracefully - no exception
@@ -403,6 +411,10 @@ class TestHandleCommentEvent:
             work_item_id="issue-42",
             project_id="proj-1",
             comment=None,  # No comment
+            context=CommentContext(
+                column_name="In Review",
+                agent_assignment="code-reviewer",
+            ),
         )
 
         # Should handle gracefully (log warning and return)

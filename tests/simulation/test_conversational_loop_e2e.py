@@ -359,6 +359,10 @@ class TestConversationalLoopSimulation:
                 work_item_id=work_item_id,
                 project_id=project_id,
                 comment=comment,
+                context=CommentContext(
+                    column_name="In Review",
+                    agent_assignment="code-reviewer",
+                ),
             )
 
             await orchestrator.handle_comment_event(event)
@@ -434,6 +438,10 @@ class TestConversationalLoopSimulation:
             work_item_id=work_item_id,
             project_id=project_id,
             comment=c1,
+            context=CommentContext(
+                column_name="In Review",
+                agent_assignment="code-reviewer",
+            ),
         )
 
         await orchestrator.handle_comment_event(event1)
@@ -457,6 +465,10 @@ class TestConversationalLoopSimulation:
             work_item_id=work_item_id,
             project_id=project_id,
             comment=c2,
+            context=CommentContext(
+                column_name="In Review",
+                agent_assignment="code-reviewer",
+            ),
         )
 
         await orchestrator.handle_comment_event(event2)
@@ -493,6 +505,10 @@ class TestConversationalLoopSimulation:
             work_item_id=work_item_id,
             project_id=project_id,
             comment=c3,
+            context=CommentContext(
+                column_name="In Review",
+                agent_assignment="code-reviewer",
+            ),
         )
 
         await orchestrator_restarted.handle_comment_event(event3)
@@ -575,6 +591,10 @@ class TestConversationalLoopSimulation:
                 work_item_id=work_item_id,
                 project_id=project_id,
                 comment=comment,
+                context=CommentContext(
+                    column_name="In Review",
+                    agent_assignment="code-reviewer",
+                ),
             )
 
             await orchestrator.handle_comment_event(event)
@@ -609,6 +629,10 @@ class TestConversationalLoopSimulation:
             work_item_id=work_item_id,
             project_id=project_id,
             comment=comment6,
+            context=CommentContext(
+                column_name="In Review",
+                agent_assignment="code-reviewer",
+            ),
         )
 
         await orchestrator_restarted.handle_comment_event(event6)

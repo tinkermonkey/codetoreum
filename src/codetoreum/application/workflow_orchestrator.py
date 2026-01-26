@@ -558,11 +558,8 @@ class WorkflowOrchestrator:
             f"Handling stage completion: {event.stage_name} for issue #{event.issue_number}"
         )
 
-        # Validate context is not None and is a dictionary before accessing
-        if event.context is None:
-            raise ValueError("StageCompletedEvent.context cannot be None")
-
-        board_name = event.context.get("board", "default") if isinstance(event.context, dict) else "default"
+        # StageCompletedEvent.context is guaranteed to be Dict[str, Any] by type contract
+        board_name = event.context.get("board", "default")
         workflow_config = await self.config.get_workflow_config(
             event.project, board_name
         )
@@ -662,11 +659,8 @@ class WorkflowOrchestrator:
             f"approved={event.approved}, iteration={event.iteration}"
         )
 
-        # Validate context is not None and is a dictionary before accessing
-        if event.context is None:
-            raise ValueError("ReviewCycleCompletedEvent.context cannot be None")
-
-        board_name = event.context.get("board", "default") if isinstance(event.context, dict) else "default"
+        # ReviewCycleCompletedEvent.context is guaranteed to be Dict[str, Any] by type contract
+        board_name = event.context.get("board", "default")
 
         if event.approved:
             # Review approved, check auto-advance
@@ -704,7 +698,7 @@ class WorkflowOrchestrator:
             )
         else:
             # Check if max iterations reached
-            max_iterations = event.context.get("max_iterations", 3) if isinstance(event.context, dict) else 3
+            max_iterations = event.context.get("max_iterations", 3)
             if event.iteration >= max_iterations:
                 # Escalate to human
                 if self.projects_api:
