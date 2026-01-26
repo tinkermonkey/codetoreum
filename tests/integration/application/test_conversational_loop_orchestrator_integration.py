@@ -622,6 +622,10 @@ class TestErrorHandlingIntegration:
             work_item_id=work_item_id,
             project_id=project_id,
             comment=comment,
+            context=CommentContext(
+                column_name="In Review",
+                agent_assignment="reviewer",
+            ),
         )
 
         # Should raise exception
@@ -913,6 +917,10 @@ class TestAdapterInteractionIntegration:
             work_item_id=work_item_id,
             project_id="proj-1",
             comment=comment,
+            context=CommentContext(
+                column_name="In Review",
+                agent_assignment="reviewer",
+            ),
         )
 
         await orchestrator.handle_comment_event(event)
