@@ -41,7 +41,8 @@ DEBUG_MODE = (
 if IS_PRODUCTION and os.getenv("CODETOREUM_DEBUG", "").lower() == "true":
     logger.warning(
         "CODETOREUM_DEBUG=true ignored in production environment. "
-        "Debug mode is always disabled in production for security."
+        "Debug mode is always disabled in production for security.",
+        extra={"error_id": "ERR_DEBUG_MODE_IN_PRODUCTION"}
     )
 
 
@@ -120,14 +121,19 @@ async def error_handling_middleware(request: Request, call_next: Callable):
 
     except PydanticValidationError as exc:
         # Pydantic validation errors (request body validation)
+        error_id = "ERR_VALIDATION_FAILED"
         logger.info(
             f"Validation error on {request.method} {request.url.path}",
-            extra={"validation_errors": exc.errors()}
+            extra={
+                "error_id": error_id,
+                "validation_errors": exc.errors()
+            }
         )
 
         error_response = ErrorResponse(
             error=ErrorCode.VALIDATION_ERROR,
             message="Request validation failed",
+            error_id=error_id,
             details=[
                 ErrorDetail(
                     field=".".join(str(loc) for loc in error["loc"]),
@@ -148,14 +154,19 @@ async def error_handling_middleware(request: Request, call_next: Callable):
 
     except ValueError as exc:
         # Value errors (typically from domain logic)
+        error_id = "ERR_VALUE_ERROR"
         logger.info(
             f"Value error on {request.method} {request.url.path}: {exc}",
-            extra={"error_type": "ValueError"}
+            extra={
+                "error_id": error_id,
+                "error_type": "ValueError"
+            }
         )
 
         error_response = ErrorResponse(
             error=ErrorCode.VALIDATION_ERROR,
             message=str(exc),
+            error_id=error_id,
             correlation_id=correlation_id,
             path=str(request.url.path),
         )
@@ -168,14 +179,19 @@ async def error_handling_middleware(request: Request, call_next: Callable):
 
     except PermissionError as exc:
         # Permission errors
+        error_id = "ERR_PERMISSION_DENIED"
         logger.warning(
             f"Permission denied on {request.method} {request.url.path}: {exc}",
-            extra={"error_type": "PermissionError"}
+            extra={
+                "error_id": error_id,
+                "error_type": "PermissionError"
+            }
         )
 
         error_response = ErrorResponse(
             error=ErrorCode.PERMISSION_DENIED,
             message=str(exc) or "Permission denied",
+            error_id=error_id,
             correlation_id=correlation_id,
             path=str(request.url.path),
         )
@@ -188,14 +204,19 @@ async def error_handling_middleware(request: Request, call_next: Callable):
 
     except FileNotFoundError as exc:
         # Not found errors
+        error_id = "ERR_RESOURCE_NOT_FOUND"
         logger.info(
             f"Resource not found on {request.method} {request.url.path}: {exc}",
-            extra={"error_type": "FileNotFoundError"}
+            extra={
+                "error_id": error_id,
+                "error_type": "FileNotFoundError"
+            }
         )
 
         error_response = ErrorResponse(
             error=ErrorCode.NOT_FOUND,
             message=str(exc) or "Resource not found",
+            error_id=error_id,
             correlation_id=correlation_id,
             path=str(request.url.path),
         )
@@ -208,14 +229,19 @@ async def error_handling_middleware(request: Request, call_next: Callable):
 
     except TimeoutError as exc:
         # Timeout errors
+        error_id = "ERR_REQUEST_TIMEOUT"
         logger.warning(
             f"Timeout on {request.method} {request.url.path}: {exc}",
-            extra={"error_type": "TimeoutError"}
+            extra={
+                "error_id": error_id,
+                "error_type": "TimeoutError"
+            }
         )
 
         error_response = ErrorResponse(
             error=ErrorCode.TIMEOUT,
             message=str(exc) or "Request timeout",
+            error_id=error_id,
             correlation_id=correlation_id,
             path=str(request.url.path),
         )
@@ -229,10 +255,12 @@ async def error_handling_middleware(request: Request, call_next: Callable):
     except Exception as exc:
         # Catch-all for unexpected errors
         # SECURITY: Log full traceback but NEVER return it in API response
+        error_id = "ERR_UNHANDLED_EXCEPTION"
         logger.error(
             f"Unhandled exception on {request.method} {request.url.path}: {type(exc).__name__}: {exc}",
             exc_info=True,
             extra={
+                "error_id": error_id,
                 "error_type": type(exc).__name__,
                 "request_method": request.method,
                 "request_path": str(request.url.path),
@@ -246,6 +274,7 @@ async def error_handling_middleware(request: Request, call_next: Callable):
             error_response = ErrorResponse(
                 error=ErrorCode.INTERNAL_ERROR,
                 message="An unexpected error occurred",
+                error_id=error_id,
                 details=[
                     ErrorDetail(
                         message=str(exc),
@@ -261,6 +290,7 @@ async def error_handling_middleware(request: Request, call_next: Callable):
             error_response = ErrorResponse(
                 error=ErrorCode.INTERNAL_ERROR,
                 message="An unexpected error occurred. Please contact support with the correlation ID if this persists.",
+                error_id=error_id,
                 correlation_id=correlation_id,
                 path=str(request.url.path),
             )

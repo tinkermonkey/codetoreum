@@ -127,7 +127,8 @@ class EventBusRegistry:
         """Register workflow event handler."""
         if "workflow_orchestrator" not in self._services:
             logger.warning(
-                "Skipping workflow handler registration: orchestrator not registered"
+                "Skipping workflow handler registration: orchestrator not registered",
+                extra={"error_id": "ERR_EVENTBUS_WORKFLOW_SERVICE_NOT_FOUND"}
             )
             return
 
@@ -144,7 +145,8 @@ class EventBusRegistry:
         """Register execution event handler."""
         if "execution_service" not in self._services:
             logger.warning(
-                "Skipping execution handler registration: service not registered"
+                "Skipping execution handler registration: service not registered",
+                extra={"error_id": "ERR_EVENTBUS_EXECUTION_SERVICE_NOT_FOUND"}
             )
             return
 
@@ -161,7 +163,8 @@ class EventBusRegistry:
         """Register review event handler."""
         if "review_service" not in self._services:
             logger.warning(
-                "Skipping review handler registration: service not registered"
+                "Skipping review handler registration: service not registered",
+                extra={"error_id": "ERR_EVENTBUS_REVIEW_SERVICE_NOT_FOUND"}
             )
             return
 

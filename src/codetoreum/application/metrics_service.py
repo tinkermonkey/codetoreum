@@ -232,7 +232,11 @@ class MetricsService(IMetricsQueryPort):
             await self.event_store.get_statistics()
             event_store_latency = (datetime.now() - check_start).total_seconds() * 1000
         except Exception as e:
-            logger.warning(f"Event store health check failed: {e}")
+            logger.warning(
+                f"Event store health check failed: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_METRICS_EVENTSTORE_HEALTH_CHECK_FAILURE"}
+            )
             event_store_connected = False
 
         return IntegrationStatus(

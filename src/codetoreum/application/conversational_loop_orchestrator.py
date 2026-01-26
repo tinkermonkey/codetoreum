@@ -164,6 +164,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 work_item_id,
                 str(e),
                 exc_info=True,
+                extra={"error_id": "ERR_CONVERSATIONAL_MONITORING_START_FAILURE"}
             )
             raise
 
@@ -176,6 +177,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 work_item_id,
                 str(e),
                 exc_info=True,
+                extra={"error_id": "ERR_CONVERSATIONAL_SESSION_PERSIST_FAILURE"}
             )
             # Attempt cleanup on persistence failure
             try:
@@ -185,6 +187,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                     "Failed to clean up monitoring after persistence error: %s",
                     str(cleanup_error),
                     exc_info=True,
+                    extra={"error_id": "ERR_CONVERSATIONAL_CLEANUP_AFTER_PERSIST_FAILURE"}
                 )
             raise
 
@@ -238,6 +241,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
             logger.warning(
                 "Received CommentNeedsResponseEvent without comment for work item %s",
                 work_item_id,
+                extra={"error_id": "ERR_CONVERSATIONAL_COMMENT_EVENT_VALIDATION_FAILURE"}
             )
             return
 
@@ -248,6 +252,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
             logger.warning(
                 "No active session found for work item %s, skipping comment response",
                 work_item_id,
+                extra={"error_id": "ERR_CONVERSATIONAL_NO_ACTIVE_SESSION"}
             )
             return
 
@@ -257,6 +262,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 "Session for work item %s is %s, skipping comment response",
                 work_item_id,
                 session_state.status,
+                extra={"error_id": "ERR_CONVERSATIONAL_SESSION_NOT_ACTIVE"}
             )
             return
 
@@ -289,6 +295,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 logger.error(
                     "Agent execution returned empty response for work item %s",
                     work_item_id,
+                    extra={"error_id": "ERR_CONVERSATIONAL_EMPTY_AGENT_RESPONSE"}
                 )
                 raise EmptyAgentResponseError(work_item_id)
 
@@ -341,6 +348,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 work_item_id,
                 str(e),
                 exc_info=True,
+                extra={"error_id": "ERR_CONVERSATIONAL_COMMENT_HANDLER_FAILURE"}
             )
             # FR-7.1: Error is logged with full context (exc_info=True) for observability
             # Don't clean up session on transient errors - let it retry
@@ -410,6 +418,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                     work_item_id,
                     str(e),
                     exc_info=True,
+                    extra={"error_id": "ERR_CONVERSATIONAL_MONITORING_STOP_FAILURE"}
                 )
 
             # Mark session as terminated
@@ -434,6 +443,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                     work_item_id,
                     str(e),
                     exc_info=True,
+                    extra={"error_id": "ERR_CONVERSATIONAL_TERMINATE_SESSION_PERSIST_FAILURE"}
                 )
                 raise
 
@@ -464,6 +474,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                     work_item_id,
                     str(e),
                     exc_info=True,
+                    extra={"error_id": "ERR_CONVERSATIONAL_LOOP_INIT_FAILURE"}
                 )
 
     async def cleanup_loop(
@@ -517,6 +528,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                     work_item_id,
                     str(e),
                     exc_info=True,
+                    extra={"error_id": "ERR_CONVERSATIONAL_CLEANUP_MONITORING_STOP_FAILURE"}
                 )
 
             # Mark session as terminated if not already
@@ -542,6 +554,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                         work_item_id,
                         str(e),
                         exc_info=True,
+                        extra={"error_id": "ERR_CONVERSATIONAL_CLEANUP_PERSIST_FAILURE"}
                     )
                     raise
 
@@ -556,6 +569,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 work_item_id,
                 str(e),
                 exc_info=True,
+                extra={"error_id": "ERR_CONVERSATIONAL_CLEANUP_HANDLER_FAILURE"}
             )
             raise
 
@@ -606,6 +620,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 work_item_id,
                 str(e),
                 exc_info=True,
+                extra={"error_id": "ERR_CONVERSATIONAL_LOAD_SESSION_FAILURE"}
             )
             raise
 
@@ -654,6 +669,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 state.work_item_id,
                 str(e),
                 exc_info=True,
+                extra={"error_id": "ERR_CONVERSATIONAL_SAVE_SESSION_FAILURE"}
             )
             raise
 

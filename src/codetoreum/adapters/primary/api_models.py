@@ -51,6 +51,9 @@ class ErrorResponse(BaseResponse):
     details: Optional[List[ErrorDetail]] = Field(
         None, description="Detailed error information"
     )
+    error_id: Optional[str] = Field(
+        None, description="Error ID for Sentry tracking and issue categorization"
+    )
     correlation_id: str = Field(
         default_factory=lambda: str(uuid4()), description="Request correlation ID"
     )
@@ -64,6 +67,7 @@ class ErrorResponse(BaseResponse):
             "example": {
                 "error": "VALIDATION_ERROR",
                 "message": "Invalid request parameters",
+                "error_id": "ERR_VALIDATION_FAILED",
                 "details": [
                     {
                         "field": "work_item_id",

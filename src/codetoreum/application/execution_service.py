@@ -168,10 +168,18 @@ class ExecutionService:
             return execution
 
         except EventStoreError as e:
-            logger.error(f"Failed to persist execution creation events: {e}")
+            logger.error(
+                f"Failed to persist execution creation events: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_EXECUTION_CREATE_EVENT_STORE_FAILURE"}
+            )
             raise
         except DomainError as e:
-            logger.error(f"Failed to create execution (validation error): {e}")
+            logger.error(
+                f"Failed to create execution (validation error): {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_EXECUTION_CREATE_VALIDATION_FAILURE"}
+            )
             raise
 
     async def start_execution(
@@ -230,7 +238,11 @@ class ExecutionService:
             )
 
         except EventStoreError as e:
-            logger.error(f"Failed to persist start event for execution {execution.id}: {e}")
+            logger.error(
+                f"Failed to persist start event for execution {execution.id}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_EXECUTION_START_EVENT_STORE_FAILURE"}
+            )
             return ExecutionServiceResult(
                 success=False,
                 execution=execution,
@@ -238,7 +250,11 @@ class ExecutionService:
                 failure_reason=ExecutionFailureReason.UNKNOWN,
             )
         except DomainError as e:
-            logger.error(f"Failed to start execution {execution.id} (validation error): {e}")
+            logger.error(
+                f"Failed to start execution {execution.id} (validation error): {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_EXECUTION_START_VALIDATION_FAILURE"}
+            )
             return ExecutionServiceResult(
                 success=False,
                 execution=execution,
@@ -311,7 +327,8 @@ class ExecutionService:
             except RateLimitError as e:
                 logger.warning(
                     f"Rate limit hit for execution {execution.id}, "
-                    f"retry {retry_count + 1}/{self.max_retries}"
+                    f"retry {retry_count + 1}/{self.max_retries}",
+                    extra={"error_id": "ERR_EXECUTION_LLM_RATE_LIMIT"}
                 )
                 last_error = e
                 retry_count += 1
@@ -322,7 +339,9 @@ class ExecutionService:
             except (ExternalServiceError, LLMProviderError) as e:
                 logger.error(
                     f"LLM service error for execution {execution.id}: {e}, "
-                    f"retry {retry_count + 1}/{self.max_retries}"
+                    f"retry {retry_count + 1}/{self.max_retries}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_EXECUTION_LLM_SERVICE_ERROR"}
                 )
                 last_error = e
                 retry_count += 1
@@ -331,12 +350,20 @@ class ExecutionService:
                 continue
 
             except EventStoreError as e:
-                logger.error(f"Event store error during execution {execution.id}: {e}")
+                logger.error(
+                    f"Event store error during execution {execution.id}: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_EXECUTION_EVENTSTORE_FAILURE"}
+                )
                 last_error = e
                 break
 
             except DomainError as e:
-                logger.error(f"Domain validation error during execution {execution.id}: {e}")
+                logger.error(
+                    f"Domain validation error during execution {execution.id}: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_EXECUTION_DOMAIN_VALIDATION_FAILURE"}
+                )
                 last_error = e
                 break
 
@@ -353,7 +380,11 @@ class ExecutionService:
         # Clean up tracking
         self._active_executions.pop(execution.id, None)
 
-        logger.error(f"Failed execution {execution.id}: {error_message}")
+        logger.error(
+            f"Failed execution {execution.id}: {error_message}",
+            exc_info=True,
+            extra={"error_id": "ERR_EXECUTION_RETRIES_EXHAUSTED"}
+        )
 
         return ExecutionServiceResult(
             success=False,
@@ -455,7 +486,8 @@ class ExecutionService:
                 execution.clear_events()
 
                 logger.error(
-                    f"Container execution {execution.id} failed: {error_message}"
+                    f"Container execution {execution.id} failed: {error_message}",
+                    extra={"error_id": "ERR_EXECUTION_CONTAINER_EXIT_FAILURE"}
                 )
 
                 return ExecutionServiceResult(
@@ -466,7 +498,11 @@ class ExecutionService:
                 )
 
         except ContainerTimeoutError as e:
-            logger.error(f"Container execution {execution.id} timed out: {e}")
+            logger.error(
+                f"Container execution {execution.id} timed out: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_EXECUTION_CONTAINER_TIMEOUT"}
+            )
             execution.timeout()
 
             # Persist events
@@ -483,7 +519,11 @@ class ExecutionService:
             )
 
         except ContainerExecutionError as e:
-            logger.error(f"Container execution error for {execution.id}: {e}")
+            logger.error(
+                f"Container execution error for {execution.id}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_EXECUTION_CONTAINER_ERROR"}
+            )
 
             error_message = f"Container execution error: {e}"
             execution.fail(error_message=error_message)
@@ -502,7 +542,11 @@ class ExecutionService:
             )
 
         except EventStoreError as e:
-            logger.error(f"Event store error during container execution {execution.id}: {e}")
+            logger.error(
+                f"Event store error during container execution {execution.id}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_EXECUTION_CONTAINER_EVENTSTORE_FAILURE"}
+            )
 
             error_message = f"Event store error: {e}"
             execution.fail(error_message=error_message)
@@ -523,7 +567,8 @@ class ExecutionService:
                 if not cleanup_success:
                     logger.error(
                         f"CRITICAL: Failed to cleanup container {container_id} after retries. "
-                        f"Manual intervention may be required."
+                        f"Manual intervention may be required.",
+                        extra={"error_id": "ERR_EXECUTION_CONTAINER_CLEANUP_CRITICAL"}
                     )
 
             # Clean up tracking
@@ -548,7 +593,8 @@ class ExecutionService:
                     )
                     if not cleanup_success:
                         logger.error(
-                            f"Failed to stop container {execution.container_id} during cancellation"
+                            f"Failed to stop container {execution.container_id} during cancellation",
+                            extra={"error_id": "ERR_EXECUTION_CANCEL_CONTAINER_STOP_FAILURE"}
                         )
 
                 # Mark as failed
@@ -576,12 +622,20 @@ class ExecutionService:
                 )
 
         except EventStoreError as e:
-            logger.error(f"Failed to persist cancellation for execution {execution.id}: {e}")
+            logger.error(
+                f"Failed to persist cancellation for execution {execution.id}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_EXECUTION_CANCEL_EVENTSTORE_FAILURE"}
+            )
             return ExecutionServiceResult(
                 success=False, execution=execution, error=str(e)
             )
         except DomainError as e:
-            logger.error(f"Domain error during cancellation of execution {execution.id}: {e}")
+            logger.error(
+                f"Domain error during cancellation of execution {execution.id}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_EXECUTION_CANCEL_DOMAIN_FAILURE"}
+            )
             return ExecutionServiceResult(
                 success=False, execution=execution, error=str(e)
             )
@@ -621,10 +675,18 @@ class ExecutionService:
                         )
 
         except ContainerExecutionError as e:
-            logger.error(f"Container error getting logs for execution {execution.id}: {e}")
+            logger.error(
+                f"Container error getting logs for execution {execution.id}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_EXECUTION_GET_LOGS_CONTAINER_ERROR"}
+            )
             # Return empty list on container errors
         except Exception as e:
-            logger.error(f"Unexpected error getting logs for execution {execution.id}: {e}")
+            logger.error(
+                f"Unexpected error getting logs for execution {execution.id}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_EXECUTION_GET_LOGS_UNEXPECTED_ERROR"}
+            )
             # Return empty list on unexpected errors
 
         return logs
@@ -660,7 +722,9 @@ class ExecutionService:
 
         except Exception as e:
             logger.error(
-                f"Error streaming logs for execution {execution.id}: {e}"
+                f"Error streaming logs for execution {execution.id}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_EXECUTION_STREAM_LOGS_ERROR"}
             )
             yield LogEntry(
                 timestamp=datetime.now(timezone.utc),
@@ -754,14 +818,22 @@ class ExecutionService:
                     try:
                         subscriber(log_entry)
                     except Exception as e:
-                        logger.error(f"Error in log subscriber: {e}")
+                        logger.error(
+                            f"Error in log subscriber: {e}",
+                            exc_info=True,
+                            extra={"error_id": "ERR_EXECUTION_LOG_SUBSCRIBER_ERROR"}
+                        )
 
             # Call user callback
             if user_callback:
                 try:
                     user_callback(content)
                 except Exception as e:
-                    logger.error(f"Error in user stream callback: {e}")
+                    logger.error(
+                        f"Error in user stream callback: {e}",
+                        exc_info=True,
+                        extra={"error_id": "ERR_EXECUTION_USER_CALLBACK_ERROR"}
+                    )
 
         return callback
 
@@ -789,7 +861,11 @@ class ExecutionService:
                     callback(log_line)
 
         except Exception as e:
-            logger.error(f"Error streaming container logs: {e}")
+            logger.error(
+                f"Error streaming container logs: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_EXECUTION_STREAM_CONTAINER_LOGS_ERROR"}
+            )
 
     def _extract_token_usage(self, logs: str) -> Tuple[int, int]:
         """
@@ -853,14 +929,16 @@ class ExecutionService:
             except ContainerExecutionError as e:
                 logger.warning(
                     f"Cleanup attempt {attempt + 1}/{max_attempts} failed for "
-                    f"container {container_id}: {e}"
+                    f"container {container_id}: {e}",
+                    extra={"error_id": "ERR_EXECUTION_CLEANUP_ATTEMPT_FAILURE"}
                 )
                 if attempt < max_attempts - 1:
                     # Exponential backoff: 1s, 2s, 4s
                     await asyncio.sleep(2 ** attempt)
                 else:
                     logger.error(
-                        f"Failed to cleanup container {container_id} after {max_attempts} attempts"
+                        f"Failed to cleanup container {container_id} after {max_attempts} attempts",
+                        extra={"error_id": "ERR_EXECUTION_CLEANUP_FINAL_FAILURE"}
                     )
                     return False
 

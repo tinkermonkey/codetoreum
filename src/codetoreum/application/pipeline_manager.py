@@ -151,7 +151,8 @@ class PipelineManager:
         except Exception as e:
             self._logger.error(
                 f"Failed to emit event {type(event).__name__}: {e}",
-                exc_info=True
+                exc_info=True,
+                extra={"error_id": "ERR_PIPELINE_EVENT_EMIT_FAILURE"}
             )
 
     # ========================================================================
@@ -288,7 +289,8 @@ class PipelineManager:
                     else:
                         # For sequential stages, stop pipeline and cleanup
                         self._logger.error(
-                            f"Sequential stage {stage.name} failed, stopping pipeline"
+                            f"Sequential stage {stage.name} failed, stopping pipeline",
+                            extra={"error_id": "ERR_PIPELINE_SEQUENTIAL_STAGE_FAILURE"}
                         )
                         # Cleanup partial state
                         await self._cleanup_failed_pipeline(
@@ -323,7 +325,9 @@ class PipelineManager:
         except Exception as e:
             duration = (datetime.now(timezone.utc) - start_time).total_seconds()
             self._logger.error(
-                f"Pipeline execution failed: {e}", exc_info=True
+                f"Pipeline execution failed: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_PIPELINE_EXECUTION_FAILURE"}
             )
 
             # Emit failure event
@@ -422,6 +426,7 @@ class PipelineManager:
             self._logger.error(
                 f"Stage execution failed: stage={stage.name}, error={e}",
                 exc_info=True,
+                extra={"error_id": "ERR_PIPELINE_STAGE_EXECUTION_FAILURE"}
             )
 
             # Mark stage as failed
@@ -466,7 +471,9 @@ class PipelineManager:
                 await self.checkpoint_store.save_checkpoint(pipeline_id, checkpoint)
             except Exception as e:
                 self._logger.error(
-                    f"Failed to save checkpoint: {e}", exc_info=True
+                    f"Failed to save checkpoint: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_PIPELINE_CHECKPOINT_SAVE_FAILURE"}
                 )
                 # Don't fail pipeline if checkpoint fails
         else:
@@ -500,7 +507,9 @@ class PipelineManager:
                     return None
             except Exception as e:
                 self._logger.error(
-                    f"Failed to recover checkpoint: {e}", exc_info=True
+                    f"Failed to recover checkpoint: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_PIPELINE_CHECKPOINT_RECOVER_FAILURE"}
                 )
                 return None
         else:
@@ -643,5 +652,6 @@ class PipelineManager:
         except Exception as e:
             self._logger.error(
                 f"Error during pipeline cleanup: {e}",
-                exc_info=True
+                exc_info=True,
+                extra={"error_id": "ERR_PIPELINE_CLEANUP_FAILURE"}
             )

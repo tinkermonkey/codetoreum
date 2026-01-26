@@ -187,7 +187,11 @@ class FeedbackProcessor:
             )
 
         except Exception as e:
-            logger.error(f"Failed to parse review output: {e}")
+            logger.error(
+                f"Failed to parse review output: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_FEEDBACK_PARSE_FAILURE"}
+            )
             return FeedbackProcessingResult(
                 success=False,
                 error=str(e),
@@ -253,7 +257,11 @@ class FeedbackProcessor:
             )
 
         except Exception as e:
-            logger.error(f"Failed to extract actionable items: {e}")
+            logger.error(
+                f"Failed to extract actionable items: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_FEEDBACK_EXTRACT_ITEMS_FAILURE"}
+            )
             return FeedbackProcessingResult(
                 success=False,
                 parsed_feedback=parsed_feedback,

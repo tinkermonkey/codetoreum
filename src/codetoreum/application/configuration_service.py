@@ -180,7 +180,9 @@ class ConfigurationService:
                 # Rollback on failure
                 logger.error(
                     f"Failed to update project config or emit event: {e}. "
-                    f"Rolling back changes for project '{command.project_name}'"
+                    f"Rolling back changes for project '{command.project_name}'",
+                    exc_info=True,
+                    extra={"error_id": "ERR_CONFIG_UPDATE_PROJECT_FAILURE"}
                 )
                 config.version = old_version
                 config.tech_stacks = old_config["tech_stacks"]
@@ -462,12 +464,17 @@ class ConfigurationService:
                         stored_value = await self.encryption_service.encrypt(command.variable_value)
                         logger.debug(f"Encrypted environment variable '{command.variable_name}'")
                     except Exception as e:
-                        logger.error(f"Failed to encrypt environment variable: {e}")
+                        logger.error(
+                            f"Failed to encrypt environment variable: {e}",
+                            exc_info=True,
+                            extra={"error_id": "ERR_CONFIG_ENCRYPT_ENV_VAR_FAILURE"}
+                        )
                         raise ValidationError(f"Failed to encrypt variable: {e}")
                 else:
                     logger.warning(
                         f"No encryption service configured. Storing secret "
-                        f"'{command.variable_name}' in plaintext"
+                        f"'{command.variable_name}' in plaintext",
+                        extra={"error_id": "ERR_CONFIG_NO_ENCRYPTION_SERVICE"}
                     )
 
             config.environment_variables[command.variable_name] = {
@@ -506,7 +513,9 @@ class ConfigurationService:
                 # Rollback on failure
                 logger.error(
                     f"Failed to add/update environment variable or emit event: {e}. "
-                    f"Rolling back changes"
+                    f"Rolling back changes",
+                    exc_info=True,
+                    extra={"error_id": "ERR_CONFIG_UPDATE_ENV_VAR_FAILURE"}
                 )
                 config.version = old_version
                 config.environment_variables = old_env_vars
