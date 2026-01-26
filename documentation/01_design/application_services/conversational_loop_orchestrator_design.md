@@ -43,7 +43,7 @@ Ports (Interfaces/Contracts)
 Adapters (Implementations)
 ├── GitHub Discussion Adapter
 ├── Claude Code LLM Provider
-└── Elasticsearch Event Store
+└── Event Store (InMemory/Redis currently, Elasticsearch planned)
 ```
 
 ### Key Design Principles
