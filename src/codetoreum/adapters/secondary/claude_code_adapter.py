@@ -382,10 +382,31 @@ class ClaudeCodeAdapter(ILLMProvider):
                 await asyncio.wait_for(read_stream(), timeout=timeout)
             except asyncio.TimeoutError:
                 process.kill()
+                # Wait for process termination with a short timeout to prevent hanging
+                try:
+                    await asyncio.wait_for(process.wait(), timeout=5)
+                except asyncio.TimeoutError:
+                    # Process didn't respond to SIGKILL, attempt SIGTERM
+                    import signal
+                    if process.pid:
+                        import os
+                        try:
+                            os.kill(process.pid, signal.SIGTERM)
+                            await asyncio.wait_for(process.wait(), timeout=2)
+                        except (ProcessLookupError, asyncio.TimeoutError):
+                            pass  # Process already terminated or won't respond
                 raise ExternalServiceError("Claude", "Execution timeout")
 
-            # Wait for process completion
-            await process.wait()
+            # Wait for process completion with timeout to prevent hanging
+            try:
+                await asyncio.wait_for(process.wait(), timeout=30)
+            except asyncio.TimeoutError:
+                process.kill()
+                try:
+                    await asyncio.wait_for(process.wait(), timeout=5)
+                except asyncio.TimeoutError:
+                    pass  # Give up, process won't terminate cleanly
+                raise ExternalServiceError("Claude", "Process termination timeout")
 
             # Check exit code
             if process.returncode != 0:
@@ -547,7 +568,17 @@ class ClaudeCodeAdapter(ILLMProvider):
                 except json.JSONDecodeError:
                     pass
 
-            await process.wait()
+            # Wait for process completion with timeout
+            timeout = ctx.timeout_seconds
+            try:
+                await asyncio.wait_for(process.wait(), timeout=timeout)
+            except asyncio.TimeoutError:
+                process.kill()
+                try:
+                    await asyncio.wait_for(process.wait(), timeout=5)
+                except asyncio.TimeoutError:
+                    pass  # Process won't terminate cleanly
+                raise StreamingError("Streaming execution timeout")
 
             if process.returncode != 0:
                 stderr = await process.stderr.read()
