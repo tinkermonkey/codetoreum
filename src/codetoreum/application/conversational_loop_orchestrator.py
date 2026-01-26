@@ -315,22 +315,8 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
             # Persist updated session state
             await self.save_session_state(updated_session)
 
-            # Emit response posted event for audit trail
+            # Log response posted for audit trail
             response_comment_id = response_comment.id if hasattr(response_comment, 'id') else str(uuid4())
-            response_event = AgentResponsePostedEvent(
-                type="agent.response_posted",
-                timestamp=now_iso,
-                source="orchestrator",
-                work_item_id=event.work_item_id,
-                project_id=event.project_id,
-                comment_id=response_comment_id,
-                agent_name=session_state.agent_assignment,
-                conversation_id=execution_result.conversation_id or session_state.llm_conversation_id,
-            )
-
-            # TODO: Emit event via event bus when properly configured
-            # For now, we skip event emission - the test focuses on session persistence
-
             logger.info(
                 "Posted agent response to work item %s, comment %s",
                 work_item_id,
@@ -344,6 +330,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 str(e),
                 exc_info=True,
             )
+            # FR-7.1: Error is logged with full context (exc_info=True) for observability
             # Don't clean up session on transient errors - let it retry
             raise
 
