@@ -227,6 +227,10 @@ async def test_scenario_10_agent_execution():
 async def test_all_scenarios_meet_performance_target():
     """
     Meta-test: Verify all scenarios meet the 10-100x performance target.
+
+    Note: scenario_07_repair_cycle is NOT included because it tests the
+    MockRepairCycleAdapter directly, not through SimulationRunner.
+    It has its own test suite in scenarios/scenario_07_repair_cycle.py.
     """
     scenarios = [
         ("Simple Workflow", create_simple_config, run_simple_scenario),

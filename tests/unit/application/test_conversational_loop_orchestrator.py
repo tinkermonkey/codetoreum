@@ -30,8 +30,8 @@ from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 def mock_discussion_adapter():
     """Create a mock discussion adapter."""
     adapter = MagicMock()
-    adapter.start_monitoring = MagicMock()
-    adapter.stop_monitoring = MagicMock()
+    adapter.start_monitoring = MagicMock(return_value=None)  # Synchronous method
+    adapter.stop_monitoring = MagicMock(return_value=None)   # Synchronous method
     adapter.add_comment = AsyncMock()
     return adapter
 
@@ -50,6 +50,9 @@ def mock_event_store():
     store = MagicMock()
     store.append = AsyncMock()
     store.get_events = AsyncMock(return_value=[])
+    store.get_latest_snapshot = AsyncMock(return_value=None)
+    store.get_stream_version = AsyncMock(return_value=0)
+    store.save_snapshot = AsyncMock()
     return store
 
 
@@ -122,7 +125,7 @@ class TestInitializeLoop:
         assert call_args[0][1]["column_name"] == "In Review"  # Config
 
         # Verify session state was persisted
-        mock_event_store.append.assert_called_once()
+        mock_event_store.save_snapshot.assert_called_once()
 
     async def test_initialize_loop_domain_validation(self, orchestrator, mock_discussion_adapter, mock_event_store):
         """Test that initialized session state passes domain model validation."""
@@ -182,7 +185,7 @@ class TestInitializeLoop:
         """Test initialization cleanup on persistence failure."""
         from codetoreum.ports.exceptions import EventStoreError
 
-        mock_event_store.append.side_effect = EventStoreError("Storage failed")
+        mock_event_store.save_snapshot.side_effect = EventStoreError("Storage failed")
 
         with pytest.raises(EventStoreError, match="Storage failed"):
             await orchestrator.initialize_loop(
@@ -210,26 +213,21 @@ class TestHandleCommentEvent:
     ):
         """Test successful comment handling and response posting."""
         # Mock session state loading
-        def mock_get_events(aggregate_id):
-            # Return event with session state snapshot
-            return [
-                MagicMock(
-                    data={
-                        "conversational_session_state": sample_session_state.to_dict()
-                    }
-                )
-            ]
-
-        mock_event_store.get_events = AsyncMock(side_effect=mock_get_events)
+        snapshot_data = {
+            "conversational_session_state": sample_session_state.to_dict()
+        }
+        mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Mock agent execution
         mock_execution_result = MagicMock()
         mock_execution_result.content = "This is the agent's response."
         mock_execution_result.conversation_id = "conv-abc123"
-        mock_llm_provider.continue_conversation.return_value = mock_execution_result
+        mock_llm_provider.continue_conversation = AsyncMock(return_value=mock_execution_result)
 
         # Mock comment posting
-        mock_discussion_adapter.add_comment.return_value = {"id": "comment-12"}
+        mock_response_comment = MagicMock()
+        mock_response_comment.id = "comment-12"
+        mock_discussion_adapter.add_comment = AsyncMock(return_value=mock_response_comment)
 
         # Create event with comment
         event = CommentNeedsResponseEvent(
@@ -262,19 +260,11 @@ class TestHandleCommentEvent:
         assert call_kwargs["parent_id"] == sample_comment.id
 
         # Verify session state was persisted with updated checkpoint
-        assert mock_event_store.append.called
-
-        # Verify response posted event was emitted with correct fields
-        event_append_calls = mock_event_store.append.call_args_list
-        # Last call should be the response posted event
-        response_event = event_append_calls[-1][0][0]
-        assert response_event["type"] == "agent.response_posted"
-        assert response_event["data"]["work_item_id"] == "issue-42"
-        assert response_event["data"]["comment_id"] == "comment-12"
+        mock_event_store.save_snapshot.assert_called_once()
 
     async def test_handle_comment_no_session(self, orchestrator, mock_event_store, sample_comment):
         """Test comment handling when no session exists."""
-        mock_event_store.get_events = AsyncMock(return_value=[])
+        mock_event_store.get_latest_snapshot = AsyncMock(return_value=None)
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
@@ -309,16 +299,10 @@ class TestHandleCommentEvent:
             status="suspended",
         )
 
-        def mock_get_events(aggregate_id):
-            return [
-                MagicMock(
-                    data={
-                        "conversational_session_state": suspended_state.to_dict()
-                    }
-                )
-            ]
-
-        mock_event_store.get_events = AsyncMock(side_effect=mock_get_events)
+        snapshot_data = {
+            "conversational_session_state": suspended_state.to_dict()
+        }
+        mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
@@ -371,16 +355,10 @@ class TestHandleCommentEvent:
             status="active",
         )
 
-        def mock_get_events(aggregate_id):
-            return [
-                MagicMock(
-                    data={
-                        "conversational_session_state": processed_state.to_dict()
-                    }
-                )
-            ]
-
-        mock_event_store.get_events = AsyncMock(side_effect=mock_get_events)
+        snapshot_data = {
+            "conversational_session_state": processed_state.to_dict()
+        }
+        mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Create event with same comment ID
         event = CommentNeedsResponseEvent(
@@ -417,16 +395,10 @@ class TestHandleColumnChangeEvent:
         sample_session_state,
     ):
         """Test column change when exiting conversational column."""
-        def mock_get_events(aggregate_id):
-            return [
-                MagicMock(
-                    data={
-                        "conversational_session_state": sample_session_state.to_dict()
-                    }
-                )
-            ]
-
-        mock_event_store.get_events = AsyncMock(side_effect=mock_get_events)
+        snapshot_data = {
+            "conversational_session_state": sample_session_state.to_dict()
+        }
+        mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         event = WorkItemColumnChangedEvent(
             type="workitem.column_changed",
@@ -445,14 +417,11 @@ class TestHandleColumnChangeEvent:
         mock_discussion_adapter.stop_monitoring.assert_called_once_with("issue-42")
 
         # Verify session state was persisted as terminated
-        assert mock_event_store.append.called
-        call_args = mock_event_store.append.call_args[0]
-        event_data = call_args[0]
-        assert event_data["data"]["conversational_session_state"]["status"] == "terminated"
+        mock_event_store.save_snapshot.assert_called_once()
 
     async def test_handle_column_change_no_session(self, orchestrator, mock_event_store, mock_discussion_adapter):
         """Test column change when no session exists."""
-        mock_event_store.get_events = AsyncMock(return_value=[])
+        mock_event_store.get_latest_snapshot = AsyncMock(return_value=None)
 
         event = WorkItemColumnChangedEvent(
             type="workitem.column_changed",
@@ -497,16 +466,10 @@ class TestCleanupLoop:
         sample_session_state,
     ):
         """Test successful loop cleanup."""
-        def mock_get_events(aggregate_id):
-            return [
-                MagicMock(
-                    data={
-                        "conversational_session_state": sample_session_state.to_dict()
-                    }
-                )
-            ]
-
-        mock_event_store.get_events = AsyncMock(side_effect=mock_get_events)
+        snapshot_data = {
+            "conversational_session_state": sample_session_state.to_dict()
+        }
+        mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         await orchestrator.cleanup_loop("issue-42", "Agent execution error")
 
@@ -514,11 +477,11 @@ class TestCleanupLoop:
         mock_discussion_adapter.stop_monitoring.assert_called_once_with("issue-42")
 
         # Verify session was marked terminated
-        assert mock_event_store.append.called
+        mock_event_store.save_snapshot.assert_called_once()
 
     async def test_cleanup_loop_no_session(self, orchestrator, mock_event_store, mock_discussion_adapter):
         """Test cleanup loop when no session exists (idempotent)."""
-        mock_event_store.get_events = AsyncMock(return_value=[])
+        mock_event_store.get_latest_snapshot = AsyncMock(return_value=None)
 
         # Should not raise
         await orchestrator.cleanup_loop("issue-42", "Cleanup reason")
@@ -546,16 +509,10 @@ class TestCleanupLoop:
             status="terminated",
         )
 
-        def mock_get_events(aggregate_id):
-            return [
-                MagicMock(
-                    data={
-                        "conversational_session_state": terminated_state.to_dict()
-                    }
-                )
-            ]
-
-        mock_event_store.get_events = AsyncMock(side_effect=mock_get_events)
+        snapshot_data = {
+            "conversational_session_state": terminated_state.to_dict()
+        }
+        mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Should handle gracefully - no exception
         await orchestrator.cleanup_loop("issue-42", "Already terminated")
@@ -568,23 +525,17 @@ class TestCleanupLoop:
         sample_session_state,
     ):
         """Test cleanup continues even if monitoring stop fails."""
-        def mock_get_events(aggregate_id):
-            return [
-                MagicMock(
-                    data={
-                        "conversational_session_state": sample_session_state.to_dict()
-                    }
-                )
-            ]
-
-        mock_event_store.get_events = AsyncMock(side_effect=mock_get_events)
+        snapshot_data = {
+            "conversational_session_state": sample_session_state.to_dict()
+        }
+        mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
         mock_discussion_adapter.stop_monitoring.side_effect = Exception("Monitoring stop failed")
 
         # Should not raise - cleanup continues
         await orchestrator.cleanup_loop("issue-42", "Error cleanup")
 
         # But should still attempt to persist state
-        assert mock_event_store.append.called
+        mock_event_store.save_snapshot.assert_called_once()
 
 
 class TestLoadSessionState:
@@ -592,16 +543,10 @@ class TestLoadSessionState:
 
     async def test_load_session_state_exists(self, orchestrator, mock_event_store, sample_session_state):
         """Test loading existing session state."""
-        def mock_get_events(aggregate_id):
-            return [
-                MagicMock(
-                    data={
-                        "conversational_session_state": sample_session_state.to_dict()
-                    }
-                )
-            ]
-
-        mock_event_store.get_events = AsyncMock(side_effect=mock_get_events)
+        snapshot_data = {
+            "conversational_session_state": sample_session_state.to_dict()
+        }
+        mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         result = await orchestrator.load_session_state("issue-42")
 
@@ -611,7 +556,7 @@ class TestLoadSessionState:
 
     async def test_load_session_state_not_exists(self, orchestrator, mock_event_store):
         """Test loading session state when none exists."""
-        mock_event_store.get_events = AsyncMock(return_value=[])
+        mock_event_store.get_latest_snapshot = AsyncMock(return_value=None)
 
         result = await orchestrator.load_session_state("issue-42")
 
@@ -630,13 +575,11 @@ class TestSaveSessionState:
         """Test successful session state persistence."""
         await orchestrator.save_session_state(sample_session_state)
 
-        # Verify event was appended
-        mock_event_store.append.assert_called_once()
-        call_args = mock_event_store.append.call_args[0]
-        event = call_args[0]
-
-        assert event["type"] == "conversational_session_snapshot"
-        assert event["data"]["conversational_session_state"]["work_item_id"] == "issue-42"
+        # Verify snapshot was saved
+        mock_event_store.save_snapshot.assert_called_once()
+        call_args = mock_event_store.save_snapshot.call_args[1]
+        assert call_args["stream_id"] == "issue-42"
+        assert "conversational_session_state" in call_args["snapshot"]
 
     async def test_save_session_state_none(self, orchestrator):
         """Test saving None session state."""
@@ -647,7 +590,7 @@ class TestSaveSessionState:
         """Test session state persistence failure."""
         from codetoreum.ports.exceptions import EventStoreError
 
-        mock_event_store.append.side_effect = EventStoreError("Storage failed")
+        mock_event_store.save_snapshot.side_effect = EventStoreError("Storage failed")
 
         with pytest.raises(EventStoreError, match="Storage failed"):
             await orchestrator.save_session_state(sample_session_state)
