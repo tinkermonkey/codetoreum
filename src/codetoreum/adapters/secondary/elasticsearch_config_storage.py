@@ -586,7 +586,9 @@ class ElasticsearchConfigStorage(IConfigStore):
             raise
         except Exception as e:
             logger.error(
-                f"Failed to get pipeline config {project_id}/{pipeline_name}: {e}"
+                f"Failed to get pipeline config {project_id}/{pipeline_name}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_CONFIG_STORAGE_PIPELINE_CONFIG_GET_FAILURE"}
             )
             raise
 

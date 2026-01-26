@@ -919,7 +919,11 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
                     logger.error(
                         f"Permanent error in PR polling for {project_id}: {e}",
                         exc_info=True,
-                        extra={"project_id": project_id, "error_type": "permanent"}
+                        extra={
+                            "error_id": "ERR_CODE_REVIEW_PR_POLLING_PERMANENT",
+                            "project_id": project_id,
+                            "error_type": "permanent"
+                        }
                     )
                     break
                 except ExternalServiceError as e:
@@ -975,7 +979,11 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
                 logger.info(f"Polling task for {project_id} cancelled")
                 break
             except Exception as e:
-                logger.error(f"Error in polling loop for {project_id}: {e}")
+                logger.error(
+                    f"Error in polling loop for {project_id}: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_CODE_REVIEW_POLLING_LOOP_FAILED", "project_id": project_id}
+                )
 
     def _adapt_polling_interval(self, project_id: str, changes_detected: int) -> None:
         """Adapt polling interval based on activity.

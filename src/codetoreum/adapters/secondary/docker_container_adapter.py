@@ -615,7 +615,10 @@ class DockerContainerAdapter(IContainer):
                             logger.warning(
                                 f"Failed to parse StartedAt date: {parse_error}",
                                 exc_info=True,
-                                extra={"date_value": state.get("StartedAt")}
+                                extra={
+                                    "error_id": "ERR_CONTAINER_DATE_PARSE_STARTED_AT",
+                                    "date_value": state.get("StartedAt")
+                                }
                             )
 
                     finished_at = None
@@ -626,7 +629,10 @@ class DockerContainerAdapter(IContainer):
                             logger.warning(
                                 f"Failed to parse FinishedAt date: {parse_error}",
                                 exc_info=True,
-                                extra={"date_value": state.get("FinishedAt")}
+                                extra={
+                                    "error_id": "ERR_CONTAINER_DATE_PARSE_FINISHED_AT",
+                                    "date_value": state.get("FinishedAt")
+                                }
                             )
 
                     try:
@@ -636,7 +642,7 @@ class DockerContainerAdapter(IContainer):
                             f"Failed to parse Created date, using current time: {parse_error}",
                             exc_info=True,
                             extra={
-                                "error_id": "ERR_DATE_PARSE_FAILED",
+                                "error_id": "ERR_CONTAINER_DATE_PARSE_CREATED",
                                 "date_value": attrs.get("Created")
                             }
                         )

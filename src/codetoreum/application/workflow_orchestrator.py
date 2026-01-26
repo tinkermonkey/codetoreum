@@ -478,16 +478,16 @@ class WorkflowOrchestrator:
             logger.info(f"Enqueued task {task_id} for agent {column_config.agent}")
         except Exception as e:
             logger.error(
-                f"CRITICAL: Failed to enqueue agent task for work_item={work_item_id}, "
-                f"column='{to_column}', agent='{column_config.agent}'. "
+                f"CRITICAL: Failed to enqueue agent task for work_item={event.issue_number}, "
+                f"column='{event.to_column}', agent='{column_config.agent}'. "
                 f"Work item has been moved to column but will not be processed automatically.",
                 exc_info=True,
                 extra={
                     "error_id": "ERR_ORCHESTRATOR_HANDLER_ENQUEUE_FAILURE",
-                    "work_item_id": work_item_id,
-                    "project_id": project_id,
-                    "board_id": board_id,
-                    "column": to_column,
+                    "work_item_id": event.issue_number,
+                    "project_id": event.project,
+                    "board_id": event.board,
+                    "column": event.to_column,
                     "agent": column_config.agent,
                     "error_type": type(e).__name__,
                 }

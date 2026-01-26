@@ -130,7 +130,11 @@ class RedisConfigCache:
         except asyncio.CancelledError:
             logger.info("Cache invalidation listener cancelled")
         except Exception as e:
-            logger.error(f"Error in cache invalidation listener: {e}")
+            logger.error(
+                f"Error in cache invalidation listener: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_CACHE_INVALIDATION_LISTENER_FAILED"}
+            )
 
     async def _handle_invalidation(self, key_pattern: str) -> None:
         """
@@ -164,7 +168,11 @@ class RedisConfigCache:
                 self._stats["invalidations"] += 1
 
         except Exception as e:
-            logger.error(f"Failed to invalidate cache for {key_pattern}: {e}")
+            logger.error(
+                f"Failed to invalidate cache for {key_pattern}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_CACHE_INVALIDATION_FAILED", "key_pattern": key_pattern}
+            )
 
     def _make_key(self, *parts: str) -> str:
         """Create cache key from parts."""

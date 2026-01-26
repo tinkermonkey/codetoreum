@@ -63,7 +63,11 @@ async def run_migrations(connection_string: str) -> bool:
         return True
 
     except Exception as e:
-        logger.error(f"Failed to run audit database migrations: {e}")
+        logger.error(
+            f"Failed to run audit database migrations: {e}",
+            exc_info=True,
+            extra={"error_id": "ERR_AUDIT_MIGRATIONS_FAILED"}
+        )
         return False
 
     finally:
@@ -94,7 +98,11 @@ async def rollback_migrations(connection_string: str) -> bool:
         return True
 
     except Exception as e:
-        logger.error(f"Failed to rollback audit database migrations: {e}")
+        logger.error(
+            f"Failed to rollback audit database migrations: {e}",
+            exc_info=True,
+            extra={"error_id": "ERR_AUDIT_MIGRATIONS_ROLLBACK_FAILED"}
+        )
         return False
 
     finally:
@@ -132,7 +140,10 @@ async def verify_schema(connection_string: str) -> bool:
             table_exists = result.scalar()
 
             if not table_exists:
-                logger.error("audit_events table does not exist")
+                logger.error(
+                    "audit_events table does not exist",
+                    extra={"error_id": "ERR_AUDIT_SCHEMA_VERIFY_TABLE_MISSING"}
+                )
                 return False
 
             # Check if required indexes exist
@@ -164,7 +175,11 @@ async def verify_schema(connection_string: str) -> bool:
             return True
 
     except Exception as e:
-        logger.error(f"Failed to verify audit schema: {e}")
+        logger.error(
+            f"Failed to verify audit schema: {e}",
+            exc_info=True,
+            extra={"error_id": "ERR_AUDIT_SCHEMA_VERIFY_FAILED"}
+        )
         return False
 
     finally:
