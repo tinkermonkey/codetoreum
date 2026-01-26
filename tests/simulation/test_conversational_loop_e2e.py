@@ -142,15 +142,26 @@ class SimulatedEventStore:
         self.snapshots: Dict[str, dict] = {}
         self.stream_versions: Dict[str, int] = {}  # Track current version per stream
 
-    async def append(self, event: dict) -> None:
-        """Append event."""
-        self.events.append(event)
-        # Store snapshots
-        if event.get("type") == "conversational_session_snapshot":
-            aggregate_id = event.get("aggregate_id")
-            state = event.get("data", {}).get("conversational_session_state")
-            if aggregate_id and state:
-                self.snapshots[aggregate_id] = state
+    async def append(self, stream_id: str, events: List, expected_version: Optional[int] = None) -> None:
+        """Append events to a stream."""
+        for event in events:
+            # Convert event to dict if it's an object with to_dict method
+            if hasattr(event, 'to_dict'):
+                event_dict = event.to_dict()
+                event_dict['aggregate_id'] = stream_id
+            else:
+                event_dict = event
+                if isinstance(event_dict, dict):
+                    event_dict['aggregate_id'] = stream_id
+
+            self.events.append(event_dict)
+
+            # Store snapshots
+            if event_dict.get("type") == "conversational_session_snapshot":
+                aggregate_id = event_dict.get("aggregate_id")
+                state = event_dict.get("data", {}).get("conversational_session_state")
+                if aggregate_id and state:
+                    self.snapshots[aggregate_id] = state
 
     async def get_events(self, aggregate_id: str, from_version: int = 0) -> List[dict]:
         """Get events for aggregate."""
