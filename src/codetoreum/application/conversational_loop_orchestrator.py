@@ -17,6 +17,7 @@ Architecture:
 - Immutable session state for event sourcing integrity
 """
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -43,6 +44,9 @@ from codetoreum.ports.output import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Timeout for LLM provider calls (5 minutes)
+_LLM_PROVIDER_TIMEOUT_SECONDS = 300
 
 
 class ConversationalLoopOrchestrator(IConversationalLoopService):
@@ -384,11 +388,38 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
             # Build thread context message
             thread_message = self._build_thread_message(event, session_state)
 
-            # Execute agent with conversation context
-            execution_result = await self.llm_provider.continue_conversation(
-                conversation_id=session_state.llm_conversation_id or "",
-                message=thread_message,
-            )
+            # Execute agent with conversation context - protected by timeout
+            try:
+                execution_result = await asyncio.wait_for(
+                    self.llm_provider.continue_conversation(
+                        conversation_id=session_state.llm_conversation_id or "",
+                        message=thread_message,
+                    ),
+                    timeout=_LLM_PROVIDER_TIMEOUT_SECONDS
+                )
+            except asyncio.TimeoutError:
+                logger.error(
+                    "[%s] LLM provider timeout for work item %s after %d seconds",
+                    "ERR_CONVERSATIONAL_LLM_TIMEOUT",
+                    work_item_id,
+                    _LLM_PROVIDER_TIMEOUT_SECONDS,
+                )
+                # Notify user about timeout
+                try:
+                    await self.discussion_adapter.add_comment(
+                        work_item_id=work_item_id,
+                        content="⚠️ Response generation timed out after 5 minutes. Please try again.",
+                        parent_id=event.comment.id,
+                    )
+                except PortError as e:
+                    logger.error(
+                        "Failed to post timeout notification for work item %s: %s",
+                        work_item_id,
+                        str(e),
+                        exc_info=True,
+                        extra={"error_id": "ERR_CONVERSATIONAL_LLM_TIMEOUT_NOTIFICATION_FAILURE"}
+                    )
+                raise EmptyAgentResponseError(work_item_id)
 
             if not execution_result.content:
                 logger.error(
