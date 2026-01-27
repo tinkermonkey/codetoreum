@@ -369,7 +369,11 @@ class WorkflowOrchestrator:
                 event.project, event.board
             )
         except Exception as e:
-            logger.error(f"Failed to load workflow config: {e}")
+            logger.error(
+                f"Failed to load workflow config: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_ORCHESTRATOR_CONFIG_LOAD_FAILURE"}
+            )
             return WorkflowResult(
                 success=False,
                 action=WorkflowAction.NO_ACTION,
@@ -383,7 +387,10 @@ class WorkflowOrchestrator:
         # Find target column config
         column_config = self._find_column_config(workflow_config, event.to_column)
         if not column_config:
-            logger.warning(f"Column {event.to_column} not found in workflow config")
+            logger.warning(
+                f"Column {event.to_column} not found in workflow config",
+                extra={"error_id": "ERR_ORCHESTRATOR_COLUMN_CONFIG_NOT_FOUND"}
+            )
             return WorkflowResult(
                 success=False,
                 action=WorkflowAction.NO_ACTION,
@@ -415,7 +422,11 @@ class WorkflowOrchestrator:
         try:
             agent_config = await self.config.get_agent_config(column_config.agent)
         except Exception as e:
-            logger.error(f"Failed to load agent config: {e}")
+            logger.error(
+                f"Failed to load agent config: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_ORCHESTRATOR_AGENT_CONFIG_LOAD_FAILURE"}
+            )
             return WorkflowResult(
                 success=False,
                 action=WorkflowAction.NO_ACTION,
@@ -432,7 +443,8 @@ class WorkflowOrchestrator:
         )
         if not validation_result.can_run:
             logger.warning(
-                f"Agent {column_config.agent} cannot run: {validation_result.reason}"
+                f"Agent {column_config.agent} cannot run: {validation_result.reason}",
+                extra={"error_id": "ERR_ORCHESTRATOR_AGENT_VALIDATION_FAILURE"}
             )
             if validation_result.needs_dev_setup:
                 await self._queue_dev_setup(event.project)
@@ -466,15 +478,16 @@ class WorkflowOrchestrator:
             logger.info(f"Enqueued task {task_id} for agent {column_config.agent}")
         except Exception as e:
             logger.error(
-                f"CRITICAL: Failed to enqueue agent task for work_item={work_item_id}, "
-                f"column='{to_column}', agent='{column_config.agent}'. "
+                f"CRITICAL: Failed to enqueue agent task for work_item={event.issue_number}, "
+                f"column='{event.to_column}', agent='{column_config.agent}'. "
                 f"Work item has been moved to column but will not be processed automatically.",
                 exc_info=True,
                 extra={
-                    "work_item_id": work_item_id,
-                    "project_id": project_id,
-                    "board_id": board_id,
-                    "column": to_column,
+                    "error_id": "ERR_ORCHESTRATOR_HANDLER_ENQUEUE_FAILURE",
+                    "work_item_id": event.issue_number,
+                    "project_id": event.project,
+                    "board_id": event.board,
+                    "column": event.to_column,
                     "agent": column_config.agent,
                     "error_type": type(e).__name__,
                 }
@@ -545,8 +558,10 @@ class WorkflowOrchestrator:
             f"Handling stage completion: {event.stage_name} for issue #{event.issue_number}"
         )
 
+        # StageCompletedEvent.context is guaranteed to be Dict[str, Any] by type contract
+        board_name = event.context.get("board", "default")
         workflow_config = await self.config.get_workflow_config(
-            event.project, event.context.get("board", "default")
+            event.project, board_name
         )
 
         # Find current column
@@ -644,10 +659,13 @@ class WorkflowOrchestrator:
             f"approved={event.approved}, iteration={event.iteration}"
         )
 
+        # ReviewCycleCompletedEvent.context is guaranteed to be Dict[str, Any] by type contract
+        board_name = event.context.get("board", "default")
+
         if event.approved:
             # Review approved, check auto-advance
             workflow_config = await self.config.get_workflow_config(
-                event.project, event.context.get("board", "default")
+                event.project, board_name
             )
 
             current_column = self._find_column_by_agent(
@@ -948,7 +966,10 @@ class WorkflowOrchestrator:
         if not all([work_item_id, project_id, board_id, to_column]):
             logger.warning(
                 f"Column change event has empty required fields",
-                extra={"event_payload": event.payload}
+                extra={
+                    "error_id": "ERR_ORCHESTRATOR_COLUMN_CHANGE_VALIDATION_FAILURE",
+                    "event_payload": event.payload
+                }
             )
             return
 
@@ -964,6 +985,7 @@ class WorkflowOrchestrator:
                     f"board={board_id}: {e}",
                     exc_info=True,
                     extra={
+                        "error_id": "ERR_ORCHESTRATOR_CONFIG_TIMEOUT",
                         "project_id": project_id,
                         "board_id": board_id,
                         "work_item_id": work_item_id,
@@ -975,7 +997,10 @@ class WorkflowOrchestrator:
             # Find target column configuration
             target_column_config = self._find_column_config(workflow_config, to_column)
             if not target_column_config:
-                logger.warning(f"Column '{to_column}' not found in workflow config")
+                logger.warning(
+                    f"Column '{to_column}' not found in workflow config",
+                    extra={"error_id": "ERR_ORCHESTRATOR_HANDLER_COLUMN_NOT_FOUND"}
+                )
                 return
 
             # Case 1: Automated column - trigger agent
@@ -1011,6 +1036,7 @@ class WorkflowOrchestrator:
                         f"Work item has been moved to column but will not be processed automatically.",
                         exc_info=True,
                         extra={
+                            "error_id": "ERR_ORCHESTRATOR_TASK_ENQUEUE_FAILURE",
                             "work_item_id": work_item_id,
                             "project_id": project_id,
                             "board_id": board_id,
@@ -1050,6 +1076,7 @@ class WorkflowOrchestrator:
                 f"project={project_id}, board={board_id}",
                 exc_info=True,
                 extra={
+                    "error_id": "ERR_ORCHESTRATOR_COLUMN_CHANGE_HANDLER_FAILURE",
                     "work_item_id": work_item_id,
                     "project_id": project_id,
                     "board_id": board_id,
@@ -1075,7 +1102,10 @@ class WorkflowOrchestrator:
         if not all([work_item_id, project_id, agent_name]):
             logger.warning(
                 f"Comment event has empty required fields",
-                extra={"event_payload": event.payload}
+                extra={
+                    "error_id": "ERR_ORCHESTRATOR_COMMENT_EVENT_VALIDATION_FAILURE",
+                    "event_payload": event.payload
+                }
             )
             return
 
@@ -1108,6 +1138,7 @@ class WorkflowOrchestrator:
                     f"project={project_id}: {e}",
                     exc_info=True,
                     extra={
+                        "error_id": "ERR_ORCHESTRATOR_COMMENT_RESPONSE_ENQUEUE_FAILURE",
                         "work_item_id": work_item_id,
                         "project_id": project_id,
                         "agent_name": agent_name,
@@ -1122,6 +1153,7 @@ class WorkflowOrchestrator:
                 f"project={project_id}",
                 exc_info=True,
                 extra={
+                    "error_id": "ERR_ORCHESTRATOR_COMMENT_HANDLER_FAILURE",
                     "work_item_id": work_item_id,
                     "project_id": project_id,
                     "error_type": type(e).__name__,
@@ -1146,7 +1178,10 @@ class WorkflowOrchestrator:
         if not all([project_id, board_id]):
             logger.warning(
                 f"Lock event has empty required fields",
-                extra={"event_payload": event.payload}
+                extra={
+                    "error_id": "ERR_ORCHESTRATOR_LOCK_EVENT_VALIDATION_FAILURE",
+                    "event_payload": event.payload
+                }
             )
             return
 
@@ -1163,7 +1198,8 @@ class WorkflowOrchestrator:
             # Board service required for processing next item
             if not self.board_service:
                 logger.warning(
-                    "Board service not configured, cannot process next queued item"
+                    "Board service not configured, cannot process next queued item",
+                    extra={"error_id": "ERR_ORCHESTRATOR_BOARD_SERVICE_NOT_CONFIGURED"}
                 )
                 return
 
@@ -1179,14 +1215,20 @@ class WorkflowOrchestrator:
             try:
                 item_position = await self.board_service.get_item_position(next_in_queue)
                 if not item_position:
-                    logger.warning(f"Could not find position for item {next_in_queue}")
+                    logger.warning(
+                        f"Could not find position for item {next_in_queue}",
+                        extra={"error_id": "ERR_ORCHESTRATOR_ITEM_POSITION_NOT_FOUND"}
+                    )
                     return
 
                 current_column_name = item_position.column_name
                 column_config = self._find_column_config(workflow_config, current_column_name)
 
                 if not column_config:
-                    logger.warning(f"No config found for column {current_column_name}")
+                    logger.warning(
+                        f"No config found for column {current_column_name}",
+                        extra={"error_id": "ERR_ORCHESTRATOR_QUEUE_COLUMN_CONFIG_NOT_FOUND"}
+                    )
                     return
 
                 # If this is an automated column, trigger the agent
@@ -1219,6 +1261,7 @@ class WorkflowOrchestrator:
                     f"for project={project_id}, board={board_id}: {e}",
                     exc_info=True,
                     extra={
+                        "error_id": "ERR_ORCHESTRATOR_QUEUED_ITEM_PROCESS_FAILURE",
                         "work_item_id": next_in_queue,
                         "project_id": project_id,
                         "board_id": board_id,
@@ -1233,6 +1276,7 @@ class WorkflowOrchestrator:
                 f"board={board_id}: {e}",
                 exc_info=True,
                 extra={
+                    "error_id": "ERR_ORCHESTRATOR_LOCK_RELEASED_HANDLER_FAILURE",
                     "project_id": project_id,
                     "board_id": board_id,
                     "next_in_queue": next_in_queue,
@@ -1258,7 +1302,8 @@ class WorkflowOrchestrator:
 
         if not all([work_item_id, project_id, new_status]):
             logger.warning(
-                f"Review event missing required fields: {event.payload}"
+                f"Review event missing required fields: {event.payload}",
+                extra={"error_id": "ERR_ORCHESTRATOR_REVIEW_EVENT_VALIDATION_FAILURE"}
             )
             return
 
@@ -1280,13 +1325,19 @@ class WorkflowOrchestrator:
                     # Find current column
                     item_position = await self.workflow_state.get_item_position(work_item_id)
                     if not item_position:
-                        logger.warning(f"Could not find position for item {work_item_id}")
+                        logger.warning(
+                            f"Could not find position for item {work_item_id}",
+                            extra={"error_id": "ERR_ORCHESTRATOR_REVIEW_ITEM_POSITION_NOT_FOUND"}
+                        )
                         return
 
                     current_column_name = item_position.get("column")
                     current_column = self._find_column_config(workflow_config, current_column_name)
                     if not current_column:
-                        logger.warning(f"No config for column {current_column_name}")
+                        logger.warning(
+                            f"No config for column {current_column_name}",
+                            extra={"error_id": "ERR_ORCHESTRATOR_REVIEW_COLUMN_CONFIG_NOT_FOUND"}
+                        )
                         return
 
                     # Find next column
@@ -1307,6 +1358,7 @@ class WorkflowOrchestrator:
                         f"Failed to move approved item: {e}",
                         exc_info=True,
                         extra={
+                            "error_id": "ERR_ORCHESTRATOR_APPROVED_ITEM_MOVE_FAILURE",
                             "work_item_id": work_item_id,
                             "project_id": project_id,
                             "board_id": board_id,
@@ -1339,12 +1391,16 @@ class WorkflowOrchestrator:
                             project_id, work_item_id, dev_column.name
                         )
                     else:
-                        logger.warning(f"No development column found for item {work_item_id}")
+                        logger.warning(
+                            f"No development column found for item {work_item_id}",
+                            extra={"error_id": "ERR_ORCHESTRATOR_DEV_COLUMN_NOT_FOUND"}
+                        )
                 except Exception as e:
                     logger.error(
                         f"Failed to move item back to development: {e}",
                         exc_info=True,
                         extra={
+                            "error_id": "ERR_ORCHESTRATOR_CHANGES_REQUESTED_MOVE_FAILURE",
                             "work_item_id": work_item_id,
                             "project_id": project_id,
                             "board_id": board_id,

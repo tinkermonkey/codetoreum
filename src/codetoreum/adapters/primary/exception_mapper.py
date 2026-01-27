@@ -29,6 +29,7 @@ from codetoreum.infrastructure.logging import get_logger
 from codetoreum.ports.exceptions import (
     AuthenticationError,
     ConcurrencyConflictError,
+    EmptyAgentResponseError,
     ExternalServiceError,
     PortError,
     RateLimitError,
@@ -171,6 +172,13 @@ def map_exception_to_http(exc: Exception, default_detail: Optional[str] = None) 
     if isinstance(exc, PortValidationError):
         return HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
+            detail=detail,
+        )
+
+    # Empty Agent Response (502) - External LLM provider returned invalid response
+    if isinstance(exc, EmptyAgentResponseError):
+        return HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
             detail=detail,
         )
 

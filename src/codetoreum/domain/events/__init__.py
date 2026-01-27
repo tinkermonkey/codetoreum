@@ -48,6 +48,7 @@ from .discussion_events import (
     CommentContext,
     CommentNeedsResponseEvent,
     CommentPostedEvent,
+    AgentResponsePostedEvent,
 )
 
 # Code review events
@@ -167,6 +168,7 @@ __all__ = [
     "CommentContext",
     "CommentNeedsResponseEvent",
     "CommentPostedEvent",
+    "AgentResponsePostedEvent",
     # Code review events
     "CodeReviewStatus",
     "ReviewStatusChangedEvent",

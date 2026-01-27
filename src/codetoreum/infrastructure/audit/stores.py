@@ -262,7 +262,11 @@ class FileAuditStore(IAuditStore):
             async with aiofiles.open(self.file_path, "a"):
                 pass
         except Exception as e:
-            logger.error(f"Failed to create audit log file: {e}")
+            logger.error(
+                f"Failed to create audit log file: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_AUDIT_STORE_DIRECTORY_FAILED"},
+            )
 
     async def store_event(
         self,
@@ -300,7 +304,11 @@ class FileAuditStore(IAuditStore):
             async with aiofiles.open(self.file_path, "a") as f:
                 await f.write(json.dumps(event) + "\n")
         except Exception as e:
-            logger.error(f"Failed to write audit event to file: {e}")
+            logger.error(
+                f"Failed to write audit event to file: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_AUDIT_STORE_WRITE_EVENT_FAILED"},
+            )
             # Don't raise - audit failures shouldn't break the application
 
         return event_id
@@ -360,7 +368,11 @@ class FileAuditStore(IAuditStore):
             logger.warning(f"Audit log file not found: {self.file_path}")
             return []
         except Exception as e:
-            logger.error(f"Failed to read audit log file: {e}")
+            logger.error(
+                f"Failed to read audit log file: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_AUDIT_STORE_READ_EVENTS_FAILED"},
+            )
             return []
 
         # Sort by timestamp (newest first)
@@ -423,7 +435,11 @@ class FileAuditStore(IAuditStore):
             logger.info(f"Cleaned up {deleted_count} old audit events")
 
         except Exception as e:
-            logger.error(f"Failed to cleanup old audit events: {e}")
+            logger.error(
+                f"Failed to cleanup old audit events: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_AUDIT_STORE_CLEANUP_FAILED"},
+            )
 
         return deleted_count
 
@@ -441,7 +457,11 @@ class FileAuditStore(IAuditStore):
                         return event
 
         except Exception as e:
-            logger.error(f"Failed to retrieve audit event: {e}")
+            logger.error(
+                f"Failed to retrieve audit event: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_AUDIT_STORE_RETRIEVE_FAILED"},
+            )
 
         return None
 
@@ -549,7 +569,11 @@ class PostgreSQLAuditStore(IAuditStore):
                 )
                 await session.commit()
             except Exception as e:
-                logger.error(f"Failed to store audit event in PostgreSQL: {e}")
+                logger.error(
+                    f"Failed to store audit event in PostgreSQL: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_AUDIT_POSTGRES_STORE_FAILED"},
+                )
                 await session.rollback()
                 # Don't raise - audit failures shouldn't break the application
 
@@ -636,7 +660,11 @@ class PostgreSQLAuditStore(IAuditStore):
                 return events
 
             except Exception as e:
-                logger.error(f"Failed to query audit events from PostgreSQL: {e}")
+                logger.error(
+                    f"Failed to query audit events from PostgreSQL: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_AUDIT_POSTGRES_READ_EVENTS_FAILED"},
+                )
                 return []
 
     async def count_events(self, filters: AuditQueryFilters) -> int:
@@ -691,7 +719,11 @@ class PostgreSQLAuditStore(IAuditStore):
                 count = result.scalar()
                 return count or 0
             except Exception as e:
-                logger.error(f"Failed to count audit events in PostgreSQL: {e}")
+                logger.error(
+                    f"Failed to count audit events in PostgreSQL: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_AUDIT_POSTGRES_COUNT_FAILED"},
+                )
                 return 0
 
     async def cleanup_old_events(self, retention_days: int) -> int:
@@ -713,7 +745,11 @@ class PostgreSQLAuditStore(IAuditStore):
                 return deleted_count
 
             except Exception as e:
-                logger.error(f"Failed to cleanup old audit events in PostgreSQL: {e}")
+                logger.error(
+                    f"Failed to cleanup old audit events in PostgreSQL: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_AUDIT_POSTGRES_CLEANUP_FAILED"},
+                )
                 await session.rollback()
                 return 0
 
@@ -755,7 +791,11 @@ class PostgreSQLAuditStore(IAuditStore):
                 }
 
             except Exception as e:
-                logger.error(f"Failed to retrieve audit event from PostgreSQL: {e}")
+                logger.error(
+                    f"Failed to retrieve audit event from PostgreSQL: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_AUDIT_POSTGRES_RETRIEVE_FAILED"},
+                )
                 return None
 
     async def close(self) -> None:

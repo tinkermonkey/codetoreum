@@ -588,3 +588,143 @@ async def test_workflow_state_persistence(orchestrator, mock_workflow_state):
     assert state.current_column == "Requirements"
     assert state.current_agent == "business_analyst"
     assert state.is_in_progress("Requirements", "business_analyst")
+
+
+@pytest.mark.asyncio
+async def test_handle_stage_completion_context_none(orchestrator):
+    """Test stage completion with context=None raises AttributeError (type violation)."""
+    event = StageCompletedEvent(
+        project="test-project",
+        issue_number=123,
+        stage_name="Implementation",
+        agent_name="developer",
+        success=True,
+        output="Implementation complete",
+        context=None,  # Type violation: context should be Dict[str, Any]
+        timestamp=datetime.now(timezone.utc),
+    )
+
+    # Should raise AttributeError since None doesn't have .get() method
+    with pytest.raises(AttributeError, match="'NoneType' object has no attribute"):
+        await orchestrator.handle_stage_completion(event)
+
+
+@pytest.mark.asyncio
+async def test_handle_stage_completion_with_extra_context_keys(
+    orchestrator, mock_task_queue, mock_decision_events
+):
+    """Test stage completion ignores extra keys in context dict."""
+    event = StageCompletedEvent(
+        project="test-project",
+        issue_number=123,
+        stage_name="Implementation",
+        agent_name="developer",
+        success=True,
+        output="Implementation complete",
+        context={"board": "Development", "extra_key": "extra_value", "another": 123},
+        timestamp=datetime.now(timezone.utc),
+    )
+
+    # Should ignore extra keys and use board="Development"
+    result = await orchestrator.handle_stage_completion(event)
+
+    assert result.success is True
+    assert result.action == WorkflowAction.TASK_QUEUED
+    assert result.agent_name == "code_reviewer"
+
+
+@pytest.mark.asyncio
+async def test_handle_review_cycle_completion_context_none(orchestrator):
+    """Test review cycle completion with context=None raises AttributeError (type violation)."""
+    event = ReviewCycleCompletedEvent(
+        project="test-project",
+        issue_number=123,
+        approved=True,
+        iteration=1,
+        maker_agent="developer",
+        reviewer_agent="code_reviewer",
+        feedback=None,
+        context=None,  # Type violation: context should be Dict[str, Any]
+        timestamp=datetime.now(timezone.utc),
+    )
+
+    # Should raise AttributeError since None doesn't have .get() method
+    with pytest.raises(AttributeError, match="'NoneType' object has no attribute"):
+        await orchestrator.handle_review_cycle_completion(event)
+
+
+@pytest.mark.asyncio
+async def test_handle_review_cycle_completion_with_extra_context_keys(
+    orchestrator, mock_projects_api
+):
+    """Test review cycle completion ignores extra keys in context dict."""
+    event = ReviewCycleCompletedEvent(
+        project="test-project",
+        issue_number=123,
+        approved=True,
+        iteration=1,
+        maker_agent="developer",
+        reviewer_agent="code_reviewer",
+        feedback=None,
+        context={"board": "Development", "extra": "value", "other": 456},
+        timestamp=datetime.now(timezone.utc),
+    )
+
+    # Should ignore extra keys and use board="Development"
+    result = await orchestrator.handle_review_cycle_completion(event)
+
+    assert result.success is True
+    assert result.action == WorkflowAction.COMPLETE
+
+
+@pytest.mark.asyncio
+async def test_handle_review_cycle_completion_missing_max_iterations(
+    orchestrator, mock_task_queue
+):
+    """Test review cycle completion without max_iterations uses default of 3."""
+    event = ReviewCycleCompletedEvent(
+        project="test-project",
+        issue_number=123,
+        approved=False,
+        iteration=2,
+        maker_agent="developer",
+        reviewer_agent="code_reviewer",
+        feedback="Please fix",
+        context={"board": "Development"},  # No max_iterations key
+        timestamp=datetime.now(timezone.utc),
+    )
+
+    result = await orchestrator.handle_review_cycle_completion(event)
+
+    # Iteration 2 < max_iterations default 3, so should retry
+    assert result.success is True
+    assert result.action == WorkflowAction.TASK_QUEUED
+    assert result.agent_name == "developer"
+
+    # Verify retry task was queued
+    task = mock_task_queue.get_last_task()
+    assert task.agent == "developer"
+
+
+@pytest.mark.asyncio
+async def test_handle_review_cycle_completion_max_iterations_exceeded(
+    orchestrator, mock_decision_events
+):
+    """Test review cycle completion escalates when max_iterations reached."""
+    event = ReviewCycleCompletedEvent(
+        project="test-project",
+        issue_number=123,
+        approved=False,
+        iteration=3,
+        maker_agent="developer",
+        reviewer_agent="code_reviewer",
+        feedback="Still not good",
+        context={"board": "Development"},  # max_iterations defaults to 3
+        timestamp=datetime.now(timezone.utc),
+    )
+
+    result = await orchestrator.handle_review_cycle_completion(event)
+
+    # Iteration 3 >= max_iterations default 3, so escalate
+    assert result.action == WorkflowAction.ESCALATE
+    assert "Max review iterations (3) reached" in result.reason

@@ -278,17 +278,31 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
                 workflows.append(workflow)
 
             except ResourceNotFoundError:
-                logger.warning(f"Workflow {stream_id} not found during reconstruction")
+                logger.warning(
+                    f"Workflow {stream_id} not found during reconstruction",
+                    extra={"error_id": "ERR_WORKFLOW_RUN_QUERY_NOT_FOUND"}
+                )
                 failed_count += 1
             except ValueError as e:
-                logger.error(f"Invalid workflow state for {stream_id}: {e}")
+                logger.error(
+                    f"Invalid workflow state for {stream_id}: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_WORKFLOW_RUN_QUERY_INVALID_STATE"}
+                )
                 failed_count += 1
             except Exception as e:
-                logger.error(f"Unexpected error reconstructing workflow {stream_id}: {e}")
+                logger.error(
+                    f"Unexpected error reconstructing workflow {stream_id}: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_WORKFLOW_RUN_QUERY_RECONSTRUCTION_FAILURE"}
+                )
                 failed_count += 1
 
         if failed_count > 0:
-            logger.warning(f"Failed to reconstruct {failed_count} workflows")
+            logger.warning(
+                f"Failed to reconstruct {failed_count} workflows",
+                extra={"error_id": "ERR_WORKFLOW_RUN_QUERY_PARTIAL_RECONSTRUCTION_FAILURE"}
+            )
 
         # Post-reconstruction filtering (status filtering requires reconstructed workflow state)
         filtered_workflows = self._filter_workflows_by_status(workflows, filters)
@@ -451,13 +465,16 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
             except WorkItemNotFoundError:
                 logger.warning(
                     f"Work item {workflow.work_item_id} not found, "
-                    f"using default metadata"
+                    f"using default metadata",
+                    extra={"error_id": "ERR_WORKFLOW_RUN_QUERY_WORK_ITEM_NOT_FOUND"}
                 )
                 return self._to_workflow_run_summary(workflow, self._default_metadata())
             except Exception as e:
                 logger.error(
                     f"Unexpected error enriching workflow {workflow.id} "
-                    f"with work item {workflow.work_item_id}: {e}"
+                    f"with work item {workflow.work_item_id}: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_WORKFLOW_RUN_QUERY_ENRICH_FAILURE"}
                 )
                 return self._to_workflow_run_summary(workflow, self._default_metadata())
 
@@ -587,13 +604,18 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
                     "priority": work_item.priority.name if work_item.priority else None,
                 }
             except WorkItemNotFoundError:
-                logger.warning(f"Work item {work_item_id} not found in ticket system")
+                logger.warning(
+                    f"Work item {work_item_id} not found in ticket system",
+                    extra={"error_id": "ERR_WORKFLOW_RUN_QUERY_METADATA_NOT_FOUND"}
+                )
                 # Cache the failure to avoid repeated lookups
                 self._work_item_cache.set(work_item_id, metadata)
                 raise
             except Exception as e:
                 logger.error(
-                    f"Unexpected error fetching work item metadata for {work_item_id}: {e}"
+                    f"Unexpected error fetching work item metadata for {work_item_id}: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_WORKFLOW_RUN_QUERY_METADATA_FETCH_FAILURE"}
                 )
                 # Don't cache errors (might be transient)
                 return metadata

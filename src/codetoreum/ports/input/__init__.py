@@ -70,6 +70,9 @@ from .authentication import (
     UserAlreadyExistsError,
     UserNotFoundError,
 )
+from .conversational_loop_service import (
+    IConversationalLoopService,
+)
 
 __all__ = [
     # Exceptions
@@ -132,4 +135,6 @@ __all__ = [
     "UserAlreadyExistsError",
     "UserNotFoundError",
     "APIKeyNotFoundError",
+    # Conversational Loop Service Port
+    "IConversationalLoopService",
 ]

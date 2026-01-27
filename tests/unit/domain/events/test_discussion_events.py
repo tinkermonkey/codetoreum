@@ -8,15 +8,9 @@ from codetoreum.domain.events import (
     CommentContext,
     CommentNeedsResponseEvent,
     CommentPostedEvent,
+    AgentResponsePostedEvent,
     now_iso,
 )
-
-# For immutability tests (when events become frozen dataclasses)
-try:
-    from dataclasses import FrozenInstanceError
-except ImportError:
-    # Fallback for older Python versions or non-frozen dataclasses
-    FrozenInstanceError = AttributeError  # type: ignore
 
 
 class TestComment:
@@ -162,7 +156,7 @@ class TestCommentContext:
         assert context.column_name == "In Progress"
 
     def test_context_with_parent_comment(self):
-        """Test context with parent comment."""
+        """Test context with parent comment using factory method."""
         parent = Comment(
             id="p1",
             author="alice",
@@ -170,12 +164,15 @@ class TestCommentContext:
             created_at=now_iso(),
         )
 
-        context = CommentContext(
+        # Use factory method which properly handles threading
+        context = CommentContext.for_reply(
+            thread_id="t1",
             parent_comment=parent,
-            is_initial_request=False,
         )
 
         assert context.parent_comment == parent
+        assert context.thread_id == "t1"
+        assert context.is_initial_request is False
 
     def test_context_initial_request(self):
         """Test context marked as initial request."""
@@ -195,10 +192,10 @@ class TestCommentContext:
             created_at=now_iso(),
         )
 
-        context = CommentContext(
+        # Use factory method to create valid context
+        context = CommentContext.for_reply(
             thread_id="t1",
             parent_comment=parent,
-            is_initial_request=True,
             column_name="Backlog",
             agent_assignment="a1",
         )
@@ -206,7 +203,7 @@ class TestCommentContext:
         d = context.to_dict()
 
         assert d["thread_id"] == "t1"
-        assert d["is_initial_request"] is True
+        assert d["is_initial_request"] is False
         assert d["parent_comment"]["id"] == "p1"
 
     def test_context_deserialization(self):
@@ -219,7 +216,7 @@ class TestCommentContext:
                 "body": "test",
                 "created_at": now_iso(),
             },
-            "is_initial_request": True,
+            "is_initial_request": False,  # Must be False when parent_comment is set
             "column_name": "Backlog",
             "agent_assignment": "a1",
         }
@@ -229,6 +226,7 @@ class TestCommentContext:
         assert context.thread_id == "t1"
         assert context.parent_comment is not None
         assert context.parent_comment.id == "p1"
+        assert context.is_initial_request is False
 
     def test_context_immutability(self):
         """Test that CommentContext instances are immutable."""
@@ -248,6 +246,51 @@ class TestCommentContext:
                 parent_comment=Comment(id="", author="alice", body="test", created_at=now_iso())
             )
 
+    def test_context_initial_request_with_parent_raises_error(self):
+        """Test that is_initial_request=True with parent_comment raises ValueError."""
+        parent = Comment(
+            id="p1",
+            author="alice",
+            body="original",
+            created_at=now_iso(),
+        )
+
+        with pytest.raises(ValueError, match="Initial requests cannot have parent comments"):
+            CommentContext(
+                parent_comment=parent,
+                is_initial_request=True,
+            )
+
+    def test_context_parent_comment_without_thread_id_raises_error(self):
+        """Test that parent_comment without thread_id raises ValueError."""
+        parent = Comment(
+            id="p1",
+            author="alice",
+            body="original",
+            created_at=now_iso(),
+        )
+
+        with pytest.raises(ValueError, match="Replies with parent comments must have thread_id"):
+            CommentContext(
+                parent_comment=parent,
+                thread_id=None,  # Missing thread_id
+            )
+
+    def test_context_parent_comment_with_empty_thread_id_raises_error(self):
+        """Test that parent_comment with empty thread_id raises ValueError."""
+        parent = Comment(
+            id="p1",
+            author="alice",
+            body="original",
+            created_at=now_iso(),
+        )
+
+        with pytest.raises(ValueError, match="Replies with parent comments must have thread_id"):
+            CommentContext(
+                parent_comment=parent,
+                thread_id="",  # Empty string
+            )
+
     def test_context_serialization_roundtrip(self):
         """Test context serialization and deserialization roundtrip."""
         parent = Comment(
@@ -260,7 +303,7 @@ class TestCommentContext:
         original = CommentContext(
             thread_id="t1",
             parent_comment=parent,
-            is_initial_request=True,
+            is_initial_request=False,
             column_name="Backlog",
             agent_assignment="a1",
         )
@@ -273,6 +316,74 @@ class TestCommentContext:
         assert restored.column_name == original.column_name
         assert restored.agent_assignment == original.agent_assignment
         assert restored.parent_comment.id == original.parent_comment.id
+
+    def test_context_factory_for_initial_request(self):
+        """Test factory method for creating initial request context."""
+        context = CommentContext.for_initial_request(
+            column_name="Backlog",
+            agent_assignment="agent-1",
+        )
+
+        assert context.is_initial_request is True
+        assert context.parent_comment is None
+        assert context.thread_id is None
+        assert context.column_name == "Backlog"
+        assert context.agent_assignment == "agent-1"
+
+    def test_context_factory_for_initial_request_minimal(self):
+        """Test factory method for initial request with minimal parameters."""
+        context = CommentContext.for_initial_request()
+
+        assert context.is_initial_request is True
+        assert context.parent_comment is None
+        assert context.thread_id is None
+        assert context.column_name == ""
+        assert context.agent_assignment == ""
+
+    def test_context_factory_for_reply(self):
+        """Test factory method for creating reply context."""
+        parent = Comment(
+            id="p1",
+            author="alice",
+            body="original",
+            created_at=now_iso(),
+        )
+
+        context = CommentContext.for_reply(
+            thread_id="t1",
+            parent_comment=parent,
+            column_name="Review",
+            agent_assignment="agent-2",
+        )
+
+        assert context.is_initial_request is False
+        assert context.parent_comment == parent
+        assert context.thread_id == "t1"
+        assert context.column_name == "Review"
+        assert context.agent_assignment == "agent-2"
+
+    def test_context_factory_for_reply_missing_thread_id(self):
+        """Test that factory raises error if thread_id is empty."""
+        parent = Comment(
+            id="p1",
+            author="alice",
+            body="original",
+            created_at=now_iso(),
+        )
+
+        with pytest.raises(ValueError, match="thread_id cannot be empty"):
+            CommentContext.for_reply(
+                thread_id="",
+                parent_comment=parent,
+            )
+
+    def test_context_factory_for_reply_missing_parent_comment(self):
+        """Test that factory raises error if parent_comment is None."""
+        with pytest.raises(ValueError, match="parent_comment cannot be None"):
+            CommentContext.for_reply(
+                thread_id="t1",
+                parent_comment=None,
+            )
 
 
 class TestCommentNeedsResponseEvent:
@@ -577,9 +688,10 @@ class TestCommentContextImmutability:
             created_at=now_iso(),
         )
 
-        context = CommentContext(
+        # Use factory method to create valid context
+        context = CommentContext.for_reply(
+            thread_id="t1",
             parent_comment=parent,
-            is_initial_request=False,
         )
 
         # Verify nested comment is preserved
@@ -704,3 +816,250 @@ class TestCommentPostedEventImmutability:
 
         with pytest.raises(FrozenInstanceError):
             event.comment.author = "alice"  # type: ignore
+
+
+class TestAgentResponsePostedEvent:
+    """Test AgentResponsePostedEvent."""
+
+    def test_create_valid_event(self):
+        """Test creating a valid agent response posted event."""
+        event = AgentResponsePostedEvent(
+            type="agent.response_posted",
+            timestamp=now_iso(),
+            source="orchestrator",
+            work_item_id="issue-1",
+            project_id="proj-1",
+            comment_id="comment-42",
+            response_comment_id="comment-43",
+            agent_name="code-reviewer",
+            conversation_id="conv-session-123",
+        )
+
+        assert event.work_item_id == "issue-1"
+        assert event.project_id == "proj-1"
+        assert event.comment_id == "comment-42"
+        assert event.response_comment_id == "comment-43"
+        assert event.agent_name == "code-reviewer"
+        assert event.conversation_id == "conv-session-123"
+
+    def test_create_without_conversation_id(self):
+        """Test creating event without conversation_id (optional field)."""
+        event = AgentResponsePostedEvent(
+            type="agent.response_posted",
+            timestamp=now_iso(),
+            source="orchestrator",
+            work_item_id="issue-1",
+            project_id="proj-1",
+            comment_id="comment-42",
+            response_comment_id="comment-43",
+            agent_name="code-reviewer",
+        )
+
+        assert event.conversation_id is None
+
+    def test_missing_work_item_id(self):
+        """Test that work_item_id is required."""
+        with pytest.raises(ValueError, match="work_item_id is required"):
+            AgentResponsePostedEvent(
+                type="agent.response_posted",
+                timestamp=now_iso(),
+                source="orchestrator",
+                work_item_id="",  # Empty
+                project_id="proj-1",
+                comment_id="comment-42",
+                response_comment_id="comment-43",
+                agent_name="code-reviewer",
+            )
+
+    def test_missing_project_id(self):
+        """Test that project_id is required."""
+        with pytest.raises(ValueError, match="project_id is required"):
+            AgentResponsePostedEvent(
+                type="agent.response_posted",
+                timestamp=now_iso(),
+                source="orchestrator",
+                work_item_id="issue-1",
+                project_id="",  # Empty
+                comment_id="comment-42",
+                response_comment_id="comment-43",
+                agent_name="code-reviewer",
+            )
+
+    def test_missing_comment_id(self):
+        """Test that comment_id is required."""
+        with pytest.raises(ValueError, match="comment_id is required"):
+            AgentResponsePostedEvent(
+                type="agent.response_posted",
+                timestamp=now_iso(),
+                source="orchestrator",
+                work_item_id="issue-1",
+                project_id="proj-1",
+                comment_id="",  # Empty
+                response_comment_id="comment-43",
+                agent_name="code-reviewer",
+            )
+
+    def test_missing_response_comment_id(self):
+        """Test that response_comment_id is required."""
+        with pytest.raises(ValueError, match="response_comment_id is required"):
+            AgentResponsePostedEvent(
+                type="agent.response_posted",
+                timestamp=now_iso(),
+                source="orchestrator",
+                work_item_id="issue-1",
+                project_id="proj-1",
+                comment_id="comment-42",
+                response_comment_id="",  # Empty
+                agent_name="code-reviewer",
+            )
+
+    def test_missing_agent_name(self):
+        """Test that agent_name is required."""
+        with pytest.raises(ValueError, match="agent_name is required"):
+            AgentResponsePostedEvent(
+                type="agent.response_posted",
+                timestamp=now_iso(),
+                source="orchestrator",
+                work_item_id="issue-1",
+                project_id="proj-1",
+                comment_id="comment-42",
+                response_comment_id="comment-43",
+                agent_name="",  # Empty
+            )
+
+    def test_agent_response_posted_serialization(self):
+        """Test agent response posted event serialization."""
+        timestamp = now_iso()
+        event = AgentResponsePostedEvent(
+            type="agent.response_posted",
+            timestamp=timestamp,
+            source="orchestrator",
+            correlation_id="corr-1",
+            work_item_id="issue-1",
+            project_id="proj-1",
+            comment_id="comment-42",
+            response_comment_id="comment-43",
+            agent_name="code-reviewer",
+            conversation_id="conv-abc123",
+        )
+
+        d = event.to_dict()
+
+        assert d["work_item_id"] == "issue-1"
+        assert d["project_id"] == "proj-1"
+        assert d["comment_id"] == "comment-42"
+        assert d["response_comment_id"] == "comment-43"
+        assert d["agent_name"] == "code-reviewer"
+        assert d["conversation_id"] == "conv-abc123"
+        assert d["timestamp"] == timestamp
+
+    def test_agent_response_posted_roundtrip(self):
+        """Test agent response posted event roundtrip."""
+        timestamp = now_iso()
+        event = AgentResponsePostedEvent(
+            type="agent.response_posted",
+            timestamp=timestamp,
+            source="orchestrator",
+            correlation_id="corr-2",
+            work_item_id="issue-1",
+            project_id="proj-1",
+            comment_id="comment-42",
+            response_comment_id="comment-43",
+            agent_name="code-reviewer",
+            conversation_id="conv-session-123",
+        )
+
+        d = event.to_dict()
+        restored = AgentResponsePostedEvent.from_dict(d)
+
+        assert restored.work_item_id == event.work_item_id
+        assert restored.project_id == event.project_id
+        assert restored.comment_id == event.comment_id
+        assert restored.response_comment_id == event.response_comment_id
+        assert restored.agent_name == event.agent_name
+        assert restored.conversation_id == event.conversation_id
+        assert restored.timestamp == event.timestamp
+
+    def test_agent_response_posted_roundtrip_without_conversation_id(self):
+        """Test agent response posted event roundtrip without conversation_id."""
+        timestamp = now_iso()
+        event = AgentResponsePostedEvent(
+            type="agent.response_posted",
+            timestamp=timestamp,
+            source="orchestrator",
+            work_item_id="issue-2",
+            project_id="proj-2",
+            comment_id="comment-99",
+            response_comment_id="comment-100",
+            agent_name="bug-fixer",
+        )
+
+        d = event.to_dict()
+        restored = AgentResponsePostedEvent.from_dict(d)
+
+        assert restored.work_item_id == event.work_item_id
+        assert restored.conversation_id is None
+
+
+class TestAgentResponsePostedEventImmutability:
+    """Test immutability of AgentResponsePostedEvent (frozen dataclass)."""
+
+    def test_agent_response_posted_event_is_frozen(self):
+        """Test that AgentResponsePostedEvent is immutable (frozen dataclass)."""
+        event = AgentResponsePostedEvent(
+            type="agent.response_posted",
+            timestamp=now_iso(),
+            source="orchestrator",
+            work_item_id="issue-1",
+            project_id="proj-1",
+            comment_id="comment-42",
+            response_comment_id="comment-43",
+            agent_name="code-reviewer",
+            conversation_id="conv-session-123",
+        )
+
+        # Verify the event is properly created
+        assert event.work_item_id == "issue-1"
+        assert event.project_id == "proj-1"
+        assert event.comment_id == "comment-42"
+        assert event.response_comment_id == "comment-43"
+        assert event.agent_name == "code-reviewer"
+        assert event.conversation_id == "conv-session-123"
+
+        # AgentResponsePostedEvent is a frozen dataclass, so attempting to modify
+        # any attribute should raise FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
+            event.work_item_id = "issue-2"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.project_id = "proj-2"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.comment_id = "comment-99"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.response_comment_id = "comment-100"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.agent_name = "bug-fixer"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.conversation_id = "conv-different"  # type: ignore
+
+    def test_agent_response_posted_event_multiple_modifications_fail(self):
+        """Test that multiple attempts to modify frozen event all fail."""
+        event = AgentResponsePostedEvent(
+            type="agent.response_posted",
+            timestamp=now_iso(),
+            source="orchestrator",
+            work_item_id="issue-1",
+            project_id="proj-1",
+            comment_id="comment-42",
+            response_comment_id="comment-43",
+            agent_name="code-reviewer",
+        )
+
+        # All modification attempts should fail consistently
+        for attempt in range(3):
+            with pytest.raises(FrozenInstanceError):
+                event.work_item_id = f"issue-{attempt}"  # type: ignore

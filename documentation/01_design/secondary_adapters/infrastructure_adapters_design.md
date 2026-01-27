@@ -570,9 +570,11 @@ class IEventStore(ABC):
         pass
 ```
 
-## Elasticsearch Event Store with Redis Buffering (Production)
+## Event Store Adapters
 
-**Architecture**: Events are buffered in Redis Streams then asynchronously persisted to Elasticsearch by background workers.
+**Current Implementation**: In-memory event store is used for v1.0. Below is the design for Elasticsearch + Redis architecture, which will be enabled in future production deployments.
+
+**Planned Architecture**: Events are buffered in Redis Streams then asynchronously persisted to Elasticsearch by background workers.
 
 ```python
 from elasticsearch import AsyncElasticsearch

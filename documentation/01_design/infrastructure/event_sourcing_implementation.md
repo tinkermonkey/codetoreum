@@ -385,23 +385,51 @@ Automatically created on first use with the following mappings:
 
 #### Integration Tests
 
-Integration tests with Elasticsearch and Redis should use testcontainers:
+Integration tests with Elasticsearch and Redis should use testcontainers with modern wait strategies:
 
 ```python
-from testcontainers.elasticsearch import ElasticSearchContainer
-from testcontainers.redis import RedisContainer
+from testcontainers.core.container import DockerContainer
+from testcontainers.core.wait_strategies import HttpWaitStrategy, PortWaitStrategy
 
-# Elasticsearch
-with ElasticSearchContainer("elasticsearch:8.11.0") as es:
-    es_client = AsyncElasticsearch([es.get_url()])
-    event_store = ElasticsearchEventStore(es_client)
-    # Test event store operations
+# Modern Elasticsearch Container (avoids deprecation warnings)
+class ModernElasticsearchContainer(DockerContainer):
+    def __init__(self, image: str = "elasticsearch:8.11.0"):
+        super().__init__(image)
+        self.with_exposed_ports(9200)
+        self.with_env("xpack.security.enabled", "false")
+        self.with_env("discovery.type", "single-node")
+        self.waiting_for(HttpWaitStrategy(port=9200).for_status_code(200))
 
-# Redis
-with RedisContainer("redis:7") as redis:
-    redis_client = aioredis.from_url(redis.get_connection_url())
-    buffer = RedisEventBuffer(redis_client)
-    # Test buffer operations
+    def get_url(self) -> str:
+        host = self.get_container_host_ip()
+        port = self.get_exposed_port(9200)
+        return f"http://{host}:{port}"
+
+# Modern Redis Container (avoids deprecation warnings)
+class ModernRedisContainer(DockerContainer):
+    def __init__(self, image: str = "redis:latest"):
+        super().__init__(image)
+        self.with_exposed_ports(6379)
+        self.waiting_for(PortWaitStrategy(6379))
+
+# Usage in tests:
+es = ModernElasticsearchContainer("elasticsearch:8.11.0")
+es.start()
+es_client = AsyncElasticsearch([es.get_url()])
+event_store = ElasticsearchEventStore(es_client)
+# Test event store operations
+es.stop()
+
+redis = ModernRedisContainer("redis:7")
+redis.start()
+redis_client = aioredis.Redis(host=redis.get_container_host_ip(),
+                              port=redis.get_exposed_port(6379))
+buffer = RedisEventBuffer(redis_client)
+# Test buffer operations
+redis.stop()
+
+# Or import from tests.conftest:
+from tests.conftest import ModernElasticsearchContainer, ModernRedisContainer
 ```
 
 ### Performance Characteristics

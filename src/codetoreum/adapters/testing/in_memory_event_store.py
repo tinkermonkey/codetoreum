@@ -89,10 +89,12 @@ class InMemoryEventStore(IEventStore):
                 self._all_events.append(event)
 
                 # Update indexes
-                event_type = event.event_type
-                if event_type not in self._events_by_type:
-                    self._events_by_type[event_type] = []
-                self._events_by_type[event_type].append(event)
+                # Handle both old DomainEvent (event_type) and new CodetoreumEvent (type)
+                event_type = getattr(event, 'event_type', None) or getattr(event, 'type', None)
+                if event_type:
+                    if event_type not in self._events_by_type:
+                        self._events_by_type[event_type] = []
+                    self._events_by_type[event_type].append(event)
 
                 # Index by correlation ID
                 if event.correlation_id:
@@ -320,8 +322,9 @@ class InMemoryEventStore(IEventStore):
                     self._all_events.remove(event)
 
                 # Remove from type index
-                event_type = event.event_type
-                if event_type in self._events_by_type:
+                # Handle both old DomainEvent (event_type) and new CodetoreumEvent (type)
+                event_type = getattr(event, 'event_type', None) or getattr(event, 'type', None)
+                if event_type and event_type in self._events_by_type:
                     if event in self._events_by_type[event_type]:
                         self._events_by_type[event_type].remove(event)
 
@@ -596,8 +599,11 @@ class InMemoryEventStore(IEventStore):
                 latest_event = events[-1]
 
                 # Apply event type filters
-                if event_type_filters and latest_event.event_type not in event_type_filters:
-                    continue
+                # Handle both old DomainEvent (event_type) and new CodetoreumEvent (type)
+                if event_type_filters:
+                    latest_event_type = getattr(latest_event, 'event_type', None) or getattr(latest_event, 'type', None)
+                    if latest_event_type not in event_type_filters:
+                        continue
 
                 # Apply event data filters
                 if event_data_filters:

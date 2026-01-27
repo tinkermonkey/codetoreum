@@ -176,7 +176,11 @@ class ElasticsearchConfigStorage(IConfigStore):
                 logger.info(f"Updated mappings for index: {index_name}")
 
         except Exception as e:
-            logger.error(f"Failed to create/update index {index_name}: {e}")
+            logger.error(
+                f"Failed to create/update index {index_name}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_INDEX_CREATE_UPDATE_FAILED"}
+            )
             raise
 
     def _get_projects_mapping(self) -> Dict[str, Any]:
@@ -293,7 +297,11 @@ class ElasticsearchConfigStorage(IConfigStore):
         except NotFoundError:
             raise ConfigNotFoundError(f"Project not found: {project_id}")
         except Exception as e:
-            logger.error(f"Failed to get project config {project_id}: {e}")
+            logger.error(
+                f"Failed to get project config {project_id}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_PROJECT_CONFIG_GET_FAILED"}
+            )
             raise
 
     async def get_project_config_by_name(self, project_name: str) -> ProjectConfig:
@@ -330,7 +338,11 @@ class ElasticsearchConfigStorage(IConfigStore):
         except ConfigNotFoundError:
             raise
         except Exception as e:
-            logger.error(f"Failed to get project config by name {project_name}: {e}")
+            logger.error(
+                f"Failed to get project config by name {project_name}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_PROJECT_CONFIG_GET_BY_NAME_FAILED"}
+            )
             raise
 
     async def save_project_config(self, config: ProjectConfig) -> None:
@@ -404,7 +416,11 @@ class ElasticsearchConfigStorage(IConfigStore):
             )
 
         except Exception as e:
-            logger.error(f"Failed to save project config {config.id}: {e}")
+            logger.error(
+                f"Failed to save project config {config.id}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_PROJECT_CONFIG_SAVE_FAILED"}
+            )
             raise
 
     async def get_agent_config(
@@ -440,7 +456,11 @@ class ElasticsearchConfigStorage(IConfigStore):
                 f"Agent config not found: {project_id}/{agent_name}"
             )
         except Exception as e:
-            logger.error(f"Failed to get agent config {doc_id}: {e}")
+            logger.error(
+                f"Failed to get agent config {doc_id}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_AGENT_CONFIG_GET_FAILED"}
+            )
             raise
 
     async def save_agent_config(self, config: AgentConfig) -> None:
@@ -512,7 +532,11 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.info(f"Saved agent config {doc_id} (version {config.version})")
 
         except Exception as e:
-            logger.error(f"Failed to save agent config {doc_id}: {e}")
+            logger.error(
+                f"Failed to save agent config {doc_id}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_AGENT_CONFIG_SAVE_FAILED"}
+            )
             raise
 
     async def get_pipeline_config(
@@ -562,7 +586,9 @@ class ElasticsearchConfigStorage(IConfigStore):
             raise
         except Exception as e:
             logger.error(
-                f"Failed to get pipeline config {project_id}/{pipeline_name}: {e}"
+                f"Failed to get pipeline config {project_id}/{pipeline_name}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_CONFIG_STORAGE_PIPELINE_CONFIG_GET_FAILURE"}
             )
             raise
 
@@ -635,7 +661,11 @@ class ElasticsearchConfigStorage(IConfigStore):
             )
 
         except Exception as e:
-            logger.error(f"Failed to save pipeline config {config.id}: {e}")
+            logger.error(
+                f"Failed to save pipeline config {config.id}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_PIPELINE_CONFIG_SAVE_FAILED"}
+            )
             raise
 
     async def get_workflow_template(self, template_name: str) -> WorkflowTemplate:
@@ -672,7 +702,11 @@ class ElasticsearchConfigStorage(IConfigStore):
         except ConfigNotFoundError:
             raise
         except Exception as e:
-            logger.error(f"Failed to get workflow template {template_name}: {e}")
+            logger.error(
+                f"Failed to get workflow template {template_name}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_WORKFLOW_TEMPLATE_GET_FAILED"}
+            )
             raise
 
     async def save_workflow_template(self, template: WorkflowTemplate) -> None:
@@ -744,7 +778,11 @@ class ElasticsearchConfigStorage(IConfigStore):
             )
 
         except Exception as e:
-            logger.error(f"Failed to save workflow template {template.id}: {e}")
+            logger.error(
+                f"Failed to save workflow template {template.id}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_WORKFLOW_TEMPLATE_SAVE_FAILED"}
+            )
             raise
 
     async def list_projects(self) -> List[ProjectConfig]:
@@ -770,7 +808,11 @@ class ElasticsearchConfigStorage(IConfigStore):
             return projects
 
         except Exception as e:
-            logger.error(f"Failed to list projects: {e}")
+            logger.error(
+                f"Failed to list projects: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_LIST_PROJECTS_FAILED"}
+            )
             raise
 
     async def list_agents(self, project_id: str) -> List[AgentConfig]:
@@ -802,7 +844,11 @@ class ElasticsearchConfigStorage(IConfigStore):
             return agents
 
         except Exception as e:
-            logger.error(f"Failed to list agents for project {project_id}: {e}")
+            logger.error(
+                f"Failed to list agents for project {project_id}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_LIST_AGENTS_FAILED"}
+            )
             raise
 
     async def list_pipelines(self, project_id: str) -> List[PipelineConfig]:
@@ -834,7 +880,11 @@ class ElasticsearchConfigStorage(IConfigStore):
             return pipelines
 
         except Exception as e:
-            logger.error(f"Failed to list pipelines for project {project_id}: {e}")
+            logger.error(
+                f"Failed to list pipelines for project {project_id}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_LIST_PIPELINES_FAILED"}
+            )
             raise
 
     async def search_configs(
@@ -937,7 +987,11 @@ class ElasticsearchConfigStorage(IConfigStore):
             return configs
 
         except Exception as e:
-            logger.error(f"Failed to search configs: {e}")
+            logger.error(
+                f"Failed to search configs: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_SEARCH_CONFIGS_FAILED"}
+            )
             raise
 
     async def get_config_version(
@@ -986,7 +1040,11 @@ class ElasticsearchConfigStorage(IConfigStore):
         except ConfigNotFoundError:
             raise
         except Exception as e:
-            logger.error(f"Failed to get config version {config_id} v{version}: {e}")
+            logger.error(
+                f"Failed to get config version {config_id} v{version}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_GET_CONFIG_VERSION_FAILED"}
+            )
             raise
 
     async def list_config_versions(
@@ -1032,7 +1090,11 @@ class ElasticsearchConfigStorage(IConfigStore):
             return versions
 
         except Exception as e:
-            logger.error(f"Failed to list config versions for {config_id}: {e}")
+            logger.error(
+                f"Failed to list config versions for {config_id}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_LIST_CONFIG_VERSIONS_FAILED"}
+            )
             raise
 
     async def delete_project_config(self, project_id: str) -> None:
@@ -1058,7 +1120,11 @@ class ElasticsearchConfigStorage(IConfigStore):
         except NotFoundError:
             raise ConfigNotFoundError(f"Project not found: {project_id}")
         except Exception as e:
-            logger.error(f"Failed to delete project config {project_id}: {e}")
+            logger.error(
+                f"Failed to delete project config {project_id}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_DELETE_PROJECT_CONFIG_FAILED"}
+            )
             raise
 
     async def delete_agent_config(
@@ -1091,7 +1157,11 @@ class ElasticsearchConfigStorage(IConfigStore):
                 f"Agent config not found: {project_id}/{agent_name}"
             )
         except Exception as e:
-            logger.error(f"Failed to delete agent config {doc_id}: {e}")
+            logger.error(
+                f"Failed to delete agent config {doc_id}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_DELETE_AGENT_CONFIG_FAILED"}
+            )
             raise
 
     async def exists(self, project_id: str) -> bool:
@@ -1114,7 +1184,11 @@ class ElasticsearchConfigStorage(IConfigStore):
             return bool(result)
 
         except Exception as e:
-            logger.error(f"Failed to check if project exists {project_id}: {e}")
+            logger.error(
+                f"Failed to check if project exists {project_id}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_PROJECT_EXISTS_CHECK_FAILED"}
+            )
             raise
 
     async def _save_history(
@@ -1166,7 +1240,11 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.debug(f"Saved history entry for {config_id} v{version}")
 
         except Exception as e:
-            logger.error(f"Failed to save history for {config_id} v{version}: {e}")
+            logger.error(
+                f"Failed to save history for {config_id} v{version}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_SAVE_HISTORY_FAILED"}
+            )
             # Don't raise - history failure shouldn't block config save
 
     def _serialize_project(self, config: ProjectConfig) -> Dict[str, Any]:

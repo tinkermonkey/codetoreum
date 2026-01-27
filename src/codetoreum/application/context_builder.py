@@ -127,10 +127,18 @@ class ContextBuilder:
             return context
 
         except DomainError as e:
-            logger.error(f"Failed to build execution context: {e}")
+            logger.error(
+                f"Failed to build execution context: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_CONTEXT_BUILD_DOMAIN_FAILURE"}
+            )
             raise
         except Exception as e:
-            logger.error(f"Unexpected error building execution context: {e}")
+            logger.error(
+                f"Unexpected error building execution context: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_CONTEXT_BUILD_UNEXPECTED_FAILURE"}
+            )
             raise DomainError(f"Failed to build execution context: {e}")
 
     async def fetch_work_item_details(
@@ -160,10 +168,17 @@ class ContextBuilder:
             return work_item
 
         except TicketSystemError as e:
-            logger.error(f"Ticket system error fetching work item {work_item_id}: {e}")
+            logger.error(
+                f"Ticket system error fetching work item {work_item_id}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_CONTEXT_TICKET_SYSTEM_ERROR"}
+            )
             return None
         except ResourceNotFoundError as e:
-            logger.warning(f"Work item {work_item_id} not found: {e}")
+            logger.warning(
+                f"Work item {work_item_id} not found: {e}",
+                extra={"error_id": "ERR_CONTEXT_WORK_ITEM_NOT_FOUND"}
+            )
             return None
 
     async def build_workspace_context(
@@ -271,7 +286,11 @@ class ContextBuilder:
             )
 
         except Exception as e:
-            logger.error(f"Failed to build workspace context: {e}")
+            logger.error(
+                f"Failed to build workspace context: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_CONTEXT_WORKSPACE_BUILD_FAILURE"}
+            )
             return WorkspaceContextResult(
                 success=False, context_files=[], error=str(e)
             )
@@ -313,10 +332,18 @@ class ContextBuilder:
             return True
 
         except OSError as e:
-            logger.error(f"File system error writing context files: {e}")
+            logger.error(
+                f"File system error writing context files: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_CONTEXT_FILES_WRITE_FS_ERROR"}
+            )
             return False
         except Exception as e:
-            logger.error(f"Unexpected error writing context files: {e}")
+            logger.error(
+                f"Unexpected error writing context files: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_CONTEXT_FILES_WRITE_UNEXPECTED_ERROR"}
+            )
             return False
 
     async def cleanup_workspace(self, workspace_path: Path) -> bool:
@@ -339,10 +366,18 @@ class ContextBuilder:
                 return True
 
         except OSError as e:
-            logger.error(f"File system error cleaning up workspace {workspace_path}: {e}")
+            logger.error(
+                f"File system error cleaning up workspace {workspace_path}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_CONTEXT_WORKSPACE_CLEANUP_FS_ERROR"}
+            )
             return False
         except Exception as e:
-            logger.error(f"Unexpected error cleaning up workspace {workspace_path}: {e}")
+            logger.error(
+                f"Unexpected error cleaning up workspace {workspace_path}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_CONTEXT_WORKSPACE_CLEANUP_UNEXPECTED_ERROR"}
+            )
             return False
 
     # Helper methods for formatting context
@@ -501,5 +536,9 @@ class ContextBuilder:
             return None
 
         except Exception as e:
-            logger.error(f"Failed to gather previous stage context: {e}")
+            logger.error(
+                f"Failed to gather previous stage context: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_CONTEXT_GATHER_PREVIOUS_STAGE_FAILURE"}
+            )
             return None

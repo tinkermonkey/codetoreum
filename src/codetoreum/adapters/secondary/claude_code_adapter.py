@@ -2,6 +2,9 @@
 
 import asyncio
 import json
+import logging
+import os
+import signal
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -96,6 +99,13 @@ class ClaudeCodeConfig:
     # Features
     enable_mcp: bool = True
     enable_tools: bool = True
+
+
+# Timeout constants for process lifecycle management
+# After streaming timeout, wait for SIGKILL to take effect before giving up
+_PROCESS_TIMEOUT_AFTER_SIGKILL_SECONDS = 5
+# After streaming completes normally, wait for process cleanup with reasonable timeout
+_PROCESS_TIMEOUT_NORMAL_COMPLETION_SECONDS = 30
 
 
 class ClaudeCodeAdapter(ILLMProvider):
@@ -381,11 +391,46 @@ class ClaudeCodeAdapter(ILLMProvider):
             try:
                 await asyncio.wait_for(read_stream(), timeout=timeout)
             except asyncio.TimeoutError:
+                logging.error(
+                    "Claude Code streaming timed out after %d seconds, terminating process (PID: %s)",
+                    timeout,
+                    process.pid,
+                )
                 process.kill()
+                # Wait for process termination with timeout to prevent hanging
+                try:
+                    await asyncio.wait_for(process.wait(), timeout=_PROCESS_TIMEOUT_AFTER_SIGKILL_SECONDS)
+                except asyncio.TimeoutError:
+                    # Process didn't respond to SIGKILL - it's in uninterruptible state
+                    logging.warning(
+                        "Process (PID: %s) did not terminate after SIGKILL within %d seconds, "
+                        "likely in D-state (uninterruptible kernel I/O)",
+                        process.pid,
+                        _PROCESS_TIMEOUT_AFTER_SIGKILL_SECONDS,
+                    )
                 raise ExternalServiceError("Claude", "Execution timeout")
 
-            # Wait for process completion
-            await process.wait()
+            # Wait for process completion with timeout to prevent hanging
+            try:
+                await asyncio.wait_for(process.wait(), timeout=_PROCESS_TIMEOUT_NORMAL_COMPLETION_SECONDS)
+            except asyncio.TimeoutError:
+                logging.error(
+                    "Process (PID: %s) did not complete within %d seconds after streaming finished, "
+                    "killing process",
+                    process.pid,
+                    _PROCESS_TIMEOUT_NORMAL_COMPLETION_SECONDS,
+                )
+                process.kill()
+                try:
+                    await asyncio.wait_for(process.wait(), timeout=_PROCESS_TIMEOUT_AFTER_SIGKILL_SECONDS)
+                except asyncio.TimeoutError:
+                    logging.warning(
+                        "Process (PID: %s) did not terminate after SIGKILL within %d seconds, "
+                        "giving up - process may be in D-state",
+                        process.pid,
+                        _PROCESS_TIMEOUT_AFTER_SIGKILL_SECONDS,
+                    )
+                raise ExternalServiceError("Claude", "Process termination timeout")
 
             # Check exit code
             if process.returncode != 0:
@@ -547,7 +592,27 @@ class ClaudeCodeAdapter(ILLMProvider):
                 except json.JSONDecodeError:
                     pass
 
-            await process.wait()
+            # Wait for process completion with timeout
+            timeout = ctx.timeout_seconds
+            try:
+                await asyncio.wait_for(process.wait(), timeout=timeout)
+            except asyncio.TimeoutError:
+                logging.error(
+                    "Claude Code streaming timed out after %d seconds, terminating process (PID: %s)",
+                    timeout,
+                    process.pid,
+                )
+                process.kill()
+                try:
+                    await asyncio.wait_for(process.wait(), timeout=_PROCESS_TIMEOUT_AFTER_SIGKILL_SECONDS)
+                except asyncio.TimeoutError:
+                    logging.warning(
+                        "Process (PID: %s) did not terminate after SIGKILL within %d seconds, "
+                        "likely in D-state (uninterruptible kernel I/O)",
+                        process.pid,
+                        _PROCESS_TIMEOUT_AFTER_SIGKILL_SECONDS,
+                    )
+                raise StreamingError("Streaming execution timeout")
 
             if process.returncode != 0:
                 stderr = await process.stderr.read()
@@ -778,9 +843,14 @@ class ClaudeCodeAdapter(ILLMProvider):
         Ensures cleanup happens even if exceptions occur.
         """
         try:
-            # Cleanup any resources if needed
+            # Cleanup any resources if needed (currently no resources to clean up)
             pass
-        except Exception:
-            # Suppress cleanup errors to avoid masking original exception
-            pass
+        except Exception as e:
+            # Log cleanup errors but suppress to avoid masking original exception
+            logging.warning(
+                "Error during context manager cleanup: %s",
+                str(e),
+                exc_info=True,
+                extra={"error_id": "ERR_CLAUDE_CODE_ADAPTER_CLEANUP_ERROR"}
+            )
         return False  # Don't suppress exceptions

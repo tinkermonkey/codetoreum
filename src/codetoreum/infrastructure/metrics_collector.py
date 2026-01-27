@@ -181,7 +181,11 @@ class MetricsCollector:
             )
 
         except Exception as e:
-            logger.error(f"Error recording column change metric: {e}")
+            logger.error(
+                f"Error recording column change metric: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_METRICS_COLUMN_CHANGE_FAILED"}
+            )
             self._metrics["errors"] += 1
 
     async def _record_lock_acquisition(self, event: DomainEvent) -> None:
@@ -201,7 +205,11 @@ class MetricsCollector:
             )
 
         except Exception as e:
-            logger.error(f"Error recording lock acquisition metric: {e}")
+            logger.error(
+                f"Error recording lock acquisition metric: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_METRICS_LOCK_ACQUISITION_FAILED"}
+            )
             self._metrics["errors"] += 1
 
     async def _record_lock_release(self, event: DomainEvent) -> None:
@@ -227,7 +235,11 @@ class MetricsCollector:
             )
 
         except Exception as e:
-            logger.error(f"Error recording lock release metric: {e}")
+            logger.error(
+                f"Error recording lock release metric: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_METRICS_LOCK_RELEASE_FAILED"}
+            )
             self._metrics["errors"] += 1
 
     async def _record_review_status(self, event: DomainEvent) -> None:
@@ -254,7 +266,11 @@ class MetricsCollector:
                 )
 
         except Exception as e:
-            logger.error(f"Error recording review status metric: {e}")
+            logger.error(
+                f"Error recording review status metric: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_METRICS_REVIEW_STATUS_FAILED"}
+            )
             self._metrics["errors"] += 1
 
     async def _record_comment(self, event: DomainEvent) -> None:
@@ -272,7 +288,11 @@ class MetricsCollector:
             )
 
         except Exception as e:
-            logger.error(f"Error recording comment metric: {e}")
+            logger.error(
+                f"Error recording comment metric: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_METRICS_COMMENT_FAILED"}
+            )
             self._metrics["errors"] += 1
 
     async def _record_comment_needs_response(self, event: DomainEvent) -> None:
@@ -288,7 +308,11 @@ class MetricsCollector:
             logger.debug(f"Recorded comment requiring response")
 
         except Exception as e:
-            logger.error(f"Error recording comment response metric: {e}")
+            logger.error(
+                f"Error recording comment response metric: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_METRICS_COMMENT_RESPONSE_FAILED"}
+            )
             self._metrics["errors"] += 1
 
     async def _record_repair_cycle_started(self, event: DomainEvent) -> None:
@@ -307,7 +331,11 @@ class MetricsCollector:
             )
 
         except Exception as e:
-            logger.error(f"Error recording repair cycle started metric: {e}")
+            logger.error(
+                f"Error recording repair cycle started metric: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_METRICS_REPAIR_CYCLE_STARTED_FAILED"}
+            )
             self._metrics["errors"] += 1
 
     async def _record_repair_cycle_test_execution(self, event: DomainEvent) -> None:
@@ -334,7 +362,11 @@ class MetricsCollector:
             )
 
         except Exception as e:
-            logger.error(f"Error recording repair cycle test execution metric: {e}")
+            logger.error(
+                f"Error recording repair cycle test execution metric: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_METRICS_REPAIR_CYCLE_TEST_FAILED"}
+            )
             self._metrics["errors"] += 1
 
     async def _record_repair_cycle_file_fix(self, event: DomainEvent) -> None:
@@ -361,7 +393,11 @@ class MetricsCollector:
             )
 
         except Exception as e:
-            logger.error(f"Error recording repair cycle file fix metric: {e}")
+            logger.error(
+                f"Error recording repair cycle file fix metric: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_METRICS_REPAIR_CYCLE_FILE_FIX_FAILED"}
+            )
             self._metrics["errors"] += 1
 
     async def _record_repair_cycle_warning_review(self, event: DomainEvent) -> None:
@@ -381,7 +417,11 @@ class MetricsCollector:
             )
 
         except Exception as e:
-            logger.error(f"Error recording repair cycle warning review metric: {e}")
+            logger.error(
+                f"Error recording repair cycle warning review metric: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_METRICS_REPAIR_CYCLE_WARNING_REVIEW_FAILED"}
+            )
             self._metrics["errors"] += 1
 
     async def _record_repair_cycle_fast_fail(self, event: DomainEvent) -> None:
@@ -401,7 +441,11 @@ class MetricsCollector:
             )
 
         except Exception as e:
-            logger.error(f"Error recording repair cycle fast-fail metric: {e}")
+            logger.error(
+                f"Error recording repair cycle fast-fail metric: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_METRICS_REPAIR_CYCLE_FAST_FAIL_FAILED"}
+            )
             self._metrics["errors"] += 1
 
     async def _record_repair_cycle_completed(self, event: DomainEvent) -> None:
@@ -437,7 +481,11 @@ class MetricsCollector:
             )
 
         except Exception as e:
-            logger.error(f"Error recording repair cycle completed metric: {e}")
+            logger.error(
+                f"Error recording repair cycle completed metric: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_METRICS_REPAIR_CYCLE_COMPLETED_FAILED"}
+            )
             self._metrics["errors"] += 1
 
     def get_metrics(self) -> Dict[str, Any]:

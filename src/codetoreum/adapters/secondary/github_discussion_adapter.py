@@ -518,7 +518,11 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Unexpected error in polling loop for {work_item_id}: {e}")
+                logger.error(
+                    f"Unexpected error in polling loop for {work_item_id}: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_DISCUSSION_POLLING_LOOP_FAILED", "work_item_id": work_item_id}
+                )
                 continue
 
     def _filter_new_comments(
@@ -562,13 +566,23 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             config: Monitoring configuration for context
             comment: The comment requiring response
         """
-        context = CommentContext(
-            thread_id=f"thread-{work_item_id}",
-            parent_comment=None,  # GitHub issues are flat
-            is_initial_request=self._is_initial_comment(work_item_id, comment),
-            column_name=config.column_name,
-            agent_assignment=config.agent_assignment,
-        )
+        # GitHub issues use flat comment structure (no threading)
+        # Determine if this is the initial comment
+        is_initial = self._is_initial_comment(work_item_id, comment)
+
+        if is_initial:
+            context = CommentContext.for_initial_request(
+                column_name=config.column_name,
+                agent_assignment=config.agent_assignment,
+            )
+        else:
+            context = CommentContext(
+                thread_id=f"thread-{work_item_id}",
+                parent_comment=None,
+                is_initial_request=False,
+                column_name=config.column_name,
+                agent_assignment=config.agent_assignment,
+            )
 
         self.emit(
             CommentNeedsResponseEvent(

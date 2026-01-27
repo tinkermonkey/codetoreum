@@ -10,6 +10,7 @@ from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.exceptions import (
     AuthenticationError,
     ExternalServiceError,
+    PortError,
     ResourceNotFoundError,
     ValidationError,
 )
@@ -99,7 +100,10 @@ class BoardPollingService:
             RuntimeError: If service is already running
         """
         if self._running:
-            logger.warning("Polling service already running")
+            logger.warning(
+                "Polling service already running",
+                extra={"error_id": "ERR_BOARD_POLLING_ALREADY_RUNNING"}
+            )
             return
 
         self._running = True
@@ -122,8 +126,12 @@ class BoardPollingService:
         while self._running:
             try:
                 await self._poll_all_boards()
-            except Exception as e:
-                logger.error(f"Error in polling loop: {e}", exc_info=True)
+            except PortError as e:
+                logger.error(
+                    f"Error in polling loop: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_BOARD_POLLING_LOOP_ERROR"}
+                )
 
             await asyncio.sleep(self.poll_interval)
 
@@ -133,8 +141,12 @@ class BoardPollingService:
             try:
                 project_id, board_id = board_key.split(":")
                 await self._poll_board(project_id, board_id)
-            except Exception as e:
-                logger.error(f"Error polling board {board_key}: {e}", exc_info=True)
+            except PortError as e:
+                logger.error(
+                    f"Error polling board {board_key}: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_BOARD_POLLING_POLL_ALL_BOARDS_ERROR"}
+                )
 
     async def _poll_board(self, project_id: str, board_id: str) -> None:
         """Poll a single board and emit events for detected changes.
@@ -152,6 +164,7 @@ class BoardPollingService:
                 f"Permanent error polling board {board_id}, disabling: {e}",
                 exc_info=True,
                 extra={
+                    "error_id": "ERR_BOARD_POLLING_PERMANENT_ERROR",
                     "project_id": project_id,
                     "board_id": board_id,
                     "error_type": type(e).__name__,
@@ -167,15 +180,23 @@ class BoardPollingService:
             logger.warning(
                 f"Transient error polling board {board_id}: {e}",
                 exc_info=True,
-                extra={"project_id": project_id, "board_id": board_id},
+                extra={
+                    "error_id": "ERR_BOARD_POLLING_TRANSIENT_ERROR",
+                    "project_id": project_id,
+                    "board_id": board_id
+                },
             )
             return
-        except Exception as e:
+        except PortError as e:
             # Unexpected errors - disable polling and alert
             logger.critical(
                 f"Unexpected error polling board {board_id}: {e}",
                 exc_info=True,
-                extra={"project_id": project_id, "board_id": board_id},
+                extra={
+                    "error_id": "ERR_BOARD_POLLING_UNEXPECTED_ERROR",
+                    "project_id": project_id,
+                    "board_id": board_id
+                },
             )
             if board_id in self._board_states:
                 del self._board_states[board_id]
@@ -196,15 +217,23 @@ class BoardPollingService:
             logger.warning(
                 f"Error getting items in columns for board {board_id}: {e}",
                 exc_info=True,
-                extra={"project_id": project_id, "board_id": board_id},
+                extra={
+                    "error_id": "ERR_BOARD_POLLING_GET_COLUMN_ITEMS_ERROR",
+                    "project_id": project_id,
+                    "board_id": board_id
+                },
             )
             return
-        except Exception as e:
+        except PortError as e:
             # Unexpected error processing columns
             logger.error(
                 f"Unexpected error processing columns for board {board_id}: {e}",
                 exc_info=True,
-                extra={"project_id": project_id, "board_id": board_id},
+                extra={
+                    "error_id": "ERR_BOARD_POLLING_PROCESS_COLUMNS_ERROR",
+                    "project_id": project_id,
+                    "board_id": board_id
+                },
             )
             return
 
@@ -234,11 +263,12 @@ class BoardPollingService:
                         f"Detected column change: {change['work_item_id']} "
                         f"{change['from_column']} -> {change['to_column']}"
                     )
-                except Exception as e:
+                except PortError as e:
                     logger.error(
                         f"Failed to emit column change event for {change['work_item_id']}: {e}",
                         exc_info=True,
                         extra={
+                            "error_id": "ERR_BOARD_POLLING_EMIT_EVENT_FAILURE",
                             "work_item_id": change["work_item_id"],
                             "from_column": change["from_column"],
                             "to_column": change["to_column"],

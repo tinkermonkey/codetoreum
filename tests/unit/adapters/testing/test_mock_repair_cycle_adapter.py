@@ -166,8 +166,8 @@ class TestConfigurationMethods:
         result1 = RepairTestResult(
             test_type=RepairTestType.UNIT,
             iteration=1,
-            passed=7,
-            failed=3,
+            passed=9,
+            failed=1,
             warnings=0,
             failures=(
                 RepairTestFailure(file="test.py", test="test_1", message="Failed"),
@@ -417,6 +417,8 @@ class TestCircuitBreaker:
             warnings=0,
             failures=(
                 RepairTestFailure(file="test.py", test="test_1", message="Failed"),
+                RepairTestFailure(file="test.py", test="test_2", message="Failed"),
+                RepairTestFailure(file="test.py", test="test_3", message="Failed"),
             ),
             warning_list=(),
             raw_output="",
@@ -447,6 +449,8 @@ class TestCircuitBreaker:
             warnings=0,
             failures=(
                 RepairTestFailure(file="test.py", test="test_1", message="Failed"),
+                RepairTestFailure(file="test.py", test="test_2", message="Failed"),
+                RepairTestFailure(file="test.py", test="test_3", message="Failed"),
             ),
             warning_list=(),
             raw_output="",

@@ -166,6 +166,22 @@ class ConversationExpiredError(LLMProviderError):
     pass
 
 
+class EmptyAgentResponseError(LLMProviderError):
+    """Agent returned an empty response."""
+
+    def __init__(self, work_item_id: str):
+        """
+        Initialize EmptyAgentResponseError.
+
+        Args:
+            work_item_id: ID of the work item the agent was responding to
+        """
+        super().__init__(
+            f"Agent returned empty response for work item: {work_item_id}"
+        )
+        self.work_item_id = work_item_id
+
+
 # Repository Errors
 
 

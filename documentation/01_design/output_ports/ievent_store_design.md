@@ -102,9 +102,23 @@ class DomainEvent:
 
 ## Adapter Implementations
 
-### Elasticsearch Event Store (Production)
+### Current Event Store Implementation (v1.0)
 
-The production implementation uses **Elasticsearch for persistence** with **Redis for buffering**:
+The current implementation uses **in-memory event store** for simplicity and simulation support:
+
+```python
+class InMemoryEventStore(IEventStore):
+    """
+    In-memory event store for development and testing.
+
+    Events are stored in memory and lost on restart.
+    Suitable for simulation mode and testing workflows.
+    """
+```
+
+### Planned: Elasticsearch Event Store with Redis Buffering
+
+The planned production implementation uses **Elasticsearch for persistence** with **Redis for buffering**:
 
 ```python
 class ElasticsearchEventStore(IEventStore):

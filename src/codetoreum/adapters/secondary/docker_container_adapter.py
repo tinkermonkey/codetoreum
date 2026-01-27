@@ -223,7 +223,10 @@ class DockerContainerAdapter(IContainer):
                                 logger.warning(
                                     f"Failed to kill container on timeout: {kill_error}",
                                     exc_info=True,
-                                    extra={"container_id": container.short_id}
+                                    extra={
+                                        "error_id": "ERR_CONTAINER_KILL_FAILED",
+                                        "container_id": container.short_id
+                                    }
                                 )
                             raise ContainerTimeoutError(f"Container execution timed out after {timeout}s")
 
@@ -279,7 +282,10 @@ class DockerContainerAdapter(IContainer):
                         logger.warning(
                             f"Failed to remove container during cleanup: {cleanup_error}",
                             exc_info=True,
-                            extra={"container_id": container.short_id if container else "unknown"}
+                            extra={
+                                "error_id": "ERR_CONTAINER_CLEANUP_FAILED",
+                                "container_id": container.short_id if container else "unknown"
+                            }
                         )
 
                 if "timeout" in str(e).lower():
@@ -489,7 +495,10 @@ class DockerContainerAdapter(IContainer):
                         logger.warning(
                             f"Failed to parse StartedAt date: {parse_error}",
                             exc_info=True,
-                            extra={"date_value": state.get("StartedAt")}
+                            extra={
+                                "error_id": "ERR_DATE_PARSE_FAILED",
+                                "date_value": state.get("StartedAt")
+                            }
                         )
 
                 finished_at = None
@@ -500,7 +509,10 @@ class DockerContainerAdapter(IContainer):
                         logger.warning(
                             f"Failed to parse FinishedAt date: {parse_error}",
                             exc_info=True,
-                            extra={"date_value": state.get("FinishedAt")}
+                            extra={
+                                "error_id": "ERR_DATE_PARSE_FAILED",
+                                "date_value": state.get("FinishedAt")
+                            }
                         )
 
                 try:
@@ -603,7 +615,10 @@ class DockerContainerAdapter(IContainer):
                             logger.warning(
                                 f"Failed to parse StartedAt date: {parse_error}",
                                 exc_info=True,
-                                extra={"date_value": state.get("StartedAt")}
+                                extra={
+                                    "error_id": "ERR_CONTAINER_DATE_PARSE_STARTED_AT",
+                                    "date_value": state.get("StartedAt")
+                                }
                             )
 
                     finished_at = None
@@ -614,7 +629,10 @@ class DockerContainerAdapter(IContainer):
                             logger.warning(
                                 f"Failed to parse FinishedAt date: {parse_error}",
                                 exc_info=True,
-                                extra={"date_value": state.get("FinishedAt")}
+                                extra={
+                                    "error_id": "ERR_CONTAINER_DATE_PARSE_FINISHED_AT",
+                                    "date_value": state.get("FinishedAt")
+                                }
                             )
 
                     try:
@@ -623,7 +641,10 @@ class DockerContainerAdapter(IContainer):
                         logger.warning(
                             f"Failed to parse Created date, using current time: {parse_error}",
                             exc_info=True,
-                            extra={"date_value": attrs.get("Created")}
+                            extra={
+                                "error_id": "ERR_CONTAINER_DATE_PARSE_CREATED",
+                                "date_value": attrs.get("Created")
+                            }
                         )
                         created_at = datetime.now(timezone.utc)  # Fallback
 

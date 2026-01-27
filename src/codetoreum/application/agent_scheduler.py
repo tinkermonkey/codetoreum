@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional
 
 from codetoreum.domain.agent import Agent
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority
+from codetoreum.ports.exceptions import PortError
 from codetoreum.ports.output import IEventStore
 
 logger = logging.getLogger(__name__)
@@ -198,8 +199,12 @@ class AgentScheduler:
         # Load agent configuration
         try:
             agent_config = await self.config.get_agent_config(agent.id)
-        except Exception as e:
-            logger.error(f"Failed to load agent config: {e}")
+        except PortError as e:
+            logger.error(
+                f"Failed to load agent config: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_SCHEDULER_AGENT_CONFIG_LOAD_FAILURE"}
+            )
             await self.scheduling_events.emit_task_rejected(
                 agent.id, work_item.project_id, f"Config error: {e}"
             )
@@ -216,7 +221,8 @@ class AgentScheduler:
             if not can_acquire:
                 retry_after = await self.rate_limiter.get_retry_after(agent.id)
                 logger.warning(
-                    f"Agent {agent.id} rate limited, retry after {retry_after}s"
+                    f"Agent {agent.id} rate limited, retry after {retry_after}s",
+                    extra={"error_id": "ERR_SCHEDULER_RATE_LIMIT"}
                 )
                 await self.scheduling_events.emit_task_throttled(
                     agent.id,
@@ -238,7 +244,10 @@ class AgentScheduler:
             reason = await self._get_unavailability_reason(
                 agent_config, work_item.project_id
             )
-            logger.warning(f"Cannot schedule agent {agent.id}: {reason}")
+            logger.warning(
+                f"Cannot schedule agent {agent.id}: {reason}",
+                extra={"error_id": "ERR_SCHEDULER_RESOURCE_UNAVAILABLE"}
+            )
             await self.scheduling_events.emit_task_rejected(
                 agent.id, work_item.project_id, reason
             )
@@ -270,8 +279,12 @@ class AgentScheduler:
         try:
             task_id = await self.task_queue.enqueue(task)
             logger.info(f"Enqueued task {task_id} for agent {agent.id}")
-        except Exception as e:
-            logger.error(f"Failed to enqueue task: {e}")
+        except PortError as e:
+            logger.error(
+                f"Failed to enqueue task: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_SCHEDULER_ENQUEUE_FAILURE"}
+            )
             await self.scheduling_events.emit_task_rejected(
                 agent.id, work_item.project_id, f"Queue error: {e}"
             )

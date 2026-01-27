@@ -533,11 +533,22 @@ class TestRepairCycleCompletedEvent:
 
     def test_create_valid_event(self):
         """Test creating a valid repair cycle completed event."""
+        final_result = RepairTestResult(
+            test_type=RepairTestType.UNIT,
+            iteration=1,
+            passed=5,
+            failed=0,
+            warnings=0,
+            failures=(),
+            warning_list=(),
+            raw_output="All tests passed",
+            timestamp=now_iso(),
+        )
         result = CycleResult(
             test_type=RepairTestType.UNIT,
             passed=True,
             iterations=1,
-            final_result=None,
+            final_result=final_result,
             error=None,
             files_fixed=2,
             warnings_reviewed=0,
@@ -575,11 +586,22 @@ class TestRepairCycleCompletedEvent:
 
     def test_serialization_with_test_results(self):
         """Test serialization with test results."""
+        final_result = RepairTestResult(
+            test_type=RepairTestType.UNIT,
+            iteration=2,
+            passed=10,
+            failed=0,
+            warnings=0,
+            failures=(),
+            warning_list=(),
+            raw_output="All tests passed after fixes",
+            timestamp=now_iso(),
+        )
         result = CycleResult(
             test_type=RepairTestType.UNIT,
             passed=True,
             iterations=2,
-            final_result=None,
+            final_result=final_result,
             error=None,
             files_fixed=1,
             warnings_reviewed=0,

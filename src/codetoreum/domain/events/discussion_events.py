@@ -102,6 +102,12 @@ class CommentContext:
     prevent accidental modifications. Attempting to modify any field will raise
     `FrozenInstanceError`.
 
+    **Invariants Enforced**:
+    - If `is_initial_request=True`, then `parent_comment` must be None (initial requests
+      cannot be replies to other comments)
+    - If `parent_comment` is not None, then `thread_id` must be set (replies require
+      threading context)
+
     Attributes:
         thread_id (Optional[str]): ID of the discussion thread, None if not part of thread
         parent_comment (Optional[Comment]): The parent comment if this is a reply, None otherwise
@@ -116,6 +122,19 @@ class CommentContext:
         ...     column_name="In Progress"
         ... )
         >>> context.column_name = "Review"  # ❌ Raises FrozenInstanceError
+
+    Example: Creating an initial request (factory method recommended)
+        >>> context = CommentContext.for_initial_request(
+        ...     column_name="Backlog",
+        ...     agent_assignment="agent-1"
+        ... )
+
+    Example: Creating a reply to a parent comment (factory method recommended)
+        >>> parent = Comment(id="c1", author="alice", body="original", created_at="...")
+        >>> context = CommentContext.for_reply(
+        ...     thread_id="thread-1",
+        ...     parent_comment=parent,
+        ... )
     """
 
     thread_id: Optional[str] = None
@@ -126,12 +145,107 @@ class CommentContext:
 
     def __post_init__(self) -> None:
         """Validate comment context after initialization."""
-        # thread_id is optional, no validation needed
-        # parent_comment is optional, but if provided it's a Comment object (validated by Comment)
-        # is_initial_request is bool, no validation needed
-        # column_name is optional (can be empty), no validation needed
-        # agent_assignment is optional (can be empty), no validation needed
-        # No required string fields to validate for CommentContext
+        # Invariant 1: Initial requests cannot have parent comments
+        if self.is_initial_request and self.parent_comment is not None:
+            raise ValueError(
+                "Initial requests cannot have parent comments. "
+                "A comment cannot be both an initial request and a reply."
+            )
+
+        # Invariant 2: Replies with parent comments must have thread_id
+        if self.parent_comment is not None and not self.thread_id:
+            raise ValueError(
+                "Replies with parent comments must have thread_id. "
+                "Threading context is required to track discussion relationships."
+            )
+
+    @classmethod
+    def for_initial_request(
+        cls,
+        column_name: str = "",
+        agent_assignment: str = "",
+    ) -> "CommentContext":
+        """Factory method to create context for an initial request comment.
+
+        Use this when creating context for the initial/first comment on a work item.
+        This ensures that `is_initial_request=True` and `parent_comment=None`,
+        which satisfies the type invariants.
+
+        Args:
+            column_name: Name of the board column where comment was made
+            agent_assignment: Agent assigned to handle the comment
+
+        Returns:
+            CommentContext: Context configured for an initial request
+
+        Example:
+            >>> context = CommentContext.for_initial_request(
+            ...     column_name="Backlog",
+            ...     agent_assignment="agent-1"
+            ... )
+            >>> context.is_initial_request
+            True
+            >>> context.parent_comment
+            None
+        """
+        return cls(
+            thread_id=None,
+            parent_comment=None,
+            is_initial_request=True,
+            column_name=column_name,
+            agent_assignment=agent_assignment,
+        )
+
+    @classmethod
+    def for_reply(
+        cls,
+        thread_id: str,
+        parent_comment: Comment,
+        column_name: str = "",
+        agent_assignment: str = "",
+    ) -> "CommentContext":
+        """Factory method to create context for a reply to a parent comment.
+
+        Use this when creating context for a reply/follow-up comment in a discussion thread.
+        This ensures that `thread_id` is set, `parent_comment` is provided, and
+        `is_initial_request=False`, which satisfies the type invariants.
+
+        Args:
+            thread_id: ID of the discussion thread
+            parent_comment: The parent comment being replied to
+            column_name: Name of the board column where comment was made
+            agent_assignment: Agent assigned to handle the comment
+
+        Returns:
+            CommentContext: Context configured for a reply
+
+        Raises:
+            ValueError: If thread_id is empty or parent_comment is None
+
+        Example:
+            >>> parent = Comment(id="c1", author="alice", body="original", created_at="...")
+            >>> context = CommentContext.for_reply(
+            ...     thread_id="thread-1",
+            ...     parent_comment=parent,
+            ...     column_name="Review"
+            ... )
+            >>> context.is_initial_request
+            False
+            >>> context.parent_comment.id
+            'c1'
+        """
+        if not thread_id:
+            raise ValueError("thread_id cannot be empty for replies")
+        if parent_comment is None:
+            raise ValueError("parent_comment cannot be None for replies")
+
+        return cls(
+            thread_id=thread_id,
+            parent_comment=parent_comment,
+            is_initial_request=False,
+            column_name=column_name,
+            agent_assignment=agent_assignment,
+        )
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -200,11 +314,8 @@ class CommentNeedsResponseEvent(CodetoreumEvent):
             raise ValueError("work_item_id is required")
         if not self.project_id:
             raise ValueError("project_id is required")
-        # Ensure comment and context are initialized if None
-        if self.comment is None:
-            object.__setattr__(self, "comment", Comment("", "", "", ""))
-        if self.context is None:
-            object.__setattr__(self, "context", CommentContext())
+        # Note: comment and context are optional and can be None
+        # Do not auto-initialize them as this prevents tests from checking None handling
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -275,9 +386,7 @@ class CommentPostedEvent(CodetoreumEvent):
             raise ValueError("work_item_id is required")
         if not self.project_id:
             raise ValueError("project_id is required")
-        # Ensure comment is initialized if None
-        if self.comment is None:
-            object.__setattr__(self, "comment", Comment("", "", "", ""))
+        # Note: comment is optional and can be None
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -303,4 +412,96 @@ class CommentPostedEvent(CodetoreumEvent):
             work_item_id=data.get("work_item_id", ""),
             project_id=data.get("project_id", ""),
             comment=comment,
+        )
+
+
+@dataclass(frozen=True)
+class AgentResponsePostedEvent(CodetoreumEvent):
+    """Emitted when an agent posts a response to a human comment.
+
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Events represent immutable facts—attempting to modify any field
+    will raise `FrozenInstanceError`. This immutability is essential because
+    events are the permanent record of state changes in the system and must
+    never be altered once created.
+
+    **Purpose**: This event tracks the posting of agent responses in conversational
+    feedback loops, enabling session persistence and audit trail reconstruction. It
+    includes LLM conversation context for session continuity across interactions.
+
+    Attributes:
+        type (str): Fixed to "agent.response_posted"
+        work_item_id (str): ID of the work item the response was posted to
+        project_id (str): ID of the project containing the work item
+        comment_id (str): ID of the human comment being responded to
+        response_comment_id (str): ID of the agent's response comment posted by the adapter
+        agent_name (str): Name of the agent posting the response
+        conversation_id (Optional[str]): LLM conversation session ID for context continuity
+        timestamp (str): ISO 8601 timestamp when response was posted
+
+    Example:
+        >>> event = AgentResponsePostedEvent(
+        ...     type="agent.response_posted",
+        ...     timestamp="2025-01-14T10:35:00+00:00",
+        ...     source="orchestrator",
+        ...     work_item_id="issue-1",
+        ...     project_id="proj-1",
+        ...     comment_id="comment-42",
+        ...     response_comment_id="comment-43",
+        ...     agent_name="code-reviewer",
+        ...     conversation_id="conv-session-123"
+        ... )
+        >>> event.agent_name = "different-agent"  # ❌ Raises FrozenInstanceError
+    """
+
+    work_item_id: str = ""
+    project_id: str = ""
+    comment_id: str = ""
+    response_comment_id: str = ""
+    agent_name: str = ""
+    conversation_id: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.work_item_id:
+            raise ValueError("work_item_id is required")
+        if not self.project_id:
+            raise ValueError("project_id is required")
+        if not self.comment_id:
+            raise ValueError("comment_id is required")
+        if not self.response_comment_id:
+            raise ValueError("response_comment_id is required")
+        if not self.agent_name:
+            raise ValueError("agent_name is required")
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update({
+            "work_item_id": self.work_item_id,
+            "project_id": self.project_id,
+            "comment_id": self.comment_id,
+            "response_comment_id": self.response_comment_id,
+            "agent_name": self.agent_name,
+            "conversation_id": self.conversation_id,
+        })
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "AgentResponsePostedEvent":
+        """Deserialize from dictionary."""
+        return cls(
+            type=data.get("type", "agent.response_posted"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            work_item_id=data.get("work_item_id", ""),
+            project_id=data.get("project_id", ""),
+            comment_id=data.get("comment_id", ""),
+            response_comment_id=data.get("response_comment_id", ""),
+            agent_name=data.get("agent_name", ""),
+            conversation_id=data.get("conversation_id"),
         )

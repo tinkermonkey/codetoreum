@@ -131,7 +131,8 @@ class WorkspaceRouter:
         except Exception as e:
             self._logger.error(
                 f"Failed to emit event {type(event).__name__}: {e}",
-                exc_info=True
+                exc_info=True,
+                extra={"error_id": "ERR_WORKSPACE_EVENT_EMIT_FAILURE"}
             )
 
     # ========================================================================
@@ -227,7 +228,8 @@ class WorkspaceRouter:
         if has_discussion_label and agent.makes_code_changes:
             self._logger.warning(
                 f"Code-changing agent {agent.id} assigned to discussion work item {work_item.id}. "
-                f"This may not be optimal."
+                f"This may not be optimal.",
+                extra={"error_id": "ERR_WORKSPACE_SUBOPTIMAL_AGENT_ASSIGNMENT"}
             )
 
         # If work item needs code changes, agent must have that capability
@@ -339,7 +341,11 @@ class WorkspaceRouter:
                 )
 
         except Exception as e:
-            self._logger.error(f"Failed to prepare workspace: {e}", exc_info=True)
+            self._logger.error(
+                f"Failed to prepare workspace: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_WORKSPACE_PREPARE_FAILURE"}
+            )
             return WorkspacePreparationResult(
                 success=False,
                 workspace_context=context,
@@ -464,7 +470,11 @@ class WorkspaceRouter:
                 )
 
         except Exception as e:
-            self._logger.error(f"Failed to finalize workspace: {e}", exc_info=True)
+            self._logger.error(
+                f"Failed to finalize workspace: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_WORKSPACE_FINALIZE_FAILURE"}
+            )
             return WorkspaceFinalizationResult(
                 success=False,
                 commit_sha=None,

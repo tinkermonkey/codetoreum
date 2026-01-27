@@ -120,6 +120,7 @@ class GitHubBoardAdapter(IBoardService):
                         f"Event handler failed for {event_type}: {e}",
                         exc_info=True,
                         extra={
+                            "error_id": "ERR_EVENT_HANDLER_FAILED",
                             "event_type": event_type,
                             "event_id": getattr(event, "event_id", None),
                             "handler": getattr(handler, "__name__", str(handler))
@@ -630,7 +631,12 @@ class GitHubBoardAdapter(IBoardService):
             logger.error(
                 f"Permanent error in board polling for {project_id}:{board_id}: {e}",
                 exc_info=True,
-                extra={"project_id": project_id, "board_id": board_id, "error_type": type(e).__name__}
+                extra={
+                    "error_id": "ERR_BOARD_POLLING_PERMANENT",
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "error_type": type(e).__name__
+                }
             )
             if project_id in self._monitoring:
                 self._monitoring[project_id].state = MonitoringState.ERROR
@@ -638,14 +644,23 @@ class GitHubBoardAdapter(IBoardService):
             # Transient errors - log and continue polling
             logger.warning(
                 f"External service error during board polling for {project_id}:{board_id}: {e}",
-                exc_info=True
+                exc_info=True,
+                extra={
+                    "error_id": "ERR_BOARD_POLLING_TRANSIENT",
+                    "project_id": project_id,
+                    "board_id": board_id
+                }
             )
         except Exception as e:
             # Unexpected errors - log critically and stop polling
             logger.critical(
                 f"Unexpected error during board polling for {project_id}:{board_id}: {e}",
                 exc_info=True,
-                extra={"project_id": project_id, "board_id": board_id}
+                extra={
+                    "error_id": "ERR_BOARD_POLLING_UNEXPECTED",
+                    "project_id": project_id,
+                    "board_id": board_id
+                }
             )
             if project_id in self._monitoring:
                 self._monitoring[project_id].state = MonitoringState.ERROR

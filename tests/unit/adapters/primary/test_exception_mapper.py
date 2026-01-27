@@ -22,6 +22,7 @@ from codetoreum.domain.exceptions import (
 from codetoreum.ports.exceptions import (
     AuthenticationError,
     ConcurrencyConflictError,
+    EmptyAgentResponseError,
     ExternalServiceError,
     PortError,
     RateLimitError,
@@ -189,6 +190,14 @@ class TestPortExceptionMapping:
 
         assert http_exc.status_code == status.HTTP_400_BAD_REQUEST
         assert "Invalid data format" in http_exc.detail
+
+    def test_empty_agent_response_maps_to_502(self):
+        exc = EmptyAgentResponseError("issue-42")
+        http_exc = map_exception_to_http(exc)
+
+        assert http_exc.status_code == status.HTTP_502_BAD_GATEWAY
+        assert "issue-42" in http_exc.detail
+        assert "empty" in http_exc.detail.lower()
 
     def test_authentication_error_maps_to_401(self):
         exc = AuthenticationError("Invalid token")

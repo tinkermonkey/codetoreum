@@ -13,9 +13,8 @@ import logging
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from codetoreum.adapters.secondary.prometheus_metrics_adapter import (
-    PrometheusMetricsAdapter,
-    PROMETHEUS_AVAILABLE,
+from codetoreum.adapters.testing.in_memory_metrics_adapter import (
+    InMemoryMetricsAdapter,
 )
 from codetoreum.infrastructure.repair_cycle_metrics_collector import (
     RepairCycleMetricsCollector,
@@ -40,58 +39,53 @@ from codetoreum.infrastructure.repair_cycle_profiling import (
 
 
 # ============================================================================
-# Prometheus Metrics Adapter Tests
+# Metrics Adapter Interface Tests
 # ============================================================================
 
 
-class TestPrometheusMetricsAdapter:
-    """Test Prometheus metrics adapter."""
+class TestMetricsAdapter:
+    """Test metrics adapter interface (using InMemoryMetricsAdapter)."""
 
-    @pytest.mark.skipif(not PROMETHEUS_AVAILABLE, reason="Requires prometheus_client installed")
     async def test_increment_counter(self):
         """Test counter increment."""
-        adapter = PrometheusMetricsAdapter()
+        adapter = InMemoryMetricsAdapter()
         await adapter.increment_counter(
-            "codetoreum_repair_cycle_started_total",
+            "repair_cycle_started_total",
             labels={"agent_name": "test_agent"},
         )
         assert await adapter.health_check()
 
-    @pytest.mark.skipif(not PROMETHEUS_AVAILABLE, reason="Requires prometheus_client installed")
     async def test_set_gauge(self):
         """Test gauge setting."""
-        adapter = PrometheusMetricsAdapter()
+        adapter = InMemoryMetricsAdapter()
         await adapter.set_gauge(
-            "codetoreum_repair_cycle_active_count",
+            "repair_cycle_active_count",
             5.0,
             labels={"agent_name": "test_agent"},
         )
         assert await adapter.health_check()
 
-    @pytest.mark.skipif(not PROMETHEUS_AVAILABLE, reason="Requires prometheus_client installed")
     async def test_record_histogram(self):
         """Test histogram recording."""
-        adapter = PrometheusMetricsAdapter()
+        adapter = InMemoryMetricsAdapter()
         await adapter.record_histogram(
-            "codetoreum_repair_cycle_duration_seconds",
+            "repair_cycle_duration_seconds",
             45.5,
             labels={"agent_name": "test_agent", "status": "success"},
         )
         assert await adapter.health_check()
 
-    @pytest.mark.skipif(not PROMETHEUS_AVAILABLE, reason="Requires prometheus_client installed")
     async def test_timer_context(self):
         """Test timer functionality."""
-        adapter = PrometheusMetricsAdapter()
+        adapter = InMemoryMetricsAdapter()
         timer_id = await adapter.start_timer("test_operation")
         assert timer_id
         duration = await adapter.stop_timer(timer_id, labels={"operation": "test"})
         assert duration >= 0
 
-    @pytest.mark.skipif(not PROMETHEUS_AVAILABLE, reason="Requires prometheus_client installed")
     async def test_batch_recording(self):
         """Test batch metric recording."""
-        adapter = PrometheusMetricsAdapter()
+        adapter = InMemoryMetricsAdapter()
         metrics = [
             {"name": "metric1", "value": 10, "type": "counter"},
             {"name": "metric2", "value": 20.5, "type": "gauge"},
@@ -99,18 +93,17 @@ class TestPrometheusMetricsAdapter:
         await adapter.record_batch(metrics)
         assert await adapter.health_check()
 
-    @pytest.mark.skipif(not PROMETHEUS_AVAILABLE, reason="Requires prometheus_client installed")
     async def test_metrics_registry(self):
         """Test metrics registry."""
-        adapter = PrometheusMetricsAdapter()
+        adapter = InMemoryMetricsAdapter()
+        await adapter.increment_counter("repair_cycle_started")
         names = await adapter.get_metric_names()
         assert len(names) > 0
-        assert any("repair_cycle" in name for name in names)
+        assert "repair_cycle_started" in names
 
-    @pytest.mark.skipif(not PROMETHEUS_AVAILABLE, reason="Requires prometheus_client installed")
     async def test_health_check(self):
         """Test health check."""
-        adapter = PrometheusMetricsAdapter()
+        adapter = InMemoryMetricsAdapter()
         health = await adapter.health_check()
         assert health is True
 
