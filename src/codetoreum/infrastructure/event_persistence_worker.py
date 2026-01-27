@@ -12,6 +12,7 @@ from codetoreum.infrastructure.redis_event_buffer import (
 )
 from codetoreum.ports.exceptions import EventStoreError
 from codetoreum.ports.output.event_store import IEventStore
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +120,7 @@ class EventPersistenceWorker:
 
         except Exception as e:
             logger.error(f"Worker {self.worker_id} failed with error: {e}", exc_info=True,
-                extra={"error_id": "ERR_INTERNAL_ERROR"}
+                extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_INTERNAL_ERROR}
             )
 
         finally:
@@ -173,7 +174,7 @@ class EventPersistenceWorker:
                 logger.error(
                     f"Worker {self.worker_id} error in main loop: {e}",
                     exc_info=True,
-                    extra={"error_id": "ERR_INTERNAL_ERROR"}
+                    extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_INTERNAL_ERROR}
             )
                 await asyncio.sleep(self.retry_delay_seconds)
 
@@ -237,7 +238,7 @@ class EventPersistenceWorker:
                     f"(attempt {attempt + 1}/{self.max_retries + 1}): {e}",
                     exc_info=True
 ,
-                    extra={"error_id": "ERR_INTERNAL_ERROR"}
+                    extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_INTERNAL_ERROR}
             )
             if attempt < self.max_retries:
                 # Wait before retrying
@@ -253,7 +254,7 @@ class EventPersistenceWorker:
                     f"{self.max_retries + 1} attempts. Events will remain in "
                     f"pending state for manual recovery.",
                     exc_info=True,
-                    extra={"error_id": "ERR_INTERNAL_ERROR"}
+                    extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_INTERNAL_ERROR}
             )
                 raise
 

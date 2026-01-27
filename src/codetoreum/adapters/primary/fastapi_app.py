@@ -65,6 +65,7 @@ from codetoreum.adapters.primary.routers.metrics import create_metrics_router
 from codetoreum.adapters.primary.routers.workspace import create_workspace_router
 from codetoreum.adapters.primary.routers.events import create_events_router
 from codetoreum.infrastructure.auth import SimpleTokenAuthManager
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.input.agent_command import IAgentCommandPort
 from codetoreum.ports.input.agent_query import IAgentQueryPort
 from codetoreum.ports.input.config_command import IConfigurationCommandPort
@@ -174,12 +175,16 @@ async def lifespan(app: FastAPI):
                 f"{result.errors} errors"
             )
         except asyncio.TimeoutError:
-            logger.error("Container recovery timed out after 5 minutes",
-                extra={"error_id": "ERR_CONTAINER_ERROR"}
+            logger.error(
+                "Container recovery timed out after 5 minutes",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_EXECUTION_TIMEOUT}
             )
         except Exception as e:
-            logger.error("Container recovery failed", exc_info=True,
-                extra={"error_id": "ERR_CONTAINER_ERROR"}
+            logger.error(
+                "Container recovery failed",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_CONTAINER_ERROR}
             )
 
     # Print authentication info if auth manager exists
@@ -758,8 +763,10 @@ def create_app(
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
         """Global exception handler for unhandled errors"""
-        logger.error(f"Unhandled exception: {exc}",
-            extra={"error_id": "ERR_INTERNAL_ERROR"}
+        logger.error(
+            f"Unhandled exception: {exc}",
+            exc_info=True,
+            extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_INTERNAL_ERROR}
         )
         return JSONResponse(
             status_code=500,

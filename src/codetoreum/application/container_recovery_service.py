@@ -25,6 +25,7 @@ from codetoreum.domain.types import (
     CONTAINER_LABEL_TYPE,
     CONTAINER_TYPE_REPAIR_CYCLE,
 )
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.exceptions import ContainerError, StorageError
 from codetoreum.ports.output.container_recovery import (
     ContainerMetadata,
@@ -191,7 +192,7 @@ class ContainerRecoveryService:
                                         f"Failed to emit ContainerRecoveredEvent for {metadata.container_id}: {e}",
                                         exc_info=True,
                                         extra={
-                                            "error_id": "ERR_EVENT_PUBLICATION_ERROR",
+                                            "error_id": ErrorRegistry.ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR,
                                             "container_id": metadata.container_id,
                                             "event_type": "container_recovered",
                                         },
@@ -227,7 +228,7 @@ class ContainerRecoveryService:
                                         f"Failed to emit ContainerKilledEvent for {metadata.container_id}: {e}",
                                         exc_info=True,
                                         extra={
-                                            "error_id": "ERR_EVENT_PUBLICATION_ERROR",
+                                            "error_id": ErrorRegistry.ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR,
                                             "container_id": metadata.container_id,
                                             "event_type": "container_killed",
                                         },
@@ -236,17 +237,22 @@ class ContainerRecoveryService:
                                 return ("kill", True)
                         else:
                             logger.error(
-                                f"Failed to execute recovery action for container {metadata.container_id}"
-,
-                                extra={"error_id": "ERR_CONTAINER_ERROR"}
-            )
+                                f"Failed to execute recovery action for container {metadata.container_id}",
+                                extra={
+                                    "error_id": ErrorRegistry.ErrorRegistry.ERR_CONTAINER_ERROR,
+                                    "container_id": metadata.container_id,
+                                }
+                            )
 
                     except (ContainerError, StorageError) as e:
                         logger.error(
                             f"Error during recovery of container {metadata.container_id}: {e}",
                             exc_info=True,
-                            extra={"error_id": "ERR_CONTAINER_ERROR"}
-            )
+                            extra={
+                                "error_id": ErrorRegistry.ErrorRegistry.ERR_CONTAINER_ERROR,
+                                "container_id": metadata.container_id,
+                            }
+                        )
 
             # Process all containers with bounded parallelism
             results = await asyncio.gather(
@@ -260,10 +266,9 @@ class ContainerRecoveryService:
                 if isinstance(result, Exception):
                     logger.error(
                         f"Unexpected error in container recovery: {result}",
-                        exc_info=result
-,
-                        extra={"error_id": "ERR_CONTAINER_ERROR"}
-            )
+                        exc_info=result,
+                        extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_CONTAINER_ERROR}
+                    )
                     processed_results.append(("error", False))
                 else:
                     processed_results.append(result)
@@ -302,7 +307,7 @@ class ContainerRecoveryService:
                     f"Failed to emit ContainerRecoveryCompletedEvent: {e}",
                     exc_info=True,
                     extra={
-                        "error_id": "ERR_EVENT_PUBLICATION_ERROR",
+                        "error_id": ErrorRegistry.ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR,
                         "event_type": "container_recovery_completed",
                     },
                 )
@@ -326,9 +331,9 @@ class ContainerRecoveryService:
 
         except Exception as e:
             logger.error(
-                f"Unrecoverable error in container recovery: {e}", exc_info=True
-,
-                extra={"error_id": "ERR_CONTAINER_ERROR"}
+                f"Unrecoverable error in container recovery: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_CONTAINER_ERROR}
             )
             return RecoveryResult(
                 recovered=recovered_count,

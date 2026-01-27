@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 from uuid import uuid4
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -267,7 +268,7 @@ class DeadLetterQueue:
                         "retry_count": event.retry_count,
                         "original_failure": event.failure_reason.value,
                         "component": "dead_letter_queue",
-                        "error_id": "ERR_DEAD_LETTER_QUEUE_ERROR"
+                        "error_id": ErrorRegistry.ErrorRegistry.ERR_DEAD_LETTER_QUEUE_ERROR
                     }
                 )
 
@@ -313,7 +314,7 @@ class DeadLetterQueue:
                     extra={
                         "component": "dead_letter_queue",
                         "operation": "retry_loop",
-                        "error_id": "ERR_DEAD_LETTER_QUEUE_ERROR"
+                        "error_id": ErrorRegistry.ErrorRegistry.ERR_DEAD_LETTER_QUEUE_ERROR
                     }
                 )
 

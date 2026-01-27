@@ -20,6 +20,7 @@ except ImportError:
     PROMETHEUS_AVAILABLE = False
 
 from codetoreum.ports.output.metrics import IMetrics, MetricData
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -202,7 +203,7 @@ class PrometheusMetricsAdapter(IMetrics):
             logger.error(
                 f"Error incrementing counter {name}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_METRICS_ERROR"}
+                extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_METRICS_ERROR}
             )
     async def set_gauge(
         self,
@@ -231,7 +232,7 @@ class PrometheusMetricsAdapter(IMetrics):
             logger.error(
                 f"Error setting gauge {name}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_METRICS_ERROR"}
+                extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_METRICS_ERROR}
             )
     async def record_histogram(
         self,
@@ -260,7 +261,7 @@ class PrometheusMetricsAdapter(IMetrics):
             logger.error(
                 f"Error recording histogram {name}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_METRICS_ERROR"}
+                extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_METRICS_ERROR}
             )
     async def record_summary(
         self,
@@ -289,7 +290,7 @@ class PrometheusMetricsAdapter(IMetrics):
             logger.error(
                 f"Error recording summary {name}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_METRICS_ERROR"}
+                extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_METRICS_ERROR}
             )
     async def start_timer(self, name: str) -> str:
         """
@@ -507,7 +508,7 @@ class PrometheusMetricsAdapter(IMetrics):
                 logger.error(
                     f"Error recording batch metric: {e}",
                     exc_info=True,
-                    extra={"error_id": "ERR_METRICS_ERROR"}
+                    extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_METRICS_ERROR}
                 )
     async def flush(self) -> None:
         """Flush any buffered metrics."""
@@ -528,6 +529,6 @@ class PrometheusMetricsAdapter(IMetrics):
             logger.error(
                 f"Health check failed: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_HEALTH_CHECK_FAILED"}
+                extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_HEALTH_CHECK_FAILED}
             )
             return False

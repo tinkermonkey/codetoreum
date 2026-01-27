@@ -27,6 +27,7 @@ from codetoreum.domain.events.lock_events import (
     WorkItemQueuedEvent,
 )
 from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -150,7 +151,7 @@ class InMemoryLockService(IPipelineLockService):
                                     "project_id": project_id,
                                     "board_id": board_id,
                                     "event_type": "lock.stale_detected",
-                                    "error_id": "ERR_PIPELINE_LOCK_ERROR",
+                                    "error_id": ErrorRegistry.ErrorRegistry.ERR_PIPELINE_LOCK_ERROR,
                                 }
                             )
 
@@ -181,7 +182,7 @@ class InMemoryLockService(IPipelineLockService):
                                     "project_id": project_id,
                                     "board_id": board_id,
                                     "event_type": "pipeline.lock_acquired",
-                                    "error_id": "ERR_PIPELINE_LOCK_ERROR",
+                                    "error_id": ErrorRegistry.ErrorRegistry.ERR_PIPELINE_LOCK_ERROR,
                                 }
                             )
 
@@ -219,7 +220,7 @@ class InMemoryLockService(IPipelineLockService):
                                 "project_id": project_id,
                                 "board_id": board_id,
                                 "event_type": "pipeline.lock_acquired",
-                                "error_id": "ERR_PIPELINE_LOCK_ERROR",
+                                "error_id": ErrorRegistry.ErrorRegistry.ERR_PIPELINE_LOCK_ERROR,
                             }
                         )
 
@@ -278,7 +279,7 @@ class InMemoryLockService(IPipelineLockService):
                         f"project={project_id}, board={board_id}. Item was queued but event notification failed.",
                         exc_info=True,
                         extra={
-                            "error_id": "ERR_EVENT_PUBLICATION_ERROR",
+                            "error_id": ErrorRegistry.ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR,
                             "work_item_id": work_item_id,
                             "project_id": project_id,
                             "board_id": board_id,
@@ -363,7 +364,7 @@ class InMemoryLockService(IPipelineLockService):
                         f"project={project_id}, board={board_id}. Lock was released but event was lost.",
                         exc_info=True,
                         extra={
-                            "error_id": "ERR_EVENT_PUBLICATION_ERROR",
+                            "error_id": ErrorRegistry.ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR,
                             "work_item_id": work_item_id,
                             "project_id": project_id,
                             "board_id": board_id,
@@ -391,7 +392,7 @@ class InMemoryLockService(IPipelineLockService):
                             f"project={project_id}, board={board_id}. Lock was acquired by next item but event was lost.",
                             exc_info=True,
                             extra={
-                                "error_id": "ERR_EVENT_PUBLICATION_ERROR",
+                                "error_id": ErrorRegistry.ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR,
                                 "work_item_id": next_item_id,
                                 "project_id": project_id,
                                 "board_id": board_id,

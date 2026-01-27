@@ -13,6 +13,7 @@ from codetoreum.domain.events import (
     ExecutionTimeout,
 )
 from codetoreum.infrastructure.event_bus import EventHandler, event_handler
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +179,7 @@ class ExecutionEventHandler(EventHandler):
 
         exit_code = event.payload.get('exit_code')
         if exit_code:
-            logger.error(f"Exit code: {exit_code}", extra={"error_id": "ERR_EXECUTION_ERROR"})
+            logger.error(f"Exit code: {exit_code}", extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_EXECUTION_ERROR})
 
         logger.warning(
             f"Failure rate: {self._metrics['failed_executions']}/{self._metrics['total_executions']} "
@@ -207,7 +208,7 @@ class ExecutionEventHandler(EventHandler):
 
         logger.error(
             f"Execution timed out: {event.aggregate_id}",
-            extra={"error_id": "ERR_EXECUTION_TIMEOUT"}
+            extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_EXECUTION_TIMEOUT}
         )
 
         logger.warning(

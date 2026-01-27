@@ -14,6 +14,7 @@ from codetoreum.domain.events import (
     WorkItemCreated,
 )
 from codetoreum.infrastructure.event_bus import EventHandler, event_handler
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +152,7 @@ class WorkflowEventHandler(EventHandler):
         logger.error(
             f"Execution {event.aggregate_id} failed, "
             f"escalation logic deferred to integration phase",
-            extra={"error_id": "ERR_EXECUTION_ERROR"}
+            extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_EXECUTION_ERROR}
         )
 
     async def _handle_review_approved(self, event: ReviewCycleApproved) -> None:

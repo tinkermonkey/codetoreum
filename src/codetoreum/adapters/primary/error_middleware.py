@@ -121,7 +121,7 @@ async def error_handling_middleware(request: Request, call_next: Callable):
 
     except PydanticValidationError as exc:
         # Pydantic validation errors (request body validation)
-        error_id = "ERR_VALIDATION_FAILED"
+        error_id = ErrorRegistry.ErrorRegistry.ERR_VALIDATION_FAILED
         logger.info(
             f"Validation error on {request.method} {request.url.path}",
             extra={
@@ -154,7 +154,7 @@ async def error_handling_middleware(request: Request, call_next: Callable):
 
     except ValueError as exc:
         # Value errors (typically from domain logic)
-        error_id = "ERR_VALUE_ERROR"
+        error_id = ErrorRegistry.ErrorRegistry.ERR_VALUE_ERROR
         logger.info(
             f"Value error on {request.method} {request.url.path}: {exc}",
             extra={
@@ -307,6 +307,7 @@ async def error_handling_middleware(request: Request, call_next: Callable):
 # from fastapi import FastAPI
 # from starlette.middleware.base import BaseHTTPMiddleware
 # from codetoreum.infrastructure.logging import configure_logging
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 #
 # # Configure logging at application startup
 # configure_logging(

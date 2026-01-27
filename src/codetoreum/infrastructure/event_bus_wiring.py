@@ -18,6 +18,7 @@ from typing import Any, Callable, Optional
 
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.event_bus_protocols import (
+from codetoreum.infrastructure.error_ids import ErrorRegistry
     IBoardService,
     IDiscussionAdapter,
     IPipelineLockService,
@@ -204,7 +205,7 @@ class EventBusWiring:
             logger.error(
                 f"Error publishing event in background task: {e}",
                 exc_info=True,
-                extra={"task_id": id(task), "error_id": "ERR_EVENT_BUS_ERROR"}
+                extra={"task_id": id(task), "error_id": ErrorRegistry.ErrorRegistry.ERR_EVENT_BUS_ERROR}
             )
             # TODO: Track metric for background task failures
             # TODO: Consider emitting system event for monitoring

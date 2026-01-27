@@ -259,7 +259,7 @@ class SimulationApplicationBootstrap:
 
         except Exception as e:
             logger.error(f"Bootstrap setup failed: {e}",
-                extra={"error_id": "ERR_INTERNAL_ERROR"}
+                extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_INTERNAL_ERROR}
             )
             raise
 
@@ -301,7 +301,7 @@ class SimulationApplicationBootstrap:
 
         except Exception as e:
             logger.error(f"Error during teardown: {e}",
-                extra={"error_id": "ERR_INTERNAL_ERROR"}
+                extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_INTERNAL_ERROR}
             )
 
     # =========================================================================
@@ -480,6 +480,7 @@ class SimulationApplicationBootstrap:
 
             async def get_workflow_state(self, issue_id: str):
                 from codetoreum.application.workflow_orchestrator import WorkflowState
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 
                 if issue_id not in self._states:
                     self._states[issue_id] = WorkflowState(

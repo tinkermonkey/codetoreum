@@ -35,6 +35,7 @@ from codetoreum.config import (
     DEFAULT_WS_RATE_LIMIT_WINDOW,
 )
 from codetoreum.domain.events import DomainEvent
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -342,7 +343,7 @@ class ConnectionManager:
             logger.error(
                 f"Failed to setup Redis pub/sub: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_INFRASTRUCTURE_ERROR"}
+                extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
             )
 
     async def _handle_redis_event(self, message: Dict[str, Any]) -> None:
@@ -363,7 +364,7 @@ class ConnectionManager:
             logger.error(
                 f"Error handling Redis event: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_INFRASTRUCTURE_ERROR"}
+                extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
             )
 
     async def connect(self, websocket: WebSocket, connection_id: str) -> bool:
@@ -460,7 +461,7 @@ class ConnectionManager:
                 logger.error(
                     f"Redis setex operation failed for connection {connection_id}: {redis_error}",
                     exc_info=True,
-                    extra={"error_id": "ERR_REDIS_ERROR"}
+                    extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_REDIS_ERROR}
                 )
                 raise
 
@@ -468,7 +469,7 @@ class ConnectionManager:
             logger.error(
                 f"Failed to persist connection state for {connection_id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_INFRASTRUCTURE_ERROR"}
+                extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
             )
 
     async def _remove_persisted_connection_state(self, connection_id: str) -> None:
@@ -487,14 +488,14 @@ class ConnectionManager:
                     logger.error(
                         f"Redis delete operation failed for connection {connection_id}: {redis_error}",
                         exc_info=True,
-                        extra={"error_id": "ERR_REDIS_ERROR"}
+                        extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_REDIS_ERROR}
                     )
                     # Don't raise - this is cleanup, best effort
         except Exception as e:
             logger.error(
                 f"Failed to remove persisted connection state for {connection_id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_INFRASTRUCTURE_ERROR"}
+                extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
             )
 
     def _create_tracked_task(self, coro):
@@ -700,7 +701,7 @@ class ConnectionManager:
             logger.error(
                 f"Error sending message to {connection_id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_INFRASTRUCTURE_ERROR"}
+                extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
             )
             # Connection closed, clean up
             self.disconnect(connection_id)
@@ -730,7 +731,7 @@ class ConnectionManager:
             logger.error(
                 f"Failed to send flow control warning: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_INFRASTRUCTURE_ERROR"}
+                extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
             )
 
     async def _send_error_and_close(
@@ -873,7 +874,7 @@ class ConnectionManager:
                 logger.error(
                     f"Failed to publish event to Redis: {e}",
                     exc_info=True,
-                    extra={"error_id": "ERR_REDIS_ERROR"}
+                    extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_REDIS_ERROR}
                 )
                 # Fall back to local broadcast
                 await self._broadcast_event_local(event_dict)
@@ -1221,7 +1222,7 @@ class WebSocketAdapter:
                 logger.error(
                     f"ValueError in WebSocket handler for {connection_id}: {e}",
                     exc_info=True,
-                    extra={"error_id": "ERR_INVALID_INPUT"}
+                    extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_INVALID_INPUT}
                 )
                 try:
                     await self.manager.send_personal_message(
@@ -1241,7 +1242,7 @@ class WebSocketAdapter:
                 logger.error(
                     f"JSON decode error for {connection_id}: {e}",
                     exc_info=True,
-                    extra={"error_id": "ERR_INVALID_INPUT"}
+                    extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_INVALID_INPUT}
                 )
                 try:
                     await self.manager.send_personal_message(
@@ -1323,7 +1324,7 @@ class WebSocketAdapter:
                     logger.error(
                         f"Failed to send heartbeat ping: {e}",
                         exc_info=True,
-                        extra={"error_id": "ERR_INFRASTRUCTURE_ERROR"}
+                        extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
                     )
                     return
 
@@ -1383,7 +1384,7 @@ class WebSocketAdapter:
             logger.error(
                 f"Failed to process subscribe message: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_HANDLER_EXECUTION"}
+                extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_HANDLER_EXECUTION}
             )
             await self.manager.send_personal_message(
                 ErrorMessage(
