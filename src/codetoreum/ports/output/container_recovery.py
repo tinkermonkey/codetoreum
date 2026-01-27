@@ -17,6 +17,8 @@ from datetime import datetime
 from types import MappingProxyType
 from typing import List, Literal, Optional
 
+from dateutil import parser as date_parser
+
 
 # ============================================================================
 # Data Models
@@ -42,6 +44,16 @@ class ContainerMetadata:
         work_item_id: Work item ID from org.codetoreum.work_item_id label (optional)
         pipeline_run_id: Pipeline run ID from org.codetoreum.pipeline_run_id label (optional)
         execution_id: Execution ID from org.codetoreum.execution_id label (optional)
+
+    Validation Rules:
+        - container_id must be non-empty (required)
+        - container_name must be non-empty (required)
+        - project_id must be non-empty (required)
+        - agent_id must be non-empty (required)
+        - task_id must be non-empty (required)
+        - created_at must be a valid datetime object
+        - labels must be a MappingProxyType (immutable)
+        - Optional fields can be None or non-empty strings
     """
 
     container_id: str
@@ -54,6 +66,30 @@ class ContainerMetadata:
     work_item_id: Optional[str] = None
     pipeline_run_id: Optional[str] = None
     execution_id: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        """Validate container metadata after initialization."""
+        if not self.container_id:
+            raise ValueError("container_id is required and must be non-empty")
+        if not self.container_name:
+            raise ValueError("container_name is required and must be non-empty")
+        if not self.project_id:
+            raise ValueError("project_id is required and must be non-empty")
+        if not self.agent_id:
+            raise ValueError("agent_id is required and must be non-empty")
+        if not self.task_id:
+            raise ValueError("task_id is required and must be non-empty")
+        if not isinstance(self.created_at, datetime):
+            raise ValueError("created_at must be a valid datetime object")
+        if not isinstance(self.labels, MappingProxyType):
+            raise ValueError("labels must be a MappingProxyType (immutable mapping)")
+        # Validate optional fields if provided
+        if self.work_item_id is not None and not self.work_item_id:
+            raise ValueError("work_item_id must be non-empty if provided")
+        if self.pipeline_run_id is not None and not self.pipeline_run_id:
+            raise ValueError("pipeline_run_id must be non-empty if provided")
+        if self.execution_id is not None and not self.execution_id:
+            raise ValueError("execution_id must be non-empty if provided")
 
 
 @dataclass(frozen=True)
@@ -77,6 +113,15 @@ class RecoveryAssessment:
         with_monitoring: Whether to enable full monitoring on reconnect
                         (true if work_item_id present, false for limited reconnect)
         execution_id: Execution ID if reconnecting (None if killing)
+
+    Validation Rules:
+        - container_id must be non-empty (required)
+        - action must be one of: "reconnect" or "kill"
+        - reason must be non-empty (required)
+        - with_monitoring must be a boolean
+        - execution_id must be non-empty if provided, or None
+        - If action is "reconnect", execution_id should be present
+        - If action is "kill", execution_id should be None
     """
 
     container_id: str
@@ -84,6 +129,26 @@ class RecoveryAssessment:
     reason: str
     with_monitoring: bool
     execution_id: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        """Validate recovery assessment after initialization."""
+        if not self.container_id:
+            raise ValueError("container_id is required and must be non-empty")
+        if self.action not in ("reconnect", "kill"):
+            raise ValueError('action must be one of: "reconnect", "kill"')
+        if not self.reason:
+            raise ValueError("reason is required and must be non-empty")
+        if not isinstance(self.with_monitoring, bool):
+            raise ValueError("with_monitoring must be a boolean")
+        # Validate execution_id if provided
+        if self.execution_id is not None and not self.execution_id:
+            raise ValueError("execution_id must be non-empty if provided")
+        # Validate logical consistency: reconnect should have execution_id
+        if self.action == "reconnect" and not self.execution_id:
+            raise ValueError("execution_id is required when action is 'reconnect'")
+        # Kill action should not have execution_id
+        if self.action == "kill" and self.execution_id is not None:
+            raise ValueError("execution_id must be None when action is 'kill'")
 
 
 @dataclass(frozen=True)
@@ -100,6 +165,15 @@ class RecoveryResult:
         errors: Number of containers where recovery failed
         repair_cycles_processed: Number of completed repair cycle results processed
         timestamp: ISO 8601 timestamp when recovery completed
+
+    Validation Rules:
+        - recovered must be >= 0 (non-negative integer)
+        - killed must be >= 0 (non-negative integer)
+        - errors must be >= 0 (non-negative integer)
+        - repair_cycles_processed must be >= 0 (non-negative integer)
+        - timestamp must be a non-empty ISO 8601 formatted string
+        - At least one operation must have been performed (recovered + killed + errors > 0
+          OR repair_cycles_processed > 0, unless all containers were already processed)
     """
 
     recovered: int
@@ -107,6 +181,26 @@ class RecoveryResult:
     errors: int
     repair_cycles_processed: int
     timestamp: str
+
+    def __post_init__(self) -> None:
+        """Validate recovery result after initialization."""
+        if self.recovered < 0:
+            raise ValueError("recovered must be >= 0")
+        if self.killed < 0:
+            raise ValueError("killed must be >= 0")
+        if self.errors < 0:
+            raise ValueError("errors must be >= 0")
+        if self.repair_cycles_processed < 0:
+            raise ValueError("repair_cycles_processed must be >= 0")
+        if not self.timestamp:
+            raise ValueError("timestamp is required and must be non-empty")
+        # Validate ISO 8601 timestamp format
+        try:
+            date_parser.isoparse(self.timestamp)
+        except (ValueError, TypeError) as e:
+            raise ValueError(
+                f"timestamp must be a valid ISO 8601 datetime string, got: {self.timestamp}"
+            ) from e
 
 
 # ============================================================================

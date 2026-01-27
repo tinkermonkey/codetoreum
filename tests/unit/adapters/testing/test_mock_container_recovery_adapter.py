@@ -143,6 +143,7 @@ class TestMockContainerRecoveryAdapterRetrievalAndAssessment:
             agent_id="agent-1",
             task_id="task-1",
             work_item_id="work-123",
+            execution_id="exec-456",
         )
 
         assessment = await adapter.assess_container(metadata)
@@ -150,6 +151,7 @@ class TestMockContainerRecoveryAdapterRetrievalAndAssessment:
         assert assessment.action == "reconnect"
         assert assessment.reason == "default_recovery"
         assert assessment.with_monitoring is True
+        assert assessment.execution_id == "exec-456"
 
     @pytest.mark.asyncio
     async def test_assess_container_configured(self):

@@ -229,16 +229,26 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
         Raises:
             ValueError: If container not found in assessments and no default set
         """
-        assessment = self.assessments.get(
-            metadata.container_id,
-            RecoveryAssessment(
-                container_id=metadata.container_id,
-                action="reconnect",
-                reason="default_recovery",
-                with_monitoring=bool(metadata.work_item_id),
-                execution_id=metadata.execution_id,
-            ),
-        )
+        if metadata.container_id in self.assessments:
+            assessment = self.assessments[metadata.container_id]
+        else:
+            # Default: reconnect if execution_id present, otherwise kill
+            if metadata.execution_id:
+                assessment = RecoveryAssessment(
+                    container_id=metadata.container_id,
+                    action="reconnect",
+                    reason="default_recovery",
+                    with_monitoring=bool(metadata.work_item_id),
+                    execution_id=metadata.execution_id,
+                )
+            else:
+                assessment = RecoveryAssessment(
+                    container_id=metadata.container_id,
+                    action="kill",
+                    reason="no_execution_found",
+                    with_monitoring=False,
+                    execution_id=None,
+                )
 
         logger.debug(
             f"Mock assess container {metadata.container_id}: {assessment.action}"
@@ -260,16 +270,26 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
         Raises:
             ValueError: If container not found in assessments and no default set
         """
-        assessment = self.assessments.get(
-            metadata.container_id,
-            RecoveryAssessment(
-                container_id=metadata.container_id,
-                action="reconnect",
-                reason="default_repair_cycle_recovery",
-                with_monitoring=bool(metadata.work_item_id),
-                execution_id=metadata.execution_id,
-            ),
-        )
+        if metadata.container_id in self.assessments:
+            assessment = self.assessments[metadata.container_id]
+        else:
+            # Default: reconnect if execution_id present, otherwise kill
+            if metadata.execution_id:
+                assessment = RecoveryAssessment(
+                    container_id=metadata.container_id,
+                    action="reconnect",
+                    reason="default_repair_cycle_recovery",
+                    with_monitoring=bool(metadata.work_item_id),
+                    execution_id=metadata.execution_id,
+                )
+            else:
+                assessment = RecoveryAssessment(
+                    container_id=metadata.container_id,
+                    action="kill",
+                    reason="no_checkpoint",
+                    with_monitoring=False,
+                    execution_id=None,
+                )
 
         logger.debug(
             f"Mock assess repair cycle container {metadata.container_id}: {assessment.action}"

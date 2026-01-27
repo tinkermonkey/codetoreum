@@ -511,3 +511,435 @@ class TestContainerTypeConstants:
         # Type label should have correct value
         assert metadata.labels[CONTAINER_LABEL_TYPE] == CONTAINER_TYPE_AGENT
         assert metadata.labels[CONTAINER_LABEL_TYPE] == "agent"
+
+
+class TestContainerMetadataValidation:
+    """Tests for ContainerMetadata validation rules."""
+
+    def test_container_id_required(self):
+        """container_id is required and must be non-empty."""
+        with pytest.raises(ValueError, match="container_id is required"):
+            ContainerMetadata(
+                container_id="",
+                container_name="agent-proj-001",
+                project_id="proj-1",
+                agent_id="agent-1",
+                task_id="task-1",
+                created_at=datetime.now(timezone.utc),
+                labels=MappingProxyType({}),
+            )
+
+    def test_container_name_required(self):
+        """container_name is required and must be non-empty."""
+        with pytest.raises(ValueError, match="container_name is required"):
+            ContainerMetadata(
+                container_id="abc123",
+                container_name="",
+                project_id="proj-1",
+                agent_id="agent-1",
+                task_id="task-1",
+                created_at=datetime.now(timezone.utc),
+                labels=MappingProxyType({}),
+            )
+
+    def test_project_id_required(self):
+        """project_id is required and must be non-empty."""
+        with pytest.raises(ValueError, match="project_id is required"):
+            ContainerMetadata(
+                container_id="abc123",
+                container_name="agent-proj-001",
+                project_id="",
+                agent_id="agent-1",
+                task_id="task-1",
+                created_at=datetime.now(timezone.utc),
+                labels=MappingProxyType({}),
+            )
+
+    def test_agent_id_required(self):
+        """agent_id is required and must be non-empty."""
+        with pytest.raises(ValueError, match="agent_id is required"):
+            ContainerMetadata(
+                container_id="abc123",
+                container_name="agent-proj-001",
+                project_id="proj-1",
+                agent_id="",
+                task_id="task-1",
+                created_at=datetime.now(timezone.utc),
+                labels=MappingProxyType({}),
+            )
+
+    def test_task_id_required(self):
+        """task_id is required and must be non-empty."""
+        with pytest.raises(ValueError, match="task_id is required"):
+            ContainerMetadata(
+                container_id="abc123",
+                container_name="agent-proj-001",
+                project_id="proj-1",
+                agent_id="agent-1",
+                task_id="",
+                created_at=datetime.now(timezone.utc),
+                labels=MappingProxyType({}),
+            )
+
+    def test_created_at_must_be_datetime(self):
+        """created_at must be a valid datetime object."""
+        with pytest.raises(ValueError, match="created_at must be a valid datetime"):
+            ContainerMetadata(
+                container_id="abc123",
+                container_name="agent-proj-001",
+                project_id="proj-1",
+                agent_id="agent-1",
+                task_id="task-1",
+                created_at="2025-01-14T10:30:00Z",  # type: ignore
+                labels=MappingProxyType({}),
+            )
+
+    def test_labels_must_be_mapping_proxy_type(self):
+        """labels must be a MappingProxyType (immutable)."""
+        with pytest.raises(ValueError, match="labels must be a MappingProxyType"):
+            ContainerMetadata(
+                container_id="abc123",
+                container_name="agent-proj-001",
+                project_id="proj-1",
+                agent_id="agent-1",
+                task_id="task-1",
+                created_at=datetime.now(timezone.utc),
+                labels={"key": "value"},  # type: ignore - Plain dict instead
+            )
+
+    def test_work_item_id_must_be_non_empty_if_provided(self):
+        """work_item_id must be non-empty if provided."""
+        with pytest.raises(ValueError, match="work_item_id must be non-empty"):
+            ContainerMetadata(
+                container_id="abc123",
+                container_name="agent-proj-001",
+                project_id="proj-1",
+                agent_id="agent-1",
+                task_id="task-1",
+                created_at=datetime.now(timezone.utc),
+                labels=MappingProxyType({}),
+                work_item_id="",  # Empty string not allowed
+            )
+
+    def test_pipeline_run_id_must_be_non_empty_if_provided(self):
+        """pipeline_run_id must be non-empty if provided."""
+        with pytest.raises(ValueError, match="pipeline_run_id must be non-empty"):
+            ContainerMetadata(
+                container_id="abc123",
+                container_name="agent-proj-001",
+                project_id="proj-1",
+                agent_id="agent-1",
+                task_id="task-1",
+                created_at=datetime.now(timezone.utc),
+                labels=MappingProxyType({}),
+                pipeline_run_id="",  # Empty string not allowed
+            )
+
+    def test_execution_id_must_be_non_empty_if_provided(self):
+        """execution_id must be non-empty if provided."""
+        with pytest.raises(ValueError, match="execution_id must be non-empty"):
+            ContainerMetadata(
+                container_id="abc123",
+                container_name="agent-proj-001",
+                project_id="proj-1",
+                agent_id="agent-1",
+                task_id="task-1",
+                created_at=datetime.now(timezone.utc),
+                labels=MappingProxyType({}),
+                execution_id="",  # Empty string not allowed
+            )
+
+    def test_optional_fields_can_be_none(self):
+        """Optional fields can be None (not provided)."""
+        metadata = ContainerMetadata(
+            container_id="abc123",
+            container_name="agent-proj-001",
+            project_id="proj-1",
+            agent_id="agent-1",
+            task_id="task-1",
+            created_at=datetime.now(timezone.utc),
+            labels=MappingProxyType({}),
+            work_item_id=None,
+            pipeline_run_id=None,
+            execution_id=None,
+        )
+
+        assert metadata.work_item_id is None
+        assert metadata.pipeline_run_id is None
+        assert metadata.execution_id is None
+
+    def test_all_required_fields_valid(self):
+        """Valid metadata with all required fields."""
+        now = datetime.now(timezone.utc)
+        labels = MappingProxyType({
+            CONTAINER_LABEL_TYPE: "agent",
+            CONTAINER_LABEL_PROJECT: "proj-1",
+        })
+
+        metadata = ContainerMetadata(
+            container_id="abc123",
+            container_name="agent-proj-001",
+            project_id="proj-1",
+            agent_id="agent-1",
+            task_id="task-1",
+            created_at=now,
+            labels=labels,
+        )
+
+        assert metadata.container_id == "abc123"
+        assert metadata.container_name == "agent-proj-001"
+        assert metadata.project_id == "proj-1"
+        assert metadata.agent_id == "agent-1"
+        assert metadata.task_id == "task-1"
+        assert metadata.created_at == now
+        assert metadata.labels == labels
+
+
+class TestRecoveryAssessmentValidation:
+    """Tests for RecoveryAssessment validation rules."""
+
+    def test_container_id_required(self):
+        """container_id is required and must be non-empty."""
+        with pytest.raises(ValueError, match="container_id is required"):
+            RecoveryAssessment(
+                container_id="",
+                action="reconnect",
+                reason="Test reason",
+                with_monitoring=True,
+                execution_id="exec-456",
+            )
+
+    def test_action_must_be_valid(self):
+        """action must be one of: reconnect, kill."""
+        with pytest.raises(ValueError, match='action must be one of'):
+            RecoveryAssessment(
+                container_id="abc123",
+                action="invalid",  # type: ignore
+                reason="Test reason",
+                with_monitoring=True,
+                execution_id="exec-456",
+            )
+
+    def test_reason_required(self):
+        """reason is required and must be non-empty."""
+        with pytest.raises(ValueError, match="reason is required"):
+            RecoveryAssessment(
+                container_id="abc123",
+                action="reconnect",
+                reason="",
+                with_monitoring=True,
+                execution_id="exec-456",
+            )
+
+    def test_with_monitoring_must_be_boolean(self):
+        """with_monitoring must be a boolean."""
+        with pytest.raises(ValueError, match="with_monitoring must be a boolean"):
+            RecoveryAssessment(
+                container_id="abc123",
+                action="reconnect",
+                reason="Test reason",
+                with_monitoring="true",  # type: ignore
+                execution_id="exec-456",
+            )
+
+    def test_execution_id_must_be_non_empty_if_provided(self):
+        """execution_id must be non-empty if provided."""
+        with pytest.raises(ValueError, match="execution_id must be non-empty"):
+            RecoveryAssessment(
+                container_id="abc123",
+                action="reconnect",
+                reason="Test reason",
+                with_monitoring=True,
+                execution_id="",  # Empty string not allowed
+            )
+
+    def test_reconnect_requires_execution_id(self):
+        """reconnect action requires execution_id."""
+        with pytest.raises(ValueError, match="execution_id is required when action is 'reconnect'"):
+            RecoveryAssessment(
+                container_id="abc123",
+                action="reconnect",
+                reason="Test reason",
+                with_monitoring=True,
+                execution_id=None,  # Should not be None for reconnect
+            )
+
+    def test_kill_must_not_have_execution_id(self):
+        """kill action must not have execution_id."""
+        with pytest.raises(ValueError, match="execution_id must be None when action is 'kill'"):
+            RecoveryAssessment(
+                container_id="abc123",
+                action="kill",
+                reason="Container timeout",
+                with_monitoring=False,
+                execution_id="exec-456",  # Should be None for kill
+            )
+
+    def test_valid_reconnect_assessment(self):
+        """Valid reconnect assessment with execution_id."""
+        assessment = RecoveryAssessment(
+            container_id="abc123",
+            action="reconnect",
+            reason="Execution in progress",
+            with_monitoring=True,
+            execution_id="exec-456",
+        )
+
+        assert assessment.container_id == "abc123"
+        assert assessment.action == "reconnect"
+        assert assessment.reason == "Execution in progress"
+        assert assessment.with_monitoring is True
+        assert assessment.execution_id == "exec-456"
+
+    def test_valid_kill_assessment(self):
+        """Valid kill assessment without execution_id."""
+        assessment = RecoveryAssessment(
+            container_id="abc123",
+            action="kill",
+            reason="Container timeout",
+            with_monitoring=False,
+            execution_id=None,
+        )
+
+        assert assessment.container_id == "abc123"
+        assert assessment.action == "kill"
+        assert assessment.reason == "Container timeout"
+        assert assessment.with_monitoring is False
+        assert assessment.execution_id is None
+
+
+class TestRecoveryResultValidation:
+    """Tests for RecoveryResult validation rules."""
+
+    def test_recovered_must_be_non_negative(self):
+        """recovered must be >= 0."""
+        with pytest.raises(ValueError, match="recovered must be >= 0"):
+            RecoveryResult(
+                recovered=-1,
+                killed=3,
+                errors=1,
+                repair_cycles_processed=2,
+                timestamp="2025-01-14T10:30:00Z",
+            )
+
+    def test_killed_must_be_non_negative(self):
+        """killed must be >= 0."""
+        with pytest.raises(ValueError, match="killed must be >= 0"):
+            RecoveryResult(
+                recovered=5,
+                killed=-1,
+                errors=1,
+                repair_cycles_processed=2,
+                timestamp="2025-01-14T10:30:00Z",
+            )
+
+    def test_errors_must_be_non_negative(self):
+        """errors must be >= 0."""
+        with pytest.raises(ValueError, match="errors must be >= 0"):
+            RecoveryResult(
+                recovered=5,
+                killed=3,
+                errors=-1,
+                repair_cycles_processed=2,
+                timestamp="2025-01-14T10:30:00Z",
+            )
+
+    def test_repair_cycles_processed_must_be_non_negative(self):
+        """repair_cycles_processed must be >= 0."""
+        with pytest.raises(ValueError, match="repair_cycles_processed must be >= 0"):
+            RecoveryResult(
+                recovered=5,
+                killed=3,
+                errors=1,
+                repair_cycles_processed=-1,
+                timestamp="2025-01-14T10:30:00Z",
+            )
+
+    def test_timestamp_required(self):
+        """timestamp is required and must be non-empty."""
+        with pytest.raises(ValueError, match="timestamp is required"):
+            RecoveryResult(
+                recovered=5,
+                killed=3,
+                errors=1,
+                repair_cycles_processed=2,
+                timestamp="",
+            )
+
+    def test_timestamp_must_be_iso8601(self):
+        """timestamp must be a valid ISO 8601 datetime string."""
+        with pytest.raises(ValueError, match="timestamp must be a valid ISO 8601"):
+            RecoveryResult(
+                recovered=5,
+                killed=3,
+                errors=1,
+                repair_cycles_processed=2,
+                timestamp="not-a-timestamp",
+            )
+
+    def test_timestamp_iso8601_with_z_suffix(self):
+        """timestamp should accept ISO 8601 with Z suffix."""
+        result = RecoveryResult(
+            recovered=5,
+            killed=3,
+            errors=1,
+            repair_cycles_processed=2,
+            timestamp="2025-01-14T10:30:00Z",
+        )
+
+        assert result.timestamp == "2025-01-14T10:30:00Z"
+
+    def test_timestamp_iso8601_with_timezone_offset(self):
+        """timestamp should accept ISO 8601 with timezone offset."""
+        result = RecoveryResult(
+            recovered=5,
+            killed=3,
+            errors=1,
+            repair_cycles_processed=2,
+            timestamp="2025-01-14T10:30:00+00:00",
+        )
+
+        assert result.timestamp == "2025-01-14T10:30:00+00:00"
+
+    def test_timestamp_iso8601_without_timezone(self):
+        """timestamp should accept ISO 8601 without timezone info."""
+        result = RecoveryResult(
+            recovered=5,
+            killed=3,
+            errors=1,
+            repair_cycles_processed=2,
+            timestamp="2025-01-14T10:30:00",
+        )
+
+        assert result.timestamp == "2025-01-14T10:30:00"
+
+    def test_all_zeros_valid(self):
+        """All counts can be zero (e.g., no containers to recover)."""
+        result = RecoveryResult(
+            recovered=0,
+            killed=0,
+            errors=0,
+            repair_cycles_processed=0,
+            timestamp="2025-01-14T10:30:00Z",
+        )
+
+        assert result.recovered == 0
+        assert result.killed == 0
+        assert result.errors == 0
+        assert result.repair_cycles_processed == 0
+
+    def test_valid_recovery_result(self):
+        """Valid recovery result with all fields."""
+        result = RecoveryResult(
+            recovered=5,
+            killed=3,
+            errors=1,
+            repair_cycles_processed=2,
+            timestamp="2025-01-14T10:30:00Z",
+        )
+
+        assert result.recovered == 5
+        assert result.killed == 3
+        assert result.errors == 1
+        assert result.repair_cycles_processed == 2
+        assert result.timestamp == "2025-01-14T10:30:00Z"

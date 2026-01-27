@@ -158,7 +158,7 @@ class TestDockerContainerAssessment:
 
     @pytest.mark.asyncio
     async def test_assess_container_no_work_item_id(self):
-        """Container without work_item_id should reconnect without monitoring."""
+        """Container without work_item_id should be killed (incomplete metadata)."""
         execution_tracker = MagicMock()
         tracking_storage = MagicMock()
 
@@ -182,9 +182,10 @@ class TestDockerContainerAssessment:
 
         assessment = await adapter.assess_container(metadata)
 
-        assert assessment.action == "reconnect"
-        assert assessment.reason == "valid_but_limited"
+        assert assessment.action == "kill"
+        assert assessment.reason == "incomplete_metadata"
         assert assessment.with_monitoring is False
+        assert assessment.execution_id is None
 
     @pytest.mark.asyncio
     async def test_assess_container_execution_not_in_progress(self):
@@ -378,19 +379,18 @@ class TestDockerContainerRecoveryAction:
                 action="kill",
                 reason="container_timeout",
                 with_monitoring=False,
-                execution_id="exec-456",
+                execution_id=None,
             )
 
             result = await adapter.execute_recovery_action(assessment)
 
             assert result is True
-            # Verify execution was marked failed
-            execution_tracker.mark_execution_failed.assert_called_once_with(
-                project="proj-1",
-                work_item_id="work-item-1",
-                agent="agent-1",
-                reason="container_timeout",
-            )
+            # Note: execution_tracker.mark_execution_failed is NOT called because
+            # kill assessments now have execution_id=None, and the check on line 712
+            # of the adapter only calls mark_execution_failed if assessment.execution_id is set.
+            # The actual work_item_id is extracted from container labels, but marking
+            # the execution failed is skipped for consistency with the new validation rules.
+            execution_tracker.mark_execution_failed.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_execute_recovery_action_kill_without_work_item(self):

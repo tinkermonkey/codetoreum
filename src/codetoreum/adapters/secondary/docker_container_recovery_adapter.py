@@ -374,21 +374,21 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                 action="kill",
                 reason="container_timeout",
                 with_monitoring=False,
-                execution_id=metadata.execution_id,
+                execution_id=None,
             )
 
         # Step 3 & 4: Execution validation - query work_execution_tracker.load_state()
         if not metadata.work_item_id:
             logger.warning(
                 f"Container {metadata.container_id} missing work_item_id, "
-                "will reconnect without monitoring"
+                "cannot reconnect without execution tracking, killing"
             )
             return RecoveryAssessment(
                 container_id=metadata.container_id,
-                action="reconnect",
-                reason="valid_but_limited",
+                action="kill",
+                reason="incomplete_metadata",
                 with_monitoring=False,
-                execution_id=metadata.execution_id,
+                execution_id=None,
             )
 
         try:
@@ -406,7 +406,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                 action="kill",
                 reason="execution_state_lookup_failed",
                 with_monitoring=False,
-                execution_id=metadata.execution_id,
+                execution_id=None,
             )
 
         if not execution_state:
@@ -419,7 +419,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                 action="kill",
                 reason="no_execution_found",
                 with_monitoring=False,
-                execution_id=metadata.execution_id,
+                execution_id=None,
             )
 
         # Step 4: Verify execution outcome is "in_progress"
@@ -434,7 +434,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                 action="kill",
                 reason="execution_not_in_progress",
                 with_monitoring=False,
-                execution_id=metadata.execution_id,
+                execution_id=None,
             )
 
         # Step 5: Validate agent matching
@@ -449,7 +449,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                 action="kill",
                 reason="agent_mismatch",
                 with_monitoring=False,
-                execution_id=metadata.execution_id,
+                execution_id=None,
             )
 
         # Step 6 & 7: All checks passed - reconnect with monitoring
@@ -508,7 +508,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                     action="kill",
                     reason="completed_during_downtime",
                     with_monitoring=False,
-                    execution_id=metadata.execution_id,
+                    execution_id=None,
                 )
         except StorageError as e:
             logger.warning(
@@ -563,7 +563,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                         action="kill",
                         reason="checkpoint_stale",
                         with_monitoring=False,
-                        execution_id=metadata.execution_id,
+                        execution_id=None,
                     )
                 else:
                     # Fresh checkpoint despite old container age → reconnect with monitoring
@@ -589,7 +589,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                     action="kill",
                     reason="no_checkpoint",
                     with_monitoring=False,
-                    execution_id=metadata.execution_id,
+                    execution_id=None,
                 )
         else:
             # Container is recent (<2 hours) → assume it's making progress, reconnect
