@@ -338,6 +338,9 @@ class TestHandleCommentEvent:
         # Verify no success event was emitted
         mock_event_store.append.assert_not_called()
 
+        # Verify session state was NOT updated (snapshot not saved)
+        mock_event_store.save_snapshot.assert_not_called()
+
     async def test_handle_comment_no_session(self, orchestrator, mock_event_store, sample_comment):
         """Test comment handling when no session exists."""
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=None)
@@ -599,6 +602,209 @@ class TestHandleCommentEvent:
         # Should raise ValueError when comment has no ID
         with pytest.raises(ValueError, match="empty ID"):
             await orchestrator.handle_comment_event(event)
+
+    async def test_handle_comment_with_none_conversation_id(
+        self,
+        orchestrator,
+        mock_discussion_adapter,
+        mock_llm_provider,
+        mock_event_store,
+        sample_session_state,
+        sample_comment,
+    ):
+        """Test that None conversation_id falls back to session state value."""
+        # Mock session state loading with existing conversation ID
+        session_with_conv = ConversationalSessionState(
+            session_id=sample_session_state.session_id,
+            work_item_id=sample_session_state.work_item_id,
+            project_id=sample_session_state.project_id,
+            agent_assignment=sample_session_state.agent_assignment,
+            column_name=sample_session_state.column_name,
+            llm_conversation_id="conv-existing-123",  # Pre-existing conversation ID
+            last_processed_comment_id=sample_session_state.last_processed_comment_id,
+            last_interaction_timestamp=sample_session_state.last_interaction_timestamp,
+            status="active",
+        )
+        snapshot_data = {
+            "conversational_session_state": session_with_conv.to_dict()
+        }
+        mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
+
+        # Mock agent execution returning None for conversation_id
+        mock_execution_result = MagicMock()
+        mock_execution_result.content = "This is the agent's response."
+        mock_execution_result.conversation_id = None  # LLM returned None
+        mock_llm_provider.continue_conversation = AsyncMock(
+            return_value=mock_execution_result
+        )
+
+        # Mock adapter returning comment with ID
+        posted_comment = MagicMock(spec=Comment)
+        posted_comment.id = "comment-xyz789"
+        mock_discussion_adapter.add_comment = AsyncMock(return_value=posted_comment)
+
+        event = CommentNeedsResponseEvent(
+            type="comment.needs_response",
+            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            source="github",
+            work_item_id="issue-42",
+            project_id="proj-1",
+            comment=sample_comment,
+            context=CommentContext(
+                column_name="In Review",
+                agent_assignment="code-reviewer",
+            ),
+        )
+
+        # Handle comment event should succeed with fallback
+        await orchestrator.handle_comment_event(event)
+
+        # Verify agent execution was called
+        mock_llm_provider.continue_conversation.assert_called_once()
+
+        # Verify comment was posted
+        mock_discussion_adapter.add_comment.assert_called_once()
+
+        # Verify snapshot was saved with FALLBACK conversation ID (existing one)
+        mock_event_store.save_snapshot.assert_called_once()
+        # Check the snapshot kwarg
+        saved_snapshot = mock_event_store.save_snapshot.call_args.kwargs["snapshot"]
+        assert saved_snapshot["conversational_session_state"]["llm_conversation_id"] == "conv-existing-123"
+
+    async def test_handle_comment_column_change_between_conversational_columns(
+        self,
+        orchestrator,
+        mock_discussion_adapter,
+        mock_llm_provider,
+        mock_event_store,
+        sample_session_state,
+        sample_comment,
+    ):
+        """Test comment handling when work item's column has changed.
+
+        This tests the behavior described in the docstring where a work item
+        moves between conversational columns. Per implementation review, the
+        code does NOT terminate the session on column change, but instead
+        continues processing. This test documents current behavior.
+        """
+        # Mock session state loading with "In Progress" column
+        session_in_progress = ConversationalSessionState(
+            session_id=sample_session_state.session_id,
+            work_item_id=sample_session_state.work_item_id,
+            project_id=sample_session_state.project_id,
+            agent_assignment=sample_session_state.agent_assignment,
+            column_name="In Progress",  # Original column (conversational)
+            llm_conversation_id=sample_session_state.llm_conversation_id,
+            last_processed_comment_id=sample_session_state.last_processed_comment_id,
+            last_interaction_timestamp=sample_session_state.last_interaction_timestamp,
+            status="active",
+        )
+        snapshot_data = {
+            "conversational_session_state": session_in_progress.to_dict()
+        }
+        mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
+
+        # Mock agent execution
+        mock_execution_result = MagicMock()
+        mock_execution_result.content = "Agent response to the comment."
+        mock_execution_result.conversation_id = "conv-abc123"
+        mock_llm_provider.continue_conversation = AsyncMock(
+            return_value=mock_execution_result
+        )
+
+        # Mock adapter returning comment with ID
+        posted_comment = MagicMock(spec=Comment)
+        posted_comment.id = "comment-xyz789"
+        mock_discussion_adapter.add_comment = AsyncMock(return_value=posted_comment)
+
+        # Mock stream version for snapshot
+        mock_event_store.get_stream_version = AsyncMock(return_value=5)
+
+        event = CommentNeedsResponseEvent(
+            type="comment.needs_response",
+            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            source="github",
+            work_item_id="issue-42",
+            project_id="proj-1",
+            comment=sample_comment,
+            context=CommentContext(
+                column_name="In Review",  # Different conversational column than session
+                agent_assignment="code-reviewer",
+            ),
+        )
+
+        # Handle comment event - implementation continues processing despite column change
+        await orchestrator.handle_comment_event(event)
+
+        # Verify LLM execution was called (doesn't terminate on column change)
+        mock_llm_provider.continue_conversation.assert_called_once()
+
+        # Verify comment was posted
+        mock_discussion_adapter.add_comment.assert_called_once()
+
+        # Verify session state was updated (snapshot saved)
+        # Even though column changed, session continues with existing context
+        mock_event_store.save_snapshot.assert_called_once()
+
+    async def test_handle_comment_event_store_failure_after_comment_posted(
+        self,
+        orchestrator,
+        mock_discussion_adapter,
+        mock_llm_provider,
+        mock_event_store,
+        sample_session_state,
+        sample_comment,
+    ):
+        """Test partial failure scenario where comment is posted but event store fails."""
+        # Mock session state loading
+        snapshot_data = {
+            "conversational_session_state": sample_session_state.to_dict()
+        }
+        mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
+
+        # Mock agent execution
+        mock_execution_result = MagicMock()
+        mock_execution_result.content = "This is the agent's response."
+        mock_execution_result.conversation_id = "conv-abc123"
+        mock_llm_provider.continue_conversation = AsyncMock(
+            return_value=mock_execution_result
+        )
+
+        # Mock adapter successfully posting comment
+        posted_comment = MagicMock(spec=Comment)
+        posted_comment.id = "comment-xyz789"
+        mock_discussion_adapter.add_comment = AsyncMock(return_value=posted_comment)
+
+        # Mock event store failure during snapshot save (after comment posted)
+        mock_event_store.save_snapshot = AsyncMock(
+            side_effect=Exception("Storage failed")
+        )
+
+        event = CommentNeedsResponseEvent(
+            type="comment.needs_response",
+            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            source="github",
+            work_item_id="issue-42",
+            project_id="proj-1",
+            comment=sample_comment,
+            context=CommentContext(
+                column_name="In Review",
+                agent_assignment="code-reviewer",
+            ),
+        )
+
+        # Handle comment event should raise the storage error
+        with pytest.raises(Exception, match="Storage failed"):
+            await orchestrator.handle_comment_event(event)
+
+        # Verify comment WAS posted (partial failure - can't roll back)
+        mock_discussion_adapter.add_comment.assert_called_once()
+
+        # Verify agent execution WAS called
+        mock_llm_provider.continue_conversation.assert_called_once()
+
+        # Verify the exception happened during snapshot save
+        mock_event_store.save_snapshot.assert_called_once()
 
 
 class TestHandleColumnChangeEvent:
