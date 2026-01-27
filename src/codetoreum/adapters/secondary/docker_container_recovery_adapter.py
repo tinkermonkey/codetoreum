@@ -842,6 +842,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                 exc_info=True,
                 extra={"error_id": ErrorRegistry.ERR_STORAGE_ERROR}
             )
+            raise
         except Exception as e:
             logger.error(
                 f"Unexpected error processing orphaned repair results: {e}",
