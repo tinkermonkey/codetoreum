@@ -427,7 +427,10 @@ class ExecutionService:
             CONTAINER_LABEL_PROJECT: context.project_id,
             CONTAINER_LABEL_AGENT: execution.agent_id,
             CONTAINER_LABEL_WORK_ITEM_ID: execution.work_item_id,
-            CONTAINER_LABEL_TASK_ID: execution.id,  # Use execution ID as task ID
+            # In the current phase, execution.id serves as both task_id and execution_id.
+            # Phase 2 recovery service uses these for container identification and tracking.
+            # Future phases may introduce separate task IDs from an external scheduler.
+            CONTAINER_LABEL_TASK_ID: execution.id,
             CONTAINER_LABEL_PIPELINE_RUN_ID: execution.workflow_id,
             CONTAINER_LABEL_EXECUTION_ID: execution.id,
         }

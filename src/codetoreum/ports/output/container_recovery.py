@@ -35,12 +35,12 @@ class ContainerMetadata:
         container_name: Human-readable container name (for logging only, not parsed)
         project_id: Project identifier from org.codetoreum.project label
         agent_id: Agent identifier from org.codetoreum.agent label
-        work_item_id: Work item ID from org.codetoreum.work_item_id label (optional)
         task_id: Task identifier from org.codetoreum.task_id label
-        pipeline_run_id: Pipeline run ID from org.codetoreum.pipeline_run_id label (optional)
-        execution_id: Execution ID from org.codetoreum.execution_id label (optional)
         created_at: Container creation timestamp from Docker API
         labels: Complete label dictionary from container for reference
+        work_item_id: Work item ID from org.codetoreum.work_item_id label (optional)
+        pipeline_run_id: Pipeline run ID from org.codetoreum.pipeline_run_id label (optional)
+        execution_id: Execution ID from org.codetoreum.execution_id label (optional)
     """
 
     container_id: str

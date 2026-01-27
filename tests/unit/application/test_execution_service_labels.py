@@ -50,7 +50,15 @@ class MockStorage:
 
 
 class TestExecutionServiceLabelBuilding:
-    """Tests for ExecutionService container label building."""
+    """Tests for ExecutionService container label building.
+
+    Note on test isolation: These unit tests instantiate AgentExecution directly
+    rather than using AgentExecution.create() factory. This is intentional because:
+    1. We're testing the label building logic in isolation
+    2. The factory creates full persistent state with validation
+    3. Direct instantiation is appropriate for unit testing a single method
+    4. These tests verify label building, not AgentExecution creation logic
+    """
 
     def setup_method(self):
         """Setup test fixtures."""

@@ -20,6 +20,8 @@ from codetoreum.domain.types import (
     CONTAINER_LABEL_TASK_ID,
     CONTAINER_LABEL_TYPE,
     CONTAINER_LABEL_WORK_ITEM_ID,
+    CONTAINER_TYPE_AGENT,
+    CONTAINER_TYPE_REPAIR_CYCLE,
 )
 from codetoreum.ports.output.container_recovery import (
     ContainerMetadata,
@@ -466,3 +468,45 @@ class TestContainerNameIsNotParsed:
             # Metadata extraction should succeed regardless of name format
             assert metadata.container_name == name
             assert metadata.project_id == "proj-1"
+
+
+class TestContainerTypeConstants:
+    """Tests verify container type constant values and usage."""
+
+    def test_container_type_agent_value(self):
+        """CONTAINER_TYPE_AGENT should be 'agent'."""
+        assert CONTAINER_TYPE_AGENT == "agent"
+
+    def test_container_type_repair_cycle_value(self):
+        """CONTAINER_TYPE_REPAIR_CYCLE should be 'repair-cycle'."""
+        assert CONTAINER_TYPE_REPAIR_CYCLE == "repair-cycle"
+
+    def test_container_label_type_uses_correct_namespace(self):
+        """CONTAINER_LABEL_TYPE should use org.codetoreum namespace."""
+        assert CONTAINER_LABEL_TYPE == "org.codetoreum.type"
+        assert CONTAINER_LABEL_TYPE.startswith("org.codetoreum.")
+
+    def test_container_type_constants_are_distinct(self):
+        """Container type constants should be distinct values."""
+        assert CONTAINER_TYPE_AGENT != CONTAINER_TYPE_REPAIR_CYCLE
+
+    def test_agent_type_in_container_metadata(self):
+        """Container type should be set to CONTAINER_TYPE_AGENT in metadata."""
+        metadata = ContainerMetadata(
+            container_id="abc123",
+            container_name="agent-proj-001",
+            project_id="proj-1",
+            agent_id="agent-1",
+            task_id="task-1",
+            created_at=datetime.now(timezone.utc),
+            labels={
+                CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+                CONTAINER_LABEL_TASK_ID: "task-1",
+            },
+        )
+
+        # Type label should have correct value
+        assert metadata.labels[CONTAINER_LABEL_TYPE] == CONTAINER_TYPE_AGENT
+        assert metadata.labels[CONTAINER_LABEL_TYPE] == "agent"

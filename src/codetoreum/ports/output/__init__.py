@@ -1,6 +1,12 @@
 """Output port interfaces."""
 
 from codetoreum.ports.output.agent_executor import IAgentExecutor
+from codetoreum.ports.output.container_recovery import (
+    ContainerMetadata,
+    IAgentContainerRecoveryService,
+    RecoveryAssessment,
+    RecoveryResult,
+)
 from codetoreum.ports.output.board_service import (
     BoardColumn,
     BoardConfig,
@@ -102,6 +108,11 @@ from codetoreum.ports.output.workflow_config_service import IWorkflowConfigServi
 __all__ = [
     # Agent Executor
     "IAgentExecutor",
+    # Container Recovery Service
+    "IAgentContainerRecoveryService",
+    "ContainerMetadata",
+    "RecoveryAssessment",
+    "RecoveryResult",
     # Board Service
     "IBoardService",
     "BoardColumn",
