@@ -1,7 +1,7 @@
 """
-Scenario 11: Orchestrator Startup and Container Recovery
+Scenario 12: Container Crash Recovery
 
-Tests Phase 5 orchestrator startup integration with container recovery.
+Tests orchestrator startup integration with container recovery.
 This scenario validates that:
 1. Orchestrator startup runs container recovery
 2. Recovery correctly identifies and assesses containers
@@ -33,7 +33,7 @@ def create_config() -> SimulationConfig:
 
     config.scenario_description = (
         "Orchestrator startup with container recovery: "
-        "Tests Phase 5 integration of container recovery at startup"
+        "Tests integration of container recovery at startup"
     )
 
     # Configure container recovery metadata
@@ -103,11 +103,11 @@ async def run_scenario(runner: SimulationRunner) -> None:
 
     create_result = await runner.execute_command(
         CreateWorkItemCommand(
-            work_item_id="issue-phase5-1",
+            work_item_id="issue-recovery-1",
             project_id="test-proj",
             title="Test container recovery",
-            description="Tests phase 5 orchestrator startup",
-            source_url="https://example.com/issues/phase5-1",
+            description="Tests orchestrator startup with container recovery",
+            source_url="https://example.com/issues/recovery-1",
             priority="high",
         )
     )
@@ -130,7 +130,7 @@ async def run_scenario(runner: SimulationRunner) -> None:
 
     start_result = await runner.execute_command(
         StartExecutionCommand(
-            work_item_id="issue-phase5-1",
+            work_item_id="issue-recovery-1",
             workflow_id="basic-workflow",
             stage_name="code-generation",
             priority="high",

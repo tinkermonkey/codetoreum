@@ -14,6 +14,7 @@ This is NOT a multi-user system - it's designed for single-tenant deployments
 and development environments.
 """
 
+import asyncio
 import os
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional
@@ -156,17 +157,24 @@ async def lifespan(app: FastAPI):
     # Run container recovery on startup if available
     if hasattr(app.state, "container_recovery_service"):
         try:
-            print("Running container recovery...", flush=True)
+            logger.info("Starting container recovery process")
             recovery_service = app.state.container_recovery_service
-            result = await recovery_service.recover_or_cleanup_containers()
-            print(
-                f"Container recovery completed: {result.recovered} recovered, "
-                f"{result.killed} killed, {result.errors} errors",
-                flush=True
+            result = await asyncio.wait_for(
+                recovery_service.recover_or_cleanup_containers(),
+                timeout=300.0  # 5 minute timeout
             )
+            logger.info(
+                f"Container recovery completed: "
+                f"{result.recovered} recovered, "
+                f"{result.killed} killed, "
+                f"{result.errors} errors"
+            )
+        except asyncio.TimeoutError:
+            logger.error("Container recovery timed out after 5 minutes")
+            # Continue startup - don't block on recovery failure
         except Exception as e:
-            print(f"Container recovery failed: {e}", flush=True)
-            # Log but don't fail startup - recovery is best-effort
+            logger.error("Container recovery failed", exc_info=True)
+            # Continue startup - don't block on recovery failure
 
     # Print authentication info if auth manager exists
     if hasattr(app.state, "auth_manager"):

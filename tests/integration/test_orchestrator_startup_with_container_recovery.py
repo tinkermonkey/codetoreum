@@ -1,5 +1,5 @@
 """
-Integration tests for orchestrator startup with container recovery (Phase 5).
+Integration tests for orchestrator startup with container recovery.
 
 Tests the complete startup flow including:
 1. Container recovery service initialization
