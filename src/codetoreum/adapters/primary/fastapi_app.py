@@ -153,6 +153,21 @@ async def lifespan(app: FastAPI):
     # Note: OpenTelemetry instrumentation is now done at module level
     # (see bottom of this file, after app = create_development_app())
 
+    # Run container recovery on startup if available
+    if hasattr(app.state, "container_recovery_service"):
+        try:
+            print("Running container recovery...", flush=True)
+            recovery_service = app.state.container_recovery_service
+            result = await recovery_service.recover_or_cleanup_containers()
+            print(
+                f"Container recovery completed: {result.recovered} recovered, "
+                f"{result.killed} killed, {result.errors} errors",
+                flush=True
+            )
+        except Exception as e:
+            print(f"Container recovery failed: {e}", flush=True)
+            # Log but don't fail startup - recovery is best-effort
+
     # Print authentication info if auth manager exists
     if hasattr(app.state, "auth_manager"):
         auth_manager: SimpleTokenAuthManager = app.state.auth_manager
@@ -202,6 +217,7 @@ def create_app(
     auth_secret_key: Optional[str] = None,
     disable_auth: bool = False,
     cors_origins: Optional[list] = None,
+    container_recovery_service: Optional[Any] = None,
 ) -> FastAPI:
     """
     Create and configure FastAPI application.
@@ -230,6 +246,7 @@ def create_app(
         auth_secret_key: Optional secret key for JWT signing. If not provided, one will be generated.
         disable_auth: If True, authentication is disabled (for development/testing only)
         cors_origins: List of allowed CORS origins
+        container_recovery_service: Optional container recovery service for startup recovery
 
     Returns:
         Configured FastAPI application
@@ -265,6 +282,10 @@ def create_app(
         auth_deps = SimpleAuthDependencies(auth_manager)
         app.state.auth_manager = auth_manager
         app.state.auth_deps = auth_deps
+
+    # Store container recovery service if provided
+    if container_recovery_service is not None:
+        app.state.container_recovery_service = container_recovery_service
 
     # Configure rate limiting
     limiter = Limiter(key_func=get_remote_address, default_limits=[rate_limit])

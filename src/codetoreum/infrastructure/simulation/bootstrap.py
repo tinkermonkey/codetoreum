@@ -27,8 +27,13 @@ from codetoreum.adapters.testing import (
     MockNotifierAdapter,
     SimpleEncryptionAdapter,
 )
+# Lazy import to avoid circular dependency
+from codetoreum.adapters.testing.mock_container_recovery_adapter import (
+    MockContainerRecoveryAdapter,
+)
 from codetoreum.adapters.testing.in_memory_config_store import InMemoryConfigStore
 from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
+from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 
 # Application Services
 from codetoreum.application.workflow_orchestrator import WorkflowOrchestrator
@@ -40,6 +45,7 @@ from codetoreum.application.feedback_processor import FeedbackProcessor
 from codetoreum.application.workspace_router import WorkspaceRouter
 from codetoreum.application.configuration_service import ConfigurationService
 from codetoreum.application.work_item_service import WorkItemService
+from codetoreum.application.container_recovery_service import ContainerRecoveryService
 
 # Infrastructure
 from codetoreum.infrastructure.event_bus import EventBus
@@ -127,6 +133,7 @@ class SimulationServices:
     workspace_router: WorkspaceRouter
     configuration_service: ConfigurationService
     work_item_service: WorkItemService
+    container_recovery_service: Optional[Any] = None
 
 
 @dataclass
@@ -538,7 +545,16 @@ class SimulationApplicationBootstrap:
             event_store=self.adapters.event_store,
         )
 
-        logger.info("Created all 9 application services with simulation dependencies")
+        # Container Recovery Service
+        mock_recovery_adapter = MockContainerRecoveryAdapter()
+        mock_event_emitter = MockEventEmitter()
+        container_recovery_service = ContainerRecoveryService(
+            recovery_adapter=mock_recovery_adapter,
+            event_emitter=mock_event_emitter,
+            container_timeout_hours=2,
+        )
+
+        logger.info("Created all application services with simulation dependencies (including container recovery)")
 
         return SimulationServices(
             workflow_orchestrator=workflow_orchestrator,
@@ -550,6 +566,7 @@ class SimulationApplicationBootstrap:
             workspace_router=workspace_router,
             configuration_service=configuration_service,
             work_item_service=work_item_service,
+            container_recovery_service=container_recovery_service,
         )
 
     # =========================================================================
@@ -665,6 +682,7 @@ class SimulationApplicationBootstrap:
                 "http://127.0.0.1:5173",
                 "http://127.0.0.1:8080",
             ],
+            container_recovery_service=self.services.container_recovery_service,
         )
 
         logger.info("Created FastAPI application")
