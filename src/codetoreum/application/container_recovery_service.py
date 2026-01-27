@@ -191,7 +191,7 @@ class ContainerRecoveryService:
                                         f"Failed to emit ContainerRecoveredEvent for {metadata.container_id}: {e}",
                                         exc_info=True,
                                         extra={
-                                            "error_id": "ERR_CONTAINER_RECOVERY_EVENT_EMIT_FAILED",
+                                            "error_id": "ERR_EVENT_PUBLICATION_ERROR",
                                             "container_id": metadata.container_id,
                                             "event_type": "container_recovered",
                                         },
@@ -227,7 +227,7 @@ class ContainerRecoveryService:
                                         f"Failed to emit ContainerKilledEvent for {metadata.container_id}: {e}",
                                         exc_info=True,
                                         extra={
-                                            "error_id": "ERR_CONTAINER_RECOVERY_EVENT_EMIT_FAILED",
+                                            "error_id": "ERR_EVENT_PUBLICATION_ERROR",
                                             "container_id": metadata.container_id,
                                             "event_type": "container_killed",
                                         },
@@ -237,15 +237,16 @@ class ContainerRecoveryService:
                         else:
                             logger.error(
                                 f"Failed to execute recovery action for container {metadata.container_id}"
-                            )
-                            return ("error", False)
+,
+                                extra={"error_id": "ERR_CONTAINER_ERROR"}
+            )
 
                     except (ContainerError, StorageError) as e:
                         logger.error(
                             f"Error during recovery of container {metadata.container_id}: {e}",
                             exc_info=True,
-                        )
-                        return ("error", False)
+                            extra={"error_id": "ERR_CONTAINER_ERROR"}
+            )
 
             # Process all containers with bounded parallelism
             results = await asyncio.gather(
@@ -260,8 +261,9 @@ class ContainerRecoveryService:
                     logger.error(
                         f"Unexpected error in container recovery: {result}",
                         exc_info=result
-                    )
-                    # Count as error and add to processed results
+,
+                        extra={"error_id": "ERR_CONTAINER_ERROR"}
+            )
                     processed_results.append(("error", False))
                 else:
                     processed_results.append(result)
@@ -300,7 +302,7 @@ class ContainerRecoveryService:
                     f"Failed to emit ContainerRecoveryCompletedEvent: {e}",
                     exc_info=True,
                     extra={
-                        "error_id": "ERR_CONTAINER_RECOVERY_EVENT_EMIT_FAILED",
+                        "error_id": "ERR_EVENT_PUBLICATION_ERROR",
                         "event_type": "container_recovery_completed",
                     },
                 )
@@ -325,8 +327,9 @@ class ContainerRecoveryService:
         except Exception as e:
             logger.error(
                 f"Unrecoverable error in container recovery: {e}", exc_info=True
+,
+                extra={"error_id": "ERR_CONTAINER_ERROR"}
             )
-            # Return partial result with error tracking
             return RecoveryResult(
                 recovered=recovered_count,
                 killed=killed_count,

@@ -142,16 +142,20 @@ class RedisPubSubAdapter(IMessageBroker):
                     # No message received, continue
                     continue
                 except Exception as e:
-                    logger.error(f"Error receiving message: {e}")
-                    self._stats["receive_errors"] += 1
+                    logger.error(f"Error receiving message: {e}",
+                        exc_info=True,
+                        extra={"error_id": "ERR_REDIS_ERROR"}
+            )
                     # Continue listening despite errors
                     await asyncio.sleep(1)
 
         except asyncio.CancelledError:
             logger.info("Pub/sub listener cancelled")
         except Exception as e:
-            logger.error(f"Fatal error in pub/sub listener: {e}")
-
+            logger.error(f"Fatal error in pub/sub listener: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_EVENT_BUS_ERROR"}
+            )
     async def _dispatch_message(self, channel: str, data: bytes) -> None:
         """
         Dispatch message to registered callbacks.
@@ -179,18 +183,24 @@ class RedisPubSubAdapter(IMessageBroker):
                         callback(message_dict)
                     dispatched += 1
                 except Exception as e:
-                    logger.error(f"Error in pub/sub callback: {e}")
-
+                    logger.error(f"Error in pub/sub callback: {e}",
+                        exc_info=True,
+                        extra={"error_id": "ERR_EVENT_BUS_ERROR"}
+            )
             # Track messages that were successfully dispatched to at least one callback
             if dispatched > 0:
                 self._stats["messages_received"] += 1
 
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to decode message: {e}")
-            self._stats["receive_errors"] += 1
+            logger.error(f"Failed to decode message: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_EVENT_PUBLICATION_ERROR"}
+            )
         except Exception as e:
-            logger.error(f"Error dispatching message: {e}")
-            self._stats["receive_errors"] += 1
+            logger.error(f"Error dispatching message: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_EVENT_BUS_ERROR"}
+            )
 
     async def publish_event(self, event: DomainEvent) -> None:
         """

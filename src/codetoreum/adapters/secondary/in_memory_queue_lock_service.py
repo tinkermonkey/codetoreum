@@ -150,6 +150,7 @@ class InMemoryLockService(IPipelineLockService):
                                     "project_id": project_id,
                                     "board_id": board_id,
                                     "event_type": "lock.stale_detected",
+                                    "error_id": "ERR_PIPELINE_LOCK_ERROR",
                                 }
                             )
 
@@ -180,6 +181,7 @@ class InMemoryLockService(IPipelineLockService):
                                     "project_id": project_id,
                                     "board_id": board_id,
                                     "event_type": "pipeline.lock_acquired",
+                                    "error_id": "ERR_PIPELINE_LOCK_ERROR",
                                 }
                             )
 
@@ -217,6 +219,7 @@ class InMemoryLockService(IPipelineLockService):
                                 "project_id": project_id,
                                 "board_id": board_id,
                                 "event_type": "pipeline.lock_acquired",
+                                "error_id": "ERR_PIPELINE_LOCK_ERROR",
                             }
                         )
 
