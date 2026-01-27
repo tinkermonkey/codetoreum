@@ -8,6 +8,7 @@ These tests verify:
 """
 
 from datetime import datetime, timezone
+from types import MappingProxyType
 from typing import Dict, List
 
 import pytest
@@ -42,7 +43,7 @@ class TestContainerMetadataImmutability:
             agent_id="agent-1",
             task_id="task-1",
             created_at=datetime.now(timezone.utc),
-            labels={},
+            labels=MappingProxyType({}),
             work_item_id="work-123",
             execution_id="exec-456",
         )
@@ -57,11 +58,11 @@ class TestContainerMetadataImmutability:
     def test_container_metadata_preserves_all_fields(self):
         """ContainerMetadata should preserve all fields exactly as provided."""
         now = datetime.now(timezone.utc)
-        labels = {
+        labels = MappingProxyType({
             CONTAINER_LABEL_TYPE: "agent",
             CONTAINER_LABEL_PROJECT: "proj-1",
             CONTAINER_LABEL_AGENT: "agent-1",
-        }
+        })
 
         metadata = ContainerMetadata(
             container_id="abc123",
@@ -427,12 +428,12 @@ class TestContainerNameIsNotParsed:
             agent_id="agent-1",   # Comes from label, not name
             task_id="task-1",     # Comes from label, not name
             created_at=datetime.now(timezone.utc),
-            labels={
+            labels=MappingProxyType({
                 CONTAINER_LABEL_TYPE: "agent",
                 CONTAINER_LABEL_PROJECT: "proj-1",
                 CONTAINER_LABEL_AGENT: "agent-1",
                 CONTAINER_LABEL_TASK_ID: "task-1",
-            },
+            }),
         )
 
         # Metadata should be extracted from labels, not inferred from name
@@ -457,12 +458,12 @@ class TestContainerNameIsNotParsed:
                 agent_id="agent-1",   # Must come from label
                 task_id="task-1",     # Must come from label
                 created_at=datetime.now(timezone.utc),
-                labels={
+                labels=MappingProxyType({
                     CONTAINER_LABEL_TYPE: "agent",
                     CONTAINER_LABEL_PROJECT: "proj-1",
                     CONTAINER_LABEL_AGENT: "agent-1",
                     CONTAINER_LABEL_TASK_ID: "task-1",
-                },
+                }),
             )
 
             # Metadata extraction should succeed regardless of name format
@@ -499,12 +500,12 @@ class TestContainerTypeConstants:
             agent_id="agent-1",
             task_id="task-1",
             created_at=datetime.now(timezone.utc),
-            labels={
+            labels=MappingProxyType({
                 CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
                 CONTAINER_LABEL_PROJECT: "proj-1",
                 CONTAINER_LABEL_AGENT: "agent-1",
                 CONTAINER_LABEL_TASK_ID: "task-1",
-            },
+            }),
         )
 
         # Type label should have correct value

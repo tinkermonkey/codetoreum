@@ -8,6 +8,7 @@ These tests verify:
 """
 
 from datetime import datetime, timedelta, timezone
+from types import MappingProxyType
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -147,7 +148,7 @@ class TestDockerContainerAssessment:
             agent_id="agent-1",
             task_id="task-1",
             created_at=created_at,
-            labels={CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT},
+            labels=MappingProxyType({CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT}),
         )
 
         assessment = await adapter.assess_container(metadata)
@@ -175,7 +176,7 @@ class TestDockerContainerAssessment:
             agent_id="agent-1",
             task_id="task-1",
             created_at=created_at,
-            labels={CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT},
+            labels=MappingProxyType({CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT}),
             work_item_id=None,  # No work item
         )
 
@@ -205,7 +206,7 @@ class TestDockerContainerAssessment:
             agent_id="agent-1",
             task_id="task-1",
             created_at=created_at,
-            labels={CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT},
+            labels=MappingProxyType({CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT}),
             work_item_id="work-123",
             execution_id="exec-456",
         )
@@ -241,7 +242,7 @@ class TestDockerContainerAssessment:
             agent_id="agent-1",
             task_id="task-1",
             created_at=created_at,
-            labels={CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT},
+            labels=MappingProxyType({CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT}),
             work_item_id="work-123",
             execution_id="exec-456",
         )
@@ -277,7 +278,7 @@ class TestDockerContainerAssessment:
             agent_id="agent-1",
             task_id="task-1",
             created_at=created_at,
-            labels={CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT},
+            labels=MappingProxyType({CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT}),
             work_item_id="work-123",
             execution_id="exec-456",
         )
@@ -522,7 +523,7 @@ class TestDockerContainerRecoveryAction:
             agent_id="agent-1",
             task_id="task-1",
             created_at=created_at,
-            labels={CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT},
+            labels=MappingProxyType({CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT}),
             work_item_id="work-123",
             execution_id="exec-456",
         )
@@ -558,7 +559,7 @@ class TestDockerContainerRecoveryAction:
             agent_id="agent-1",
             task_id="task-1",
             created_at=created_at,
-            labels={CONTAINER_LABEL_TYPE: CONTAINER_TYPE_REPAIR_CYCLE},
+            labels=MappingProxyType({CONTAINER_LABEL_TYPE: CONTAINER_TYPE_REPAIR_CYCLE}),
             work_item_id="work-123",
             execution_id="exec-456",
         )

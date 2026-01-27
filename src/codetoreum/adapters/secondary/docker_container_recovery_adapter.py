@@ -13,6 +13,7 @@ It handles:
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
+from types import MappingProxyType
 from typing import Any, Dict, List, Optional, Protocol
 
 from dateutil import parser as dateparser
@@ -317,7 +318,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
             agent_id=agent_id,
             task_id=task_id,
             created_at=created_at,
-            labels=labels,
+            labels=MappingProxyType(labels),
             work_item_id=work_item_id,
             pipeline_run_id=pipeline_run_id,
             execution_id=execution_id,

@@ -10,6 +10,7 @@ These tests verify:
 """
 
 from datetime import datetime, timedelta, timezone
+from types import MappingProxyType
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -157,7 +158,7 @@ class TestRepairCycleContainerAssessment:
             agent_id="repair-agent",
             task_id="task-1",
             created_at=datetime.now(timezone.utc) - timedelta(hours=1),
-            labels={"org.codetoreum.type": "repair-cycle"},
+            labels=MappingProxyType({"org.codetoreum.type": "repair-cycle"}),
             work_item_id="100",
             pipeline_run_id="run-abc",
             execution_id="exec-123",
@@ -195,7 +196,7 @@ class TestRepairCycleContainerAssessment:
             agent_id="repair-agent",
             task_id="task-1",
             created_at=datetime.now(timezone.utc) - timedelta(hours=3),  # 3h old
-            labels={"org.codetoreum.type": "repair-cycle"},
+            labels=MappingProxyType({"org.codetoreum.type": "repair-cycle"}),
             work_item_id="100",
             pipeline_run_id="run-abc",
             execution_id="exec-123",
@@ -229,7 +230,7 @@ class TestRepairCycleContainerAssessment:
             agent_id="repair-agent",
             task_id="task-1",
             created_at=datetime.now(timezone.utc) - timedelta(hours=3),  # 3h old
-            labels={"org.codetoreum.type": "repair-cycle"},
+            labels=MappingProxyType({"org.codetoreum.type": "repair-cycle"}),
             work_item_id="100",
             pipeline_run_id="run-abc",
             execution_id="exec-123",
@@ -267,7 +268,7 @@ class TestRepairCycleContainerAssessment:
             agent_id="repair-agent",
             task_id="task-1",
             created_at=datetime.now(timezone.utc) - timedelta(hours=3),  # 3h old
-            labels={"org.codetoreum.type": "repair-cycle"},
+            labels=MappingProxyType({"org.codetoreum.type": "repair-cycle"}),
             work_item_id="100",
             pipeline_run_id="run-abc",
             execution_id="exec-123",
@@ -301,7 +302,7 @@ class TestRepairCycleContainerAssessment:
             agent_id="repair-agent",
             task_id="task-1",
             created_at=datetime.now(timezone.utc) - timedelta(minutes=30),  # 30 min
-            labels={"org.codetoreum.type": "repair-cycle"},
+            labels=MappingProxyType({"org.codetoreum.type": "repair-cycle"}),
             work_item_id="100",
             pipeline_run_id="run-abc",
             execution_id="exec-123",
@@ -333,7 +334,7 @@ class TestRepairCycleContainerAssessment:
             agent_id="repair-agent",
             task_id="task-1",
             created_at=datetime.now(timezone.utc) - timedelta(hours=1),
-            labels={"org.codetoreum.type": "repair-cycle"},
+            labels=MappingProxyType({"org.codetoreum.type": "repair-cycle"}),
             work_item_id="100",
             pipeline_run_id="run-abc",
             execution_id="exec-123",

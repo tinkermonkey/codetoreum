@@ -6,6 +6,7 @@ for use in unit tests, integration tests, and simulation mode.
 
 import logging
 from datetime import datetime, timedelta, timezone
+from types import MappingProxyType
 from typing import Dict, List, Optional
 
 from codetoreum.domain.types import CONTAINER_TYPE_AGENT, CONTAINER_TYPE_REPAIR_CYCLE
@@ -87,12 +88,12 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
             agent_id=agent_id,
             task_id=task_id,
             created_at=created_at,
-            labels={
+            labels=MappingProxyType({
                 "org.codetoreum.type": CONTAINER_TYPE_AGENT,
                 "org.codetoreum.project": project_id,
                 "org.codetoreum.agent": agent_id,
                 "org.codetoreum.task_id": task_id,
-            },
+            }),
             work_item_id=work_item_id,
             execution_id=execution_id,
             pipeline_run_id=pipeline_run_id,
@@ -143,12 +144,12 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
             agent_id=agent_id,
             task_id=task_id,
             created_at=created_at,
-            labels={
+            labels=MappingProxyType({
                 "org.codetoreum.type": CONTAINER_TYPE_REPAIR_CYCLE,
                 "org.codetoreum.project": project_id,
                 "org.codetoreum.agent": agent_id,
                 "org.codetoreum.task_id": task_id,
-            },
+            }),
             work_item_id=work_item_id,
             execution_id=execution_id,
         )

@@ -14,7 +14,8 @@ Design Principles:
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Literal, Optional
+from types import MappingProxyType
+from typing import List, Literal, Optional
 
 
 # ============================================================================
@@ -37,7 +38,7 @@ class ContainerMetadata:
         agent_id: Agent identifier from org.codetoreum.agent label
         task_id: Task identifier from org.codetoreum.task_id label
         created_at: Container creation timestamp from Docker API
-        labels: Complete label dictionary from container for reference
+        labels: Complete label mapping from container for reference (immutable MappingProxyType)
         work_item_id: Work item ID from org.codetoreum.work_item_id label (optional)
         pipeline_run_id: Pipeline run ID from org.codetoreum.pipeline_run_id label (optional)
         execution_id: Execution ID from org.codetoreum.execution_id label (optional)
@@ -49,7 +50,7 @@ class ContainerMetadata:
     agent_id: str
     task_id: str
     created_at: datetime
-    labels: Dict[str, str]
+    labels: MappingProxyType
     work_item_id: Optional[str] = None
     pipeline_run_id: Optional[str] = None
     execution_id: Optional[str] = None
