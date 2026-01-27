@@ -111,7 +111,10 @@ class ContainerKilledEvent(CodetoreumEvent):
         project_id (Optional[str]): Project ID (may be missing if labels incomplete)
         agent_id (Optional[str]): Agent ID (may be missing if labels incomplete)
         work_item_id (Optional[str]): Work item ID if available
-        kill_reason (str): Reason for killing (container_timeout, agent_mismatch, no_execution_found, unmanaged, incomplete_metadata)
+        kill_reason (str): Reason for killing - Agent container reasons:
+            container_timeout (age >2h), agent_mismatch, no_execution_found, unmanaged,
+            incomplete_metadata. Repair cycle container reasons: completed_during_downtime,
+            checkpoint_stale (>60min stale + >2h old), no_checkpoint (>2h old).
         uptime_seconds (float): Container uptime in seconds before kill
         execution_marked_failed (bool): True if execution state was updated to failed
         timestamp (str): ISO 8601 timestamp when container was killed
@@ -127,7 +130,10 @@ class ContainerKilledEvent(CodetoreumEvent):
         "agent_mismatch",
         "no_execution_found",
         "unmanaged",
-        "incomplete_metadata"
+        "incomplete_metadata",
+        "completed_during_downtime",
+        "checkpoint_stale",
+        "no_checkpoint"
     ] = "unmanaged"
     uptime_seconds: float = 0.0
     execution_marked_failed: bool = False
@@ -146,7 +152,10 @@ class ContainerKilledEvent(CodetoreumEvent):
             "agent_mismatch",
             "no_execution_found",
             "unmanaged",
-            "incomplete_metadata"
+            "incomplete_metadata",
+            "completed_during_downtime",
+            "checkpoint_stale",
+            "no_checkpoint"
         )
         if self.kill_reason not in valid_reasons:
             raise ValueError(f"kill_reason must be one of: {', '.join(valid_reasons)}")

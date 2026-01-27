@@ -225,6 +225,50 @@ class IAgentContainerRecoveryService(ABC):
         pass
 
     @abstractmethod
+    async def get_running_repair_cycle_containers(self) -> List[ContainerMetadata]:
+        """List running repair cycle containers using label filtering.
+
+        Uses Docker label filtering to ONLY return containers with the
+        org.codetoreum.type=repair-cycle label. This separate enumeration
+        from agent containers enables specialized recovery logic for repair
+        cycle containers, which have different lifecycle management.
+
+        Returns:
+            List[ContainerMetadata]: Containers with repair-cycle label
+
+        Raises:
+            ContainerError: If Docker API list operation fails
+        """
+        pass
+
+    @abstractmethod
+    async def assess_repair_cycle_container(
+        self, metadata: ContainerMetadata
+    ) -> RecoveryAssessment:
+        """Assess recovery action for a repair cycle container.
+
+        Evaluates repair cycle container state using specialized logic:
+        1. Checks for completed results in storage (kills if found)
+        2. Checks container age vs 2-hour threshold
+        3. If old, checks checkpoint staleness (>60 minutes)
+        4. Returns decision (kill stale/old, reconnect fresh)
+
+        Repair cycle containers have different assessment criteria than
+        agent containers due to checkpoint-based progress tracking.
+
+        Arguments:
+            metadata: Container metadata extracted from Docker labels
+
+        Returns:
+            RecoveryAssessment: Decision for this container
+
+        Raises:
+            ContainerError: If container inspection fails
+            StorageError: If storage/checkpoint lookup fails
+        """
+        pass
+
+    @abstractmethod
     async def process_orphaned_repair_results(self) -> int:
         """Process completed repair cycle results in storage.
 

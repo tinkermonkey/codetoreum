@@ -753,16 +753,11 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                         key, result, ttl=86400
                     )  # 24 hour retention
 
-                    # TODO: Integrate with repair cycle completion service to:
-                    # - Post summary to work item
-                    # - Auto-commit changes
-                    # - Advance work item state
-                    # - End pipeline run
-                    # - Clean up container
-                    #
-                    # For now, just count it as processed
-                    # This will be called from ContainerRecoveryService which can
-                    # provide the repair_cycle_completion_service dependency
+                    # NOTE: This adapter marks results as processed in storage for deduplication.
+                    # The actual completion flow (work item advancement, auto-commit, cleanup, etc.)
+                    # should be handled by the ContainerRecoveryService or a delegated
+                    # repair cycle completion service. This adapter's responsibility is limited
+                    # to identifying completed results and preventing duplicate processing.
 
                     processed += 1
 
