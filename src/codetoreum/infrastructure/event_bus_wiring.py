@@ -18,12 +18,12 @@ from typing import Any, Callable, Optional
 
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.event_bus_protocols import (
-from codetoreum.infrastructure.error_ids import ErrorRegistry
     IBoardService,
     IDiscussionAdapter,
     IPipelineLockService,
     ICodeReviewService,
 )
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 

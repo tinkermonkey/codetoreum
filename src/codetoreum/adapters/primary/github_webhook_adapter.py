@@ -21,12 +21,12 @@ from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.output.config_store import IConfigStore
 from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.ports.input.workflow_command import (
-from codetoreum.infrastructure.error_ids import ErrorRegistry
     IWorkflowCommandPort,
     StartWorkflowCommand,
     TriggerType,
     WorkflowCommandResult,
 )
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 # Type aliases for missing interfaces
 IEventBus = EventBus

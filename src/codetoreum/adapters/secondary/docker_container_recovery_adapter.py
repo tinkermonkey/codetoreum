@@ -31,11 +31,11 @@ from codetoreum.domain.types import (
 )
 from codetoreum.ports.exceptions import ContainerError, StorageError
 from codetoreum.ports.output.container_recovery import (
-from codetoreum.infrastructure.error_ids import ErrorRegistry
     ContainerMetadata,
     IAgentContainerRecoveryService,
     RecoveryAssessment,
 )
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 

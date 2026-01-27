@@ -38,11 +38,11 @@ from codetoreum.ports.input.conversational_loop_service import (
     IConversationalLoopService,
 )
 from codetoreum.ports.output import (
-from codetoreum.infrastructure.error_ids import ErrorRegistry
     IDiscussionAdapter,
     IEventStore,
     ILLMProvider,
 )
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 

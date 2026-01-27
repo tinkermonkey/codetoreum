@@ -235,7 +235,7 @@ class MockBoardAdapter(IBoardService):
             ValueError: Work item or column doesn't exist
         """
         from codetoreum.ports.output.board_service import ColumnMovementResult
-from codetoreum.infrastructure.error_ids import ErrorRegistry
+        from codetoreum.infrastructure.error_ids import ErrorRegistry
 
         with self._lock:
             if work_item_id not in self._item_positions:

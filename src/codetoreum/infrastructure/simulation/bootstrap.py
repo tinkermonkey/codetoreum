@@ -480,7 +480,7 @@ class SimulationApplicationBootstrap:
 
             async def get_workflow_state(self, issue_id: str):
                 from codetoreum.application.workflow_orchestrator import WorkflowState
-from codetoreum.infrastructure.error_ids import ErrorRegistry
+                from codetoreum.infrastructure.error_ids import ErrorRegistry
 
                 if issue_id not in self._states:
                     self._states[issue_id] = WorkflowState(

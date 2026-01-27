@@ -36,7 +36,7 @@ def create_error_response(
     status_code: int,
     error_code: ErrorCode,
     message: str,
-    details: Optional<dict> = None
+    details: Optional[dict] = None,
 ) -> HTTPException:
     """
     Create a standardized HTTP exception with error response.

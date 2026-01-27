@@ -38,7 +38,6 @@ from codetoreum.ports.exceptions import (
     ValidationError as PortValidationError,
 )
 from codetoreum.ports.input.exceptions import (
-from codetoreum.infrastructure.error_ids import ErrorRegistry
     AgentExecutionNotFoundError,
     AgentNotFoundError as InputPortAgentNotFoundError,
     ArtifactNotFoundError,
@@ -57,6 +56,7 @@ from codetoreum.infrastructure.error_ids import ErrorRegistry
     WorkflowNotPausedError,
     WorkItemNotFoundError as InputPortWorkItemNotFoundError,
 )
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = get_logger(__name__)
 

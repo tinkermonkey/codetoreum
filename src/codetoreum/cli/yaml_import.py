@@ -30,11 +30,11 @@ from codetoreum.adapters.secondary.elasticsearch_config_storage import (
 )
 from codetoreum.adapters.secondary.config_storage_factory import ConfigStorageFactory
 from codetoreum.ports.output.config_store import (
-from codetoreum.infrastructure.error_ids import ErrorRegistry
     AgentConfig,
     PipelineConfig,
     ProjectConfig,
 )
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 console = Console()
