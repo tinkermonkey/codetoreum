@@ -80,11 +80,11 @@ class ContainerRecoveryService:
 
         This is the primary entry point called during orchestrator initialization.
         It coordinates the complete recovery process:
-        1. Discovers running Codetoreum containers via label filtering
-        2. Assesses each container for recovery or cleanup
-        3. Executes recovery actions with bounded parallelism
-        4. Processes orphaned repair results
-        5. Emits completion event
+        1. Process orphaned repair cycle results from storage
+        2. Discover and assess repair cycle containers
+        3. Discover and assess agent containers
+        4. Execute recovery actions with bounded parallelism
+        5. Emit completion event
 
         Returns:
             RecoveryResult: Summary of recovery operations
@@ -100,21 +100,62 @@ class ContainerRecoveryService:
         repair_cycles_processed = 0
 
         try:
-            # Step 1: List running containers
-            logger.info("Starting container recovery cycle")
-            containers = await self.recovery_adapter.get_running_agent_containers()
-            logger.info(f"Found {len(containers)} running Codetoreum containers")
+            # Step 1: Process orphaned repair cycle results (highest priority)
+            try:
+                repair_cycles_processed = (
+                    await self.recovery_adapter.process_orphaned_repair_results()
+                )
+                logger.info(
+                    f"Processed {repair_cycles_processed} orphaned repair cycle results"
+                )
+            except StorageError as e:
+                logger.warning(
+                    f"Failed to process orphaned repair results: {e}", exc_info=True
+                )
 
-            # Step 2: Assess and execute recovery for each container with bounded parallelism
+            # Step 2: Assess repair cycle containers separately
+            repair_cycle_containers = (
+                await self.recovery_adapter.get_running_repair_cycle_containers()
+            )
+            logger.info(
+                f"Found {len(repair_cycle_containers)} running repair cycle containers"
+            )
+
+            # Step 3: List running agent containers
+            logger.info("Starting container recovery cycle")
+            agent_containers = await self.recovery_adapter.get_running_agent_containers()
+            logger.info(f"Found {len(agent_containers)} running agent containers")
+
+            # Combine all containers for assessment and recovery
+            all_containers = repair_cycle_containers + agent_containers
+            logger.info(
+                f"Total containers to assess: "
+                f"{len(repair_cycle_containers)} repair + {len(agent_containers)} agent"
+            )
+
+            # Step 4: Assess and execute recovery with bounded parallelism
             semaphore = asyncio.Semaphore(self.BATCH_SIZE)
 
             async def process_container(metadata: ContainerMetadata):
                 """Process a single container with semaphore-bounded parallelism."""
                 async with semaphore:
                     try:
-                        assessment = await self.recovery_adapter.assess_container(
-                            metadata
-                        )
+                        # Determine assessment method based on container type
+                        container_type = metadata.labels.get(
+                            "org.codetoreum.type"
+                        )  # Use raw string to avoid import
+
+                        if container_type == "repair-cycle":
+                            assessment = (
+                                await self.recovery_adapter.assess_repair_cycle_container(
+                                    metadata
+                                )
+                            )
+                        else:
+                            assessment = await self.recovery_adapter.assess_container(
+                                metadata
+                            )
+
                         success = await self.recovery_adapter.execute_recovery_action(
                             assessment
                         )
@@ -175,9 +216,10 @@ class ContainerRecoveryService:
                         )
                         return ("error", False)
 
-            # Process containers with bounded parallelism
+            # Process all containers with bounded parallelism
             results = await asyncio.gather(
-                *[process_container(c) for c in containers], return_exceptions=False
+                *[process_container(c) for c in all_containers],
+                return_exceptions=False,
             )
 
             # Count results
@@ -189,17 +231,7 @@ class ContainerRecoveryService:
                 elif action == "error":
                     error_count += 1
 
-            # Step 3: Process orphaned repair results
-            try:
-                repair_cycles_processed = (
-                    await self.recovery_adapter.process_orphaned_repair_results()
-                )
-            except StorageError as e:
-                logger.warning(
-                    f"Failed to process orphaned repair results: {e}", exc_info=True
-                )
-
-            # Step 4: Emit completion event
+            # Step 5: Emit completion event
             end_time = datetime.now(timezone.utc)
             duration_seconds = (end_time - start_time).total_seconds()
 
