@@ -854,3 +854,120 @@ class TestBuildThreadMessage:
 
         assert "Can you explain section 2" in message
         assert "user123" in message
+
+    def test_build_thread_message_context_missing_column_name(self, orchestrator, sample_comment, sample_session_state):
+        """Test building thread message when context has no column_name."""
+        event = CommentNeedsResponseEvent(
+            type="comment.needs_response",
+            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            source="github",
+            work_item_id="issue-42",
+            project_id="proj-1",
+            comment=sample_comment,
+            context=CommentContext(
+                column_name=None,  # Missing column_name
+                agent_assignment="code-reviewer",
+            ),
+        )
+
+        message = orchestrator._build_thread_message(event, sample_session_state)
+
+        # Should still include comment but skip column_name
+        assert "Can you explain section 2" in message
+        assert "user123" in message
+        assert "Work item:" not in message
+
+    def test_build_thread_message_context_missing_agent_assignment(self, orchestrator, sample_comment, sample_session_state):
+        """Test building thread message when context has no agent_assignment."""
+        event = CommentNeedsResponseEvent(
+            type="comment.needs_response",
+            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            source="github",
+            work_item_id="issue-42",
+            project_id="proj-1",
+            comment=sample_comment,
+            context=CommentContext(
+                column_name="In Review",
+                agent_assignment=None,  # Missing agent_assignment
+            ),
+        )
+
+        message = orchestrator._build_thread_message(event, sample_session_state)
+
+        # Should include column_name but skip agent_assignment
+        assert "In Review" in message
+        assert "Can you explain section 2" in message
+        assert "Assigned agent:" not in message
+
+    def test_build_thread_message_comment_not_comment_type(self, orchestrator, sample_session_state):
+        """Test building thread message when comment is not a Comment instance."""
+        # Create a mock comment that's not a Comment instance
+        comment = MagicMock()
+        comment.author = "reviewer"
+        comment.body = "Some feedback"
+
+        event = CommentNeedsResponseEvent(
+            type="comment.needs_response",
+            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            source="github",
+            work_item_id="issue-42",
+            project_id="proj-1",
+            comment=comment,
+            context=CommentContext(
+                column_name="In Review",
+                agent_assignment="code-reviewer",
+            ),
+        )
+
+        message = orchestrator._build_thread_message(event, sample_session_state)
+
+        # Should skip comment due to not being a Comment instance
+        assert "In Review" in message
+        assert "New comment from" not in message
+
+    def test_build_thread_message_context_not_commentcontext_type(self, orchestrator, sample_comment, sample_session_state):
+        """Test building thread message when context is not a CommentContext instance."""
+        # Create a mock context that's not a CommentContext instance
+        context = {"column_name": "In Review", "agent_assignment": "code-reviewer"}
+
+        event = CommentNeedsResponseEvent(
+            type="comment.needs_response",
+            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            source="github",
+            work_item_id="issue-42",
+            project_id="proj-1",
+            comment=sample_comment,
+            context=context,  # Dict instead of CommentContext
+        )
+
+        message = orchestrator._build_thread_message(event, sample_session_state)
+
+        # Should skip context fields but include comment
+        assert "Can you explain section 2" in message
+        assert "user123" in message
+        # Should not include context fields since it's not a CommentContext
+        assert "In Review" not in message
+
+
+class TestHandleCommentEventContextValidation:
+    """Test suite for CommentNeedsResponseEvent context validation."""
+
+    async def test_handle_comment_event_with_context_none(
+        self,
+        orchestrator,
+        mock_event_store,
+        sample_comment,
+    ):
+        """Test handle_comment_event raises ValueError when context is None."""
+        event = CommentNeedsResponseEvent(
+            type="comment.needs_response",
+            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            source="github",
+            work_item_id="issue-42",
+            project_id="proj-1",
+            comment=sample_comment,
+            context=None,  # Missing required context
+        )
+
+        with pytest.raises(ValueError, match="CommentNeedsResponseEvent must have context"):
+            await orchestrator.handle_comment_event(event)
