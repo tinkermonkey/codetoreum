@@ -27,7 +27,7 @@ class MockLoggerAdapter:
 
     def error(self, message: str) -> None:
         """Log error level message."""
-        logger.error(message, extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_INTERNAL_ERROR})
+        logger.error(message, extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR})
 
     def debug(self, message: str) -> None:
         """Log debug level message."""

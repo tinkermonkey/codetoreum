@@ -118,7 +118,7 @@ class RetentionPolicyManager:
         except Exception as e:
             error_msg = f"Failed to cleanup audit events: {e}"
             logger.error(error_msg,
-                extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_INTERNAL_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
             )
 
         stats["end_time"] = datetime.utcnow().isoformat()
@@ -165,7 +165,7 @@ class RetentionPolicyManager:
                 break
             except Exception as e:
                 logger.error(f"Error in audit log cleanup loop: {e}",
-                    extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_AUDIT_ERROR}
+                    extra={"error_id": ErrorRegistry.ERR_AUDIT_ERROR}
             )
                 await asyncio.sleep(60)  # Wait 1 minute before retrying
 

@@ -145,7 +145,7 @@ class RedisPubSubAdapter(IMessageBroker):
                 except Exception as e:
                     logger.error(f"Error receiving message: {e}",
                         exc_info=True,
-                        extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_REDIS_ERROR}
+                        extra={"error_id": ErrorRegistry.ERR_REDIS_ERROR}
             )
                     # Continue listening despite errors
                     await asyncio.sleep(1)
@@ -155,7 +155,7 @@ class RedisPubSubAdapter(IMessageBroker):
         except Exception as e:
             logger.error(f"Fatal error in pub/sub listener: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_EVENT_BUS_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_EVENT_BUS_ERROR}
             )
     async def _dispatch_message(self, channel: str, data: bytes) -> None:
         """
@@ -186,7 +186,7 @@ class RedisPubSubAdapter(IMessageBroker):
                 except Exception as e:
                     logger.error(f"Error in pub/sub callback: {e}",
                         exc_info=True,
-                        extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_EVENT_BUS_ERROR}
+                        extra={"error_id": ErrorRegistry.ERR_EVENT_BUS_ERROR}
             )
             # Track messages that were successfully dispatched to at least one callback
             if dispatched > 0:
@@ -195,12 +195,12 @@ class RedisPubSubAdapter(IMessageBroker):
         except json.JSONDecodeError as e:
             logger.error(f"Failed to decode message: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR}
             )
         except Exception as e:
             logger.error(f"Error dispatching message: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_EVENT_BUS_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_EVENT_BUS_ERROR}
             )
 
     async def publish_event(self, event: DomainEvent) -> None:

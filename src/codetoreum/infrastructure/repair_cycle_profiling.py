@@ -156,7 +156,7 @@ class RepairCycleProfiler:
             yield profile
         except Exception as e:
             profile.exceptions += 1
-            logger.error(f"Exception during profiled operation {operation}: {e}", exc_info=True, extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_INTERNAL_ERROR})
+            logger.error(f"Exception during profiled operation {operation}: {e}", exc_info=True, extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR})
             raise
         finally:
             profile.end_time = time.time()

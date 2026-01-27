@@ -491,7 +491,7 @@ class InMemoryQueueService(IPipelineQueueService):
                     "board_id": board_id,
                     "column": column,
                     "error_type": type(e).__name__,
-                    "error_id": ErrorRegistry.ErrorRegistry.ERR_PIPELINE_LOCK_ERROR}
+                    "error_id": ErrorRegistry.ERR_PIPELINE_LOCK_ERROR}
             )
             # Don't raise - allow queue to remain in current state
             # Next sync or lock operation will retry

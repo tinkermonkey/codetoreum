@@ -152,7 +152,7 @@ class WorkflowEventHandler(EventHandler):
         logger.error(
             f"Execution {event.aggregate_id} failed, "
             f"escalation logic deferred to integration phase",
-            extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_EXECUTION_ERROR}
+            extra={"error_id": ErrorRegistry.ERR_EXECUTION_ERROR}
         )
 
     async def _handle_review_approved(self, event: ReviewCycleApproved) -> None:

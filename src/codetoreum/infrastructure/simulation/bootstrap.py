@@ -259,7 +259,7 @@ class SimulationApplicationBootstrap:
 
         except Exception as e:
             logger.error(f"Bootstrap setup failed: {e}",
-                extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_INTERNAL_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
             )
             raise
 
@@ -301,7 +301,7 @@ class SimulationApplicationBootstrap:
 
         except Exception as e:
             logger.error(f"Error during teardown: {e}",
-                extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_INTERNAL_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
             )
 
     # =========================================================================

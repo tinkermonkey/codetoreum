@@ -121,7 +121,7 @@ class GitHubBoardAdapter(IBoardService):
                         f"Event handler failed for {event_type}: {e}",
                         exc_info=True,
                         extra={
-                            "error_id": ErrorRegistry.ErrorRegistry.ERR_HANDLER_EXECUTION,
+                            "error_id": ErrorRegistry.ERR_HANDLER_EXECUTION,
                             "event_type": event_type,
                             "event_id": getattr(event, "event_id", None),
                             "handler": getattr(handler, "__name__", str(handler))
@@ -633,7 +633,7 @@ class GitHubBoardAdapter(IBoardService):
                 f"Permanent error in board polling for {project_id}:{board_id}: {e}",
                 exc_info=True,
                 extra={
-                    "error_id": ErrorRegistry.ErrorRegistry.ERR_BOARD_ERROR,
+                    "error_id": ErrorRegistry.ERR_BOARD_ERROR,
                     "project_id": project_id,
                     "board_id": board_id,
                     "error_type": type(e).__name__
@@ -647,7 +647,7 @@ class GitHubBoardAdapter(IBoardService):
                 f"External service error during board polling for {project_id}:{board_id}: {e}",
                 exc_info=True,
                 extra={
-                    "error_id": ErrorRegistry.ErrorRegistry.ERR_EXTERNAL_SERVICE_ERROR,
+                    "error_id": ErrorRegistry.ERR_EXTERNAL_SERVICE_ERROR,
                     "project_id": project_id,
                     "board_id": board_id
                 }
@@ -658,7 +658,7 @@ class GitHubBoardAdapter(IBoardService):
                 f"Unexpected error during board polling for {project_id}:{board_id}: {e}",
                 exc_info=True,
                 extra={
-                    "error_id": ErrorRegistry.ErrorRegistry.ERR_BOARD_ERROR,
+                    "error_id": ErrorRegistry.ERR_BOARD_ERROR,
                     "project_id": project_id,
                     "board_id": board_id
                 }

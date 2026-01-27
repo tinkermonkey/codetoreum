@@ -178,13 +178,13 @@ async def lifespan(app: FastAPI):
             logger.error(
                 "Container recovery timed out after 5 minutes",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_EXECUTION_TIMEOUT}
+                extra={"error_id": ErrorRegistry.ERR_EXECUTION_TIMEOUT}
             )
         except Exception as e:
             logger.error(
                 "Container recovery failed",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_CONTAINER_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR}
             )
 
     # Print authentication info if auth manager exists
@@ -766,7 +766,7 @@ def create_app(
         logger.error(
             f"Unhandled exception: {exc}",
             exc_info=True,
-            extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_INTERNAL_ERROR}
+            extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
         )
         return JSONResponse(
             status_code=500,

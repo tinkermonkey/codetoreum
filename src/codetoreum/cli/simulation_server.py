@@ -462,7 +462,7 @@ async def main_async(
         console.print("\n[yellow]Interrupted by user[/yellow]")
     except click.FileError as e:
         console.print(f"\n[bold red]File error:[/bold red] {e}")
-        logger.error(f"File error: {e}", extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_FILE_READ_ERROR})
+        logger.error(f"File error: {e}", extra={"error_id": ErrorRegistry.ERR_FILE_READ_ERROR})
         sys.exit(1)
     except OSError as e:
         console.print(f"\n[bold red]Server error:[/bold red] {e}")
@@ -470,7 +470,7 @@ async def main_async(
         sys.exit(1)
     except RuntimeError as e:
         console.print(f"\n[bold red]Runtime error:[/bold red] {e}")
-        logger.exception("Runtime error in simulation server", extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_INTERNAL_ERROR})
+        logger.exception("Runtime error in simulation server", extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR})
         sys.exit(1)
     except Exception as e:
         console.print(f"\n[bold red]Unexpected error:[/bold red] {e}")
@@ -485,7 +485,7 @@ async def main_async(
                 console.print("[green]✓ Cleanup completed successfully[/green]")
             except Exception as e:
                 console.print(f"[red]Error during cleanup: {e}[/red]")
-                logger.error(f"Error during cleanup: {e}", extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_INFRASTRUCTURE_ERROR})
+                logger.error(f"Error during cleanup: {e}", extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR})
 
 
 @click.command()

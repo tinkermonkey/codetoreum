@@ -239,7 +239,7 @@ def map_exception_to_http(exc: Exception, default_detail: Optional[str] = None) 
 
     # Generic Domain Errors (500) - unexpected business logic errors
     if isinstance(exc, DomainError):
-        logger.error(f"Unhandled domain error: {type(exc).__name__}: {exc}", extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_INTERNAL_ERROR})
+        logger.error(f"Unhandled domain error: {type(exc).__name__}: {exc}", extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR})
         return HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=detail,

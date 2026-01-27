@@ -249,7 +249,7 @@ class RepairCycleMetricsCollector:
                 extra={
                     "last_operation": operation,
                     "last_error": str(error),
-                "error_id": ErrorRegistry.ErrorRegistry.ERR_METRICS_ERROR},
+                "error_id": ErrorRegistry.ERR_METRICS_ERROR},
                 exc_info=True,
             )
 

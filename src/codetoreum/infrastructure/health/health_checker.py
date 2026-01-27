@@ -90,7 +90,7 @@ class HealthChecker(IHealthCheck):
                 logger.error(
                     f"Unexpected error in dependency check: {result}",
                     exc_info=result,
-                    extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_HEALTH_CHECK_FAILED}
+                    extra={"error_id": ErrorRegistry.ERR_HEALTH_CHECK_FAILED}
                 )
                 # Create unhealthy result for failed check
                 processed_results.append(DependencyHealth(
@@ -228,7 +228,7 @@ class CompositeHealthCheck(IHealthCheck):
                 logger.error(
                     f"Unexpected error in composite liveness check: {result}",
                     exc_info=result,
-                    extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_HEALTH_CHECK_FAILED}
+                    extra={"error_id": ErrorRegistry.ERR_HEALTH_CHECK_FAILED}
                 )
                 overall_status = HealthStatus.UNHEALTHY
                 break
@@ -252,7 +252,7 @@ class CompositeHealthCheck(IHealthCheck):
                 logger.error(
                     f"Unexpected error in composite readiness check: {result}",
                     exc_info=result,
-                    extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_HEALTH_CHECK_FAILED}
+                    extra={"error_id": ErrorRegistry.ERR_HEALTH_CHECK_FAILED}
                 )
                 overall_status = HealthStatus.UNHEALTHY
                 break

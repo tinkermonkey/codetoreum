@@ -385,7 +385,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                         ))
                     break
         except Exception as e:
-            logger.error(f"Error during repair cycle execution: {e}", exc_info=True, extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_REPAIR_CYCLE_ERROR})
+            logger.error(f"Error during repair cycle execution: {e}", exc_info=True, extra={"error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR})
 
         # Calculate overall success and duration
         overall_success = all(result.passed for result in cycle_results) if cycle_results else False
@@ -397,7 +397,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             try:
                 await self._checkpoint_store.delete_checkpoint(context.pipeline_run_id)
             except Exception as e:
-                logger.error(f"Failed to delete checkpoint: {e}", exc_info=True, extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_STORAGE_ERROR})
+                logger.error(f"Failed to delete checkpoint: {e}", exc_info=True, extra={"error_id": ErrorRegistry.ERR_STORAGE_ERROR})
 
         # Emit cycle completed event (only if we have results)
         if self._current_project is not None and cycle_results:
@@ -455,7 +455,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
             return None
         except Exception as e:
-            logger.error(f"Failed to retrieve checkpoint: {e}", exc_info=True, extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_STORAGE_ERROR})
+            logger.error(f"Failed to retrieve checkpoint: {e}", exc_info=True, extra={"error_id": ErrorRegistry.ERR_STORAGE_ERROR})
             return None
 
     def _restore_checkpoint_state(self, checkpoint: RepairCycleCheckpoint) -> None:
@@ -530,7 +530,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                         "timestamp": self.clock.now().isoformat(),
                     }
                     self._handler_errors.append(error_record)
-                    logger.error(f"Error in event handler for {event_type}: {e}", exc_info=True, extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_HANDLER_EXECUTION})
+                    logger.error(f"Error in event handler for {event_type}: {e}", exc_info=True, extra={"error_id": ErrorRegistry.ERR_HANDLER_EXECUTION})
 
     # ==================== IEventEmitter Implementation ====================
 
@@ -820,7 +820,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                     "iteration": iteration,
                     "error": str(e),
                     "error_type": type(e).__name__,
-                    "error_id": ErrorRegistry.ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
                 exc_info=True,
             )
 

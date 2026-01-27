@@ -192,7 +192,7 @@ class ContainerRecoveryService:
                                         f"Failed to emit ContainerRecoveredEvent for {metadata.container_id}: {e}",
                                         exc_info=True,
                                         extra={
-                                            "error_id": ErrorRegistry.ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR,
+                                            "error_id": ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR,
                                             "container_id": metadata.container_id,
                                             "event_type": "container_recovered",
                                         },
@@ -228,7 +228,7 @@ class ContainerRecoveryService:
                                         f"Failed to emit ContainerKilledEvent for {metadata.container_id}: {e}",
                                         exc_info=True,
                                         extra={
-                                            "error_id": ErrorRegistry.ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR,
+                                            "error_id": ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR,
                                             "container_id": metadata.container_id,
                                             "event_type": "container_killed",
                                         },
@@ -239,7 +239,7 @@ class ContainerRecoveryService:
                             logger.error(
                                 f"Failed to execute recovery action for container {metadata.container_id}",
                                 extra={
-                                    "error_id": ErrorRegistry.ErrorRegistry.ERR_CONTAINER_ERROR,
+                                    "error_id": ErrorRegistry.ERR_CONTAINER_ERROR,
                                     "container_id": metadata.container_id,
                                 }
                             )
@@ -249,7 +249,7 @@ class ContainerRecoveryService:
                             f"Error during recovery of container {metadata.container_id}: {e}",
                             exc_info=True,
                             extra={
-                                "error_id": ErrorRegistry.ErrorRegistry.ERR_CONTAINER_ERROR,
+                                "error_id": ErrorRegistry.ERR_CONTAINER_ERROR,
                                 "container_id": metadata.container_id,
                             }
                         )
@@ -267,7 +267,7 @@ class ContainerRecoveryService:
                     logger.error(
                         f"Unexpected error in container recovery: {result}",
                         exc_info=result,
-                        extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_CONTAINER_ERROR}
+                        extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR}
                     )
                     processed_results.append(("error", False))
                 else:
@@ -307,7 +307,7 @@ class ContainerRecoveryService:
                     f"Failed to emit ContainerRecoveryCompletedEvent: {e}",
                     exc_info=True,
                     extra={
-                        "error_id": ErrorRegistry.ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR,
+                        "error_id": ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR,
                         "event_type": "container_recovery_completed",
                     },
                 )
@@ -333,7 +333,7 @@ class ContainerRecoveryService:
             logger.error(
                 f"Unrecoverable error in container recovery: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_CONTAINER_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR}
             )
             return RecoveryResult(
                 recovered=recovered_count,

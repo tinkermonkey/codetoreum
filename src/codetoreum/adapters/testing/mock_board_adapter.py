@@ -125,7 +125,7 @@ class MockBoardAdapter(IBoardService):
                 try:
                     handler(event)
                 except Exception as e:
-                    logger.error(f"Error in event handler: {e}", exc_info=True, extra={"error_id": ErrorRegistry.ErrorRegistry.ERR_HANDLER_EXECUTION})
+                    logger.error(f"Error in event handler: {e}", exc_info=True, extra={"error_id": ErrorRegistry.ERR_HANDLER_EXECUTION})
 
     # ===== Query Operations =====
 

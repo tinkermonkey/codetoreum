@@ -182,7 +182,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
                     extra={
                         "event_type": event_type,
                         "handler": handler_name,
-                        "error_id": ErrorRegistry.ErrorRegistry.ERR_VALIDATION_FAILED
+                        "error_id": ErrorRegistry.ERR_VALIDATION_FAILED
                     }
                 )
                 failures.append((handler, e))
@@ -194,7 +194,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
                     extra={
                         "event_type": event_type,
                         "handler": handler_name,
-                        "error_id": ErrorRegistry.ErrorRegistry.ERR_HANDLER_EXECUTION
+                        "error_id": ErrorRegistry.ERR_HANDLER_EXECUTION
                     }
                 )
                 failures.append((handler, e))
@@ -205,7 +205,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
                 extra={
                     "event_type": event_type,
                     "failure_count": len(failures),
-                    "error_id": ErrorRegistry.ErrorRegistry.ERR_HANDLER_EXECUTION
+                    "error_id": ErrorRegistry.ERR_HANDLER_EXECUTION
                 }
             )
 

@@ -360,7 +360,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     "pipeline_run_id": context.pipeline_run_id,
                     "test_type": config.test_type.value,
                     "error": str(e),
-                    "error_id": ErrorRegistry.ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
                 exc_info=True,
             )
             raise
@@ -474,7 +474,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         "pipeline_run_id": context.pipeline_run_id,
                         "file": file_path,
                         "error": str(e),
-                    "error_id": ErrorRegistry.ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
                     exc_info=True,
                 )
 
@@ -604,7 +604,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         "pipeline_run_id": context.pipeline_run_id,
                         "file": warning.file,
                         "error": str(e),
-                    "error_id": ErrorRegistry.ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
                     exc_info=True,
                 )
 
@@ -686,7 +686,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     "iteration": iteration,
                     "error": str(e),
                     "error_type": type(e).__name__,
-                    "error_id": ErrorRegistry.ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
                 exc_info=True,
             )
 
@@ -839,7 +839,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         "test_type": test_type.value,
                         "failure_data": failure_data,
                         "validation_error": str(e),
-                    "error_id": ErrorRegistry.ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
                     exc_info=True,
                 )
 
@@ -894,7 +894,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         "test_type": test_type.value,
                         "warning_data": warning_data,
                         "validation_error": str(e),
-                    "error_id": ErrorRegistry.ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
                     exc_info=True,
                 )
 
@@ -1076,7 +1076,7 @@ Return a JSON response with the status of fixes applied."""
                         "test_type": config.test_type.value,
                         "iteration": iteration,
                         "error": error,
-                    "error_id": ErrorRegistry.ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
                     exc_info=True,
                 )
                 break
