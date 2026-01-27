@@ -59,10 +59,7 @@ class IConversationalLoopService(ABC):
         1. Creating a unique session identifier
         2. Initializing session state with provided configuration
         3. Starting the discussion adapter's monitoring (via IDiscussionAdapter.start_monitoring())
-        4. Checking for any existing unprocessed comments from the current session
-        5. If no comments exist, posting initial agent output to the discussion thread
-        6. Emitting ConversationalSessionStartedEvent for audit trail
-        7. Persisting session state to IEventStore
+        4. Persisting session state to IEventStore
 
         **Parameters**:
         - work_item_id: Unique identifier of the work item (e.g., GitHub issue #42)
@@ -75,18 +72,14 @@ class IConversationalLoopService(ABC):
         **Returns**:
         - ConversationalSessionState: The initialized session state with:
             - session_id: Unique identifier for this session
-            - llm_conversation_id: Initialized (if needed) for conversation context
-            - last_processed_comment_id: Initial checkpoint for comment monitoring
+            - llm_conversation_id: None initially (created on first agent execution)
+            - last_processed_comment_id: "__checkpoint_start" sentinel value
             - status: Set to "active"
 
-        **Events Emitted**:
-        - ConversationalSessionStartedEvent: Marks session initialization
-
         **Raises**:
-        - WorkItemNotFoundError: If work item doesn't exist
-        - ProjectNotFoundError: If project doesn't exist
-        - ValidationError: If column_config is malformed or missing required fields
-        - DiscussionAdapterError: If starting monitoring fails
+        - ValueError: If work_item_id, project_id is missing, or column_config is missing required fields
+        - PortError: If starting monitoring fails
+        - EventStoreError: If persisting session state fails
         """
         pass
 
