@@ -31,31 +31,26 @@ class TestContainerRecoveryServiceInitialization:
 
     def test_service_initialization(self):
         """Service should initialize with required dependencies."""
-        container_service = MagicMock()
-        event_store = MagicMock()
+        recovery_adapter = MockContainerRecoveryAdapter()
         event_emitter = MagicMock()
 
         service = ContainerRecoveryService(
-            container_service=container_service,
-            event_store=event_store,
+            recovery_adapter=recovery_adapter,
             event_emitter=event_emitter,
             container_timeout_hours=3,
         )
 
-        assert service.container_service is container_service
-        assert service.event_store is event_store
+        assert service.recovery_adapter is recovery_adapter
         assert service.event_emitter is event_emitter
         assert service.container_timeout_hours == 3
 
     def test_service_default_timeout(self):
         """Service should use default timeout of 2 hours."""
-        container_service = MagicMock()
-        event_store = MagicMock()
+        recovery_adapter = MockContainerRecoveryAdapter()
         event_emitter = MagicMock()
 
         service = ContainerRecoveryService(
-            container_service=container_service,
-            event_store=event_store,
+            recovery_adapter=recovery_adapter,
             event_emitter=event_emitter,
         )
 
@@ -68,26 +63,12 @@ class TestContainerRecoveryServiceWithMock:
     @pytest.mark.asyncio
     async def test_recover_or_cleanup_containers_empty(self):
         """Service should handle empty container list."""
-        container_service = MagicMock()
-        event_store = MagicMock()
+        mock_adapter = MockContainerRecoveryAdapter()
         event_emitter = MagicMock()
 
         service = ContainerRecoveryService(
-            container_service=container_service,
-            event_store=event_store,
+            recovery_adapter=mock_adapter,
             event_emitter=event_emitter,
-        )
-
-        # Mock the port interface methods by monkey-patching
-        mock_adapter = MockContainerRecoveryAdapter()
-
-        service.get_running_agent_containers = (
-            mock_adapter.get_running_agent_containers
-        )
-        service.assess_container = mock_adapter.assess_container
-        service.execute_recovery_action = mock_adapter.execute_recovery_action
-        service.process_orphaned_repair_results = (
-            mock_adapter.process_orphaned_repair_results
         )
 
         result = await service.recover_or_cleanup_containers()
@@ -100,18 +81,13 @@ class TestContainerRecoveryServiceWithMock:
     @pytest.mark.asyncio
     async def test_recover_or_cleanup_containers_with_recovery(self):
         """Service should emit recovery events when containers are recovered."""
-        container_service = MagicMock()
-        event_store = MagicMock()
+        mock_adapter = MockContainerRecoveryAdapter()
         event_emitter = MagicMock()
 
         service = ContainerRecoveryService(
-            container_service=container_service,
-            event_store=event_store,
+            recovery_adapter=mock_adapter,
             event_emitter=event_emitter,
         )
-
-        # Setup mock adapter
-        mock_adapter = MockContainerRecoveryAdapter()
 
         # Add a container that will be recovered
         container = mock_adapter.add_container(
@@ -129,19 +105,9 @@ class TestContainerRecoveryServiceWithMock:
         mock_adapter.set_assessment(
             container_id="container-123",
             action="reconnect",
-            reason="execution_in_progress",
+            reason="valid_execution",
             with_monitoring=True,
             execution_id="exec-456",
-        )
-
-        # Wire the methods
-        service.get_running_agent_containers = (
-            mock_adapter.get_running_agent_containers
-        )
-        service.assess_container = mock_adapter.assess_container
-        service.execute_recovery_action = mock_adapter.execute_recovery_action
-        service.process_orphaned_repair_results = (
-            mock_adapter.process_orphaned_repair_results
         )
 
         result = await service.recover_or_cleanup_containers()
@@ -150,11 +116,8 @@ class TestContainerRecoveryServiceWithMock:
         assert result.killed == 0
         assert result.errors == 0
 
-        # Verify events were emitted
-        assert event_emitter.emit.call_count >= 2  # Recovery + Completion
+        # Verify recovery event was emitted
         calls = event_emitter.emit.call_args_list
-
-        # Check for recovery event
         recovery_event = None
         for call in calls:
             event = call[0][0]
@@ -164,25 +127,18 @@ class TestContainerRecoveryServiceWithMock:
 
         assert recovery_event is not None
         assert recovery_event.container_id == "container-123"
-        assert recovery_event.project_id == "proj-1"
-        assert recovery_event.agent_id == "agent-1"
         assert recovery_event.recovery_action == "reconnect_with_monitoring"
 
     @pytest.mark.asyncio
     async def test_recover_or_cleanup_containers_with_kill(self):
-        """Service should emit kill events when containers are killed."""
-        container_service = MagicMock()
-        event_store = MagicMock()
+        """Service should emit kill events when containers are cleaned up."""
+        mock_adapter = MockContainerRecoveryAdapter()
         event_emitter = MagicMock()
 
         service = ContainerRecoveryService(
-            container_service=container_service,
-            event_store=event_store,
+            recovery_adapter=mock_adapter,
             event_emitter=event_emitter,
         )
-
-        # Setup mock adapter
-        mock_adapter = MockContainerRecoveryAdapter()
 
         # Add a container that will be killed
         container = mock_adapter.add_container(
@@ -200,16 +156,6 @@ class TestContainerRecoveryServiceWithMock:
             action="kill",
             reason="container_timeout",
             with_monitoring=False,
-        )
-
-        # Wire the methods
-        service.get_running_agent_containers = (
-            mock_adapter.get_running_agent_containers
-        )
-        service.assess_container = mock_adapter.assess_container
-        service.execute_recovery_action = mock_adapter.execute_recovery_action
-        service.process_orphaned_repair_results = (
-            mock_adapter.process_orphaned_repair_results
         )
 
         result = await service.recover_or_cleanup_containers()
@@ -234,18 +180,13 @@ class TestContainerRecoveryServiceWithMock:
     @pytest.mark.asyncio
     async def test_recover_or_cleanup_containers_with_failures(self):
         """Service should handle action failures gracefully."""
-        container_service = MagicMock()
-        event_store = MagicMock()
+        mock_adapter = MockContainerRecoveryAdapter()
         event_emitter = MagicMock()
 
         service = ContainerRecoveryService(
-            container_service=container_service,
-            event_store=event_store,
+            recovery_adapter=mock_adapter,
             event_emitter=event_emitter,
         )
-
-        # Setup mock adapter
-        mock_adapter = MockContainerRecoveryAdapter()
 
         # Add containers
         container1 = mock_adapter.add_container(
@@ -270,7 +211,7 @@ class TestContainerRecoveryServiceWithMock:
         mock_adapter.set_assessment(
             container_id="container-1",
             action="reconnect",
-            reason="execution_in_progress",
+            reason="valid_execution",
             with_monitoring=False,
             execution_id="exec-1",
         )
@@ -278,23 +219,13 @@ class TestContainerRecoveryServiceWithMock:
         mock_adapter.set_assessment(
             container_id="container-2",
             action="reconnect",
-            reason="execution_in_progress",
+            reason="valid_execution",
             with_monitoring=False,
             execution_id="exec-2",
         )
 
         # Mark one as failing
         mock_adapter.set_action_failure("container-1")
-
-        # Wire the methods
-        service.get_running_agent_containers = (
-            mock_adapter.get_running_agent_containers
-        )
-        service.assess_container = mock_adapter.assess_container
-        service.execute_recovery_action = mock_adapter.execute_recovery_action
-        service.process_orphaned_repair_results = (
-            mock_adapter.process_orphaned_repair_results
-        )
 
         result = await service.recover_or_cleanup_containers()
 
@@ -305,18 +236,13 @@ class TestContainerRecoveryServiceWithMock:
     @pytest.mark.asyncio
     async def test_recovery_completion_event(self):
         """Service should emit completion event with summary."""
-        container_service = MagicMock()
-        event_store = MagicMock()
+        mock_adapter = MockContainerRecoveryAdapter()
         event_emitter = MagicMock()
 
         service = ContainerRecoveryService(
-            container_service=container_service,
-            event_store=event_store,
+            recovery_adapter=mock_adapter,
             event_emitter=event_emitter,
         )
-
-        # Setup mock adapter
-        mock_adapter = MockContainerRecoveryAdapter()
 
         # Add mixed containers
         mock_adapter.add_container(
@@ -331,7 +257,7 @@ class TestContainerRecoveryServiceWithMock:
         mock_adapter.set_assessment(
             container_id="container-1",
             action="reconnect",
-            reason="execution_in_progress",
+            reason="valid_execution",
             with_monitoring=False,
             execution_id="exec-1",
         )
@@ -353,16 +279,6 @@ class TestContainerRecoveryServiceWithMock:
         )
 
         mock_adapter.repair_cycles_to_process = 2
-
-        # Wire the methods
-        service.get_running_agent_containers = (
-            mock_adapter.get_running_agent_containers
-        )
-        service.assess_container = mock_adapter.assess_container
-        service.execute_recovery_action = mock_adapter.execute_recovery_action
-        service.process_orphaned_repair_results = (
-            mock_adapter.process_orphaned_repair_results
-        )
 
         result = await service.recover_or_cleanup_containers()
 

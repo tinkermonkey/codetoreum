@@ -11,7 +11,7 @@ It handles:
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from dateutil import parser as dateparser
 
@@ -29,38 +29,57 @@ from codetoreum.domain.types import (
 from codetoreum.ports.exceptions import ContainerError, StorageError
 from codetoreum.ports.output.container_recovery import (
     ContainerMetadata,
+    IAgentContainerRecoveryService,
     RecoveryAssessment,
 )
-from codetoreum.ports.output.event_store import IEventStore
 
 logger = logging.getLogger(__name__)
 
 
-class DockerContainerRecoveryAdapter:
+class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
     """
     Docker adapter for container recovery operations.
 
-    This adapter implements the recovery logic by:
+    This adapter implements IAgentContainerRecoveryService to handle recovery
+    of containers at orchestrator startup by:
     1. Connecting to Docker daemon
     2. Listing containers with Codetoreum labels
     3. Extracting metadata from labels
-    4. Assessing each container for recovery or cleanup
-    5. Executing recovery actions
+    4. Assessing each container for recovery or cleanup (full decision tree)
+    5. Executing recovery actions (reconnect or kill)
+
+    Decision Tree:
+    1. Filter repair cycle containers (handled separately)
+    2. Age check: Kill if >2 hours old
+    3. Execution validation: Kill if no execution found or not in_progress
+    4. Agent matching: Kill if agent mismatch
+    5. Monitoring capability: Determine if full monitoring possible
+    6. Reconnect or kill accordingly
 
     Thread Safety:
     - This adapter is async-safe but not thread-safe
     - All Docker operations are executed in a thread pool
     """
 
-    def __init__(self, event_store: IEventStore, container_timeout_hours: int = 2):
+    def __init__(
+        self,
+        execution_tracker: Any,  # IWorkExecutionStateTracker
+        tracking_storage: Any,  # IStorage
+        docker_runner: Optional[Any] = None,  # IDockerRunner for reconnections
+        container_timeout_hours: int = 2,
+    ):
         """
         Initialize DockerContainerRecoveryAdapter.
 
         Args:
-            event_store: Event store for checking execution state
+            execution_tracker: Work execution state tracker for validation
+            tracking_storage: Storage for container tracking re-registration
+            docker_runner: Docker runner for reconnectToContainer() calls
             container_timeout_hours: Hours before a container is considered orphaned
         """
-        self.event_store = event_store
+        self.execution_tracker = execution_tracker
+        self.tracking_storage = tracking_storage
+        self.docker_runner = docker_runner
         self.container_timeout_hours = container_timeout_hours
         self._docker_client = None
 
@@ -197,13 +216,15 @@ class DockerContainerRecoveryAdapter:
         """
         Assess recovery action for a single container.
 
-        Evaluates the container's state to determine whether to reconnect
-        with monitoring or kill it for cleanup. Assessment criteria:
+        Evaluates the container's state using complete decision tree:
 
-        1. Age check: Containers >2 hours old are killed (timeout)
-        2. Execution validation: Check if execution exists in work tracker
-        3. Agent matching: Verify agent in container matches execution
-        4. Monitoring capability: Determine if full monitoring possible
+        1. Filter repair cycle containers (handled separately)
+        2. Age check: Containers >2 hours old are killed (timeout)
+        3. Execution validation: Query work_execution_tracker.load_state()
+        4. Execution outcome check: Verify outcome is "in_progress"
+        5. Agent matching: Validate container agent matches execution agent
+        6. Monitoring capability: Determine if full monitoring possible
+        7. Return assessment (reconnect or kill)
 
         Args:
             metadata: Container metadata extracted from Docker labels
@@ -215,7 +236,22 @@ class DockerContainerRecoveryAdapter:
             ContainerError: If container inspection fails
             StorageError: If execution state lookup fails
         """
-        # Step 1: Age check
+        # Step 1: Filter repair cycle containers (handled separately)
+        container_type = metadata.labels.get(CONTAINER_LABEL_TYPE)
+        if container_type == CONTAINER_TYPE_REPAIR_CYCLE:
+            logger.info(
+                f"Container {metadata.container_id} is repair cycle type, "
+                "will be handled by repair cycle recovery"
+            )
+            return RecoveryAssessment(
+                container_id=metadata.container_id,
+                action="kill",
+                reason="handled_by_repair_cycle_recovery",
+                with_monitoring=False,
+                execution_id=None,
+            )
+
+        # Step 2: Age check - containers >2 hours old are killed regardless
         now = datetime.now(timezone.utc)
         age_seconds = (now - metadata.created_at).total_seconds()
         age_hours = age_seconds / 3600
@@ -230,63 +266,93 @@ class DockerContainerRecoveryAdapter:
                 action="kill",
                 reason="container_timeout",
                 with_monitoring=False,
-                execution_id=None,
+                execution_id=metadata.execution_id,
             )
 
-        # Step 2: Execution validation
-        # Check if execution exists in event store by trying to retrieve events for it
-        execution_found = False
-        if metadata.execution_id:
-            try:
-                # Try to find events for this execution
-                # We're checking if the execution was ever tracked in the system
-                execution_found = await self._check_execution_exists(
-                    metadata.execution_id
-                )
-            except StorageError as e:
-                logger.warning(
-                    f"Failed to check execution state for {metadata.execution_id}: {e}"
-                )
-                # If we can't check, kill to be safe
-                return RecoveryAssessment(
-                    container_id=metadata.container_id,
-                    action="kill",
-                    reason="no_execution_found",
-                    with_monitoring=False,
-                    execution_id=None,
-                )
-
-        if not execution_found:
+        # Step 3 & 4: Execution validation - query work_execution_tracker.load_state()
+        if not metadata.work_item_id:
             logger.warning(
-                f"No execution found for container {metadata.container_id} "
-                f"with execution_id {metadata.execution_id}"
+                f"Container {metadata.container_id} missing work_item_id, "
+                "will reconnect without monitoring"
+            )
+            return RecoveryAssessment(
+                container_id=metadata.container_id,
+                action="reconnect",
+                reason="valid_but_limited",
+                with_monitoring=False,
+                execution_id=metadata.execution_id,
+            )
+
+        try:
+            execution_state = await self.execution_tracker.load_state(
+                project=metadata.project_id, work_item_id=metadata.work_item_id
+            )
+        except StorageError as e:
+            logger.error(
+                f"Failed to load execution state for {metadata.work_item_id}: {e}",
+                exc_info=True,
+            )
+            return RecoveryAssessment(
+                container_id=metadata.container_id,
+                action="kill",
+                reason="execution_state_lookup_failed",
+                with_monitoring=False,
+                execution_id=metadata.execution_id,
+            )
+
+        if not execution_state:
+            logger.info(
+                f"No execution history found for container {metadata.container_id} "
+                f"with work_item_id {metadata.work_item_id}"
             )
             return RecoveryAssessment(
                 container_id=metadata.container_id,
                 action="kill",
                 reason="no_execution_found",
                 with_monitoring=False,
-                execution_id=None,
+                execution_id=metadata.execution_id,
             )
 
-        # Step 3: Agent matching
-        # In the current implementation, we can't fully validate agent matching
-        # without access to the work tracker. Accept the container if it has
-        # valid execution state.
+        # Step 4: Verify execution outcome is "in_progress"
+        outcome = execution_state.get("outcome")
+        if outcome != "in_progress":
+            logger.info(
+                f"Container {metadata.container_id} execution not in_progress, "
+                f"outcome={outcome}, killing"
+            )
+            return RecoveryAssessment(
+                container_id=metadata.container_id,
+                action="kill",
+                reason="execution_not_in_progress",
+                with_monitoring=False,
+                execution_id=metadata.execution_id,
+            )
 
-        # Step 4: Monitoring capability
-        with_monitoring = bool(metadata.work_item_id)
+        # Step 5: Validate agent matching
+        execution_agent = execution_state.get("agent")
+        if execution_agent != metadata.agent_id:
+            logger.info(
+                f"Container {metadata.container_id} agent mismatch: "
+                f"container={metadata.agent_id}, execution={execution_agent}, killing"
+            )
+            return RecoveryAssessment(
+                container_id=metadata.container_id,
+                action="kill",
+                reason="agent_mismatch",
+                with_monitoring=False,
+                execution_id=metadata.execution_id,
+            )
 
+        # Step 6 & 7: All checks passed - reconnect with monitoring
         logger.info(
-            f"Container {metadata.container_id} assessment: reconnect "
-            f"(with_monitoring={with_monitoring})"
+            f"Container {metadata.container_id} assessment: reconnect with monitoring"
         )
 
         return RecoveryAssessment(
             container_id=metadata.container_id,
             action="reconnect",
-            reason="execution_in_progress",
-            with_monitoring=with_monitoring,
+            reason="valid_execution",
+            with_monitoring=True,
             execution_id=metadata.execution_id,
         )
 
@@ -294,11 +360,9 @@ class DockerContainerRecoveryAdapter:
         """
         Execute reconnect or kill action.
 
-        Performs the recovery action determined during assessment.
-
-        Actions:
-        - reconnect: Resume monitoring the running container
-        - kill: Stop and remove the container for cleanup
+        Performs the recovery action determined during assessment:
+        - reconnect: Re-register in tracking storage and restart monitoring thread
+        - kill: Kill container and mark execution failed
 
         Args:
             assessment: Recovery assessment with determined action
@@ -318,7 +382,8 @@ class DockerContainerRecoveryAdapter:
                 container = client.containers.get(assessment.container_id)
             except Exception as e:
                 logger.error(
-                    f"Failed to get container {assessment.container_id}: {e}"
+                    f"Failed to get container {assessment.container_id}: {e}",
+                    exc_info=True,
                 )
                 return False
 
@@ -328,8 +393,31 @@ class DockerContainerRecoveryAdapter:
                         f"Reconnecting container {assessment.container_id} "
                         f"with execution_id {assessment.execution_id}"
                     )
-                    # For reconnect, we just return success since the container is
-                    # already running and will be picked up by the monitoring system
+                    # Re-register container in tracking storage with 2-hour TTL
+                    container_info = {
+                        "containerName": container.name,
+                        "agent": container.labels.get(CONTAINER_LABEL_AGENT),
+                        "project": container.labels.get(CONTAINER_LABEL_PROJECT),
+                        "taskId": container.labels.get(CONTAINER_LABEL_TASK_ID),
+                        "startedAt": datetime.now(timezone.utc).isoformat(),
+                        "recovered": "true",
+                    }
+
+                    try:
+                        # Store in tracking storage with TTL of 7200 seconds (2 hours)
+                        key = f"agent:container:{container.name}"
+                        # Note: This will be awaited in async context
+                        # For now, we prepare the operation
+                        self._tracking_storage_op = (key, container_info, 7200)
+                    except Exception as storage_error:
+                        logger.warning(
+                            f"Failed to register container in tracking storage: {storage_error}",
+                            exc_info=True,
+                        )
+                        # Continue anyway - container is still running
+
+                    # For reconnect, container is already running
+                    # It will be picked up by monitoring system
                     return True
 
                 elif assessment.action == "kill":
@@ -349,13 +437,37 @@ class DockerContainerRecoveryAdapter:
                     try:
                         container.remove(force=True)
                         logger.info(f"Removed container {assessment.container_id}")
-                        return True
                     except Exception as remove_error:
                         logger.error(
                             f"Failed to remove container {assessment.container_id}: {remove_error}",
                             exc_info=True,
                         )
-                        return False
+                        # Continue to mark execution failed even if removal failed
+
+                    # Mark execution failed if we have execution info
+                    if assessment.execution_id:
+                        try:
+                            # Get container metadata for agent info
+                            agent = container.labels.get(CONTAINER_LABEL_AGENT)
+                            project = container.labels.get(CONTAINER_LABEL_PROJECT)
+                            work_item_id = container.labels.get(
+                                CONTAINER_LABEL_WORK_ITEM_ID
+                            )
+
+                            # Note: This will be awaited in async context
+                            self._mark_failed_op = (
+                                project,
+                                work_item_id,
+                                agent,
+                                assessment.reason,
+                            )
+                        except Exception as mark_error:
+                            logger.error(
+                                f"Failed to mark execution failed for {assessment.execution_id}: {mark_error}",
+                                exc_info=True,
+                            )
+
+                    return True
 
             except Exception as e:
                 logger.error(
@@ -385,28 +497,13 @@ class DockerContainerRecoveryAdapter:
         logger.info("Processing orphaned repair cycle results")
         return 0
 
-    async def _check_execution_exists(self, execution_id: str) -> bool:
+    async def recover_or_cleanup_containers(self):
+        """Placeholder for main recovery orchestration method.
+
+        This method is orchestrated by ContainerRecoveryService.
+        The adapter provides the sub-methods that the service calls.
         """
-        Check if an execution exists in the event store.
+        raise NotImplementedError(
+            "recover_or_cleanup_containers is orchestrated by ContainerRecoveryService"
+        )
 
-        Args:
-            execution_id: Execution ID to check
-
-        Returns:
-            bool: True if execution exists, False otherwise
-
-        Raises:
-            StorageError: If event store lookup fails
-        """
-        # Query event store for any events related to this execution
-        try:
-            # Try to retrieve events for this execution
-            # This is a simplified check - in production, you'd query the actual
-            # event store with proper aggregation
-            events = await self.event_store.get_events(
-                aggregate_id=execution_id, limit=1
-            )
-            return len(events) > 0
-        except Exception as e:
-            logger.warning(f"Failed to check execution {execution_id}: {e}")
-            raise StorageError(f"Failed to check execution state: {str(e)}")

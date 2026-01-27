@@ -11,13 +11,14 @@ from typing import Dict, List, Optional
 from codetoreum.domain.types import CONTAINER_TYPE_AGENT
 from codetoreum.ports.output.container_recovery import (
     ContainerMetadata,
+    IAgentContainerRecoveryService,
     RecoveryAssessment,
 )
 
 logger = logging.getLogger(__name__)
 
 
-class MockContainerRecoveryAdapter:
+class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
     """
     Mock adapter for container recovery operations.
 
@@ -206,6 +207,14 @@ class MockContainerRecoveryAdapter:
         """
         logger.debug(f"Mock processing {self.repair_cycles_to_process} repair cycles")
         return self.repair_cycles_to_process
+
+    async def recover_or_cleanup_containers(self):
+        """Placeholder for main recovery interface method."""
+        # This is implemented by ContainerRecoveryService orchestrator
+        # The mock adapter provides the sub-methods
+        raise NotImplementedError(
+            "recover_or_cleanup_containers is orchestrated by ContainerRecoveryService"
+        )
 
     def reset(self) -> None:
         """Reset all mock state."""
