@@ -15,6 +15,7 @@ and development environments.
 """
 
 import asyncio
+import logging
 import os
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional
@@ -81,6 +82,9 @@ from codetoreum.ports.input.orchestration_command import IOrchestrationCommandPo
 from codetoreum.ports.input.work_item_command import IWorkItemCommandPort
 from codetoreum.ports.input.work_item_query import IWorkItemQueryPort
 from codetoreum.ports.output.event_store import IEventStore
+
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================================
