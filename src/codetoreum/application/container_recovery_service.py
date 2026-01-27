@@ -201,8 +201,8 @@ class ContainerRecoveryService:
                                 return ("reconnect", True)
                             else:  # kill
                                 # Emit kill event
-                                # The execution was marked failed asynchronously in execute_recovery_action
-                                # if the adapter implements mark_execution_failed
+                                # The adapter will attempt to mark execution failed if it has
+                                # the necessary work_item metadata and supports mark_execution_failed
                                 execution_marked_failed = (
                                     metadata.work_item_id is not None and metadata.work_item_id != ""
                                 )
