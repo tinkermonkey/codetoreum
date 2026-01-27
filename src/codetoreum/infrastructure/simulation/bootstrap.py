@@ -258,8 +258,9 @@ class SimulationApplicationBootstrap:
             return self.app
 
         except Exception as e:
-            logger.error(f"Bootstrap setup failed: {e}")
-            await self.teardown()
+            logger.error(f"Bootstrap setup failed: {e}",
+                extra={"error_id": "ERR_INTERNAL_ERROR"}
+            )
             raise
 
     async def teardown(self) -> None:
@@ -299,8 +300,9 @@ class SimulationApplicationBootstrap:
             logger.info("Simulation bootstrap teardown complete")
 
         except Exception as e:
-            logger.error(f"Error during teardown: {e}")
-            raise
+            logger.error(f"Error during teardown: {e}",
+                extra={"error_id": "ERR_INTERNAL_ERROR"}
+            )
 
     # =========================================================================
     # Phase 1: Create Adapters

@@ -238,7 +238,7 @@ def map_exception_to_http(exc: Exception, default_detail: Optional[str] = None) 
 
     # Generic Domain Errors (500) - unexpected business logic errors
     if isinstance(exc, DomainError):
-        logger.error(f"Unhandled domain error: {type(exc).__name__}: {exc}")
+        logger.error(f"Unhandled domain error: {type(exc).__name__}: {exc}", extra={"error_id": "ERR_INTERNAL_ERROR"})
         return HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=detail,
@@ -249,7 +249,7 @@ def map_exception_to_http(exc: Exception, default_detail: Optional[str] = None) 
     # ========================================================================
 
     # For any other exception, log and return generic 500
-    logger.exception(f"Unhandled exception: {type(exc).__name__}", exc_info=exc)
+    logger.exception(f"Unhandled exception: {type(exc).__name__}", exc_info=exc, extra={"error_id": "ERR_UNHANDLED_EXCEPTION"})
     # For unknown exceptions, use default_detail if provided, otherwise use generic message
     # We don't expose the exception message for unknown exceptions (security concern)
     final_detail = default_detail if default_detail else "An internal error occurred"

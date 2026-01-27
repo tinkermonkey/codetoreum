@@ -249,11 +249,11 @@ class GitHubWebhookAdapter:
             raise HTTPException(status_code=404, detail=str(e))
 
         except InvalidPayloadError as e:
-            self.logger.error(f"Invalid payload: {e}")
+            self.logger.error(f"Invalid payload: {e}", extra={"error_id": "ERR_INVALID_INPUT"})
             raise HTTPException(status_code=400, detail=str(e))
 
         except Exception as e:
-            self.logger.error(f"Webhook processing failed: {e}")
+            self.logger.error(f"Webhook processing failed: {e}", extra={"error_id": "ERR_INTERNAL_ERROR"})
             raise HTTPException(status_code=500, detail="Internal error")
 
     async def verify_signature(self, payload: bytes, signature: str) -> bool:
@@ -270,7 +270,7 @@ class GitHubWebhookAdapter:
         # Get webhook secret from configuration
         secret = await self.config.get_webhook_secret()
         if not secret:
-            self.logger.error("Webhook secret not configured")
+            self.logger.error("Webhook secret not configured", extra={"error_id": "ERR_MISSING_CONFIGURATION"})
             return False
 
         # Compute expected signature

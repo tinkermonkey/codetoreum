@@ -118,10 +118,9 @@ class EventPersistenceWorker:
             raise
 
         except Exception as e:
-            logger.error(f"Worker {self.worker_id} failed with error: {e}", exc_info=True)
-            raise EventPersistenceWorkerError(
-                f"Worker {self.worker_id} failed: {e}"
-            ) from e
+            logger.error(f"Worker {self.worker_id} failed with error: {e}", exc_info=True,
+                extra={"error_id": "ERR_INTERNAL_ERROR"}
+            )
 
         finally:
             self._running = False
@@ -174,8 +173,8 @@ class EventPersistenceWorker:
                 logger.error(
                     f"Worker {self.worker_id} error in main loop: {e}",
                     exc_info=True,
-                )
-                # Wait before retrying to avoid tight loop on persistent errors
+                    extra={"error_id": "ERR_INTERNAL_ERROR"}
+            )
                 await asyncio.sleep(self.retry_delay_seconds)
 
     async def _process_batch(self, batch: List[Dict[str, Any]]) -> None:
@@ -237,8 +236,9 @@ class EventPersistenceWorker:
                     f"Worker {self.worker_id} unexpected error processing batch "
                     f"(attempt {attempt + 1}/{self.max_retries + 1}): {e}",
                     exc_info=True
-                )
-
+,
+                    extra={"error_id": "ERR_INTERNAL_ERROR"}
+            )
             if attempt < self.max_retries:
                 # Wait before retrying
                 await asyncio.sleep(self.retry_delay_seconds * (attempt + 1))
@@ -253,8 +253,8 @@ class EventPersistenceWorker:
                     f"{self.max_retries + 1} attempts. Events will remain in "
                     f"pending state for manual recovery.",
                     exc_info=True,
-                )
-
+                    extra={"error_id": "ERR_INTERNAL_ERROR"}
+            )
                 raise
 
     def _group_events_by_stream(

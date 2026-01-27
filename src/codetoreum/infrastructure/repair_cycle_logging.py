@@ -102,7 +102,7 @@ class RepairCycleLogger:
 
     def error(self, message: str, data: Optional[Dict[str, Any]] = None, exc_info: bool = False) -> None:
         """Log error message."""
-        self.logger.error(self._format_message(message, data), exc_info=exc_info)
+        self.logger.error(self._format_message(message, data), exc_info=exc_info, extra={"error_id": "ERR_REPAIR_CYCLE_ERROR"})
 
     def critical(self, message: str, data: Optional[Dict[str, Any]] = None, exc_info: bool = False) -> None:
         """Log critical message."""
@@ -276,7 +276,7 @@ class RepairCycleErrorLogger:
         if failure_details:
             msg += " | " + " | ".join(f"{k}={v}" for k, v in failure_details.items())
 
-        self.logger.error(msg)
+        self.logger.error(msg, extra={"error_id": "ERR_REPAIR_CYCLE_ERROR"})
 
     def log_fix_attempt(
         self,
@@ -378,7 +378,8 @@ class RepairCycleLoggingContext:
         if exc_type:
             self.error_logger.logger.error(
                 f"repair_cycle_context_failed | error_type={exc_type.__name__} | error={str(exc_val)}",
-                exc_info=True
+                exc_info=True,
+                extra={"error_id": "ERR_REPAIR_CYCLE_ERROR"}
             )
         else:
             self.logger.info("repair_cycle_context_completed")

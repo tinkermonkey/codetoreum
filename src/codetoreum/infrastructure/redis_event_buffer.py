@@ -257,8 +257,9 @@ class RedisEventBuffer:
                     except Exception as e:
                         logger.error(
                             f"Failed to deserialize event from message {message_id}: {e}"
-                        )
-                        # Move to dead letter queue
+,
+                            extra={"error_id": "ERR_INTERNAL_ERROR"}
+            )
                         await self._move_to_dead_letter(message_id, fields, str(e))
 
             return events
@@ -419,8 +420,9 @@ class RedisEventBuffer:
         except Exception as e:
             logger.error(
                 f"Failed to move message {message_id} to dead letter queue: {e}"
+,
+                extra={"error_id": "ERR_INTERNAL_ERROR"}
             )
-
     async def close(self) -> None:
         """Close the buffer (cleanup resources)."""
         # Redis client is managed externally, so nothing to do here

@@ -237,7 +237,7 @@ class YAMLConfigImporter:
             return {"success": False, "error": str(e)}
         except Exception as e:
             console.print(f"[bold red]Unexpected error:[/bold red] {e}")
-            logger.exception("Unexpected error loading YAML")
+            logger.exception("Unexpected error loading YAML", extra={"error_id": "ERR_CONFIG_PARSING_ERROR"})
             return {"success": False, "error": f"Unexpected error: {e}"}
 
         # Validate YAML structure
@@ -334,7 +334,7 @@ class YAMLConfigImporter:
 
         except Exception as e:
             console.print(f"[bold red]Error saving to database:[/bold red] {e}")
-            logger.exception("Failed to save configuration")
+            logger.exception("Failed to save configuration", extra={"error_id": "ERR_DATABASE_ERROR"})
             return {"success": False, "error": str(e)}
 
     async def _import_agent_config(

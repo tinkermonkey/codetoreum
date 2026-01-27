@@ -199,8 +199,11 @@ class PrometheusMetricsAdapter(IMetrics):
             else:
                 logger.warning(f"Counter metric not found: {name}")
         except Exception as e:
-            logger.error(f"Error incrementing counter {name}: {e}", exc_info=True)
-
+            logger.error(
+                f"Error incrementing counter {name}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_METRICS_ERROR"}
+            )
     async def set_gauge(
         self,
         name: str,
@@ -225,8 +228,11 @@ class PrometheusMetricsAdapter(IMetrics):
             else:
                 logger.warning(f"Gauge metric not found: {name}")
         except Exception as e:
-            logger.error(f"Error setting gauge {name}: {e}", exc_info=True)
-
+            logger.error(
+                f"Error setting gauge {name}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_METRICS_ERROR"}
+            )
     async def record_histogram(
         self,
         name: str,
@@ -251,8 +257,11 @@ class PrometheusMetricsAdapter(IMetrics):
             else:
                 logger.warning(f"Histogram metric not found: {name}")
         except Exception as e:
-            logger.error(f"Error recording histogram {name}: {e}", exc_info=True)
-
+            logger.error(
+                f"Error recording histogram {name}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_METRICS_ERROR"}
+            )
     async def record_summary(
         self,
         name: str,
@@ -277,8 +286,11 @@ class PrometheusMetricsAdapter(IMetrics):
             else:
                 logger.warning(f"Summary metric not found: {name}")
         except Exception as e:
-            logger.error(f"Error recording summary {name}: {e}", exc_info=True)
-
+            logger.error(
+                f"Error recording summary {name}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_METRICS_ERROR"}
+            )
     async def start_timer(self, name: str) -> str:
         """
         Start a timer.
@@ -492,8 +504,11 @@ class PrometheusMetricsAdapter(IMetrics):
 
                 await self.record_custom_metric(name, value, metric_type, labels)
             except Exception as e:
-                logger.error(f"Error recording batch metric: {e}", exc_info=True)
-
+                logger.error(
+                    f"Error recording batch metric: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_METRICS_ERROR"}
+                )
     async def flush(self) -> None:
         """Flush any buffered metrics."""
         # Prometheus client handles flushing automatically
@@ -510,5 +525,9 @@ class PrometheusMetricsAdapter(IMetrics):
             # Verify we can access the metrics registry
             return len(self._metrics_registry) > 0
         except Exception as e:
-            logger.error(f"Health check failed: {e}", exc_info=True)
+            logger.error(
+                f"Health check failed: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_HEALTH_CHECK_FAILED"}
+            )
             return False

@@ -174,11 +174,13 @@ async def lifespan(app: FastAPI):
                 f"{result.errors} errors"
             )
         except asyncio.TimeoutError:
-            logger.error("Container recovery timed out after 5 minutes")
-            # Continue startup - don't block on recovery failure
+            logger.error("Container recovery timed out after 5 minutes",
+                extra={"error_id": "ERR_CONTAINER_ERROR"}
+            )
         except Exception as e:
-            logger.error("Container recovery failed", exc_info=True)
-            # Continue startup - don't block on recovery failure
+            logger.error("Container recovery failed", exc_info=True,
+                extra={"error_id": "ERR_CONTAINER_ERROR"}
+            )
 
     # Print authentication info if auth manager exists
     if hasattr(app.state, "auth_manager"):
@@ -756,7 +758,9 @@ def create_app(
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
         """Global exception handler for unhandled errors"""
-        logger.error(f"Unhandled exception: {exc}")
+        logger.error(f"Unhandled exception: {exc}",
+            extra={"error_id": "ERR_INTERNAL_ERROR"}
+        )
         return JSONResponse(
             status_code=500,
             content={

@@ -461,19 +461,19 @@ async def main_async(
         console.print("\n[yellow]Interrupted by user[/yellow]")
     except click.FileError as e:
         console.print(f"\n[bold red]File error:[/bold red] {e}")
-        logger.error(f"File error: {e}")
+        logger.error(f"File error: {e}", extra={"error_id": "ERR_FILE_READ_ERROR"})
         sys.exit(1)
     except OSError as e:
         console.print(f"\n[bold red]Server error:[/bold red] {e}")
-        logger.error(f"Server error: {e}")
+        logger.error(f"Server error: {e}", extra={"error_id": "ERR_SERVICE_UNAVAILABLE"})
         sys.exit(1)
     except RuntimeError as e:
         console.print(f"\n[bold red]Runtime error:[/bold red] {e}")
-        logger.exception("Runtime error in simulation server")
+        logger.exception("Runtime error in simulation server", extra={"error_id": "ERR_INTERNAL_ERROR"})
         sys.exit(1)
     except Exception as e:
         console.print(f"\n[bold red]Unexpected error:[/bold red] {e}")
-        logger.exception("Unexpected error in simulation server")
+        logger.exception("Unexpected error in simulation server", extra={"error_id": "ERR_UNHANDLED_EXCEPTION"})
         sys.exit(1)
     finally:
         # Cleanup
@@ -484,7 +484,7 @@ async def main_async(
                 console.print("[green]✓ Cleanup completed successfully[/green]")
             except Exception as e:
                 console.print(f"[red]Error during cleanup: {e}[/red]")
-                logger.error(f"Error during cleanup: {e}")
+                logger.error(f"Error during cleanup: {e}", extra={"error_id": "ERR_INFRASTRUCTURE_ERROR"})
 
 
 @click.command()
@@ -586,7 +586,7 @@ def main(
         console.print("\n[yellow]Server stopped by user[/yellow]")
     except Exception as e:
         console.print(f"\n[bold red]Fatal error:[/bold red] {e}")
-        logger.exception("Fatal error in simulation server")
+        logger.exception("Fatal error in simulation server", extra={"error_id": "ERR_UNHANDLED_EXCEPTION"})
         sys.exit(1)
 
 

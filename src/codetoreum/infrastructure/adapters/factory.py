@@ -326,7 +326,7 @@ class AdapterFactory:
                     adapter, service_config=service_config
                 )
             except Exception as e:
-                logger.error(f"Failed to apply resilience to ticket system adapter: {e}")
+                logger.error(f"Failed to apply resilience to ticket system adapter: {e}", extra={"error_id": "ERR_CONFIGURATION_ERROR"})
                 raise
 
         return adapter
@@ -392,7 +392,7 @@ class AdapterFactory:
                     adapter, service_config=service_config
                 )
             except Exception as e:
-                logger.error(f"Failed to apply resilience to LLM provider adapter: {e}")
+                logger.error(f"Failed to apply resilience to LLM provider adapter: {e}", extra={"error_id": "ERR_CONFIGURATION_ERROR"})
                 raise
 
         return adapter
@@ -458,7 +458,7 @@ class AdapterFactory:
                     adapter, service_config=service_config
                 )
             except Exception as e:
-                logger.error(f"Failed to apply resilience to container adapter: {e}")
+                logger.error(f"Failed to apply resilience to container adapter: {e}", extra={"error_id": "ERR_CONFIGURATION_ERROR"})
                 raise
 
         return adapter
@@ -524,7 +524,7 @@ class AdapterFactory:
                     adapter, service_config=service_config
                 )
             except Exception as e:
-                logger.error(f"Failed to apply resilience to repository adapter: {e}")
+                logger.error(f"Failed to apply resilience to repository adapter: {e}", extra={"error_id": "ERR_CONFIGURATION_ERROR"})
                 raise
 
         return adapter

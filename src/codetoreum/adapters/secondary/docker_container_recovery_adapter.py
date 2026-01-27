@@ -406,6 +406,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
             logger.error(
                 f"Failed to load execution state for {metadata.work_item_id}: {e}",
                 exc_info=True,
+                extra={"error_id": "ERR_STORAGE_ERROR"}
             )
             return RecoveryAssessment(
                 container_id=metadata.container_id,
@@ -639,8 +640,8 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                 logger.error(
                     f"Failed to get container {assessment.container_id}: {e}",
                     exc_info=True,
+                    extra={"error_id": "ERR_CONTAINER_ERROR"}
                 )
-                return None
 
         try:
             # Get container in executor
@@ -709,8 +710,8 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                         logger.error(
                             f"Failed to remove container {assessment.container_id}: {remove_error}",
                             exc_info=True,
+                            extra={"error_id": "ERR_CONTAINER_ERROR"}
                         )
-
                 # Kill container in executor
                 await loop.run_in_executor(None, _kill_container)
 
@@ -734,14 +735,15 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                         logger.error(
                             f"Failed to mark execution failed for {assessment.execution_id}: {mark_error}",
                             exc_info=True,
+                            extra={"error_id": "ERR_CONTAINER_EXECUTION_ERROR"}
                         )
-
                 return True
 
         except Exception as e:
             logger.error(
                 f"Unexpected error executing recovery action for {assessment.container_id}: {e}",
                 exc_info=True,
+                extra={"error_id": "ERR_CONTAINER_ERROR"}
             )
             return False
 
@@ -829,22 +831,22 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                     logger.error(
                         f"Error processing repair cycle result {key}",
                         exc_info=True,
+                        extra={"error_id": "ERR_REPAIR_CYCLE_ERROR"}
                     )
-
             logger.info(f"Processed {processed} orphaned repair cycle results")
 
         except StorageError as e:
             logger.error(
                 f"Storage error during orphaned repair result processing: {e}",
                 exc_info=True,
+                extra={"error_id": "ERR_STORAGE_ERROR"}
             )
-            raise
         except Exception as e:
             logger.error(
                 f"Unexpected error processing orphaned repair results: {e}",
                 exc_info=True,
+                extra={"error_id": "ERR_INTERNAL_ERROR"}
             )
-
         return processed
 
     async def recover_or_cleanup_containers(self) -> "RecoveryResult":

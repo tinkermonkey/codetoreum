@@ -204,7 +204,7 @@ class EventBusWiring:
             logger.error(
                 f"Error publishing event in background task: {e}",
                 exc_info=True,
-                extra={"task_id": id(task)}
+                extra={"task_id": id(task), "error_id": "ERR_EVENT_BUS_ERROR"}
             )
             # TODO: Track metric for background task failures
             # TODO: Consider emitting system event for monitoring

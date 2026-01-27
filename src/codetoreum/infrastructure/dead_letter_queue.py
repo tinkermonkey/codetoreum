@@ -266,7 +266,8 @@ class DeadLetterQueue:
                         "event_type": event.event_type,
                         "retry_count": event.retry_count,
                         "original_failure": event.failure_reason.value,
-                        "component": "dead_letter_queue"
+                        "component": "dead_letter_queue",
+                        "error_id": "ERR_DEAD_LETTER_QUEUE_ERROR"
                     }
                 )
 
@@ -311,7 +312,8 @@ class DeadLetterQueue:
                     exc_info=True,
                     extra={
                         "component": "dead_letter_queue",
-                        "operation": "retry_loop"
+                        "operation": "retry_loop",
+                        "error_id": "ERR_DEAD_LETTER_QUEUE_ERROR"
                     }
                 )
 

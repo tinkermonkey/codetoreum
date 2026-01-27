@@ -302,8 +302,8 @@ class EventBus:
                                 "event_type": event.event_type,
                                 "event_id": event.event_id,
                                 "handler_index": idx,
-                                "error_type": type(result).__name__
-                            }
+                                "error_type": type(result).__name__,
+                            "error_id": "ERR_EVENT_BUS_ERROR"}
                         )
                         self._stats["handler_errors"] += 1
 
@@ -523,8 +523,8 @@ class EventBus:
                 extra={
                     "event_id": event.event_id,
                     "event_type": event.event_type,
-                    "error_type": "redis_connection"
-                }
+                    "error_type": "redis_connection",
+                "error_id": "ERR_EVENT_BUS_ERROR"}
             )
             # Don't raise - persistence failure shouldn't block event handling
         except Exception as e:

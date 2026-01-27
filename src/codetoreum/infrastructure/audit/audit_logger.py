@@ -281,7 +281,8 @@ class AuditLogger:
             # Never let audit logging failures affect the operation
             self.logger.error(
                 f"Failed to store audit event: {e}",
-                extra={"event_type": event.event_type.value},
+                extra={"event_type": event.event_type.value,
+                    "error_id": "ERR_AUDIT_ERROR"},
             )
 
     # Convenience methods for common audit events
