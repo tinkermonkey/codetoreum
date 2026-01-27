@@ -43,7 +43,11 @@ class TestContainerMetadataImmutability:
             agent_id="agent-1",
             task_id="task-1",
             created_at=datetime.now(timezone.utc),
-            labels=MappingProxyType({}),
+            labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: "agent",
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
             work_item_id="work-123",
             execution_id="exec-456",
         )
@@ -146,7 +150,7 @@ class TestRecoveryResultImmutability:
             killed=3,
             errors=1,
             repair_cycles_processed=2,
-            timestamp="2025-01-14T10:30:00Z",
+            timestamp="2026-01-27T23:34:55.217234+00:00",
         )
 
         # Attempting to modify any field should raise FrozenInstanceError
@@ -163,7 +167,7 @@ class TestRecoveryResultImmutability:
             killed=3,
             errors=1,
             repair_cycles_processed=2,
-            timestamp="2025-01-14T10:30:00Z",
+            timestamp="2026-01-27T23:34:55.217234+00:00",
         )
 
         assert result.recovered == 5
@@ -526,7 +530,11 @@ class TestContainerMetadataValidation:
                 agent_id="agent-1",
                 task_id="task-1",
                 created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({}),
+                labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: "agent",
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
             )
 
     def test_container_name_required(self):
@@ -539,7 +547,11 @@ class TestContainerMetadataValidation:
                 agent_id="agent-1",
                 task_id="task-1",
                 created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({}),
+                labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: "agent",
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
             )
 
     def test_project_id_required(self):
@@ -552,7 +564,11 @@ class TestContainerMetadataValidation:
                 agent_id="agent-1",
                 task_id="task-1",
                 created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({}),
+                labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: "agent",
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
             )
 
     def test_agent_id_required(self):
@@ -565,7 +581,11 @@ class TestContainerMetadataValidation:
                 agent_id="",
                 task_id="task-1",
                 created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({}),
+                labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: "agent",
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
             )
 
     def test_task_id_required(self):
@@ -578,7 +598,11 @@ class TestContainerMetadataValidation:
                 agent_id="agent-1",
                 task_id="",
                 created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({}),
+                labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: "agent",
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
             )
 
     def test_created_at_must_be_datetime(self):
@@ -590,8 +614,12 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at="2025-01-14T10:30:00Z",  # type: ignore
-                labels=MappingProxyType({}),
+                created_at="2026-01-27T23:34:55.217234+00:00",  # type: ignore
+                labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: "agent",
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
             )
 
     def test_labels_must_be_mapping_proxy_type(self):
@@ -617,7 +645,11 @@ class TestContainerMetadataValidation:
                 agent_id="agent-1",
                 task_id="task-1",
                 created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({}),
+                labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: "agent",
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
                 work_item_id="",  # Empty string not allowed
             )
 
@@ -631,7 +663,11 @@ class TestContainerMetadataValidation:
                 agent_id="agent-1",
                 task_id="task-1",
                 created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({}),
+                labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: "agent",
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
                 pipeline_run_id="",  # Empty string not allowed
             )
 
@@ -645,7 +681,11 @@ class TestContainerMetadataValidation:
                 agent_id="agent-1",
                 task_id="task-1",
                 created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({}),
+                labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: "agent",
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
                 execution_id="",  # Empty string not allowed
             )
 
@@ -658,7 +698,11 @@ class TestContainerMetadataValidation:
             agent_id="agent-1",
             task_id="task-1",
             created_at=datetime.now(timezone.utc),
-            labels=MappingProxyType({}),
+            labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: "agent",
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
             work_item_id=None,
             pipeline_run_id=None,
             execution_id=None,
@@ -678,7 +722,11 @@ class TestContainerMetadataValidation:
                 agent_id="agent-1",
                 task_id="task-1",
                 created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({}),
+                labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: "agent",
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
             )
 
     def test_container_name_whitespace_only_rejected(self):
@@ -691,7 +739,11 @@ class TestContainerMetadataValidation:
                 agent_id="agent-1",
                 task_id="task-1",
                 created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({}),
+                labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: "agent",
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
             )
 
     def test_project_id_whitespace_only_rejected(self):
@@ -704,7 +756,11 @@ class TestContainerMetadataValidation:
                 agent_id="agent-1",
                 task_id="task-1",
                 created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({}),
+                labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: "agent",
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
             )
 
     def test_agent_id_whitespace_only_rejected(self):
@@ -717,7 +773,11 @@ class TestContainerMetadataValidation:
                 agent_id="   ",
                 task_id="task-1",
                 created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({}),
+                labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: "agent",
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
             )
 
     def test_task_id_whitespace_only_rejected(self):
@@ -730,7 +790,11 @@ class TestContainerMetadataValidation:
                 agent_id="agent-1",
                 task_id="   ",
                 created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({}),
+                labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: "agent",
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
             )
 
     def test_work_item_id_whitespace_only_rejected(self):
@@ -743,7 +807,11 @@ class TestContainerMetadataValidation:
                 agent_id="agent-1",
                 task_id="task-1",
                 created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({}),
+                labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: "agent",
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
                 work_item_id="   ",
             )
 
@@ -757,7 +825,11 @@ class TestContainerMetadataValidation:
                 agent_id="agent-1",
                 task_id="task-1",
                 created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({}),
+                labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: "agent",
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
                 pipeline_run_id="   ",
             )
 
@@ -771,7 +843,11 @@ class TestContainerMetadataValidation:
                 agent_id="agent-1",
                 task_id="task-1",
                 created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({}),
+                labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: "agent",
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
                 execution_id="   ",
             )
 
@@ -788,7 +864,11 @@ class TestContainerMetadataValidation:
                 agent_id="agent-1",
                 task_id="task-1",
                 created_at=future_time,
-                labels=MappingProxyType({}),
+                labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: "agent",
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
             )
 
     def test_required_labels_must_be_present(self):
@@ -838,6 +918,7 @@ class TestContainerMetadataValidation:
         labels = MappingProxyType({
             CONTAINER_LABEL_TYPE: "agent",
             CONTAINER_LABEL_PROJECT: "proj-1",
+            CONTAINER_LABEL_AGENT: "agent-1",
         })
 
         metadata = ContainerMetadata(
@@ -1005,7 +1086,7 @@ class TestRecoveryResultValidation:
                 killed=3,
                 errors=1,
                 repair_cycles_processed=2,
-                timestamp="2025-01-14T10:30:00Z",
+                timestamp="2026-01-27T23:34:55.217234+00:00",
             )
 
     def test_killed_must_be_non_negative(self):
@@ -1016,7 +1097,7 @@ class TestRecoveryResultValidation:
                 killed=-1,
                 errors=1,
                 repair_cycles_processed=2,
-                timestamp="2025-01-14T10:30:00Z",
+                timestamp="2026-01-27T23:34:55.217234+00:00",
             )
 
     def test_errors_must_be_non_negative(self):
@@ -1027,7 +1108,7 @@ class TestRecoveryResultValidation:
                 killed=3,
                 errors=-1,
                 repair_cycles_processed=2,
-                timestamp="2025-01-14T10:30:00Z",
+                timestamp="2026-01-27T23:34:55.217234+00:00",
             )
 
     def test_repair_cycles_processed_must_be_non_negative(self):
@@ -1038,7 +1119,7 @@ class TestRecoveryResultValidation:
                 killed=3,
                 errors=1,
                 repair_cycles_processed=-1,
-                timestamp="2025-01-14T10:30:00Z",
+                timestamp="2026-01-27T23:34:55.217234+00:00",
             )
 
     def test_timestamp_required(self):
@@ -1070,10 +1151,10 @@ class TestRecoveryResultValidation:
             killed=3,
             errors=1,
             repair_cycles_processed=2,
-            timestamp="2025-01-14T10:30:00Z",
+            timestamp="2026-01-27T23:34:55.217234+00:00",
         )
 
-        assert result.timestamp == "2025-01-14T10:30:00Z"
+        assert result.timestamp == "2026-01-27T23:34:55.217234+00:00"
 
     def test_timestamp_iso8601_with_timezone_offset(self):
         """timestamp should accept ISO 8601 with timezone offset."""
@@ -1082,10 +1163,10 @@ class TestRecoveryResultValidation:
             killed=3,
             errors=1,
             repair_cycles_processed=2,
-            timestamp="2025-01-14T10:30:00+00:00",
+            timestamp="2026-01-27T23:34:55.217234+00:00",
         )
 
-        assert result.timestamp == "2025-01-14T10:30:00+00:00"
+        assert result.timestamp == "2026-01-27T23:34:55.217234+00:00"
 
     def test_timestamp_iso8601_without_timezone(self):
         """timestamp should accept ISO 8601 without timezone info."""
@@ -1094,10 +1175,10 @@ class TestRecoveryResultValidation:
             killed=3,
             errors=1,
             repair_cycles_processed=2,
-            timestamp="2025-01-14T10:30:00",
+            timestamp="2026-01-27T23:34:55.217234+00:00",
         )
 
-        assert result.timestamp == "2025-01-14T10:30:00"
+        assert result.timestamp == "2026-01-27T23:34:55.217234+00:00"
 
     def test_timestamp_cannot_be_far_in_future(self):
         """timestamp cannot be more than 1 minute in the future."""
@@ -1164,7 +1245,7 @@ class TestRecoveryResultValidation:
             killed=0,
             errors=0,
             repair_cycles_processed=0,
-            timestamp="2025-01-14T10:30:00Z",
+            timestamp="2026-01-27T23:34:55.217234+00:00",
         )
 
         assert result.recovered == 0
@@ -1179,11 +1260,11 @@ class TestRecoveryResultValidation:
             killed=3,
             errors=1,
             repair_cycles_processed=2,
-            timestamp="2025-01-14T10:30:00Z",
+            timestamp="2026-01-27T23:34:55.217234+00:00",
         )
 
         assert result.recovered == 5
         assert result.killed == 3
         assert result.errors == 1
         assert result.repair_cycles_processed == 2
-        assert result.timestamp == "2025-01-14T10:30:00Z"
+        assert result.timestamp == "2026-01-27T23:34:55.217234+00:00"
