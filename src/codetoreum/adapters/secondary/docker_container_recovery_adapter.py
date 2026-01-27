@@ -331,15 +331,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
         """
         Assess recovery action for a single container.
 
-        Evaluates the container's state using complete decision tree:
-
-        1. Filter repair cycle containers (handled separately)
-        2. Age check: Containers >2 hours old are killed (timeout)
-        3. Execution validation: Query work_execution_tracker.load_state()
-        4. Execution outcome check: Verify outcome is "in_progress"
-        5. Agent matching: Validate container agent matches execution agent
-        6. Monitoring capability: Determine if full monitoring possible
-        7. Return assessment (reconnect or kill)
+        See class docstring for complete decision tree.
 
         Args:
             metadata: Container metadata extracted from Docker labels

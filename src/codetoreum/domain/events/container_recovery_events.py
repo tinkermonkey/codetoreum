@@ -111,14 +111,22 @@ class ContainerKilledEvent(CodetoreumEvent):
         project_id (Optional[str]): Project ID (may be missing if labels incomplete)
         agent_id (Optional[str]): Agent ID (may be missing if labels incomplete)
         work_item_id (Optional[str]): Work item ID if available
-        kill_reason (str): Reason for killing - Agent container reasons:
-            container_timeout (age >2h), agent_mismatch, no_execution_found,
-            execution_state_lookup_failed, execution_not_in_progress, unmanaged,
-            incomplete_metadata, repair_cycle_wrong_assessment_path. Repair cycle
-            container reasons: completed_during_downtime, checkpoint_stale (>60min
-            stale + >2h old), no_checkpoint (>2h old).
+        kill_reason (str): Reason for killing. Agent container reasons:
+            - container_timeout: age >2h
+            - agent_mismatch: container agent != execution agent
+            - no_execution_found: execution not found in tracker
+            - execution_state_lookup_failed: error querying execution state
+            - execution_not_in_progress: execution outcome != "in_progress"
+            - unmanaged: container missing labels
+            - incomplete_metadata: required labels missing
+            - repair_cycle_wrong_assessment_path: repair cycle handled separately.
+            Repair cycle container reasons:
+            - completed_during_downtime: repair completed while offline
+            - checkpoint_stale: checkpoint >60min stale and container >2h old
+            - no_checkpoint: no checkpoint found and container >2h old
         uptime_seconds (float): Container uptime in seconds before kill
-        execution_marked_failed (bool): True if execution state was updated to failed
+        execution_marked_failed (bool): True if mark_execution_failed was attempted
+            (indicates whether metadata existed to attempt marking, not success)
         timestamp (str): ISO 8601 timestamp when container was killed
     """
 

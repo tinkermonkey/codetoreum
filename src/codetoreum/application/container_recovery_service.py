@@ -201,11 +201,10 @@ class ContainerRecoveryService:
                                 return ("reconnect", True)
                             else:  # kill
                                 # Emit kill event
-                                # The adapter will attempt to mark execution failed if it has
-                                # the necessary work_item metadata and supports mark_execution_failed
-                                execution_marked_failed = (
-                                    metadata.work_item_id is not None and metadata.work_item_id != ""
-                                )
+                                # Note: execution_marked_failed indicates whether marking *should* be attempted
+                                # (true if work_item_id is present). The actual mark_execution_failed() call
+                                # happens in execute_recovery_action if the tracker supports it.
+                                execution_marked_failed = bool(metadata.work_item_id)
                                 event = ContainerKilledEvent(
                                     type="container_recovery.killed",
                                     timestamp=datetime.now(timezone.utc).isoformat(),
