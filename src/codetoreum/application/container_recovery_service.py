@@ -184,7 +184,19 @@ class ContainerRecoveryService:
                                         else "reconnect_limited"
                                     ),
                                 )
-                                self.event_emitter.emit(event)
+                                try:
+                                    self.event_emitter.emit(event)
+                                except Exception as e:
+                                    logger.error(
+                                        f"Failed to emit ContainerRecoveredEvent for {metadata.container_id}: {e}",
+                                        exc_info=True,
+                                        extra={
+                                            "error_id": "ERR_CONTAINER_RECOVERY_EVENT_EMIT_FAILED",
+                                            "container_id": metadata.container_id,
+                                            "event_type": "container_recovered",
+                                        },
+                                    )
+                                    # Continue - recovery succeeded even if event emission failed
                                 return ("reconnect", True)
                             else:  # kill
                                 # Emit kill event
@@ -208,7 +220,19 @@ class ContainerRecoveryService:
                                     ),
                                     execution_marked_failed=execution_marked_failed,
                                 )
-                                self.event_emitter.emit(event)
+                                try:
+                                    self.event_emitter.emit(event)
+                                except Exception as e:
+                                    logger.error(
+                                        f"Failed to emit ContainerKilledEvent for {metadata.container_id}: {e}",
+                                        exc_info=True,
+                                        extra={
+                                            "error_id": "ERR_CONTAINER_RECOVERY_EVENT_EMIT_FAILED",
+                                            "container_id": metadata.container_id,
+                                            "event_type": "container_killed",
+                                        },
+                                    )
+                                    # Continue - recovery action succeeded even if event emission failed
                                 return ("kill", True)
                         else:
                             logger.error(
@@ -254,7 +278,18 @@ class ContainerRecoveryService:
                 completed_at=end_time.isoformat(),
                 duration_seconds=duration_seconds,
             )
-            self.event_emitter.emit(completion_event)
+            try:
+                self.event_emitter.emit(completion_event)
+            except Exception as e:
+                logger.error(
+                    f"Failed to emit ContainerRecoveryCompletedEvent: {e}",
+                    exc_info=True,
+                    extra={
+                        "error_id": "ERR_CONTAINER_RECOVERY_EVENT_EMIT_FAILED",
+                        "event_type": "container_recovery_completed",
+                    },
+                )
+                # Continue - recovery cycle completed successfully even if completion event emission failed
 
             logger.info(
                 f"Container recovery cycle completed: "

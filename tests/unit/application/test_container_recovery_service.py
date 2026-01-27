@@ -302,6 +302,135 @@ class TestContainerRecoveryServiceWithMock:
         assert completion_event.repair_cycles_processed == 2
 
 
+    @pytest.mark.asyncio
+    async def test_recovery_event_emission_failure_handling(self):
+        """Service should handle event emission failures gracefully."""
+        mock_adapter = MockContainerRecoveryAdapter()
+        event_emitter = MagicMock()
+
+        # Configure event_emitter to fail on first call
+        event_emitter.emit.side_effect = [
+            Exception("Event store connection error"),  # Fails for recovery event
+            None,  # Succeeds for kill event
+            None,  # Succeeds for completion event
+        ]
+
+        service = ContainerRecoveryService(
+            recovery_adapter=mock_adapter,
+            event_emitter=event_emitter,
+        )
+
+        # Add a container that will be recovered
+        mock_adapter.add_container(
+            container_id="container-123",
+            container_name="test-container",
+            project_id="proj-1",
+            agent_id="agent-1",
+            task_id="task-1",
+            work_item_id="work-123",
+            execution_id="exec-456",
+            age_hours=1.0,
+        )
+
+        mock_adapter.set_assessment(
+            container_id="container-123",
+            action="reconnect",
+            reason="valid_execution",
+            with_monitoring=True,
+            execution_id="exec-456",
+        )
+
+        # Should not raise - recovery should succeed even if event emission fails
+        result = await service.recover_or_cleanup_containers()
+
+        assert result.recovered == 1
+        assert result.killed == 0
+        assert result.errors == 0
+
+    @pytest.mark.asyncio
+    async def test_kill_event_emission_failure_handling(self):
+        """Service should handle kill event emission failures gracefully."""
+        mock_adapter = MockContainerRecoveryAdapter()
+        event_emitter = MagicMock()
+
+        # Configure event_emitter to fail on kill event
+        event_emitter.emit.side_effect = [
+            None,  # Succeeds for no recovery events in this test
+            Exception("Event serialization error"),  # Fails for kill event
+            None,  # Succeeds for completion event
+        ]
+
+        service = ContainerRecoveryService(
+            recovery_adapter=mock_adapter,
+            event_emitter=event_emitter,
+        )
+
+        # Add a container that will be killed
+        mock_adapter.add_container(
+            container_id="container-456",
+            container_name="old-container",
+            project_id="proj-1",
+            agent_id="agent-1",
+            task_id="task-1",
+            age_hours=3.0,
+        )
+
+        mock_adapter.set_assessment(
+            container_id="container-456",
+            action="kill",
+            reason="container_timeout",
+            with_monitoring=False,
+        )
+
+        # Should not raise - kill should succeed even if event emission fails
+        result = await service.recover_or_cleanup_containers()
+
+        assert result.recovered == 0
+        assert result.killed == 1
+        assert result.errors == 0
+
+    @pytest.mark.asyncio
+    async def test_completion_event_emission_failure_handling(self):
+        """Service should handle completion event emission failures gracefully."""
+        mock_adapter = MockContainerRecoveryAdapter()
+        event_emitter = MagicMock()
+
+        # Configure event_emitter to fail on completion event
+        event_emitter.emit.side_effect = Exception("Event bus unavailable")
+
+        service = ContainerRecoveryService(
+            recovery_adapter=mock_adapter,
+            event_emitter=event_emitter,
+        )
+
+        # Add a container that will be recovered
+        mock_adapter.add_container(
+            container_id="container-123",
+            container_name="test-container",
+            project_id="proj-1",
+            agent_id="agent-1",
+            task_id="task-1",
+            work_item_id="work-123",
+            execution_id="exec-456",
+            age_hours=1.0,
+        )
+
+        mock_adapter.set_assessment(
+            container_id="container-123",
+            action="reconnect",
+            reason="valid_execution",
+            with_monitoring=True,
+            execution_id="exec-456",
+        )
+
+        # Should not raise - completion should succeed even if event emission fails
+        result = await service.recover_or_cleanup_containers()
+
+        assert result.recovered == 1
+        assert result.killed == 0
+        assert result.errors == 0
+
+
 class TestCalculateUptimeSeconds:
     """Tests for uptime calculation utility."""
 
