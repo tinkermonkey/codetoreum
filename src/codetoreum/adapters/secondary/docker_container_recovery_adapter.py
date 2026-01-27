@@ -579,56 +579,64 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
         """
         loop = asyncio.get_event_loop()
 
-        def _execute():
+        def _get_container():
+            """Get container synchronously."""
             client = self._get_client()
-
             try:
-                container = client.containers.get(assessment.container_id)
+                return client.containers.get(assessment.container_id)
             except Exception as e:
                 logger.error(
                     f"Failed to get container {assessment.container_id}: {e}",
                     exc_info=True,
                 )
+                return None
+
+        try:
+            # Get container in executor
+            container = await loop.run_in_executor(None, _get_container)
+            if container is None:
                 return False
 
-            try:
-                if assessment.action == "reconnect":
-                    logger.info(
-                        f"Reconnecting container {assessment.container_id} "
-                        f"with execution_id {assessment.execution_id}"
+            if assessment.action == "reconnect":
+                logger.info(
+                    f"Reconnecting container {assessment.container_id} "
+                    f"with execution_id {assessment.execution_id}"
+                )
+
+                # Re-register container in tracking storage with 2-hour TTL
+                container_info = {
+                    "containerName": container.name,
+                    "agent": container.labels.get(CONTAINER_LABEL_AGENT),
+                    "project": container.labels.get(CONTAINER_LABEL_PROJECT),
+                    "taskId": container.labels.get(CONTAINER_LABEL_TASK_ID),
+                    "startedAt": datetime.now(timezone.utc).isoformat(),
+                    "recovered": "true",
+                }
+
+                try:
+                    # Store in tracking storage with TTL of 7200 seconds (2 hours)
+                    key = f"agent:container:{container.name}"
+                    await self.tracking_storage.set(key, container_info, ttl=7200)
+                    logger.debug(f"Registered container {container.name} in tracking storage")
+                except StorageError as e:
+                    logger.warning(
+                        f"Failed to register container {container.name} in tracking storage: {e}",
+                        exc_info=True,
                     )
-                    # Re-register container in tracking storage with 2-hour TTL
-                    container_info = {
-                        "containerName": container.name,
-                        "agent": container.labels.get(CONTAINER_LABEL_AGENT),
-                        "project": container.labels.get(CONTAINER_LABEL_PROJECT),
-                        "taskId": container.labels.get(CONTAINER_LABEL_TASK_ID),
-                        "startedAt": datetime.now(timezone.utc).isoformat(),
-                        "recovered": "true",
-                    }
+                    # Continue anyway - container is still running
 
-                    try:
-                        # Store in tracking storage with TTL of 7200 seconds (2 hours)
-                        key = f"agent:container:{container.name}"
-                        # Note: This will be awaited in async context
-                        # For now, we prepare the operation
-                        self._tracking_storage_op = (key, container_info, 7200)
-                    except Exception as storage_error:
-                        logger.warning(
-                            f"Failed to register container in tracking storage: {storage_error}",
-                            exc_info=True,
-                        )
-                        # Continue anyway - container is still running
+                # For reconnect, container is already running
+                # It will be picked up by monitoring system
+                return True
 
-                    # For reconnect, container is already running
-                    # It will be picked up by monitoring system
-                    return True
+            elif assessment.action == "kill":
+                logger.info(
+                    f"Killing container {assessment.container_id} "
+                    f"(reason: {assessment.reason})"
+                )
 
-                elif assessment.action == "kill":
-                    logger.info(
-                        f"Killing container {assessment.container_id} "
-                        f"(reason: {assessment.reason})"
-                    )
+                def _kill_container():
+                    """Kill and remove container synchronously."""
                     try:
                         # Kill the container with SIGKILL
                         container.kill()
@@ -646,40 +654,46 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                             f"Failed to remove container {assessment.container_id}: {remove_error}",
                             exc_info=True,
                         )
-                        # Continue to mark execution failed even if removal failed
 
-                    # Mark execution failed if we have execution info
-                    if assessment.execution_id:
-                        try:
-                            # Get container metadata for agent info
-                            agent = container.labels.get(CONTAINER_LABEL_AGENT)
-                            project = container.labels.get(CONTAINER_LABEL_PROJECT)
-                            work_item_id = container.labels.get(
-                                CONTAINER_LABEL_WORK_ITEM_ID
-                            )
+                # Kill container in executor
+                await loop.run_in_executor(None, _kill_container)
 
-                            # Note: This will be awaited in async context
-                            self._mark_failed_op = (
-                                project,
-                                work_item_id,
-                                agent,
-                                assessment.reason,
-                            )
-                        except Exception as mark_error:
-                            logger.error(
-                                f"Failed to mark execution failed for {assessment.execution_id}: {mark_error}",
-                                exc_info=True,
-                            )
+                # Mark execution failed if we have execution info
+                if assessment.execution_id and self.execution_tracker:
+                    try:
+                        # Get container metadata for agent info
+                        agent = container.labels.get(CONTAINER_LABEL_AGENT)
+                        project = container.labels.get(CONTAINER_LABEL_PROJECT)
+                        work_item_id = container.labels.get(
+                            CONTAINER_LABEL_WORK_ITEM_ID
+                        )
 
-                    return True
+                        if project and work_item_id and agent:
+                            # Try to mark execution failed if tracker supports it
+                            if hasattr(self.execution_tracker, "mark_execution_failed"):
+                                await self.execution_tracker.mark_execution_failed(
+                                    project=project,
+                                    work_item_id=work_item_id,
+                                    agent=agent,
+                                    reason=assessment.reason,
+                                )
+                                logger.debug(
+                                    f"Marked execution failed for {work_item_id} with reason {assessment.reason}"
+                                )
+                    except Exception as mark_error:
+                        logger.error(
+                            f"Failed to mark execution failed for {assessment.execution_id}: {mark_error}",
+                            exc_info=True,
+                        )
 
-            except Exception as e:
-                logger.error(
-                    f"Unexpected error executing recovery action: {e}", exc_info=True
-                )
-                return False
+                return True
 
-        return await loop.run_in_executor(None, _execute)
+        except Exception as e:
+            logger.error(
+                f"Unexpected error executing recovery action for {assessment.container_id}: {e}",
+                exc_info=True,
+            )
+            return False
 
     async def process_orphaned_repair_results(self) -> int:
         """

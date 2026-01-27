@@ -294,3 +294,210 @@ class TestDockerContainerAssessment:
         assert assessment.reason == "valid_execution"
         assert assessment.with_monitoring is True
         assert assessment.execution_id == "exec-456"
+
+
+class TestDockerContainerRecoveryAction:
+    """Tests for container recovery action execution."""
+
+    @pytest.mark.asyncio
+    async def test_execute_recovery_action_reconnect_with_monitoring(self):
+        """Reconnect action should re-register container in tracking storage."""
+        execution_tracker = AsyncMock()
+        tracking_storage = AsyncMock()
+
+        adapter = DockerContainerRecoveryAdapter(
+            execution_tracker=execution_tracker,
+            tracking_storage=tracking_storage,
+        )
+
+        # Mock Docker client and container
+        mock_container = MagicMock()
+        mock_container.id = "container-123"
+        mock_container.name = "test-container"
+        mock_container.labels = {
+            CONTAINER_LABEL_AGENT: "agent-1",
+            CONTAINER_LABEL_PROJECT: "proj-1",
+            CONTAINER_LABEL_TASK_ID: "task-1",
+        }
+
+        with patch.object(adapter, "_get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.containers.get.return_value = mock_container
+            mock_get_client.return_value = mock_client
+
+            from codetoreum.ports.output.container_recovery import RecoveryAssessment
+
+            assessment = RecoveryAssessment(
+                container_id="container-123",
+                action="reconnect",
+                reason="valid_execution",
+                with_monitoring=True,
+                execution_id="exec-456",
+            )
+
+            result = await adapter.execute_recovery_action(assessment)
+
+            assert result is True
+            tracking_storage.set.assert_called_once()
+            args, kwargs = tracking_storage.set.call_args
+            assert args[0] == "agent:container:test-container"
+            assert kwargs.get("ttl") == 7200
+
+    @pytest.mark.asyncio
+    async def test_execute_recovery_action_kill_with_execution_marking(self):
+        """Kill action should mark execution as failed."""
+        execution_tracker = AsyncMock()
+        tracking_storage = AsyncMock()
+
+        adapter = DockerContainerRecoveryAdapter(
+            execution_tracker=execution_tracker,
+            tracking_storage=tracking_storage,
+        )
+
+        # Mock Docker client and container
+        mock_container = MagicMock()
+        mock_container.id = "container-123"
+        mock_container.name = "test-container"
+        mock_container.labels = {
+            CONTAINER_LABEL_AGENT: "agent-1",
+            CONTAINER_LABEL_PROJECT: "proj-1",
+            CONTAINER_LABEL_TASK_ID: "task-1",
+            CONTAINER_LABEL_WORK_ITEM_ID: "work-item-1",
+        }
+
+        with patch.object(adapter, "_get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.containers.get.return_value = mock_container
+            mock_get_client.return_value = mock_client
+
+            from codetoreum.ports.output.container_recovery import RecoveryAssessment
+
+            assessment = RecoveryAssessment(
+                container_id="container-123",
+                action="kill",
+                reason="container_timeout",
+                with_monitoring=False,
+                execution_id="exec-456",
+            )
+
+            result = await adapter.execute_recovery_action(assessment)
+
+            assert result is True
+            # Verify execution was marked failed
+            execution_tracker.mark_execution_failed.assert_called_once_with(
+                project="proj-1",
+                work_item_id="work-item-1",
+                agent="agent-1",
+                reason="container_timeout",
+            )
+
+    @pytest.mark.asyncio
+    async def test_execute_recovery_action_kill_without_work_item(self):
+        """Kill action without work_item_id should not mark execution failed."""
+        execution_tracker = AsyncMock()
+        tracking_storage = AsyncMock()
+
+        adapter = DockerContainerRecoveryAdapter(
+            execution_tracker=execution_tracker,
+            tracking_storage=tracking_storage,
+        )
+
+        # Mock Docker client and container (no work_item_id)
+        mock_container = MagicMock()
+        mock_container.id = "container-123"
+        mock_container.name = "test-container"
+        mock_container.labels = {
+            CONTAINER_LABEL_AGENT: "agent-1",
+            CONTAINER_LABEL_PROJECT: "proj-1",
+            CONTAINER_LABEL_TASK_ID: "task-1",
+            # No work item ID
+        }
+
+        with patch.object(adapter, "_get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.containers.get.return_value = mock_container
+            mock_get_client.return_value = mock_client
+
+            from codetoreum.ports.output.container_recovery import RecoveryAssessment
+
+            assessment = RecoveryAssessment(
+                container_id="container-123",
+                action="kill",
+                reason="container_timeout",
+                with_monitoring=False,
+                execution_id=None,
+            )
+
+            result = await adapter.execute_recovery_action(assessment)
+
+            assert result is True
+            # Should not mark execution failed (no execution_id or work_item_id)
+            execution_tracker.mark_execution_failed.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_execute_recovery_action_get_container_fails(self):
+        """Recovery action should fail gracefully if container retrieval fails."""
+        execution_tracker = AsyncMock()
+        tracking_storage = AsyncMock()
+
+        adapter = DockerContainerRecoveryAdapter(
+            execution_tracker=execution_tracker,
+            tracking_storage=tracking_storage,
+        )
+
+        with patch.object(adapter, "_get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.containers.get.side_effect = Exception("Docker error")
+            mock_get_client.return_value = mock_client
+
+            from codetoreum.ports.output.container_recovery import RecoveryAssessment
+
+            assessment = RecoveryAssessment(
+                container_id="container-123",
+                action="reconnect",
+                reason="valid_execution",
+                with_monitoring=True,
+                execution_id="exec-456",
+            )
+
+            result = await adapter.execute_recovery_action(assessment)
+
+            assert result is False
+
+    @pytest.mark.asyncio
+    async def test_execute_recovery_action_tracking_storage_error_continues(self):
+        """Recovery action should continue if tracking storage fails."""
+        execution_tracker = AsyncMock()
+        tracking_storage = AsyncMock()
+        tracking_storage.set.side_effect = StorageError("Storage error")
+
+        adapter = DockerContainerRecoveryAdapter(
+            execution_tracker=execution_tracker,
+            tracking_storage=tracking_storage,
+        )
+
+        # Mock Docker client and container
+        mock_container = MagicMock()
+        mock_container.id = "container-123"
+        mock_container.name = "test-container"
+        mock_container.labels = {}
+
+        with patch.object(adapter, "_get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.containers.get.return_value = mock_container
+            mock_get_client.return_value = mock_client
+
+            from codetoreum.ports.output.container_recovery import RecoveryAssessment
+
+            assessment = RecoveryAssessment(
+                container_id="container-123",
+                action="reconnect",
+                reason="valid_execution",
+                with_monitoring=True,
+                execution_id="exec-456",
+            )
+
+            result = await adapter.execute_recovery_action(assessment)
+
+            # Should still succeed even if storage fails
+            assert result is True

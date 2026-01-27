@@ -186,6 +186,11 @@ class ContainerRecoveryService:
                                 return ("reconnect", True)
                             else:  # kill
                                 # Emit kill event
+                                # The execution was marked failed asynchronously in execute_recovery_action
+                                # if the adapter implements mark_execution_failed
+                                execution_marked_failed = (
+                                    metadata.work_item_id is not None and metadata.work_item_id != ""
+                                )
                                 event = ContainerKilledEvent(
                                     type="container_recovery.killed",
                                     timestamp=datetime.now(timezone.utc).isoformat(),
@@ -199,7 +204,7 @@ class ContainerRecoveryService:
                                     uptime_seconds=self._calculate_uptime_seconds(
                                         metadata.created_at
                                     ),
-                                    execution_marked_failed=False,
+                                    execution_marked_failed=execution_marked_failed,
                                 )
                                 self.event_emitter.emit(event)
                                 return ("kill", True)
