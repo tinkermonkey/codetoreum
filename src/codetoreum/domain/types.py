@@ -45,3 +45,14 @@ MetricName = NewType("MetricName", str)
 NotificationId = NewType("NotificationId", str)
 TemplateId = NewType("TemplateId", str)
 ChannelId = NewType("ChannelId", str)
+
+# Container label constants for Docker container labeling and recovery
+# These labels enable the container recovery service to identify, track, and manage
+# agent containers at orchestrator startup. All agent containers MUST include these labels.
+CONTAINER_LABEL_TYPE = "org.codetoreum.type"  # Values: "agent" | "repair-cycle"
+CONTAINER_LABEL_PROJECT = "org.codetoreum.project"
+CONTAINER_LABEL_AGENT = "org.codetoreum.agent"
+CONTAINER_LABEL_WORK_ITEM_ID = "org.codetoreum.work_item_id"
+CONTAINER_LABEL_TASK_ID = "org.codetoreum.task_id"
+CONTAINER_LABEL_PIPELINE_RUN_ID = "org.codetoreum.pipeline_run_id"
+CONTAINER_LABEL_EXECUTION_ID = "org.codetoreum.execution_id"
