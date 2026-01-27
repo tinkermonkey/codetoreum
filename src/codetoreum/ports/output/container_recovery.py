@@ -13,11 +13,17 @@ Design Principles:
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from types import MappingProxyType
 from typing import List, Literal, Optional
 
 from dateutil import parser as date_parser
+
+from codetoreum.domain.types import (
+    CONTAINER_LABEL_AGENT,
+    CONTAINER_LABEL_PROJECT,
+    CONTAINER_LABEL_TYPE,
+)
 
 
 # ============================================================================
@@ -46,12 +52,13 @@ class ContainerMetadata:
         execution_id: Execution ID from org.codetoreum.execution_id label (optional)
 
     Validation Rules:
-        - container_id must be non-empty (required)
-        - container_name must be non-empty (required)
-        - project_id must be non-empty (required)
-        - agent_id must be non-empty (required)
-        - task_id must be non-empty (required)
-        - created_at must be a valid datetime object
+        - container_id must be non-empty and non-whitespace (required)
+        - container_name must be non-empty and non-whitespace (required)
+        - project_id must be non-empty and non-whitespace (required)
+        - agent_id must be non-empty and non-whitespace (required)
+        - task_id must be non-empty and non-whitespace (required)
+        - created_at must be a valid datetime object (not in the future)
+        - labels must contain required keys: CONTAINER_LABEL_TYPE, CONTAINER_LABEL_PROJECT, CONTAINER_LABEL_AGENT
         - labels must be a MappingProxyType (immutable)
         - Optional fields can be None or non-empty strings
     """
@@ -69,26 +76,33 @@ class ContainerMetadata:
 
     def __post_init__(self) -> None:
         """Validate container metadata after initialization."""
-        if not self.container_id:
+        if not self.container_id or not self.container_id.strip():
             raise ValueError("container_id is required and must be non-empty")
-        if not self.container_name:
+        if not self.container_name or not self.container_name.strip():
             raise ValueError("container_name is required and must be non-empty")
-        if not self.project_id:
+        if not self.project_id or not self.project_id.strip():
             raise ValueError("project_id is required and must be non-empty")
-        if not self.agent_id:
+        if not self.agent_id or not self.agent_id.strip():
             raise ValueError("agent_id is required and must be non-empty")
-        if not self.task_id:
+        if not self.task_id or not self.task_id.strip():
             raise ValueError("task_id is required and must be non-empty")
         if not isinstance(self.created_at, datetime):
             raise ValueError("created_at must be a valid datetime object")
+        if self.created_at > datetime.now(timezone.utc):
+            raise ValueError("created_at cannot be in the future")
         if not isinstance(self.labels, MappingProxyType):
             raise ValueError("labels must be a MappingProxyType (immutable mapping)")
+        # Validate required labels
+        required_labels = {CONTAINER_LABEL_TYPE, CONTAINER_LABEL_PROJECT, CONTAINER_LABEL_AGENT}
+        missing = required_labels - set(self.labels.keys())
+        if missing:
+            raise ValueError(f"Missing required labels: {missing}")
         # Validate optional fields if provided
-        if self.work_item_id is not None and not self.work_item_id:
+        if self.work_item_id is not None and not self.work_item_id.strip():
             raise ValueError("work_item_id must be non-empty if provided")
-        if self.pipeline_run_id is not None and not self.pipeline_run_id:
+        if self.pipeline_run_id is not None and not self.pipeline_run_id.strip():
             raise ValueError("pipeline_run_id must be non-empty if provided")
-        if self.execution_id is not None and not self.execution_id:
+        if self.execution_id is not None and not self.execution_id.strip():
             raise ValueError("execution_id must be non-empty if provided")
 
 
@@ -115,13 +129,13 @@ class RecoveryAssessment:
         execution_id: Execution ID if reconnecting (None if killing)
 
     Validation Rules:
-        - container_id must be non-empty (required)
+        - container_id must be non-empty and non-whitespace (required)
         - action must be one of: "reconnect" or "kill"
-        - reason must be non-empty (required)
+        - reason must be non-empty and non-whitespace (required)
         - with_monitoring must be a boolean
         - execution_id must be non-empty if provided, or None
-        - If action is "reconnect", execution_id should be present
-        - If action is "kill", execution_id should be None
+        - If action is "reconnect", execution_id is required
+        - If action is "kill", execution_id must be None
     """
 
     container_id: str
@@ -132,21 +146,21 @@ class RecoveryAssessment:
 
     def __post_init__(self) -> None:
         """Validate recovery assessment after initialization."""
-        if not self.container_id:
+        if not self.container_id or not self.container_id.strip():
             raise ValueError("container_id is required and must be non-empty")
         if self.action not in ("reconnect", "kill"):
             raise ValueError('action must be one of: "reconnect", "kill"')
-        if not self.reason:
+        if not self.reason or not self.reason.strip():
             raise ValueError("reason is required and must be non-empty")
         if not isinstance(self.with_monitoring, bool):
             raise ValueError("with_monitoring must be a boolean")
         # Validate execution_id if provided
-        if self.execution_id is not None and not self.execution_id:
+        if self.execution_id is not None and not self.execution_id.strip():
             raise ValueError("execution_id must be non-empty if provided")
-        # Validate logical consistency: reconnect should have execution_id
+        # Validate logical consistency: reconnect requires execution_id
         if self.action == "reconnect" and not self.execution_id:
             raise ValueError("execution_id is required when action is 'reconnect'")
-        # Kill action should not have execution_id
+        # Kill action must not have execution_id
         if self.action == "kill" and self.execution_id is not None:
             raise ValueError("execution_id must be None when action is 'kill'")
 
@@ -172,6 +186,7 @@ class RecoveryResult:
         - errors must be >= 0 (non-negative integer)
         - repair_cycles_processed must be >= 0 (non-negative integer)
         - timestamp must be a non-empty ISO 8601 formatted string
+        - timestamp must be within reasonable bounds (not more than 1 minute in future, not more than 1 year in past)
         - At least one operation must have been performed (recovered + killed + errors > 0
           OR repair_cycles_processed > 0, unless all containers were already processed)
     """
@@ -194,13 +209,23 @@ class RecoveryResult:
             raise ValueError("repair_cycles_processed must be >= 0")
         if not self.timestamp:
             raise ValueError("timestamp is required and must be non-empty")
-        # Validate ISO 8601 timestamp format
+        # Validate ISO 8601 timestamp format and reasonable bounds
         try:
-            date_parser.isoparse(self.timestamp)
+            parsed_dt = date_parser.isoparse(self.timestamp)
         except (ValueError, TypeError) as e:
             raise ValueError(
                 f"timestamp must be a valid ISO 8601 datetime string, got: {self.timestamp}"
             ) from e
+
+        # Validate timestamp is within reasonable bounds
+        now = datetime.now(timezone.utc)
+        # Allow 1 minute grace for clock skew
+        if parsed_dt > now.replace(microsecond=0) + timedelta(minutes=1):
+            raise ValueError("timestamp cannot be more than 1 minute in the future")
+        # Allow up to 1 year in the past
+        one_year_ago = now - timedelta(days=365)
+        if parsed_dt < one_year_ago:
+            raise ValueError("timestamp cannot be more than 1 year in the past")
 
 
 # ============================================================================

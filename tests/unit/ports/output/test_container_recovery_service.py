@@ -668,6 +668,170 @@ class TestContainerMetadataValidation:
         assert metadata.pipeline_run_id is None
         assert metadata.execution_id is None
 
+    def test_container_id_whitespace_only_rejected(self):
+        """container_id must reject whitespace-only strings."""
+        with pytest.raises(ValueError, match="container_id is required"):
+            ContainerMetadata(
+                container_id="   ",
+                container_name="agent-proj-001",
+                project_id="proj-1",
+                agent_id="agent-1",
+                task_id="task-1",
+                created_at=datetime.now(timezone.utc),
+                labels=MappingProxyType({}),
+            )
+
+    def test_container_name_whitespace_only_rejected(self):
+        """container_name must reject whitespace-only strings."""
+        with pytest.raises(ValueError, match="container_name is required"):
+            ContainerMetadata(
+                container_id="abc123",
+                container_name="   ",
+                project_id="proj-1",
+                agent_id="agent-1",
+                task_id="task-1",
+                created_at=datetime.now(timezone.utc),
+                labels=MappingProxyType({}),
+            )
+
+    def test_project_id_whitespace_only_rejected(self):
+        """project_id must reject whitespace-only strings."""
+        with pytest.raises(ValueError, match="project_id is required"):
+            ContainerMetadata(
+                container_id="abc123",
+                container_name="agent-proj-001",
+                project_id="   ",
+                agent_id="agent-1",
+                task_id="task-1",
+                created_at=datetime.now(timezone.utc),
+                labels=MappingProxyType({}),
+            )
+
+    def test_agent_id_whitespace_only_rejected(self):
+        """agent_id must reject whitespace-only strings."""
+        with pytest.raises(ValueError, match="agent_id is required"):
+            ContainerMetadata(
+                container_id="abc123",
+                container_name="agent-proj-001",
+                project_id="proj-1",
+                agent_id="   ",
+                task_id="task-1",
+                created_at=datetime.now(timezone.utc),
+                labels=MappingProxyType({}),
+            )
+
+    def test_task_id_whitespace_only_rejected(self):
+        """task_id must reject whitespace-only strings."""
+        with pytest.raises(ValueError, match="task_id is required"):
+            ContainerMetadata(
+                container_id="abc123",
+                container_name="agent-proj-001",
+                project_id="proj-1",
+                agent_id="agent-1",
+                task_id="   ",
+                created_at=datetime.now(timezone.utc),
+                labels=MappingProxyType({}),
+            )
+
+    def test_work_item_id_whitespace_only_rejected(self):
+        """work_item_id must reject whitespace-only strings."""
+        with pytest.raises(ValueError, match="work_item_id must be non-empty"):
+            ContainerMetadata(
+                container_id="abc123",
+                container_name="agent-proj-001",
+                project_id="proj-1",
+                agent_id="agent-1",
+                task_id="task-1",
+                created_at=datetime.now(timezone.utc),
+                labels=MappingProxyType({}),
+                work_item_id="   ",
+            )
+
+    def test_pipeline_run_id_whitespace_only_rejected(self):
+        """pipeline_run_id must reject whitespace-only strings."""
+        with pytest.raises(ValueError, match="pipeline_run_id must be non-empty"):
+            ContainerMetadata(
+                container_id="abc123",
+                container_name="agent-proj-001",
+                project_id="proj-1",
+                agent_id="agent-1",
+                task_id="task-1",
+                created_at=datetime.now(timezone.utc),
+                labels=MappingProxyType({}),
+                pipeline_run_id="   ",
+            )
+
+    def test_execution_id_whitespace_only_rejected(self):
+        """execution_id must reject whitespace-only strings."""
+        with pytest.raises(ValueError, match="execution_id must be non-empty"):
+            ContainerMetadata(
+                container_id="abc123",
+                container_name="agent-proj-001",
+                project_id="proj-1",
+                agent_id="agent-1",
+                task_id="task-1",
+                created_at=datetime.now(timezone.utc),
+                labels=MappingProxyType({}),
+                execution_id="   ",
+            )
+
+    def test_created_at_cannot_be_future(self):
+        """created_at cannot be in the future."""
+        from datetime import timedelta
+        future_time = datetime.now(timezone.utc) + timedelta(hours=1)
+
+        with pytest.raises(ValueError, match="created_at cannot be in the future"):
+            ContainerMetadata(
+                container_id="abc123",
+                container_name="agent-proj-001",
+                project_id="proj-1",
+                agent_id="agent-1",
+                task_id="task-1",
+                created_at=future_time,
+                labels=MappingProxyType({}),
+            )
+
+    def test_required_labels_must_be_present(self):
+        """labels must contain all required keys."""
+        incomplete_labels = MappingProxyType({
+            CONTAINER_LABEL_TYPE: "agent",
+            CONTAINER_LABEL_PROJECT: "proj-1",
+            # Missing CONTAINER_LABEL_AGENT
+        })
+
+        with pytest.raises(ValueError, match="Missing required labels"):
+            ContainerMetadata(
+                container_id="abc123",
+                container_name="agent-proj-001",
+                project_id="proj-1",
+                agent_id="agent-1",
+                task_id="task-1",
+                created_at=datetime.now(timezone.utc),
+                labels=incomplete_labels,
+            )
+
+    def test_all_required_labels_must_be_present(self):
+        """labels must contain all three required label keys."""
+        complete_labels = MappingProxyType({
+            CONTAINER_LABEL_TYPE: "agent",
+            CONTAINER_LABEL_PROJECT: "proj-1",
+            CONTAINER_LABEL_AGENT: "agent-1",
+        })
+
+        metadata = ContainerMetadata(
+            container_id="abc123",
+            container_name="agent-proj-001",
+            project_id="proj-1",
+            agent_id="agent-1",
+            task_id="task-1",
+            created_at=datetime.now(timezone.utc),
+            labels=complete_labels,
+        )
+
+        assert CONTAINER_LABEL_TYPE in metadata.labels
+        assert CONTAINER_LABEL_PROJECT in metadata.labels
+        assert CONTAINER_LABEL_AGENT in metadata.labels
+
     def test_all_required_fields_valid(self):
         """Valid metadata with all required fields."""
         now = datetime.now(timezone.utc)
@@ -709,6 +873,17 @@ class TestRecoveryAssessmentValidation:
                 execution_id="exec-456",
             )
 
+    def test_container_id_whitespace_only_rejected(self):
+        """container_id must reject whitespace-only strings."""
+        with pytest.raises(ValueError, match="container_id is required"):
+            RecoveryAssessment(
+                container_id="   ",
+                action="reconnect",
+                reason="Test reason",
+                with_monitoring=True,
+                execution_id="exec-456",
+            )
+
     def test_action_must_be_valid(self):
         """action must be one of: reconnect, kill."""
         with pytest.raises(ValueError, match='action must be one of'):
@@ -727,6 +902,17 @@ class TestRecoveryAssessmentValidation:
                 container_id="abc123",
                 action="reconnect",
                 reason="",
+                with_monitoring=True,
+                execution_id="exec-456",
+            )
+
+    def test_reason_whitespace_only_rejected(self):
+        """reason must reject whitespace-only strings."""
+        with pytest.raises(ValueError, match="reason is required"):
+            RecoveryAssessment(
+                container_id="abc123",
+                action="reconnect",
+                reason="   ",
                 with_monitoring=True,
                 execution_id="exec-456",
             )
@@ -912,6 +1098,64 @@ class TestRecoveryResultValidation:
         )
 
         assert result.timestamp == "2025-01-14T10:30:00"
+
+    def test_timestamp_cannot_be_far_in_future(self):
+        """timestamp cannot be more than 1 minute in the future."""
+        from datetime import timedelta
+        future_time = datetime.now(timezone.utc) + timedelta(minutes=5)
+
+        with pytest.raises(ValueError, match="timestamp cannot be more than 1 minute in the future"):
+            RecoveryResult(
+                recovered=5,
+                killed=3,
+                errors=1,
+                repair_cycles_processed=2,
+                timestamp=future_time.isoformat(),
+            )
+
+    def test_timestamp_cannot_be_far_in_past(self):
+        """timestamp cannot be more than 1 year in the past."""
+        from datetime import timedelta
+        past_time = datetime.now(timezone.utc) - timedelta(days=400)
+
+        with pytest.raises(ValueError, match="timestamp cannot be more than 1 year in the past"):
+            RecoveryResult(
+                recovered=5,
+                killed=3,
+                errors=1,
+                repair_cycles_processed=2,
+                timestamp=past_time.isoformat(),
+            )
+
+    def test_timestamp_slightly_future_allowed(self):
+        """timestamp slightly in the future (within 1 minute) is allowed for clock skew."""
+        from datetime import timedelta
+        slightly_future = datetime.now(timezone.utc) + timedelta(seconds=30)
+
+        result = RecoveryResult(
+            recovered=5,
+            killed=3,
+            errors=1,
+            repair_cycles_processed=2,
+            timestamp=slightly_future.isoformat(),
+        )
+
+        assert result.timestamp == slightly_future.isoformat()
+
+    def test_timestamp_slightly_past_allowed(self):
+        """timestamp slightly in the past is allowed."""
+        from datetime import timedelta
+        slightly_past = datetime.now(timezone.utc) - timedelta(seconds=30)
+
+        result = RecoveryResult(
+            recovered=5,
+            killed=3,
+            errors=1,
+            repair_cycles_processed=2,
+            timestamp=slightly_past.isoformat(),
+        )
+
+        assert result.timestamp == slightly_past.isoformat()
 
     def test_all_zeros_valid(self):
         """All counts can be zero (e.g., no containers to recover)."""
