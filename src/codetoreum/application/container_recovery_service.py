@@ -243,6 +243,7 @@ class ContainerRecoveryService:
                                     "container_id": metadata.container_id,
                                 }
                             )
+                            return ("error", False)
 
                     except (ContainerError, StorageError) as e:
                         logger.error(
@@ -253,6 +254,7 @@ class ContainerRecoveryService:
                                 "container_id": metadata.container_id,
                             }
                         )
+                        return ("error", False)
 
             # Process all containers with bounded parallelism
             results = await asyncio.gather(

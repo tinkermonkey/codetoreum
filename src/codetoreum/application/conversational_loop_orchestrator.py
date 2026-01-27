@@ -267,6 +267,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 work_item_id,
                 extra={"error_id": ErrorRegistry.ERR_CONVERSATIONAL_LOOP_ERROR}
             )
+            raise ValueError("CommentNeedsResponseEvent must have context")
 
         # Load active session state
         session_state = await self.load_session_state(work_item_id)
