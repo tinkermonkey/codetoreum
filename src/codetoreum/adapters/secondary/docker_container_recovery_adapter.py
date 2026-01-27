@@ -13,7 +13,7 @@ It handles:
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Protocol
 
 from dateutil import parser as dateparser
 
@@ -40,6 +40,56 @@ logger = logging.getLogger(__name__)
 # Repair cycle container recovery configuration
 CHECKPOINT_STALENESS_THRESHOLD = timedelta(minutes=60)  # 60 minutes
 REPAIR_CYCLE_AGE_THRESHOLD = timedelta(hours=2)  # 2 hours
+
+
+# Protocol types for injected dependencies
+class IWorkExecutionStateTracker(Protocol):
+    """Protocol for execution state tracking."""
+
+    async def load_state(self, project: str, work_item_id: str) -> Optional[Dict[str, Any]]:
+        """Load execution state from storage."""
+        ...
+
+    async def mark_execution_failed(
+        self, project: str, work_item_id: str, agent: str, reason: str
+    ) -> None:
+        """Mark an execution as failed with a reason."""
+        ...
+
+
+class IStorage(Protocol):
+    """Protocol for storage operations."""
+
+    async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
+        """Store a value with optional TTL."""
+        ...
+
+    async def get(self, key: str) -> Optional[Any]:
+        """Retrieve a stored value."""
+        ...
+
+
+class IDockerRunner(Protocol):
+    """Protocol for Docker runner operations."""
+
+    async def reconnect_to_container(
+        self,
+        container_name: str,
+        project: str,
+        work_item_id: str,
+        agent: str,
+        task_id: str,
+    ) -> None:
+        """Reconnect to a running container and restart monitoring."""
+        ...
+
+
+class IRepairCycleCheckpointStore(Protocol):
+    """Protocol for repair cycle checkpoint storage."""
+
+    async def get_checkpoint(self, container_id: str) -> Optional[Dict[str, Any]]:
+        """Get the checkpoint for a repair cycle container."""
+        ...
 
 
 class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
@@ -69,10 +119,10 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
 
     def __init__(
         self,
-        execution_tracker: Any,  # IWorkExecutionStateTracker
-        tracking_storage: Any,  # IStorage
-        docker_runner: Optional[Any] = None,  # IDockerRunner for reconnections
-        checkpoint_store: Optional[Any] = None,  # IRepairCycleCheckpointStore
+        execution_tracker: IWorkExecutionStateTracker,
+        tracking_storage: IStorage,
+        docker_runner: Optional[IDockerRunner] = None,
+        checkpoint_store: Optional[IRepairCycleCheckpointStore] = None,
         container_timeout_hours: int = 2,
     ):
         """
@@ -635,6 +685,11 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                     f"(reason: {assessment.reason})"
                 )
 
+                # Extract metadata BEFORE killing container
+                agent = container.labels.get(CONTAINER_LABEL_AGENT)
+                project = container.labels.get(CONTAINER_LABEL_PROJECT)
+                work_item_id = container.labels.get(CONTAINER_LABEL_WORK_ITEM_ID)
+
                 def _kill_container():
                     """Kill and remove container synchronously."""
                     try:
@@ -661,12 +716,6 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                 # Mark execution failed if we have execution info
                 if assessment.execution_id and self.execution_tracker:
                     try:
-                        # Get container metadata for agent info
-                        agent = container.labels.get(CONTAINER_LABEL_AGENT)
-                        project = container.labels.get(CONTAINER_LABEL_PROJECT)
-                        work_item_id = container.labels.get(
-                            CONTAINER_LABEL_WORK_ITEM_ID
-                        )
 
                         if project and work_item_id and agent:
                             # Try to mark execution failed if tracker supports it
@@ -797,13 +846,25 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
 
         return processed
 
-    async def recover_or_cleanup_containers(self):
-        """Placeholder for main recovery orchestration method.
+    async def recover_or_cleanup_containers(self) -> "RecoveryResult":
+        """Execute full recovery/cleanup cycle - DEPRECATED.
 
-        This method is orchestrated by ContainerRecoveryService.
-        The adapter provides the sub-methods that the service calls.
+        This method is kept for interface compatibility but should not be called directly.
+        The recovery orchestration logic has been moved to ContainerRecoveryService.
+
+        Use ContainerRecoveryService which coordinates:
+        1. Container discovery via get_running_agent_containers()
+        2. Container assessment via assess_container()
+        3. Recovery action execution via execute_recovery_action()
+        4. Result collection and event emission
+
+        Returns:
+            RecoveryResult: Placeholder result (not used)
+
+        Raises:
+            NotImplementedError: This method should be called through ContainerRecoveryService
         """
         raise NotImplementedError(
-            "recover_or_cleanup_containers is orchestrated by ContainerRecoveryService"
+            "recover_or_cleanup_containers is orchestrated by ContainerRecoveryService. "
+            "Call the service instead of invoking this method directly."
         )
-

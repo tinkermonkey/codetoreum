@@ -501,3 +501,69 @@ class TestDockerContainerRecoveryAction:
 
             # Should still succeed even if storage fails
             assert result is True
+
+    @pytest.mark.asyncio
+    async def test_assess_container_execution_state_lookup_failed(self):
+        """Container with failed execution state lookup should be killed."""
+        execution_tracker = AsyncMock()
+        tracking_storage = MagicMock()
+
+        adapter = DockerContainerRecoveryAdapter(
+            execution_tracker=execution_tracker, tracking_storage=tracking_storage
+        )
+
+        created_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        from codetoreum.ports.output.container_recovery import ContainerMetadata
+
+        metadata = ContainerMetadata(
+            container_id="container-1",
+            container_name="test-container",
+            project_id="proj-1",
+            agent_id="agent-1",
+            task_id="task-1",
+            created_at=created_at,
+            labels={CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT},
+            work_item_id="work-123",
+            execution_id="exec-456",
+        )
+
+        # Mock execution state lookup failure
+        execution_tracker.load_state.side_effect = StorageError(
+            "Failed to load execution state"
+        )
+
+        assessment = await adapter.assess_container(metadata)
+
+        assert assessment.action == "kill"
+        assert assessment.reason == "execution_state_lookup_failed"
+
+    @pytest.mark.asyncio
+    async def test_assess_container_repair_cycle_wrong_assessment_path(self):
+        """Repair cycle container passed to assess_container should be killed."""
+        execution_tracker = AsyncMock()
+        tracking_storage = MagicMock()
+
+        adapter = DockerContainerRecoveryAdapter(
+            execution_tracker=execution_tracker, tracking_storage=tracking_storage
+        )
+
+        created_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        from codetoreum.ports.output.container_recovery import ContainerMetadata
+        from codetoreum.domain.types import CONTAINER_TYPE_REPAIR_CYCLE
+
+        metadata = ContainerMetadata(
+            container_id="container-1",
+            container_name="test-container",
+            project_id="proj-1",
+            agent_id="agent-1",
+            task_id="task-1",
+            created_at=created_at,
+            labels={CONTAINER_LABEL_TYPE: CONTAINER_TYPE_REPAIR_CYCLE},
+            work_item_id="work-123",
+            execution_id="exec-456",
+        )
+
+        assessment = await adapter.assess_container(metadata)
+
+        assert assessment.action == "kill"
+        assert assessment.reason == "repair_cycle_wrong_assessment_path"

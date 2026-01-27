@@ -21,6 +21,10 @@ from codetoreum.domain.events.container_recovery_events import (
     ContainerRecoveredEvent,
     ContainerRecoveryCompletedEvent,
 )
+from codetoreum.domain.types import (
+    CONTAINER_LABEL_TYPE,
+    CONTAINER_TYPE_REPAIR_CYCLE,
+)
 from codetoreum.ports.exceptions import ContainerError, StorageError
 from codetoreum.ports.output.container_recovery import (
     ContainerMetadata,
@@ -141,11 +145,9 @@ class ContainerRecoveryService:
                 async with semaphore:
                     try:
                         # Determine assessment method based on container type
-                        container_type = metadata.labels.get(
-                            "org.codetoreum.type"
-                        )  # Use raw string to avoid import
+                        container_type = metadata.labels.get(CONTAINER_LABEL_TYPE)
 
-                        if container_type == "repair-cycle":
+                        if container_type == CONTAINER_TYPE_REPAIR_CYCLE:
                             assessment = (
                                 await self.recovery_adapter.assess_repair_cycle_container(
                                     metadata

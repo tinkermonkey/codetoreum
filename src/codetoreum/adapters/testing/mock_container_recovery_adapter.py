@@ -52,6 +52,7 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
         task_id: str,
         work_item_id: Optional[str] = None,
         execution_id: Optional[str] = None,
+        pipeline_run_id: Optional[str] = None,
         created_at: Optional[datetime] = None,
         age_hours: Optional[float] = None,
     ) -> ContainerMetadata:
@@ -66,6 +67,7 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
             task_id: Task ID
             work_item_id: Optional work item ID
             execution_id: Optional execution ID
+            pipeline_run_id: Optional pipeline run ID
             created_at: Optional creation timestamp (defaults to now)
             age_hours: Optional age in hours (used instead of created_at)
 
@@ -93,6 +95,7 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
             },
             work_item_id=work_item_id,
             execution_id=execution_id,
+            pipeline_run_id=pipeline_run_id,
         )
 
         self.containers.append(metadata)
@@ -307,12 +310,21 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
         logger.debug(f"Mock processing {self.repair_cycles_to_process} repair cycles")
         return self.repair_cycles_to_process
 
-    async def recover_or_cleanup_containers(self):
-        """Placeholder for main recovery interface method."""
-        # This is implemented by ContainerRecoveryService orchestrator
-        # The mock adapter provides the sub-methods
+    async def recover_or_cleanup_containers(self) -> "RecoveryResult":
+        """Execute full recovery/cleanup cycle - DEPRECATED.
+
+        This method is kept for interface compatibility but should not be called directly.
+        The recovery orchestration logic has been moved to ContainerRecoveryService.
+
+        Returns:
+            RecoveryResult: Placeholder result (not used)
+
+        Raises:
+            NotImplementedError: This method should be called through ContainerRecoveryService
+        """
         raise NotImplementedError(
-            "recover_or_cleanup_containers is orchestrated by ContainerRecoveryService"
+            "recover_or_cleanup_containers is orchestrated by ContainerRecoveryService. "
+            "Call the service instead of invoking this method directly."
         )
 
     def reset(self) -> None:
