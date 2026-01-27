@@ -123,7 +123,7 @@ class IConversationalLoopService(ABC):
         - WorkItemNotFoundError: If work item doesn't exist
         - SessionNotFoundError: If no active session exists for the work item
         - SessionInactiveError: If session is suspended or terminated
-        - DiscussionAdapterError: If adding comment fails
+        - PortError: If adding comment fails
         - LLMProviderError: If agent execution fails
         - ValidationError: If event data is invalid or missing
         """
@@ -168,7 +168,7 @@ class IConversationalLoopService(ABC):
         **Raises**:
         - WorkItemNotFoundError: If work item doesn't exist
         - ValidationError: If event data is invalid
-        - DiscussionAdapterError: If starting/stopping monitoring fails
+        - PortError: If starting/stopping monitoring fails
         """
         pass
 
@@ -200,7 +200,7 @@ class IConversationalLoopService(ABC):
         - ConversationalSessionEndedEvent: Tracks cleanup reason
 
         **Raises**:
-        - DiscussionAdapterError: If stopping monitoring fails (should not prevent cleanup)
+        - PortError: If stopping monitoring fails (should not prevent cleanup)
         """
         pass
 

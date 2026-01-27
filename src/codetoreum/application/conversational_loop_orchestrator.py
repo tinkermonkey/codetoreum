@@ -109,8 +109,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
         1. Create unique session identifier
         2. Initialize session state with configuration
         3. Start discussion adapter monitoring
-        4. Create and persist session state
-        5. Emit ConversationalSessionStartedEvent for audit trail
+        4. Persist session state
 
         Args:
             work_item_id: Unique identifier of the work item
@@ -125,7 +124,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
 
         Raises:
             ValueError: If required configuration is missing
-            DiscussionAdapterError: If starting monitoring fails
+            PortError: If starting monitoring fails
             EventStoreError: If persisting session state fails
         """
         # Validate inputs
@@ -241,7 +240,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
             ValueError: If event data is invalid
             SessionNotFoundError: If no active session exists
             SessionInactiveError: If session is suspended or terminated
-            DiscussionAdapterError: If adding comment fails
+            PortError: If adding comment fails
             LLMProviderError: If agent execution fails
             EventStoreError: If persisting session state fails
         """
@@ -553,7 +552,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
 
         Raises:
             ValueError: If event data is invalid
-            DiscussionAdapterError: If starting/stopping monitoring fails
+            PortError: If starting/stopping monitoring fails
             EventStoreError: If persisting state fails
         """
         work_item_id = event.work_item_id
@@ -709,7 +708,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
             reason: Human-readable reason for cleanup
 
         Raises:
-            DiscussionAdapterError: If stopping monitoring fails (should not prevent cleanup)
+            PortError: If stopping monitoring fails (should not prevent cleanup)
         """
         if not work_item_id:
             raise ValueError("work_item_id is required")
