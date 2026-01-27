@@ -250,8 +250,23 @@ class ContainerRecoveryService:
             # Process all containers with bounded parallelism
             results = await asyncio.gather(
                 *[process_container(c) for c in all_containers],
-                return_exceptions=False,
+                return_exceptions=True,
             )
+
+            # Handle any exceptions returned from gather
+            processed_results = []
+            for result in results:
+                if isinstance(result, Exception):
+                    logger.error(
+                        f"Unexpected error in container recovery: {result}",
+                        exc_info=result
+                    )
+                    # Count as error and add to processed results
+                    processed_results.append(("error", False))
+                else:
+                    processed_results.append(result)
+
+            results = processed_results
 
             # Count results
             for action, success in results:

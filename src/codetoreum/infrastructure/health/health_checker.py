@@ -4,6 +4,7 @@ Provides concrete health check implementations for various system components.
 """
 
 import asyncio
+import logging
 import time
 from datetime import datetime
 from typing import Dict, List, Optional, Callable
@@ -15,6 +16,8 @@ from .interfaces import (
     IHealthCheck,
 )
 from ..resilience.interfaces import ICircuitBreaker, IRateLimiter, CircuitState
+
+logger = logging.getLogger(__name__)
 
 
 class HealthChecker(IHealthCheck):
@@ -77,7 +80,27 @@ class HealthChecker(IHealthCheck):
         for name, checker in self.dependencies.items():
             tasks.append(self._check_dependency_safe(name, checker))
 
-        dependency_results = await asyncio.gather(*tasks)
+        dependency_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Handle any exceptions returned from gather
+        processed_results = []
+        for result in dependency_results:
+            if isinstance(result, Exception):
+                logger.error(
+                    f"Unexpected error in dependency check: {result}",
+                    exc_info=result
+                )
+                # Create unhealthy result for failed check
+                processed_results.append(DependencyHealth(
+                    name="unknown",
+                    status=HealthStatus.UNHEALTHY,
+                    message=f"Health check failed with exception: {str(result)}",
+                    last_check=datetime.utcnow()
+                ))
+            else:
+                processed_results.append(result)
+
+        dependency_results = processed_results
 
         # Determine overall status
         for dep in dependency_results:
@@ -194,12 +217,19 @@ class CompositeHealthCheck(IHealthCheck):
 
     async def check_liveness(self) -> HealthCheckResult:
         """Check liveness of all sub-checks."""
-        results = await asyncio.gather(*[check.check_liveness() for check in self.checks])
+        results = await asyncio.gather(*[check.check_liveness() for check in self.checks], return_exceptions=True)
 
         # All must be healthy for liveness
         overall_status = HealthStatus.HEALTHY
         for result in results:
-            if result.status != HealthStatus.HEALTHY:
+            if isinstance(result, Exception):
+                logger.error(
+                    f"Unexpected error in composite liveness check: {result}",
+                    exc_info=result
+                )
+                overall_status = HealthStatus.UNHEALTHY
+                break
+            elif result.status != HealthStatus.HEALTHY:
                 overall_status = HealthStatus.UNHEALTHY
                 break
 
@@ -210,12 +240,19 @@ class CompositeHealthCheck(IHealthCheck):
 
     async def check_readiness(self) -> HealthCheckResult:
         """Check readiness of all sub-checks."""
-        results = await asyncio.gather(*[check.check_readiness() for check in self.checks])
+        results = await asyncio.gather(*[check.check_readiness() for check in self.checks], return_exceptions=True)
 
         # Determine overall status
         overall_status = HealthStatus.HEALTHY
         for result in results:
-            if result.status == HealthStatus.UNHEALTHY:
+            if isinstance(result, Exception):
+                logger.error(
+                    f"Unexpected error in composite readiness check: {result}",
+                    exc_info=result
+                )
+                overall_status = HealthStatus.UNHEALTHY
+                break
+            elif result.status == HealthStatus.UNHEALTHY:
                 overall_status = HealthStatus.UNHEALTHY
                 break
             elif result.status == HealthStatus.DEGRADED:
