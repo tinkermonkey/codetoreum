@@ -7,8 +7,7 @@ These tests verify:
 - Integration with event store and event emitter
 """
 
-from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock
+from datetime import datetime, timezone
 
 import pytest
 
@@ -56,26 +55,14 @@ class TestContainerRecoveryWorkflowWithMocks:
         # Setup event emitter
         event_emitter = MockEventEmitter()
 
-        # Setup event store
-        event_store = MagicMock()
-
-        async def mock_get_events(aggregate_id, limit=1):
-            # exec-001 and exec-002 exist, exec-orphan doesn't
-            if aggregate_id in ("exec-001", "exec-002"):
-                return [{"type": "ExecutionStarted"}]
-            raise Exception("Execution not found")
-
-        event_store.get_events = mock_get_events
+        # Setup mock adapter
+        mock_adapter = MockContainerRecoveryAdapter()
 
         # Setup service
         service = ContainerRecoveryService(
-            container_service=MagicMock(),
-            event_store=event_store,
+            recovery_adapter=mock_adapter,
             event_emitter=event_emitter,
         )
-
-        # Setup mock adapter
-        mock_adapter = MockContainerRecoveryAdapter()
 
         # Add containers
         # 1. Recent with work_item (should recover with monitoring)
@@ -153,16 +140,6 @@ class TestContainerRecoveryWorkflowWithMocks:
             with_monitoring=False,
         )
 
-        # Wire adapter methods
-        service.get_running_agent_containers = (
-            mock_adapter.get_running_agent_containers
-        )
-        service.assess_container = mock_adapter.assess_container
-        service.execute_recovery_action = mock_adapter.execute_recovery_action
-        service.process_orphaned_repair_results = (
-            mock_adapter.process_orphaned_repair_results
-        )
-
         # Execute recovery
         result = await service.recover_or_cleanup_containers()
 
@@ -216,16 +193,13 @@ class TestContainerRecoveryWorkflowWithMocks:
     async def test_recovery_with_partial_failures(self):
         """Test recovery when some actions fail."""
         event_emitter = MockEventEmitter()
-        event_store = MagicMock()
-        event_store.get_events = AsyncMock(return_value=[{"type": "ExecutionStarted"}])
-
-        service = ContainerRecoveryService(
-            container_service=MagicMock(),
-            event_store=event_store,
-            event_emitter=event_emitter,
-        )
 
         mock_adapter = MockContainerRecoveryAdapter()
+
+        service = ContainerRecoveryService(
+            recovery_adapter=mock_adapter,
+            event_emitter=event_emitter,
+        )
 
         # Add containers
         mock_adapter.add_container(
@@ -268,16 +242,6 @@ class TestContainerRecoveryWorkflowWithMocks:
         # Mark one as failing
         mock_adapter.set_action_failure("failure-1")
 
-        # Wire adapter methods
-        service.get_running_agent_containers = (
-            mock_adapter.get_running_agent_containers
-        )
-        service.assess_container = mock_adapter.assess_container
-        service.execute_recovery_action = mock_adapter.execute_recovery_action
-        service.process_orphaned_repair_results = (
-            mock_adapter.process_orphaned_repair_results
-        )
-
         # Execute recovery
         result = await service.recover_or_cleanup_containers()
 
@@ -295,29 +259,16 @@ class TestContainerRecoveryWorkflowWithMocks:
     async def test_recovery_with_repair_cycles(self):
         """Test recovery processes orphaned repair cycle results."""
         event_emitter = MockEventEmitter()
-        event_store = MagicMock()
-        event_store.get_events = AsyncMock(return_value=[])
-
-        service = ContainerRecoveryService(
-            container_service=MagicMock(),
-            event_store=event_store,
-            event_emitter=event_emitter,
-        )
 
         mock_adapter = MockContainerRecoveryAdapter()
 
+        service = ContainerRecoveryService(
+            recovery_adapter=mock_adapter,
+            event_emitter=event_emitter,
+        )
+
         # Configure repair cycles
         mock_adapter.repair_cycles_to_process = 5
-
-        # Wire adapter methods
-        service.get_running_agent_containers = (
-            mock_adapter.get_running_agent_containers
-        )
-        service.assess_container = mock_adapter.assess_container
-        service.execute_recovery_action = mock_adapter.execute_recovery_action
-        service.process_orphaned_repair_results = (
-            mock_adapter.process_orphaned_repair_results
-        )
 
         # Execute recovery
         result = await service.recover_or_cleanup_containers()
@@ -336,16 +287,13 @@ class TestContainerRecoveryWorkflowWithMocks:
     async def test_recovery_event_timestamp_ordering(self):
         """Test that events have proper timestamps in chronological order."""
         event_emitter = MockEventEmitter()
-        event_store = MagicMock()
-        event_store.get_events = AsyncMock(return_value=[{"type": "ExecutionStarted"}])
-
-        service = ContainerRecoveryService(
-            container_service=MagicMock(),
-            event_store=event_store,
-            event_emitter=event_emitter,
-        )
 
         mock_adapter = MockContainerRecoveryAdapter()
+
+        service = ContainerRecoveryService(
+            recovery_adapter=mock_adapter,
+            event_emitter=event_emitter,
+        )
 
         mock_adapter.add_container(
             container_id="container-1",
@@ -363,16 +311,6 @@ class TestContainerRecoveryWorkflowWithMocks:
             reason="execution_in_progress",
             with_monitoring=False,
             execution_id="exec-1",
-        )
-
-        # Wire adapter methods
-        service.get_running_agent_containers = (
-            mock_adapter.get_running_agent_containers
-        )
-        service.assess_container = mock_adapter.assess_container
-        service.execute_recovery_action = mock_adapter.execute_recovery_action
-        service.process_orphaned_repair_results = (
-            mock_adapter.process_orphaned_repair_results
         )
 
         # Execute recovery
