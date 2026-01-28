@@ -158,7 +158,11 @@ class TestRepairCycleContainerAssessment:
             agent_id="repair-agent",
             task_id="task-1",
             created_at=datetime.now(timezone.utc) - timedelta(hours=1),
-            labels=MappingProxyType({"org.codetoreum.type": "repair-cycle"}),
+            labels=MappingProxyType({
+                "org.codetoreum.type": "repair-cycle",
+                "org.codetoreum.project": "proj-1",
+                "org.codetoreum.agent": "repair-agent",
+            }),
             work_item_id="100",
             pipeline_run_id="run-abc",
             execution_id="exec-123",
@@ -196,7 +200,11 @@ class TestRepairCycleContainerAssessment:
             agent_id="repair-agent",
             task_id="task-1",
             created_at=datetime.now(timezone.utc) - timedelta(hours=3),  # 3h old
-            labels=MappingProxyType({"org.codetoreum.type": "repair-cycle"}),
+            labels=MappingProxyType({
+                "org.codetoreum.type": "repair-cycle",
+                "org.codetoreum.project": "proj-1",
+                "org.codetoreum.agent": "repair-agent",
+            }),
             work_item_id="100",
             pipeline_run_id="run-abc",
             execution_id="exec-123",
@@ -230,7 +238,11 @@ class TestRepairCycleContainerAssessment:
             agent_id="repair-agent",
             task_id="task-1",
             created_at=datetime.now(timezone.utc) - timedelta(hours=3),  # 3h old
-            labels=MappingProxyType({"org.codetoreum.type": "repair-cycle"}),
+            labels=MappingProxyType({
+                "org.codetoreum.type": "repair-cycle",
+                "org.codetoreum.project": "proj-1",
+                "org.codetoreum.agent": "repair-agent",
+            }),
             work_item_id="100",
             pipeline_run_id="run-abc",
             execution_id="exec-123",
@@ -268,7 +280,11 @@ class TestRepairCycleContainerAssessment:
             agent_id="repair-agent",
             task_id="task-1",
             created_at=datetime.now(timezone.utc) - timedelta(hours=3),  # 3h old
-            labels=MappingProxyType({"org.codetoreum.type": "repair-cycle"}),
+            labels=MappingProxyType({
+                "org.codetoreum.type": "repair-cycle",
+                "org.codetoreum.project": "proj-1",
+                "org.codetoreum.agent": "repair-agent",
+            }),
             work_item_id="100",
             pipeline_run_id="run-abc",
             execution_id="exec-123",
@@ -302,7 +318,11 @@ class TestRepairCycleContainerAssessment:
             agent_id="repair-agent",
             task_id="task-1",
             created_at=datetime.now(timezone.utc) - timedelta(minutes=30),  # 30 min
-            labels=MappingProxyType({"org.codetoreum.type": "repair-cycle"}),
+            labels=MappingProxyType({
+                "org.codetoreum.type": "repair-cycle",
+                "org.codetoreum.project": "proj-1",
+                "org.codetoreum.agent": "repair-agent",
+            }),
             work_item_id="100",
             pipeline_run_id="run-abc",
             execution_id="exec-123",
@@ -334,7 +354,11 @@ class TestRepairCycleContainerAssessment:
             agent_id="repair-agent",
             task_id="task-1",
             created_at=datetime.now(timezone.utc) - timedelta(hours=1),
-            labels=MappingProxyType({"org.codetoreum.type": "repair-cycle"}),
+            labels=MappingProxyType({
+                "org.codetoreum.type": "repair-cycle",
+                "org.codetoreum.project": "proj-1",
+                "org.codetoreum.agent": "repair-agent",
+            }),
             work_item_id="100",
             pipeline_run_id="run-abc",
             execution_id="exec-123",
