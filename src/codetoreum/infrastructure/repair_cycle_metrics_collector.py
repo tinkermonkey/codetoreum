@@ -21,6 +21,7 @@ from codetoreum.domain.events.repair_cycle_events import RepairCycleMetricsBacke
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.event_types import EventTypes
 from codetoreum.ports.output.metrics import IMetrics
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -248,7 +249,7 @@ class RepairCycleMetricsCollector:
                 extra={
                     "last_operation": operation,
                     "last_error": str(error),
-                },
+                "error_id": ErrorRegistry.ERR_METRICS_ERROR},
                 exc_info=True,
             )
 

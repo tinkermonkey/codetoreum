@@ -38,6 +38,7 @@ except ImportError:
     ALWAYS_OFF = None
 
 from .config import ObservabilityConfig
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -193,5 +194,5 @@ def setup_opentelemetry(config: ObservabilityConfig, app=None) -> None:
 
     except Exception as e:
         # Don't crash the application if observability fails
-        logger.error(f"Failed to initialize OpenTelemetry: {e}", exc_info=True)
+        logger.error(f"Failed to initialize OpenTelemetry: {e}", exc_info=True, extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR})
         logger.warning("Application will continue without distributed tracing")

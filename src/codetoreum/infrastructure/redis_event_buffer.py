@@ -10,6 +10,7 @@ from redis import asyncio as aioredis
 
 from codetoreum.config import DEFAULT_REDIS_STREAM_MAX_LENGTH
 from codetoreum.domain.events import DomainEvent
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_serialization import EventSerializer
 
 logger = logging.getLogger(__name__)
@@ -256,9 +257,10 @@ class RedisEventBuffer:
 
                     except Exception as e:
                         logger.error(
-                            f"Failed to deserialize event from message {message_id}: {e}"
+                            f"Failed to deserialize event from message {message_id}: {e}",
+                            exc_info=True,
+                            extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
                         )
-                        # Move to dead letter queue
                         await self._move_to_dead_letter(message_id, fields, str(e))
 
             return events
@@ -418,9 +420,10 @@ class RedisEventBuffer:
 
         except Exception as e:
             logger.error(
-                f"Failed to move message {message_id} to dead letter queue: {e}"
+                f"Failed to move message {message_id} to dead letter queue: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
             )
-
     async def close(self) -> None:
         """Close the buffer (cleanup resources)."""
         # Redis client is managed externally, so nothing to do here

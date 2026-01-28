@@ -479,9 +479,23 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
                 return self._to_workflow_run_summary(workflow, self._default_metadata())
 
         # Execute enrichment in parallel (with error handling per workflow)
-        summaries = await asyncio.gather(*[enrich_one(w) for w in workflows])
+        summaries = await asyncio.gather(*[enrich_one(w) for w in workflows], return_exceptions=True)
 
-        return list(summaries)
+        # Handle any exceptions returned from gather
+        processed_summaries = []
+        for summary in summaries:
+            if isinstance(summary, Exception):
+                logger.error(
+                    f"Unexpected error during workflow enrichment: {summary}",
+                    exc_info=summary,
+                    extra={"error_id": "ERR_WORKFLOW_RUN_QUERY_ENRICHMENT_EXCEPTION"}
+                )
+                # Skip this workflow if enrichment completely failed
+                # The enrich_one function should handle all normal cases
+            else:
+                processed_summaries.append(summary)
+
+        return processed_summaries
 
     def _default_metadata(self) -> Dict:
         """

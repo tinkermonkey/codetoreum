@@ -246,7 +246,7 @@ class TestEventEmitter:
         assert len(error_logs) > 0
         assert "validation error" in error_logs[0].message.lower()
         # Check extra context
-        assert error_logs[0].__dict__.get("error_id") == "ERR_HANDLER_VALIDATION"
+        assert error_logs[0].__dict__.get("error_id") == "ERR_VALIDATION_FAILED"
 
     def test_emit_handles_type_error(self, adapter, caplog):
         """Test emit properly logs type errors (TypeError) with exc_info."""
@@ -296,7 +296,7 @@ class TestEventEmitter:
         assert len(error_logs) > 0
         assert "unexpected error" in error_logs[0].message.lower()
         # Check extra context
-        assert error_logs[0].__dict__.get("error_id") == "ERR_HANDLER_UNEXPECTED"
+        assert error_logs[0].__dict__.get("error_id") == "ERR_HANDLER_EXECUTION"
 
     def test_emit_multiple_handlers_one_fails(self, adapter):
         """Test emit continues to next handler when one fails."""
@@ -421,7 +421,7 @@ class TestEventEmitter:
         ]
         assert len(summary_logs) == 1
         assert summary_logs[0].__dict__.get("failure_count") == 2
-        assert summary_logs[0].__dict__.get("error_id") == "ERR_HANDLER_FAILURES"
+        assert summary_logs[0].__dict__.get("error_id") == "ERR_HANDLER_EXECUTION"
 
     def test_on_rejects_non_callable(self, adapter):
         """Test on() rejects non-callable handlers."""

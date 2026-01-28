@@ -1,0 +1,1018 @@
+"""Docker adapter for IAgentContainerRecoveryService.
+
+This adapter implements container recovery operations using Docker SDK for Python.
+It handles:
+- Listing containers with Codetoreum labels
+- Extracting metadata from container labels
+- Assessing container state for recovery or cleanup
+- Executing recovery actions (reconnect or kill)
+- Processing orphaned repair cycle results from storage
+- Assessing repair cycle containers based on checkpoint staleness
+"""
+
+import asyncio
+import logging
+from datetime import datetime, timedelta, timezone
+from types import MappingProxyType
+from typing import Any, Dict, List, Optional, Protocol
+
+from dateutil import parser as dateparser
+
+from codetoreum.domain.types import (
+    CONTAINER_LABEL_AGENT,
+    CONTAINER_LABEL_EXECUTION_ID,
+    CONTAINER_LABEL_PIPELINE_RUN_ID,
+    CONTAINER_LABEL_PROJECT,
+    CONTAINER_LABEL_TASK_ID,
+    CONTAINER_LABEL_TYPE,
+    CONTAINER_LABEL_WORK_ITEM_ID,
+    CONTAINER_TYPE_AGENT,
+    CONTAINER_TYPE_REPAIR_CYCLE,
+)
+from codetoreum.ports.exceptions import ContainerError, StorageError
+from codetoreum.ports.output.container_recovery import (
+    ContainerMetadata,
+    IAgentContainerRecoveryService,
+    RecoveryAssessment,
+)
+from codetoreum.infrastructure.error_ids import ErrorRegistry
+
+# Import Docker SDK exceptions for proper error handling
+try:
+    from docker.errors import NotFound as DockerNotFound, DockerException
+except ImportError:
+    # Provide fallback classes if docker is not installed
+    class DockerNotFound(Exception):  # type: ignore
+        """Fallback DockerNotFound when docker SDK is not available."""
+        pass
+    class DockerException(Exception):  # type: ignore
+        """Fallback DockerException when docker SDK is not available."""
+        pass
+
+logger = logging.getLogger(__name__)
+
+# Repair cycle container recovery configuration
+CHECKPOINT_STALENESS_THRESHOLD = timedelta(minutes=60)  # 60 minutes
+REPAIR_CYCLE_AGE_THRESHOLD = timedelta(hours=2)  # 2 hours
+
+
+# Protocol types for injected dependencies
+class IWorkExecutionStateTracker(Protocol):
+    """Protocol for execution state tracking."""
+
+    async def load_state(self, project: str, work_item_id: str) -> Optional[Dict[str, Any]]:
+        """Load execution state from storage."""
+        ...
+
+    async def mark_execution_failed(
+        self, project: str, work_item_id: str, agent: str, reason: str
+    ) -> None:
+        """Mark an execution as failed with a reason."""
+        ...
+
+
+class IStorage(Protocol):
+    """Protocol for storage operations."""
+
+    async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
+        """Store a value with optional TTL."""
+        ...
+
+    async def get(self, key: str) -> Optional[Any]:
+        """Retrieve a stored value."""
+        ...
+
+
+class IDockerRunner(Protocol):
+    """Protocol for Docker runner operations."""
+
+    async def reconnect_to_container(
+        self,
+        container_name: str,
+        project: str,
+        work_item_id: str,
+        agent: str,
+        task_id: str,
+    ) -> None:
+        """Reconnect to a running container and restart monitoring."""
+        ...
+
+
+class IRepairCycleCheckpointStore(Protocol):
+    """Protocol for repair cycle checkpoint storage."""
+
+    async def get_checkpoint(self, container_id: str) -> Optional[Dict[str, Any]]:
+        """Get the checkpoint for a repair cycle container."""
+        ...
+
+
+class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
+    """
+    Docker adapter for container recovery operations.
+
+    This adapter implements IAgentContainerRecoveryService to handle recovery
+    of containers at orchestrator startup by:
+    1. Connecting to Docker daemon
+    2. Listing containers with Codetoreum labels
+    3. Extracting metadata from labels
+    4. Assessing each container for recovery or cleanup (full decision tree)
+    5. Executing recovery actions (reconnect or kill)
+
+    Decision Tree:
+    1. Filter repair cycle containers (handled separately)
+    2. Age check: Kill if >2 hours old
+    3. Execution validation: Kill if no execution found or not in_progress
+    4. Agent matching: Kill if agent mismatch
+    5. Monitoring capability: Determine if full monitoring possible
+    6. Reconnect or kill accordingly
+
+    Thread Safety:
+    - This adapter is async-safe but not thread-safe
+    - All Docker operations are executed in a thread pool
+    """
+
+    def __init__(
+        self,
+        execution_tracker: IWorkExecutionStateTracker,
+        tracking_storage: IStorage,
+        docker_runner: Optional[IDockerRunner] = None,
+        checkpoint_store: Optional[IRepairCycleCheckpointStore] = None,
+        container_timeout_hours: int = 2,
+    ):
+        """
+        Initialize DockerContainerRecoveryAdapter.
+
+        Args:
+            execution_tracker: Work execution state tracker for validation
+            tracking_storage: Storage for container tracking re-registration
+            docker_runner: Docker runner for reconnectToContainer() calls
+            checkpoint_store: Checkpoint store for repair cycle validation
+            container_timeout_hours: Hours before a container is considered orphaned
+        """
+        self.execution_tracker = execution_tracker
+        self.tracking_storage = tracking_storage
+        self.docker_runner = docker_runner
+        self.checkpoint_store = checkpoint_store
+        self.container_timeout_hours = container_timeout_hours
+        self._docker_client = None
+
+    def _get_client(self):
+        """Get or create Docker client."""
+        if self._docker_client is None:
+            try:
+                import docker
+
+                self._docker_client = docker.from_env()
+            except ImportError as e:
+                raise ContainerError(f"Docker SDK not installed: {str(e)}")
+            except DockerException as e:
+                raise ContainerError(f"Failed to connect to Docker daemon: {str(e)}")
+            except Exception as e:
+                logger.error(
+                    f"UNEXPECTED error connecting to Docker: {e}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR, "error_type": "unexpected"}
+                )
+                raise ContainerError(f"Unexpected error connecting to Docker: {str(e)}")
+
+        return self._docker_client
+
+    async def get_running_agent_containers(self) -> List[ContainerMetadata]:
+        """
+        List running agent containers with Codetoreum labels.
+
+        Uses Docker label filtering to ONLY return agent containers (not repair-cycle).
+        This ensures:
+        - Unrelated containers are never returned
+        - Repair cycle containers are handled separately
+        - Query-time protection prevents accidental modifications
+        - Label filtering is done at Docker API level
+
+        Returns:
+            List[ContainerMetadata]: Agent containers with valid Codetoreum labels
+
+        Raises:
+            ContainerError: If Docker API list operation fails
+        """
+        loop = asyncio.get_event_loop()
+
+        def _list_containers():
+            client = self._get_client()
+
+            try:
+                # Use Docker label filtering to only get agent containers
+                # Filter for org.codetoreum.type=agent (exclude repair-cycle)
+                filters = {
+                    "label": [f"{CONTAINER_LABEL_TYPE}={CONTAINER_TYPE_AGENT}"]
+                }
+
+                containers = client.containers.list(filters=filters, all=False)
+                metadata_list = []
+
+                for container in containers:
+                    try:
+                        metadata = self._extract_metadata(container)
+                        if metadata:
+                            metadata_list.append(metadata)
+                    except (KeyError, AttributeError, ValueError, TypeError) as e:
+                        logger.warning(
+                            f"Failed to extract metadata from container {container.short_id}: {e}",
+                            exc_info=True,
+                            extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR, "error_type": "expected"}
+                        )
+                    except Exception as e:
+                        logger.error(
+                            f"UNEXPECTED error extracting metadata from container {container.short_id}: {e}",
+                            exc_info=True,
+                            extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR, "error_type": "unexpected"}
+                        )
+
+                return metadata_list
+
+            except Exception as e:
+                raise ContainerError(f"Failed to list agent containers: {str(e)}")
+
+        return await loop.run_in_executor(None, _list_containers)
+
+    async def get_running_repair_cycle_containers(
+        self,
+    ) -> List[ContainerMetadata]:
+        """
+        List running repair cycle containers using label filtering.
+
+        Separately enumerates containers matching repair-cycle type.
+        Uses Docker label filtering to ONLY return repair cycle containers:
+        - Unrelated containers are never returned
+        - Query-time protection prevents accidental modifications
+        - Label filtering is done at Docker API level
+
+        Returns:
+            List[ContainerMetadata]: Repair cycle containers with valid labels
+
+        Raises:
+            ContainerError: If Docker API list operation fails
+        """
+        loop = asyncio.get_event_loop()
+
+        def _list_containers():
+            client = self._get_client()
+
+            try:
+                # Use Docker label filtering to get repair cycle containers
+                # Filter for org.codetoreum.type=repair-cycle
+                filters = {
+                    "label": [f"{CONTAINER_LABEL_TYPE}={CONTAINER_TYPE_REPAIR_CYCLE}"]
+                }
+
+                containers = client.containers.list(filters=filters, all=False)
+                metadata_list = []
+
+                for container in containers:
+                    try:
+                        metadata = self._extract_metadata(container)
+                        if metadata:
+                            metadata_list.append(metadata)
+                    except (KeyError, AttributeError, ValueError, TypeError) as e:
+                        logger.warning(
+                            f"Failed to extract metadata from repair cycle container {container.short_id}: {e}",
+                            exc_info=True,
+                            extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR, "error_type": "expected"}
+                        )
+                    except Exception as e:
+                        logger.error(
+                            f"UNEXPECTED error extracting metadata from repair cycle container {container.short_id}: {e}",
+                            exc_info=True,
+                            extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR, "error_type": "unexpected"}
+                        )
+
+                return metadata_list
+
+            except Exception as e:
+                raise ContainerError(
+                    f"Failed to list repair cycle containers: {str(e)}"
+                )
+
+        return await loop.run_in_executor(None, _list_containers)
+
+    def _extract_metadata(self, container) -> Optional[ContainerMetadata]:
+        """
+        Extract metadata from container labels.
+
+        Args:
+            container: Docker container object
+
+        Returns:
+            ContainerMetadata if all required labels present, None otherwise
+        """
+        labels = container.attrs.get("Config", {}).get("Labels", {})
+
+        # Check for required labels
+        container_type = labels.get(CONTAINER_LABEL_TYPE)
+        if not container_type:
+            logger.warning(
+                f"Container {container.short_id} missing {CONTAINER_LABEL_TYPE} label"
+            )
+            return None
+
+        # Validate container type
+        if container_type not in (CONTAINER_TYPE_AGENT, CONTAINER_TYPE_REPAIR_CYCLE):
+            logger.warning(
+                f"Container {container.short_id} has invalid type: {container_type}"
+            )
+            return None
+
+        # Extract required labels
+        project_id = labels.get(CONTAINER_LABEL_PROJECT)
+        agent_id = labels.get(CONTAINER_LABEL_AGENT)
+        task_id = labels.get(CONTAINER_LABEL_TASK_ID)
+
+        if not (project_id and agent_id and task_id):
+            logger.warning(
+                f"Container {container.short_id} missing required labels. "
+                f"project_id={project_id}, agent_id={agent_id}, task_id={task_id}"
+            )
+            return None
+
+        # Parse created_at
+        created_at = None
+        try:
+            created_at = dateparser.isoparse(container.attrs["Created"])
+        except (ValueError, TypeError, KeyError) as e:
+            logger.error(
+                f"Failed to parse created_at timestamp for container {container.short_id}: {e}. "
+                f"Using current time as fallback - age-based recovery decisions will be incorrect. "
+                f"Raw timestamp value: {container.attrs.get('Created', 'MISSING')}",
+                exc_info=True,
+                extra={
+                    "error_id": ErrorRegistry.ERR_CONTAINER_ERROR,
+                    "error_type": "expected",
+                    "container_id": container.short_id,
+                    "raw_created": container.attrs.get("Created", "MISSING"),
+                    "impact": "age_based_recovery_decisions_may_be_incorrect",
+                }
+            )
+        except Exception as e:
+            logger.error(
+                f"UNEXPECTED error parsing created_at for container {container.short_id}: {e}. "
+                f"Using current time as fallback - age-based recovery decisions will be incorrect.",
+                exc_info=True,
+                extra={
+                    "error_id": ErrorRegistry.ERR_CONTAINER_ERROR,
+                    "error_type": "unexpected",
+                    "container_id": container.short_id,
+                    "raw_created": container.attrs.get("Created", "MISSING"),
+                    "impact": "age_based_recovery_decisions_may_be_incorrect",
+                }
+            )
+        finally:
+            # Use current time as fallback if parsing failed
+            if created_at is None:
+                created_at = datetime.now(timezone.utc)
+
+        # Extract optional labels
+        work_item_id = labels.get(CONTAINER_LABEL_WORK_ITEM_ID)
+        pipeline_run_id = labels.get(CONTAINER_LABEL_PIPELINE_RUN_ID)
+        execution_id = labels.get(CONTAINER_LABEL_EXECUTION_ID)
+
+        return ContainerMetadata(
+            container_id=container.id,
+            container_name=container.name,
+            project_id=project_id,
+            agent_id=agent_id,
+            task_id=task_id,
+            created_at=created_at,
+            labels=MappingProxyType(labels),
+            work_item_id=work_item_id,
+            pipeline_run_id=pipeline_run_id,
+            execution_id=execution_id,
+        )
+
+    async def assess_container(
+        self, metadata: ContainerMetadata
+    ) -> RecoveryAssessment:
+        """
+        Assess recovery action for a single container.
+
+        See class docstring for complete decision tree.
+
+        Args:
+            metadata: Container metadata extracted from Docker labels
+
+        Returns:
+            RecoveryAssessment: Decision for this container
+
+        Raises:
+            ContainerError: If container inspection fails
+            StorageError: If execution state lookup fails
+        """
+        # Step 1: Filter repair cycle containers (not handled by this method)
+        container_type = metadata.labels.get(CONTAINER_LABEL_TYPE)
+        if container_type == CONTAINER_TYPE_REPAIR_CYCLE:
+            # Repair cycle containers are assessed separately via assess_repair_cycle_container
+            logger.warning(
+                f"Container {metadata.container_id} is repair cycle type, "
+                "but was passed to assess_container() - should use assess_repair_cycle_container()"
+            )
+            return RecoveryAssessment(
+                container_id=metadata.container_id,
+                action="kill",
+                reason="repair_cycle_wrong_assessment_path",
+                with_monitoring=False,
+                execution_id=None,
+            )
+
+        # Step 2: Age check - containers >2 hours old are killed regardless
+        now = datetime.now(timezone.utc)
+        age_seconds = (now - metadata.created_at).total_seconds()
+        age_hours = age_seconds / 3600
+
+        if age_hours > self.container_timeout_hours:
+            logger.info(
+                f"Container {metadata.container_id} is {age_hours:.1f} hours old, "
+                f"exceeds {self.container_timeout_hours}h timeout"
+            )
+            return RecoveryAssessment(
+                container_id=metadata.container_id,
+                action="kill",
+                reason="container_timeout",
+                with_monitoring=False,
+                execution_id=None,
+            )
+
+        # Step 3 & 4: Execution validation - query work_execution_tracker.load_state()
+        if not metadata.work_item_id:
+            logger.warning(
+                f"Container {metadata.container_id} missing work_item_id, "
+                "cannot reconnect without execution tracking, killing"
+            )
+            return RecoveryAssessment(
+                container_id=metadata.container_id,
+                action="kill",
+                reason="incomplete_metadata",
+                with_monitoring=False,
+                execution_id=None,
+            )
+
+        try:
+            execution_state = await self.execution_tracker.load_state(
+                project=metadata.project_id, work_item_id=metadata.work_item_id
+            )
+        except StorageError as e:
+            logger.error(
+                f"Failed to load execution state for {metadata.work_item_id}: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_STORAGE_ERROR}
+            )
+            return RecoveryAssessment(
+                container_id=metadata.container_id,
+                action="kill",
+                reason="execution_state_lookup_failed",
+                with_monitoring=False,
+                execution_id=None,
+            )
+
+        if not execution_state:
+            logger.info(
+                f"No execution history found for container {metadata.container_id} "
+                f"with work_item_id {metadata.work_item_id}"
+            )
+            return RecoveryAssessment(
+                container_id=metadata.container_id,
+                action="kill",
+                reason="no_execution_found",
+                with_monitoring=False,
+                execution_id=None,
+            )
+
+        # Step 4: Verify execution outcome is "in_progress"
+        outcome = execution_state.get("outcome")
+        if outcome != "in_progress":
+            logger.info(
+                f"Container {metadata.container_id} execution not in_progress, "
+                f"outcome={outcome}, killing"
+            )
+            return RecoveryAssessment(
+                container_id=metadata.container_id,
+                action="kill",
+                reason="execution_not_in_progress",
+                with_monitoring=False,
+                execution_id=None,
+            )
+
+        # Step 5: Validate agent matching
+        execution_agent = execution_state.get("agent")
+        if execution_agent != metadata.agent_id:
+            logger.info(
+                f"Container {metadata.container_id} agent mismatch: "
+                f"container={metadata.agent_id}, execution={execution_agent}, killing"
+            )
+            return RecoveryAssessment(
+                container_id=metadata.container_id,
+                action="kill",
+                reason="agent_mismatch",
+                with_monitoring=False,
+                execution_id=None,
+            )
+
+        # Step 6 & 7: All checks passed - reconnect with monitoring
+        logger.info(
+            f"Container {metadata.container_id} assessment: reconnect with monitoring"
+        )
+
+        return RecoveryAssessment(
+            container_id=metadata.container_id,
+            action="reconnect",
+            reason="valid_execution",
+            with_monitoring=True,
+            execution_id=metadata.execution_id,
+        )
+
+    async def assess_repair_cycle_container(
+        self, metadata: ContainerMetadata
+    ) -> RecoveryAssessment:
+        """
+        Assess recovery action for a repair cycle container.
+
+        Evaluates repair cycle container state using specialized logic:
+        1. Check for completed result in storage
+        2. Check container age vs REPAIR_CYCLE_AGE_THRESHOLD (2 hours)
+        3. Check checkpoint staleness (>60 minutes) if available
+        4. Kill if stale checkpoint + old age, or no checkpoint + old age
+        5. Reconnect with monitoring if fresh checkpoint and recent age
+
+        Args:
+            metadata: Container metadata extracted from Docker labels
+
+        Returns:
+            RecoveryAssessment: Decision for this repair cycle container
+
+        Raises:
+            ContainerError: If container inspection fails
+            StorageError: If storage operations fail
+        """
+        # Step 1: Check for completed result in storage
+        result_key = (
+            f"repair_cycle:result:{metadata.project_id}:"
+            f"{metadata.work_item_id}:{metadata.pipeline_run_id}"
+        )
+
+        try:
+            result = await self.tracking_storage.get(result_key)
+
+            if result and result.get("overall_success") is not None:
+                # Repair cycle completed during downtime - will be processed separately
+                logger.info(
+                    f"Found completed repair cycle result in storage for "
+                    f"{metadata.project_id}/{metadata.work_item_id}/{metadata.pipeline_run_id}"
+                )
+                return RecoveryAssessment(
+                    container_id=metadata.container_id,
+                    action="kill",
+                    reason="completed_during_downtime",
+                    with_monitoring=False,
+                    execution_id=None,
+                )
+        except StorageError as e:
+            logger.warning(
+                f"Failed to check for completed repair result {result_key}: {e}",
+                exc_info=True,
+            )
+            # Continue with other checks
+
+        # Step 2: Check container age
+        now = datetime.now(timezone.utc)
+        age = now - metadata.created_at
+
+        if age > REPAIR_CYCLE_AGE_THRESHOLD:
+            # Container is old (>2 hours) - check checkpoint staleness
+            checkpoint = None
+
+            if self.checkpoint_store and metadata.pipeline_run_id:
+                try:
+                    # Try to get checkpoint - use generic "all" test type for repair cycles
+                    checkpoint = await self.checkpoint_store.get_checkpoint(
+                        pipeline_run_id=metadata.pipeline_run_id, test_type="all"
+                    )
+                except (KeyError, AttributeError, ValueError) as e:
+                    logger.warning(
+                        f"Failed to get checkpoint for {metadata.pipeline_run_id}: {e}",
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_CHECKPOINT_ERROR, "error_type": "expected"}
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"UNEXPECTED error getting checkpoint for {metadata.pipeline_run_id}: {e}",
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_CHECKPOINT_ERROR, "error_type": "unexpected"}
+                    )
+
+            if checkpoint:
+                # We have a checkpoint - check if it's stale
+                # checkpoint.timestamp is an ISO 8601 string, parse it
+                try:
+                    checkpoint_time = dateparser.isoparse(checkpoint.timestamp)
+                except (ValueError, TypeError, AttributeError) as e:
+                    logger.error(
+                        f"Failed to parse checkpoint timestamp for repair cycle {metadata.pipeline_run_id}: {e}. "
+                        f"Treating checkpoint as stale and will kill container. "
+                        f"Raw timestamp value: {getattr(checkpoint, 'timestamp', 'MISSING')}",
+                        exc_info=True,
+                        extra={
+                            "error_id": ErrorRegistry.ERR_CHECKPOINT_ERROR,
+                            "error_type": "expected",
+                            "container_id": metadata.container_id,
+                            "pipeline_run_id": metadata.pipeline_run_id,
+                            "raw_checkpoint_timestamp": getattr(checkpoint, "timestamp", "MISSING"),
+                            "impact": "checkpoint_treated_as_stale_will_kill_container",
+                        }
+                    )
+                    # Can't parse timestamp, treat as stale
+                    checkpoint_time = now - CHECKPOINT_STALENESS_THRESHOLD - timedelta(
+                        minutes=1
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"UNEXPECTED error parsing checkpoint timestamp for repair cycle {metadata.pipeline_run_id}: {e}. "
+                        f"Treating checkpoint as stale and will kill container.",
+                        exc_info=True,
+                        extra={
+                            "error_id": ErrorRegistry.ERR_CHECKPOINT_ERROR,
+                            "error_type": "unexpected",
+                            "container_id": metadata.container_id,
+                            "pipeline_run_id": metadata.pipeline_run_id,
+                            "raw_checkpoint_timestamp": getattr(checkpoint, "timestamp", "MISSING"),
+                            "impact": "checkpoint_treated_as_stale_will_kill_container",
+                        }
+                    )
+                    # Can't parse timestamp, treat as stale
+                    checkpoint_time = now - CHECKPOINT_STALENESS_THRESHOLD - timedelta(
+                        minutes=1
+                    )
+
+                checkpoint_age = now - checkpoint_time
+                if checkpoint_age > CHECKPOINT_STALENESS_THRESHOLD:
+                    # Stale checkpoint + old container → kill
+                    logger.info(
+                        f"Repair cycle container {metadata.container_id} has stale checkpoint "
+                        f"(age {checkpoint_age.total_seconds():.0f}s) and container age {age.total_seconds():.0f}s"
+                    )
+                    return RecoveryAssessment(
+                        container_id=metadata.container_id,
+                        action="kill",
+                        reason="checkpoint_stale",
+                        with_monitoring=False,
+                        execution_id=None,
+                    )
+                else:
+                    # Fresh checkpoint despite old container age → reconnect with monitoring
+                    logger.info(
+                        f"Repair cycle container {metadata.container_id} has fresh checkpoint, "
+                        f"reconnecting with monitoring"
+                    )
+                    return RecoveryAssessment(
+                        container_id=metadata.container_id,
+                        action="reconnect",
+                        reason="valid_repair_cycle",
+                        with_monitoring=True,
+                        execution_id=metadata.execution_id,
+                    )
+            else:
+                # No checkpoint and old container → kill
+                logger.info(
+                    f"Repair cycle container {metadata.container_id} has no checkpoint "
+                    f"and container age {age.total_seconds():.0f}s"
+                )
+                return RecoveryAssessment(
+                    container_id=metadata.container_id,
+                    action="kill",
+                    reason="no_checkpoint",
+                    with_monitoring=False,
+                    execution_id=None,
+                )
+        else:
+            # Container is recent (<2 hours) → assume it's making progress, reconnect
+            logger.info(
+                f"Repair cycle container {metadata.container_id} is recent "
+                f"(age {age.total_seconds():.0f}s), reconnecting"
+            )
+            return RecoveryAssessment(
+                container_id=metadata.container_id,
+                action="reconnect",
+                reason="valid_repair_cycle",
+                with_monitoring=True,
+                execution_id=metadata.execution_id,
+            )
+
+    async def execute_recovery_action(self, assessment: RecoveryAssessment) -> bool:
+        """
+        Execute reconnect or kill action.
+
+        Performs the recovery action determined during assessment:
+        - reconnect: Re-register in tracking storage and restart monitoring thread
+        - kill: Kill container and mark execution failed
+
+        Args:
+            assessment: Recovery assessment with determined action
+
+        Returns:
+            bool: True if action succeeded, False otherwise
+
+        Raises:
+            ContainerError: If Docker API operations fail
+        """
+        loop = asyncio.get_event_loop()
+
+        def _get_container():
+            """Get container synchronously."""
+            client = self._get_client()
+            try:
+                return client.containers.get(assessment.container_id)
+            except DockerNotFound as e:
+                logger.warning(
+                    f"Container {assessment.container_id} not found: {e}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_CONTAINER_NOT_FOUND, "error_type": "expected"}
+                )
+                return None
+            except Exception as e:
+                logger.error(
+                    f"UNEXPECTED error getting container {assessment.container_id}: {e}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR, "error_type": "unexpected"}
+                )
+                return None
+
+        try:
+            # Get container in executor
+            container = await loop.run_in_executor(None, _get_container)
+            if container is None:
+                return False
+
+            if assessment.action == "reconnect":
+                logger.info(
+                    f"Reconnecting container {assessment.container_id} "
+                    f"with execution_id {assessment.execution_id}"
+                )
+
+                # Re-register container in tracking storage with 2-hour TTL
+                container_info = {
+                    "containerName": container.name,
+                    "agent": container.labels.get(CONTAINER_LABEL_AGENT),
+                    "project": container.labels.get(CONTAINER_LABEL_PROJECT),
+                    "taskId": container.labels.get(CONTAINER_LABEL_TASK_ID),
+                    "startedAt": datetime.now(timezone.utc).isoformat(),
+                    "recovered": "true",
+                }
+
+                try:
+                    # Store in tracking storage with TTL of 7200 seconds (2 hours)
+                    key = f"agent:container:{container.name}"
+                    await self.tracking_storage.set(key, container_info, ttl=7200)
+                    logger.debug(f"Registered container {container.name} in tracking storage")
+                except StorageError as e:
+                    logger.warning(
+                        f"Failed to register container {container.name} in tracking storage: {e}",
+                        exc_info=True,
+                    )
+                    # Continue anyway - container is still running
+
+                # For reconnect, container is already running
+                # It will be picked up by monitoring system
+                return True
+
+            elif assessment.action == "kill":
+                logger.info(
+                    f"Killing container {assessment.container_id} "
+                    f"(reason: {assessment.reason})"
+                )
+
+                # Extract metadata BEFORE killing container
+                agent = container.labels.get(CONTAINER_LABEL_AGENT)
+                project = container.labels.get(CONTAINER_LABEL_PROJECT)
+                work_item_id = container.labels.get(CONTAINER_LABEL_WORK_ITEM_ID)
+
+                def _kill_container():
+                    """Kill and remove container synchronously."""
+                    try:
+                        # Kill the container with SIGKILL
+                        container.kill()
+                    except DockerNotFound as kill_error:
+                        logger.warning(
+                            f"Container {assessment.container_id} not found or already killed: {kill_error}",
+                            exc_info=True,
+                            extra={"error_id": ErrorRegistry.ERR_CONTAINER_NOT_FOUND, "error_type": "expected"}
+                        )
+                    except Exception as kill_error:
+                        logger.error(
+                            f"UNEXPECTED error killing container {assessment.container_id}: {kill_error}",
+                            exc_info=True,
+                            extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR, "error_type": "unexpected"}
+                        )
+
+                    # Remove the container
+                    try:
+                        container.remove(force=True)
+                        logger.info(f"Removed container {assessment.container_id}")
+                    except DockerNotFound as remove_error:
+                        logger.warning(
+                            f"Container {assessment.container_id} not found or already removed: {remove_error}",
+                            exc_info=True,
+                            extra={"error_id": ErrorRegistry.ERR_CONTAINER_NOT_FOUND, "error_type": "expected"}
+                        )
+                    except Exception as remove_error:
+                        logger.error(
+                            f"UNEXPECTED error removing container {assessment.container_id}: {remove_error}",
+                            exc_info=True,
+                            extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR, "error_type": "unexpected"}
+                        )
+                # Kill container in executor
+                await loop.run_in_executor(None, _kill_container)
+
+                # Mark execution failed if we have execution info
+                if assessment.execution_id and self.execution_tracker:
+                    try:
+
+                        if project and work_item_id and agent:
+                            # Try to mark execution failed if tracker supports it
+                            if hasattr(self.execution_tracker, "mark_execution_failed"):
+                                await self.execution_tracker.mark_execution_failed(
+                                    project=project,
+                                    work_item_id=work_item_id,
+                                    agent=agent,
+                                    reason=assessment.reason,
+                                )
+                                logger.debug(
+                                    f"Marked execution failed for {work_item_id} with reason {assessment.reason}"
+                                )
+                    except (KeyError, AttributeError, ValueError) as mark_error:
+                        logger.warning(
+                            f"Failed to mark execution failed for {assessment.execution_id} (expected error): {mark_error}",
+                            exc_info=True,
+                            extra={"error_id": ErrorRegistry.ERR_CONTAINER_EXECUTION_ERROR, "error_type": "expected"}
+                        )
+                    except Exception as mark_error:
+                        logger.error(
+                            f"UNEXPECTED error marking execution failed for {assessment.execution_id}: {mark_error}",
+                            exc_info=True,
+                            extra={"error_id": ErrorRegistry.ERR_CONTAINER_EXECUTION_ERROR, "error_type": "unexpected"}
+                        )
+                return True
+
+        except (KeyError, AttributeError) as e:
+            logger.error(
+                f"UNEXPECTED error with container or metadata during recovery for {assessment.container_id}: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR, "error_type": "unexpected"}
+            )
+            return False
+        except Exception as e:
+            logger.error(
+                f"UNEXPECTED error executing recovery action for {assessment.container_id}: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR, "error_type": "unexpected"}
+            )
+            return False
+
+    async def process_orphaned_repair_results(self) -> int:
+        """
+        Process completed repair cycle results in storage.
+
+        Handles repair cycle containers that may have completed while
+        the orchestrator was offline. Scans storage for results matching
+        the pattern `repair_cycle:result:{project}:{work_item_id}:{run_id}`
+        and processes unprocessed completed results.
+
+        Returns:
+            int: Number of repair cycles processed
+
+        Raises:
+            StorageError: If storage operations fail
+        """
+        processed = 0
+        logger.info("Processing orphaned repair cycle results")
+
+        try:
+            # Scan storage for repair cycle results
+            # Key pattern: repair_cycle:result:{project}:{work_item_id}:{run_id}
+            result_keys = await self.tracking_storage.scan("repair_cycle:result:*")
+
+            if not result_keys:
+                logger.info("No orphaned repair cycle results found")
+                return 0
+
+            logger.info(f"Found {len(result_keys)} potential repair cycle results")
+
+            for key in result_keys:
+                try:
+                    result = await self.tracking_storage.get(key)
+                    if not result:
+                        logger.warning(f"Result key exists but value is empty: {key}")
+                        continue
+
+                    # Check if result has been processed already
+                    if result.get("processed"):
+                        logger.debug(f"Repair cycle result already processed: {key}")
+                        continue
+
+                    # Check if repair cycle is complete (has overall_success status)
+                    if result.get("overall_success") is None:
+                        logger.debug(
+                            f"Repair cycle result not yet complete: {key}"
+                        )
+                        continue
+
+                    # Parse key to extract metadata
+                    # Example: repair_cycle:result:myproject:100:abc12345
+                    parts = key.split(":")
+                    if len(parts) < 5:
+                        logger.warning(f"Invalid result key format: {key}")
+                        continue
+
+                    project_id = parts[2]
+                    work_item_id = parts[3]
+                    run_id = ":".join(
+                        parts[4:]
+                    )  # Handle run_ids that may contain colons
+
+                    logger.info(
+                        f"Processing completed repair cycle result: "
+                        f"{project_id}/{work_item_id}/{run_id}"
+                    )
+
+                    # Mark as processed before processing to avoid reprocessing on failures
+                    result["processed"] = True
+                    await self.tracking_storage.set(
+                        key, result, ttl=86400
+                    )  # 24 hour retention
+
+                    # NOTE: This adapter marks results as processed in storage for deduplication.
+                    # The actual completion flow (work item advancement, auto-commit, cleanup, etc.)
+                    # should be handled by the ContainerRecoveryService or a delegated
+                    # repair cycle completion service. This adapter's responsibility is limited
+                    # to identifying completed results and preventing duplicate processing.
+
+                    processed += 1
+
+                except (KeyError, ValueError, IndexError) as e:
+                    logger.warning(
+                        f"Invalid repair cycle result format {key}: {e}",
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR, "error_type": "expected"}
+                    )
+                except StorageError as e:
+                    logger.warning(
+                        f"Storage error processing repair cycle result {key}: {e}",
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_STORAGE_ERROR, "error_type": "expected"}
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"UNEXPECTED error processing repair cycle result {key}: {e}",
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR, "error_type": "unexpected"}
+                    )
+            logger.info(f"Processed {processed} orphaned repair cycle results")
+
+        except StorageError as e:
+            logger.error(
+                f"Storage error during orphaned repair result processing: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_STORAGE_ERROR, "error_type": "expected"}
+            )
+            raise
+        except (KeyError, ValueError) as e:
+            logger.warning(
+                f"Invalid data during orphaned repair result processing: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR, "error_type": "expected"}
+            )
+        except Exception as e:
+            logger.error(
+                f"UNEXPECTED error processing orphaned repair results: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR, "error_type": "unexpected"}
+            )
+        return processed
+
+    async def recover_or_cleanup_containers(self) -> "RecoveryResult":
+        """Execute full recovery/cleanup cycle - DEPRECATED.
+
+        This method is kept for interface compatibility but should not be called directly.
+        The recovery orchestration logic has been moved to ContainerRecoveryService.
+
+        Use ContainerRecoveryService which coordinates:
+        1. Container discovery via get_running_agent_containers()
+        2. Container assessment via assess_container()
+        3. Recovery action execution via execute_recovery_action()
+        4. Result collection and event emission
+
+        Returns:
+            RecoveryResult: Placeholder result (not used)
+
+        Raises:
+            NotImplementedError: This method should be called through ContainerRecoveryService
+        """
+        raise NotImplementedError(
+            "recover_or_cleanup_containers is orchestrated by ContainerRecoveryService. "
+            "Call the service instead of invoking this method directly."
+        )

@@ -32,6 +32,7 @@ from codetoreum.ports.output.pipeline_queue_service import (
     QueueValidationError,
 )
 from codetoreum.ports.output.board_service import IBoardService
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -490,7 +491,7 @@ class InMemoryQueueService(IPipelineQueueService):
                     "board_id": board_id,
                     "column": column,
                     "error_type": type(e).__name__,
-                }
+                    "error_id": ErrorRegistry.ERR_PIPELINE_LOCK_ERROR}
             )
             # Don't raise - allow queue to remain in current state
             # Next sync or lock operation will retry

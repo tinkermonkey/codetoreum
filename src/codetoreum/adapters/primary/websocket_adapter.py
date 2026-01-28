@@ -35,6 +35,7 @@ from codetoreum.config import (
     DEFAULT_WS_RATE_LIMIT_WINDOW,
 )
 from codetoreum.domain.events import DomainEvent
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -339,7 +340,11 @@ class ConnectionManager:
                 self._redis_initialized = True
                 logger.info("Redis pub/sub set up for WebSocket message distribution")
         except Exception as e:
-            logger.error(f"Failed to setup Redis pub/sub: {e}")
+            logger.error(
+                f"Failed to setup Redis pub/sub: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+            )
 
     async def _handle_redis_event(self, message: Dict[str, Any]) -> None:
         """
@@ -356,7 +361,11 @@ class ConnectionManager:
                 # Broadcast to local connections only (not back to Redis)
                 await self._broadcast_event_local(event_dict)
         except Exception as e:
-            logger.error(f"Error handling Redis event: {e}")
+            logger.error(
+                f"Error handling Redis event: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+            )
 
     async def connect(self, websocket: WebSocket, connection_id: str) -> bool:
         """
@@ -449,11 +458,19 @@ class ConnectionManager:
                     json.dumps(connection_data),
                 )
             except Exception as redis_error:
-                logger.error(f"Redis setex operation failed for connection {connection_id}: {redis_error}")
+                logger.error(
+                    f"Redis setex operation failed for connection {connection_id}: {redis_error}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_REDIS_ERROR}
+                )
                 raise
 
         except Exception as e:
-            logger.error(f"Failed to persist connection state for {connection_id}: {e}")
+            logger.error(
+                f"Failed to persist connection state for {connection_id}: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+            )
 
     async def _remove_persisted_connection_state(self, connection_id: str) -> None:
         """
@@ -468,10 +485,18 @@ class ConnectionManager:
                 try:
                     await self.redis_client.delete(key)
                 except Exception as redis_error:
-                    logger.error(f"Redis delete operation failed for connection {connection_id}: {redis_error}")
+                    logger.error(
+                        f"Redis delete operation failed for connection {connection_id}: {redis_error}",
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_REDIS_ERROR}
+                    )
                     # Don't raise - this is cleanup, best effort
         except Exception as e:
-            logger.error(f"Failed to remove persisted connection state for {connection_id}: {e}")
+            logger.error(
+                f"Failed to remove persisted connection state for {connection_id}: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+            )
 
     def _create_tracked_task(self, coro):
         """
@@ -673,7 +698,11 @@ class ConnectionManager:
             return True
 
         except Exception as e:
-            logger.error(f"Error sending message to {connection_id}: {e}")
+            logger.error(
+                f"Error sending message to {connection_id}: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+            )
             # Connection closed, clean up
             self.disconnect(connection_id)
             return False
@@ -699,7 +728,11 @@ class ConnectionManager:
             await conn_state.websocket.send_json(warning_message)
             self.stats["flow_control_warnings"] += 1
         except Exception as e:
-            logger.error(f"Failed to send flow control warning: {e}")
+            logger.error(
+                f"Failed to send flow control warning: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+            )
 
     async def _send_error_and_close(
         self, connection_id: str, code: int, reason: str
@@ -838,7 +871,11 @@ class ConnectionManager:
             try:
                 await self.redis_pubsub.publish_event(event)
             except Exception as e:
-                logger.error(f"Failed to publish event to Redis: {e}")
+                logger.error(
+                    f"Failed to publish event to Redis: {e}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_REDIS_ERROR}
+                )
                 # Fall back to local broadcast
                 await self._broadcast_event_local(event_dict)
         else:
@@ -1182,7 +1219,11 @@ class WebSocketAdapter:
                 self.manager.disconnect(connection_id)
             except ValueError as e:
                 # Invalid message format or data
-                logger.error(f"ValueError in WebSocket handler for {connection_id}: {e}", exc_info=True)
+                logger.error(
+                    f"ValueError in WebSocket handler for {connection_id}: {e}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_INVALID_INPUT}
+                )
                 try:
                     await self.manager.send_personal_message(
                         ErrorMessage(
@@ -1198,7 +1239,11 @@ class WebSocketAdapter:
                     self.manager.disconnect(connection_id)
             except json.JSONDecodeError as e:
                 # JSON parsing error
-                logger.error(f"JSON decode error for {connection_id}: {e}", exc_info=True)
+                logger.error(
+                    f"JSON decode error for {connection_id}: {e}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_INVALID_INPUT}
+                )
                 try:
                     await self.manager.send_personal_message(
                         ErrorMessage(
@@ -1214,7 +1259,11 @@ class WebSocketAdapter:
                     self.manager.disconnect(connection_id)
             except Exception as e:
                 # Unexpected error
-                logger.error(f"Unexpected WebSocket error for client {connection_id}: {e}", exc_info=True)
+                logger.error(
+                    f"Unexpected WebSocket error for client {connection_id}: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_UNHANDLED_EXCEPTION"}
+                )
                 try:
                     await self.manager.send_personal_message(
                         ErrorMessage(
@@ -1272,8 +1321,11 @@ class WebSocketAdapter:
                         {"type": "ping", "timestamp": datetime.utcnow().isoformat()}
                     )
                 except Exception as e:
-                    logger.error(f"Failed to send heartbeat ping: {e}")
-                    self.manager.disconnect(connection_id)
+                    logger.error(
+                        f"Failed to send heartbeat ping: {e}",
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+                    )
                     return
 
         except asyncio.CancelledError:
@@ -1329,7 +1381,11 @@ class WebSocketAdapter:
             )
 
         except Exception as e:
-            logger.error(f"Failed to process subscribe message: {e}")
+            logger.error(
+                f"Failed to process subscribe message: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_HANDLER_EXECUTION}
+            )
             await self.manager.send_personal_message(
                 ErrorMessage(
                     code="subscribe_failed",

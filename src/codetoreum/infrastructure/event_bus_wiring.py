@@ -23,6 +23,7 @@ from codetoreum.infrastructure.event_bus_protocols import (
     IPipelineLockService,
     ICodeReviewService,
 )
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -204,7 +205,7 @@ class EventBusWiring:
             logger.error(
                 f"Error publishing event in background task: {e}",
                 exc_info=True,
-                extra={"task_id": id(task)}
+                extra={"task_id": id(task), "error_id": ErrorRegistry.ERR_EVENT_BUS_ERROR}
             )
             # TODO: Track metric for background task failures
             # TODO: Consider emitting system event for monitoring

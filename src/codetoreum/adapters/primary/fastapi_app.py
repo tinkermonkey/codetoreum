@@ -14,6 +14,8 @@ This is NOT a multi-user system - it's designed for single-tenant deployments
 and development environments.
 """
 
+import asyncio
+import logging
 import os
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional
@@ -63,6 +65,7 @@ from codetoreum.adapters.primary.routers.metrics import create_metrics_router
 from codetoreum.adapters.primary.routers.workspace import create_workspace_router
 from codetoreum.adapters.primary.routers.events import create_events_router
 from codetoreum.infrastructure.auth import SimpleTokenAuthManager
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.input.agent_command import IAgentCommandPort
 from codetoreum.ports.input.agent_query import IAgentQueryPort
 from codetoreum.ports.input.config_command import IConfigurationCommandPort
@@ -80,6 +83,9 @@ from codetoreum.ports.input.orchestration_command import IOrchestrationCommandPo
 from codetoreum.ports.input.work_item_command import IWorkItemCommandPort
 from codetoreum.ports.input.work_item_query import IWorkItemQueryPort
 from codetoreum.ports.output.event_store import IEventStore
+
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================================
@@ -153,6 +159,34 @@ async def lifespan(app: FastAPI):
     # Note: OpenTelemetry instrumentation is now done at module level
     # (see bottom of this file, after app = create_development_app())
 
+    # Run container recovery on startup if available
+    if hasattr(app.state, "container_recovery_service"):
+        try:
+            logger.info("Starting container recovery process")
+            recovery_service = app.state.container_recovery_service
+            result = await asyncio.wait_for(
+                recovery_service.recover_or_cleanup_containers(),
+                timeout=300.0  # 5 minute timeout
+            )
+            logger.info(
+                f"Container recovery completed: "
+                f"{result.recovered} recovered, "
+                f"{result.killed} killed, "
+                f"{result.errors} errors"
+            )
+        except asyncio.TimeoutError:
+            logger.error(
+                "Container recovery timed out after 5 minutes",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_EXECUTION_TIMEOUT}
+            )
+        except Exception as e:
+            logger.error(
+                "Container recovery failed",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR}
+            )
+
     # Print authentication info if auth manager exists
     if hasattr(app.state, "auth_manager"):
         auth_manager: SimpleTokenAuthManager = app.state.auth_manager
@@ -202,6 +236,7 @@ def create_app(
     auth_secret_key: Optional[str] = None,
     disable_auth: bool = False,
     cors_origins: Optional[list] = None,
+    container_recovery_service: Optional[Any] = None,
 ) -> FastAPI:
     """
     Create and configure FastAPI application.
@@ -230,6 +265,7 @@ def create_app(
         auth_secret_key: Optional secret key for JWT signing. If not provided, one will be generated.
         disable_auth: If True, authentication is disabled (for development/testing only)
         cors_origins: List of allowed CORS origins
+        container_recovery_service: Optional container recovery service for startup recovery
 
     Returns:
         Configured FastAPI application
@@ -265,6 +301,10 @@ def create_app(
         auth_deps = SimpleAuthDependencies(auth_manager)
         app.state.auth_manager = auth_manager
         app.state.auth_deps = auth_deps
+
+    # Store container recovery service if provided
+    if container_recovery_service is not None:
+        app.state.container_recovery_service = container_recovery_service
 
     # Configure rate limiting
     limiter = Limiter(key_func=get_remote_address, default_limits=[rate_limit])
@@ -723,7 +763,11 @@ def create_app(
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
         """Global exception handler for unhandled errors"""
-        logger.error(f"Unhandled exception: {exc}")
+        logger.error(
+            f"Unhandled exception: {exc}",
+            exc_info=True,
+            extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
+        )
         return JSONResponse(
             status_code=500,
             content={

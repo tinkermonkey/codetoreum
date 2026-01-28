@@ -19,6 +19,7 @@ from typing import Dict, Optional
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from codetoreum.ports.output import DecryptionError, EncryptionError, IEncryptionService
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +101,7 @@ class SimpleEncryptionAdapter(IEncryptionService):
         except EncryptionError:
             raise
         except Exception as e:
-            logger.error(f"Encryption failed: {e}")
+            logger.error(f"Encryption failed: {e}", extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR})
             raise EncryptionError(f"Encryption failed: {e}") from e
 
     async def decrypt(self, ciphertext: str) -> str:
@@ -147,7 +148,7 @@ class SimpleEncryptionAdapter(IEncryptionService):
         except DecryptionError:
             raise
         except Exception as e:
-            logger.error(f"Decryption failed: {e}")
+            logger.error(f"Decryption failed: {e}", extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR})
             raise DecryptionError(f"Decryption failed: {e}") from e
 
     async def rotate_key(self, old_key_id: str, new_key_id: str) -> None:
@@ -180,7 +181,7 @@ class SimpleEncryptionAdapter(IEncryptionService):
         except EncryptionError:
             raise
         except Exception as e:
-            logger.error(f"Key rotation failed: {e}")
+            logger.error(f"Key rotation failed: {e}", extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR})
             raise EncryptionError(f"Key rotation failed: {e}") from e
 
     def add_key(self, key_id: str, key: bytes) -> None:

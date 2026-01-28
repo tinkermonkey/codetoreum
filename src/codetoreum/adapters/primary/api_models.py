@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 
 # ============================================================================
@@ -67,7 +68,7 @@ class ErrorResponse(BaseResponse):
             "example": {
                 "error": "VALIDATION_ERROR",
                 "message": "Invalid request parameters",
-                "error_id": "ERR_VALIDATION_FAILED",
+                "error_id": ErrorRegistry.ERR_VALIDATION_FAILED,
                 "details": [
                     {
                         "field": "work_item_id",

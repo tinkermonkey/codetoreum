@@ -39,6 +39,7 @@ from codetoreum.ports.output.code_review_service import (
     ReviewComment,
 )
 from codetoreum.ports.output.monitoring import MonitoringConfig, MonitoringState, MonitoringStatus
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -181,7 +182,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
                     extra={
                         "event_type": event_type,
                         "handler": handler_name,
-                        "error_id": "ERR_HANDLER_VALIDATION"
+                        "error_id": ErrorRegistry.ERR_VALIDATION_FAILED
                     }
                 )
                 failures.append((handler, e))
@@ -193,7 +194,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
                     extra={
                         "event_type": event_type,
                         "handler": handler_name,
-                        "error_id": "ERR_HANDLER_UNEXPECTED"
+                        "error_id": ErrorRegistry.ERR_HANDLER_EXECUTION
                     }
                 )
                 failures.append((handler, e))
@@ -204,7 +205,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
                 extra={
                     "event_type": event_type,
                     "failure_count": len(failures),
-                    "error_id": "ERR_HANDLER_FAILURES"
+                    "error_id": ErrorRegistry.ERR_HANDLER_EXECUTION
                 }
             )
 
@@ -920,7 +921,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
                         f"Permanent error in PR polling for {project_id}: {e}",
                         exc_info=True,
                         extra={
-                            "error_id": "ERR_CODE_REVIEW_PR_POLLING_PERMANENT",
+                            "error_id": "ERR_REVIEW_ERROR",
                             "project_id": project_id,
                             "error_type": "permanent"
                         }
@@ -982,7 +983,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
                 logger.error(
                     f"Error in polling loop for {project_id}: {e}",
                     exc_info=True,
-                    extra={"error_id": "ERR_CODE_REVIEW_POLLING_LOOP_FAILED", "project_id": project_id}
+                    extra={"error_id": "ERR_REVIEW_ERROR", "project_id": project_id}
                 )
 
     def _adapt_polling_interval(self, project_id: str, changes_detected: int) -> None:

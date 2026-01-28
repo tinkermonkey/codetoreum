@@ -521,7 +521,7 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
                 logger.error(
                     f"Unexpected error in polling loop for {work_item_id}: {e}",
                     exc_info=True,
-                    extra={"error_id": "ERR_DISCUSSION_POLLING_LOOP_FAILED", "work_item_id": work_item_id}
+                    extra={"error_id": "ERR_DISCUSSION_ERROR", "work_item_id": work_item_id}
                 )
                 continue
 

@@ -117,8 +117,9 @@ class RetentionPolicyManager:
 
         except Exception as e:
             error_msg = f"Failed to cleanup audit events: {e}"
-            logger.error(error_msg)
-            stats["errors"].append(error_msg)
+            logger.error(error_msg,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
+            )
 
         stats["end_time"] = datetime.utcnow().isoformat()
         return stats
@@ -163,8 +164,9 @@ class RetentionPolicyManager:
                 logger.info("Audit log cleanup loop cancelled")
                 break
             except Exception as e:
-                logger.error(f"Error in audit log cleanup loop: {e}")
-                # Continue loop even on error
+                logger.error(f"Error in audit log cleanup loop: {e}",
+                    extra={"error_id": ErrorRegistry.ERR_AUDIT_ERROR}
+            )
                 await asyncio.sleep(60)  # Wait 1 minute before retrying
 
     def get_retention_info(self) -> dict:
@@ -191,6 +193,7 @@ class RetentionPolicyManager:
 #
 # from codetoreum.infrastructure.audit.stores import InMemoryAuditStore
 # from codetoreum.infrastructure.audit.retention import RetentionPolicy, RetentionPolicyManager
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 #
 # # Create audit store
 # audit_store = InMemoryAuditStore()

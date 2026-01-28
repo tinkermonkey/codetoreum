@@ -179,7 +179,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to create/update index {index_name}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_INDEX_CREATE_UPDATE_FAILED"}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR}
             )
             raise
 
@@ -300,7 +300,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to get project config {project_id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_PROJECT_CONFIG_GET_FAILED"}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR}
             )
             raise
 
@@ -341,7 +341,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to get project config by name {project_name}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_PROJECT_CONFIG_GET_BY_NAME_FAILED"}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR}
             )
             raise
 
@@ -419,7 +419,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to save project config {config.id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_PROJECT_CONFIG_SAVE_FAILED"}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR}
             )
             raise
 
@@ -459,7 +459,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to get agent config {doc_id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_AGENT_CONFIG_GET_FAILED"}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR}
             )
             raise
 
@@ -535,7 +535,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to save agent config {doc_id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_AGENT_CONFIG_SAVE_FAILED"}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR}
             )
             raise
 
@@ -588,7 +588,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to get pipeline config {project_id}/{pipeline_name}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_CONFIG_STORAGE_PIPELINE_CONFIG_GET_FAILURE"}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR}
             )
             raise
 
@@ -664,7 +664,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to save pipeline config {config.id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_PIPELINE_CONFIG_SAVE_FAILED"}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR}
             )
             raise
 
@@ -705,7 +705,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to get workflow template {template_name}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_WORKFLOW_TEMPLATE_GET_FAILED"}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR}
             )
             raise
 
@@ -781,7 +781,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to save workflow template {template.id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_WORKFLOW_TEMPLATE_SAVE_FAILED"}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR}
             )
             raise
 
@@ -811,7 +811,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to list projects: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_LIST_PROJECTS_FAILED"}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR}
             )
             raise
 
@@ -847,7 +847,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to list agents for project {project_id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_LIST_AGENTS_FAILED"}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR}
             )
             raise
 
@@ -883,7 +883,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to list pipelines for project {project_id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_LIST_PIPELINES_FAILED"}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR}
             )
             raise
 
@@ -909,6 +909,7 @@ class ElasticsearchConfigStorage(IConfigStore):
         try:
             # Sanitize and validate query to prevent injection attacks
             from codetoreum.infrastructure.security import sanitize_search_query, InvalidInputError
+            from codetoreum.infrastructure.error_ids import ErrorRegistry
 
             try:
                 sanitized_query = sanitize_search_query(query, max_length=500)
@@ -990,7 +991,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to search configs: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_SEARCH_CONFIGS_FAILED"}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR}
             )
             raise
 
@@ -1043,7 +1044,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to get config version {config_id} v{version}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_GET_CONFIG_VERSION_FAILED"}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR}
             )
             raise
 
@@ -1093,7 +1094,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to list config versions for {config_id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_LIST_CONFIG_VERSIONS_FAILED"}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR}
             )
             raise
 
@@ -1123,7 +1124,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to delete project config {project_id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_DELETE_PROJECT_CONFIG_FAILED"}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR}
             )
             raise
 
@@ -1160,7 +1161,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to delete agent config {doc_id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_DELETE_AGENT_CONFIG_FAILED"}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR}
             )
             raise
 
@@ -1187,7 +1188,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to check if project exists {project_id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_PROJECT_EXISTS_CHECK_FAILED"}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR}
             )
             raise
 
@@ -1243,7 +1244,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to save history for {config_id} v{version}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_SAVE_HISTORY_FAILED"}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR}
             )
             # Don't raise - history failure shouldn't block config save
 

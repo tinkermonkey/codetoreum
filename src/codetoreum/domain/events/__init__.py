@@ -92,6 +92,13 @@ from .repair_cycle_events import (
     RepairCycleCompletedEvent,
 )
 
+# Container recovery events
+from .container_recovery_events import (
+    ContainerRecoveredEvent,
+    ContainerKilledEvent,
+    ContainerRecoveryCompletedEvent,
+)
+
 __all__ = [
     # Legacy domain events (from events.py)
     "DomainEvent",
@@ -198,4 +205,8 @@ __all__ = [
     "RepairCycleCheckpointFailedEvent",
     "RepairCycleMetricsBackendFailedEvent",
     "RepairCycleCompletedEvent",
+    # Container recovery events
+    "ContainerRecoveredEvent",
+    "ContainerKilledEvent",
+    "ContainerRecoveryCompletedEvent",
 ]

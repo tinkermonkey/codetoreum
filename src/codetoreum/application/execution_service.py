@@ -11,6 +11,15 @@ from codetoreum.domain.agent import Agent
 from codetoreum.domain.agent_execution import AgentExecution, ExecutionStatus
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.project_context import ProjectContext
+from codetoreum.domain.types import (
+    CONTAINER_LABEL_AGENT,
+    CONTAINER_LABEL_EXECUTION_ID,
+    CONTAINER_LABEL_PIPELINE_RUN_ID,
+    CONTAINER_LABEL_PROJECT,
+    CONTAINER_LABEL_TASK_ID,
+    CONTAINER_LABEL_TYPE,
+    CONTAINER_LABEL_WORK_ITEM_ID,
+)
 from codetoreum.domain.value_objects import (
     ContainerConfig,
     ExecutionContext,
@@ -394,6 +403,39 @@ class ExecutionService:
             failure_reason=self._classify_failure(last_error),
         )
 
+    def _build_container_labels(
+        self,
+        execution: AgentExecution,
+        context: ExecutionContext,
+    ) -> Dict[str, str]:
+        """
+        Build Docker labels for container.
+
+        Labels are used by the container recovery service to identify and manage
+        containers at orchestrator startup. All labels are immutable metadata
+        extracted from domain objects.
+
+        Args:
+            execution: Agent execution instance
+            context: Execution context with project and task information
+
+        Returns:
+            Dict[str, str]: Container labels following org.codetoreum.* namespace
+        """
+        labels = {
+            CONTAINER_LABEL_TYPE: "agent",
+            CONTAINER_LABEL_PROJECT: context.project_id,
+            CONTAINER_LABEL_AGENT: execution.agent_id,
+            CONTAINER_LABEL_WORK_ITEM_ID: execution.work_item_id,
+            # In the current phase, execution.id serves as both task_id and execution_id.
+            # Phase 2 recovery service uses these for container identification and tracking.
+            # Future phases may introduce separate task IDs from an external scheduler.
+            CONTAINER_LABEL_TASK_ID: execution.id,
+            CONTAINER_LABEL_PIPELINE_RUN_ID: execution.workflow_id,
+            CONTAINER_LABEL_EXECUTION_ID: execution.id,
+        }
+        return labels
+
     async def execute_with_container(
         self,
         execution: AgentExecution,
@@ -416,6 +458,9 @@ class ExecutionService:
         container_id = None
 
         try:
+            # Build container labels for recovery tracking
+            labels = self._build_container_labels(execution, context)
+
             # Create container
             container_id = await self.container.create(
                 image=container_config.image,
@@ -426,6 +471,7 @@ class ExecutionService:
                 working_dir=container_config.working_dir,
                 user=container_config.user,
                 network=container_config.network,
+                labels=labels,
             )
 
             logger.info(
