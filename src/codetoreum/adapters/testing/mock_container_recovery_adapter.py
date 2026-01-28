@@ -43,6 +43,11 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
         self.failed_actions: set = set()
         self.executed_actions: List[RecoveryAssessment] = []
         self.repair_cycles_to_process: int = 0
+        self.docker_failure_after_count: Optional[int] = None  # Simulate Docker failure after N containers
+        self.docker_failure_counter: int = 0  # Current count of processed containers
+        self.assessment_exceptions: Dict[str, Exception] = {}  # Exceptions to raise during assessment
+        self.checkpoint_store_failures: set = set()  # Container IDs that cause checkpoint store failure
+        self.malformed_storage_keys: List[str] = []  # Malformed keys to simulate storage issues
 
     def add_container(
         self,
@@ -56,6 +61,7 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
         pipeline_run_id: Optional[str] = None,
         created_at: Optional[datetime] = None,
         age_hours: Optional[float] = None,
+        container_type: str = CONTAINER_TYPE_AGENT,
     ) -> ContainerMetadata:
         """
         Add a mock container to the adapter.
@@ -71,6 +77,7 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
             pipeline_run_id: Optional pipeline run ID
             created_at: Optional creation timestamp (defaults to now)
             age_hours: Optional age in hours (used instead of created_at)
+            container_type: Container type (agent or repair-cycle)
 
         Returns:
             ContainerMetadata: The created metadata object
@@ -89,7 +96,7 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
             task_id=task_id,
             created_at=created_at,
             labels=MappingProxyType({
-                "org.codetoreum.type": CONTAINER_TYPE_AGENT,
+                "org.codetoreum.type": container_type,
                 "org.codetoreum.project": project_id,
                 "org.codetoreum.agent": agent_id,
                 "org.codetoreum.task_id": task_id,
@@ -99,7 +106,10 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
             pipeline_run_id=pipeline_run_id,
         )
 
-        self.containers.append(metadata)
+        if container_type == CONTAINER_TYPE_REPAIR_CYCLE:
+            self.repair_cycle_containers.append(metadata)
+        else:
+            self.containers.append(metadata)
         return metadata
 
     def add_repair_cycle_container(
@@ -227,8 +237,23 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
             RecoveryAssessment: Pre-configured assessment, or default reconnect
 
         Raises:
-            ValueError: If container not found in assessments and no default set
+            Exception: If configured to raise an exception for this container
         """
+        # Check if this container should raise an exception
+        if metadata.container_id in self.assessment_exceptions:
+            raise self.assessment_exceptions[metadata.container_id]
+
+        # Check if Docker failure threshold reached
+        if (self.docker_failure_after_count is not None and
+                self.docker_failure_counter >= self.docker_failure_after_count):
+            from codetoreum.ports.exceptions import ContainerError
+            raise ContainerError(
+                f"Docker daemon unavailable (simulated failure after {self.docker_failure_after_count} containers)",
+                error_code="ERR_DOCKER_CONNECTION_FAILED"
+            )
+
+        self.docker_failure_counter += 1
+
         if metadata.container_id in self.assessments:
             assessment = self.assessments[metadata.container_id]
         else:
@@ -268,8 +293,16 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
             RecoveryAssessment: Pre-configured assessment, or default reconnect
 
         Raises:
-            ValueError: If container not found in assessments and no default set
+            StorageError: If checkpoint store is unavailable
         """
+        # Check if checkpoint store should fail for this container
+        if metadata.container_id in self.checkpoint_store_failures:
+            from codetoreum.ports.exceptions import StorageError
+            raise StorageError(
+                f"Checkpoint store unavailable for {metadata.container_id}",
+                error_code="ERR_CHECKPOINT_STORE_UNAVAILABLE"
+            )
+
         if metadata.container_id in self.assessments:
             assessment = self.assessments[metadata.container_id]
         else:
@@ -305,7 +338,19 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
 
         Returns:
             bool: False if container_id is in failed_actions, True otherwise
+
+        Raises:
+            ContainerError: If Docker failure threshold is reached
         """
+        # Check if Docker failure threshold reached
+        if (self.docker_failure_after_count is not None and
+                self.docker_failure_counter > self.docker_failure_after_count):
+            from codetoreum.ports.exceptions import ContainerError
+            raise ContainerError(
+                f"Docker daemon unavailable (simulated failure)",
+                error_code="ERR_DOCKER_CONNECTION_FAILED"
+            )
+
         self.executed_actions.append(assessment)
 
         if assessment.container_id in self.failed_actions:
@@ -327,7 +372,17 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
 
         Returns:
             int: Number of repair cycles (from repair_cycles_to_process)
+
+        Raises:
+            StorageError: If storage has malformed keys
         """
+        # Simulate processing malformed storage keys
+        if self.malformed_storage_keys:
+            logger.warning(
+                f"Found {len(self.malformed_storage_keys)} malformed storage keys, "
+                f"skipping them"
+            )
+
         logger.debug(f"Mock processing {self.repair_cycles_to_process} repair cycles")
         return self.repair_cycles_to_process
 
@@ -356,3 +411,46 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
         self.failed_actions = set()
         self.executed_actions = []
         self.repair_cycles_to_process = 0
+        self.docker_failure_after_count = None
+        self.docker_failure_counter = 0
+        self.assessment_exceptions = {}
+        self.checkpoint_store_failures = set()
+        self.malformed_storage_keys = []
+
+    def set_docker_failure_after_count(self, count: int) -> None:
+        """
+        Simulate Docker API failure after processing N containers.
+
+        Args:
+            count: Number of containers to process before simulating Docker failure
+        """
+        self.docker_failure_after_count = count
+        self.docker_failure_counter = 0
+
+    def set_assessment_exception(self, container_id: str, exception: Exception) -> None:
+        """
+        Configure assessment to raise an exception for a specific container.
+
+        Args:
+            container_id: Container ID that will raise exception
+            exception: Exception to raise during assessment
+        """
+        self.assessment_exceptions[container_id] = exception
+
+    def set_checkpoint_store_failure(self, container_id: str) -> None:
+        """
+        Configure checkpoint store to fail for a specific container.
+
+        Args:
+            container_id: Container ID that will cause checkpoint store failure
+        """
+        self.checkpoint_store_failures.add(container_id)
+
+    def add_malformed_storage_key(self, key: str) -> None:
+        """
+        Add a malformed storage key to simulate storage issues.
+
+        Args:
+            key: Malformed key that doesn't match expected patterns
+        """
+        self.malformed_storage_keys.append(key)
