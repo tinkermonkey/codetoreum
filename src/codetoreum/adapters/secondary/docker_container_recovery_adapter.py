@@ -338,16 +338,31 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
         try:
             created_at = dateparser.isoparse(container.attrs["Created"])
         except (ValueError, TypeError, KeyError) as e:
-            logger.warning(
-                f"Failed to parse created_at for container {container.short_id}: {e}",
+            logger.error(
+                f"Failed to parse created_at timestamp for container {container.short_id}: {e}. "
+                f"Using current time as fallback - age-based recovery decisions will be incorrect. "
+                f"Raw timestamp value: {container.attrs.get('Created', 'MISSING')}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR, "error_type": "expected"}
+                extra={
+                    "error_id": ErrorRegistry.ERR_CONTAINER_ERROR,
+                    "error_type": "expected",
+                    "container_id": container.short_id,
+                    "raw_created": container.attrs.get("Created", "MISSING"),
+                    "impact": "age_based_recovery_decisions_may_be_incorrect",
+                }
             )
         except Exception as e:
             logger.error(
-                f"UNEXPECTED error parsing created_at for container {container.short_id}: {e}",
+                f"UNEXPECTED error parsing created_at for container {container.short_id}: {e}. "
+                f"Using current time as fallback - age-based recovery decisions will be incorrect.",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR, "error_type": "unexpected"}
+                extra={
+                    "error_id": ErrorRegistry.ERR_CONTAINER_ERROR,
+                    "error_type": "unexpected",
+                    "container_id": container.short_id,
+                    "raw_created": container.attrs.get("Created", "MISSING"),
+                    "impact": "age_based_recovery_decisions_may_be_incorrect",
+                }
             )
         finally:
             # Use current time as fallback if parsing failed
@@ -597,10 +612,19 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                 try:
                     checkpoint_time = dateparser.isoparse(checkpoint.timestamp)
                 except (ValueError, TypeError, AttributeError) as e:
-                    logger.warning(
-                        f"Failed to parse checkpoint timestamp: {e}",
+                    logger.error(
+                        f"Failed to parse checkpoint timestamp for repair cycle {metadata.pipeline_run_id}: {e}. "
+                        f"Treating checkpoint as stale and will kill container. "
+                        f"Raw timestamp value: {getattr(checkpoint, 'timestamp', 'MISSING')}",
                         exc_info=True,
-                        extra={"error_id": ErrorRegistry.ERR_CHECKPOINT_ERROR, "error_type": "expected"}
+                        extra={
+                            "error_id": ErrorRegistry.ERR_CHECKPOINT_ERROR,
+                            "error_type": "expected",
+                            "container_id": metadata.container_id,
+                            "pipeline_run_id": metadata.pipeline_run_id,
+                            "raw_checkpoint_timestamp": getattr(checkpoint, "timestamp", "MISSING"),
+                            "impact": "checkpoint_treated_as_stale_will_kill_container",
+                        }
                     )
                     # Can't parse timestamp, treat as stale
                     checkpoint_time = now - CHECKPOINT_STALENESS_THRESHOLD - timedelta(
@@ -608,9 +632,17 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                     )
                 except Exception as e:
                     logger.error(
-                        f"UNEXPECTED error parsing checkpoint timestamp: {e}",
+                        f"UNEXPECTED error parsing checkpoint timestamp for repair cycle {metadata.pipeline_run_id}: {e}. "
+                        f"Treating checkpoint as stale and will kill container.",
                         exc_info=True,
-                        extra={"error_id": ErrorRegistry.ERR_CHECKPOINT_ERROR, "error_type": "unexpected"}
+                        extra={
+                            "error_id": ErrorRegistry.ERR_CHECKPOINT_ERROR,
+                            "error_type": "unexpected",
+                            "container_id": metadata.container_id,
+                            "pipeline_run_id": metadata.pipeline_run_id,
+                            "raw_checkpoint_timestamp": getattr(checkpoint, "timestamp", "MISSING"),
+                            "impact": "checkpoint_treated_as_stale_will_kill_container",
+                        }
                     )
                     # Can't parse timestamp, treat as stale
                     checkpoint_time = now - CHECKPOINT_STALENESS_THRESHOLD - timedelta(

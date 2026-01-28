@@ -596,3 +596,212 @@ class TestDockerContainerRecoveryAction:
 
         assert assessment.action == "kill"
         assert assessment.reason == "repair_cycle_wrong_assessment_path"
+
+
+class TestTimestampParsingErrors:
+    """Tests for timestamp parsing failure handling with error logging."""
+
+    def test_extract_metadata_invalid_created_timestamp_format(self, caplog):
+        """Should log error when created_at timestamp is invalid format."""
+        execution_tracker = MagicMock()
+        tracking_storage = MagicMock()
+
+        adapter = DockerContainerRecoveryAdapter(
+            execution_tracker=execution_tracker, tracking_storage=tracking_storage
+        )
+
+        # Mock Docker container with invalid timestamp
+        container = MagicMock()
+        container.id = "abc123def456"
+        container.short_id = "abc123"
+        container.name = "test-container"
+        container.attrs = {
+            "Created": "invalid-timestamp-format",
+            "Config": {
+                "Labels": {
+                    CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
+                    CONTAINER_LABEL_PROJECT: "proj-1",
+                    CONTAINER_LABEL_AGENT: "agent-1",
+                    CONTAINER_LABEL_TASK_ID: "task-1",
+                }
+            },
+        }
+
+        metadata = adapter._extract_metadata(container)
+
+        # Should still return metadata but with current time as created_at
+        assert metadata is not None
+        assert metadata.container_id == "abc123def456"
+        # Verify error was logged with proper context
+        assert "Failed to parse created_at timestamp" in caplog.text
+        assert "raw_timestamp" in caplog.text or "Created" in caplog.text
+
+    def test_extract_metadata_missing_created_timestamp(self, caplog):
+        """Should log error when created_at timestamp is missing."""
+        execution_tracker = MagicMock()
+        tracking_storage = MagicMock()
+
+        adapter = DockerContainerRecoveryAdapter(
+            execution_tracker=execution_tracker, tracking_storage=tracking_storage
+        )
+
+        # Mock Docker container without Created field
+        container = MagicMock()
+        container.id = "abc123def456"
+        container.short_id = "abc123"
+        container.name = "test-container"
+        container.attrs = {
+            "Config": {
+                "Labels": {
+                    CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
+                    CONTAINER_LABEL_PROJECT: "proj-1",
+                    CONTAINER_LABEL_AGENT: "agent-1",
+                    CONTAINER_LABEL_TASK_ID: "task-1",
+                }
+            },
+        }
+
+        metadata = adapter._extract_metadata(container)
+
+        # Should still return metadata but with current time as created_at
+        assert metadata is not None
+        assert metadata.container_id == "abc123def456"
+        # Verify error was logged with proper context indicating MISSING
+        assert "Failed to parse created_at timestamp" in caplog.text
+        assert "MISSING" in caplog.text
+
+    def test_extract_metadata_null_created_timestamp(self, caplog):
+        """Should log error when created_at timestamp is null."""
+        execution_tracker = MagicMock()
+        tracking_storage = MagicMock()
+
+        adapter = DockerContainerRecoveryAdapter(
+            execution_tracker=execution_tracker, tracking_storage=tracking_storage
+        )
+
+        # Mock Docker container with null Created field
+        container = MagicMock()
+        container.id = "abc123def456"
+        container.short_id = "abc123"
+        container.name = "test-container"
+        container.attrs = {
+            "Created": None,
+            "Config": {
+                "Labels": {
+                    CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
+                    CONTAINER_LABEL_PROJECT: "proj-1",
+                    CONTAINER_LABEL_AGENT: "agent-1",
+                    CONTAINER_LABEL_TASK_ID: "task-1",
+                }
+            },
+        }
+
+        metadata = adapter._extract_metadata(container)
+
+        # Should still return metadata but with current time as created_at
+        assert metadata is not None
+        # Verify error was logged indicating impact on age-based decisions
+        assert "Failed to parse created_at timestamp" in caplog.text
+        assert "age-based recovery decisions will be incorrect" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_assess_repair_cycle_checkpoint_parse_error(self, caplog):
+        """Should log error when checkpoint timestamp cannot be parsed."""
+        execution_tracker = AsyncMock()
+        tracking_storage = AsyncMock()
+        checkpoint_store = AsyncMock()
+
+        adapter = DockerContainerRecoveryAdapter(
+            execution_tracker=execution_tracker,
+            tracking_storage=tracking_storage,
+            checkpoint_store=checkpoint_store,
+        )
+
+        # Recent container (within 2 hours) with old container age check
+        created_at = datetime.now(timezone.utc) - timedelta(hours=3)
+        from codetoreum.ports.output.container_recovery import ContainerMetadata
+
+        metadata = ContainerMetadata(
+            container_id="container-1",
+            container_name="test-container",
+            project_id="proj-1",
+            agent_id="agent-1",
+            task_id="task-1",
+            created_at=created_at,
+            labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: "repair-cycle",
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
+            work_item_id="work-123",
+            pipeline_run_id="run-456",
+            execution_id="exec-789",
+        )
+
+        # Mock checkpoint with invalid timestamp
+        mock_checkpoint = MagicMock()
+        mock_checkpoint.timestamp = "invalid-timestamp-format"
+        checkpoint_store.get_checkpoint.return_value = mock_checkpoint
+
+        # Mock storage get
+        tracking_storage.get.return_value = None
+
+        assessment = await adapter.assess_repair_cycle_container(metadata)
+
+        # Should kill container (checkpoint unparseable = stale)
+        assert assessment.action == "kill"
+        assert assessment.reason == "checkpoint_stale"
+        # Verify error was logged indicating impact
+        assert "Failed to parse checkpoint timestamp" in caplog.text
+        assert "will kill container" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_assess_repair_cycle_checkpoint_null_timestamp(self, caplog):
+        """Should log error when checkpoint timestamp is None."""
+        execution_tracker = AsyncMock()
+        tracking_storage = AsyncMock()
+        checkpoint_store = AsyncMock()
+
+        adapter = DockerContainerRecoveryAdapter(
+            execution_tracker=execution_tracker,
+            tracking_storage=tracking_storage,
+            checkpoint_store=checkpoint_store,
+        )
+
+        # Old container (beyond 2 hours) with null checkpoint timestamp
+        created_at = datetime.now(timezone.utc) - timedelta(hours=3)
+        from codetoreum.ports.output.container_recovery import ContainerMetadata
+
+        metadata = ContainerMetadata(
+            container_id="container-1",
+            container_name="test-container",
+            project_id="proj-1",
+            agent_id="agent-1",
+            task_id="task-1",
+            created_at=created_at,
+            labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: "repair-cycle",
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
+            work_item_id="work-123",
+            pipeline_run_id="run-456",
+            execution_id="exec-789",
+        )
+
+        # Mock checkpoint with null timestamp
+        mock_checkpoint = MagicMock()
+        mock_checkpoint.timestamp = None
+        checkpoint_store.get_checkpoint.return_value = mock_checkpoint
+
+        # Mock storage get
+        tracking_storage.get.return_value = None
+
+        assessment = await adapter.assess_repair_cycle_container(metadata)
+
+        # Should kill container (checkpoint unparseable = stale)
+        assert assessment.action == "kill"
+        assert assessment.reason == "checkpoint_stale"
+        # Verify error was logged indicating impact
+        assert "Failed to parse checkpoint timestamp" in caplog.text
+        assert "will kill container" in caplog.text
