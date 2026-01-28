@@ -193,10 +193,16 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                         metadata = self._extract_metadata(container)
                         if metadata:
                             metadata_list.append(metadata)
-                    except Exception as e:
+                    except (KeyError, AttributeError, ValueError, TypeError) as e:
                         logger.warning(
                             f"Failed to extract metadata from container {container.short_id}: {e}",
                             exc_info=True,
+                        )
+                    except Exception as e:
+                        logger.error(
+                            f"UNEXPECTED error extracting metadata from container {container.short_id}: {e}",
+                            exc_info=True,
+                            extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR}
                         )
 
                 return metadata_list
@@ -244,10 +250,16 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                         metadata = self._extract_metadata(container)
                         if metadata:
                             metadata_list.append(metadata)
-                    except Exception as e:
+                    except (KeyError, AttributeError, ValueError, TypeError) as e:
                         logger.warning(
                             f"Failed to extract metadata from repair cycle container {container.short_id}: {e}",
                             exc_info=True,
+                        )
+                    except Exception as e:
+                        logger.error(
+                            f"UNEXPECTED error extracting metadata from repair cycle container {container.short_id}: {e}",
+                            exc_info=True,
+                            extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR}
                         )
 
                 return metadata_list
@@ -301,9 +313,17 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
         # Parse created_at
         try:
             created_at = dateparser.isoparse(container.attrs["Created"])
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             logger.warning(
-                f"Failed to parse created_at for container {container.short_id}: {e}"
+                f"Failed to parse created_at for container {container.short_id}: {e}",
+                exc_info=True,
+            )
+            created_at = datetime.now(timezone.utc)
+        except Exception as e:
+            logger.error(
+                f"UNEXPECTED error parsing created_at for container {container.short_id}: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR}
             )
             created_at = datetime.now(timezone.utc)
 
@@ -531,10 +551,16 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                     checkpoint = await self.checkpoint_store.get_checkpoint(
                         pipeline_run_id=metadata.pipeline_run_id, test_type="all"
                     )
-                except Exception as e:
+                except (KeyError, AttributeError, ValueError) as e:
                     logger.warning(
                         f"Failed to get checkpoint for {metadata.pipeline_run_id}: {e}",
                         exc_info=True,
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"UNEXPECTED error getting checkpoint for {metadata.pipeline_run_id}: {e}",
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_CHECKPOINT_ERROR}
                     )
 
             if checkpoint:
@@ -542,9 +568,20 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                 # checkpoint.timestamp is an ISO 8601 string, parse it
                 try:
                     checkpoint_time = dateparser.isoparse(checkpoint.timestamp)
-                except Exception as e:
+                except (ValueError, TypeError, AttributeError) as e:
                     logger.warning(
-                        f"Failed to parse checkpoint timestamp: {e}", exc_info=True
+                        f"Failed to parse checkpoint timestamp: {e}",
+                        exc_info=True
+                    )
+                    # Can't parse timestamp, treat as stale
+                    checkpoint_time = now - CHECKPOINT_STALENESS_THRESHOLD - timedelta(
+                        minutes=1
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"UNEXPECTED error parsing checkpoint timestamp: {e}",
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_CHECKPOINT_ERROR}
                     )
                     # Can't parse timestamp, treat as stale
                     checkpoint_time = now - CHECKPOINT_STALENESS_THRESHOLD - timedelta(
@@ -629,12 +666,19 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
             client = self._get_client()
             try:
                 return client.containers.get(assessment.container_id)
+            except (KeyError, AttributeError) as e:
+                logger.warning(
+                    f"Container {assessment.container_id} not found: {e}",
+                    exc_info=True,
+                )
+                return None
             except Exception as e:
                 logger.error(
-                    f"Failed to get container {assessment.container_id}: {e}",
+                    f"UNEXPECTED error getting container {assessment.container_id}: {e}",
                     exc_info=True,
                     extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR}
                 )
+                return None
 
         try:
             # Get container in executor
@@ -690,18 +734,30 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                     try:
                         # Kill the container with SIGKILL
                         container.kill()
-                    except Exception as kill_error:
+                    except (KeyError, AttributeError) as kill_error:
                         logger.warning(
-                            f"Failed to kill container {assessment.container_id}: {kill_error}"
+                            f"Container {assessment.container_id} not found or already killed: {kill_error}",
+                            exc_info=True,
+                        )
+                    except Exception as kill_error:
+                        logger.error(
+                            f"UNEXPECTED error killing container {assessment.container_id}: {kill_error}",
+                            exc_info=True,
+                            extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR}
                         )
 
                     # Remove the container
                     try:
                         container.remove(force=True)
                         logger.info(f"Removed container {assessment.container_id}")
+                    except (KeyError, AttributeError) as remove_error:
+                        logger.warning(
+                            f"Container {assessment.container_id} not found or already removed: {remove_error}",
+                            exc_info=True,
+                        )
                     except Exception as remove_error:
                         logger.error(
-                            f"Failed to remove container {assessment.container_id}: {remove_error}",
+                            f"UNEXPECTED error removing container {assessment.container_id}: {remove_error}",
                             exc_info=True,
                             extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR}
                         )
@@ -724,17 +780,28 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                                 logger.debug(
                                     f"Marked execution failed for {work_item_id} with reason {assessment.reason}"
                                 )
+                    except (KeyError, AttributeError, ValueError) as mark_error:
+                        logger.warning(
+                            f"Failed to mark execution failed for {assessment.execution_id} (expected error): {mark_error}",
+                            exc_info=True,
+                        )
                     except Exception as mark_error:
                         logger.error(
-                            f"Failed to mark execution failed for {assessment.execution_id}: {mark_error}",
+                            f"UNEXPECTED error marking execution failed for {assessment.execution_id}: {mark_error}",
                             exc_info=True,
                             extra={"error_id": ErrorRegistry.ERR_CONTAINER_EXECUTION_ERROR}
                         )
                 return True
 
+        except (KeyError, AttributeError) as e:
+            logger.warning(
+                f"Container or metadata not found during recovery for {assessment.container_id}: {e}",
+                exc_info=True,
+            )
+            return False
         except Exception as e:
             logger.error(
-                f"Unexpected error executing recovery action for {assessment.container_id}: {e}",
+                f"UNEXPECTED error executing recovery action for {assessment.container_id}: {e}",
                 exc_info=True,
                 extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR}
             )
@@ -820,9 +887,19 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
 
                     processed += 1
 
+                except (KeyError, ValueError, IndexError) as e:
+                    logger.warning(
+                        f"Invalid repair cycle result format {key}: {e}",
+                        exc_info=True,
+                    )
+                except StorageError as e:
+                    logger.warning(
+                        f"Storage error processing repair cycle result {key}: {e}",
+                        exc_info=True,
+                    )
                 except Exception as e:
                     logger.error(
-                        f"Error processing repair cycle result {key}",
+                        f"UNEXPECTED error processing repair cycle result {key}: {e}",
                         exc_info=True,
                         extra={"error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR}
                     )
@@ -835,9 +912,14 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                 extra={"error_id": ErrorRegistry.ERR_STORAGE_ERROR}
             )
             raise
+        except (KeyError, ValueError) as e:
+            logger.warning(
+                f"Invalid data during orphaned repair result processing: {e}",
+                exc_info=True,
+            )
         except Exception as e:
             logger.error(
-                f"Unexpected error processing orphaned repair results: {e}",
+                f"UNEXPECTED error processing orphaned repair results: {e}",
                 exc_info=True,
                 extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
             )
