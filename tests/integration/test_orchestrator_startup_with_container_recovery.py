@@ -201,6 +201,7 @@ class TestOrchestratorStartupWithContainerRecovery:
             project_id="test-proj",
             agent_id="agent-1",
             task_id="task-1",
+            execution_id="exec-1",  # Required for reconnect action
         )
 
         # Mark this container's action as failing
@@ -212,6 +213,7 @@ class TestOrchestratorStartupWithContainerRecovery:
             action="reconnect",
             reason="Will fail",
             with_monitoring=True,
+            execution_id="exec-1",  # Required when action is "reconnect"
         )
 
         # Create recovery service
