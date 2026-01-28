@@ -148,7 +148,11 @@ class TestDockerContainerAssessment:
             agent_id="agent-1",
             task_id="task-1",
             created_at=created_at,
-            labels=MappingProxyType({CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT}),
+            labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
         )
 
         assessment = await adapter.assess_container(metadata)
@@ -176,7 +180,11 @@ class TestDockerContainerAssessment:
             agent_id="agent-1",
             task_id="task-1",
             created_at=created_at,
-            labels=MappingProxyType({CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT}),
+            labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
             work_item_id=None,  # No work item
         )
 
@@ -207,7 +215,11 @@ class TestDockerContainerAssessment:
             agent_id="agent-1",
             task_id="task-1",
             created_at=created_at,
-            labels=MappingProxyType({CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT}),
+            labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
             work_item_id="work-123",
             execution_id="exec-456",
         )
@@ -243,7 +255,11 @@ class TestDockerContainerAssessment:
             agent_id="agent-1",
             task_id="task-1",
             created_at=created_at,
-            labels=MappingProxyType({CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT}),
+            labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
             work_item_id="work-123",
             execution_id="exec-456",
         )
@@ -279,7 +295,11 @@ class TestDockerContainerAssessment:
             agent_id="agent-1",
             task_id="task-1",
             created_at=created_at,
-            labels=MappingProxyType({CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT}),
+            labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
             work_item_id="work-123",
             execution_id="exec-456",
         )
@@ -523,7 +543,11 @@ class TestDockerContainerRecoveryAction:
             agent_id="agent-1",
             task_id="task-1",
             created_at=created_at,
-            labels=MappingProxyType({CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT}),
+            labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
             work_item_id="work-123",
             execution_id="exec-456",
         )
@@ -559,7 +583,11 @@ class TestDockerContainerRecoveryAction:
             agent_id="agent-1",
             task_id="task-1",
             created_at=created_at,
-            labels=MappingProxyType({CONTAINER_LABEL_TYPE: CONTAINER_TYPE_REPAIR_CYCLE}),
+            labels=MappingProxyType({
+                CONTAINER_LABEL_TYPE: CONTAINER_TYPE_REPAIR_CYCLE,
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }),
             work_item_id="work-123",
             execution_id="exec-456",
         )
