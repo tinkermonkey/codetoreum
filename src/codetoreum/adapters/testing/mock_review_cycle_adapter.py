@@ -48,11 +48,6 @@ from codetoreum.infrastructure.error_ids import ErrorRegistry
 logger = logging.getLogger(__name__)
 
 
-class ReviewSequenceExhausted(Exception):
-    """Raised when review sequence is exhausted."""
-    pass
-
-
 @dataclass
 class ReviewSequenceItem:
     """A single item in a review sequence.
@@ -245,6 +240,28 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         ]
         self.set_review_sequence(work_item_id, sequence)
 
+    def queue_human_feedback(self, work_item_id: str, feedback: str) -> None:
+        """Queue human feedback for escalation scenarios.
+
+        Stores feedback that will be returned when the review cycle
+        is resumed with human feedback. Multiple calls queue feedback
+        in FIFO order.
+
+        Args:
+            work_item_id: Work item ID to queue feedback for
+            feedback: Human feedback text to queue
+
+        Raises:
+            ValueError: If feedback is empty
+        """
+        if not feedback or not feedback.strip():
+            raise ValueError("Feedback cannot be empty")
+        if not hasattr(self, "_human_feedback_queue"):
+            self._human_feedback_queue: Dict[str, List[str]] = {}
+        if work_item_id not in self._human_feedback_queue:
+            self._human_feedback_queue[work_item_id] = []
+        self._human_feedback_queue[work_item_id].append(feedback)
+
     @property
     def current_project(self) -> Optional[str]:
         """Get current project ID."""
@@ -339,9 +356,8 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
                     with self._lock:
                         self._sequence_indices[work_item_id] = idx + 1
 
-                # Advance clock by a small amount (mock doesn't need real delays)
-                # Using nanoseconds to avoid long waits in tests
-                await self.clock.advance(timedelta(microseconds=100))
+                # Advance clock for review execution (30 seconds)
+                await self.clock.advance(timedelta(seconds=30))
 
                 # Process the decision
                 review_result = decision_item.to_review_result()
@@ -533,7 +549,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
             })
 
         return ReviewCycleResult(
-            next_column="approved" if final_status == "APPROVED" else "escalated",
+            next_column="Testing" if final_status == "APPROVED" else request.board_id,
             cycle_complete=True,
             final_status=final_status,
             total_iterations=iteration,
@@ -744,7 +760,11 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
             return list(self._events)
 
     def get_all_events_log(self) -> List[Dict[str, Any]]:
-        """Return all logged events."""
+        """Return all logged events for testing and assertion.
+
+        Returns a consolidated view of all events that have been
+        emitted or logged, suitable for assertion helpers.
+        """
         with self._lock:
             return [
                 event for event in self._events
@@ -826,7 +846,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
                 f"got {actual_status}"
             )
 
-    def assert_human_escalation(self, work_item_id: str) -> None:
+    def assert_escalation_occurred(self, work_item_id: str) -> None:
         """Assert work item was escalated to human.
 
         Args:
@@ -841,7 +861,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
                 event.get("work_item_id") == work_item_id):
                 if not event.get("human_escalation"):
                     raise AssertionError(
-                        f"Expected human escalation for {work_item_id}"
+                        f"Expected escalation for {work_item_id}"
                     )
                 return
 
@@ -849,7 +869,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
             f"No completion event found for work item {work_item_id}"
         )
 
-    def assert_no_human_escalation(self, work_item_id: str) -> None:
+    def assert_no_escalation(self, work_item_id: str) -> None:
         """Assert work item was not escalated to human.
 
         Args:
@@ -864,7 +884,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
                 event.get("work_item_id") == work_item_id):
                 if event.get("human_escalation"):
                     raise AssertionError(
-                        f"Unexpected human escalation for {work_item_id}"
+                        f"Unexpected escalation for {work_item_id}"
                     )
                 return
 
@@ -899,18 +919,14 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
             raise ValueError("max_iterations must be positive")
 
     def _log_event(self, event: Dict[str, Any]) -> None:
-        """Log event with timestamp."""
+        """Log event to event tracking for testing purposes.
+
+        This complements the regular event emission by storing a copy
+        in a searchable format for assertion helpers.
+        """
         event["timestamp"] = self.clock.now().isoformat()
         with self._lock:
-            # Store in internal event log that doesn't go through event emitter
-            if not hasattr(self, "_event_log"):
-                self._event_log: List[Dict[str, Any]] = []
-            self._event_log.append(event)
-
-    def get_all_events_log(self) -> List[Dict[str, Any]]:
-        """Return all logged events."""
-        with self._lock:
-            return getattr(self, "_event_log", [])
+            self._events.append(event)
 
     def clear(self) -> None:
         """Clear all state for testing."""
@@ -923,5 +939,5 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
             self._event_handlers.clear()
             self._monitoring.clear()
             self._handler_errors.clear()
-            if hasattr(self, "_event_log"):
-                self._event_log.clear()
+            if hasattr(self, "_human_feedback_queue"):
+                self._human_feedback_queue.clear()

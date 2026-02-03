@@ -377,32 +377,32 @@ class TestAssertionHelpers:
             adapter.assert_final_status("item-1", "BLOCKED")
 
     @pytest.mark.asyncio
-    async def test_assert_human_escalation(self, adapter, base_request):
-        """Test human escalation assertion."""
+    async def test_assert_escalation_occurred(self, adapter, base_request):
+        """Test escalation occurred assertion."""
         adapter.set_always_escalate("item-1")
 
         await adapter.start_review_cycle(base_request)
 
-        adapter.assert_human_escalation("item-1")
+        adapter.assert_escalation_occurred("item-1")
 
     @pytest.mark.asyncio
-    async def test_assert_no_human_escalation(self, adapter, base_request):
-        """Test no human escalation assertion."""
+    async def test_assert_no_escalation(self, adapter, base_request):
+        """Test no escalation assertion."""
         adapter.set_approve_immediately("item-1")
 
         await adapter.start_review_cycle(base_request)
 
-        adapter.assert_no_human_escalation("item-1")
+        adapter.assert_no_escalation("item-1")
 
     @pytest.mark.asyncio
-    async def test_assert_no_human_escalation_failure(self, adapter, base_request):
-        """Test no human escalation assertion fails on escalation."""
+    async def test_assert_no_escalation_failure(self, adapter, base_request):
+        """Test no escalation assertion fails on escalation."""
         adapter.set_always_escalate("item-1")
 
         await adapter.start_review_cycle(base_request)
 
-        with pytest.raises(AssertionError, match="Unexpected human escalation"):
-            adapter.assert_no_human_escalation("item-1")
+        with pytest.raises(AssertionError, match="Unexpected escalation"):
+            adapter.assert_no_escalation("item-1")
 
 
 class TestSimulationClockIntegration:
