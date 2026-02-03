@@ -149,7 +149,7 @@ class RepairCycleEventHandler(EventHandler):
                     RepairTestRunConfig(test_type=RepairTestType.INTEGRATION),
                     RepairTestRunConfig(test_type=RepairTestType.E2E),
                 ),
-                agent_name="repair_agent",
+                agent_name="senior_software_engineer",
                 max_total_agent_calls=100,
                 checkpoint_interval=5,
             )

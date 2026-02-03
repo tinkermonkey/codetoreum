@@ -10,21 +10,24 @@ Comprehensive test scenarios validating the full SDLC pipeline workflow includin
 import pytest
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
-from codetoreum.adapters.testing.mock_review_cycle_adapter import (
-    MockReviewCycleAdapter,
-    ReviewSequenceItem,
-)
+from codetoreum.adapters.testing.mock_review_cycle_adapter import MockReviewCycleAdapter
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
 from codetoreum.domain.events import WorkItemColumnChanged
-from codetoreum.domain.repair_cycle_types import RepairTestType
+from codetoreum.domain.repair_cycle_types import (
+    RepairTestRunConfig,
+    RepairTestType,
+)
 from codetoreum.ports.output.review_cycle_service import ReviewCycleRequest
+from codetoreum.application.event_handlers.repair_cycle_event_handler import (
+    RepairCycleEventContext,
+)
 
 
 class TestScenario06SDLCPipelineWithRepair:
     """Test scenarios for full SDLC pipeline with repair cycle integration."""
 
     @pytest.mark.asyncio
-    async def test_scenario_01_review_to_repair_happy_path(self):
+    async def test_scenario_01_happy_path_first_approval_with_testing(self):
         """
         Test full workflow: Review approval → Testing column → Repair cycle.
 
@@ -92,22 +95,15 @@ class TestScenario06SDLCPipelineWithRepair:
         )
 
         # Execute repair cycle (would be triggered by event handler in full integration)
-        from codetoreum.application.event_handlers.repair_cycle_event_handler import RepairCycleEventContext
         repair_context = RepairCycleEventContext(
             stage_name="Testing",
             pipeline_run_id="work-item-1",
             test_configs=(
-                __import__('codetoreum.domain.repair_cycle_types', fromlist=['RepairTestRunConfig']).RepairTestRunConfig(
-                    test_type=RepairTestType.UNIT
-                ),
-                __import__('codetoreum.domain.repair_cycle_types', fromlist=['RepairTestRunConfig']).RepairTestRunConfig(
-                    test_type=RepairTestType.INTEGRATION
-                ),
-                __import__('codetoreum.domain.repair_cycle_types', fromlist=['RepairTestRunConfig']).RepairTestRunConfig(
-                    test_type=RepairTestType.E2E
-                ),
+                RepairTestRunConfig(test_type=RepairTestType.UNIT),
+                RepairTestRunConfig(test_type=RepairTestType.INTEGRATION),
+                RepairTestRunConfig(test_type=RepairTestType.E2E),
             ),
-            agent_name="repair_agent",
+            agent_name="senior_software_engineer",
             max_total_agent_calls=100,
             checkpoint_interval=5,
         )
@@ -171,9 +167,6 @@ class TestScenario06SDLCPipelineWithRepair:
         assert review_result.final_status == "APPROVED"
 
         # Execute repair cycle
-        from codetoreum.application.event_handlers.repair_cycle_event_handler import RepairCycleEventContext
-        from codetoreum.domain.repair_cycle_types import RepairTestRunConfig
-
         repair_context = RepairCycleEventContext(
             stage_name="Testing",
             pipeline_run_id="work-item-2",
@@ -182,7 +175,7 @@ class TestScenario06SDLCPipelineWithRepair:
                 RepairTestRunConfig(test_type=RepairTestType.INTEGRATION),
                 RepairTestRunConfig(test_type=RepairTestType.E2E),
             ),
-            agent_name="repair_agent",
+            agent_name="senior_software_engineer",
             max_total_agent_calls=100,
             checkpoint_interval=5,
         )
@@ -197,7 +190,86 @@ class TestScenario06SDLCPipelineWithRepair:
         repair_adapter.assert_test_type_passed(RepairTestType.UNIT)
 
     @pytest.mark.asyncio
-    async def test_scenario_03_bootstrap_integration(self):
+    async def test_scenario_testing_failure_remains_in_column(self):
+        """
+        Test failure scenario: Review approved, but tests fail beyond max iterations.
+
+        Work item should remain in Testing column after repair cycle exhausts max iterations
+        without all tests passing. This validates the fast-fail strategy and escalation path.
+
+        Timeline (simulated):
+        00:00 - Review cycle starts
+        00:30 - Iteration 1: APPROVED
+        00:30 - Work item moves to Testing column
+        00:31 - Repair cycle starts
+        01:00 - UNIT tests fail (iteration 1)
+        03:00 - UNIT tests fail (iteration 2)
+        05:00 - UNIT tests fail (iteration 3)
+        ...
+        After max_total_agent_calls (5) exhausted: Repair cycle fails
+
+        Expected:
+        - Review cycle: 1 iteration, APPROVED
+        - Repair cycle: Fails after max iterations
+        - Work item remains in Testing column (awaiting human intervention)
+        """
+        clock = SimulationClock(speed_multiplier=100.0)
+
+        # Setup adapters
+        review_adapter = MockReviewCycleAdapter(clock)
+        review_adapter.current_project = "test-project"
+        review_adapter.set_approve_immediately("work-item-10")
+
+        repair_adapter = MockRepairCycleAdapter(clock)
+        repair_adapter.current_project = "test-project"
+        # Configure UNIT tests to never pass (requires 999 iterations)
+        repair_adapter.set_iterations_until_success(RepairTestType.UNIT, 999)
+
+        # Execute review cycle
+        review_request = ReviewCycleRequest(
+            work_item_id="work-item-10",
+            project_id="test-project",
+            board_id="test-board",
+            maker_agent="senior_software_engineer",
+            reviewer_agent="code_reviewer",
+            max_iterations=5,
+            auto_advance_on_approval=True,
+            escalate_on_blocked=True,
+            previous_stage_output="Initial implementation"
+        )
+
+        review_result = await review_adapter.start_review_cycle(review_request)
+        assert review_result.final_status == "APPROVED"
+
+        # Execute repair cycle with limited agent calls
+        repair_context = RepairCycleEventContext(
+            stage_name="Testing",
+            pipeline_run_id="work-item-10",
+            test_configs=(
+                RepairTestRunConfig(test_type=RepairTestType.UNIT),
+            ),
+            agent_name="senior_software_engineer",
+            max_total_agent_calls=5,  # Limited to force failure
+            checkpoint_interval=5,
+        )
+
+        repair_result = await repair_adapter.execute(repair_context)
+
+        # Assert repair cycle failed (not all tests passed)
+        assert repair_result.overall_success is False
+
+        # Determine final column based on result
+        # Per requirements: Stay in Testing if repair fails after max iterations
+        final_column = "Staged" if repair_result.overall_success else "Testing"
+        assert final_column == "Testing"
+
+        # Verify the UNIT test never passed
+        unit_results = [tr for tr in repair_result.test_results if tr.test_type == RepairTestType.UNIT]
+        assert len(unit_results) == 1
+        assert unit_results[0].passed is False
+
+    @pytest.mark.asyncio
+    async def test_scenario_04_bootstrap_integration(self):
         """
         Test full bootstrap integration with event handlers wired.
 
