@@ -468,3 +468,32 @@ async def e2e_client(
     yield client
     # Cleanup - properly close the client to release socket resources
     client.close()
+
+
+# ====================================================================================
+# Scenario 06 Test Data Fixtures
+# ====================================================================================
+
+# Test project constants
+SCENARIO_06_TEST_PROJECT = "test-project"
+SCENARIO_06_TEST_BOARD = "test-board"
+SCENARIO_06_MAKER_AGENT = "senior_software_engineer"
+SCENARIO_06_REVIEWER_AGENT = "code_reviewer"
+SCENARIO_06_DEFAULT_MAX_ITERATIONS = 5
+
+
+@pytest.fixture
+def scenario_06_test_config() -> dict:
+    """
+    Provide standard test configuration for Scenario 06 tests.
+
+    Returns:
+        Dictionary with test constants for consistency
+    """
+    return {
+        "project_id": SCENARIO_06_TEST_PROJECT,
+        "board_id": SCENARIO_06_TEST_BOARD,
+        "maker_agent": SCENARIO_06_MAKER_AGENT,
+        "reviewer_agent": SCENARIO_06_REVIEWER_AGENT,
+        "max_iterations": SCENARIO_06_DEFAULT_MAX_ITERATIONS,
+    }
