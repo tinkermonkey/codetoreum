@@ -312,7 +312,7 @@ class TestScenario06SDLCPipelineWithRepair:
             await bootstrap.teardown()
 
     @pytest.mark.asyncio
-    async def test_scenario_04_performance_validation(self):
+    async def test_scenario_05_performance_validation(self):
         """
         Performance validation: Full SDLC pipeline (review + repair) in <10s real-time.
 
@@ -353,9 +353,6 @@ class TestScenario06SDLCPipelineWithRepair:
         assert review_result.final_status == "APPROVED"
 
         # Execute repair cycle
-        from codetoreum.application.event_handlers.repair_cycle_event_handler import RepairCycleEventContext
-        from codetoreum.domain.repair_cycle_types import RepairTestRunConfig
-
         repair_context = RepairCycleEventContext(
             stage_name="Testing",
             pipeline_run_id="perf-test",
@@ -363,7 +360,7 @@ class TestScenario06SDLCPipelineWithRepair:
                 RepairTestRunConfig(test_type=RepairTestType.UNIT),
                 RepairTestRunConfig(test_type=RepairTestType.INTEGRATION),
             ),
-            agent_name="repair_agent",
+            agent_name="senior_software_engineer",
             max_total_agent_calls=50,
             checkpoint_interval=5,
         )
