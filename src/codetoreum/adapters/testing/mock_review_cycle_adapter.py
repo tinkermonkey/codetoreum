@@ -136,6 +136,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         self._cycle_states: Dict[str, ReviewCycleState] = {}
         self._review_sequences: Dict[str, List[ReviewSequenceItem]] = {}
         self._sequence_indices: Dict[str, int] = {}
+        self._human_feedback_queue: Dict[str, List[str]] = {}
 
         # Event system
         self._events: List[Dict[str, Any]] = []
@@ -256,8 +257,6 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         """
         if not feedback or not feedback.strip():
             raise ValueError("Feedback cannot be empty")
-        if not hasattr(self, "_human_feedback_queue"):
-            self._human_feedback_queue: Dict[str, List[str]] = {}
         if work_item_id not in self._human_feedback_queue:
             self._human_feedback_queue[work_item_id] = []
         self._human_feedback_queue[work_item_id].append(feedback)
@@ -456,6 +455,9 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
                                 iteration=iteration,
                             ))
 
+                        # Advance clock for maker revision (2 minutes)
+                        await self.clock.advance(timedelta(seconds=120))
+
                 elif decision_item.decision == ReviewDecision.ESCALATE:
                     cycle.start_iteration(
                         maker_output="Maker output iteration",
@@ -494,6 +496,30 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
                             blocking_count=blocking_count,
                             escalation_reason="BLOCKED",
                         ))
+
+                    # Check for queued human feedback
+                    feedback_queue = self._human_feedback_queue.get(work_item_id, [])
+                    if feedback_queue:
+                        # Advance clock for human feedback wait (5 minutes)
+                        await self.clock.advance(timedelta(seconds=300))
+                        feedback = feedback_queue.pop(0)
+                        if self._current_project:
+                            self.emit(ReviewCycleHumanFeedbackReceivedEvent(
+                                type="review_cycle.human_feedback_received",
+                                timestamp=self.clock.now().isoformat(),
+                                source="mock_review_cycle",
+                                review_cycle_id=cycle.id,
+                                work_item_id=work_item_id,
+                                feedback=feedback,
+                            ))
+                            self._log_event({
+                                "type": "REVIEW_CYCLE_HUMAN_FEEDBACK_RECEIVED",
+                                "work_item_id": work_item_id,
+                                "feedback": feedback,
+                                "iteration": iteration,
+                            })
+                        # Continue loop to process next iteration with feedback incorporated
+                        continue
 
                     break
 
@@ -581,6 +607,9 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
             cycle_state: Current state of the paused review cycle
             feedback: Human feedback to incorporate
         """
+        # Advance clock for human feedback wait (5 minutes)
+        await self.clock.advance(timedelta(seconds=300))
+
         if self._current_project:
             # Generate a cycle ID for the event (use work_item_id as base for consistency)
             cycle_id = f"cycle-{cycle_state.work_item_id}"
@@ -939,5 +968,4 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
             self._event_handlers.clear()
             self._monitoring.clear()
             self._handler_errors.clear()
-            if hasattr(self, "_human_feedback_queue"):
-                self._human_feedback_queue.clear()
+            self._human_feedback_queue.clear()
