@@ -144,6 +144,15 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         self._handler_errors: List[Dict[str, Any]] = []
         self._lock = threading.RLock()
 
+    @property
+    def clock(self) -> SimulationClock:
+        """Private property for internal clock access.
+
+        This property provides internal access to the simulation clock for timing
+        operations within the adapter. External code should not access this.
+        """
+        return self._clock
+
     # Configuration methods
 
     def set_review_sequence(

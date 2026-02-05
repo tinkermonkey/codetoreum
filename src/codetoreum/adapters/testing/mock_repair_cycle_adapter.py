@@ -135,6 +135,15 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         self._handler_errors: List[Dict[str, Any]] = []
         self._lock = threading.Lock()
 
+    @property
+    def clock(self) -> SimulationClock:
+        """Private property for internal clock access.
+
+        This property provides internal access to the simulation clock for timing
+        operations within the adapter. External code should not access this.
+        """
+        return self._clock
+
     # Configuration methods (FR-11.2, FR-11.3, FR-11.4)
 
     def set_test_result_sequence(
