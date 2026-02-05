@@ -127,8 +127,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
             clock: SimulationClock instance for deterministic time advancement
         """
         super().__init__()
-        self.clock = clock or SimulationClock()
-        self._clock = self.clock  # Alias for internal use
+        self._clock = clock or SimulationClock()
         self._current_project: Optional[str] = None
 
         # Review state tracking

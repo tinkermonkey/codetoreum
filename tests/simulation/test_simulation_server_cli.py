@@ -150,7 +150,7 @@ work_items:
             assert bootstrap._is_setup is True
             # Verify speed multiplier was overridden (engine encapsulates clock)
             assert bootstrap.engine is not None
-            assert bootstrap.engine._clock._speed_multiplier == 100.0
+            assert bootstrap.engine.get_speed_multiplier() == 100.0
 
         finally:
             await bootstrap.teardown()
@@ -352,7 +352,7 @@ work_items:
             try:
                 # Verify speed multiplier is set correctly (engine encapsulates clock)
                 assert bootstrap.engine is not None
-                assert bootstrap.engine._clock._speed_multiplier == speed
+                assert bootstrap.engine.get_speed_multiplier() == speed
 
             finally:
                 await bootstrap.teardown()

@@ -49,7 +49,6 @@ from codetoreum.application.container_recovery_service import ContainerRecoveryS
 
 # Infrastructure
 from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
 from codetoreum.infrastructure.adapters.factory import (

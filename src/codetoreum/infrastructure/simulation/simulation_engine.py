@@ -67,8 +67,7 @@ class SimulationEngine:
             Use create() factory method instead of __init__ directly.
         """
         self._clock = clock
-        self._logger = logging.getLogger(__name__)
-        self._logger.debug("SimulationEngine initialized")
+        logger.debug("SimulationEngine initialized")
 
     @staticmethod
     def create(config: Optional[SimulationConfig] = None) -> "SimulationEngine":
@@ -304,5 +303,5 @@ class SimulationEngine:
         Clears scheduled callbacks and resets time to current instant.
         """
         self._clock.clear_scheduled_callbacks()
-        self._clock._current_time = datetime.now(timezone.utc)
+        self._clock.start_at(datetime.now(timezone.utc))
         logger.debug("SimulationEngine reset")

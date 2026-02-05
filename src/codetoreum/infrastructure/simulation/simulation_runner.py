@@ -105,7 +105,12 @@ class SimulationRunner:
 
         # Use engine's clock if provided, otherwise create new one
         if engine:
-            self.clock = engine._clock  # Access internal clock via engine
+            # NOTE: Accessing _clock directly for backward compatibility.
+            # SimulationRunner needs direct clock access to coordinate timing across
+            # the full scenario execution. The engine's public API methods (advance, etc.)
+            # are sufficient for most use cases, but the runner manages its own execution
+            # loop and needs the clock object itself.
+            self.clock = engine._clock
         else:
             # Create simulation clock
             self.clock = SimulationClock(

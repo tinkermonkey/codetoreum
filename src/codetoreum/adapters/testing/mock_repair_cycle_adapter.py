@@ -105,8 +105,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             checkpoint_store: Optional checkpoint store for recovery testing
         """
         super().__init__()
-        self.clock = clock or SimulationClock()
-        self._clock = self.clock  # Alias for internal use
+        self._clock = clock or SimulationClock()
         self._checkpoint_store = checkpoint_store
         self._current_project: Optional[str] = None
         self._repair_state: Dict[str, Any] = {}

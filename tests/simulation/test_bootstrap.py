@@ -248,7 +248,7 @@ class TestSimulationApplicationBootstrap:
 
         # Verify clock uses correct multiplier (engine encapsulates clock)
         assert bootstrap.engine is not None
-        assert bootstrap.engine._clock._speed_multiplier == 50.0
+        assert bootstrap.engine.get_speed_multiplier() == 50.0
 
         await bootstrap.teardown()
 
