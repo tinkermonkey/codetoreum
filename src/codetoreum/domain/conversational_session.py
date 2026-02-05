@@ -40,7 +40,8 @@ class ConversationalSessionState:
         work_item_id (str): ID of the work item containing the discussion thread
         project_id (str): ID of the project containing the work item
         agent_assignment (str): Name of the agent assigned to this feedback loop
-        column_name (str): Name of the board column where the work item is located
+        column_name (Optional[str]): Name of the board column where the work item is located,
+            None if not tracked (board context is optional metadata, not core session concern).
         llm_conversation_id (Optional[str]): LLM provider's conversation session ID,
             used to maintain context across multiple agent responses (e.g., for
             Claude Code's --session-id flag). None if not yet created.
@@ -81,7 +82,7 @@ class ConversationalSessionState:
     work_item_id: str
     project_id: str
     agent_assignment: str
-    column_name: str
+    column_name: Optional[str]
     llm_conversation_id: Optional[str]
     last_processed_comment_id: str
     last_interaction_timestamp: str
@@ -97,8 +98,6 @@ class ConversationalSessionState:
             raise ValueError("project_id is required")
         if not self.agent_assignment:
             raise ValueError("agent_assignment is required")
-        if not self.column_name:
-            raise ValueError("column_name is required")
         if not self.last_processed_comment_id:
             raise ValueError("last_processed_comment_id is required")
         if not self.last_interaction_timestamp:

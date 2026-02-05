@@ -170,8 +170,6 @@ async def scenario_a_normal_event_flow(runner: SimulationRunner):
     # Initialize monitoring
     monitoring_config = DiscussionMonitoringConfig(
         project_id=project_id,
-        column_name="Requirements",
-        agent_assignment="business_analyst"
     )
     discussion_adapter.start_monitoring(work_item_id, monitoring_config)
 
@@ -273,8 +271,6 @@ async def scenario_b_restart_recovery(runner: SimulationRunner):
     # Pre-populate comments (simulating state before restart)
     monitoring_config = DiscussionMonitoringConfig(
         project_id=project_id,
-        column_name="Requirements",
-        agent_assignment="business_analyst"
     )
     discussion_adapter.start_monitoring(work_item_id, monitoring_config)
 
@@ -343,8 +339,6 @@ async def edge_case_c_event_ordering(runner: SimulationRunner):
 
     monitoring_config = DiscussionMonitoringConfig(
         project_id=project_id,
-        column_name="Implementation",
-        agent_assignment="developer"
     )
     discussion_adapter.start_monitoring(work_item_id, monitoring_config)
 
@@ -395,8 +389,6 @@ async def edge_case_d_bot_comment_filtering(runner: SimulationRunner):
 
     monitoring_config = DiscussionMonitoringConfig(
         project_id=project_id,
-        column_name="Review",
-        agent_assignment="developer"
     )
     discussion_adapter.start_monitoring(work_item_id, monitoring_config)
 
@@ -460,8 +452,6 @@ async def edge_case_e_threaded_context(runner: SimulationRunner):
 
     monitoring_config = DiscussionMonitoringConfig(
         project_id=project_id,
-        column_name="Requirements",
-        agent_assignment="business_analyst"
     )
     discussion_adapter.start_monitoring(work_item_id, monitoring_config)
 
@@ -526,8 +516,6 @@ async def edge_case_f_column_change_during_processing(runner: SimulationRunner):
 
     monitoring_config = DiscussionMonitoringConfig(
         project_id=project_id,
-        column_name="Implementation",
-        agent_assignment="developer"
     )
     discussion_adapter.start_monitoring(work_item_id, monitoring_config)
 
@@ -588,8 +576,6 @@ async def edge_case_g_concurrent_work_items(runner: SimulationRunner):
     for work_item_id in work_items:
         monitoring_config = DiscussionMonitoringConfig(
             project_id="proj-concurrent-test",
-            column_name="Implementation",
-            agent_assignment="developer"
         )
         discussion_adapter.start_monitoring(work_item_id, monitoring_config)
 
@@ -630,8 +616,6 @@ async def edge_case_h_initial_agent_output(runner: SimulationRunner):
 
     monitoring_config = DiscussionMonitoringConfig(
         project_id=project_id,
-        column_name="Requirements",
-        agent_assignment="business_analyst"
     )
     discussion_adapter.start_monitoring(work_item_id, monitoring_config)
 
@@ -672,8 +656,6 @@ async def edge_case_i_error_handling(runner: SimulationRunner):
 
     monitoring_config = DiscussionMonitoringConfig(
         project_id=project_id,
-        column_name="Implementation",
-        agent_assignment="developer"
     )
     discussion_adapter.start_monitoring(work_item_id, monitoring_config)
 
@@ -719,8 +701,6 @@ async def edge_case_j_duplicate_prevention(runner: SimulationRunner):
 
     monitoring_config = DiscussionMonitoringConfig(
         project_id=project_id,
-        column_name="Review",
-        agent_assignment="developer"
     )
     discussion_adapter.start_monitoring(work_item_id, monitoring_config)
 

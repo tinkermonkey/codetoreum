@@ -127,20 +127,20 @@ class TestConversationalSessionState:
                 status="active"
             )
 
-    def test_missing_column_name(self):
-        """Test that column_name is required."""
-        with pytest.raises(ValueError, match="column_name is required"):
-            ConversationalSessionState(
-                session_id="sess-001",
-                work_item_id="issue-42",
-                project_id="proj-1",
-                agent_assignment="code-reviewer",
-                column_name="",
-                llm_conversation_id="conv-abc123",
-                last_processed_comment_id="comment-10",
-                last_interaction_timestamp="2025-01-14T10:35:00+00:00",
-                status="active"
-            )
+    def test_column_name_is_optional(self):
+        """Test that column_name is optional (can be None for pure discussion tracking)."""
+        state = ConversationalSessionState(
+            session_id="sess-001",
+            work_item_id="issue-42",
+            project_id="proj-1",
+            agent_assignment="code-reviewer",
+            column_name=None,  # Now optional - board context is auxiliary
+            llm_conversation_id="conv-abc123",
+            last_processed_comment_id="comment-10",
+            last_interaction_timestamp="2025-01-14T10:35:00+00:00",
+            status="active"
+        )
+        assert state.column_name is None
 
     def test_missing_last_processed_comment_id(self):
         """Test that last_processed_comment_id is required."""

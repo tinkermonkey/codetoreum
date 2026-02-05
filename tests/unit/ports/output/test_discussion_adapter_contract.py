@@ -79,8 +79,6 @@ class TestDiscussionAdapterContract(ABC):
         adapter = await self.create_adapter()
         config = DiscussionMonitoringConfig(
             project_id="proj-123",
-            column_name="In Review",
-            agent_assignment="agent-456",
         )
 
         # Should not raise
@@ -92,8 +90,6 @@ class TestDiscussionAdapterContract(ABC):
         adapter = await self.create_adapter()
         config = DiscussionMonitoringConfig(
             project_id="proj-123",
-            column_name="In Review",
-            agent_assignment="agent-456",
         )
 
         adapter.start_monitoring("issue-123", config)
@@ -127,8 +123,6 @@ class TestDiscussionAdapterContract(ABC):
         adapter = await self.create_adapter()
         config = DiscussionMonitoringConfig(
             project_id="proj-123",
-            column_name="In Review",
-            agent_assignment="agent-456",
             last_processed_comment_id="comment-789",
         )
 

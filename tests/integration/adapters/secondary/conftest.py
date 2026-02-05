@@ -90,8 +90,6 @@ def monitoring_config():
     """Provide standard monitoring configuration."""
     return DiscussionMonitoringConfig(
         project_id="proj-12345",
-        column_name="Review",
-        agent_assignment="agent-67890",
     )
 
 

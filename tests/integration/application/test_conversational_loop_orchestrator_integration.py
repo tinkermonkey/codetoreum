@@ -105,8 +105,6 @@ class MockDiscussionAdapter:
         if isinstance(config, dict):
             monitoring_config = DiscussionMonitoringConfig(
                 project_id=config.get("project_id", ""),
-                column_name=config.get("column_name", ""),
-                agent_assignment=config.get("agent_assignment", ""),
             )
             self.monitoring_sessions[work_item_id] = monitoring_config
         else:
@@ -538,8 +536,6 @@ class TestSessionPersistenceAcrossInstancesIntegration:
         # Resume monitoring with checkpoint
         monitoring_config = DiscussionMonitoringConfig(
             project_id=session_2.project_id,
-            column_name=session_2.column_name,
-            agent_assignment=session_2.agent_assignment,
         )
         testable_discussion_adapter.start_monitoring(work_item_id, monitoring_config)
 

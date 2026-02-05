@@ -88,9 +88,7 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
 
         # Start monitoring an issue
         mon_config = DiscussionMonitoringConfig(
-            project_id="proj-1",
-            column_name="Review",
-            agent_assignment="agent-1"
+            project_id="proj-1"
         )
         adapter.start_monitoring("issue-123", mon_config)
 
@@ -571,17 +569,12 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
         is_initial = self._is_initial_comment(work_item_id, comment)
 
         if is_initial:
-            context = CommentContext.for_initial_request(
-                column_name=config.column_name,
-                agent_assignment=config.agent_assignment,
-            )
+            context = CommentContext.for_initial_request()
         else:
             context = CommentContext(
                 thread_id=f"thread-{work_item_id}",
                 parent_comment=None,
                 is_initial_request=False,
-                column_name=config.column_name,
-                agent_assignment=config.agent_assignment,
             )
 
         self.emit(

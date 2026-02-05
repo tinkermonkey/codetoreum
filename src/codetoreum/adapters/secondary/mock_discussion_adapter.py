@@ -56,9 +56,7 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
         # Setup
         adapter = MockDiscussionAdapter(identity_service)
         config = DiscussionMonitoringConfig(
-            project_id="proj-1",
-            column_name="In Review",
-            agent_assignment="agent-1"
+            project_id="proj-1"
         )
         adapter.start_monitoring("item-1", config)
 
@@ -271,17 +269,12 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
 
             # Use factory method to create context based on whether this is initial
             if is_initial:
-                context = CommentContext.for_initial_request(
-                    column_name=config.column_name,
-                    agent_assignment=config.agent_assignment
-                )
+                context = CommentContext.for_initial_request()
             else:
                 context = CommentContext(
                     thread_id=f"thread-{work_item_id}",
                     parent_comment=None,
                     is_initial_request=False,
-                    column_name=config.column_name,
-                    agent_assignment=config.agent_assignment
                 )
 
             self.emit(CommentNeedsResponseEvent(
