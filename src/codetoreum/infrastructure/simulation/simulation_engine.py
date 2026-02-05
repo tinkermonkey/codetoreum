@@ -1,0 +1,308 @@
+"""
+Simulation Engine - Centralizes all simulation timing and coordination.
+
+This module provides the SimulationEngine class which:
+1. Owns and fully encapsulates the simulation clock
+2. Manages all time-aware simulation components through a single interface
+3. Provides controlled access to time operations without exposing implementation
+4. Handles automatic clock injection into components that need it
+5. Is the sole external interface for simulation behavior
+
+The engine ensures that core application components remain completely
+simulation-agnostic - they never receive or use a clock directly.
+"""
+
+import logging
+from datetime import datetime, timedelta, timezone
+from typing import Optional, TYPE_CHECKING
+
+from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
+from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+
+if TYPE_CHECKING:
+    from codetoreum.adapters.testing.mock_review_cycle_adapter import MockReviewCycleAdapter
+    from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
+    from codetoreum.adapters.testing.mock_metrics_query_adapter import MockMetricsQueryAdapter
+
+logger = logging.getLogger(__name__)
+
+
+class SimulationEngine:
+    """
+    Encapsulates and manages all simulation timing and coordination.
+
+    This is the single point of control for simulation clock and time-aware
+    components. The engine:
+
+    1. Creates and owns the simulation clock privately
+    2. Provides public APIs for time operations (advance, wait_for, etc.)
+    3. Injects clock into components that need it (adapters, handlers)
+    4. Keeps all simulation internals hidden from core application
+    5. Manages clock lifecycle (start, stop, reset)
+
+    The engine ensures that core components (domain layer, application layer)
+    never see or use the clock directly - they only use the engine's public API.
+
+    Usage:
+        # In bootstrap:
+        engine = SimulationEngine.create(config)
+        repair_adapter = engine.create_repair_cycle_adapter()
+        review_adapter = engine.create_review_cycle_adapter()
+        metrics_adapter = engine.create_metrics_query_adapter()
+
+        # In tests:
+        await engine.advance(timedelta(hours=1))
+        await engine.wait_for(timedelta(minutes=30))
+        engine.now()  # Get current time
+    """
+
+    def __init__(self, clock: SimulationClock):
+        """
+        Initialize the simulation engine with a clock.
+
+        Args:
+            clock: The simulation clock to manage
+
+        Note:
+            Use create() factory method instead of __init__ directly.
+        """
+        self._clock = clock
+        self._logger = logging.getLogger(__name__)
+        self._logger.debug("SimulationEngine initialized")
+
+    @staticmethod
+    def create(config: Optional[SimulationConfig] = None) -> "SimulationEngine":
+        """
+        Create a new simulation engine with configured clock.
+
+        Args:
+            config: Simulation configuration (uses default if None)
+
+        Returns:
+            Configured SimulationEngine instance
+        """
+        if config is None:
+            config = SimulationConfig.create_fast_config("default")
+
+        clock = SimulationClock(
+            speed_multiplier=config.time.speed_multiplier,
+            auto_advance=config.time.auto_advance,
+        )
+
+        # Set start time if configured
+        if config.time.start_time:
+            clock.start_at(config.time.start_time)
+
+        logger.info(
+            "Created SimulationEngine",
+            extra={
+                "speed_multiplier": config.time.speed_multiplier,
+                "auto_advance": config.time.auto_advance,
+            }
+        )
+
+        return SimulationEngine(clock)
+
+    # =========================================================================
+    # Time Operations - Public API for core application
+    # =========================================================================
+
+    def now(self) -> datetime:
+        """
+        Get current simulated time.
+
+        Returns:
+            Current datetime in UTC
+        """
+        return self._clock.now()
+
+    async def advance(self, delta: timedelta) -> None:
+        """
+        Advance simulation time by a delta.
+
+        Args:
+            delta: Amount of time to advance
+
+        Raises:
+            ValueError: If delta is negative
+        """
+        await self._clock.advance(delta)
+
+    async def advance_to(self, target_time: datetime) -> None:
+        """
+        Advance simulation to a specific time.
+
+        Args:
+            target_time: Target datetime
+
+        Raises:
+            ValueError: If target_time is before current time
+        """
+        await self._clock.advance_to(target_time)
+
+    async def wait_for(self, delta: timedelta) -> None:
+        """
+        Wait for a time delta (in simulated time).
+
+        Args:
+            delta: Amount of time to wait
+        """
+        await self._clock.wait_for(delta)
+
+    async def sleep(self, seconds: float) -> None:
+        """
+        Sleep for a number of seconds (in simulated time).
+
+        Args:
+            seconds: Number of seconds to sleep
+        """
+        await self._clock.sleep(seconds)
+
+    def schedule_callback(
+        self,
+        callback,
+        at_time: Optional[datetime] = None,
+        after_delta: Optional[timedelta] = None,
+    ) -> None:
+        """
+        Schedule a callback to be triggered at a specific time.
+
+        Args:
+            callback: Function to call (can be sync or async)
+            at_time: Absolute time to trigger (mutually exclusive with after_delta)
+            after_delta: Relative time from now (mutually exclusive with at_time)
+
+        Raises:
+            ValueError: If neither or both time parameters are provided
+        """
+        self._clock.schedule_callback(callback, at_time, after_delta)
+
+    def set_speed_multiplier(self, multiplier: float) -> None:
+        """
+        Change the speed multiplier.
+
+        Args:
+            multiplier: New speed multiplier (must be > 0)
+
+        Raises:
+            ValueError: If multiplier is <= 0
+        """
+        self._clock.set_speed_multiplier(multiplier)
+
+    def get_speed_multiplier(self) -> float:
+        """Get current speed multiplier."""
+        return self._clock.get_speed_multiplier()
+
+    async def start_auto_advance(self) -> None:
+        """Start automatic clock advancement."""
+        await self._clock.start_auto_advance()
+
+    async def stop_auto_advance(self) -> None:
+        """Stop automatic clock advancement."""
+        await self._clock.stop_auto_advance()
+
+    # =========================================================================
+    # Adapter Creation - Injection of clock into time-aware components
+    # =========================================================================
+
+    def create_repair_cycle_adapter(self):
+        """
+        Create mock repair cycle adapter with injected clock.
+
+        Returns:
+            MockRepairCycleAdapter instance with clock already configured
+        """
+        from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
+
+        adapter = MockRepairCycleAdapter(clock=self._clock)
+        logger.debug("Created MockRepairCycleAdapter via SimulationEngine")
+        return adapter
+
+    def create_review_cycle_adapter(self):
+        """
+        Create mock review cycle adapter with injected clock.
+
+        Returns:
+            MockReviewCycleAdapter instance with clock already configured
+        """
+        from codetoreum.adapters.testing.mock_review_cycle_adapter import MockReviewCycleAdapter
+
+        adapter = MockReviewCycleAdapter(clock=self._clock)
+        logger.debug("Created MockReviewCycleAdapter via SimulationEngine")
+        return adapter
+
+    def create_metrics_query_adapter(
+        self,
+        metrics_adapter=None,
+        event_store=None,
+    ):
+        """
+        Create mock metrics query adapter with injected clock.
+
+        Args:
+            metrics_adapter: Optional metrics storage adapter
+            event_store: Optional event store for event-based metrics
+
+        Returns:
+            MockMetricsQueryAdapter instance with clock already configured
+        """
+        from codetoreum.adapters.primary.input_port_adapters.mock import MockMetricsQueryAdapter
+
+        adapter = MockMetricsQueryAdapter(
+            metrics_adapter=metrics_adapter,
+            event_store=event_store,
+            clock=self._clock,
+        )
+        logger.debug("Created MockMetricsQueryAdapter via SimulationEngine")
+        return adapter
+
+    # =========================================================================
+    # Event Handler Creation - Injection of clock into time-aware handlers
+    # =========================================================================
+
+    def create_repair_cycle_event_handler(self, repair_cycle, event_bus):
+        """
+        Create repair cycle event handler with injected clock.
+
+        Args:
+            repair_cycle: MockRepairCycleAdapter instance
+            event_bus: EventBus instance
+
+        Returns:
+            RepairCycleEventHandler instance with clock already configured
+        """
+        from codetoreum.application.event_handlers import RepairCycleEventHandler
+
+        handler = RepairCycleEventHandler(
+            repair_cycle=repair_cycle,
+            clock=self._clock,
+            event_bus=event_bus,
+        )
+        logger.debug("Created RepairCycleEventHandler via SimulationEngine")
+        return handler
+
+    # =========================================================================
+    # Clock Lifecycle Management
+    # =========================================================================
+
+    async def stop(self) -> None:
+        """
+        Stop the simulation engine (stops auto-advance if running).
+
+        Should be called during teardown to clean up clock resources.
+        """
+        try:
+            await self._clock.stop_auto_advance()
+            logger.debug("SimulationEngine stopped")
+        except Exception as e:
+            logger.error(f"Error stopping SimulationEngine: {e}", exc_info=True)
+
+    def reset(self) -> None:
+        """
+        Reset the clock to initial state.
+
+        Clears scheduled callbacks and resets time to current instant.
+        """
+        self._clock.clear_scheduled_callbacks()
+        self._clock._current_time = datetime.now(timezone.utc)
+        logger.debug("SimulationEngine reset")

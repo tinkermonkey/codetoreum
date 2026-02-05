@@ -7,6 +7,7 @@ from .simulation_clock import (
     reset_clock,
     set_clock,
 )
+from .simulation_engine import SimulationEngine
 from .simulation_config import (
     AgentBehaviorConfig,
     ContainerBehaviorConfig,
@@ -47,6 +48,8 @@ __all__ = [
     "get_clock",
     "set_clock",
     "reset_clock",
+    # Engine
+    "SimulationEngine",
     # Config
     "SimulationConfig",
     "AgentBehaviorConfig",

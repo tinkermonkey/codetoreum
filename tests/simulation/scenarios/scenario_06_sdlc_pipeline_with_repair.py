@@ -296,13 +296,15 @@ class TestScenario06SDLCPipelineWithRepair:
             # Verify infrastructure was created
             assert bootstrap.infrastructure is not None
             assert bootstrap.infrastructure.event_bus is not None
-            assert bootstrap.infrastructure.clock is not None
+
+            # Verify engine was created (engine encapsulates clock)
+            assert bootstrap.engine is not None
 
             # Verify services were created
             assert bootstrap.services is not None
 
-            # Verify the clock is shared between repair cycle and infrastructure
-            assert bootstrap.adapters.repair_cycle.clock == bootstrap.infrastructure.clock
+            # Verify the clock is shared between repair cycle and engine
+            assert bootstrap.adapters.repair_cycle.clock == bootstrap.engine._clock
 
             logger = __import__('logging').getLogger(__name__)
             logger.info("Bootstrap integration test passed")

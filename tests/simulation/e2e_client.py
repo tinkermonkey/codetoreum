@@ -218,7 +218,10 @@ class SimulationE2EClient:
         self.app = app
         self.bootstrap = bootstrap
         self.client = TestClient(app)
-        self.clock: SimulationClock = bootstrap.infrastructure.clock
+        # Get clock from engine (engine encapsulates clock)
+        if not bootstrap.engine:
+            raise RuntimeError("SimulationEngine not initialized in bootstrap")
+        self.clock: SimulationClock = bootstrap.engine._clock
 
     def close(self):
         """Close the test client and release socket resources."""

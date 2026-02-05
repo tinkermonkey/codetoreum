@@ -16,6 +16,7 @@ from codetoreum.infrastructure.simulation.bootstrap import (
     SimulationPorts,
     SimulationInfrastructure,
 )
+from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
 
 
 @pytest.mark.asyncio
@@ -245,8 +246,9 @@ class TestSimulationApplicationBootstrap:
 
         await bootstrap.setup()
 
-        # Verify clock uses correct multiplier
-        assert bootstrap.infrastructure.clock._speed_multiplier == 50.0
+        # Verify clock uses correct multiplier (engine encapsulates clock)
+        assert bootstrap.engine is not None
+        assert bootstrap.engine._clock._speed_multiplier == 50.0
 
         await bootstrap.teardown()
 
@@ -289,7 +291,7 @@ class TestBootstrapWithFixtures:
         """Test that simulation_infrastructure fixture provides infrastructure."""
         assert simulation_infrastructure is not None
         assert simulation_infrastructure.event_bus is not None
-        assert simulation_infrastructure.clock is not None
+        # Clock is now managed by SimulationEngine, not exposed through infrastructure
 
 
 @pytest.mark.asyncio
@@ -310,10 +312,13 @@ class TestBootstrapErrorHandling:
         config = SimulationConfig.create_fast_config("test")
         bootstrap = SimulationApplicationBootstrap(config)
 
+        # Create engine (required by adapters and infrastructure)
+        bootstrap._engine = SimulationEngine.create(config)
+
         # Create adapters and services but not ports
-        bootstrap.adapters = bootstrap._create_adapters()
+        bootstrap.adapters = await bootstrap._create_adapters()
         bootstrap.infrastructure = bootstrap._create_infrastructure()
-        bootstrap.services = bootstrap._create_services()
+        bootstrap.services = await bootstrap._create_services()
 
         # Try to create FastAPI app without ports
         with pytest.raises(RuntimeError, match="Ports and infrastructure must be created first"):
@@ -344,6 +349,9 @@ class TestBootstrapErrorHandling:
         config = SimulationConfig.create_fast_config("test")
 
         bootstrap = SimulationApplicationBootstrap(config)
+
+        # Create engine first (required by adapters)
+        bootstrap._engine = SimulationEngine.create(config)
 
         # Should still create adapters with defaults
         adapters = await bootstrap._create_adapters()

@@ -89,8 +89,10 @@ async def test_with_bootstrap(simulation_bootstrap):
     # Access services
     execution_service = simulation_bootstrap.services.execution_service
 
-    # Access infrastructure
-    clock = simulation_bootstrap.infrastructure.clock
+    # Access simulation engine (encapsulates clock and time operations)
+    engine = simulation_bootstrap.engine
+    # Advance simulation time via engine
+    await engine.advance(timedelta(hours=1))
 ```
 
 #### `e2e_client`

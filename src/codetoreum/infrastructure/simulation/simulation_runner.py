@@ -15,6 +15,7 @@ from codetoreum.adapters.testing.mock_notifier_adapter import MockNotifierAdapte
 from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
 
 T = TypeVar("T")
 
@@ -84,23 +85,36 @@ class SimulationRunner:
         >>> assert result.success
     """
 
-    def __init__(self, config: SimulationConfig):
+    def __init__(self, config: SimulationConfig, engine: Optional[SimulationEngine] = None):
         """
         Initialize simulation runner.
 
         Args:
             config: Simulation configuration
+            engine: Optional SimulationEngine instance. If provided, uses the engine's
+                    clock instead of creating a new one. This allows runners to work
+                    with a bootstrap's encapsulated engine.
+
+        Note:
+            If engine is provided, the config.time settings are ignored (the engine
+            already has its clock configured). Use this when running scenarios that
+            use SimulationApplicationBootstrap.
         """
         self.config = config
+        self.engine = engine
 
-        # Create simulation clock
-        self.clock = SimulationClock(
-            speed_multiplier=config.time.speed_multiplier,
-            auto_advance=config.time.auto_advance,
-        )
+        # Use engine's clock if provided, otherwise create new one
+        if engine:
+            self.clock = engine._clock  # Access internal clock via engine
+        else:
+            # Create simulation clock
+            self.clock = SimulationClock(
+                speed_multiplier=config.time.speed_multiplier,
+                auto_advance=config.time.auto_advance,
+            )
 
-        if config.time.start_time:
-            self.clock.start_at(config.time.start_time)
+            if config.time.start_time:
+                self.clock.start_at(config.time.start_time)
 
         # Create mock adapters
         self.llm_adapter = MockLLMAdapter(
@@ -389,7 +403,10 @@ class SimulationRunner:
         Args:
             delta: Amount of time to advance
         """
-        await self.clock.advance(delta)
+        if self.engine:
+            await self.engine.advance(delta)
+        else:
+            await self.clock.advance(delta)
 
     async def advance_to(self, target_time: datetime) -> None:
         """
@@ -398,7 +415,10 @@ class SimulationRunner:
         Args:
             target_time: Target time
         """
-        await self.clock.advance_to(target_time)
+        if self.engine:
+            await self.engine.advance_to(target_time)
+        else:
+            await self.clock.advance_to(target_time)
 
     def get_events_by_type(self, event_type: str) -> List[DomainEvent]:
         """
