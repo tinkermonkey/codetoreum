@@ -134,7 +134,7 @@ class ConversationalSessionState:
             work_item_id=data.get("work_item_id", ""),
             project_id=data.get("project_id", ""),
             agent_assignment=data.get("agent_assignment", ""),
-            column_name=data.get("column_name", ""),
+            column_name=data.get("column_name"),
             llm_conversation_id=data.get("llm_conversation_id"),
             last_processed_comment_id=data.get("last_processed_comment_id", ""),
             last_interaction_timestamp=data.get("last_interaction_timestamp", ""),

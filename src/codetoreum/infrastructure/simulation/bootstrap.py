@@ -666,7 +666,7 @@ class SimulationApplicationBootstrap:
         Register repair cycle event handler with the event bus.
 
         This handler listens for WorkItemColumnChanged events and invokes
-        the repair cycle when items enter the Testing column.
+        the repair cycle when items enter the configured repair cycle stage.
 
         The SimulationEngine injects the clock into the handler, keeping
         simulation details encapsulated.
@@ -742,7 +742,7 @@ class SimulationApplicationBootstrap:
 
         # Register repair cycle event handler with event bus
         # This allows the handler to listen for WorkItemColumnChanged events
-        # and invoke the repair cycle when items enter the Testing column
+        # and invoke the repair cycle when items enter the configured repair cycle stage
         self._register_repair_cycle_handler()
 
         return app

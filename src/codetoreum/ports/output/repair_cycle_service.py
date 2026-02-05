@@ -58,7 +58,7 @@ class IRepairCycle(Protocol):
     """Port interface for repair cycle operations.
 
     The repair cycle is a deterministic test-fix-validate loop used in the
-    Testing column of the SDLC workflow. It executes test types sequentially
+    configured repair cycle stage of the SDLC workflow. It executes test types sequentially
     (UNIT → INTEGRATION → E2E) with fast-fail behavior.
 
     For each test type:

@@ -74,7 +74,7 @@ class EventBusRegistry:
             workflow_orchestrator: Workflow orchestrator service
             execution_service: Execution service
             review_service: Review service
-            repair_cycle: Repair cycle adapter (for Testing column automation)
+            repair_cycle: Repair cycle adapter (for repair cycle automation)
             clock: Simulation clock (for repair cycle)
 
         Raises:
@@ -266,7 +266,7 @@ def setup_event_bus(
         workflow_orchestrator: Workflow orchestrator service
         execution_service: Execution service
         review_service: Review service
-        repair_cycle: Repair cycle adapter (for Testing column automation)
+        repair_cycle: Repair cycle adapter (for repair cycle automation)
         clock: Simulation clock (for repair cycle)
         max_retries: Maximum retry attempts for failed handlers
         retry_delay_seconds: Delay between retries

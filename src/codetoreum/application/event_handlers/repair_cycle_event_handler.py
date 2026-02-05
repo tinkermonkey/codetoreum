@@ -1,9 +1,9 @@
-"""Event handler for repair cycle (Testing column) automation.
+"""Event handler for repair cycle automation.
 
 Subscribes to workitem.column_changed events and orchestrates:
-- Detection of work items entering the Testing column
+- Detection of work items entering the configured repair cycle stage
 - Invocation of the repair cycle (test-fix-validate loop)
-- Coordination with MockRepairCycleAdapter for test execution
+- Coordination with repair cycle adapters for test execution
 """
 
 import logging
@@ -37,9 +37,9 @@ class RepairCycleEventContext:
 
 @event_handler("WorkItemColumnChanged")
 class RepairCycleEventHandler(EventHandler):
-    """Handles workitem.column_changed events for Testing column automation.
+    """Handles workitem.column_changed events for repair cycle automation.
 
-    Responds to work items entering the Testing column by initiating the
+    Responds to work items entering the configured repair cycle stage by initiating the
     deterministic repair cycle (test-fix-validate loop).
 
     Example:
@@ -50,7 +50,7 @@ class RepairCycleEventHandler(EventHandler):
         )
         bus.register_handler(handler)
 
-        # When a work item moves to the Testing column:
+        # When a work item moves to the configured repair cycle stage:
         event = WorkItemColumnChanged(
             aggregate_id="item-1",
             payload={
@@ -119,9 +119,9 @@ class RepairCycleEventHandler(EventHandler):
 
     async def handle_column_change(self, event: WorkItemColumnChanged) -> None:
         """
-        Process column movement and trigger repair cycle if entering Testing column.
+        Process column movement and trigger repair cycle if entering configured repair stage.
 
-        The repair cycle is initiated when a work item enters the Testing column.
+        The repair cycle is initiated when a work item enters the configured repair cycle stage.
         The cycle executes test types sequentially (UNIT → INTEGRATION → E2E) with
         fast-fail behavior.
 
@@ -137,7 +137,7 @@ class RepairCycleEventHandler(EventHandler):
         if to_column != "Testing":
             return
 
-        logger.info(f"Work item {work_item_id} entered Testing column, initiating repair cycle")
+        logger.info(f"Work item {work_item_id} entered configured repair cycle stage, initiating repair cycle")
 
         try:
             # Create repair cycle context
