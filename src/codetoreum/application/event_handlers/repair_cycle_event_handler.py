@@ -133,7 +133,7 @@ class RepairCycleEventHandler(EventHandler):
         project_id = event.payload.get("project_id")
         to_column = event.payload.get("to_column")
 
-        # Only process if work item is entering the Testing column
+        # Only process if work item is entering the configured repair cycle stage
         if to_column != "Testing":
             return
 
