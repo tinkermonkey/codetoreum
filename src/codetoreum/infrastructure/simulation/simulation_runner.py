@@ -95,8 +95,8 @@ class SimulationRunner:
         Args:
             config: Simulation configuration
             engine: Optional SimulationEngine instance. If provided, uses the engine's
-                    clock instead of creating a new one. This allows runners to work
-                    with a bootstrap's encapsulated engine.
+                    public API for time operations instead of creating a new clock.
+                    This allows runners to work with a bootstrap's encapsulated engine.
 
         Note:
             If engine is provided, the config.time settings are ignored (the engine
@@ -106,15 +106,9 @@ class SimulationRunner:
         self.config = config
         self.engine = engine
 
-        # Use engine's clock if provided, otherwise create new one
-        if engine:
-            # NOTE: Accessing _clock directly for backward compatibility.
-            # SimulationRunner needs direct clock access to coordinate timing across
-            # the full scenario execution. The engine's public API methods (advance, etc.)
-            # are sufficient for most use cases, but the runner manages its own execution
-            # loop and needs the clock object itself.
-            self.clock = engine._clock
-        else:
+        # When engine is provided, we'll use its public API (advance, now, etc.)
+        # Otherwise create a new clock for standalone scenarios
+        if not engine:
             # Create simulation clock
             self.clock = SimulationClock(
                 speed_multiplier=config.time.speed_multiplier,
@@ -123,6 +117,8 @@ class SimulationRunner:
 
             if config.time.start_time:
                 self.clock.start_at(config.time.start_time)
+        else:
+            self.clock = None
 
         # Create mock adapters
         self.llm_adapter = MockLLMAdapter(
@@ -154,6 +150,13 @@ class SimulationRunner:
         # Start and end times
         self._start_time: Optional[datetime] = None
         self._end_time: Optional[datetime] = None
+
+    def _get_clock_now(self) -> datetime:
+        """Get current simulated time from engine or clock."""
+        if self.engine:
+            return self.engine.now()
+        else:
+            return self.clock.now()
 
     def _configure_adapters(self) -> None:
         """Configure adapters based on simulation config."""
@@ -187,7 +190,7 @@ class SimulationRunner:
             SimulationResult with outcome and statistics
         """
         self._start_time = datetime.now(timezone.utc)
-        simulated_start_time = self.clock.now()
+        simulated_start_time = self._get_clock_now()
 
         errors = []
 
@@ -205,7 +208,7 @@ class SimulationRunner:
             logger.error(error_msg, exc_info=True)
 
         self._end_time = datetime.now(timezone.utc)
-        simulated_end_time = self.clock.now()
+        simulated_end_time = self._get_clock_now()
 
         # Calculate durations
         real_duration = (self._end_time - self._start_time).total_seconds()
@@ -263,7 +266,7 @@ class SimulationRunner:
             assertion_name=assertion_name,
             passed=condition,
             message=message if not condition else "Passed",
-            timestamp=self.clock.now(),
+            timestamp=self._get_clock_now(),
         )
         self.assertions.append(result)
 
@@ -470,7 +473,7 @@ class SimulationRunner:
 
         print(f"\n=== Simulation Summary: {self.config.scenario_name} ===")
         print(f"Real time elapsed: {(self._end_time - self._start_time).total_seconds():.2f}s")
-        print(f"Simulated time: {(self.clock.now() - (self.config.time.start_time or self._start_time)).total_seconds():.2f}s")
+        print(f"Simulated time: {(self._get_clock_now() - (self.config.time.start_time or self._start_time)).total_seconds():.2f}s")
         print(f"Speed multiplier: {self.config.time.speed_multiplier}x")
         print(f"\nEvents captured: {len(self.captured_events)}")
         print(f"Metrics recorded: {sum(len(m) for m in self.metrics_adapter.get_all_metrics().values())}")

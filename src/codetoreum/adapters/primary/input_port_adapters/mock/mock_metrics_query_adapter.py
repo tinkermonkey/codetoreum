@@ -184,7 +184,7 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
                 mock_external_services=True,
                 event_replay_enabled=True,
                 current_simulation_time=self._clock.now(),
-                started_at=self._clock._current_time,
+                started_at=self._clock.now(),
             )
 
         if self._simulation_mode:
