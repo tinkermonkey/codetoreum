@@ -43,6 +43,9 @@ class SimulationEngine:
     The engine ensures that core components (domain layer, application layer)
     never see or use the clock directly - they only use the engine's public API.
 
+    For tests and simulation code that need direct clock access (e.g., to verify
+    clock synchronization across components), use get_clock_for_testing().
+
     Usage:
         # In bootstrap:
         engine = SimulationEngine.create(config)
@@ -54,6 +57,7 @@ class SimulationEngine:
         await engine.advance(timedelta(hours=1))
         await engine.wait_for(timedelta(minutes=30))
         engine.now()  # Get current time
+        clock = engine.get_clock_for_testing()  # For test assertions
     """
 
     def __init__(self, clock: SimulationClock):
@@ -114,6 +118,23 @@ class SimulationEngine:
             Current datetime in UTC
         """
         return self._clock.now()
+
+    def get_clock_for_testing(self) -> SimulationClock:
+        """
+        Get the simulation clock for testing and verification.
+
+        This method is intended for test code that needs to verify clock
+        synchronization across adapters or directly manipulate the clock.
+        Application code should use the public engine APIs instead.
+
+        Returns:
+            The SimulationClock instance managed by this engine
+
+        Note:
+            This breaks encapsulation intentionally for testing purposes.
+            Use sparingly and only in test/simulation code.
+        """
+        return self._clock
 
     async def advance(self, delta: timedelta) -> None:
         """
