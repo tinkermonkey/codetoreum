@@ -583,7 +583,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
             })
 
         return ReviewCycleResult(
-            next_column="Testing" if final_status == "APPROVED" else request.board_id,
+            next_column="Testing" if final_status == "APPROVED" else "Code Review",
             cycle_complete=True,
             final_status=final_status,
             total_iterations=iteration,
