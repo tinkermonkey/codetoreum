@@ -738,6 +738,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
             try:
                 self._event_handlers[event_type].remove(handler)
             except ValueError:
+                # Handler was not registered; nothing to remove.
                 pass
 
     def emit(self, event) -> None:
