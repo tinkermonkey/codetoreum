@@ -16,6 +16,7 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestType,
 )
 from codetoreum.infrastructure.event_bus import EventHandler, event_handler, EventBus
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.exceptions import ExternalServiceError
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle
