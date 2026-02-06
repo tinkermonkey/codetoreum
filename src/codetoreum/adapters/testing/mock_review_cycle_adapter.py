@@ -367,7 +367,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
                 await self.clock.advance(timedelta(seconds=30))
 
                 # Process the decision
-                review_result = decision_item.to_review_result()
+                decision_item.to_review_result()
 
                 if decision_item.decision == ReviewDecision.APPROVE:
                     cycle.start_iteration(
