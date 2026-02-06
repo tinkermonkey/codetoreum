@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from codetoreum.adapters.testing.mock_review_cycle_adapter import MockReviewCycleAdapter
     from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
     from codetoreum.adapters.testing.mock_metrics_query_adapter import MockMetricsQueryAdapter
+    from codetoreum.application.event_handlers import RepairCycleEventHandler
 
 logger = logging.getLogger(__name__)
 
