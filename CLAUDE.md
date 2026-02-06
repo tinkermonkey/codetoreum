@@ -232,6 +232,86 @@ Database-backed configuration with web UI:
 - Adapters MUST remain pure (no resilience logic embedded)
 - No silent error handling (all errors logged with exc_info=True)
 
+## Simulation Testing Infrastructure
+
+The system includes a comprehensive simulation framework for fast, deterministic testing without external services.
+
+### Key Components
+
+**SimulationRunner** (`src/codetoreum/infrastructure/simulation/simulation_runner.py`)
+- Orchestrates test scenarios
+- Provides assertion helpers (assert_event_occurred, assert_metric_recorded, etc.)
+- Access to mock adapters (llm_adapter, container_adapter, metrics_adapter, notifier_adapter)
+
+**SimulationConfig** (`src/codetoreum/infrastructure/simulation/simulation_config.py`)
+- Configuration for simulation behavior (time, agents, containers, notifications)
+- `create_fast_config()` - 100x speed multiplier for tests
+- `create_realistic_config()` - 1x speed for behavior testing
+- Support for YAML configuration files via `from_yaml()`
+
+**SimulationClock** (`src/codetoreum/infrastructure/simulation/simulation_clock.py`)
+- Time control with configurable speed multipliers
+- `advance(delta)` - Fast-forward by duration
+- `advance_to(time)` - Jump to specific time
+- `now()` - Get current simulation time
+
+**Mock Adapters** (`src/codetoreum/adapters/testing/`)
+- 18 total adapters (mock + in-memory implementations)
+- MockLLMAdapter, MockBoardAdapter, MockReviewCycleAdapter, MockRepairCycleAdapter
+- InMemoryEventStore, InMemoryStorageAdapter, InMemoryMetricsAdapter
+- See `MOCK_ADAPTERS_REFERENCE.md` for complete reference
+
+### Simulation Scenarios
+
+12 predefined scenarios testing different workflows:
+- **Scenarios 01-05**: Basic workflows (simple, parallel, review, failure, complex)
+- **Scenarios 06-06b**: Full SDLC pipeline (with/without repair)
+- **Scenario 07**: Repair cycle test-fix-validate loops
+- **Scenario 09**: Queue position-based ordering
+- **Scenarios 10-10b**: Agent execution and multi-turn dialogue
+- **Scenario 12**: Container failure recovery
+
+See `documentation/simulation_scenarios/SCENARIOS_COMPLETE.md` for detailed specifications.
+
+### Testing Pattern
+
+```python
+@pytest.mark.asyncio
+async def test_workflow():
+    # 1. Create configuration
+    config = SimulationConfig.create_fast_config("test_name", speed_multiplier=100.0)
+
+    # 2. Create runner
+    runner = SimulationRunner(config)
+
+    # 3. Define scenario
+    async def scenario(sim):
+        # Trigger actions, advance time, make assertions
+        await sim.advance_time(timedelta(minutes=5))
+        sim.assert_event_occurred("WorkflowStarted")
+
+    # 4. Run and verify
+    result = await runner.run(scenario)
+    assert result.success
+    assert result.speed_multiplier >= 10.0
+```
+
+### Key Features
+
+- **Time Manipulation**: 10-100x faster than real execution
+- **Determinism**: Same input always produces same output
+- **No External Dependencies**: All services mocked/in-memory
+- **Complete Assertions**: Event, metric, and notification validation
+- **Event Sourcing**: Full audit trail of all domain events
+- **Fast Feedback**: Typical scenario runs in < 30 seconds real time
+
+### Documentation References
+
+- `tests/simulation/README.md` - Framework overview and best practices
+- `tests/simulation/SCENARIO_FORMAT.md` - Scenario creation guide
+- `documentation/simulation_scenarios/SCENARIOS_COMPLETE.md` - All scenario specifications
+- `documentation/01_design/infrastructure/MOCK_ADAPTERS_REFERENCE.md` - Mock adapter guide
+
 ## Key Documentation
 
 **Essential Reading:**
@@ -239,13 +319,19 @@ Database-backed configuration with web UI:
 2. `documentation/01_design/03_implementation_plan.md` - Implementation plan
 3. `documentation/01_design/infrastructure/resilience_infrastructure_design.md` - Resilience patterns
 4. `documentation/01_design/ports/output/NEW_INTERFACES_QUICK_REFERENCE.md` - Port interface guide
+5. `documentation/01_design/ports/output/COMPREHENSIVE_PORTS_REFERENCE.md` - Complete port inventory (28+ ports)
+
+**Testing & Simulation:**
+- `tests/simulation/README.md` - Simulation testing framework
+- `documentation/simulation_scenarios/SCENARIOS_COMPLETE.md` - Scenario specifications
+- `documentation/01_design/infrastructure/MOCK_ADAPTERS_REFERENCE.md` - Mock adapter reference
 
 **Design Specifications:**
-- `domains/` - Domain model specifications
-- `application_services/` - Application service designs
-- `input_ports/` and `output_ports/` - Port interface specifications
-- `events/` - Domain event catalog
-- `infrastructure/` - Cross-cutting infrastructure
+- `documentation/01_design/domains/` - Domain model specifications
+- `documentation/01_design/application_services/` - Application service designs
+- `documentation/01_design/ports/` - Port interface specifications
+- `documentation/01_design/events/` - Domain event catalog
+- `documentation/01_design/infrastructure/` - Cross-cutting infrastructure
 
 ---
 
