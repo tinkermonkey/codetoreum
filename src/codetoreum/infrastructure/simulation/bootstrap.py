@@ -273,6 +273,7 @@ class SimulationApplicationBootstrap:
 
         except Exception as e:
             logger.error(f"Bootstrap setup failed: {e}",
+                exc_info=True,
                 extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
             )
             raise

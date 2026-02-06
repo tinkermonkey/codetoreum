@@ -1,10 +1,13 @@
 """Simulation runner for orchestrating test scenarios."""
 
 import asyncio
+import logging
 import traceback
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, TypeVar
+
+logger = logging.getLogger(__name__)
 
 from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
 from codetoreum.adapters.testing.in_memory_metrics_adapter import (
@@ -199,6 +202,7 @@ class SimulationRunner:
             error_msg = f"Scenario execution failed: {str(e)}"
             error_traceback = traceback.format_exc()
             errors.append(f"{error_msg}\n{error_traceback}")
+            logger.error(error_msg, exc_info=True)
 
         self._end_time = datetime.now(timezone.utc)
         simulated_end_time = self.clock.now()

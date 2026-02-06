@@ -346,6 +346,10 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         sequence = self._review_sequences.get(work_item_id, None)
         if sequence is None:
             # Default to approve on first iteration
+            logger.warning(
+                f"No review sequence configured for work item {work_item_id}, "
+                "falling back to auto-approve on first iteration"
+            )
             sequence = [ReviewSequenceItem(
                 decision=ReviewDecision.APPROVE,
                 summary="Approved by mock reviewer"
@@ -537,6 +541,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
                 exc_info=True,
                 extra={"error_id": ErrorRegistry.ERR_REVIEW_CYCLE_ERROR}
             )
+            raise
 
         # Save cycle state
         cycle_state = ReviewCycleState(

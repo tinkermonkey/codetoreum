@@ -114,8 +114,9 @@ class RepairCycleEventHandler(EventHandler):
             logger.error(
                 f"Error handling repair cycle for {event.payload.get('work_item_id')}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_REPAIR_CYCLE_HANDLE_FAILURE"},
+                extra={"error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
             )
+            raise
 
     async def handle_column_change(self, event: WorkItemColumnChanged) -> None:
         """
@@ -180,9 +181,10 @@ class RepairCycleEventHandler(EventHandler):
                 f"Repair cycle execution failed for {work_item_id}: {e}",
                 exc_info=True,
                 extra={
-                    "error_id": "ERR_REPAIR_CYCLE_EXECUTION_FAILURE",
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_STAGE_FAILURE,
                     "work_item_id": work_item_id,
                     "project_id": project_id,
                     "board_id": board_id,
                 },
             )
+            raise
