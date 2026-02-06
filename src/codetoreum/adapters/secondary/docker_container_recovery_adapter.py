@@ -994,6 +994,42 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
             )
         return processed
 
+    def close(self) -> None:
+        """Close Docker client and clean up all resources."""
+        if self._docker_client is not None:
+            try:
+                # Close the API client's session and adapter connection pools
+                if hasattr(self._docker_client, 'api'):
+                    api = self._docker_client.api
+                    # Close HTTP session
+                    if hasattr(api, '_session') and api._session:
+                        try:
+                            api._session.close()
+                        except Exception:
+                            pass
+                    # Close adapters (which hold socket connections)
+                    if hasattr(api, '_adapters') and api._adapters:
+                        try:
+                            for adapter in api._adapters.values():
+                                if hasattr(adapter, 'close'):
+                                    adapter.close()
+                        except Exception:
+                            pass
+                    if hasattr(api, 'close'):
+                        try:
+                            api.close()
+                        except Exception:
+                            pass
+            except Exception:
+                logger.debug("Error cleaning up Docker API client", exc_info=True)
+
+            try:
+                self._docker_client.close()
+            except Exception:
+                logger.debug("Error closing Docker client", exc_info=True)
+            finally:
+                self._docker_client = None
+
     async def recover_or_cleanup_containers(self) -> "RecoveryResult":
         """Execute full recovery/cleanup cycle - DEPRECATED.
 
