@@ -39,7 +39,7 @@ from codetoreum.ports.output.review_cycle_service import (
     ReviewStatus as ReviewStatusLiteral,
     IterationOutput,
 )
-from codetoreum.ports.output.monitoring import MonitoringConfig, MonitoringStatus
+from codetoreum.ports.output.monitoring import MonitoringConfig, MonitoringState, MonitoringStatus
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.infrastructure.error_ids import ErrorRegistry
@@ -782,12 +782,12 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
     ) -> MonitoringStatus:
         """Start monitoring (no-op for mock)."""
         status = MonitoringStatus(
-            service_name="MockReviewCycleAdapter",
-            is_running=True,
-            timestamp=self.clock.now().isoformat(),
+            state=MonitoringState.ACTIVE,
+            project_id=config.project_id,
+            started_at=self.clock.now().isoformat(),
         )
         with self._lock:
-            self._monitoring["default"] = status
+            self._monitoring[config.project_id] = status
         return status
 
     async def stop_monitoring(self) -> None:

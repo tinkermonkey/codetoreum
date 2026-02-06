@@ -42,7 +42,7 @@ from codetoreum.domain.events.repair_cycle_events import (
     RepairCycleWarningReviewCompletedEvent,
     RepairCycleWarningReviewStartedEvent,
 )
-from codetoreum.ports.output.monitoring import MonitoringConfig, MonitoringStatus
+from codetoreum.ports.output.monitoring import MonitoringConfig, MonitoringState, MonitoringStatus
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle, RepairCycleContext
 from codetoreum.ports.output.repair_cycle_checkpoint_store import IRepairCycleCheckpointStore
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
@@ -570,11 +570,11 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
     ) -> MonitoringStatus:
         """Start monitoring (no-op for mock)."""
         status = MonitoringStatus(
-            service_name="MockRepairCycleAdapter",
-            is_running=True,
-            timestamp=self.clock.now().isoformat(),
+            state=MonitoringState.ACTIVE,
+            project_id=config.project_id,
+            started_at=self.clock.now().isoformat(),
         )
-        self._monitoring["default"] = status
+        self._monitoring[config.project_id] = status
         return status
 
     async def stop_monitoring(self) -> None:
