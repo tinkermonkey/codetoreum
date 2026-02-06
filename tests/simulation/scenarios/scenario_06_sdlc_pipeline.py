@@ -17,7 +17,6 @@ from codetoreum.adapters.testing.mock_review_cycle_adapter import (
 from codetoreum.domain.review_cycle import ReviewDecision
 from codetoreum.ports.output.review_cycle_service import (
     ReviewCycleRequest,
-    ReviewStatus,
     ReviewFinding,
 )
 import time
