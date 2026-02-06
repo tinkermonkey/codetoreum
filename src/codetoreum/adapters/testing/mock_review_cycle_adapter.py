@@ -535,7 +535,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
             logger.error(
                 f"Error during review cycle execution: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_REVIEW_CYCLE_ERROR}
             )
 
         # Save cycle state
