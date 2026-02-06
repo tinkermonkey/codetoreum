@@ -82,7 +82,7 @@ class TestScenario06SDLCPipelineWithRepair:
         review_adapter.assert_iteration_count("work-item-1", 1)
 
         # Simulate work item moving to Testing column
-        column_change_event = WorkItemColumnChanged(
+        WorkItemColumnChanged(
             aggregate_id="work-item-1",
             payload={
                 "work_item_id": "work-item-1",
