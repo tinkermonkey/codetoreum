@@ -257,7 +257,7 @@ class TestScenario06SDLCPipeline:
         assert result.final_status == "BLOCKED"
         assert result.total_iterations == 5
         assert result.human_escalation_occurred is True
-        assert result.next_column == "test-board"  # Stuck in current column
+        assert result.next_column == "Code Review"  # Stuck in current column
 
         review_adapter.assert_iteration_count("work-item-4", 5)
         review_adapter.assert_escalation_occurred("work-item-4")
