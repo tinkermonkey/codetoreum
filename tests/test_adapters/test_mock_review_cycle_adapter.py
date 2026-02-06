@@ -11,7 +11,6 @@ Tests cover:
 """
 
 import pytest
-from datetime import datetime, timezone
 
 from codetoreum.adapters.testing.mock_review_cycle_adapter import (
     MockReviewCycleAdapter,
