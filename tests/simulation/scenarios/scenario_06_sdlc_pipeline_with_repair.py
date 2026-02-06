@@ -285,7 +285,7 @@ class TestScenario06SDLCPipelineWithRepair:
         bootstrap = SimulationApplicationBootstrap(config)
 
         # Setup the application
-        app = await bootstrap.setup()
+        await bootstrap.setup()
 
         try:
             # Verify adapters were created
