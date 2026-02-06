@@ -146,10 +146,10 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
 
     @property
     def clock(self) -> SimulationClock:
-        """Private property for internal clock access.
+        """Public property for simulation clock access.
 
-        This property provides internal access to the simulation clock for timing
-        operations within the adapter. External code should not access this.
+        This property provides access to the simulation clock for timing operations
+        and advancing time in tests. Tests can use this to fast-forward simulation time.
         """
         return self._clock
 

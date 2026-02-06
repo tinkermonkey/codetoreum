@@ -33,7 +33,7 @@ class ReviewFinding:
         severity: Severity level of the finding (blocking, major, minor, suggestion)
         description: Description of the finding
         file: Optional source file the finding references
-        line: Optional line number in the file (0-indexed)
+        line: Optional line number in the file (1-indexed)
     """
 
     severity: Literal["blocking", "major", "minor", "suggestion"]
@@ -199,29 +199,28 @@ class IReviewCycle(ABC):
     - Review output parsing
 
     Example:
-        async with review_service as svc:
-            # Start a review cycle
-            request = ReviewCycleRequest(
-                work_item_id="item-1",
-                project_id="proj-1",
-                board_id="board-1",
-                maker_agent="junior_dev",
-                reviewer_agent="senior_dev",
-                max_iterations=3,
-                auto_advance_on_approval=True,
-                escalate_on_blocked=True,
-                previous_stage_output="Initial development output"
-            )
-            result = await svc.start_review_cycle(request)
+        # Start a review cycle
+        request = ReviewCycleRequest(
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
+            maker_agent="junior_dev",
+            reviewer_agent="senior_dev",
+            max_iterations=3,
+            auto_advance_on_approval=True,
+            escalate_on_blocked=True,
+            previous_stage_output="Initial development output"
+        )
+        result = await review_service.start_review_cycle(request)
 
-            # Handle escalation if needed
-            if result.human_escalation_occurred:
-                cycle_state = await svc.get_cycle_state(request.work_item_id)
-                # Wait for human feedback
-                await svc.resume_with_human_feedback(
-                    cycle_state,
-                    "Please use async/await pattern"
-                )
+        # Handle escalation if needed
+        if result.human_escalation_occurred:
+            cycle_state = await review_service.get_cycle_state(request.work_item_id)
+            # Wait for human feedback
+            await review_service.resume_with_human_feedback(
+                cycle_state,
+                "Please address reviewer feedback"
+            )
     """
 
     @abstractmethod

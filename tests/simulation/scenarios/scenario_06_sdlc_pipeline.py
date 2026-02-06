@@ -39,7 +39,7 @@ class TestScenario06SDLCPipeline:
         - 1 iteration
         - 0 escalations
         - Final column: Testing
-        - Events: CYCLE_STARTED, REVIEW_COMPLETED(APPROVED), CYCLE_APPROVED
+        - Events: REVIEW_CYCLE_STARTED, REVIEW_CYCLE_COMPLETED, review_cycle.approved
         """
         clock = SimulationClock(speed_multiplier=100.0)
         review_adapter = MockReviewCycleAdapter(clock)
@@ -95,7 +95,7 @@ class TestScenario06SDLCPipeline:
         - 3 iterations
         - 0 escalations
         - Final column: Testing
-        - Events: 3x REVIEW_COMPLETED, 2x MAKER_REVISION, CYCLE_APPROVED
+        - Events: 3x review_cycle.iteration_completed, 2x review_cycle.maker_revision, review_cycle.approved
         """
         clock = SimulationClock(speed_multiplier=100.0)
         review_adapter = MockReviewCycleAdapter(clock)
@@ -155,7 +155,7 @@ class TestScenario06SDLCPipeline:
         - 2 iterations
         - 1 escalation
         - Final column: Testing
-        - Events: ESCALATED_TO_HUMAN, HUMAN_FEEDBACK_RECEIVED, CYCLE_APPROVED
+        - Events: review_cycle.escalated_to_human, REVIEW_CYCLE_HUMAN_FEEDBACK_RECEIVED, review_cycle.approved
         """
         clock = SimulationClock(speed_multiplier=100.0)
         review_adapter = MockReviewCycleAdapter(clock)
@@ -227,7 +227,7 @@ class TestScenario06SDLCPipeline:
         - 5 iterations
         - 1 escalation (auto)
         - Final column: Code Review (stuck)
-        - Events: 5x REVIEW_COMPLETED, 5x MAKER_REVISION_COMPLETED, MAX_ITERATIONS_REACHED
+        - Events: 5x review_cycle.iteration_completed, 5x review_cycle.maker_revision, review_cycle.max_iterations_reached
         """
         clock = SimulationClock(speed_multiplier=100.0)
         review_adapter = MockReviewCycleAdapter(clock)

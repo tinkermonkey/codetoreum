@@ -156,7 +156,7 @@ events = review_adapter.get_all_events_log()
 
 # Verify event types
 assert any(e["type"] == "REVIEW_CYCLE_STARTED" for e in events)
-assert any(e["type"] == "REVIEW_COMPLETED" for e in events)
+assert any(e["type"] == "REVIEW_CYCLE_COMPLETED" for e in events)
 assert any(e["type"] == "REVIEW_CYCLE_HUMAN_FEEDBACK_RECEIVED" for e in events)
 ```
 
