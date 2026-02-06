@@ -860,19 +860,18 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             )
 
             # Emit event so users/monitoring can be alerted
-            self._emit_event(
-                RepairCycleCheckpointFailedEvent(
-                    type="repair_cycle.checkpoint_failed",
-                    timestamp=self.clock.now().isoformat(),
-                    source="mock_repair_cycle",
-                    pipeline_run_id=context.pipeline_run_id,
-                    test_type=test_type.value,
-                    iteration=iteration,
-                    error_type=type(e).__name__,
-                    error_message=str(e),
-                    checkpoint_store_type=type(self._checkpoint_store).__name__ if self._checkpoint_store else "none",
-                )
+            checkpoint_failed_event = RepairCycleCheckpointFailedEvent(
+                type="repair_cycle.checkpoint_failed",
+                timestamp=self.clock.now().isoformat(),
+                source="mock_repair_cycle",
+                pipeline_run_id=context.pipeline_run_id,
+                test_type=test_type.value,
+                iteration=iteration,
+                error_type=type(e).__name__,
+                error_message=str(e),
+                checkpoint_store_type=type(self._checkpoint_store).__name__ if self._checkpoint_store else "none",
             )
+            self._emit_event("repair_cycle.checkpoint_failed", checkpoint_failed_event)
 
     # Event log retrieval (FR-11.10)
 
