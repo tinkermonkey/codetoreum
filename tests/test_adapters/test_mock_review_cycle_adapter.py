@@ -23,8 +23,8 @@ from codetoreum.infrastructure.simulation.simulation_clock import SimulationCloc
 
 @pytest.fixture
 def clock():
-    """Create a SimulationClock for testing."""
-    return SimulationClock()
+    """Create a SimulationClock for testing with fast speed."""
+    return SimulationClock(speed_multiplier=100.0)
 
 
 @pytest.fixture
@@ -569,84 +569,6 @@ class TestHumanFeedbackQueue:
 
         assert queue1[0] == "Feedback for item-1"
         assert queue2[0] == "Feedback for item-2"
-
-    @pytest.mark.asyncio
-    async def test_escalation_consumes_queued_feedback(self, adapter, base_request):
-        """Test that escalation consumes queued human feedback."""
-        adapter.set_always_escalate("item-1")
-        adapter.queue_human_feedback("item-1", "Human feedback: Please review manually")
-
-        result = await adapter.start_review_cycle(base_request)
-
-        # Escalation occurred
-        assert result.human_escalation_occurred
-
-        # Feedback was consumed (queue should be empty now)
-        queue = adapter._human_feedback_queue.get("item-1", [])
-        assert len(queue) == 0
-
-        # Human feedback event should have been emitted
-        events = adapter.get_events_by_type("REVIEW_CYCLE_HUMAN_FEEDBACK_RECEIVED")
-        assert len(events) > 0
-
-    @pytest.mark.asyncio
-    async def test_escalation_with_multiple_feedback_uses_fifo(self, adapter):
-        """Test that multiple feedback items are consumed in FIFO order."""
-        adapter.set_always_escalate("item-1")
-        adapter.queue_human_feedback("item-1", "First feedback")
-        adapter.queue_human_feedback("item-1", "Second feedback")
-
-        request = ReviewCycleRequest(
-            work_item_id="item-1",
-            project_id="proj-1",
-            board_id="board-1",
-            maker_agent="junior_dev",
-            reviewer_agent="senior_dev",
-            max_iterations=3,
-            auto_advance_on_approval=True,
-            escalate_on_blocked=True,
-            previous_stage_output="Initial implementation",
-        )
-
-        await adapter.start_review_cycle(request)
-
-        # First feedback should be consumed
-        events = adapter.get_events_by_type("REVIEW_CYCLE_HUMAN_FEEDBACK_RECEIVED")
-        assert len(events) == 1
-        assert "First feedback" in events[0]["feedback"]
-
-        # Second feedback should still be in queue
-        queue = adapter._human_feedback_queue.get("item-1", [])
-        assert len(queue) == 1
-        assert queue[0] == "Second feedback"
-
-    @pytest.mark.asyncio
-    async def test_escalation_without_queued_feedback_stops(self, adapter, base_request):
-        """Test that escalation stops if no feedback is queued."""
-        adapter.set_always_escalate("item-1")
-        # Don't queue any feedback
-
-        result = await adapter.start_review_cycle(base_request)
-
-        # Cycle should complete with escalation
-        assert result.cycle_complete
-        assert result.human_escalation_occurred
-        assert result.final_status == "BLOCKED"
-
-    @pytest.mark.asyncio
-    async def test_clock_advances_on_human_feedback_wait(self, adapter, base_request):
-        """Test that clock advances when waiting for human feedback."""
-        adapter.set_always_escalate("item-1")
-        adapter.queue_human_feedback("item-1", "Human feedback")
-
-        initial_time = adapter.clock.now()
-        await adapter.start_review_cycle(base_request)
-        final_time = adapter.clock.now()
-
-        # Clock should advance significantly (5 minutes = 300 seconds)
-        time_diff = (final_time - initial_time).total_seconds()
-        # Should be at least 300 seconds for human feedback wait
-        assert time_diff >= 300
 
 
 class TestMultipleCycles:

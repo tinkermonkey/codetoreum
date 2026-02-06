@@ -530,8 +530,6 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
                                 "feedback": feedback,
                                 "iteration": iteration,
                             })
-                        # Continue loop to process next iteration with feedback incorporated
-                        continue
 
                     break
 
