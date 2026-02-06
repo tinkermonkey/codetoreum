@@ -316,7 +316,8 @@ class SimulationApplicationBootstrap:
 
         except Exception as e:
             logger.error(f"Error during teardown: {e}",
-                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                exc_info=True
             )
 
     # =========================================================================
