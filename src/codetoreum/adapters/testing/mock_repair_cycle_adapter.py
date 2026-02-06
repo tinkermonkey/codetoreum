@@ -565,21 +565,48 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
     # ==================== IMonitoredService Implementation ====================
 
     async def start_monitoring(
-        self,
-        config: MonitoringConfig,
-    ) -> MonitoringStatus:
-        """Start monitoring (no-op for mock)."""
+        self, project_id: str, config: MonitoringConfig
+    ) -> None:
+        """Begin monitoring for changes.
+
+        Args:
+            project_id: Project to monitor
+            config: Monitoring configuration
+        """
         status = MonitoringStatus(
             state=MonitoringState.ACTIVE,
-            project_id=config.project_id,
+            project_id=project_id,
             started_at=self.clock.now().isoformat(),
         )
-        self._monitoring[config.project_id] = status
-        return status
+        with self._lock:
+            self._monitoring[project_id] = status
 
-    async def stop_monitoring(self) -> None:
-        """Stop monitoring (no-op for mock)."""
-        pass
+    async def stop_monitoring(self, project_id: str) -> None:
+        """Stop monitoring for changes.
+
+        Args:
+            project_id: Project to stop monitoring
+        """
+        with self._lock:
+            if project_id in self._monitoring:
+                self._monitoring[project_id].state = MonitoringState.STOPPED
+
+    async def get_monitoring_status(self, project_id: str) -> MonitoringStatus:
+        """Query current monitoring state.
+
+        Args:
+            project_id: Project to query status for
+
+        Returns:
+            MonitoringStatus with current state
+        """
+        with self._lock:
+            return self._monitoring.get(
+                project_id,
+                MonitoringStatus(
+                    state=MonitoringState.STOPPED, project_id=project_id
+                ),
+            )
 
     def get_all_events(self) -> List[dict]:
         """Get all emitted events."""
