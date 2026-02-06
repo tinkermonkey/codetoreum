@@ -510,20 +510,18 @@ class TestErrorHandling:
     @pytest.mark.asyncio
     async def test_invalid_max_iterations(self, adapter):
         """Test validation of invalid max iterations."""
-        request = ReviewCycleRequest(
-            work_item_id="item-1",
-            project_id="proj-1",
-            board_id="board-1",
-            maker_agent="junior_dev",
-            reviewer_agent="senior_dev",
-            max_iterations=0,
-            auto_advance_on_approval=True,
-            escalate_on_blocked=True,
-            previous_stage_output="Initial implementation",
-        )
-
         with pytest.raises(ValueError, match="max_iterations must be positive"):
-            await adapter.start_review_cycle(request)
+            ReviewCycleRequest(
+                work_item_id="item-1",
+                project_id="proj-1",
+                board_id="board-1",
+                maker_agent="junior_dev",
+                reviewer_agent="senior_dev",
+                max_iterations=0,
+                auto_advance_on_approval=True,
+                escalate_on_blocked=True,
+                previous_stage_output="Initial implementation",
+            )
 
     def test_assert_no_handler_errors(self, adapter):
         """Test assertion for handler errors."""

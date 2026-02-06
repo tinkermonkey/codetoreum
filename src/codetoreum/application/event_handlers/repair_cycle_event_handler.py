@@ -8,7 +8,7 @@ Subscribes to workitem.column_changed events and orchestrates:
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Tuple
 
 from codetoreum.domain.events import DomainEvent, WorkItemColumnChanged
 from codetoreum.domain.repair_cycle_types import (
@@ -30,7 +30,7 @@ class RepairCycleEventContext:
 
     stage_name: str
     pipeline_run_id: str
-    test_configs: tuple
+    test_configs: Tuple[RepairTestRunConfig, ...]
     agent_name: str
     max_total_agent_calls: int
     checkpoint_interval: int
@@ -81,9 +81,24 @@ class RepairCycleEventHandler(EventHandler):
             clock: Optional simulation clock for deterministic test execution
             event_bus: Event bus for publishing events
         """
-        self.repair_cycle = repair_cycle
-        self.clock = clock
-        self.event_bus = event_bus
+        self._repair_cycle = repair_cycle
+        self._clock = clock
+        self._event_bus = event_bus
+
+    @property
+    def repair_cycle(self) -> IRepairCycle:
+        """Get the repair cycle adapter."""
+        return self._repair_cycle
+
+    @property
+    def clock(self) -> Optional[SimulationClock]:
+        """Get the simulation clock if configured."""
+        return self._clock
+
+    @property
+    def event_bus(self) -> Optional[EventBus]:
+        """Get the event bus if configured."""
+        return self._event_bus
 
     def get_event_types(self) -> list[str]:
         """Get list of event types this handler processes.
@@ -157,7 +172,7 @@ class RepairCycleEventHandler(EventHandler):
             )
 
             # Execute repair cycle
-            result = await self.repair_cycle.execute(context)
+            result = await self._repair_cycle.execute(context)
 
             logger.info(
                 f"Repair cycle completed for {work_item_id}: "

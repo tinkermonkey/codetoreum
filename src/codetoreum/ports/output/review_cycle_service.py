@@ -41,6 +41,11 @@ class ReviewFinding:
     file: Optional[str] = None
     line: Optional[int] = None
 
+    def __post_init__(self) -> None:
+        """Validate finding data."""
+        if not self.description or not self.description.strip():
+            raise ValueError("Finding description cannot be empty")
+
 
 @dataclass
 class ReviewResult:
@@ -104,8 +109,13 @@ class ReviewCycleRequest:
     previous_stage_output: str
     pipeline_run_id: Optional[str] = None
 
+    def __post_init__(self) -> None:
+        """Validate request data."""
+        if self.max_iterations <= 0:
+            raise ValueError(f"max_iterations must be positive, got {self.max_iterations}")
 
-@dataclass
+
+@dataclass(frozen=True)
 class ReviewCycleState:
     """Complete state of an in-progress review cycle.
 
@@ -145,8 +155,16 @@ class ReviewCycleState:
     created_at: str = ""
     updated_at: str = ""
 
+    def __post_init__(self) -> None:
+        """Validate state data."""
+        if self.current_iteration > self.max_iterations:
+            raise ValueError(
+                f"current_iteration ({self.current_iteration}) cannot exceed "
+                f"max_iterations ({self.max_iterations})"
+            )
 
-@dataclass
+
+@dataclass(frozen=True)
 class ReviewCycleResult:
     """Result of a completed or paused review cycle.
 
@@ -163,6 +181,11 @@ class ReviewCycleResult:
     final_status: ReviewStatus
     total_iterations: int
     human_escalation_occurred: bool
+
+    def __post_init__(self) -> None:
+        """Validate result data."""
+        if self.total_iterations <= 0:
+            raise ValueError(f"total_iterations must be positive, got {self.total_iterations}")
 
 
 class IReviewCycle(ABC):

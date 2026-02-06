@@ -168,8 +168,9 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         """
         if not sequence:
             raise ValueError("Review sequence cannot be empty")
-        self._review_sequences[work_item_id] = sequence
-        self._sequence_indices[work_item_id] = 0
+        with self._lock:
+            self._review_sequences[work_item_id] = sequence
+            self._sequence_indices[work_item_id] = 0
 
     def set_approve_immediately(self, work_item_id: str) -> None:
         """Configure work item to be approved on first iteration.
@@ -867,7 +868,8 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         Raises:
             AssertionError: If iteration count doesn't match
         """
-        state = self._cycle_states.get(work_item_id)
+        with self._lock:
+            state = self._cycle_states.get(work_item_id)
         if not state:
             raise AssertionError(
                 f"No cycle state found for work item {work_item_id}"
@@ -922,7 +924,8 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         Raises:
             AssertionError: If escalation didn't occur
         """
-        events = self.get_all_events_log()
+        with self._lock:
+            events = self.get_all_events_log()
         for event in events:
             if (event.get("type") == "REVIEW_CYCLE_COMPLETED" and
                 event.get("work_item_id") == work_item_id):
@@ -945,7 +948,8 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         Raises:
             AssertionError: If escalation occurred
         """
-        events = self.get_all_events_log()
+        with self._lock:
+            events = self.get_all_events_log()
         for event in events:
             if (event.get("type") == "REVIEW_CYCLE_COMPLETED" and
                 event.get("work_item_id") == work_item_id):

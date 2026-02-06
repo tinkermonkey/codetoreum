@@ -225,7 +225,7 @@ class SimulationEngine:
     # Adapter Creation - Injection of clock into time-aware components
     # =========================================================================
 
-    def create_repair_cycle_adapter(self):
+    def create_repair_cycle_adapter(self) -> "MockRepairCycleAdapter":
         """
         Create mock repair cycle adapter with injected clock.
 
@@ -238,7 +238,7 @@ class SimulationEngine:
         logger.debug("Created MockRepairCycleAdapter via SimulationEngine")
         return adapter
 
-    def create_review_cycle_adapter(self):
+    def create_review_cycle_adapter(self) -> "MockReviewCycleAdapter":
         """
         Create mock review cycle adapter with injected clock.
 
@@ -253,9 +253,9 @@ class SimulationEngine:
 
     def create_metrics_query_adapter(
         self,
-        metrics_adapter=None,
-        event_store=None,
-    ):
+        metrics_adapter: Optional[object] = None,
+        event_store: Optional[object] = None,
+    ) -> "MockMetricsQueryAdapter":
         """
         Create mock metrics query adapter with injected clock.
 
@@ -280,7 +280,11 @@ class SimulationEngine:
     # Event Handler Creation - Injection of clock into time-aware handlers
     # =========================================================================
 
-    def create_repair_cycle_event_handler(self, repair_cycle, event_bus):
+    def create_repair_cycle_event_handler(
+        self,
+        repair_cycle: object,
+        event_bus: object,
+    ) -> "RepairCycleEventHandler":
         """
         Create repair cycle event handler with injected clock.
 
