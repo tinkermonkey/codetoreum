@@ -608,7 +608,7 @@ class TestHumanFeedbackQueue:
             previous_stage_output="Initial implementation",
         )
 
-        result = await adapter.start_review_cycle(request)
+        await adapter.start_review_cycle(request)
 
         # First feedback should be consumed
         events = adapter.get_events_by_type("REVIEW_CYCLE_HUMAN_FEEDBACK_RECEIVED")
