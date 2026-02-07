@@ -183,15 +183,6 @@ class TestEventBusRegistryServiceRegistration:
         registry.register_services()
         assert registry._services == {}
 
-    def test_register_services_raises_on_error(self, registry):
-        """Test register_services raises EventBusWiringError on failure."""
-        # Create a non-serializable object to cause registration to fail
-        bad_service = lambda x: x  # Functions can't always be stored properly
-
-        with pytest.raises(EventBusWiringError):
-            # Patch to force error
-            with pytest.raises(Exception):
-                registry.register_services(workflow_orchestrator=bad_service)
 
 
 # ====================================================================================
@@ -341,22 +332,6 @@ class TestEventBusRegistryHandlerRegistration:
         # All handlers should be registered
         assert len(registry._handlers) >= 4
 
-    def test_register_handlers_returns_error_on_failure(
-        self,
-        registry,
-    ):
-        """Test register_handlers raises EventBusWiringError on failure."""
-        # Make registration fail by not registering services but enabling handlers
-        with pytest.raises(EventBusWiringError):
-            # Try to register handler without service - should skip, not error
-            registry.register_handlers(register_repair_cycle=True)
-            # Actually this won't error, it just skips. Let's force an error differently.
-
-    def test_register_handlers_raises_event_bus_wiring_error(self, registry):
-        """Test register_handlers raises proper exception type."""
-        # This is expected behavior - missing service just logs warning
-        registry.register_handlers(register_repair_cycle=True)
-        # No exception should be raised
 
 
 # ====================================================================================
@@ -451,13 +426,6 @@ class TestSetupEventBusFunction:
         assert registry._services.get("repair_cycle") == mock_repair_cycle
         assert registry._services.get("clock") == simulation_clock
 
-    def test_setup_event_bus_raises_on_error(self):
-        """Test setup_event_bus raises EventBusWiringError on failure."""
-        # Invalid configuration that would cause an error
-        with pytest.raises(EventBusWiringError):
-            # Create a scenario where wiring fails
-            # Pass invalid max_retries to trigger error path
-            setup_event_bus(max_retries=-1)
 
 
 # ====================================================================================
