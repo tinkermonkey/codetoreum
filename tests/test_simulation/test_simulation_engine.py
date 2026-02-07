@@ -119,6 +119,47 @@ class TestSimulationEngineTimeOperations:
         assert hasattr(simulation_engine, 'sleep')
         assert callable(simulation_engine.sleep)
 
+    @pytest.mark.asyncio
+    async def test_advance_with_negative_delta_raises_error(self, simulation_engine):
+        """Test advance() with negative delta raises ValueError."""
+        with pytest.raises(ValueError):
+            await simulation_engine.advance(timedelta(hours=-1))
+
+    @pytest.mark.asyncio
+    async def test_advance_with_zero_delta(self, simulation_engine):
+        """Test advance() with zero delta succeeds."""
+        current_time = simulation_engine.now()
+        await simulation_engine.advance(timedelta(seconds=0))
+        # Time should remain unchanged
+        assert simulation_engine.now() == current_time
+
+    @pytest.mark.asyncio
+    async def test_advance_to_with_past_time_raises_error(self, simulation_engine):
+        """Test advance_to() with past time raises ValueError."""
+        current_time = simulation_engine.now()
+        past_time = current_time - timedelta(hours=1)
+
+        with pytest.raises(ValueError):
+            await simulation_engine.advance_to(past_time)
+
+    @pytest.mark.asyncio
+    async def test_advance_to_with_current_time(self, simulation_engine):
+        """Test advance_to() with current time succeeds."""
+        current_time = simulation_engine.now()
+        # Should not raise
+        await simulation_engine.advance_to(current_time)
+        assert simulation_engine.now() == current_time
+
+    @pytest.mark.asyncio
+    async def test_advance_to_with_future_time(self, simulation_engine):
+        """Test advance_to() with future time succeeds."""
+        current_time = simulation_engine.now()
+        future_time = current_time + timedelta(hours=1)
+
+        # Should not raise
+        await simulation_engine.advance_to(future_time)
+        assert simulation_engine.now() >= future_time
+
 
 # ====================================================================================
 # Tests for Speed Multiplier
@@ -399,6 +440,35 @@ class TestSimulationEngineIntegration:
 
         # Adapter should have the same clock instance
         assert repair_adapter.clock is simulation_engine._clock
+
+    def test_factory_methods_share_clock(self, simulation_engine):
+        """Test all factory methods share the same clock instance."""
+        # Create multiple adapters
+        repair_adapter = simulation_engine.create_repair_cycle_adapter()
+        review_adapter = simulation_engine.create_review_cycle_adapter()
+        metrics_adapter = simulation_engine.create_metrics_query_adapter()
+
+        # All should share the same clock
+        assert repair_adapter.clock is simulation_engine._clock
+        assert review_adapter.clock is simulation_engine._clock
+        assert metrics_adapter.clock is simulation_engine._clock
+
+        # All adapter clocks should be the same instance
+        assert repair_adapter.clock is review_adapter.clock
+        assert review_adapter.clock is metrics_adapter.clock
+
+    def test_repair_cycle_event_handler_shares_clock(self, simulation_engine):
+        """Test repair cycle event handler gets the same clock."""
+        repair_cycle = Mock()
+        event_bus = Mock()
+
+        handler = simulation_engine.create_repair_cycle_event_handler(
+            repair_cycle=repair_cycle,
+            event_bus=event_bus,
+        )
+
+        # Handler should have the same clock instance as engine
+        assert handler.clock is simulation_engine._clock
 
     @pytest.mark.asyncio
     async def test_full_simulation_lifecycle_setup_only(self, simulation_config):
