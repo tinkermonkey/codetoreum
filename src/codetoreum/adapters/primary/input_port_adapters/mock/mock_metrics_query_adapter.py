@@ -179,12 +179,12 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
         if self._clock:
             return SimulationModeInfo(
                 enabled=True,
-                time_multiplier=self._clock._speed_multiplier,
+                time_multiplier=self._clock.get_speed_multiplier(),
                 deterministic_responses=True,
                 mock_external_services=True,
                 event_replay_enabled=True,
                 current_simulation_time=self._clock.now(),
-                started_at=self._clock._current_time,
+                started_at=self._clock.now(),
             )
 
         if self._simulation_mode:

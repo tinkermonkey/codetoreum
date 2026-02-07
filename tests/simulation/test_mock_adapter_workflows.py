@@ -129,8 +129,6 @@ class TestDiscussionWorkflow:
         # Setup monitoring for item
         config = DiscussionMonitoringConfig(
             project_id="demo-project",
-            column_name="In Review",
-            agent_assignment="code-review-agent"
         )
         discussion_adapter.start_monitoring("PROJ-100", config)
 
@@ -170,8 +168,6 @@ class TestDiscussionWorkflow:
         """
         config = DiscussionMonitoringConfig(
             project_id="demo-project",
-            column_name="In Review",
-            agent_assignment="review-agent"
         )
         discussion_adapter.start_monitoring("PROJ-200", config)
 
@@ -395,8 +391,6 @@ class TestCombinedWorkflow:
         # 3. Post initial discussion
         config = DiscussionMonitoringConfig(
             project_id="ACME",
-            column_name="Dev",
-            agent_assignment="dev-agent"
         )
         discussion.start_monitoring("ACME-1", config)
         await discussion.add_comment("ACME-1", "Working on this now")

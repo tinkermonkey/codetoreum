@@ -51,8 +51,6 @@ class TestGitHubDiscussionAdapterWebhook:
         """Create monitoring configuration."""
         return DiscussionMonitoringConfig(
             project_id="proj-1",
-            column_name="Review",
-            agent_assignment="agent-1",
         )
 
     @pytest.mark.asyncio
@@ -212,8 +210,6 @@ class TestGitHubDiscussionAdapterPolling:
     def monitoring_config(self):
         return DiscussionMonitoringConfig(
             project_id="proj-1",
-            column_name="Review",
-            agent_assignment="agent-1",
         )
 
     @pytest.mark.asyncio
@@ -449,8 +445,6 @@ class TestGitHubDiscussionAdapterCommands:
     def monitoring_config(self):
         return DiscussionMonitoringConfig(
             project_id="proj-1",
-            column_name="Review",
-            agent_assignment="agent-1",
         )
 
     @pytest.mark.asyncio
@@ -530,8 +524,6 @@ class TestGitHubDiscussionAdapterMonitoring:
     def monitoring_config(self):
         return DiscussionMonitoringConfig(
             project_id="proj-1",
-            column_name="Review",
-            agent_assignment="agent-1",
         )
 
     @pytest.mark.asyncio
@@ -572,8 +564,6 @@ class TestGitHubDiscussionAdapterMonitoring:
         """start_monitoring validates parameters."""
         config = DiscussionMonitoringConfig(
             project_id="proj-1",
-            column_name="Review",
-            agent_assignment="agent-1",
         )
 
         with pytest.raises(ValidationError):
@@ -582,8 +572,6 @@ class TestGitHubDiscussionAdapterMonitoring:
         with pytest.raises(ValidationError):
             adapter.start_monitoring("123", DiscussionMonitoringConfig(
                 project_id="",
-                column_name="Review",
-                agent_assignment="agent-1",
             ))
 
 

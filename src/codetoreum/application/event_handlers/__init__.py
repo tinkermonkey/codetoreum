@@ -6,6 +6,9 @@ from codetoreum.application.event_handlers.board_event_handler import (
 from codetoreum.application.event_handlers.execution_event_handler import (
     ExecutionEventHandler,
 )
+from codetoreum.application.event_handlers.repair_cycle_event_handler import (
+    RepairCycleEventHandler,
+)
 from codetoreum.application.event_handlers.review_event_handler import (
     ReviewEventHandler,
 )
@@ -16,6 +19,7 @@ from codetoreum.application.event_handlers.workflow_event_handler import (
 __all__ = [
     "BoardColumnEventHandler",
     "ExecutionEventHandler",
+    "RepairCycleEventHandler",
     "ReviewEventHandler",
     "WorkflowEventHandler",
 ]

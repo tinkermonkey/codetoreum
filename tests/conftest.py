@@ -29,14 +29,28 @@ def is_docker_available() -> bool:
             return True
         finally:
             # Properly close all resources to avoid ResourceWarnings
+            import gc
             try:
                 if hasattr(client, 'api'):
                     api = client.api
                     # Close the API client's session and adapter connection pools
                     if hasattr(api, '_session') and api._session:
-                        api._session.close()
+                        try:
+                            api._session.close()
+                        except Exception:
+                            pass
+                    if hasattr(api, '_adapters') and api._adapters:
+                        try:
+                            for adapter in api._adapters.values():
+                                if hasattr(adapter, 'close'):
+                                    adapter.close()
+                        except Exception:
+                            pass
                     if hasattr(api, 'close'):
-                        api.close()
+                        try:
+                            api.close()
+                        except Exception:
+                            pass
             except Exception:
                 # Ignore cleanup errors
                 pass
@@ -45,6 +59,8 @@ def is_docker_available() -> bool:
             except Exception:
                 # Ignore cleanup errors
                 pass
+            # Force garbage collection to close any remaining sockets
+            gc.collect()
     except (docker.errors.DockerException, Exception):
         return False
 
@@ -74,14 +90,28 @@ def docker_client() -> Generator[docker.DockerClient, None, None]:
         yield client
     finally:
         # Properly close all resources to avoid ResourceWarnings
+        import gc
         try:
             if hasattr(client, 'api'):
                 api = client.api
                 # Close the API client's session and adapter connection pools
                 if hasattr(api, '_session') and api._session:
-                    api._session.close()
+                    try:
+                        api._session.close()
+                    except Exception:
+                        pass
+                if hasattr(api, '_adapters') and api._adapters:
+                    try:
+                        for adapter in api._adapters.values():
+                            if hasattr(adapter, 'close'):
+                                adapter.close()
+                    except Exception:
+                        pass
                 if hasattr(api, 'close'):
-                    api.close()
+                    try:
+                        api.close()
+                    except Exception:
+                        pass
         except Exception:
             # Ignore cleanup errors
             pass
@@ -90,6 +120,8 @@ def docker_client() -> Generator[docker.DockerClient, None, None]:
         except Exception:
             # Ignore cleanup errors
             pass
+        # Force garbage collection to close any remaining sockets
+        gc.collect()
 
 
 @pytest.fixture

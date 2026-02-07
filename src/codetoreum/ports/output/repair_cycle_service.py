@@ -4,8 +4,8 @@ This interface defines contracts for the repair cycle, which automates the
 process of iteratively executing tests, identifying failures and warnings, and
 coordinating fixes until tests pass or circuit breakers trigger.
 
-The repair cycle is a deterministic test-fix-validate loop used in the Testing
-column of the SDLC workflow. It executes test types sequentially (UNIT →
+The repair cycle is a deterministic test-fix-validate loop used in the
+configured repair cycle stage of the SDLC workflow. It executes test types sequentially (UNIT →
 INTEGRATION → E2E) with fast-fail behavior.
 
 For each test type:
@@ -58,7 +58,7 @@ class IRepairCycle(Protocol):
     """Port interface for repair cycle operations.
 
     The repair cycle is a deterministic test-fix-validate loop used in the
-    Testing column of the SDLC workflow. It executes test types sequentially
+    configured repair cycle stage of the SDLC workflow. It executes test types sequentially
     (UNIT → INTEGRATION → E2E) with fast-fail behavior.
 
     For each test type:

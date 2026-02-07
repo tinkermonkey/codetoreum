@@ -42,7 +42,7 @@ from codetoreum.domain.events.repair_cycle_events import (
     RepairCycleWarningReviewCompletedEvent,
     RepairCycleWarningReviewStartedEvent,
 )
-from codetoreum.ports.output.monitoring import MonitoringConfig, MonitoringStatus
+from codetoreum.ports.output.monitoring import MonitoringConfig, MonitoringState, MonitoringStatus
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle, RepairCycleContext
 from codetoreum.ports.output.repair_cycle_checkpoint_store import IRepairCycleCheckpointStore
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
@@ -105,8 +105,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             checkpoint_store: Optional checkpoint store for recovery testing
         """
         super().__init__()
-        self.clock = clock or SimulationClock()
-        self._clock = self.clock  # Alias for internal use
+        self._clock = clock or SimulationClock()
         self._checkpoint_store = checkpoint_store
         self._current_project: Optional[str] = None
         self._repair_state: Dict[str, Any] = {}
@@ -135,6 +134,15 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         self._monitoring: Dict[str, MonitoringStatus] = {}
         self._handler_errors: List[Dict[str, Any]] = []
         self._lock = threading.Lock()
+
+    @property
+    def clock(self) -> SimulationClock:
+        """Private property for internal clock access.
+
+        This property provides internal access to the simulation clock for timing
+        operations within the adapter. External code should not access this.
+        """
+        return self._clock
 
     # Configuration methods (FR-11.2, FR-11.3, FR-11.4)
 
@@ -557,21 +565,48 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
     # ==================== IMonitoredService Implementation ====================
 
     async def start_monitoring(
-        self,
-        config: MonitoringConfig,
-    ) -> MonitoringStatus:
-        """Start monitoring (no-op for mock)."""
-        status = MonitoringStatus(
-            service_name="MockRepairCycleAdapter",
-            is_running=True,
-            timestamp=self.clock.now().isoformat(),
-        )
-        self._monitoring["default"] = status
-        return status
+        self, project_id: str, config: MonitoringConfig
+    ) -> None:
+        """Begin monitoring for changes.
 
-    async def stop_monitoring(self) -> None:
-        """Stop monitoring (no-op for mock)."""
-        pass
+        Args:
+            project_id: Project to monitor
+            config: Monitoring configuration
+        """
+        status = MonitoringStatus(
+            state=MonitoringState.ACTIVE,
+            project_id=project_id,
+            started_at=self.clock.now().isoformat(),
+        )
+        with self._lock:
+            self._monitoring[project_id] = status
+
+    async def stop_monitoring(self, project_id: str) -> None:
+        """Stop monitoring for changes.
+
+        Args:
+            project_id: Project to stop monitoring
+        """
+        with self._lock:
+            if project_id in self._monitoring:
+                self._monitoring[project_id].state = MonitoringState.STOPPED
+
+    async def get_monitoring_status(self, project_id: str) -> MonitoringStatus:
+        """Query current monitoring state.
+
+        Args:
+            project_id: Project to query status for
+
+        Returns:
+            MonitoringStatus with current state
+        """
+        with self._lock:
+            return self._monitoring.get(
+                project_id,
+                MonitoringStatus(
+                    state=MonitoringState.STOPPED, project_id=project_id
+                ),
+            )
 
     def get_all_events(self) -> List[dict]:
         """Get all emitted events."""
@@ -825,19 +860,18 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             )
 
             # Emit event so users/monitoring can be alerted
-            self._emit_event(
-                RepairCycleCheckpointFailedEvent(
-                    type="repair_cycle.checkpoint_failed",
-                    timestamp=self.clock.now().isoformat(),
-                    source="mock_repair_cycle",
-                    pipeline_run_id=context.pipeline_run_id,
-                    test_type=test_type.value,
-                    iteration=iteration,
-                    error_type=type(e).__name__,
-                    error_message=str(e),
-                    checkpoint_store_type=type(self._checkpoint_store).__name__ if self._checkpoint_store else "none",
-                )
+            checkpoint_failed_event = RepairCycleCheckpointFailedEvent(
+                type="repair_cycle.checkpoint_failed",
+                timestamp=self.clock.now().isoformat(),
+                source="mock_repair_cycle",
+                pipeline_run_id=context.pipeline_run_id,
+                test_type=test_type.value,
+                iteration=iteration,
+                error_type=type(e).__name__,
+                error_message=str(e),
+                checkpoint_store_type=type(self._checkpoint_store).__name__ if self._checkpoint_store else "none",
             )
+            self._emit_event("repair_cycle.checkpoint_failed", checkpoint_failed_event)
 
     # Event log retrieval (FR-11.10)
 

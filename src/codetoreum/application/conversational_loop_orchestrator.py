@@ -42,6 +42,7 @@ from codetoreum.ports.output import (
     IEventStore,
     ILLMProvider,
 )
+from codetoreum.ports.output.discussion_adapter import DiscussionMonitoringConfig
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
@@ -116,8 +117,8 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
             work_item_id: Unique identifier of the work item
             project_id: Unique identifier of the project
             column_config: Configuration dictionary with:
-                - column_name: Name of the board column
                 - agent_assignment: Name of the agent assigned to handle responses
+                - (optional) column_name: Name of the board column for tracking
                 - (optional) other metadata for agent context
 
         Returns:
@@ -132,11 +133,11 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
         if not work_item_id or not project_id:
             raise ValueError("work_item_id and project_id are required")
 
-        column_name = column_config.get("column_name", "")
         agent_assignment = column_config.get("agent_assignment", "")
+        column_name = column_config.get("column_name")
 
-        if not column_name or not agent_assignment:
-            raise ValueError("column_config must include column_name and agent_assignment")
+        if not agent_assignment:
+            raise ValueError("column_config must include agent_assignment")
 
         # Create unique session identifier
         session_id = f"conv_session_{work_item_id}_{int(datetime.now(timezone.utc).timestamp())}"
@@ -156,12 +157,10 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
         )
 
         # Start monitoring for comments
-        monitoring_config = {
-            "project_id": project_id,
-            "column_name": column_name,
-            "agent_assignment": agent_assignment,
-            "last_processed_comment_id": None,
-        }
+        monitoring_config = DiscussionMonitoringConfig(
+            project_id=project_id,
+            last_processed_comment_id=None,
+        )
 
         try:
             self.discussion_adapter.start_monitoring(work_item_id, monitoring_config)
@@ -931,17 +930,12 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
         """
         parts = []
 
-        # Add context about where we are
+        # Add context about the discussion thread
         if isinstance(event.context, CommentContext):
-            if event.context.column_name:
-                parts.append(f"Work item: {event.context.column_name}")
-            if event.context.agent_assignment:
-                parts.append(f"Assigned agent: {event.context.agent_assignment}")
-
             # Add parent comment if available
             if event.context.parent_comment:
                 parent = event.context.parent_comment
-                parts.append(f"\nPrevious comment from {parent.author}:")
+                parts.append(f"Previous comment from {parent.author}:")
                 parts.append(parent.body)
 
         # Add the current comment

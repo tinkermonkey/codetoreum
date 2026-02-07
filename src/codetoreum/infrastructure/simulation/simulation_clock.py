@@ -1,10 +1,13 @@
 """Simulation clock for deterministic time manipulation in tests."""
 
 import asyncio
+import logging
 import threading
 import traceback
 from datetime import datetime, timedelta, timezone
 from typing import Callable, List, Optional, Tuple, Union
+
+logger = logging.getLogger(__name__)
 
 
 class SimulationClock:
@@ -171,8 +174,10 @@ class SimulationClock:
             except Exception as e:
                 # Log but don't stop advancing - distinguish between sync and async errors
                 callback_type = "async" if asyncio.iscoroutinefunction(callback) else "sync"
-                print(f"Error in scheduled {callback_type} callback: {e}")
-                print(traceback.format_exc())
+                logger.error(
+                    f"Error in scheduled {callback_type} callback at {scheduled_time}: {e}",
+                    exc_info=True
+                )
 
     def schedule_callback(
         self,
@@ -305,7 +310,7 @@ class SimulationClock:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                print(f"Error in auto-advance loop: {e}")
+                logger.error(f"Error in auto-advance loop: {e}", exc_info=True)
 
     def reset(self) -> None:
         """Reset clock to current real time and clear all callbacks."""

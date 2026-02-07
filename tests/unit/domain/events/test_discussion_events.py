@@ -337,8 +337,8 @@ class TestCommentContext:
         assert context.is_initial_request is True
         assert context.parent_comment is None
         assert context.thread_id is None
-        assert context.column_name == ""
-        assert context.agent_assignment == ""
+        assert context.column_name is None
+        assert context.agent_assignment is None
 
     def test_context_factory_for_reply(self):
         """Test factory method for creating reply context."""

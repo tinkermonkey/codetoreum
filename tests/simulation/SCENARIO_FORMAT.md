@@ -2,7 +2,7 @@
 
 ## Overview
 
-Simulation scenarios can be defined programmatically using Python or declaratively using YAML files. This document describes both formats.
+Simulation scenarios are primarily defined using Python for maximum flexibility and clarity. YAML can be used to define simulation configuration (agent behavior, timing, container settings) and can be loaded and passed to Python scenarios for parameterization. This document describes both the Python format (primary) and YAML configuration format (supplemental).
 
 ## Python Format (Recommended)
 
@@ -104,9 +104,9 @@ metrics = await runner.metrics_adapter.query_metrics(...)
 notifications = runner.notifier_adapter.get_sent_notifications()
 ```
 
-## YAML Format (Declarative)
+## YAML Configuration Format (Optional)
 
-For simple scenarios, YAML format provides a declarative approach.
+YAML files can be used to configure simulation behavior (time, agent responses, container settings) for parameterized testing. Configuration can be loaded and passed to Python scenario functions. **Note**: Scenario logic (workflow execution, assertions) must be implemented in Python.
 
 ### Basic Structure
 
@@ -289,12 +289,14 @@ def load_scenario(yaml_file: str) -> SimulationConfig:
 
 ## Example Scenarios
 
-See the `scenarios/` directory for complete examples:
+See the `scenarios/` directory for complete Python examples:
 
-1. **scenario_01_simple_workflow.yaml**: Single work item, 3 stages
-2. **scenario_02_parallel_executions.yaml**: Multiple work items in parallel
-3. **scenario_03_review_cycle.yaml**: Maker-checker with feedback loop
-4. **scenario_04_execution_failure.yaml**: Agent failure and retry
-5. **scenario_05_complex_workflow.yaml**: Multi-stage with branches
+1. **scenario_01_simple_workflow.py**: Single work item, 3 stages
+2. **scenario_02_parallel_executions.py**: Multiple work items in parallel
+3. **scenario_03_review_cycle.py**: Maker-checker with feedback loop
+4. **scenario_04_execution_failure.py**: Agent failure and retry
+5. **scenario_05_complex_workflow.py**: Multi-stage with branches
+
+For complete documentation of all scenarios, see `SCENARIOS_COMPLETE.md`.
 
 Each YAML scenario has a corresponding Python test in `test_scenarios.py`.

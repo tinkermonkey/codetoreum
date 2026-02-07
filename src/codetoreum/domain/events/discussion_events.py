@@ -112,8 +112,8 @@ class CommentContext:
         thread_id (Optional[str]): ID of the discussion thread, None if not part of thread
         parent_comment (Optional[Comment]): The parent comment if this is a reply, None otherwise
         is_initial_request (bool): Whether this is the initial request comment (default: False)
-        column_name (str): Name of the board column where comment was made (empty if not applicable)
-        agent_assignment (str): Agent assigned to handle the comment (empty if unassigned)
+        column_name (Optional[str]): Name of the board column where comment was made, None if not applicable
+        agent_assignment (Optional[str]): Agent assigned to handle the comment, None if unassigned
 
     Example:
         >>> context = CommentContext(
@@ -140,8 +140,8 @@ class CommentContext:
     thread_id: Optional[str] = None
     parent_comment: Optional[Comment] = None
     is_initial_request: bool = False
-    column_name: str = ""
-    agent_assignment: str = ""
+    column_name: Optional[str] = None
+    agent_assignment: Optional[str] = None
 
     def __post_init__(self) -> None:
         """Validate comment context after initialization."""
@@ -162,8 +162,8 @@ class CommentContext:
     @classmethod
     def for_initial_request(
         cls,
-        column_name: str = "",
-        agent_assignment: str = "",
+        column_name: Optional[str] = None,
+        agent_assignment: Optional[str] = None,
     ) -> "CommentContext":
         """Factory method to create context for an initial request comment.
 
@@ -172,8 +172,8 @@ class CommentContext:
         which satisfies the type invariants.
 
         Args:
-            column_name: Name of the board column where comment was made
-            agent_assignment: Agent assigned to handle the comment
+            column_name: Name of the board column where comment was made (optional)
+            agent_assignment: Agent assigned to handle the comment (optional)
 
         Returns:
             CommentContext: Context configured for an initial request
@@ -201,8 +201,8 @@ class CommentContext:
         cls,
         thread_id: str,
         parent_comment: Comment,
-        column_name: str = "",
-        agent_assignment: str = "",
+        column_name: Optional[str] = None,
+        agent_assignment: Optional[str] = None,
     ) -> "CommentContext":
         """Factory method to create context for a reply to a parent comment.
 
@@ -213,8 +213,8 @@ class CommentContext:
         Args:
             thread_id: ID of the discussion thread
             parent_comment: The parent comment being replied to
-            column_name: Name of the board column where comment was made
-            agent_assignment: Agent assigned to handle the comment
+            column_name: Name of the board column where comment was made (optional)
+            agent_assignment: Agent assigned to handle the comment (optional)
 
         Returns:
             CommentContext: Context configured for a reply
@@ -268,8 +268,8 @@ class CommentContext:
             thread_id=data.get("thread_id"),
             parent_comment=parent,
             is_initial_request=data.get("is_initial_request", False),
-            column_name=data.get("column_name", ""),
-            agent_assignment=data.get("agent_assignment", ""),
+            column_name=data.get("column_name"),
+            agent_assignment=data.get("agent_assignment"),
         )
 
 

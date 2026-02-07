@@ -92,6 +92,17 @@ from .repair_cycle_events import (
     RepairCycleCompletedEvent,
 )
 
+# Review cycle events
+from .review_cycle_events import (
+    ReviewCycleStartedEvent,
+    ReviewCycleIterationCompletedEvent,
+    ReviewCycleMakerRevisionEvent,
+    ReviewCycleEscalatedToHumanEvent,
+    ReviewCycleHumanFeedbackReceivedEvent,
+    ReviewCycleMaxIterationsReachedEvent,
+    ReviewCycleApprovedEvent,
+)
+
 # Container recovery events
 from .container_recovery_events import (
     ContainerRecoveredEvent,
@@ -205,6 +216,14 @@ __all__ = [
     "RepairCycleCheckpointFailedEvent",
     "RepairCycleMetricsBackendFailedEvent",
     "RepairCycleCompletedEvent",
+    # Review cycle events
+    "ReviewCycleStartedEvent",
+    "ReviewCycleIterationCompletedEvent",
+    "ReviewCycleMakerRevisionEvent",
+    "ReviewCycleEscalatedToHumanEvent",
+    "ReviewCycleHumanFeedbackReceivedEvent",
+    "ReviewCycleMaxIterationsReachedEvent",
+    "ReviewCycleApprovedEvent",
     # Container recovery events
     "ContainerRecoveredEvent",
     "ContainerKilledEvent",

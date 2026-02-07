@@ -49,13 +49,14 @@ from codetoreum.application.container_recovery_service import ContainerRecoveryS
 
 # Infrastructure
 from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
 from codetoreum.infrastructure.adapters.factory import (
     AdapterFactory,
     AdapterFactoryConfig,
 )
 from codetoreum.infrastructure.resilience import OperationMode
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 # Ports
 from codetoreum.ports.input.workflow_command import IWorkflowCommandPort
@@ -118,6 +119,7 @@ class SimulationAdapters:
     config_store: InMemoryConfigStore
     notifier: MockNotifierAdapter
     encryption: SimpleEncryptionAdapter
+    repair_cycle: Any  # MockRepairCycleAdapter - lazy imported to avoid circular dependency
 
 
 @dataclass
@@ -163,10 +165,13 @@ class SimulationPorts:
 
 @dataclass
 class SimulationInfrastructure:
-    """Container for infrastructure components."""
+    """
+    Container for infrastructure components.
+
+    Note: Clock is managed by SimulationEngine, not exposed here.
+    """
 
     event_bus: EventBus
-    clock: SimulationClock
     logger: logging.Logger
 
 
@@ -193,6 +198,9 @@ class SimulationApplicationBootstrap:
         """
         Initialize bootstrap with simulation configuration.
 
+        This creates an internal SimulationEngine that manages all timing
+        and time-aware components in simulation mode.
+
         Args:
             config: Simulation configuration (creates default if None)
         """
@@ -208,17 +216,19 @@ class SimulationApplicationBootstrap:
         # Internal state
         self._is_setup = False
         self._adapter_factory: Optional[AdapterFactory] = None
+        self._engine: Optional[SimulationEngine] = None
 
     async def setup(self) -> FastAPI:
         """
         Set up the entire application stack.
 
         This method executes all 5 bootstrap phases in order:
-        1. Create adapters
-        2. Create infrastructure
-        3. Create services
-        4. Create ports
-        5. Create FastAPI app
+        1. Create clock (early, shared by adapters and infrastructure)
+        2. Create adapters
+        3. Create infrastructure
+        4. Create services
+        5. Create ports
+        6. Create FastAPI app
 
         Returns:
             Fully configured FastAPI application
@@ -231,6 +241,10 @@ class SimulationApplicationBootstrap:
 
         try:
             logger.info("Starting simulation bootstrap...")
+
+            # Phase 0: Create simulation engine (encapsulates clock and timing)
+            logger.info("Phase 0: Creating simulation engine...")
+            self._engine = SimulationEngine.create(self.config)
 
             # Phase 1: Create adapters
             logger.info("Phase 1: Creating adapters...")
@@ -259,6 +273,7 @@ class SimulationApplicationBootstrap:
 
         except Exception as e:
             logger.error(f"Bootstrap setup failed: {e}",
+                exc_info=True,
                 extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
             )
             raise
@@ -279,9 +294,9 @@ class SimulationApplicationBootstrap:
         try:
             logger.info("Tearing down simulation bootstrap...")
 
-            # Stop clock auto-advance if it's running
-            if self.infrastructure and self.infrastructure.clock:
-                await self.infrastructure.clock.stop_auto_advance()
+            # Stop simulation engine
+            if self._engine:
+                await self._engine.stop()
 
             # Clean up resources
             if self.infrastructure and self.infrastructure.event_bus:
@@ -295,13 +310,15 @@ class SimulationApplicationBootstrap:
             self.infrastructure = None
             self.adapters = None
             self._adapter_factory = None
+            self._engine = None
 
             self._is_setup = False
             logger.info("Simulation bootstrap teardown complete")
 
         except Exception as e:
             logger.error(f"Error during teardown: {e}",
-                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                exc_info=True
             )
 
     # =========================================================================
@@ -310,11 +327,18 @@ class SimulationApplicationBootstrap:
 
     async def _create_adapters(self) -> SimulationAdapters:
         """
-        Create all 9 mock adapters using AdapterFactory in simulation mode.
+        Create all 10 mock adapters using AdapterFactory in simulation mode.
+
+        The SimulationEngine automatically injects the clock into time-aware
+        adapters (repair_cycle, review_cycle, metrics_query), hiding simulation
+        implementation details from the adapter constructors.
 
         Returns:
             SimulationAdapters with all adapters configured
         """
+        if not self._engine:
+            raise RuntimeError("SimulationEngine must be created before adapters")
+
         # Create adapter factory in simulation mode with resilience disabled
         factory_config = AdapterFactoryConfig(
             operation_mode=OperationMode.SIMULATION,
@@ -341,7 +365,10 @@ class SimulationApplicationBootstrap:
         # ticket_system, llm_provider, container, repository, and event_store.
         encryption = SimpleEncryptionAdapter()
 
-        logger.info("Created 9 simulation adapters")
+        # Create time-aware adapters via engine (clock is injected internally)
+        repair_cycle = self._engine.create_repair_cycle_adapter()
+
+        logger.info("Created 10 simulation adapters")
 
         return SimulationAdapters(
             ticket_system=ticket_system,
@@ -354,6 +381,7 @@ class SimulationApplicationBootstrap:
             config_store=config_store,
             notifier=notifier,
             encryption=encryption,
+            repair_cycle=repair_cycle,
         )
 
     # =========================================================================
@@ -362,20 +390,16 @@ class SimulationApplicationBootstrap:
 
     def _create_infrastructure(self) -> SimulationInfrastructure:
         """
-        Create infrastructure components (event bus, clock, logger).
+        Create infrastructure components (event bus, logger).
+
+        The SimulationEngine manages the clock internally. The engine is used
+        directly to access clock functionality, not through infrastructure.
 
         Returns:
             SimulationInfrastructure with configured components
         """
-        # Create simulation clock
-        clock = SimulationClock(
-            speed_multiplier=self.config.time.speed_multiplier,
-            auto_advance=self.config.time.auto_advance,
-        )
-
-        # Set start time if configured
-        if self.config.time.start_time:
-            clock.start_at(self.config.time.start_time)
+        if not self._engine:
+            raise RuntimeError("SimulationEngine must be created before infrastructure")
 
         # Create event bus
         event_bus = EventBus()
@@ -385,9 +409,10 @@ class SimulationApplicationBootstrap:
 
         logger.info("Created infrastructure components")
 
+        # Note: Clock is no longer exposed here - it's managed by SimulationEngine
+        # The engine is the single point of control for all timing operations
         return SimulationInfrastructure(
             event_bus=event_bus,
-            clock=clock,
             logger=app_logger,
         )
 
@@ -480,7 +505,6 @@ class SimulationApplicationBootstrap:
 
             async def get_workflow_state(self, issue_id: str):
                 from codetoreum.application.workflow_orchestrator import WorkflowState
-                from codetoreum.infrastructure.error_ids import ErrorRegistry
 
                 if issue_id not in self._states:
                     self._states[issue_id] = WorkflowState(
@@ -594,10 +618,12 @@ class SimulationApplicationBootstrap:
         execution_command = MockExecutionCommandAdapter()
         execution_query = MockExecutionQueryAdapter()
         config_query = MockConfigQueryAdapter()
-        metrics_query = MockMetricsQueryAdapter(
+        # Create metrics query adapter via engine (clock is injected internally)
+        if not self._engine:
+            raise RuntimeError("SimulationEngine must be created before ports")
+        metrics_query = self._engine.create_metrics_query_adapter(
             metrics_adapter=self.adapters.metrics,
             event_store=self.adapters.event_store,
-            clock=self.infrastructure.clock,
         )
         workspace_query = MockWorkspaceQueryAdapter()
         workflow_command = MockWorkflowCommandAdapter()
@@ -632,6 +658,32 @@ class SimulationApplicationBootstrap:
     # =========================================================================
     # Phase 5: Create FastAPI App
     # =========================================================================
+
+    # =========================================================================
+    # Helper Methods
+    # =========================================================================
+
+    def _register_repair_cycle_handler(self) -> None:
+        """
+        Register repair cycle event handler with the event bus.
+
+        This handler listens for WorkItemColumnChanged events and invokes
+        the repair cycle when items enter the configured repair cycle stage.
+
+        The SimulationEngine injects the clock into the handler, keeping
+        simulation details encapsulated.
+        """
+        if not self.adapters or not self.infrastructure or not self._engine:
+            logger.warning("Cannot register repair cycle handler: components not ready")
+            return
+
+        handler = self._engine.create_repair_cycle_event_handler(
+            repair_cycle=self.adapters.repair_cycle,
+            event_bus=self.infrastructure.event_bus,
+        )
+
+        self.infrastructure.event_bus.register_handler(handler)
+        logger.info("Registered RepairCycleEventHandler with event bus")
 
     def _create_fastapi_app(self) -> FastAPI:
         """
@@ -690,4 +742,26 @@ class SimulationApplicationBootstrap:
 
         logger.info("Created FastAPI application")
 
+        # Register repair cycle event handler with event bus
+        # This allows the handler to listen for WorkItemColumnChanged events
+        # and invoke the repair cycle when items enter the configured repair cycle stage
+        self._register_repair_cycle_handler()
+
         return app
+
+    # =========================================================================
+    # Public API
+    # =========================================================================
+
+    @property
+    def engine(self) -> Optional[SimulationEngine]:
+        """
+        Get the SimulationEngine instance.
+
+        The engine manages all simulation timing and coordinates time-aware
+        components. Use this to advance time or access clock operations.
+
+        Returns:
+            SimulationEngine instance (None if not yet set up)
+        """
+        return self._engine

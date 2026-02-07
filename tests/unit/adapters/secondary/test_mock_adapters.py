@@ -190,8 +190,6 @@ class TestMockDiscussionAdapter:
         """Test simulate_comment by human emits needs_response event."""
         config = DiscussionMonitoringConfig(
             project_id="proj-1",
-            column_name="In Review",
-            agent_assignment="agent-1"
         )
         adapter.start_monitoring("item-1", config)
 
@@ -211,8 +209,6 @@ class TestMockDiscussionAdapter:
         """Test simulate_comment by bot doesn't emit needs_response event."""
         config = DiscussionMonitoringConfig(
             project_id="proj-1",
-            column_name="In Review",
-            agent_assignment="agent-1"
         )
         adapter.start_monitoring("item-1", config)
 
@@ -241,8 +237,6 @@ class TestMockDiscussionAdapter:
         """Test starting work-item-specific monitoring."""
         config = DiscussionMonitoringConfig(
             project_id="proj-1",
-            column_name="In Review",
-            agent_assignment="agent-1"
         )
         adapter.start_monitoring("item-1", config)
         assert "item-1" in adapter._monitoring
@@ -251,8 +245,6 @@ class TestMockDiscussionAdapter:
         """Test stopping monitoring."""
         config = DiscussionMonitoringConfig(
             project_id="proj-1",
-            column_name="In Review",
-            agent_assignment="agent-1"
         )
         adapter.start_monitoring("item-1", config)
         adapter.stop_monitoring("item-1")
@@ -272,8 +264,6 @@ class TestMockDiscussionAdapter:
         """Test simulate_bot_comment emits event when monitoring."""
         config = DiscussionMonitoringConfig(
             project_id="proj-1",
-            column_name="In Review",
-            agent_assignment="agent-1"
         )
         adapter.start_monitoring("item-1", config)
 
@@ -340,8 +330,6 @@ class TestMockDiscussionAdapter:
 
         config = DiscussionMonitoringConfig(
             project_id="proj-1",
-            column_name="In Review",
-            agent_assignment="agent-1"
         )
         adapter.start_monitoring("item-1", config)
         assert adapter.is_monitoring("item-1")
@@ -364,8 +352,6 @@ class TestMockDiscussionAdapter:
         """Test clear_monitoring helper."""
         config = DiscussionMonitoringConfig(
             project_id="proj-1",
-            column_name="In Review",
-            agent_assignment="agent-1"
         )
         adapter.start_monitoring("item-1", config)
         adapter.start_monitoring("item-2", config)
@@ -402,8 +388,6 @@ class TestMockDiscussionAdapter:
         """Test get_thread_info shows monitoring state."""
         config = DiscussionMonitoringConfig(
             project_id="proj-1",
-            column_name="In Review",
-            agent_assignment="agent-1"
         )
         adapter.create_thread("item-1", "Initial")
         adapter.start_monitoring("item-1", config)
@@ -418,8 +402,6 @@ class TestMockDiscussionAdapter:
 
         config = DiscussionMonitoringConfig(
             project_id="proj-1",
-            column_name="Review",
-            agent_assignment="agent-1"
         )
         adapter.start_monitoring("item-1", config)
 
@@ -445,8 +427,6 @@ class TestMockDiscussionAdapter:
         """Test simulate_column_change emits WorkItemColumnChangedEvent."""
         config = DiscussionMonitoringConfig(
             project_id="proj-1",
-            column_name="In Review",
-            agent_assignment="agent-1"
         )
         adapter.start_monitoring("item-1", config)
 
@@ -479,8 +459,6 @@ class TestMockDiscussionAdapter:
         """Test get_processed_comment_ids tracks processed human comments."""
         config = DiscussionMonitoringConfig(
             project_id="proj-1",
-            column_name="In Review",
-            agent_assignment="agent-1"
         )
         adapter.start_monitoring("item-1", config)
 
@@ -497,8 +475,6 @@ class TestMockDiscussionAdapter:
         """Test get_processed_comment_ids doesn't track bot comments."""
         config = DiscussionMonitoringConfig(
             project_id="proj-1",
-            column_name="In Review",
-            agent_assignment="agent-1"
         )
         adapter.start_monitoring("item-1", config)
 
@@ -517,8 +493,6 @@ class TestMockDiscussionAdapter:
         """Test get_processed_comment_ids returns a copy (not reference)."""
         config = DiscussionMonitoringConfig(
             project_id="proj-1",
-            column_name="In Review",
-            agent_assignment="agent-1"
         )
         adapter.start_monitoring("item-1", config)
         adapter.simulate_comment("item-1", "alice", "Comment")
@@ -534,8 +508,6 @@ class TestMockDiscussionAdapter:
         """Test reset_monitoring_state clears monitoring config."""
         config = DiscussionMonitoringConfig(
             project_id="proj-1",
-            column_name="In Review",
-            agent_assignment="agent-1"
         )
         adapter.start_monitoring("item-1", config)
         assert adapter.is_monitoring("item-1")
@@ -548,8 +520,6 @@ class TestMockDiscussionAdapter:
         """Test reset_monitoring_state preserves comment queue."""
         config = DiscussionMonitoringConfig(
             project_id="proj-1",
-            column_name="In Review",
-            agent_assignment="agent-1"
         )
         adapter.start_monitoring("item-1", config)
         adapter.create_thread("item-1", "Initial comment")
@@ -571,8 +541,6 @@ class TestMockDiscussionAdapter:
         """Test reset_monitoring_state only clears one item vs clear_monitoring all."""
         config = DiscussionMonitoringConfig(
             project_id="proj-1",
-            column_name="In Review",
-            agent_assignment="agent-1"
         )
         adapter.start_monitoring("item-1", config)
         adapter.start_monitoring("item-2", config)

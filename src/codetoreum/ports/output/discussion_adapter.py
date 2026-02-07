@@ -25,17 +25,17 @@ class DiscussionMonitoringConfig:
     Unlike project-wide monitoring (IMonitoredService), discussion monitoring
     is work-item-specific, allowing selective subscription to specific issues.
 
+    This configuration focuses on discussion-specific concerns (what comments
+    have been processed) rather than workflow/board context (column, agent assignment).
+    Board context should be tracked separately in the orchestration layer.
+
     Attributes:
         project_id: Project containing the work item
-        column_name: Current column the work item is in (for context)
-        agent_assignment: Agent assigned to handle responses (for context)
         last_processed_comment_id: Last comment ID already processed,
                                   used to avoid reprocessing comments
     """
 
     project_id: str
-    column_name: str
-    agent_assignment: str
     last_processed_comment_id: Optional[str] = None
 
 
@@ -78,9 +78,7 @@ class IDiscussionAdapter(IEventEmitter, ABC):
         async with adapter as adp:
             # Start monitoring a specific work item
             config = DiscussionMonitoringConfig(
-                project_id="proj-123",
-                column_name="In Review",
-                agent_assignment="agent-456"
+                project_id="proj-123"
             )
             adp.start_monitoring("issue-789", config)
 

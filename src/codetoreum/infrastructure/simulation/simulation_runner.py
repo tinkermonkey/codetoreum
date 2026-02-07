@@ -1,10 +1,13 @@
 """Simulation runner for orchestrating test scenarios."""
 
 import asyncio
+import logging
 import traceback
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, TypeVar
+
+logger = logging.getLogger(__name__)
 
 from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
 from codetoreum.adapters.testing.in_memory_metrics_adapter import (
@@ -15,6 +18,7 @@ from codetoreum.adapters.testing.mock_notifier_adapter import MockNotifierAdapte
 from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
 
 T = TypeVar("T")
 
@@ -84,23 +88,37 @@ class SimulationRunner:
         >>> assert result.success
     """
 
-    def __init__(self, config: SimulationConfig):
+    def __init__(self, config: SimulationConfig, engine: Optional[SimulationEngine] = None):
         """
         Initialize simulation runner.
 
         Args:
             config: Simulation configuration
+            engine: Optional SimulationEngine instance. If provided, uses the engine's
+                    public API for time operations instead of creating a new clock.
+                    This allows runners to work with a bootstrap's encapsulated engine.
+
+        Note:
+            If engine is provided, the config.time settings are ignored (the engine
+            already has its clock configured). Use this when running scenarios that
+            use SimulationApplicationBootstrap.
         """
         self.config = config
+        self.engine = engine
 
-        # Create simulation clock
-        self.clock = SimulationClock(
-            speed_multiplier=config.time.speed_multiplier,
-            auto_advance=config.time.auto_advance,
-        )
+        # When engine is provided, we'll use its public API (advance, now, etc.)
+        # Otherwise create a new clock for standalone scenarios
+        if not engine:
+            # Create simulation clock
+            self.clock = SimulationClock(
+                speed_multiplier=config.time.speed_multiplier,
+                auto_advance=config.time.auto_advance,
+            )
 
-        if config.time.start_time:
-            self.clock.start_at(config.time.start_time)
+            if config.time.start_time:
+                self.clock.start_at(config.time.start_time)
+        else:
+            self.clock = None
 
         # Create mock adapters
         self.llm_adapter = MockLLMAdapter(
@@ -132,6 +150,13 @@ class SimulationRunner:
         # Start and end times
         self._start_time: Optional[datetime] = None
         self._end_time: Optional[datetime] = None
+
+    def _get_clock_now(self) -> datetime:
+        """Get current simulated time from engine or clock."""
+        if self.engine:
+            return self.engine.now()
+        else:
+            return self.clock.now()
 
     def _configure_adapters(self) -> None:
         """Configure adapters based on simulation config."""
@@ -165,7 +190,7 @@ class SimulationRunner:
             SimulationResult with outcome and statistics
         """
         self._start_time = datetime.now(timezone.utc)
-        simulated_start_time = self.clock.now()
+        simulated_start_time = self._get_clock_now()
 
         errors = []
 
@@ -180,9 +205,10 @@ class SimulationRunner:
             error_msg = f"Scenario execution failed: {str(e)}"
             error_traceback = traceback.format_exc()
             errors.append(f"{error_msg}\n{error_traceback}")
+            logger.error(error_msg, exc_info=True)
 
         self._end_time = datetime.now(timezone.utc)
-        simulated_end_time = self.clock.now()
+        simulated_end_time = self._get_clock_now()
 
         # Calculate durations
         real_duration = (self._end_time - self._start_time).total_seconds()
@@ -240,7 +266,7 @@ class SimulationRunner:
             assertion_name=assertion_name,
             passed=condition,
             message=message if not condition else "Passed",
-            timestamp=self.clock.now(),
+            timestamp=self._get_clock_now(),
         )
         self.assertions.append(result)
 
@@ -389,7 +415,10 @@ class SimulationRunner:
         Args:
             delta: Amount of time to advance
         """
-        await self.clock.advance(delta)
+        if self.engine:
+            await self.engine.advance(delta)
+        else:
+            await self.clock.advance(delta)
 
     async def advance_to(self, target_time: datetime) -> None:
         """
@@ -398,7 +427,10 @@ class SimulationRunner:
         Args:
             target_time: Target time
         """
-        await self.clock.advance_to(target_time)
+        if self.engine:
+            await self.engine.advance_to(target_time)
+        else:
+            await self.clock.advance_to(target_time)
 
     def get_events_by_type(self, event_type: str) -> List[DomainEvent]:
         """
@@ -441,7 +473,7 @@ class SimulationRunner:
 
         print(f"\n=== Simulation Summary: {self.config.scenario_name} ===")
         print(f"Real time elapsed: {(self._end_time - self._start_time).total_seconds():.2f}s")
-        print(f"Simulated time: {(self.clock.now() - (self.config.time.start_time or self._start_time)).total_seconds():.2f}s")
+        print(f"Simulated time: {(self._get_clock_now() - (self.config.time.start_time or self._start_time)).total_seconds():.2f}s")
         print(f"Speed multiplier: {self.config.time.speed_multiplier}x")
         print(f"\nEvents captured: {len(self.captured_events)}")
         print(f"Metrics recorded: {sum(len(m) for m in self.metrics_adapter.get_all_metrics().values())}")

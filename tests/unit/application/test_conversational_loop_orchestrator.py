@@ -122,7 +122,9 @@ class TestInitializeLoop:
         mock_discussion_adapter.start_monitoring.assert_called_once()
         call_args = mock_discussion_adapter.start_monitoring.call_args
         assert call_args[0][0] == work_item_id  # First positional arg
-        assert call_args[0][1]["column_name"] == "In Review"  # Config
+        # Config is now DiscussionMonitoringConfig object (not a dict)
+        config = call_args[0][1]
+        assert config.project_id == project_id
 
         # Verify session state was persisted
         mock_event_store.save_snapshot.assert_called_once()
@@ -156,13 +158,13 @@ class TestInitializeLoop:
                 {"column_name": "In Review", "agent_assignment": "reviewer"}
             )
 
-    async def test_initialize_loop_missing_column_name(self, orchestrator):
-        """Test initialization fails with missing column_name."""
-        with pytest.raises(ValueError, match="column_name and agent_assignment"):
+    async def test_initialize_loop_missing_agent_assignment(self, orchestrator):
+        """Test initialization fails with missing required agent_assignment."""
+        with pytest.raises(ValueError, match="agent_assignment"):
             await orchestrator.initialize_loop(
                 "issue-42",
                 "proj-1",
-                {"agent_assignment": "reviewer"}  # Missing column_name
+                {"column_name": "In Review"}  # Missing agent_assignment
             )
 
     async def test_initialize_loop_monitoring_failure(self, orchestrator, mock_discussion_adapter, mock_event_store):
@@ -1023,7 +1025,7 @@ class TestBuildThreadMessage:
     """Test suite for _build_thread_message helper method."""
 
     def test_build_thread_message_with_context(self, orchestrator, sample_comment, sample_session_state):
-        """Test building thread message with full context."""
+        """Test building thread message with full context (discussion thread context only)."""
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
             timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -1032,17 +1034,19 @@ class TestBuildThreadMessage:
             project_id="proj-1",
             comment=sample_comment,
             context=CommentContext(
-                column_name="In Review",
-                agent_assignment="code-reviewer",
+                column_name="In Review",  # Column context is optional, not included in message
+                agent_assignment="code-reviewer",  # Agent context is optional, not included in message
             ),
         )
 
         message = orchestrator._build_thread_message(event, sample_session_state)
 
-        assert "In Review" in message
-        assert "code-reviewer" in message
+        # Message includes comment content, not column/agent context (decoupled)
         assert "Can you explain section 2" in message
         assert "user123" in message
+        # Board-level context (column_name, agent_assignment) no longer mixed into discussion context
+        assert "In Review" not in message
+        assert "code-reviewer" not in message
 
     def test_build_thread_message_without_context(self, orchestrator, sample_comment, sample_session_state):
         """Test building thread message without context."""
@@ -1061,8 +1065,8 @@ class TestBuildThreadMessage:
         assert "Can you explain section 2" in message
         assert "user123" in message
 
-    def test_build_thread_message_context_missing_column_name(self, orchestrator, sample_comment, sample_session_state):
-        """Test building thread message when context has no column_name."""
+    def test_build_thread_message_with_optional_context(self, orchestrator, sample_comment, sample_session_state):
+        """Test building thread message with optional context fields (now all optional)."""
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
             timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -1071,20 +1075,29 @@ class TestBuildThreadMessage:
             project_id="proj-1",
             comment=sample_comment,
             context=CommentContext(
-                column_name=None,  # Missing column_name
-                agent_assignment="code-reviewer",
+                column_name=None,  # Now optional
+                agent_assignment=None,  # Now optional
             ),
         )
 
         message = orchestrator._build_thread_message(event, sample_session_state)
 
-        # Should still include comment but skip column_name
+        # Message still includes comment content
         assert "Can you explain section 2" in message
         assert "user123" in message
+        # Board context fields not included (decoupled from discussion context)
         assert "Work item:" not in message
+        assert "Assigned agent:" not in message
 
-    def test_build_thread_message_context_missing_agent_assignment(self, orchestrator, sample_comment, sample_session_state):
-        """Test building thread message when context has no agent_assignment."""
+    def test_build_thread_message_with_parent_comment(self, orchestrator, sample_comment, sample_session_state):
+        """Test building thread message includes parent comment context."""
+        parent = Comment(
+            id="comment-10",
+            author="alice",
+            body="What's your approach to this?",
+            created_at=datetime.now(timezone.utc).isoformat(),
+        )
+
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
             timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -1093,17 +1106,19 @@ class TestBuildThreadMessage:
             project_id="proj-1",
             comment=sample_comment,
             context=CommentContext(
-                column_name="In Review",
-                agent_assignment=None,  # Missing agent_assignment
+                thread_id="thread-42",
+                parent_comment=parent,
+                is_initial_request=False,
             ),
         )
 
         message = orchestrator._build_thread_message(event, sample_session_state)
 
-        # Should include column_name but skip agent_assignment
-        assert "In Review" in message
+        # Should include parent comment and current comment
+        assert "What's your approach to this?" in message
+        assert "alice" in message
         assert "Can you explain section 2" in message
-        assert "Assigned agent:" not in message
+        assert "user123" in message
 
     def test_build_thread_message_comment_not_comment_type(self, orchestrator, sample_session_state):
         """Test building thread message when comment is not a Comment instance."""
@@ -1119,16 +1134,13 @@ class TestBuildThreadMessage:
             work_item_id="issue-42",
             project_id="proj-1",
             comment=comment,
-            context=CommentContext(
-                column_name="In Review",
-                agent_assignment="code-reviewer",
-            ),
+            context=CommentContext(),  # Empty context
         )
 
         message = orchestrator._build_thread_message(event, sample_session_state)
 
-        # Should skip comment due to not being a Comment instance
-        assert "In Review" in message
+        # Should skip invalid comment type - message will be empty
+        assert message == ""
         assert "New comment from" not in message
 
     def test_build_thread_message_context_not_commentcontext_type(self, orchestrator, sample_comment, sample_session_state):

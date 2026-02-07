@@ -819,10 +819,40 @@ class DockerContainerAdapter(IContainer):
         await loop.run_in_executor(None, _copy)
 
     def close(self) -> None:
-        """Close Docker client."""
+        """Close Docker client and clean up all resources."""
         if self._docker_client is not None:
-            self._docker_client.close()
-            self._docker_client = None
+            try:
+                # Close the API client's session and adapter connection pools
+                if hasattr(self._docker_client, 'api'):
+                    api = self._docker_client.api
+                    # Close HTTP session
+                    if hasattr(api, '_session') and api._session:
+                        try:
+                            api._session.close()
+                        except Exception:
+                            pass
+                    # Close adapters (which hold socket connections)
+                    if hasattr(api, '_adapters') and api._adapters:
+                        try:
+                            for adapter in api._adapters.values():
+                                if hasattr(adapter, 'close'):
+                                    adapter.close()
+                        except Exception:
+                            pass
+                    if hasattr(api, 'close'):
+                        try:
+                            api.close()
+                        except Exception:
+                            pass
+            except Exception:
+                logger.debug("Error cleaning up Docker API client", exc_info=True)
+
+            try:
+                self._docker_client.close()
+            except Exception:
+                logger.debug("Error closing Docker client", exc_info=True)
+            finally:
+                self._docker_client = None
 
     async def __aenter__(self):
         """Async context manager entry."""

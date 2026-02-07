@@ -105,8 +105,6 @@ class MockDiscussionAdapter:
         if isinstance(config, dict):
             monitoring_config = DiscussionMonitoringConfig(
                 project_id=config.get("project_id", ""),
-                column_name=config.get("column_name", ""),
-                agent_assignment=config.get("agent_assignment", ""),
             )
             self.monitoring_sessions[work_item_id] = monitoring_config
         else:
@@ -538,8 +536,6 @@ class TestSessionPersistenceAcrossInstancesIntegration:
         # Resume monitoring with checkpoint
         monitoring_config = DiscussionMonitoringConfig(
             project_id=session_2.project_id,
-            column_name=session_2.column_name,
-            agent_assignment=session_2.agent_assignment,
         )
         testable_discussion_adapter.start_monitoring(work_item_id, monitoring_config)
 
@@ -831,36 +827,9 @@ class TestAdapterInteractionIntegration:
     """Integration test: Orchestrator's interaction with real adapters.
 
     Verifies:
-    - Correct monitoring configuration passed to discussion adapter
     - LLM conversation continuity with real EventStore persistence
     - Event store state recovery enables conversation context
     """
-
-    async def test_discussion_adapter_monitoring_config(
-        self,
-        orchestrator,
-        testable_discussion_adapter,
-    ):
-        """Test that discussion adapter receives correct monitoring config.
-
-        Verifies FR-2.1: startMonitoring() called with correct configuration.
-        """
-        work_item_id = "issue-42"
-
-        await orchestrator.initialize_loop(
-            work_item_id,
-            "proj-1",
-            {
-                "column_name": "In Review",
-                "agent_assignment": "code-reviewer",
-            }
-        )
-
-        # Verify monitoring config passed to adapter
-        assert work_item_id in testable_discussion_adapter.monitoring_sessions
-        config = testable_discussion_adapter.monitoring_sessions[work_item_id]
-        assert config.column_name == "In Review"
-        assert config.agent_assignment == "code-reviewer"
 
     async def test_llm_provider_conversation_continuity_with_event_store(
         self,
