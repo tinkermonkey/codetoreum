@@ -511,13 +511,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
         """Get current orchestration status for a project.
 
         Returns:
-            Dict with keys:
-                - project_name: str
-                - enabled: bool
-                - repo_url: str
-                - branch: str
-                - workspace_path: str
-                - organization: str
+            ProjectStatus with project configuration and status information.
 
         Raises:
             ResourceNotFoundError: Project doesn't exist
