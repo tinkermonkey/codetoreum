@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 
-@dataclass
+@dataclass(frozen=True)
 class OrchestrationCycleResult:
     """Result of a single orchestration cycle.
 
@@ -21,7 +21,7 @@ class OrchestrationCycleResult:
         projects_processed: Number of projects processed
         total_actions: Total actions taken across all projects
         total_errors: Total errors encountered
-        cycle_duration_ms: Duration of the cycle in milliseconds
+        cycle_duration_ms: Duration of the cycle in milliseconds (as integer)
         timestamp: When the cycle completed
         error_message: Error message if cycle failed
     """
@@ -30,12 +30,12 @@ class OrchestrationCycleResult:
     projects_processed: int
     total_actions: int
     total_errors: int
-    cycle_duration_ms: float
+    cycle_duration_ms: int
     timestamp: datetime
     error_message: Optional[str] = None
 
 
-@dataclass
+@dataclass(frozen=True)
 class ProjectOrchestrationResult:
     """Result of orchestrating a single project.
 
@@ -43,7 +43,7 @@ class ProjectOrchestrationResult:
         project_name: Name of the project
         success: Whether project orchestration succeeded
         actions_taken: Number of actions taken for this project
-        errors: List of errors encountered
+        errors: Tuple of errors encountered (immutable)
         workspace_path: Path to the project's workspace
         timestamp: When orchestration completed
     """
@@ -51,7 +51,7 @@ class ProjectOrchestrationResult:
     project_name: str
     success: bool
     actions_taken: int
-    errors: List[str]
+    errors: tuple[str, ...]
     workspace_path: str
     timestamp: datetime
 
@@ -67,9 +67,8 @@ class IMultiProjectOrchestrator(ABC):
     1. Load and track enabled projects
     2. Ensure project repositories are cloned and available
     3. Execute per-project orchestration cycles
-    4. Handle project-specific state isolation
-    5. Coordinate cross-project resource sharing
-    6. Emit orchestration events for observability
+    4. Handle project-specific state isolation (per-project locking, queueing)
+    5. Emit orchestration events for observability
 
     Project Orchestration:
     - Each project has its own workflow, pipeline, and board configuration

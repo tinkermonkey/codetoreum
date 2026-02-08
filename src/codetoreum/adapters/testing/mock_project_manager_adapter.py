@@ -21,6 +21,7 @@ from codetoreum.domain.events.project_events import (
     ProjectDisabledEvent,
     ProjectEnabledEvent,
 )
+from codetoreum.domain.repository_url import extract_repo_name
 from codetoreum.domain.value_objects import ProjectConfig
 from codetoreum.domain.work_item import WorkItem
 from codetoreum.ports.output.event_emitter import IEventEmitter
@@ -177,15 +178,7 @@ class MockProjectManagerAdapter(IProjectManagerService):
 
             config = self._projects[project_name].config
             repo_url = config.repo_url
-
-            # Extract repo name from URL
-            # Remove .git suffix if present
-            if repo_url.endswith(".git"):
-                repo_url = repo_url[:-4]
-
-            # Take final path component
-            repo_name = repo_url.rstrip("/").split("/")[-1]
-
+            repo_name = extract_repo_name(repo_url)
             return f"{self._base_workspace}/{repo_name}"
 
     async def ensure_project_cloned(self, project_name: str) -> str:
@@ -457,23 +450,6 @@ class MockProjectManagerAdapter(IProjectManagerService):
     # =========================================================================
     # Private Methods
     # =========================================================================
-
-    @staticmethod
-    def _extract_repo_name(repo_url: str) -> str:
-        """Extract repository name from URL.
-
-        Removes .git suffix and takes final path component.
-
-        Args:
-            repo_url: Repository URL
-
-        Returns:
-            Repository name
-        """
-        url = repo_url
-        if url.endswith(".git"):
-            url = url[:-4]
-        return url.rstrip("/").split("/")[-1]
 
     @staticmethod
     def _get_iso_timestamp() -> str:

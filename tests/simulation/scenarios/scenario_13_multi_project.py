@@ -38,6 +38,7 @@ from codetoreum.domain.events.project_events import (
     ProjectClonedEvent,
     ProjectCloneFailedEvent,
 )
+from codetoreum.domain.repository_url import extract_repo_name
 from codetoreum.domain.work_item import WorkItem
 from codetoreum.adapters.testing.mock_project_manager_adapter import (
     MockProjectManagerAdapter,
@@ -79,29 +80,6 @@ def create_test_work_item(
         updated_at=datetime.now(timezone.utc),
         completed_at=None,
     )
-
-
-def extract_repo_name(repo_url: str) -> str:
-    """Extract repository name from URL.
-
-    Removes .git suffix and takes final path component.
-    Handles both SSH (git@...) and HTTPS formats.
-
-    Args:
-        repo_url: Repository URL (SSH or HTTPS format)
-
-    Returns:
-        Repository name extracted from URL
-
-    Examples:
-        - "git@github.com:org/repo.git" → "repo"
-        - "https://github.com/org/repo.git" → "repo"
-        - "https://github.com/org/repo" → "repo"
-    """
-    url = repo_url
-    if url.endswith(".git"):
-        url = url[:-4]
-    return url.rstrip("/").split("/")[-1]
 
 
 def create_config() -> SimulationConfig:

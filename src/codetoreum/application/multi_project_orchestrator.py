@@ -285,14 +285,14 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                             project_name=project_name,
                             success=False,
                             actions_taken=0,
-                            errors=[str(e)],
+                            errors=(str(e),),
                             workspace_path="",
                             timestamp=datetime.now(timezone.utc),
                         )
                     )
 
             # Step 4: Emit cycle completion event
-            cycle_duration_ms = (time.time() - cycle_start) * 1000
+            cycle_duration_ms = int((time.time() - cycle_start) * 1000)
             cycle_result = OrchestrationCycleResult(
                 success=total_errors == 0,
                 projects_processed=len(project_results),
@@ -303,17 +303,25 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
             )
 
             # Emit event
-            if self._event_emitter:
-                event = OrchestrationCycleCompletedEvent(
-                    type="orchestration.cycle_completed",
-                    timestamp=self._get_iso_timestamp(),
-                    source="multi_project_orchestrator",
-                    projects_processed=len(project_results),
-                    boards_processed=0,  # Not tracked at orchestrator level
-                    work_items_found=total_actions,  # Proxy: actions = work items processed
-                    cycle_duration_ms=int(cycle_duration_ms),
+            try:
+                if self._event_emitter:
+                    event = OrchestrationCycleCompletedEvent(
+                        type="orchestration.cycle_completed",
+                        timestamp=self._get_iso_timestamp(),
+                        source="multi_project_orchestrator",
+                        projects_processed=len(project_results),
+                        boards_processed=0,  # Not tracked at orchestrator level
+                        work_items_found=total_actions,  # Proxy: actions = work items processed
+                        cycle_duration_ms=cycle_duration_ms,
+                    )
+                    self._event_emitter.emit(event)
+            except Exception as e:
+                logger.warning(
+                    f"Event emission failed: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_EVENT_EMISSION_FAILED"},
                 )
-                self._event_emitter.emit(event)
+                # Don't fail the cycle - orchestration succeeded even if event failed
 
             logger.info(
                 f"Orchestration cycle #{self._cycle_count} completed: "
@@ -333,7 +341,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                 exc_info=True,
                 extra={"error_id": "ERR_ORCHESTRATION_CYCLE_FAILED"},
             )
-            duration_ms = (time.time() - cycle_start) * 1000
+            duration_ms = int((time.time() - cycle_start) * 1000)
             return OrchestrationCycleResult(
                 success=False,
                 projects_processed=0,
@@ -354,7 +362,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                     "error_type": type(e).__name__,
                 },
             )
-            duration_ms = (time.time() - cycle_start) * 1000
+            duration_ms = int((time.time() - cycle_start) * 1000)
             return OrchestrationCycleResult(
                 success=False,
                 projects_processed=0,

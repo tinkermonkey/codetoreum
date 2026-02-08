@@ -46,6 +46,15 @@ class ProjectConfig:
     enabled: bool
     org: str
 
+    def __post_init__(self):
+        """Validate project configuration."""
+        if not self.repo_url or not self.repo_url.strip():
+            raise DomainError("ProjectConfig.repo_url cannot be empty")
+        if not self.branch or not self.branch.strip():
+            raise DomainError("ProjectConfig.branch cannot be empty")
+        if not self.org or not self.org.strip():
+            raise DomainError("ProjectConfig.org cannot be empty")
+
 
 # ============================================================================
 # Type-Safe Identifiers (Generic Base)
