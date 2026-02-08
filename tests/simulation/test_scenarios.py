@@ -33,6 +33,10 @@ from .scenarios.scenario_10_agent_execution import (
     create_config as create_agent_execution_config,
     run_scenario as run_agent_execution_scenario,
 )
+from .scenarios.scenario_13_multi_project import (
+    create_config as create_multi_project_config,
+    run_scenario as run_multi_project_scenario,
+)
 
 from .helpers import (
     AssertionHelpers,
@@ -367,3 +371,53 @@ async def test_mock_adapters_integration(
     )
     assert notif_result.success
     assert mock_notifier.get_notification_count() == 1
+
+
+@pytest.mark.simulation
+@pytest.mark.scenario
+@pytest.mark.asyncio
+async def test_scenario_13_multi_project():
+    """Test Scenario 13: Multi-Project Orchestration.
+
+    Validates that multiple independent projects can be orchestrated
+    within a single cycle with proper isolation and state management.
+    """
+    config = create_multi_project_config()
+    runner = SimulationRunner(config)
+
+    result = await runner.run(run_multi_project_scenario)
+
+    # Print diagnostics
+    print_event_timeline(runner)
+    print_metrics_summary(runner)
+
+    # Verify success
+    assert result.success, f"Scenario failed with errors: {result.errors}"
+    assert result.assertions_passed >= 6, "Expected at least 6 assertions to pass"
+    assert result.assertions_failed == 0, "Expected no failed assertions"
+
+    # Verify performance goal (10-100x faster)
+    assert result.speed_multiplier >= 10.0, (
+        f"Speed multiplier {result.speed_multiplier:.1f}x below 10x target"
+    )
+
+    # Verify events captured
+    assert result.events_captured >= 20, "Expected at least 20 events (repos + work items)"
+
+    # Additional assertions - verify event types in captured events
+    from codetoreum.domain.events.project_events import (
+        OrchestrationCycleCompletedEvent,
+        ProjectClonedEvent,
+    )
+
+    cycle_events = [
+        e for e in runner.captured_events
+        if isinstance(e, OrchestrationCycleCompletedEvent)
+    ]
+    assert len(cycle_events) >= 1, "Expected OrchestrationCycleCompletedEvent"
+
+    clone_events = [
+        e for e in runner.captured_events
+        if isinstance(e, ProjectClonedEvent)
+    ]
+    assert len(clone_events) >= 3, "Expected at least 3 ProjectClonedEvent"

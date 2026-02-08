@@ -1,0 +1,211 @@
+"""Multi-project orchestrator port interface.
+
+This interface defines contracts for orchestrating work across multiple
+independent projects within a single orchestrator process. The orchestrator
+coordinates project initialization, per-project workflow execution, and
+cross-project state management.
+"""
+
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Dict, List, Optional
+
+
+@dataclass
+class OrchestrationCycleResult:
+    """Result of a single orchestration cycle.
+
+    Attributes:
+        success: Whether the cycle completed without critical errors
+        projects_processed: Number of projects processed
+        total_actions: Total actions taken across all projects
+        total_errors: Total errors encountered
+        cycle_duration_ms: Duration of the cycle in milliseconds
+        timestamp: When the cycle completed
+        error_message: Error message if cycle failed
+    """
+
+    success: bool
+    projects_processed: int
+    total_actions: int
+    total_errors: int
+    cycle_duration_ms: float
+    timestamp: datetime
+    error_message: Optional[str] = None
+
+
+@dataclass
+class ProjectOrchestrationResult:
+    """Result of orchestrating a single project.
+
+    Attributes:
+        project_name: Name of the project
+        success: Whether project orchestration succeeded
+        actions_taken: Number of actions taken for this project
+        errors: List of errors encountered
+        workspace_path: Path to the project's workspace
+        timestamp: When orchestration completed
+    """
+
+    project_name: str
+    success: bool
+    actions_taken: int
+    errors: List[str]
+    workspace_path: str
+    timestamp: datetime
+
+
+class IMultiProjectOrchestrator(ABC):
+    """Output port for orchestrating multiple projects.
+
+    Coordinates workflow execution across multiple independent projects,
+    handling project initialization, per-project orchestration, and
+    cross-project state management.
+
+    Responsibilities:
+    1. Load and track enabled projects
+    2. Ensure project repositories are cloned and available
+    3. Execute per-project orchestration cycles
+    4. Handle project-specific state isolation
+    5. Coordinate cross-project resource sharing
+    6. Emit orchestration events for observability
+
+    Project Orchestration:
+    - Each project has its own workflow, pipeline, and board configuration
+    - Projects execute independently but share orchestration infrastructure
+    - State (locks, queues, sessions) is isolated per project via namespacing
+    - Repository workspaces are isolated per project repository
+
+    Orchestration Cycles:
+    - Full cycle: reload config → get enabled projects → process each project
+    - Per-project: ensure cloned → orchestrate workflows → emit events
+    - Errors in one project don't block others
+
+    Example:
+        async with orchestrator as orch:
+            # Run a complete orchestration cycle
+            result = await orch.run_orchestration_cycle()
+            assert result.success
+            assert result.projects_processed > 0
+    """
+
+    @abstractmethod
+    async def run_orchestration_cycle(self) -> OrchestrationCycleResult:
+        """Execute a complete orchestration cycle across all enabled projects.
+
+        Operations:
+        1. Reload project configurations (detect added/removed projects)
+        2. Get list of enabled projects
+        3. For each enabled project:
+           a. Ensure project repository is cloned
+           b. Execute per-project workflow orchestration
+           c. Collect results and errors
+        4. Emit orchestration events
+        5. Return aggregated cycle result
+
+        Error Handling:
+        - Errors in one project don't block others
+        - Clone failures emit ProjectCloneFailedEvent, processing continues
+        - Workflow errors logged per project, not blocking overall cycle
+
+        Returns:
+            OrchestrationCycleResult: Aggregated results across all projects
+
+        Raises:
+            ExternalServiceError: Critical infrastructure failure
+        """
+        pass
+
+    @abstractmethod
+    async def orchestrate_project(
+        self, project_name: str
+    ) -> ProjectOrchestrationResult:
+        """Execute orchestration for a single project.
+
+        Operations:
+        1. Load project configuration
+        2. Ensure repository is cloned
+        3. Execute workflow orchestration for the project
+        4. Collect and return results
+
+        Args:
+            project_name: Name of the project to orchestrate
+
+        Returns:
+            ProjectOrchestrationResult: Results for this project
+
+        Raises:
+            ResourceNotFoundError: Project configuration doesn't exist
+            ExternalServiceError: Repository clone/orchestration failed
+        """
+        pass
+
+    @abstractmethod
+    async def get_project_status(self, project_name: str) -> Dict[str, any]:
+        """Get current orchestration status for a project.
+
+        Returns information about:
+        - Project configuration (enabled, repo URL, branch)
+        - Repository status (cloned, last clone time, clone failures)
+        - Pending work items in the project
+        - Active workflows/pipelines
+
+        Args:
+            project_name: Name of the project
+
+        Returns:
+            Dict with project status information
+
+        Raises:
+            ResourceNotFoundError: Project doesn't exist
+        """
+        pass
+
+    @abstractmethod
+    async def enable_project(self, project_name: str) -> None:
+        """Enable a project for orchestration.
+
+        Marks a project as enabled so it will be processed in
+        orchestration cycles. If the project configuration doesn't
+        exist, raises ResourceNotFoundError.
+
+        Args:
+            project_name: Name of the project
+
+        Raises:
+            ResourceNotFoundError: Project configuration doesn't exist
+            ExternalServiceError: Configuration update failed
+        """
+        pass
+
+    @abstractmethod
+    async def disable_project(self, project_name: str) -> None:
+        """Disable a project from orchestration.
+
+        Marks a project as disabled so it won't be processed in
+        orchestration cycles. Does not delete project configuration,
+        just marks it as inactive.
+
+        Args:
+            project_name: Name of the project
+
+        Raises:
+            ResourceNotFoundError: Project configuration doesn't exist
+            ExternalServiceError: Configuration update failed
+        """
+        pass
+
+    @abstractmethod
+    async def list_enabled_projects(self) -> List[str]:
+        """Get list of all enabled projects.
+
+        Returns project names that are configured and enabled.
+
+        Returns:
+            List of enabled project names
+
+        Raises:
+            ExternalServiceError: Configuration service failure
+        """
+        pass
