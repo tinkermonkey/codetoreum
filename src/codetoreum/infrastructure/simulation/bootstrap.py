@@ -1,13 +1,19 @@
 """
 Simulation Application Bootstrap
 
-Wires up the entire application stack in simulation mode including:
-- All 9 mock adapters
-- All 8 application services
-- All input/output ports
-- FastAPI application
+Wires up the entire application stack in simulation mode through 6 phases:
 
-This is the foundational component that enables simulation testing.
+**Phase 0**: Create simulation engine (encapsulates clock and timing)
+**Phase 1**: Create adapters (10 mock adapters: ticket system, LLM, container, repository,
+           event store, metrics, storage, config, notifier, encryption, repair cycle)
+**Phase 2**: Create infrastructure (event bus, logger, error registry)
+**Phase 3**: Create services (8 application services with their dependencies)
+**Phase 4**: Create ports (16 input port implementations)
+**Phase 5**: Create FastAPI app (wire all ports to API endpoints, register event handlers)
+
+This is the foundational component that enables simulation testing. It provides a complete
+application bootstrap that wires together all components in the correct order with proper
+dependency injection.
 """
 
 import logging
@@ -222,13 +228,13 @@ class SimulationApplicationBootstrap:
         """
         Set up the entire application stack.
 
-        This method executes all 5 bootstrap phases in order:
-        1. Create clock (early, shared by adapters and infrastructure)
-        2. Create adapters
-        3. Create infrastructure
-        4. Create services
-        5. Create ports
-        6. Create FastAPI app
+        This method executes all 6 bootstrap phases in order:
+        - Phase 0: Create simulation engine (encapsulates clock and timing)
+        - Phase 1: Create adapters (9 mock adapters for all output ports)
+        - Phase 2: Create infrastructure (event bus, logger, error registry)
+        - Phase 3: Create services (8 application services with dependencies)
+        - Phase 4: Create ports (16 input port implementations)
+        - Phase 5: Create FastAPI app (wire all ports to API endpoints, register handlers)
 
         Returns:
             Fully configured FastAPI application
@@ -656,41 +662,27 @@ class SimulationApplicationBootstrap:
         )
 
     # =========================================================================
-    # Phase 5: Create FastAPI App
+    # Phase 5: Create FastAPI App and Register Event Handlers
     # =========================================================================
-
-    # =========================================================================
-    # Helper Methods
-    # =========================================================================
-
-    def _register_repair_cycle_handler(self) -> None:
-        """
-        Register repair cycle event handler with the event bus.
-
-        This handler listens for WorkItemColumnChanged events and invokes
-        the repair cycle when items enter the configured repair cycle stage.
-
-        The SimulationEngine injects the clock into the handler, keeping
-        simulation details encapsulated.
-        """
-        if not self.adapters or not self.infrastructure or not self._engine:
-            logger.warning("Cannot register repair cycle handler: components not ready")
-            return
-
-        handler = self._engine.create_repair_cycle_event_handler(
-            repair_cycle=self.adapters.repair_cycle,
-            event_bus=self.infrastructure.event_bus,
-        )
-
-        self.infrastructure.event_bus.register_handler(handler)
-        logger.info("Registered RepairCycleEventHandler with event bus")
 
     def _create_fastapi_app(self) -> FastAPI:
         """
         Create FastAPI application with all routers wired to ports.
 
+        This is the final step in Phase 5, which:
+        1. Creates FastAPI app instance using create_app() factory
+        2. Wires all 16 input ports (7 command + 9 query) to API endpoints
+        3. Wires infrastructure components (event store, event bus)
+        4. Wires application services (configuration service, logger, recovery service)
+        5. Configures CORS for localhost development
+        6. Disables authentication (ADR-003: simulation mode requirement)
+        7. Registers event handlers for cross-cutting concerns
+
         Returns:
             Configured FastAPI application ready for testing
+
+        Raises:
+            RuntimeError: If ports, infrastructure, or services not created first
         """
         if not self.ports or not self.infrastructure or not self.services:
             raise RuntimeError("Ports and infrastructure must be created first")
@@ -740,7 +732,7 @@ class SimulationApplicationBootstrap:
             container_recovery_service=self.services.container_recovery_service,
         )
 
-        logger.info("Created FastAPI application")
+        logger.info("Created FastAPI application with all ports wired")
 
         # Register repair cycle event handler with event bus
         # This allows the handler to listen for WorkItemColumnChanged events
@@ -748,6 +740,34 @@ class SimulationApplicationBootstrap:
         self._register_repair_cycle_handler()
 
         return app
+
+    def _register_repair_cycle_handler(self) -> None:
+        """
+        Register repair cycle event handler with the event bus.
+
+        Part of Phase 5: Event handler registration for cross-cutting concerns.
+
+        This handler listens for WorkItemColumnChanged events and invokes
+        the repair cycle when items enter the configured repair cycle stage.
+
+        The SimulationEngine injects the clock into the handler, keeping
+        simulation details encapsulated and allowing deterministic test
+        execution with controlled timing.
+
+        Logs a warning if components are not yet initialized, allowing
+        graceful degradation if called before full setup completion.
+        """
+        if not self.adapters or not self.infrastructure or not self._engine:
+            logger.warning("Cannot register repair cycle handler: components not ready")
+            return
+
+        handler = self._engine.create_repair_cycle_event_handler(
+            repair_cycle=self.adapters.repair_cycle,
+            event_bus=self.infrastructure.event_bus,
+        )
+
+        self.infrastructure.event_bus.register_handler(handler)
+        logger.info("Registered RepairCycleEventHandler with event bus")
 
     # =========================================================================
     # Public API
