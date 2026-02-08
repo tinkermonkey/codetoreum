@@ -520,7 +520,7 @@ class TestMultiProjectOrchestratorLifecycle:
         multi_orchestrator._initial_setup.assert_called_once()
 
         # Stop and clean up
-        multi_orchestrator.stop()
+        await multi_orchestrator.stop()
         try:
             await asyncio.wait_for(task, timeout=1.0)
         except asyncio.TimeoutError:
@@ -542,7 +542,7 @@ class TestMultiProjectOrchestratorLifecycle:
         assert hasattr(multi_orchestrator, "_running")
 
         # Call stop()
-        multi_orchestrator.stop()
+        await multi_orchestrator.stop()
 
         # Give it a moment to process the stop signal
         await asyncio.sleep(0.01)
@@ -582,7 +582,7 @@ class TestMultiProjectOrchestratorLifecycle:
         assert "cycle" in setup_called_first
 
         # Clean up
-        multi_orchestrator.stop()
+        await multi_orchestrator.stop()
         task.cancel()
         try:
             await task
@@ -602,7 +602,7 @@ class TestMultiProjectOrchestratorLifecycle:
         # Let it run for a bit
         await asyncio.sleep(0.1)
 
-        multi_orchestrator.stop()
+        await multi_orchestrator.stop()
 
         # Clean up
         task.cancel()

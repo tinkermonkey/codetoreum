@@ -507,7 +507,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                 timestamp=start_time,
             )
 
-    async def get_project_status(self, project_name: str) -> Dict[str, Any]:
+    async def get_project_status(self, project_name: str) -> ProjectStatus:
         """Get current orchestration status for a project.
 
         Returns:
