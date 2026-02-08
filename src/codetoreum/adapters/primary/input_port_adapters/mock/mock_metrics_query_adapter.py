@@ -62,6 +62,15 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
         self._lock = RLock()
         self._start_time = datetime.now(timezone.utc)
 
+    @property
+    def clock(self) -> Optional["SimulationClock"]:
+        """Property for accessing the simulation clock.
+
+        This property provides access to the simulation clock for timing
+        operations within the adapter.
+        """
+        return self._clock
+
     async def get_system_health(self) -> SystemHealthInfo:
         """Get overall system health status."""
         with self._lock:
