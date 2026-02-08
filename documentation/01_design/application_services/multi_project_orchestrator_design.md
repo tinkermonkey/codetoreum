@@ -381,7 +381,9 @@ Used to:
 orchestrator = MultiProjectOrchestrator(
     project_manager=project_manager,
     workflow_orchestrator=workflow_orchestrator,
+    board_service=board_service,
     event_emitter=event_emitter,
+    poll_interval_seconds=30,
 )
 
 # Run orchestration cycle

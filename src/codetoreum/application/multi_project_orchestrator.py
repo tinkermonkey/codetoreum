@@ -438,14 +438,13 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                 timestamp=start_time,
             )
 
-        except Exception as e:
-            # Let programming errors (TypeError, AttributeError, etc.) propagate
-            # Only catch expected external service errors here
-            logger.error(
+        except ExternalServiceError as e:
+            # Workflow orchestration external service error
+            logger.warning(
                 f"Orchestration failed for {project_name}: {e}",
                 exc_info=True,
                 extra={
-                    "error_id": "ERR_ORCHESTRATION_ERROR",
+                    "error_id": "ERR_WORKFLOW_ORCHESTRATION_FAILED",
                     "project_name": project_name,
                 },
             )

@@ -42,7 +42,6 @@ def create_project_config(repo_url: str, branch: str = "main") -> ProjectConfig:
 class TestMultiProjectNamespaceIsolation:
     """Integration tests for project-scoped state isolation."""
 
-    @pytest.mark.asyncio
     async def test_pipeline_locks_isolated_by_project(self, project_manager):
         """Verify pipeline locks namespaced per project.
 
@@ -80,7 +79,6 @@ class TestMultiProjectNamespaceIsolation:
         assert lock_key_p1.startswith("project1:")
         assert lock_key_p2.startswith("project2:")
 
-    @pytest.mark.asyncio
     async def test_queue_state_isolated_by_project(self, project_manager, temp_workspace):
         """Verify queue state files namespaced per project.
 
@@ -128,7 +126,6 @@ class TestMultiProjectNamespaceIsolation:
             assert data_p2["project"] == "project2"
             assert "task3" in data_p2["items"]
 
-    @pytest.mark.asyncio
     async def test_session_state_isolated_by_project(self, project_manager, temp_workspace):
         """Verify session state namespaced per project.
 
@@ -185,7 +182,6 @@ class TestMultiProjectNamespaceIsolation:
             assert data_p2["project"] == "project2"
             assert data_p2["agent"] == "designer"
 
-    @pytest.mark.asyncio
     async def test_execution_state_isolated_by_project(self, project_manager, temp_workspace):
         """Verify execution state namespaced per project.
 
@@ -243,7 +239,6 @@ class TestMultiProjectNamespaceIsolation:
             assert data_p2["project"] == "project2"
             assert "container-p2-001" in data_p2["container_id"]
 
-    @pytest.mark.asyncio
     async def test_project_configurations_remain_independent(self, project_manager):
         """Verify that updating one project config doesn't affect others."""
         # Create two projects
