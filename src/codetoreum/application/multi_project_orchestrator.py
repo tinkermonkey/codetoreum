@@ -344,6 +344,27 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                 error_message=msg,
             )
 
+        except Exception as e:
+            msg = f"Unexpected error in orchestration cycle: {e}"
+            logger.error(
+                msg,
+                exc_info=True,
+                extra={
+                    "error_id": "ERR_ORCHESTRATION_CYCLE_UNEXPECTED",
+                    "error_type": type(e).__name__,
+                },
+            )
+            duration_ms = (time.time() - cycle_start) * 1000
+            return OrchestrationCycleResult(
+                success=False,
+                projects_processed=0,
+                total_actions=0,
+                total_errors=1,
+                cycle_duration_ms=duration_ms,
+                timestamp=cycle_timestamp,
+                error_message=msg,
+            )
+
     async def orchestrate_project(
         self, project_name: str
     ) -> ProjectOrchestrationResult:
@@ -453,6 +474,26 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                 success=False,
                 actions_taken=0,
                 errors=[f"Orchestration error: {e}"],
+                workspace_path="",
+                timestamp=start_time,
+            )
+
+        except Exception as e:
+            # Unexpected error in workflow orchestration
+            logger.error(
+                f"UNEXPECTED error orchestrating {project_name}: {e}",
+                exc_info=True,
+                extra={
+                    "error_id": "ERR_WORKFLOW_ORCHESTRATION_UNEXPECTED",
+                    "project_name": project_name,
+                    "error_type": type(e).__name__,
+                },
+            )
+            return ProjectOrchestrationResult(
+                project_name=project_name,
+                success=False,
+                actions_taken=0,
+                errors=[str(e)],
                 workspace_path="",
                 timestamp=start_time,
             )
