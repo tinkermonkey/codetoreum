@@ -160,6 +160,15 @@ Events related to configuration changes and reconciliation.
 - **dev_container_verified** - Dev container image verified
 - **dev_container_verification_failed** - Dev container verification failed
 
+### 9.1 Project Management Events
+Events related to multi-project orchestration and repository management.
+
+- **project.cloned** - Project repository successfully cloned or updated
+- **project.clone_failed** - Project clone/pull failed (transient error)
+- **project.enabled** - Project became enabled in configuration
+- **project.disabled** - Project became disabled in configuration
+- **orchestration.cycle_completed** - Orchestration poll cycle completed
+
 ### 10. System Events
 System-level operational events.
 
