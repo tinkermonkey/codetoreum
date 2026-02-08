@@ -1079,7 +1079,7 @@ OrchestrationCycleStarted
 └── OrchestrationCycleCompletedEvent
     ├── projects_processed: 3
     ├── boards_processed: 3
-    ├── work_items_found: 18
+    ├── total_actions: 18
     └── cycle_duration_ms: ~1000
 ```
 

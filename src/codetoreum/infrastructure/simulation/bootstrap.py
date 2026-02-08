@@ -236,7 +236,7 @@ class SimulationApplicationBootstrap:
 
         This method executes all 6 bootstrap phases in order:
         - Phase 0: Create simulation engine (encapsulates clock and timing)
-        - Phase 1: Create adapters (9 mock adapters for all output ports)
+        - Phase 1: Create adapters (12 mock adapters for all output ports)
         - Phase 2: Create infrastructure (event bus, logger, error registry)
         - Phase 3: Create services (8 application services with dependencies)
         - Phase 4: Create ports (16 input port implementations)
