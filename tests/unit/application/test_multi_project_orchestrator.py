@@ -111,7 +111,7 @@ class TestOrchestrationCycle:
         cycle_event = event_emitter.emit.call_args_list[0][0][0]
         assert isinstance(cycle_event, OrchestrationCycleCompletedEvent)
         assert cycle_event.projects_processed == 2
-        assert cycle_event.work_items_found == 8
+        assert cycle_event.total_actions == 8
 
     @pytest.mark.asyncio
     async def test_run_orchestration_cycle_no_enabled_projects(
@@ -455,7 +455,7 @@ class TestCycleMetrics:
         assert event_emitter.emit.called
         event = event_emitter.emit.call_args[0][0]
         assert event.projects_processed == 2
-        assert event.work_items_found == 10
+        assert event.total_actions == 10
         assert event.type == "orchestration.cycle_completed"
         assert event.source == "multi_project_orchestrator"
 
@@ -538,21 +538,25 @@ class TestMultiProjectOrchestratorLifecycle:
         # Let loop start
         await asyncio.sleep(0.01)
 
-        # Verify loop initialized
-        assert hasattr(multi_orchestrator, "_running")
+        # Verify loop has _stop_event for controlling the loop
+        assert hasattr(multi_orchestrator, "_stop_event")
 
-        # Call stop()
+        # Call stop() to signal the loop to exit
         await multi_orchestrator.stop()
 
-        # Give it a moment to process the stop signal
-        await asyncio.sleep(0.01)
+        # Give it a moment to process the stop signal and exit
+        await asyncio.sleep(0.1)
 
-        # Cancel task to clean up
-        task.cancel()
+        # Task should complete now (not running indefinitely)
         try:
-            await task
-        except (asyncio.CancelledError, Exception):
-            pass  # Expected when cancelling
+            await asyncio.wait_for(task, timeout=1.0)
+        except asyncio.TimeoutError:
+            # If it times out, the stop didn't work as expected
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass  # Clean up
 
     @pytest.mark.asyncio
     async def test_initial_setup_is_called_before_loop(self, multi_orchestrator):

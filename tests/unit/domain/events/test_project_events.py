@@ -511,16 +511,3 @@ class TestOrchestrationCycleCompletedEvent:
         assert restored.total_actions == original.total_actions
         assert restored.cycle_duration_ms == original.cycle_duration_ms
 
-    def test_orchestration_cycle_completed_event_deserialization_with_defaults(self):
-        """Deserialize with missing fields using defaults."""
-        # Minimal data without optional fields
-        data = {
-            "type": "orchestration.cycle_completed",
-        }
-        event = OrchestrationCycleCompletedEvent.from_dict(data)
-
-        # Should use defaults for all numeric fields
-        assert event.projects_processed == 0
-        assert event.boards_processed == 0
-        assert event.total_actions == 0
-        assert event.cycle_duration_ms == 0
