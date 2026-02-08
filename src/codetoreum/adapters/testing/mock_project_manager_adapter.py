@@ -11,9 +11,9 @@ Configuration changes emit ProjectEnabledEvent/ProjectDisabledEvent.
 
 import logging
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set
 
 from codetoreum.domain.events.project_events import (
     ProjectClonedEvent,
@@ -22,6 +22,7 @@ from codetoreum.domain.events.project_events import (
     ProjectEnabledEvent,
 )
 from codetoreum.domain.value_objects import ProjectConfig
+from codetoreum.domain.work_item import WorkItem
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.exceptions import (
     ExternalServiceError,
@@ -105,7 +106,9 @@ class MockProjectManagerAdapter(IProjectManagerService):
         self._event_emitter = event_emitter
         self._base_workspace = base_workspace
         self._lock = threading.Lock()
-        self._clone_failure_mode = False  # Can be set for testing failures
+        self._clone_failures: Set[str] = set()  # Per-project clone failures
+        self._project_boards: Dict[str, List[str]] = {}  # Per-project boards
+        self._project_work_items: Dict[str, List[WorkItem]] = {}  # Per-project work items
 
     # =========================================================================
     # IProjectManagerService Implementation
@@ -217,8 +220,8 @@ class MockProjectManagerAdapter(IProjectManagerService):
             config = state.config
             workspace_path = f"{self._base_workspace}/{self._extract_repo_name(config.repo_url)}"
 
-            # Simulate clone failure if in failure mode
-            if self._clone_failure_mode:
+            # Simulate clone failure if project in clone_failures set
+            if project_name in self._clone_failures:
                 state.clone_failures += 1
                 event = ProjectCloneFailedEvent(
                     type="project.clone_failed",
@@ -336,17 +339,94 @@ class MockProjectManagerAdapter(IProjectManagerService):
         with self._lock:
             self._projects.clear()
 
-    def set_clone_failure_mode(self, enabled: bool) -> None:
-        """Set clone operation failure mode for testing.
+    def simulate_clone_failure(self, project_name: str) -> None:
+        """Simulate clone failure for a specific project for testing.
 
-        When enabled, ensure_project_cloned() will fail with
-        ProjectCloneFailedEvent emission.
+        When a project is in the clone failures set, ensure_project_cloned()
+        will fail with ProjectCloneFailedEvent emission and ExternalServiceError.
 
         Args:
-            enabled: True to enable failure mode, False to disable
+            project_name: Name of the project to simulate clone failure for
         """
         with self._lock:
-            self._clone_failure_mode = enabled
+            self._clone_failures.add(project_name)
+
+    def clear_clone_failure(self, project_name: str) -> None:
+        """Clear simulated clone failure for a specific project.
+
+        Args:
+            project_name: Name of the project
+        """
+        with self._lock:
+            self._clone_failures.discard(project_name)
+
+    def add_work_item_to_project(
+        self, project_name: str, work_item: WorkItem
+    ) -> None:
+        """Add a work item to a project for simulation testing.
+
+        Args:
+            project_name: Name of the project
+            work_item: Work item to add
+
+        Raises:
+            ResourceNotFoundError: Project doesn't exist
+        """
+        with self._lock:
+            if project_name not in self._projects:
+                raise ResourceNotFoundError("Project", project_name)
+            if project_name not in self._project_work_items:
+                self._project_work_items[project_name] = []
+            self._project_work_items[project_name].append(work_item)
+
+    def add_boards_to_project(self, project_name: str, boards: List[str]) -> None:
+        """Configure boards for a project.
+
+        Args:
+            project_name: Name of the project
+            boards: List of board names
+
+        Raises:
+            ResourceNotFoundError: Project doesn't exist
+        """
+        with self._lock:
+            if project_name not in self._projects:
+                raise ResourceNotFoundError("Project", project_name)
+            self._project_boards[project_name] = boards
+
+    def get_project_boards(self, project_name: str) -> List[str]:
+        """Get boards configured for a project.
+
+        Args:
+            project_name: Name of the project
+
+        Returns:
+            List of board names for the project
+
+        Raises:
+            ResourceNotFoundError: Project doesn't exist
+        """
+        with self._lock:
+            if project_name not in self._projects:
+                raise ResourceNotFoundError("Project", project_name)
+            return self._project_boards.get(project_name, [])
+
+    def get_project_work_items(self, project_name: str) -> List[WorkItem]:
+        """Get work items added to a project.
+
+        Args:
+            project_name: Name of the project
+
+        Returns:
+            List of work items for the project
+
+        Raises:
+            ResourceNotFoundError: Project doesn't exist
+        """
+        with self._lock:
+            if project_name not in self._projects:
+                raise ResourceNotFoundError("Project", project_name)
+            return self._project_work_items.get(project_name, []).copy()
 
     def get_clone_failure_count(self, project_name: str) -> int:
         """Get count of clone failures for a project.

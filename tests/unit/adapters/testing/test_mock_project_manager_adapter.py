@@ -23,8 +23,6 @@ from codetoreum.domain.value_objects import ProjectConfig
 from codetoreum.domain.events.project_events import (
     ProjectClonedEvent,
     ProjectCloneFailedEvent,
-    ProjectEnabledEvent,
-    ProjectDisabledEvent,
 )
 from codetoreum.ports.exceptions import (
     ExternalServiceError,
@@ -307,7 +305,7 @@ class TestEnsureProjectCloned:
     async def test_clone_failure_mode(self, adapter, config_1):
         """Test clone failure simulation."""
         adapter.add_project("api-service", config_1)
-        adapter.set_clone_failure_mode(True)
+        adapter.simulate_clone_failure("api-service")
 
         with pytest.raises(ExternalServiceError, match="simulated"):
             await adapter.ensure_project_cloned("api-service")
@@ -318,7 +316,7 @@ class TestEnsureProjectCloned:
         emitter = MockEventEmitter()
         adapter = MockProjectManagerAdapter(event_emitter=emitter)
         adapter.add_project("api-service", config_1)
-        adapter.set_clone_failure_mode(True)
+        adapter.simulate_clone_failure("api-service")
 
         with pytest.raises(ExternalServiceError):
             await adapter.ensure_project_cloned("api-service")
@@ -334,7 +332,7 @@ class TestEnsureProjectCloned:
     async def test_clone_failure_increments_count(self, adapter, config_1):
         """Test that clone failures increment failure count."""
         adapter.add_project("api-service", config_1)
-        adapter.set_clone_failure_mode(True)
+        adapter.simulate_clone_failure("api-service")
 
         # First failure
         with pytest.raises(ExternalServiceError):
@@ -350,15 +348,15 @@ class TestEnsureProjectCloned:
     async def test_successful_clone_resets_failure_count(self, adapter, config_1):
         """Test that successful clone resets failure count."""
         adapter.add_project("api-service", config_1)
-        adapter.set_clone_failure_mode(True)
+        adapter.simulate_clone_failure("api-service")
 
         # Failure
         with pytest.raises(ExternalServiceError):
             await adapter.ensure_project_cloned("api-service")
         assert adapter.get_clone_failure_count("api-service") == 1
 
-        # Disable failure mode and try again
-        adapter.set_clone_failure_mode(False)
+        # Clear failure mode and try again
+        adapter.clear_clone_failure("api-service")
         await adapter.ensure_project_cloned("api-service")
         assert adapter.get_clone_failure_count("api-service") == 0
 
@@ -442,15 +440,28 @@ class TestHelperMethods:
         with pytest.raises(ResourceNotFoundError):
             adapter.get_clone_failure_count("nonexistent")
 
-    def test_set_clone_failure_mode(self, adapter, config_1):
-        """Test toggling clone failure mode."""
+    @pytest.mark.asyncio
+    async def test_simulate_clone_failure(self, adapter, config_1):
+        """Test per-project clone failure simulation."""
         adapter.add_project("api-service", config_1)
+        adapter.simulate_clone_failure("api-service")
 
-        adapter.set_clone_failure_mode(True)
-        assert adapter._clone_failure_mode is True
+        # Clone should fail
+        with pytest.raises(ExternalServiceError):
+            await adapter.ensure_project_cloned("api-service")
 
-        adapter.set_clone_failure_mode(False)
-        assert adapter._clone_failure_mode is False
+    @pytest.mark.asyncio
+    async def test_clear_clone_failure(self, adapter, config_1):
+        """Test clearing clone failure allows clone to succeed."""
+        adapter.add_project("api-service", config_1)
+        adapter.simulate_clone_failure("api-service")
+
+        # Clear the failure
+        adapter.clear_clone_failure("api-service")
+
+        # Clone should now succeed
+        path = await adapter.ensure_project_cloned("api-service")
+        assert path == "/workspace/api-service"
 
     @pytest.mark.asyncio
     async def test_multiple_projects_independent_clones(self, adapter, config_1, config_2):
@@ -466,6 +477,51 @@ class TestHelperMethods:
 
         assert api_state.cloned is True
         assert web_state.cloned is False
+
+    def test_add_work_item_to_project(self, adapter, config_1):
+        """Test adding work items to a project."""
+        from unittest.mock import Mock
+
+        adapter.add_project("api-service", config_1)
+
+        # Create mock work items
+        work_item1 = Mock(spec=["id", "title"])
+        work_item1.id = "issue-1"
+        work_item1.title = "Fix bug"
+
+        adapter.add_work_item_to_project("api-service", work_item1)
+
+        items = adapter.get_project_work_items("api-service")
+        assert len(items) == 1
+        assert items[0].id == "issue-1"
+
+    def test_add_work_item_to_nonexistent_project_fails(self, adapter):
+        """Test adding work item to nonexistent project raises error."""
+        from unittest.mock import Mock
+
+        work_item = Mock()
+        with pytest.raises(ResourceNotFoundError):
+            adapter.add_work_item_to_project("nonexistent", work_item)
+
+    def test_add_boards_to_project(self, adapter, config_1):
+        """Test adding boards to a project."""
+        adapter.add_project("api-service", config_1)
+
+        boards = ["Todo", "In Progress", "Done"]
+        adapter.add_boards_to_project("api-service", boards)
+
+        project_boards = adapter.get_project_boards("api-service")
+        assert project_boards == boards
+
+    def test_get_project_boards_nonexistent_project_fails(self, adapter):
+        """Test getting boards for nonexistent project raises error."""
+        with pytest.raises(ResourceNotFoundError):
+            adapter.get_project_boards("nonexistent")
+
+    def test_get_project_work_items_nonexistent_project_fails(self, adapter):
+        """Test getting work items for nonexistent project raises error."""
+        with pytest.raises(ResourceNotFoundError):
+            adapter.get_project_work_items("nonexistent")
 
 
 class TestMockProjectState:

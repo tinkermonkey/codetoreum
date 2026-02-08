@@ -4,8 +4,11 @@ Captures all emitted events in memory without external dependencies.
 Used for verifying event emission behavior in unit tests.
 """
 
+import logging
 from typing import Callable, Dict, List
 from codetoreum.ports.output.event_emitter import IEventEmitter
+
+logger = logging.getLogger(__name__)
 
 
 class MockEventEmitter(IEventEmitter):
@@ -103,8 +106,7 @@ class MockEventEmitter(IEventEmitter):
             try:
                 handler(event)
             except Exception:
-                # Silently ignore handler errors
-                pass
+                logger.warning("Handler error in mock event emitter", exc_info=True)
 
         # Call type-specific handlers
         event_type = getattr(event, "type", None)
@@ -113,8 +115,7 @@ class MockEventEmitter(IEventEmitter):
                 try:
                     handler(event)
                 except Exception:
-                    # Silently ignore handler errors
-                    pass
+                    logger.warning("Handler error in mock event emitter", exc_info=True)
 
     # =========================================================================
     # Test Helper Methods
