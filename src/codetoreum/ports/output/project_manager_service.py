@@ -156,9 +156,9 @@ class IProjectManagerService(ABC):
         5. Emits ProjectClonedEvent on success
         6. Emits ProjectCloneFailedEvent on transient errors (will retry next cycle)
 
-        Clone failures are non-blocking. The service logs the error and emits
-        an event, but processing continues to the next project. The next
-        orchestration cycle will attempt the clone again.
+        Note: On transient errors (ExternalServiceError), the exception is raised
+        and the caller is responsible for handling the error. The caller may choose
+        to treat it as non-blocking and continue processing other projects.
 
         Args:
             project_name: Name of the project
@@ -169,8 +169,7 @@ class IProjectManagerService(ABC):
         Raises:
             ResourceNotFoundError: Project configuration doesn't exist
             ValidationError: Invalid repository URL or branch configuration
-            ExternalServiceError: Repository clone/pull operation failed
-                                 (transient - will retry next cycle)
+            ExternalServiceError: Repository clone/pull operation failed (transient)
 
         Events:
             - ProjectClonedEvent: Emitted on successful clone/pull

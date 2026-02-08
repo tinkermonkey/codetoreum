@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Default poll interval
+# Default poll interval between orchestration cycles
 POLL_INTERVAL_SECONDS = 30
 
 
@@ -69,7 +69,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
         workflow_orchestrator: "IWorkflowOrchestrator",
         board_service: IBoardService,
         event_emitter: Optional[IEventEmitter] = None,
-        poll_interval_seconds: int = 30,
+        poll_interval_seconds: int = POLL_INTERVAL_SECONDS,
     ) -> None:
         """Initialize the multi-project orchestrator.
 
@@ -87,7 +87,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
         self._poll_interval_seconds = poll_interval_seconds
         self._last_cycle_time: Optional[datetime] = None
         self._cycle_count = 0
-        self._running = False
+        self._stop_event = asyncio.Event()
 
     async def start(self) -> None:
         """Start the main poll loop.
@@ -96,16 +96,17 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
         then enters main poll loop that repeats orchestration cycles with
         POLL_INTERVAL between each cycle.
 
-        The loop continues until stop() is called.
+        The loop continues until stop() is called. Shutdown is responsive—
+        stop() will interrupt the sleep between cycles immediately.
         """
         logger.info("Starting multi-project orchestrator poll loop")
-        self._running = True
+        self._stop_event.clear()
 
         # Initial setup: reconcile all project boards
         await self._initial_setup()
 
-        # Main poll loop
-        while self._running:
+        # Main poll loop with responsive shutdown
+        while True:
             cycle_start = time.time()
 
             await self.run_orchestration_cycle()
@@ -116,16 +117,27 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                 extra={"cycle_duration_ms": int(cycle_duration_ms)},
             )
 
-            # Wait before next cycle
-            await asyncio.sleep(self._poll_interval_seconds)
+            # Wait before next cycle with responsive shutdown
+            try:
+                await asyncio.wait_for(
+                    self._stop_event.wait(),
+                    timeout=self._poll_interval_seconds
+                )
+                # Stop event was set, exit gracefully
+                logger.info("Orchestration cycle loop stopped")
+                break
+            except asyncio.TimeoutError:
+                # Normal timeout - continue to next cycle
+                pass
 
     async def stop(self) -> None:
         """Stop the main poll loop.
 
-        Signals the poll loop to exit on the next iteration.
+        Signals the poll loop to exit immediately (responsive shutdown).
+        Does not wait for the current cycle to complete.
         """
         logger.info("Stopping multi-project orchestrator poll loop")
-        self._running = False
+        self._stop_event.set()
 
     async def _initial_setup(self) -> None:
         """Perform initial setup on startup.
@@ -312,7 +324,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                         source="multi_project_orchestrator",
                         projects_processed=len(project_results),
                         boards_processed=0,  # Not tracked at orchestrator level
-                        work_items_found=total_actions,  # Proxy: actions = work items processed
+                        total_actions=total_actions,
                         cycle_duration_ms=cycle_duration_ms,
                     )
                     self._event_emitter.emit(event)
@@ -385,15 +397,15 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
         3. Delegate to workflow orchestrator for the project
         4. Collect and return results
 
+        Errors (ResourceNotFoundError, ExternalServiceError) are caught internally
+        and returned as failed results. Processing continues to the next project
+        on errors.
+
         Args:
             project_name: Name of the project
 
         Returns:
-            ProjectOrchestrationResult: Results for this project
-
-        Raises:
-            ResourceNotFoundError: Project configuration doesn't exist
-            ExternalServiceError: Repository clone failed
+            ProjectOrchestrationResult: Results for this project (success or failure)
         """
         start_time = datetime.now(timezone.utc)
 
@@ -516,20 +528,17 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
         Raises:
             ResourceNotFoundError: Project doesn't exist
         """
-        try:
-            config = await self._project_manager.get_project_config(project_name)
-            workspace_path = await self._project_manager.get_project_path(project_name)
+        config = await self._project_manager.get_project_config(project_name)
+        workspace_path = await self._project_manager.get_project_path(project_name)
 
-            return ProjectStatus(
-                project_name=project_name,
-                enabled=config.enabled,
-                repo_url=config.repo_url,
-                branch=config.branch,
-                organization=config.org,
-                workspace_path=workspace_path,
-            )
-        except ResourceNotFoundError:
-            raise
+        return ProjectStatus(
+            project_name=project_name,
+            enabled=config.enabled,
+            repo_url=config.repo_url,
+            branch=config.branch,
+            organization=config.org,
+            workspace_path=workspace_path,
+        )
 
     async def list_enabled_projects(self) -> List[str]:
         """Get list of all enabled projects.

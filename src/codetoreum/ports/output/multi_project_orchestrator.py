@@ -165,17 +165,18 @@ class IMultiProjectOrchestrator(ABC):
     async def get_project_status(self, project_name: str) -> ProjectStatus:
         """Get current orchestration status for a project.
 
-        Returns information about:
-        - Project configuration (enabled, repo URL, branch)
-        - Repository status (cloned, last clone time, clone failures)
-        - Pending work items in the project
-        - Active workflows/pipelines
+        Returns basic project information:
+        - Project name
+        - Enabled status
+        - Repository URL and branch
+        - Organization/owner
+        - Workspace filesystem path
 
         Args:
             project_name: Name of the project
 
         Returns:
-            ProjectStatus with project configuration and status information
+            ProjectStatus with project configuration and path information
 
         Raises:
             ResourceNotFoundError: Project doesn't exist

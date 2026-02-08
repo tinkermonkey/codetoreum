@@ -321,14 +321,15 @@ class OrchestrationCycleCompletedEvent(CodetoreumEvent):
     Provides cycle-level metrics for monitoring and debugging:
     - Count of projects processed (enabled projects)
     - Count of boards processed across all projects
-    - Count of work items found in all boards
+    - Count of actions taken across all projects
     - Cycle duration in milliseconds
 
     Attributes:
         type (str): Fixed to "orchestration.cycle_completed"
         projects_processed (int): Number of enabled projects processed (>= 0)
-        boards_processed (int): Total number of boards processed across all projects (>= 0)
-        work_items_found (int): Total number of work items found across all boards (>= 0)
+        boards_processed (int): Total number of boards processed across all projects (>= 0).
+                               Currently always 0; reserved for future use.
+        total_actions (int): Total number of actions taken across all projects (>= 0)
         cycle_duration_ms (int): Elapsed time for the cycle in milliseconds (>= 0)
 
     Example:
@@ -337,8 +338,8 @@ class OrchestrationCycleCompletedEvent(CodetoreumEvent):
         ...     timestamp="2025-02-08T10:31:00+00:00",
         ...     source="orchestrator",
         ...     projects_processed=3,
-        ...     boards_processed=7,
-        ...     work_items_found=42,
+        ...     boards_processed=0,
+        ...     total_actions=42,
         ...     cycle_duration_ms=15000
         ... )
         >>> event.projects_processed = 2  # ❌ Raises FrozenInstanceError
@@ -346,7 +347,7 @@ class OrchestrationCycleCompletedEvent(CodetoreumEvent):
 
     projects_processed: int = 0
     boards_processed: int = 0
-    work_items_found: int = 0
+    total_actions: int = 0
     cycle_duration_ms: int = 0
 
     def __post_init__(self) -> None:
@@ -356,8 +357,8 @@ class OrchestrationCycleCompletedEvent(CodetoreumEvent):
             raise ValueError("projects_processed must be >= 0")
         if self.boards_processed < 0:
             raise ValueError("boards_processed must be >= 0")
-        if self.work_items_found < 0:
-            raise ValueError("work_items_found must be >= 0")
+        if self.total_actions < 0:
+            raise ValueError("total_actions must be >= 0")
         if self.cycle_duration_ms < 0:
             raise ValueError("cycle_duration_ms must be >= 0")
 
@@ -367,7 +368,7 @@ class OrchestrationCycleCompletedEvent(CodetoreumEvent):
         d.update({
             "projects_processed": self.projects_processed,
             "boards_processed": self.boards_processed,
-            "work_items_found": self.work_items_found,
+            "total_actions": self.total_actions,
             "cycle_duration_ms": self.cycle_duration_ms,
         })
         return d
@@ -383,6 +384,6 @@ class OrchestrationCycleCompletedEvent(CodetoreumEvent):
             event_id=data.get("event_id") or str(uuid4()),
             projects_processed=data.get("projects_processed", 0),
             boards_processed=data.get("boards_processed", 0),
-            work_items_found=data.get("work_items_found", 0),
+            total_actions=data.get("total_actions", 0),
             cycle_duration_ms=data.get("cycle_duration_ms", 0),
         )

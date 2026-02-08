@@ -4,8 +4,8 @@ Simulation Application Bootstrap
 Wires up the entire application stack in simulation mode through 6 phases:
 
 **Phase 0**: Create simulation engine (encapsulates clock and timing)
-**Phase 1**: Create adapters (10 mock adapters: ticket system, LLM, container, repository,
-           event store, metrics, storage, config, notifier, encryption, repair cycle)
+**Phase 1**: Create adapters (12 mock adapters: ticket system, LLM, container, repository,
+           event store, metrics, storage, config, notifier, encryption, repair cycle, project manager)
 **Phase 2**: Create infrastructure (event bus, logger, error registry)
 **Phase 3**: Create services (8 application services with their dependencies)
 **Phase 4**: Create ports (16 input port implementations)
@@ -192,7 +192,7 @@ class SimulationApplicationBootstrap:
     Bootstrap the entire application stack in simulation mode.
 
     This class wires up:
-    1. All 9 mock adapters (via AdapterFactory)
+    1. All 12 mock adapters (5 via AdapterFactory + 7 additional)
     2. Infrastructure (event bus, clock, logger)
     3. All 8 application services
     4. All input/output ports
@@ -258,8 +258,8 @@ class SimulationApplicationBootstrap:
             logger.info("Phase 0: Creating simulation engine...")
             self._engine = SimulationEngine.create(self.config)
 
-            # Phase 1: Create adapters
-            logger.info("Phase 1: Creating adapters...")
+            # Phase 1: Create adapters (12 total)
+            logger.info("Phase 1: Creating 12 adapters...")
             self.adapters = await self._create_adapters()
 
             # Phase 2: Create infrastructure
@@ -339,14 +339,24 @@ class SimulationApplicationBootstrap:
 
     async def _create_adapters(self) -> SimulationAdapters:
         """
-        Create all 10 mock adapters using AdapterFactory in simulation mode.
+        Create all 12 mock adapters in simulation mode.
+
+        5 adapters created via AdapterFactory:
+        - ticket_system (in_memory)
+        - llm_provider (mock)
+        - container (fake)
+        - repository (in_memory)
+        - event_store (in_memory)
+
+        7 additional adapters created directly:
+        - metrics, storage, config_store, notifier, encryption, repair_cycle, project_manager
 
         The SimulationEngine automatically injects the clock into time-aware
-        adapters (repair_cycle, review_cycle, metrics_query), hiding simulation
-        implementation details from the adapter constructors.
+        adapters (repair_cycle), hiding simulation implementation details from
+        the adapter constructors.
 
         Returns:
-            SimulationAdapters with all adapters configured
+            SimulationAdapters with all 12 adapters configured
         """
         if not self._engine:
             raise RuntimeError("SimulationEngine must be created before adapters")
@@ -395,7 +405,7 @@ class SimulationApplicationBootstrap:
             ),
         )
 
-        logger.info("Created 11 simulation adapters")
+        logger.info("Created 12 simulation adapters")
 
         return SimulationAdapters(
             ticket_system=ticket_system,
