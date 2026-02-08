@@ -308,23 +308,49 @@ def print_event_timeline(runner: SimulationRunner) -> None:
     """
     Print a timeline of captured events.
 
+    Supports both DomainEvent (with occurred_at) and CodetoreumEvent (with timestamp).
+
     Args:
         runner: Simulation runner
     """
+    from datetime import timezone
+
     print("\n=== Event Timeline ===")
 
     if not runner.captured_events:
         print("No events captured")
         return
 
-    start_time = runner.captured_events[0].occurred_at
+    # Get start time from first event (handle both event types)
+    first_event = runner.captured_events[0]
+    if hasattr(first_event, 'occurred_at'):
+        start_time = first_event.occurred_at
+    elif hasattr(first_event, 'timestamp'):
+        start_time = datetime.fromisoformat(first_event.timestamp.replace('Z', '+00:00'))
+    else:
+        print("Unknown event type - no timestamp found")
+        return
 
     for i, event in enumerate(runner.captured_events, 1):
-        elapsed = (event.occurred_at - start_time).total_seconds()
+        # Extract timestamp from event (handle both types)
+        if hasattr(event, 'occurred_at'):
+            event_time = event.occurred_at
+        elif hasattr(event, 'timestamp'):
+            event_time = datetime.fromisoformat(event.timestamp.replace('Z', '+00:00'))
+        else:
+            event_time = start_time
+
+        elapsed = (event_time - start_time).total_seconds()
+
+        # Extract event type (handle both types)
+        event_type = getattr(event, 'event_type', getattr(event, 'type', 'Unknown'))
+        aggregate_type = getattr(event, 'aggregate_type', 'Unknown')
+        aggregate_id = getattr(event, 'aggregate_id', 'Unknown')
+
         print(
             f"{i:2d}. [{elapsed:6.1f}s] "
-            f"{event.event_type:30s} "
-            f"| {event.aggregate_type}:{event.aggregate_id}"
+            f"{event_type:30s} "
+            f"| {aggregate_type}:{aggregate_id}"
         )
 
     print("=" * 80)
