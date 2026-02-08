@@ -18,12 +18,7 @@ from .adapter_events import CodetoreumEvent
 class ProjectClonedEvent(CodetoreumEvent):
     """Emitted when a project repository is successfully cloned or updated.
 
-    **Immutability**: This is an immutable event (frozen dataclass). All fields
-    are read-only after construction to maintain event sourcing audit trail
-    integrity. Events represent immutable facts—attempting to modify any field
-    will raise `FrozenInstanceError`. This immutability is essential because
-    events are the permanent record of state changes in the system and must
-    never be altered once created.
+    See module docstring for immutability guarantees.
 
     Fired when:
     - A repository is cloned for the first time to the workspace
@@ -83,7 +78,23 @@ class ProjectClonedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "ProjectClonedEvent":
-        """Deserialize from dictionary."""
+        """Deserialize from dictionary.
+
+        Raises:
+            ValueError: If required fields are missing from input dict
+        """
+        missing_fields = []
+        for field in ["project_name", "repo_url", "workspace_path", "branch"]:
+            if not data.get(field):
+                missing_fields.append(field)
+
+        if missing_fields:
+            raise ValueError(
+                f"Cannot deserialize ProjectClonedEvent: missing required field(s) "
+                f"{missing_fields}. All of project_name, repo_url, workspace_path, "
+                f"and branch are required."
+            )
+
         return cls(
             type=data.get("type", "project.cloned"),
             timestamp=data.get("timestamp", ""),
@@ -101,12 +112,7 @@ class ProjectClonedEvent(CodetoreumEvent):
 class ProjectCloneFailedEvent(CodetoreumEvent):
     """Emitted when a project clone or update fails with a transient error.
 
-    **Immutability**: This is an immutable event (frozen dataclass). All fields
-    are read-only after construction to maintain event sourcing audit trail
-    integrity. Events represent immutable facts—attempting to modify any field
-    will raise `FrozenInstanceError`. This immutability is essential because
-    events are the permanent record of state changes in the system and must
-    never be altered once created.
+    See module docstring for immutability guarantees.
 
     Fired when:
     - Repository clone fails (network issues, temporary service outage)
@@ -135,7 +141,6 @@ class ProjectCloneFailedEvent(CodetoreumEvent):
         ...     error_message="Connection timeout: Could not reach github.com",
         ...     will_retry=True
         ... )
-        >>> event.will_retry = False  # ❌ Raises FrozenInstanceError
     """
 
     project_name: str = ""
@@ -166,7 +171,23 @@ class ProjectCloneFailedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "ProjectCloneFailedEvent":
-        """Deserialize from dictionary."""
+        """Deserialize from dictionary.
+
+        Raises:
+            ValueError: If required fields are missing from input dict
+        """
+        missing_fields = []
+        for field in ["project_name", "repo_url", "error_message"]:
+            if not data.get(field):
+                missing_fields.append(field)
+
+        if missing_fields:
+            raise ValueError(
+                f"Cannot deserialize ProjectCloneFailedEvent: missing required field(s) "
+                f"{missing_fields}. All of project_name, repo_url, and error_message "
+                f"are required."
+            )
+
         return cls(
             type=data.get("type", "project.clone_failed"),
             timestamp=data.get("timestamp", ""),
@@ -184,12 +205,7 @@ class ProjectCloneFailedEvent(CodetoreumEvent):
 class ProjectEnabledEvent(CodetoreumEvent):
     """Emitted when a project becomes enabled in configuration.
 
-    **Immutability**: This is an immutable event (frozen dataclass). All fields
-    are read-only after construction to maintain event sourcing audit trail
-    integrity. Events represent immutable facts—attempting to modify any field
-    will raise `FrozenInstanceError`. This immutability is essential because
-    events are the permanent record of state changes in the system and must
-    never be altered once created.
+    See module docstring for immutability guarantees.
 
     Fired when:
     - A project's enabled status changes from false to true
@@ -209,7 +225,6 @@ class ProjectEnabledEvent(CodetoreumEvent):
         ...     source="project_manager",
         ...     project_name="api-service"
         ... )
-        >>> event.project_name = "other-project"  # ❌ Raises FrozenInstanceError
     """
 
     project_name: str = ""
@@ -230,7 +245,17 @@ class ProjectEnabledEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "ProjectEnabledEvent":
-        """Deserialize from dictionary."""
+        """Deserialize from dictionary.
+
+        Raises:
+            ValueError: If required fields are missing from input dict
+        """
+        if not data.get("project_name"):
+            raise ValueError(
+                "Cannot deserialize ProjectEnabledEvent: missing required field "
+                "'project_name'"
+            )
+
         return cls(
             type=data.get("type", "project.enabled"),
             timestamp=data.get("timestamp", ""),
@@ -245,12 +270,7 @@ class ProjectEnabledEvent(CodetoreumEvent):
 class ProjectDisabledEvent(CodetoreumEvent):
     """Emitted when a project becomes disabled in configuration.
 
-    **Immutability**: This is an immutable event (frozen dataclass). All fields
-    are read-only after construction to maintain event sourcing audit trail
-    integrity. Events represent immutable facts—attempting to modify any field
-    will raise `FrozenInstanceError`. This immutability is essential because
-    events are the permanent record of state changes in the system and must
-    never be altered once created.
+    See module docstring for immutability guarantees.
 
     Fired when:
     - A project's enabled status changes from true to false
@@ -270,7 +290,6 @@ class ProjectDisabledEvent(CodetoreumEvent):
         ...     source="project_manager",
         ...     project_name="deprecated-service"
         ... )
-        >>> event.project_name = "other-project"  # ❌ Raises FrozenInstanceError
     """
 
     project_name: str = ""
@@ -291,7 +310,17 @@ class ProjectDisabledEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "ProjectDisabledEvent":
-        """Deserialize from dictionary."""
+        """Deserialize from dictionary.
+
+        Raises:
+            ValueError: If required fields are missing from input dict
+        """
+        if not data.get("project_name"):
+            raise ValueError(
+                "Cannot deserialize ProjectDisabledEvent: missing required field "
+                "'project_name'"
+            )
+
         return cls(
             type=data.get("type", "project.disabled"),
             timestamp=data.get("timestamp", ""),
@@ -306,12 +335,7 @@ class ProjectDisabledEvent(CodetoreumEvent):
 class OrchestrationCycleCompletedEvent(CodetoreumEvent):
     """Emitted at the end of each orchestration poll cycle.
 
-    **Immutability**: This is an immutable event (frozen dataclass). All fields
-    are read-only after construction to maintain event sourcing audit trail
-    integrity. Events represent immutable facts—attempting to modify any field
-    will raise `FrozenInstanceError`. This immutability is essential because
-    events are the permanent record of state changes in the system and must
-    never be altered once created.
+    See module docstring for immutability guarantees.
 
     Fired when:
     - All enabled projects have been processed
@@ -342,7 +366,6 @@ class OrchestrationCycleCompletedEvent(CodetoreumEvent):
         ...     total_actions=42,
         ...     cycle_duration_ms=15000
         ... )
-        >>> event.projects_processed = 2  # ❌ Raises FrozenInstanceError
     """
 
     projects_processed: int = 0

@@ -5,7 +5,10 @@ from adapters to the orchestrator.
 """
 
 from abc import ABC, abstractmethod
-from typing import Callable, Optional
+from typing import Callable, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from codetoreum.domain.events.adapter_events import CodetoreumEvent
 
 
 class IEventEmitter(ABC):
@@ -49,7 +52,7 @@ class IEventEmitter(ABC):
         pass
 
     @abstractmethod
-    def emit(self, event: "CodetoreumEvent") -> None:  # type: ignore
+    def emit(self, event: "CodetoreumEvent") -> None:
         """Emit an event to all subscribers.
 
         Events are dispatched to all handlers subscribed to the event type,

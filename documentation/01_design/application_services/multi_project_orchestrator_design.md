@@ -299,7 +299,7 @@ Errors in one project don't block others:
 
 ### Unit Tests
 
-20 comprehensive unit tests covering:
+Comprehensive unit tests covering orchestration and error handling:
 
 **Location**: `tests/unit/application/test_multi_project_orchestrator.py`
 
@@ -310,7 +310,7 @@ Errors in one project don't block others:
 4. `TestCycleMetrics` - Metrics tracking and events
 5. `TestErrorHandling` - Error resilience
 
-**Coverage**: 15/15 tests passing, ~100% method coverage
+See test file for current test count and coverage details.
 
 ### Simulation Tests
 

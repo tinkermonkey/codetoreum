@@ -65,7 +65,12 @@ class MockProjectManagerAdapter(IProjectManagerService):
     - Simulated clone/pull operations
     - Event emission for configuration changes and clone status
     - Support for configuration reloading
-    - Thread-safe concurrent operations
+    - Thread-safe for multi-threaded test scenarios (using threading.Lock)
+
+    Note: Thread safety is limited to multi-threaded execution. Async methods
+    on the same event loop share a thread, so concurrent coroutines require
+    additional synchronization beyond threading.Lock. For async concurrency,
+    use asyncio.Lock or similar async primitives.
 
     Example:
         # Setup
