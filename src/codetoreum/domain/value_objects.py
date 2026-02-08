@@ -9,6 +9,45 @@ from codetoreum.domain.exceptions import DomainError
 
 
 # ============================================================================
+# Project Configuration Value Object
+# ============================================================================
+
+
+@dataclass(frozen=True)
+class ProjectConfig:
+    """Immutable project configuration from projects.yaml.
+
+    Represents the complete configuration for a single project including
+    repository details and enabled status. Frozen to ensure immutability
+    in the domain layer.
+
+    Attributes:
+        repo_url: Repository URL (SSH or HTTPS format).
+                 Examples: "git@github.com:org/repo.git",
+                          "https://github.com/org/repo.git"
+        branch: Branch name to checkout and track for this project (e.g., "main")
+        enabled: Whether this project is actively processed by the orchestrator.
+                Only enabled projects are included in orchestration cycles.
+        org: Organization or namespace identifier for the project.
+             Used for namespacing pipeline locks, queue state, and other
+             per-project resources to maintain isolation.
+
+    Example:
+        >>> config = ProjectConfig(
+        ...     repo_url="https://github.com/acme/api-service.git",
+        ...     branch="main",
+        ...     enabled=True,
+        ...     org="acme-org"
+        ... )
+    """
+
+    repo_url: str
+    branch: str
+    enabled: bool
+    org: str
+
+
+# ============================================================================
 # Type-Safe Identifiers (Generic Base)
 # ============================================================================
 

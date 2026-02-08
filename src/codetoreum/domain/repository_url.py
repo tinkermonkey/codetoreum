@@ -24,7 +24,7 @@ def extract_repo_name(repo_url: str) -> str:
         str: Repository name (final path component without .git)
 
     Raises:
-        ValueError: If repo_url is empty or None
+        ValueError: If repo_url is empty, None, or contains only whitespace
 
     Example:
         >>> extract_repo_name("git@github.com:acme/api-service.git")
@@ -36,8 +36,8 @@ def extract_repo_name(repo_url: str) -> str:
         >>> extract_repo_name("https://vcs.example.com/orgs/team/repo.git")
         'repo'
     """
-    if not repo_url:
-        raise ValueError("repo_url cannot be empty or None")
+    if not repo_url or not repo_url.strip():
+        raise ValueError("repo_url cannot be empty, None, or whitespace-only")
 
     # Remove trailing .git if present
     url = repo_url.rstrip('/')

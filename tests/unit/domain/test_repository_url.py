@@ -84,20 +84,18 @@ class TestExtractRepoName:
 
     def test_empty_string_raises_error(self):
         """Raise ValueError when given empty string."""
-        with pytest.raises(ValueError, match="repo_url cannot be empty or None"):
+        with pytest.raises(ValueError, match="repo_url cannot be empty, None, or whitespace-only"):
             extract_repo_name("")
 
     def test_none_raises_error(self):
         """Raise ValueError when given None."""
-        with pytest.raises(ValueError, match="repo_url cannot be empty or None"):
+        with pytest.raises(ValueError, match="repo_url cannot be empty, None, or whitespace-only"):
             extract_repo_name(None)  # type: ignore
 
     def test_whitespace_only_string(self):
-        """Handle whitespace-only string (returns whitespace)."""
-        # Whitespace is treated as a valid URL string
-        result = extract_repo_name("   ")
-        # Result is the whitespace string itself (final path component)
-        assert result == "   "
+        """Raise ValueError when given whitespace-only string."""
+        with pytest.raises(ValueError, match="repo_url cannot be empty, None, or whitespace-only"):
+            extract_repo_name("   ")
 
     def test_custom_git_server_https(self):
         """Extract repo name from custom git server HTTPS URL."""
@@ -111,11 +109,12 @@ class TestExtractRepoName:
 
     def test_url_with_query_parameters(self):
         """Handle HTTPS URL with query parameters."""
-        # Note: This test documents behavior. Query parameters should normally
-        # not be in a git URL, but this documents what happens if they are.
+        # Note: Query parameters should normally not be in a git URL,
+        # but this test documents the exact current behavior.
         url = "https://github.com/org/repo.git?ref=main"
         # Query parameters are treated as part of the repo name
-        assert "repo" in extract_repo_name(url)
+        result = extract_repo_name(url)
+        assert result == "repo.git?ref=main"
 
     def test_preserves_repo_name_case(self):
         """Preserve case of repository name."""
