@@ -37,6 +37,9 @@ from codetoreum.adapters.testing import (
 from codetoreum.adapters.testing.mock_container_recovery_adapter import (
     MockContainerRecoveryAdapter,
 )
+from codetoreum.adapters.testing.mock_project_manager_adapter import (
+    MockProjectManagerAdapter,
+)
 from codetoreum.adapters.testing.in_memory_config_store import InMemoryConfigStore
 from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
@@ -52,6 +55,7 @@ from codetoreum.application.workspace_router import WorkspaceRouter
 from codetoreum.application.configuration_service import ConfigurationService
 from codetoreum.application.work_item_service import WorkItemService
 from codetoreum.application.container_recovery_service import ContainerRecoveryService
+from codetoreum.application.multi_project_orchestrator import MultiProjectOrchestrator
 
 # Infrastructure
 from codetoreum.infrastructure.event_bus import EventBus
@@ -126,6 +130,7 @@ class SimulationAdapters:
     notifier: MockNotifierAdapter
     encryption: SimpleEncryptionAdapter
     repair_cycle: Any  # MockRepairCycleAdapter - lazy imported to avoid circular dependency
+    project_manager: Any  # IProjectManagerService - multi-project management
 
 
 @dataclass
@@ -141,6 +146,7 @@ class SimulationServices:
     workspace_router: WorkspaceRouter
     configuration_service: ConfigurationService
     work_item_service: WorkItemService
+    multi_project_orchestrator: Optional[Any] = None  # MultiProjectOrchestrator
     container_recovery_service: Optional[Any] = None
 
 
@@ -374,7 +380,22 @@ class SimulationApplicationBootstrap:
         # Create time-aware adapters via engine (clock is injected internally)
         repair_cycle = self._engine.create_repair_cycle_adapter()
 
-        logger.info("Created 10 simulation adapters")
+        # Create project manager adapter
+        project_manager = MockProjectManagerAdapter()
+
+        # Pre-configure default test project for simulation testing
+        from codetoreum.domain.value_objects import ProjectConfig
+        project_manager.add_project(
+            "default_project",
+            ProjectConfig(
+                repo_url="https://vcs.example.com/org/default.git",
+                branch="main",
+                enabled=True,
+                org="test-org",
+            ),
+        )
+
+        logger.info("Created 11 simulation adapters")
 
         return SimulationAdapters(
             ticket_system=ticket_system,
@@ -388,6 +409,7 @@ class SimulationApplicationBootstrap:
             notifier=notifier,
             encryption=encryption,
             repair_cycle=repair_cycle,
+            project_manager=project_manager,
         )
 
     # =========================================================================
@@ -587,7 +609,19 @@ class SimulationApplicationBootstrap:
             container_timeout_hours=2,
         )
 
-        logger.info("Created all application services with simulation dependencies (including container recovery)")
+        # Multi-Project Orchestrator - Note: workflow_orchestrator and board_service
+        # will be None initially; the orchestrator is created with minimal dependencies
+        # and can be updated after Phase 4 if needed for full multi-project workflows.
+        # For simulation testing, the orchestrator can function with just the project manager.
+        multi_project_orchestrator = MultiProjectOrchestrator(
+            project_manager=self.adapters.project_manager,
+            workflow_orchestrator=workflow_orchestrator,
+            board_service=None,  # No board service in simulation mode yet
+            event_emitter=mock_event_emitter,
+            poll_interval_seconds=30,
+        )
+
+        logger.info("Created all application services with simulation dependencies (including container recovery and multi-project orchestrator)")
 
         return SimulationServices(
             workflow_orchestrator=workflow_orchestrator,
@@ -599,6 +633,7 @@ class SimulationApplicationBootstrap:
             workspace_router=workspace_router,
             configuration_service=configuration_service,
             work_item_service=work_item_service,
+            multi_project_orchestrator=multi_project_orchestrator,
             container_recovery_service=container_recovery_service,
         )
 
