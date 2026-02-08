@@ -1,6 +1,6 @@
 # Complete Simulation Scenarios Reference
 
-**Current Status**: 12 scenarios implemented, all documented
+**Current Status**: 13 scenarios implemented, all documented
 
 ## Overview
 
@@ -22,6 +22,7 @@ This document provides complete specifications for all simulation scenarios. Eac
 | 10 | Agent Execution | Agent context & output | 12 min | ~7s | ✅ Complete |
 | 10b | Conversational | Multi-turn agent dialogue | 15 min | ~9s | ✅ Complete |
 | 12 | Container Recovery | Failure recovery | 18 min | ~11s | ✅ Complete |
+| 13 | Multi-Project | Multi-project orchestration | 10 min | ~5s | ✅ Complete |
 
 ---
 
@@ -1020,6 +1021,123 @@ Result: Failed, escalated to operator
 
 ---
 
+### Scenario 13: Multi-Project Orchestration
+
+**File**: `scenario_13_multi_project.py`
+**Purpose**: Multi-project orchestration within single orchestration cycle
+
+**What It Tests**:
+- ✅ Multi-project configuration loading and reloading
+- ✅ Repository cloning for multiple projects
+- ✅ Per-project workflow orchestration delegation
+- ✅ Work item processing across multiple projects
+- ✅ Project isolation (no cross-project contamination)
+- ✅ Aggregated orchestration cycle metrics
+- ✅ Event emission for observability
+
+**Scenario Setup**:
+Three independent projects processed in single orchestration cycle:
+
+1. **api-service** (Backend)
+   - Repository: `https://github.com/acme/api-service.git`
+   - Branch: `main`
+   - Board: `backend-pipeline`
+   - Work Items: 5
+   - Agents: code-generator, code-reviewer, test-runner
+
+2. **web-app** (Frontend)
+   - Repository: `https://github.com/acme/web-app.git`
+   - Branch: `develop`
+   - Board: `frontend-pipeline`
+   - Work Items: 7
+   - Agents: ui-generator, qa-tester
+
+3. **data-service** (Data/Analytics)
+   - Repository: `https://github.com/acme/data-service.git`
+   - Branch: `main`
+   - Board: `data-pipeline`
+   - Work Items: 6
+   - Agents: data-engineer, data-validator
+
+**Orchestration Flow**:
+```
+OrchestrationCycleStarted
+├── ReloadProjectConfiguration
+│   └── Detect 3 enabled projects
+│
+├── For each project (api-service, web-app, data-service):
+│   ├── EnsureRepositoryCloned
+│   │   └── ProjectClonedEvent emitted
+│   │
+│   └── OrchestrationDelegated to WorkflowOrchestrator
+│       └── Process all work items in project board
+│           ├── CardMovedEvent (Backlog → In Progress)
+│           ├── AgentExecutionStarted
+│           ├── AgentExecutionCompleted
+│           └── ...repeat for all work items
+│
+└── OrchestrationCycleCompletedEvent
+    ├── projects_processed: 3
+    ├── boards_processed: 3
+    ├── work_items_found: 18
+    └── cycle_duration_ms: ~1000
+```
+
+**Expected Events**:
+- 3 `ProjectClonedEvent` (one per project)
+- 18 `CardMovedEvent` (one per work item)
+- 18 `AgentExecutionStarted` events
+- 18 `AgentExecutionCompleted` events
+- 1 `OrchestrationCycleCompletedEvent` (with aggregated metrics)
+
+**Key Behaviors Validated**:
+
+1. **Project Isolation**
+   - Each project maintains separate state
+   - No cross-project pipeline lock conflicts
+   - No shared queues or resources
+   - Independent workflow execution
+
+2. **Configuration Management**
+   - Configuration loaded at cycle start
+   - Projects detected as enabled/disabled
+   - Project metadata (repos, branches) loaded correctly
+
+3. **Repository Management**
+   - Each project repository cloned to workspace
+   - Correct branch checked out
+   - Repository state independent per project
+
+4. **Work Item Processing**
+   - All 18 work items processed across projects
+   - Agent diversity (different agents per project)
+   - Sequential processing per project (no inter-project parallelism in simulation)
+
+5. **Cycle Completion**
+   - Aggregated metrics calculated correctly
+   - All events captured and sequenced
+   - Cycle duration measured accurately
+
+**Metrics**:
+- Simulated Duration: ~10 minutes (across all projects)
+- Real Duration: ~0.05 seconds
+- Projects Processed: 3
+- Work Items Processed: 18
+- Events Emitted: 40+ (clones, moves, executions, completion)
+- Speed Multiplier: 10,000x+ (very fast)
+
+**Assertions Verified**:
+- 3 projects loaded
+- 18 total work items
+- 3 clone events (one per project)
+- 1 cycle completion event
+- All assertions in scenario passed
+- No assertion failures
+
+**Use Case**: Multi-project support validation, multi-tenancy testing, orchestrator scalability
+
+---
+
 ## Scenario Maintenance and Extension
 
 ### Adding New Scenarios
@@ -1090,7 +1208,7 @@ All scenarios target:
 ## Regression Testing
 
 Use scenarios in this order for CI/CD:
-1. **Fast** (< 5s): 01, 09
+1. **Fast** (< 5s): 01, 09, 13
 2. **Standard** (5-15s): 02, 03, 04, 05, 10
 3. **Extended** (15-40s): 06, 06b, 07, 10b, 12
 4. **Full Suite**: All scenarios (< 3 minutes total)

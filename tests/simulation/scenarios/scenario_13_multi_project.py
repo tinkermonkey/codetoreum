@@ -20,6 +20,7 @@ Expected outcome:
 - Project isolation maintained (no cross-project contamination)
 """
 
+import pytest
 from datetime import timedelta
 from typing import Any, Dict
 
@@ -321,3 +322,25 @@ async def run_scenario(runner: SimulationRunner) -> None:
 
     # Advance final time
     await runner.advance_time(timedelta(milliseconds=300))
+
+
+@pytest.mark.asyncio
+async def test_scenario_13_multi_project():
+    """Test multi-project orchestration scenario.
+
+    Validates:
+    - Multiple independent projects processed in single orchestration cycle
+    - 3 projects (api-service, web-app, data-service) with isolated boards
+    - 18 total work items across all projects
+    - Project isolation maintained with no cross-contamination
+    - OrchestrationCycleCompletedEvent emitted with aggregated metrics
+    """
+    config = create_config()
+    runner = SimulationRunner(config)
+    result = await runner.run(run_scenario)
+
+    assert result.success, f"Scenario failed: {result.errors}"
+    assert result.speed_multiplier >= 10.0, "Speed multiplier below target"
+    assert result.events_captured > 0, "No events captured"
+    assert result.assertions_passed > 0, "No assertions passed"
+    assert result.assertions_failed == 0, "Some assertions failed"
