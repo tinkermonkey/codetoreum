@@ -211,7 +211,7 @@ class MockProjectManagerAdapter(IProjectManagerService):
 
             state = self._projects[project_name]
             config = state.config
-            workspace_path = f"{self._base_workspace}/{self._extract_repo_name(config.repo_url)}"
+            workspace_path = f"{self._base_workspace}/{extract_repo_name(config.repo_url)}"
 
             # Simulate clone failure if project in clone_failures set
             if project_name in self._clone_failures:

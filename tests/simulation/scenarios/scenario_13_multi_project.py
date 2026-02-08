@@ -459,16 +459,11 @@ class TestScenario13MultiProjectOrchestration:
             assert path is not None, f"Clone path should exist for {project_name}"
             assert project_name in path, f"Path should contain project name {project_name}"
 
-        # Verify disabled project was not cloned
-        try:
-            await adapter.ensure_project_cloned("project_c")
-            # If we get here without exception, project_c still shouldn't be marked as cloned
-            state = adapter.get_project_state("project_c")
-            assert state is not None
-            assert not state.cloned, "Disabled project should not be cloned"
-        except Exception:
-            # Expected - project_c might not be in enabled list to clone
-            pass
+        # Verify disabled project was not cloned by the orchestrator
+        # The orchestrator should not call clone on disabled projects
+        state = adapter.get_project_state("project_c")
+        if state is not None:
+            assert not state.cloned, "Orchestrator should not clone disabled projects"
 
     @pytest.mark.asyncio
     async def test_scenario_b_project_isolation(

@@ -21,6 +21,7 @@ from codetoreum.ports.output.multi_project_orchestrator import (
     IMultiProjectOrchestrator,
     OrchestrationCycleResult,
     ProjectOrchestrationResult,
+    ProjectStatus,
 )
 from codetoreum.ports.exceptions import (
     ResourceNotFoundError,
@@ -207,7 +208,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
             except ExternalServiceError as e:
                 msg = f"Failed to get enabled projects: {e}"
                 logger.error(msg)
-                duration_ms = (time.time() - cycle_start) * 1000
+                duration_ms = int((time.time() - cycle_start) * 1000)
                 return OrchestrationCycleResult(
                     success=False,
                     projects_processed=0,
@@ -220,7 +221,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
 
             if not enabled_projects:
                 logger.info("No enabled projects to orchestrate")
-                duration_ms = (time.time() - cycle_start) * 1000
+                duration_ms = int((time.time() - cycle_start) * 1000)
                 return OrchestrationCycleResult(
                     success=True,
                     projects_processed=0,
@@ -426,7 +427,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                     project_name=project_name,
                     success=False,
                     actions_taken=0,
-                    errors=[f"Clone failed: {clone_error}"],
+                    errors=(f"Clone failed: {clone_error}",),
                     workspace_path="",
                     timestamp=start_time,
                 )
@@ -445,7 +446,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                 project_name=project_name,
                 success=True,
                 actions_taken=actions_taken,
-                errors=[],
+                errors=(),
                 workspace_path=workspace_path,
                 timestamp=start_time,
             )
@@ -462,7 +463,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                 project_name=project_name,
                 success=False,
                 actions_taken=0,
-                errors=[f"Project not found: {e}"],
+                errors=(f"Project not found: {e}",),
                 workspace_path="",
                 timestamp=start_time,
             )
@@ -481,7 +482,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                 project_name=project_name,
                 success=False,
                 actions_taken=0,
-                errors=[f"Orchestration error: {e}"],
+                errors=(f"Orchestration error: {e}",),
                 workspace_path="",
                 timestamp=start_time,
             )
@@ -501,7 +502,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                 project_name=project_name,
                 success=False,
                 actions_taken=0,
-                errors=[str(e)],
+                errors=(str(e),),
                 workspace_path="",
                 timestamp=start_time,
             )
@@ -525,14 +526,14 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
             config = await self._project_manager.get_project_config(project_name)
             workspace_path = await self._project_manager.get_project_path(project_name)
 
-            return {
-                "project_name": project_name,
-                "enabled": config.enabled,
-                "repo_url": config.repo_url,
-                "branch": config.branch,
-                "organization": config.org,
-                "workspace_path": workspace_path,
-            }
+            return ProjectStatus(
+                project_name=project_name,
+                enabled=config.enabled,
+                repo_url=config.repo_url,
+                branch=config.branch,
+                organization=config.org,
+                workspace_path=workspace_path,
+            )
         except ResourceNotFoundError:
             raise
 

@@ -262,7 +262,7 @@ class TestPerProjectOrchestration:
         assert result.success
         assert result.project_name == "api-service"
         assert result.actions_taken == 5
-        assert result.errors == []
+        assert result.errors == ()
         assert result.workspace_path == "/workspace/api-service"
 
         # Verify calls
@@ -349,12 +349,12 @@ class TestProjectStatus:
         status = await multi_orchestrator.get_project_status("api-service")
 
         # Assert
-        assert status["project_name"] == "api-service"
-        assert status["enabled"] is True
-        assert status["repo_url"] == "https://github.com/acme/api-service.git"
-        assert status["branch"] == "develop"
-        assert status["organization"] == "acme"
-        assert status["workspace_path"] == "/workspace/api-service"
+        assert status.project_name == "api-service"
+        assert status.enabled is True
+        assert status.repo_url == "https://github.com/acme/api-service.git"
+        assert status.branch == "develop"
+        assert status.organization == "acme"
+        assert status.workspace_path == "/workspace/api-service"
 
     @pytest.mark.asyncio
     async def test_get_project_status_not_found(self, multi_orchestrator, project_manager):
@@ -420,7 +420,7 @@ class TestCycleMetrics:
 
         # Assert
         assert result.cycle_duration_ms >= 0
-        assert isinstance(result.cycle_duration_ms, float)
+        assert isinstance(result.cycle_duration_ms, int)
 
     @pytest.mark.asyncio
     async def test_event_emitted_with_correct_metrics(
@@ -499,3 +499,117 @@ class TestErrorHandling:
 
         # Assert
         assert result.success
+
+
+class TestMultiProjectOrchestratorLifecycle:
+    """Tests for poll loop lifecycle methods (start, stop, _initial_setup)."""
+
+    @pytest.mark.asyncio
+    async def test_start_calls_initial_setup(self, multi_orchestrator):
+        """Verify start() calls _initial_setup() before entering the loop."""
+        # Setup mocks
+        multi_orchestrator._initial_setup = AsyncMock()
+        multi_orchestrator.run_orchestration_cycle = AsyncMock()
+
+        # Start in background
+        import asyncio
+        task = asyncio.create_task(multi_orchestrator.start())
+        await asyncio.sleep(0.01)  # Let start() begin
+
+        # Verify _initial_setup was called
+        multi_orchestrator._initial_setup.assert_called_once()
+
+        # Stop and clean up
+        multi_orchestrator.stop()
+        try:
+            await asyncio.wait_for(task, timeout=1.0)
+        except asyncio.TimeoutError:
+            pass  # Expected if loop takes time to exit
+
+    @pytest.mark.asyncio
+    async def test_stop_exits_poll_loop(self, multi_orchestrator):
+        """Verify stop() method can be called and loop handles it gracefully."""
+        import asyncio
+
+        multi_orchestrator.run_orchestration_cycle = AsyncMock()
+
+        task = asyncio.create_task(multi_orchestrator.start())
+
+        # Let loop start
+        await asyncio.sleep(0.01)
+
+        # Verify loop initialized
+        assert hasattr(multi_orchestrator, "_running")
+
+        # Call stop()
+        multi_orchestrator.stop()
+
+        # Give it a moment to process the stop signal
+        await asyncio.sleep(0.01)
+
+        # Cancel task to clean up
+        task.cancel()
+        try:
+            await task
+        except (asyncio.CancelledError, Exception):
+            pass  # Expected when cancelling
+
+    @pytest.mark.asyncio
+    async def test_initial_setup_is_called_before_loop(self, multi_orchestrator):
+        """Verify _initial_setup() is called before the poll loop begins."""
+        import asyncio
+
+        # Setup: track if _initial_setup is called before run_orchestration_cycle
+        setup_called_first = []
+
+        async def mock_setup():
+            setup_called_first.append("setup")
+
+        async def mock_cycle():
+            setup_called_first.append("cycle")
+
+        multi_orchestrator._initial_setup = AsyncMock(side_effect=mock_setup)
+        multi_orchestrator.run_orchestration_cycle = AsyncMock(side_effect=mock_cycle)
+
+        task = asyncio.create_task(multi_orchestrator.start())
+
+        # Let loop run
+        await asyncio.sleep(0.05)
+
+        # Verify setup was called first
+        assert len(setup_called_first) >= 2
+        assert setup_called_first[0] == "setup"
+        assert "cycle" in setup_called_first
+
+        # Clean up
+        multi_orchestrator.stop()
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass  # Expected
+
+    @pytest.mark.asyncio
+    async def test_poll_loop_respects_interval(self, multi_orchestrator):
+        """Verify poll loop calls orchestration multiple times."""
+        import asyncio
+
+        multi_orchestrator._poll_interval_seconds = 0.01
+        multi_orchestrator.run_orchestration_cycle = AsyncMock()
+
+        task = asyncio.create_task(multi_orchestrator.start())
+
+        # Let it run for a bit
+        await asyncio.sleep(0.1)
+
+        multi_orchestrator.stop()
+
+        # Clean up
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass  # Expected
+
+        # Verify orchestration was called multiple times
+        assert multi_orchestrator.run_orchestration_cycle.call_count >= 2

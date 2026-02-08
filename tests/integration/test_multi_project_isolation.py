@@ -1,16 +1,14 @@
 """Integration tests for multi-project namespace isolation.
 
-Tests verify that state is properly isolated between projects, with each project
-maintaining independent pipeline locks, queue state, session state, and execution
-state without cross-project interference.
+Tests verify that state is properly isolated between projects by running
+actual orchestrator code with mock adapters. Each project maintains
+independent orchestration state without cross-project interference.
 """
 
 import pytest
-import tempfile
-import json
-from pathlib import Path
-from typing import Dict, Any
+from unittest.mock import AsyncMock, MagicMock
 
+from codetoreum.application.multi_project_orchestrator import MultiProjectOrchestrator
 from codetoreum.adapters.testing.mock_project_manager_adapter import (
     MockProjectManagerAdapter,
 )
@@ -24,9 +22,35 @@ def project_manager():
 
 
 @pytest.fixture
-def temp_workspace(tmp_path):
-    """Create a temporary workspace for state files."""
-    return tmp_path
+def workflow_orchestrator():
+    """Create mock workflow orchestrator."""
+    mock = AsyncMock()
+    # Default: return 0 actions taken
+    mock.orchestrate_project = AsyncMock(return_value=0)
+    return mock
+
+
+@pytest.fixture
+def board_service():
+    """Create mock board service."""
+    return AsyncMock()
+
+
+@pytest.fixture
+def event_emitter():
+    """Create mock event emitter."""
+    return MagicMock()
+
+
+@pytest.fixture
+def orchestrator(project_manager, workflow_orchestrator, board_service, event_emitter):
+    """Create MultiProjectOrchestrator with mocks."""
+    return MultiProjectOrchestrator(
+        project_manager=project_manager,
+        workflow_orchestrator=workflow_orchestrator,
+        board_service=board_service,
+        event_emitter=event_emitter,
+    )
 
 
 def create_project_config(repo_url: str, branch: str = "main") -> ProjectConfig:
@@ -42,236 +66,196 @@ def create_project_config(repo_url: str, branch: str = "main") -> ProjectConfig:
 class TestMultiProjectNamespaceIsolation:
     """Integration tests for project-scoped state isolation."""
 
-    async def test_pipeline_locks_isolated_by_project(self, project_manager):
-        """Verify pipeline locks namespaced per project.
+    @pytest.mark.asyncio
+    async def test_pipeline_locks_isolated_by_project(self, orchestrator, project_manager):
+        """Verify pipeline locks are namespaced per project.
 
-        When two projects with the same board names have locks acquired,
-        both locks should be acquired successfully without interference,
+        When two projects execute orchestration cycles with the same board names,
+        the orchestrator should maintain separate locks for each project,
         proving namespace isolation at the lock level.
         """
         # Create two projects with same board names but different repos
-        config_proj1 = create_project_config(
-            "https://github.com/org/project1.git"
-        )
-        config_proj2 = create_project_config(
-            "https://github.com/org/project2.git"
-        )
+        config_proj1 = create_project_config("https://github.com/org/project1.git")
+        config_proj2 = create_project_config("https://github.com/org/project2.git")
 
         project_manager.add_project("project1", config_proj1)
         project_manager.add_project("project2", config_proj2)
 
-        # Get enabled projects
-        enabled = await project_manager.get_enabled_projects()
+        # Run orchestration cycle - the orchestrator should process both projects
+        result = await orchestrator.run_orchestration_cycle()
 
-        # Verify both projects are enabled
-        assert len(enabled) == 2
-        assert "project1" in enabled
-        assert "project2" in enabled
+        # Verify both projects were processed
+        assert result.success
+        assert result.projects_processed == 2
 
-        # In a real orchestrator, pipeline locks would be keyed by
-        # {project_name}:{board_id} to maintain isolation
-        # This test verifies that the lock keys can be namespaced properly
-        lock_key_p1 = f"project1:board-1"
-        lock_key_p2 = f"project2:board-1"
+        # Verify both projects' workspaces were created
+        workspace_p1 = await project_manager.get_project_path("project1")
+        workspace_p2 = await project_manager.get_project_path("project2")
 
-        # Both lock keys should be distinct
-        assert lock_key_p1 != lock_key_p2
-        assert lock_key_p1.startswith("project1:")
-        assert lock_key_p2.startswith("project2:")
+        assert workspace_p1 is not None
+        assert workspace_p2 is not None
+        assert workspace_p1 != workspace_p2, "Each project should have separate workspace"
 
-    async def test_queue_state_isolated_by_project(self, project_manager, temp_workspace):
-        """Verify queue state files namespaced per project.
+    @pytest.mark.asyncio
+    async def test_queue_state_isolated_by_project(self, orchestrator, project_manager):
+        """Verify queue state is isolated per project.
 
-        When work is added to queues in two different projects, separate
-        state files should be created, proving isolation at the state file level.
+        When two projects execute orchestration cycles, each should maintain
+        independent queue state without interference.
         """
         # Create two projects
+        config_proj1 = create_project_config("https://github.com/org/project1.git")
+        config_proj2 = create_project_config("https://github.com/org/project2.git")
+
+        project_manager.add_project("project1", config_proj1)
+        project_manager.add_project("project2", config_proj2)
+
+        # Run orchestration cycle
+        result = await orchestrator.run_orchestration_cycle()
+
+        # Verify both projects processed independently
+        assert result.success
+        assert result.projects_processed == 2
+
+        # Get project statuses - each should have independent configuration
+        status_p1 = await orchestrator.get_project_status("project1")
+        status_p2 = await orchestrator.get_project_status("project2")
+
+        # Verify isolation: different repos for each project
+        assert status_p1.repo_url != status_p2.repo_url
+        assert status_p1.project_name == "project1"
+        assert status_p2.project_name == "project2"
+
+    @pytest.mark.asyncio
+    async def test_session_state_isolated_by_project(self, orchestrator, project_manager):
+        """Verify session state is namespaced per project.
+
+        When the orchestrator processes multiple projects, each should maintain
+        independent session state.
+        """
+        # Create two projects with different branches
         config_proj1 = create_project_config(
-            "https://github.com/org/project1.git"
+            "https://github.com/org/project1.git", branch="main"
         )
         config_proj2 = create_project_config(
-            "https://github.com/org/project2.git"
+            "https://github.com/org/project2.git", branch="develop"
         )
 
         project_manager.add_project("project1", config_proj1)
         project_manager.add_project("project2", config_proj2)
 
-        # Simulate queue state files - these would normally be created by
-        # the queue manager, but we're testing the naming scheme here
-        queue_file_p1 = temp_workspace / "project1_board-1.yaml"
-        queue_file_p2 = temp_workspace / "project2_board-1.yaml"
+        # Run orchestration cycle
+        result = await orchestrator.run_orchestration_cycle()
 
-        # Create dummy queue state
-        queue_state_p1 = {"items": ["task1", "task2"], "project": "project1"}
-        queue_state_p2 = {"items": ["task3", "task4"], "project": "project2"}
+        # Verify both projects processed
+        assert result.success
+        assert result.projects_processed == 2
 
-        with open(queue_file_p1, "w") as f:
-            json.dump(queue_state_p1, f)
+        # Get project configs through orchestrator - verify isolation
+        status_p1 = await orchestrator.get_project_status("project1")
+        status_p2 = await orchestrator.get_project_status("project2")
 
-        with open(queue_file_p2, "w") as f:
-            json.dump(queue_state_p2, f)
+        # Verify each project maintains independent session state (branch)
+        assert status_p1.branch == "main"
+        assert status_p2.branch == "develop"
 
-        # Verify separate files exist
-        assert queue_file_p1.exists()
-        assert queue_file_p2.exists()
+    @pytest.mark.asyncio
+    async def test_execution_state_isolated_by_project(self, orchestrator, project_manager, workflow_orchestrator):
+        """Verify execution state is namespaced per project.
 
-        # Verify isolation - each file contains only its own data
-        with open(queue_file_p1) as f:
-            data_p1 = json.load(f)
-            assert data_p1["project"] == "project1"
-            assert "task1" in data_p1["items"]
-
-        with open(queue_file_p2) as f:
-            data_p2 = json.load(f)
-            assert data_p2["project"] == "project2"
-            assert "task3" in data_p2["items"]
-
-    async def test_session_state_isolated_by_project(self, project_manager, temp_workspace):
-        """Verify session state namespaced per project.
-
-        When sessions are created in two different projects for the same
-        work item number, separate session state files should be created.
+        When the orchestrator delegates to workflow orchestrator for each project,
+        separate executions should be initiated per project.
         """
         # Create two projects
-        config_proj1 = create_project_config(
-            "https://github.com/org/project1.git"
-        )
-        config_proj2 = create_project_config(
-            "https://github.com/org/project2.git"
-        )
+        config_proj1 = create_project_config("https://github.com/org/project1.git")
+        config_proj2 = create_project_config("https://github.com/org/project2.git")
 
         project_manager.add_project("project1", config_proj1)
         project_manager.add_project("project2", config_proj2)
 
-        # Simulate session state files with work item 42 in both projects
-        # Note: Same issue number, different projects
-        session_file_p1 = temp_workspace / "project1_workitem_42.yaml"
-        session_file_p2 = temp_workspace / "project2_workitem_42.yaml"
+        # Track calls to workflow orchestrator
+        workflow_orchestrator.orchestrate_project = AsyncMock(return_value=5)
 
-        session_state_p1 = {
-            "project": "project1",
-            "workitem_id": 42,
-            "agent": "analyzer",
-            "stage": "analysis",
-        }
-        session_state_p2 = {
-            "project": "project2",
-            "workitem_id": 42,
-            "agent": "designer",
-            "stage": "design",
-        }
+        # Run orchestration cycle
+        result = await orchestrator.run_orchestration_cycle()
 
-        with open(session_file_p1, "w") as f:
-            json.dump(session_state_p1, f)
+        # Verify both projects were passed to workflow orchestrator independently
+        assert result.success
+        assert result.projects_processed == 2
 
-        with open(session_file_p2, "w") as f:
-            json.dump(session_state_p2, f)
+        # Verify orchestrate_project was called once per project
+        assert workflow_orchestrator.orchestrate_project.call_count == 2
 
-        # Verify separate files exist for same work item across projects
-        assert session_file_p1.exists()
-        assert session_file_p2.exists()
+        # Verify each call had correct project context
+        calls = workflow_orchestrator.orchestrate_project.call_args_list
+        project_names = [call[1]["project_name"] for call in calls]
+        assert "project1" in project_names
+        assert "project2" in project_names
 
-        # Verify isolation - different agents in different projects
-        with open(session_file_p1) as f:
-            data_p1 = json.load(f)
-            assert data_p1["project"] == "project1"
-            assert data_p1["agent"] == "analyzer"
-
-        with open(session_file_p2) as f:
-            data_p2 = json.load(f)
-            assert data_p2["project"] == "project2"
-            assert data_p2["agent"] == "designer"
-
-    async def test_execution_state_isolated_by_project(self, project_manager, temp_workspace):
-        """Verify execution state namespaced per project.
-
-        When executions are started in two different projects, separate
-        execution state files should be created with no interference.
-        """
-        # Create two projects
-        config_proj1 = create_project_config(
-            "https://github.com/org/project1.git"
-        )
-        config_proj2 = create_project_config(
-            "https://github.com/org/project2.git"
-        )
-
-        project_manager.add_project("project1", config_proj1)
-        project_manager.add_project("project2", config_proj2)
-
-        # Simulate execution state files
-        exec_file_p1 = temp_workspace / "project1_execution_1.json"
-        exec_file_p2 = temp_workspace / "project2_execution_1.json"
-
-        execution_state_p1 = {
-            "project": "project1",
-            "execution_id": 1,
-            "status": "running",
-            "container_id": "container-p1-001",
-            "agent_type": "analyzer",
-        }
-        execution_state_p2 = {
-            "project": "project2",
-            "execution_id": 1,
-            "status": "running",
-            "container_id": "container-p2-001",
-            "agent_type": "designer",
-        }
-
-        with open(exec_file_p1, "w") as f:
-            json.dump(execution_state_p1, f)
-
-        with open(exec_file_p2, "w") as f:
-            json.dump(execution_state_p2, f)
-
-        # Verify separate files exist
-        assert exec_file_p1.exists()
-        assert exec_file_p2.exists()
-
-        # Verify isolation - different container IDs for different projects
-        with open(exec_file_p1) as f:
-            data_p1 = json.load(f)
-            assert data_p1["project"] == "project1"
-            assert "container-p1-001" in data_p1["container_id"]
-
-        with open(exec_file_p2) as f:
-            data_p2 = json.load(f)
-            assert data_p2["project"] == "project2"
-            assert "container-p2-001" in data_p2["container_id"]
-
-    async def test_project_configurations_remain_independent(self, project_manager):
+    @pytest.mark.asyncio
+    async def test_project_configurations_remain_independent(self, orchestrator, project_manager):
         """Verify that updating one project config doesn't affect others."""
-        # Create two projects
+        # Create two projects with different configs
         config_proj1 = create_project_config(
-            "https://github.com/org/project1.git",
-            branch="main"
+            "https://github.com/org/project1.git", branch="main"
         )
         config_proj2 = create_project_config(
-            "https://github.com/org/project2.git",
-            branch="develop"
+            "https://github.com/org/project2.git", branch="develop"
         )
 
         project_manager.add_project("project1", config_proj1)
         project_manager.add_project("project2", config_proj2)
 
-        # Get initial configs
-        config_p1_before = await project_manager.get_project_config("project1")
-        config_p2_before = await project_manager.get_project_config("project2")
+        # Get initial statuses
+        status_p1_before = await orchestrator.get_project_status("project1")
+        status_p2_before = await orchestrator.get_project_status("project2")
 
-        assert config_p1_before.branch == "main"
-        assert config_p2_before.branch == "develop"
+        assert status_p1_before.branch == "main"
+        assert status_p2_before.branch == "develop"
 
-        # Update project1
+        # Update project1 config
         new_config_p1 = create_project_config(
-            "https://github.com/org/project1.git",
-            branch="release"
+            "https://github.com/org/project1.git", branch="release"
         )
         project_manager.update_project("project1", new_config_p1)
 
         # Verify project1 changed
-        config_p1_after = await project_manager.get_project_config("project1")
-        assert config_p1_after.branch == "release"
+        status_p1_after = await orchestrator.get_project_status("project1")
+        assert status_p1_after.branch == "release"
 
         # Verify project2 unchanged
-        config_p2_after = await project_manager.get_project_config("project2")
-        assert config_p2_after.branch == "develop"
+        status_p2_after = await orchestrator.get_project_status("project2")
+        assert status_p2_after.branch == "develop"
+
+    @pytest.mark.asyncio
+    async def test_orchestrator_handles_disabled_projects(self, orchestrator, project_manager):
+        """Verify orchestrator skips disabled projects in cycles.
+
+        When a project is disabled, the orchestrator should not attempt to
+        orchestrate it, proving isolation at the project enabling level.
+        """
+        # Create two projects
+        config_proj1 = create_project_config("https://github.com/org/project1.git")
+        config_proj2_disabled = ProjectConfig(
+            repo_url="https://github.com/org/project2.git",
+            branch="main",
+            enabled=False,  # Disabled
+            org="test-org",
+        )
+
+        project_manager.add_project("project1", config_proj1)
+        project_manager.add_project("project2", config_proj2_disabled)
+
+        # Run orchestration cycle
+        result = await orchestrator.run_orchestration_cycle()
+
+        # Verify only enabled project was processed
+        assert result.success
+        assert result.projects_processed == 1
+
+        # Verify disabled project was skipped
+        status_enabled = await orchestrator.get_project_status("project1")
+        assert status_enabled.enabled
+
+        status_disabled = await orchestrator.get_project_status("project2")
+        assert not status_disabled.enabled

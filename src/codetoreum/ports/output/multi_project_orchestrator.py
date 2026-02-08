@@ -13,6 +13,27 @@ from typing import Any, Dict, List, Optional
 
 
 @dataclass(frozen=True)
+class ProjectStatus:
+    """Status information for a single project.
+
+    Attributes:
+        project_name: Name of the project
+        enabled: Whether the project is enabled for orchestration
+        repo_url: Repository URL for the project
+        branch: Default branch for the project
+        organization: Organization/owner of the project
+        workspace_path: Filesystem path where project workspace is mounted
+    """
+
+    project_name: str
+    enabled: bool
+    repo_url: str
+    branch: str
+    organization: str
+    workspace_path: str
+
+
+@dataclass(frozen=True)
 class OrchestrationCycleResult:
     """Result of a single orchestration cycle.
 
@@ -141,7 +162,7 @@ class IMultiProjectOrchestrator(ABC):
         pass
 
     @abstractmethod
-    async def get_project_status(self, project_name: str) -> Dict[str, Any]:
+    async def get_project_status(self, project_name: str) -> ProjectStatus:
         """Get current orchestration status for a project.
 
         Returns information about:
@@ -154,7 +175,7 @@ class IMultiProjectOrchestrator(ABC):
             project_name: Name of the project
 
         Returns:
-            Dict with project status information
+            ProjectStatus with project configuration and status information
 
         Raises:
             ResourceNotFoundError: Project doesn't exist
