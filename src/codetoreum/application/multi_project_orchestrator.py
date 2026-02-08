@@ -304,8 +304,8 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
             )
 
             # Emit event
-            try:
-                if self._event_emitter:
+            if self._event_emitter:
+                try:
                     event = OrchestrationCycleCompletedEvent(
                         type="orchestration.cycle_completed",
                         timestamp=self._get_iso_timestamp(),
@@ -316,13 +316,13 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                         cycle_duration_ms=cycle_duration_ms,
                     )
                     self._event_emitter.emit(event)
-            except Exception as e:
-                logger.warning(
-                    f"Event emission failed: {e}",
-                    exc_info=True,
-                    extra={"error_id": "ERR_EVENT_EMISSION_FAILED"},
-                )
-                # Don't fail the cycle - orchestration succeeded even if event failed
+                except Exception as e:
+                    logger.warning(
+                        f"Event emission failed: {e}",
+                        exc_info=True,
+                        extra={"error_id": "ERR_EVENT_EMISSION_FAILED"},
+                    )
+                    # Don't fail the cycle - orchestration succeeded even if event failed
 
             logger.info(
                 f"Orchestration cycle #{self._cycle_count} completed: "

@@ -89,7 +89,7 @@ class IMultiProjectOrchestrator(ABC):
     2. Ensure project repositories are cloned and available
     3. Execute per-project orchestration cycles
     4. Handle project-specific state isolation (per-project locking, queueing)
-    5. Emit orchestration events for observability
+    5. Emit orchestration events for observability and audit trail
 
     Project Orchestration:
     - Each project has its own workflow, pipeline, and board configuration

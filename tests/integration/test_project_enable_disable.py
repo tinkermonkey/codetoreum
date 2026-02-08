@@ -1,13 +1,13 @@
 """Integration tests for project enable/disable behavior.
 
-Tests verify that disabling a project stops processing without cleanup,
-and re-enabling a project resumes with preserved state.
+Tests verify that disabling a project stops processing through the orchestrator,
+and re-enabling a project resumes orchestration.
 """
 
 import pytest
-import json
-from pathlib import Path
+from unittest.mock import AsyncMock
 
+from codetoreum.application.multi_project_orchestrator import MultiProjectOrchestrator
 from codetoreum.adapters.testing.mock_project_manager_adapter import (
     MockProjectManagerAdapter,
 )
@@ -21,12 +21,33 @@ def project_manager():
 
 
 @pytest.fixture
-def temp_workspace(tmp_path):
-    """Create a temporary workspace for state files."""
-    return tmp_path
+def workflow_orchestrator():
+    """Create mock workflow orchestrator."""
+    mock = AsyncMock()
+    mock.orchestrate_project = AsyncMock(return_value=5)
+    return mock
 
 
-def create_project_config(repo_url: str, branch: str = "main", enabled: bool = True) -> ProjectConfig:
+@pytest.fixture
+def board_service():
+    """Create mock board service."""
+    return AsyncMock()
+
+
+@pytest.fixture
+def orchestrator(project_manager, workflow_orchestrator, board_service):
+    """Create MultiProjectOrchestrator with mock adapters."""
+    return MultiProjectOrchestrator(
+        project_manager=project_manager,
+        workflow_orchestrator=workflow_orchestrator,
+        board_service=board_service,
+        event_emitter=None,
+    )
+
+
+def create_project_config(
+    repo_url: str, branch: str = "main", enabled: bool = True
+) -> ProjectConfig:
     """Helper to create a project configuration."""
     return ProjectConfig(
         repo_url=repo_url,
@@ -37,253 +58,210 @@ def create_project_config(repo_url: str, branch: str = "main", enabled: bool = T
 
 
 class TestProjectEnableDisable:
-    """Integration tests for project enable/disable behavior."""
+    """Integration tests for project enable/disable behavior.
 
-    async def test_disable_project_excluded_from_enabled_list(self, project_manager):
-        """Verify disabling project excludes it from enabled projects list."""
-        # Create a project
-        config = create_project_config(
-            "https://github.com/org/test-project.git",
-            enabled=True,
-        )
-        project_manager.add_project("test-project", config)
+    These tests verify that the orchestrator correctly handles disabled projects
+    and that disabling/re-enabling doesn't affect orchestration of other projects.
+    """
 
-        # Verify it's enabled
-        enabled_before = await project_manager.get_enabled_projects()
-        assert "test-project" in enabled_before
+    @pytest.mark.asyncio
+    async def test_disabled_project_excluded_from_orchestration(
+        self, orchestrator, project_manager, workflow_orchestrator
+    ):
+        """Verify disabled project is excluded from orchestration cycle.
 
-        # Disable the project
-        disabled_config = create_project_config(
-            "https://github.com/org/test-project.git",
-            enabled=False,
-        )
-        project_manager.update_project("test-project", disabled_config)
-
-        # Verify it's no longer enabled
-        enabled_after = await project_manager.get_enabled_projects()
-        assert "test-project" not in enabled_after
-
-    async def test_disable_project_skips_processing_no_cleanup(self, project_manager, temp_workspace):
-        """Verify disabling project skips processing without cleanup operations.
-
-        When a project is disabled:
-        1. It should be excluded from enabled projects list
-        2. No cleanup operations should be performed
-        3. State files should remain intact for potential re-enabling
+        When a project is disabled, the orchestrator should not invoke
+        workflow orchestration for it.
         """
-        # Create a project with existing state
-        config = create_project_config(
-            "https://github.com/org/active-project.git",
-            enabled=True,
-        )
-        project_manager.add_project("active-project", config)
-
-        # Create state files simulating active work
-        state_file = temp_workspace / "active-project_board-1.yaml"
-        state_data = {
-            "project": "active-project",
-            "board": "board-1",
-            "queue_items": ["task1", "task2", "task3"],
-            "last_update": "2024-01-01T12:00:00Z",
-        }
-
-        with open(state_file, "w") as f:
-            json.dump(state_data, f)
-
-        assert state_file.exists()
-
-        # Disable the project
-        disabled_config = create_project_config(
-            "https://github.com/org/active-project.git",
-            enabled=False,
-        )
-        project_manager.update_project("active-project", disabled_config)
-
-        # Verify project is disabled
-        enabled_projects = await project_manager.get_enabled_projects()
-        assert "active-project" not in enabled_projects
-
-        # Verify state files remain intact (no cleanup)
-        assert state_file.exists(), "State file should remain after disable"
-
-        with open(state_file) as f:
-            preserved_data = json.load(f)
-            assert preserved_data == state_data, "State data should be unchanged"
-
-    async def test_re_enable_project_resumes_with_preserved_state(self, project_manager, temp_workspace):
-        """Verify re-enabling project resumes with preserved state.
-
-        When a project is disabled then re-enabled:
-        1. Previous state should remain accessible
-        2. Processing should resume with the preserved state
-        3. No state loss or corruption should occur
-        """
-        # Create a project and add state
-        config_enabled = create_project_config(
-            "https://github.com/org/cycling-project.git",
-            enabled=True,
-        )
-        project_manager.add_project("cycling-project", config_enabled)
-
-        # Create and persist state
-        state_file = temp_workspace / "cycling-project_queue.yaml"
-        original_state = {
-            "project": "cycling-project",
-            "queue_items": ["analysis-123", "design-456", "implementation-789"],
-            "processing_order": ["analysis-123", "design-456"],
-            "completed": ["setup-001"],
-            "cycle": 3,
-        }
-
-        with open(state_file, "w") as f:
-            json.dump(original_state, f)
-
-        # Verify state exists
-        assert state_file.exists()
-
-        # Disable project
-        disabled_config = create_project_config(
-            "https://github.com/org/cycling-project.git",
-            enabled=False,
-        )
-        project_manager.update_project("cycling-project", disabled_config)
-
-        # Verify disabled
-        enabled_before = await project_manager.get_enabled_projects()
-        assert "cycling-project" not in enabled_before
-
-        # Re-enable project
-        re_enabled_config = create_project_config(
-            "https://github.com/org/cycling-project.git",
-            enabled=True,
-        )
-        project_manager.update_project("cycling-project", re_enabled_config)
-
-        # Verify re-enabled
-        enabled_after = await project_manager.get_enabled_projects()
-        assert "cycling-project" in enabled_after
-
-        # Verify state is preserved and accessible
-        assert state_file.exists(), "State file should still exist after re-enable"
-
-        with open(state_file) as f:
-            restored_state = json.load(f)
-            assert restored_state == original_state, "State should be completely preserved"
-            assert restored_state["cycle"] == 3, "Cycle count preserved"
-            assert restored_state["completed"] == ["setup-001"], "Completed items preserved"
-
-    async def test_disable_enable_cycle_preserves_all_state_types(self, project_manager, temp_workspace):
-        """Verify disable-enable cycle preserves all types of state.
-
-        Tests that multiple state files (queue, session, execution) are
-        all preserved through a disable-enable cycle.
-        """
-        config_enabled = create_project_config(
-            "https://github.com/org/multi-state-project.git",
-            enabled=True,
-        )
-        project_manager.add_project("multi-state-project", config_enabled)
-
-        # Create multiple state files
-        queue_file = temp_workspace / "multi-state-project_queue.yaml"
-        session_file = temp_workspace / "multi-state-project_session.yaml"
-        execution_file = temp_workspace / "multi-state-project_execution.json"
-
-        queue_state = {"items": ["task1", "task2"], "count": 2}
-        session_state = {"session_id": "sess-123", "agent": "analyzer"}
-        execution_state = {"exec_id": 1, "status": "pending", "container": None}
-
-        with open(queue_file, "w") as f:
-            json.dump(queue_state, f)
-        with open(session_file, "w") as f:
-            json.dump(session_state, f)
-        with open(execution_file, "w") as f:
-            json.dump(execution_state, f)
-
-        # Verify all files exist
-        assert queue_file.exists()
-        assert session_file.exists()
-        assert execution_file.exists()
-
-        # Disable project
-        disabled_config = create_project_config(
-            "https://github.com/org/multi-state-project.git",
-            enabled=False,
-        )
-        project_manager.update_project("multi-state-project", disabled_config)
-
-        # Re-enable project
+        # Setup: Create enabled and disabled project
         enabled_config = create_project_config(
-            "https://github.com/org/multi-state-project.git",
-            enabled=True,
+            "https://github.com/org/enabled.git", enabled=True
         )
-        project_manager.update_project("multi-state-project", enabled_config)
+        disabled_config = create_project_config(
+            "https://github.com/org/disabled.git", enabled=False
+        )
 
-        # Verify all state files still exist with original content
-        assert queue_file.exists()
-        assert session_file.exists()
-        assert execution_file.exists()
+        project_manager.add_project("enabled-proj", enabled_config)
+        project_manager.add_project("disabled-proj", disabled_config)
 
-        with open(queue_file) as f:
-            assert json.load(f) == queue_state
+        # Execute: Run orchestration cycle
+        result = await orchestrator.run_orchestration_cycle()
 
-        with open(session_file) as f:
-            assert json.load(f) == session_state
+        # Verify: Only enabled project was orchestrated
+        assert result.success
+        assert result.projects_processed == 1
+        assert workflow_orchestrator.orchestrate_project.call_count == 1
 
-        with open(execution_file) as f:
-            assert json.load(f) == execution_state
+        call_args = workflow_orchestrator.orchestrate_project.call_args[1]
+        assert call_args["project_name"] == "enabled-proj"
 
-    async def test_multiple_projects_disable_independent(self, project_manager):
+    @pytest.mark.asyncio
+    async def test_disabling_project_stops_orchestration(
+        self, orchestrator, project_manager, workflow_orchestrator
+    ):
+        """Verify disabling a project stops its orchestration on next cycle.
+
+        When a project transitions from enabled to disabled, subsequent
+        orchestration cycles should exclude it.
+        """
+        # Setup: Create initially enabled project
+        config = create_project_config("https://github.com/org/test.git", enabled=True)
+        project_manager.add_project("test-proj", config)
+
+        # Execute: First cycle - project enabled
+        result1 = await orchestrator.run_orchestration_cycle()
+        assert result1.projects_processed == 1
+        assert workflow_orchestrator.orchestrate_project.call_count == 1
+
+        # Execute: Disable project
+        disabled_config = create_project_config(
+            "https://github.com/org/test.git", enabled=False
+        )
+        project_manager.update_project("test-proj", disabled_config)
+
+        # Reset mock call count
+        workflow_orchestrator.reset_mock()
+
+        # Execute: Second cycle - project now disabled
+        result2 = await orchestrator.run_orchestration_cycle()
+
+        # Verify: Project not orchestrated in second cycle
+        assert result2.projects_processed == 0
+        assert workflow_orchestrator.orchestrate_project.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_re_enabling_project_resumes_orchestration(
+        self, orchestrator, project_manager, workflow_orchestrator
+    ):
+        """Verify re-enabling a project resumes its orchestration.
+
+        When a project is disabled then re-enabled, orchestration should
+        resume on the next cycle.
+        """
+        # Setup: Create project
+        config = create_project_config("https://github.com/org/test.git", enabled=True)
+        project_manager.add_project("test-proj", config)
+
+        # Execute: Disable project
+        disabled_config = create_project_config(
+            "https://github.com/org/test.git", enabled=False
+        )
+        project_manager.update_project("test-proj", disabled_config)
+
+        # Reset mock
+        workflow_orchestrator.reset_mock()
+
+        # Verify: Disabled project not orchestrated
+        result_disabled = await orchestrator.run_orchestration_cycle()
+        assert result_disabled.projects_processed == 0
+
+        # Execute: Re-enable project
+        enabled_config = create_project_config(
+            "https://github.com/org/test.git", enabled=True
+        )
+        project_manager.update_project("test-proj", enabled_config)
+
+        # Reset mock
+        workflow_orchestrator.reset_mock()
+
+        # Execute: Next cycle
+        result_enabled = await orchestrator.run_orchestration_cycle()
+
+        # Verify: Project orchestrated again
+        assert result_enabled.projects_processed == 1
+        assert workflow_orchestrator.orchestrate_project.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_disable_one_project_does_not_affect_others(
+        self, orchestrator, project_manager, workflow_orchestrator
+    ):
         """Verify disabling one project doesn't affect others.
 
-        When multiple projects exist and one is disabled,
-        the enabled list should exclude only that project.
+        When multiple projects exist and one is disabled, other enabled
+        projects should continue to be orchestrated normally.
         """
-        # Create three projects
-        config_a = create_project_config(
-            "https://github.com/org/project-a.git",
-            enabled=True,
-        )
-        config_b = create_project_config(
-            "https://github.com/org/project-b.git",
-            enabled=True,
-        )
-        config_c = create_project_config(
-            "https://github.com/org/project-c.git",
-            enabled=True,
-        )
+        # Setup: Create three projects, all enabled
+        config_a = create_project_config("https://github.com/org/project-a.git")
+        config_b = create_project_config("https://github.com/org/project-b.git")
+        config_c = create_project_config("https://github.com/org/project-c.git")
 
         project_manager.add_project("project-a", config_a)
         project_manager.add_project("project-b", config_b)
         project_manager.add_project("project-c", config_c)
 
-        # Verify all enabled
-        enabled = await project_manager.get_enabled_projects()
-        assert len(enabled) == 3
-        assert all(p in enabled for p in ["project-a", "project-b", "project-c"])
+        # Execute: First cycle - all enabled
+        result1 = await orchestrator.run_orchestration_cycle()
+        assert result1.projects_processed == 3
 
-        # Disable only project-b
+        # Execute: Disable only project-b
         disabled_config_b = create_project_config(
-            "https://github.com/org/project-b.git",
-            enabled=False,
+            "https://github.com/org/project-b.git", enabled=False
         )
         project_manager.update_project("project-b", disabled_config_b)
 
-        # Verify only b is disabled
-        enabled_after = await project_manager.get_enabled_projects()
-        assert len(enabled_after) == 2
-        assert "project-a" in enabled_after
-        assert "project-c" in enabled_after
-        assert "project-b" not in enabled_after
+        # Reset mock
+        workflow_orchestrator.reset_mock()
 
-        # Re-enable project-b
-        enabled_config_b = create_project_config(
-            "https://github.com/org/project-b.git",
-            enabled=True,
+        # Execute: Second cycle with project-b disabled
+        result2 = await orchestrator.run_orchestration_cycle()
+
+        # Verify: Only 2 projects orchestrated (a and c)
+        assert result2.projects_processed == 2
+        assert workflow_orchestrator.orchestrate_project.call_count == 2
+
+        # Verify: Correct projects were orchestrated
+        calls = workflow_orchestrator.orchestrate_project.call_args_list
+        project_names = [call[1]["project_name"] for call in calls]
+        assert "project-a" in project_names
+        assert "project-c" in project_names
+        assert "project-b" not in project_names
+
+    @pytest.mark.asyncio
+    async def test_multiple_disable_enable_cycles(
+        self, orchestrator, project_manager, workflow_orchestrator
+    ):
+        """Verify multiple disable/enable cycles work correctly.
+
+        Tests that a project can be cycled between enabled and disabled
+        multiple times without issues.
+        """
+        # Setup: Create project
+        config = create_project_config("https://github.com/org/test.git", enabled=True)
+        project_manager.add_project("test-proj", config)
+
+        # Cycle 1: Enabled
+        result = await orchestrator.run_orchestration_cycle()
+        assert result.projects_processed == 1
+
+        # Disable
+        project_manager.update_project(
+            "test-proj",
+            create_project_config("https://github.com/org/test.git", enabled=False),
         )
-        project_manager.update_project("project-b", enabled_config_b)
+        workflow_orchestrator.reset_mock()
 
-        # Verify all enabled again
-        enabled_final = await project_manager.get_enabled_projects()
-        assert len(enabled_final) == 3
-        assert all(p in enabled_final for p in ["project-a", "project-b", "project-c"])
+        # Cycle 2: Disabled
+        result = await orchestrator.run_orchestration_cycle()
+        assert result.projects_processed == 0
+
+        # Re-enable
+        project_manager.update_project(
+            "test-proj",
+            create_project_config("https://github.com/org/test.git", enabled=True),
+        )
+        workflow_orchestrator.reset_mock()
+
+        # Cycle 3: Enabled again
+        result = await orchestrator.run_orchestration_cycle()
+        assert result.projects_processed == 1
+
+        # Disable again
+        project_manager.update_project(
+            "test-proj",
+            create_project_config("https://github.com/org/test.git", enabled=False),
+        )
+        workflow_orchestrator.reset_mock()
+
+        # Cycle 4: Disabled again
+        result = await orchestrator.run_orchestration_cycle()
+        assert result.projects_processed == 0

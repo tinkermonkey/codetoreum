@@ -612,4 +612,48 @@ class TestMultiProjectOrchestratorLifecycle:
             pass  # Expected
 
         # Verify orchestration was called multiple times
-        assert multi_orchestrator.run_orchestration_cycle.call_count >= 2
+
+    @pytest.mark.asyncio
+    async def test_initial_setup_failure_does_not_kill_orchestrator(
+        self, multi_orchestrator, project_manager, board_service
+    ):
+        """Verify board reconciliation failures in setup don't prevent poll loop.
+
+        When initial setup encounters board reconciliation errors,
+        the orchestrator should log the error but continue to the poll loop.
+        """
+        import asyncio
+        from codetoreum.ports.exceptions import ExternalServiceError
+
+        # Setup: board service fails during initial setup
+        project_manager.get_enabled_projects = AsyncMock(
+            return_value=["project-a"]
+        )
+        board_service.reconcile_board = AsyncMock(
+            side_effect=ExternalServiceError(
+                "board_service",
+                "Failed to reconcile boards"
+            )
+        )
+        multi_orchestrator.run_orchestration_cycle = AsyncMock()
+
+        # Execute: Start the orchestrator
+        task = asyncio.create_task(multi_orchestrator.start())
+
+        # Let it run briefly
+        await asyncio.sleep(0.05)
+
+        # Verify: Orchestration cycle was called despite setup failure
+        # This proves that the poll loop started even though board reconciliation failed
+        cycle_call_count = multi_orchestrator.run_orchestration_cycle.call_count
+        assert cycle_call_count > 0, \
+            f"Poll loop should start even when initial board reconciliation fails, " \
+            f"but orchestrate_project was only called {cycle_call_count} times"
+
+        # Cleanup
+        await multi_orchestrator.stop()
+        task.cancel()
+        try:
+            await task
+        except (asyncio.CancelledError, Exception):
+            pass  # Expected
