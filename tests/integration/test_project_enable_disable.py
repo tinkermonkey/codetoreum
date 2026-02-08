@@ -39,6 +39,7 @@ def create_project_config(repo_url: str, branch: str = "main", enabled: bool = T
 class TestProjectEnableDisable:
     """Integration tests for project enable/disable behavior."""
 
+    @pytest.mark.asyncio
     async def test_disable_project_excluded_from_enabled_list(self, project_manager):
         """Verify disabling project excludes it from enabled projects list."""
         # Create a project
@@ -63,6 +64,7 @@ class TestProjectEnableDisable:
         enabled_after = await project_manager.get_enabled_projects()
         assert "test-project" not in enabled_after
 
+    @pytest.mark.asyncio
     async def test_disable_project_skips_processing_no_cleanup(self, project_manager, temp_workspace):
         """Verify disabling project skips processing without cleanup operations.
 
@@ -110,6 +112,7 @@ class TestProjectEnableDisable:
             preserved_data = json.load(f)
             assert preserved_data == state_data, "State data should be unchanged"
 
+    @pytest.mark.asyncio
     async def test_re_enable_project_resumes_with_preserved_state(self, project_manager, temp_workspace):
         """Verify re-enabling project resumes with preserved state.
 
@@ -172,6 +175,7 @@ class TestProjectEnableDisable:
             assert restored_state["cycle"] == 3, "Cycle count preserved"
             assert restored_state["completed"] == ["setup-001"], "Completed items preserved"
 
+    @pytest.mark.asyncio
     async def test_disable_enable_cycle_preserves_all_state_types(self, project_manager, temp_workspace):
         """Verify disable-enable cycle preserves all types of state.
 
@@ -233,6 +237,7 @@ class TestProjectEnableDisable:
         with open(execution_file) as f:
             assert json.load(f) == execution_state
 
+    @pytest.mark.asyncio
     async def test_multiple_projects_disable_independent(self, project_manager):
         """Verify disabling one project doesn't affect others.
 

@@ -18,7 +18,7 @@ from codetoreum.adapters.testing.mock_project_manager_adapter import (
     MockProjectManagerAdapter,
     MockProjectState,
 )
-from codetoreum.adapters.testing.mock_event_emitter import MockEventEmitter
+from codetoreum.adapters.testing.capturing_mock_event_emitter import CapturingMockEventEmitter
 from codetoreum.domain.value_objects import ProjectConfig
 from codetoreum.domain.events.project_events import (
     ProjectClonedEvent,
@@ -264,7 +264,7 @@ class TestEnsureProjectCloned:
     @pytest.mark.asyncio
     async def test_clone_emits_event(self, config_1):
         """Test that successful clone emits ProjectClonedEvent."""
-        emitter = MockEventEmitter()
+        emitter = CapturingMockEventEmitter()
         adapter = MockProjectManagerAdapter(event_emitter=emitter)
         adapter.add_project("api-service", config_1)
 
@@ -280,7 +280,7 @@ class TestEnsureProjectCloned:
     @pytest.mark.asyncio
     async def test_clone_event_contains_details(self, config_1):
         """Test that ProjectClonedEvent has correct details."""
-        emitter = MockEventEmitter()
+        emitter = CapturingMockEventEmitter()
         adapter = MockProjectManagerAdapter(event_emitter=emitter)
         adapter.add_project("api-service", config_1)
 
@@ -313,7 +313,7 @@ class TestEnsureProjectCloned:
     @pytest.mark.asyncio
     async def test_clone_failure_emits_event(self, config_1):
         """Test that clone failure emits ProjectCloneFailedEvent."""
-        emitter = MockEventEmitter()
+        emitter = CapturingMockEventEmitter()
         adapter = MockProjectManagerAdapter(event_emitter=emitter)
         adapter.add_project("api-service", config_1)
         adapter.simulate_clone_failure("api-service")
@@ -407,7 +407,7 @@ class TestEventEmitterIntegration:
     async def test_set_event_emitter(self, adapter, config_1):
         """Test setting event emitter after construction."""
         adapter.add_project("api-service", config_1)
-        emitter = MockEventEmitter()
+        emitter = CapturingMockEventEmitter()
         adapter.set_event_emitter(emitter)
 
         await adapter.ensure_project_cloned("api-service")
@@ -420,7 +420,7 @@ class TestEventEmitterIntegration:
     @pytest.mark.asyncio
     async def test_emitter_in_constructor(self, config_1):
         """Test providing emitter in constructor."""
-        emitter = MockEventEmitter()
+        emitter = CapturingMockEventEmitter()
         adapter = MockProjectManagerAdapter(event_emitter=emitter)
         adapter.add_project("api-service", config_1)
 

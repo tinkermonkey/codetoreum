@@ -13,8 +13,6 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from codetoreum.domain.events.project_events import (
     OrchestrationCycleCompletedEvent,
-    ProjectClonedEvent,
-    ProjectCloneFailedEvent,
 )
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
 from codetoreum.ports.output.board_service import IBoardService
@@ -145,8 +143,8 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
             for project_name in enabled_projects:
                 try:
                     await self._reconcile_project_boards(project_name)
-                except Exception as e:
-                    logger.error(
+                except (ExternalServiceError, ResourceNotFoundError) as e:
+                    logger.warning(
                         f"Initial board reconciliation failed for {project_name}: {e}",
                         exc_info=True,
                         extra={
@@ -155,8 +153,8 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                         },
                     )
                     # Continue with other projects
-        except Exception as e:
-            logger.error(
+        except (ExternalServiceError, ResourceNotFoundError) as e:
+            logger.warning(
                 f"Initial setup failed: {e}",
                 exc_info=True,
                 extra={"error_id": "ERR_INITIAL_SETUP_FAILED"},
@@ -272,9 +270,9 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                         )
                         # Continue - reconciliation failure doesn't block other projects
 
-                except Exception as e:
-                    logger.error(
-                        f"Unexpected error orchestrating {project_name}: {e}",
+                except (ExternalServiceError, ResourceNotFoundError) as e:
+                    logger.warning(
+                        f"Orchestration of {project_name} failed: {e}",
                         exc_info=True,
                         extra={
                             "error_id": "ERR_PROJECT_ORCHESTRATION_FAILED",
@@ -328,8 +326,13 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
             self._last_cycle_time = cycle_timestamp
             return cycle_result
 
-        except Exception as e:
-            logger.error(f"Critical error in orchestration cycle: {e}", exc_info=True)
+        except (ExternalServiceError, ResourceNotFoundError) as e:
+            msg = f"Critical error in orchestration cycle: {e}"
+            logger.error(
+                msg,
+                exc_info=True,
+                extra={"error_id": "ERR_ORCHESTRATION_CYCLE_FAILED"},
+            )
             duration_ms = (time.time() - cycle_start) * 1000
             return OrchestrationCycleResult(
                 success=False,
@@ -338,7 +341,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                 total_errors=1,
                 cycle_duration_ms=duration_ms,
                 timestamp=cycle_timestamp,
-                error_message=str(e),
+                error_message=msg,
             )
 
     async def orchestrate_project(
@@ -372,26 +375,15 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
             )
 
             # Ensure project is cloned
+            # Note: ProjectClonedEvent is emitted by the project manager adapter
             try:
                 workspace_path = await self._project_manager.ensure_project_cloned(
                     project_name
                 )
                 logger.debug(f"Project {project_name} ensured at {workspace_path}")
 
-                # Emit ProjectClonedEvent
-                if self._event_emitter:
-                    event = ProjectClonedEvent(
-                        type="project.cloned",
-                        timestamp=self._get_iso_timestamp(),
-                        source="multi_project_orchestrator",
-                        project_name=project_name,
-                        repo_url=config.repo_url,
-                        workspace_path=workspace_path,
-                        branch=config.branch,
-                    )
-                    self._event_emitter.emit(event)
-
             except ExternalServiceError as clone_error:
+                # Note: ProjectCloneFailedEvent is emitted by the project manager adapter
                 logger.warning(
                     f"Clone failed for project {project_name}: {clone_error}",
                     exc_info=True,
@@ -400,19 +392,6 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                         "project_name": project_name,
                     },
                 )
-
-                # Emit ProjectCloneFailedEvent
-                if self._event_emitter:
-                    event = ProjectCloneFailedEvent(
-                        type="project.clone_failed",
-                        timestamp=self._get_iso_timestamp(),
-                        source="multi_project_orchestrator",
-                        project_name=project_name,
-                        repo_url=config.repo_url,
-                        error_message=str(clone_error),
-                        will_retry=True,
-                    )
-                    self._event_emitter.emit(event)
 
                 return ProjectOrchestrationResult(
                     project_name=project_name,
@@ -460,11 +439,13 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
             )
 
         except Exception as e:
+            # Let programming errors (TypeError, AttributeError, etc.) propagate
+            # Only catch expected external service errors here
             logger.error(
-                f"Unexpected error orchestrating {project_name}: {e}",
+                f"Orchestration failed for {project_name}: {e}",
                 exc_info=True,
                 extra={
-                    "error_id": "ERR_UNEXPECTED_ORCHESTRATION_ERROR",
+                    "error_id": "ERR_ORCHESTRATION_ERROR",
                     "project_name": project_name,
                 },
             )
@@ -472,7 +453,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                 project_name=project_name,
                 success=False,
                 actions_taken=0,
-                errors=[f"Unexpected error: {e}"],
+                errors=[f"Orchestration error: {e}"],
                 workspace_path="",
                 timestamp=start_time,
             )
@@ -533,6 +514,13 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
         Raises:
             ExternalServiceError: Board reconciliation failed
         """
+        if self._board_service is None:
+            logger.debug(
+                f"Skipping board reconciliation for {project_name} (board service not configured)",
+                extra={"project_name": project_name},
+            )
+            return
+
         logger.debug(
             f"Reconciling boards for project {project_name}",
             extra={"project_name": project_name},

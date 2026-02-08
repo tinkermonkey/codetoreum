@@ -1,7 +1,8 @@
-"""Mock event emitter for testing domain event emission.
+"""Capturing mock event emitter for testing domain event emission.
 
 Captures all emitted events in memory without external dependencies.
 Used for verifying event emission behavior in unit tests.
+Supports event type filtering and wildcard subscriptions.
 """
 
 import logging
@@ -11,14 +12,14 @@ from codetoreum.ports.output.event_emitter import IEventEmitter
 logger = logging.getLogger(__name__)
 
 
-class MockEventEmitter(IEventEmitter):
+class CapturingMockEventEmitter(IEventEmitter):
     """In-memory event emitter for testing.
 
     Captures all emitted events and allows subscribing to event types.
     Useful for verifying that domain events are emitted correctly.
 
     Example:
-        emitter = MockEventEmitter()
+        emitter = CapturingMockEventEmitter()
 
         # Subscribe to specific events
         events = []

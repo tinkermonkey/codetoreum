@@ -180,7 +180,7 @@ class ProjectOrchestrationResult:
 
 ## Dependency Injection
 
-The MultiProjectOrchestrator requires three dependencies:
+The MultiProjectOrchestrator requires the following dependencies:
 
 ```python
 class MultiProjectOrchestrator(IMultiProjectOrchestrator):
@@ -188,11 +188,15 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
         self,
         project_manager: IProjectManagerService,
         workflow_orchestrator: "IWorkflowOrchestrator",
+        board_service: IBoardService,
         event_emitter: Optional[IEventEmitter] = None,
+        poll_interval_seconds: int = 30,
     ) -> None:
         self._project_manager = project_manager
         self._workflow_orchestrator = workflow_orchestrator
+        self._board_service = board_service
         self._event_emitter = event_emitter
+        self._poll_interval_seconds = poll_interval_seconds
 ```
 
 ### Dependencies
@@ -208,9 +212,18 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
    - Returns action count
    - Handles card movements and agent execution
 
-3. **IEventEmitter** (Optional)
+3. **IBoardService** (Required)
+   - Reconciles project boards
+   - Synchronizes with external system
+   - Can be None in simulation mode (guarded with None check)
+
+4. **IEventEmitter** (Optional)
    - Emits orchestration events
    - Used for observability and debugging
+
+5. **poll_interval_seconds** (Optional)
+   - Seconds to wait between orchestration cycles (default: 30)
+   - Only used when start() is called for continuous polling
 
 ## Event Emissions
 
