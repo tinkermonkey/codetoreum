@@ -356,7 +356,7 @@ class TestPerProjectOrchestration:
 
 
 class TestProjectStatus:
-    """Tests for project status retrieval."""
+    """Tests for project status retrieval and listing."""
 
     @pytest.mark.asyncio
     async def test_get_project_status_success(
@@ -397,10 +397,6 @@ class TestProjectStatus:
         # Execute & Assert
         with pytest.raises(ResourceNotFoundError):
             await multi_orchestrator.get_project_status("nonexistent")
-
-
-class TestProjectStatus:
-    """Tests for project status and listing."""
 
     @pytest.mark.asyncio
     async def test_list_enabled_projects(self, multi_orchestrator, project_manager):

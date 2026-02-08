@@ -188,12 +188,12 @@ async def run_scenario(runner: SimulationRunner) -> None:
     projects = runner.config.metadata["projects"]
 
     # =========================================================================
-    # Phase 1: Configuration reload
+    # Configuration reload
     # =========================================================================
     # Configuration reload is simulated in the orchestrator
 
     # =========================================================================
-    # Phase 2: Repository cloning for each project
+    # Repository cloning for each project
     # =========================================================================
     from datetime import datetime, timezone
 
@@ -213,7 +213,7 @@ async def run_scenario(runner: SimulationRunner) -> None:
     await runner.advance_time(timedelta(milliseconds=500))
 
     # =========================================================================
-    # Phase 3: Per-project workflow orchestration
+    # Per-project workflow orchestration
     # =========================================================================
     total_work_items = 0
 
@@ -262,7 +262,7 @@ async def run_scenario(runner: SimulationRunner) -> None:
         await runner.advance_time(timedelta(milliseconds=200))
 
     # =========================================================================
-    # Phase 4: Orchestration cycle completion
+    # Orchestration cycle completion
     # =========================================================================
     cycle_completed = OrchestrationCycleCompletedEvent(
         type="orchestration.cycle_completed",

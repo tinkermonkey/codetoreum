@@ -108,11 +108,9 @@ Returns current project status:
 - Workspace path
 - Organization namespace
 
-### 4. Project Enable/Disable
+**Method**: `list_enabled_projects() -> List[str]`
 
-**Methods**: `enable_project()`, `disable_project()`, `list_enabled_projects()`
-
-Manages project enabled status for filtering in orchestration cycles.
+Returns list of enabled projects for orchestration filtering.
 
 ## Port Interface Design
 
@@ -137,18 +135,8 @@ class IMultiProjectOrchestrator(ABC):
         pass
 
     @abstractmethod
-    async def get_project_status(self, project_name: str) -> Dict[str, any]:
+    async def get_project_status(self, project_name: str) -> Dict[str, Any]:
         """Get current status for a project"""
-        pass
-
-    @abstractmethod
-    async def enable_project(self, project_name: str) -> None:
-        """Enable a project for orchestration"""
-        pass
-
-    @abstractmethod
-    async def disable_project(self, project_name: str) -> None:
-        """Disable a project from orchestration"""
         pass
 
     @abstractmethod
@@ -305,12 +293,11 @@ Errors in one project don't block others:
 **Test Classes**:
 1. `TestOrchestrationCycle` - Cycle execution and error handling
 2. `TestPerProjectOrchestration` - Per-project orchestration
-3. `TestProjectStatus` - Status retrieval
-4. `TestProjectEnableDisable` - Enable/disable operations
-5. `TestCycleMetrics` - Metrics tracking and events
-6. `TestErrorHandling` - Error resilience
+3. `TestProjectStatus` - Status retrieval and listing
+4. `TestCycleMetrics` - Metrics tracking and events
+5. `TestErrorHandling` - Error resilience
 
-**Coverage**: 20/20 tests passing, ~100% method coverage
+**Coverage**: 15/15 tests passing, ~100% method coverage
 
 ### Simulation Tests
 
@@ -397,10 +384,6 @@ else:
 # Check project status
 status = await orchestrator.get_project_status("api-service")
 print(f"api-service status: {status}")
-
-# Enable/disable projects
-await orchestrator.enable_project("web-app")
-await orchestrator.disable_project("deprecated-service")
 
 # List enabled projects
 projects = await orchestrator.list_enabled_projects()
