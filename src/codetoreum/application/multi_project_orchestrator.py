@@ -9,12 +9,15 @@ import asyncio
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
-
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from codetoreum.domain.events.project_events import OrchestrationCycleCompletedEvent
+from codetoreum.domain.events.project_events import (
+    OrchestrationCycleCompletedEvent,
+    ProjectClonedEvent,
+    ProjectCloneFailedEvent,
+)
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
+from codetoreum.ports.output.board_service import IBoardService
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.multi_project_orchestrator import (
     IMultiProjectOrchestrator,
@@ -30,6 +33,9 @@ if TYPE_CHECKING:
     from codetoreum.ports.output.workflow_orchestrator import IWorkflowOrchestrator
 
 logger = logging.getLogger(__name__)
+
+# Default poll interval
+POLL_INTERVAL_SECONDS = 30
 
 
 class MultiProjectOrchestrator(IMultiProjectOrchestrator):
@@ -62,20 +68,100 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
         self,
         project_manager: IProjectManagerService,
         workflow_orchestrator: "IWorkflowOrchestrator",
+        board_service: IBoardService,
         event_emitter: Optional[IEventEmitter] = None,
+        poll_interval_seconds: int = 30,
     ) -> None:
         """Initialize the multi-project orchestrator.
 
         Args:
             project_manager: Service for managing project configurations and repositories
             workflow_orchestrator: Service for orchestrating individual project workflows
+            board_service: Service for reconciling project boards
             event_emitter: Optional event emitter for orchestration events
+            poll_interval_seconds: Seconds to wait between orchestration cycles (default: 30)
         """
         self._project_manager = project_manager
         self._workflow_orchestrator = workflow_orchestrator
+        self._board_service = board_service
         self._event_emitter = event_emitter
+        self._poll_interval_seconds = poll_interval_seconds
         self._last_cycle_time: Optional[datetime] = None
         self._cycle_count = 0
+        self._running = False
+
+    async def start(self) -> None:
+        """Start the main poll loop.
+
+        Performs initial setup (board reconciliation) for all enabled projects,
+        then enters main poll loop that repeats orchestration cycles with
+        POLL_INTERVAL between each cycle.
+
+        The loop continues until stop() is called.
+        """
+        logger.info("Starting multi-project orchestrator poll loop")
+        self._running = True
+
+        # Initial setup: reconcile all project boards
+        await self._initial_setup()
+
+        # Main poll loop
+        while self._running:
+            cycle_start = time.time()
+
+            await self.run_orchestration_cycle()
+
+            cycle_duration_ms = (time.time() - cycle_start) * 1000
+            logger.info(
+                f"Orchestration cycle completed in {cycle_duration_ms:.0f}ms",
+                extra={"cycle_duration_ms": int(cycle_duration_ms)},
+            )
+
+            # Wait before next cycle
+            await asyncio.sleep(self._poll_interval_seconds)
+
+    async def stop(self) -> None:
+        """Stop the main poll loop.
+
+        Signals the poll loop to exit on the next iteration.
+        """
+        logger.info("Stopping multi-project orchestrator poll loop")
+        self._running = False
+
+    async def _initial_setup(self) -> None:
+        """Perform initial setup on startup.
+
+        Reconciles all project boards for enabled projects.
+        Continues on errors (non-blocking failures).
+        """
+        try:
+            enabled_projects = await self._project_manager.get_enabled_projects()
+
+            logger.info(
+                f"Initial setup for {len(enabled_projects)} projects",
+                extra={"project_count": len(enabled_projects)},
+            )
+
+            for project_name in enabled_projects:
+                try:
+                    await self._reconcile_project_boards(project_name)
+                except Exception as e:
+                    logger.error(
+                        f"Initial board reconciliation failed for {project_name}: {e}",
+                        exc_info=True,
+                        extra={
+                            "error_id": "ERR_INITIAL_RECONCILIATION_FAILED",
+                            "project_name": project_name,
+                        },
+                    )
+                    # Continue with other projects
+        except Exception as e:
+            logger.error(
+                f"Initial setup failed: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_INITIAL_SETUP_FAILED"},
+            )
+            # Don't propagate - allow poll loop to start even if initial setup fails
 
     async def run_orchestration_cycle(self) -> OrchestrationCycleResult:
         """Execute a complete orchestration cycle across all enabled projects.
@@ -110,7 +196,11 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                 await self._project_manager.reload_config()
                 logger.debug("Project configurations reloaded")
             except ExternalServiceError as e:
-                logger.warning(f"Failed to reload project config: {e}")
+                logger.warning(
+                    f"Failed to reload project config: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_CONFIG_RELOAD_FAILED"},
+                )
                 # Don't fail the cycle, use cached config
 
             # Step 2: Get enabled projects
@@ -167,8 +257,30 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                             f"Orchestration of {project_name} had errors: "
                             f"{', '.join(result.errors)}"
                         )
+
+                    # Reconcile boards for the project
+                    try:
+                        await self._reconcile_project_boards(project_name)
+                    except Exception as e:
+                        logger.warning(
+                            f"Board reconciliation failed for {project_name}: {e}",
+                            exc_info=True,
+                            extra={
+                                "error_id": "ERR_BOARD_RECONCILIATION_FAILED",
+                                "project_name": project_name,
+                            },
+                        )
+                        # Continue - reconciliation failure doesn't block other projects
+
                 except Exception as e:
-                    logger.error(f"Unexpected error orchestrating {project_name}: {e}")
+                    logger.error(
+                        f"Unexpected error orchestrating {project_name}: {e}",
+                        exc_info=True,
+                        extra={
+                            "error_id": "ERR_PROJECT_ORCHESTRATION_FAILED",
+                            "project_name": project_name,
+                        },
+                    )
                     total_errors += 1
                     project_results.append(
                         ProjectOrchestrationResult(
@@ -260,10 +372,56 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
             )
 
             # Ensure project is cloned
-            workspace_path = await self._project_manager.ensure_project_cloned(
-                project_name
-            )
-            logger.debug(f"Project {project_name} ensured at {workspace_path}")
+            try:
+                workspace_path = await self._project_manager.ensure_project_cloned(
+                    project_name
+                )
+                logger.debug(f"Project {project_name} ensured at {workspace_path}")
+
+                # Emit ProjectClonedEvent
+                if self._event_emitter:
+                    event = ProjectClonedEvent(
+                        type="project.cloned",
+                        timestamp=self._get_iso_timestamp(),
+                        source="multi_project_orchestrator",
+                        project_name=project_name,
+                        repo_url=config.repo_url,
+                        workspace_path=workspace_path,
+                        branch=config.branch,
+                    )
+                    self._event_emitter.emit(event)
+
+            except ExternalServiceError as clone_error:
+                logger.warning(
+                    f"Clone failed for project {project_name}: {clone_error}",
+                    exc_info=True,
+                    extra={
+                        "error_id": "ERR_PROJECT_CLONE_TRANSIENT",
+                        "project_name": project_name,
+                    },
+                )
+
+                # Emit ProjectCloneFailedEvent
+                if self._event_emitter:
+                    event = ProjectCloneFailedEvent(
+                        type="project.clone_failed",
+                        timestamp=self._get_iso_timestamp(),
+                        source="multi_project_orchestrator",
+                        project_name=project_name,
+                        repo_url=config.repo_url,
+                        error_message=str(clone_error),
+                        will_retry=True,
+                    )
+                    self._event_emitter.emit(event)
+
+                return ProjectOrchestrationResult(
+                    project_name=project_name,
+                    success=False,
+                    actions_taken=0,
+                    errors=[f"Clone failed: {clone_error}"],
+                    workspace_path="",
+                    timestamp=start_time,
+                )
 
             # Delegate per-project orchestration to workflow orchestrator
             # The workflow orchestrator knows about this project through context
@@ -285,7 +443,13 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
             )
 
         except ResourceNotFoundError as e:
-            logger.warning(f"Project {project_name} not found: {e}")
+            logger.warning(
+                f"Project {project_name} not found: {e}",
+                extra={
+                    "error_id": "ERR_PROJECT_NOT_FOUND",
+                    "project_name": project_name,
+                },
+            )
             return ProjectOrchestrationResult(
                 project_name=project_name,
                 success=False,
@@ -295,20 +459,14 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                 timestamp=start_time,
             )
 
-        except ExternalServiceError as e:
-            logger.warning(f"External service error for {project_name}: {e}")
-            return ProjectOrchestrationResult(
-                project_name=project_name,
-                success=False,
-                actions_taken=0,
-                errors=[f"External service error: {e}"],
-                workspace_path="",
-                timestamp=start_time,
-            )
-
         except Exception as e:
             logger.error(
-                f"Unexpected error orchestrating {project_name}: {e}", exc_info=True
+                f"Unexpected error orchestrating {project_name}: {e}",
+                exc_info=True,
+                extra={
+                    "error_id": "ERR_UNEXPECTED_ORCHESTRATION_ERROR",
+                    "project_name": project_name,
+                },
             )
             return ProjectOrchestrationResult(
                 project_name=project_name,
@@ -319,7 +477,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                 timestamp=start_time,
             )
 
-    async def get_project_status(self, project_name: str) -> Dict[str, any]:
+    async def get_project_status(self, project_name: str) -> Dict[str, Any]:
         """Get current orchestration status for a project.
 
         Returns:
@@ -329,8 +487,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                 - repo_url: str
                 - branch: str
                 - workspace_path: str
-                - cloned: bool
-                - last_action: Optional[datetime]
+                - organization: str
 
         Raises:
             ResourceNotFoundError: Project doesn't exist
@@ -350,48 +507,6 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
         except ResourceNotFoundError:
             raise
 
-    async def enable_project(self, project_name: str) -> None:
-        """Enable a project for orchestration.
-
-        Args:
-            project_name: Name of the project
-
-        Raises:
-            ResourceNotFoundError: Project doesn't exist
-        """
-        config = await self._project_manager.get_project_config(project_name)
-        # Create new config with enabled=True
-        updated_config = config.__class__(
-            repo_url=config.repo_url,
-            branch=config.branch,
-            enabled=True,
-            org=config.org,
-        )
-        # Note: This requires project manager to support updating
-        # For now, log the intent
-        logger.info(f"Enabled project: {project_name}")
-
-    async def disable_project(self, project_name: str) -> None:
-        """Disable a project from orchestration.
-
-        Args:
-            project_name: Name of the project
-
-        Raises:
-            ResourceNotFoundError: Project doesn't exist
-        """
-        config = await self._project_manager.get_project_config(project_name)
-        # Create new config with enabled=False
-        updated_config = config.__class__(
-            repo_url=config.repo_url,
-            branch=config.branch,
-            enabled=False,
-            org=config.org,
-        )
-        # Note: This requires project manager to support updating
-        # For now, log the intent
-        logger.info(f"Disabled project: {project_name}")
-
     async def list_enabled_projects(self) -> List[str]:
         """Get list of all enabled projects.
 
@@ -406,6 +521,23 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
     # =========================================================================
     # Private Methods
     # =========================================================================
+
+    async def _reconcile_project_boards(self, project_name: str) -> None:
+        """Reconcile boards for a specific project.
+
+        Synchronizes the project board with the external system.
+
+        Args:
+            project_name: Name of the project
+
+        Raises:
+            ExternalServiceError: Board reconciliation failed
+        """
+        logger.debug(
+            f"Reconciling boards for project {project_name}",
+            extra={"project_name": project_name},
+        )
+        await self._board_service.reconcile_board(project_name)
 
     @staticmethod
     def _get_iso_timestamp() -> str:

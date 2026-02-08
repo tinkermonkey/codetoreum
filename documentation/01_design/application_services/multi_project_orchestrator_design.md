@@ -2,7 +2,7 @@
 
 ## Overview
 
-The **MultiProjectOrchestrator** is a Phase 3 application service that orchestrates workflow execution across multiple independent projects within a single orchestrator process. It coordinates project initialization, per-project workflow execution, and cross-project state management.
+The **MultiProjectOrchestrator** is an application service that orchestrates workflow execution across multiple independent projects within a single orchestrator process. It coordinates project initialization, per-project workflow execution, and cross-project state management.
 
 **Location**: `src/codetoreum/application/multi_project_orchestrator.py`
 
@@ -417,8 +417,8 @@ projects = await orchestrator.list_enabled_projects()
 
 ## Related Documents
 
-- `03_implementation_plan.md` - Phase 3 implementation details
 - `consolidated_services_design.md` - Other application services
 - `../ports/output/project_manager_service.py` - Project manager port
 - `../ports/output/workflow_orchestrator.py` - Workflow orchestrator port
+- `../ports/output/board_service.py` - Board service port
 - `../domains/events/project_events.py` - Project domain events

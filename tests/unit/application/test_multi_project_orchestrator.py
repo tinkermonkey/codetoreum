@@ -36,17 +36,24 @@ def workflow_orchestrator():
 
 
 @pytest.fixture
+def board_service():
+    """Create mock board service."""
+    return AsyncMock()
+
+
+@pytest.fixture
 def event_emitter():
     """Create mock event emitter."""
     return MagicMock()
 
 
 @pytest.fixture
-def multi_orchestrator(project_manager, workflow_orchestrator, event_emitter):
+def multi_orchestrator(project_manager, workflow_orchestrator, board_service, event_emitter):
     """Create MultiProjectOrchestrator with mocks."""
     return MultiProjectOrchestrator(
         project_manager=project_manager,
         workflow_orchestrator=workflow_orchestrator,
+        board_service=board_service,
         event_emitter=event_emitter,
     )
 
@@ -56,7 +63,7 @@ class TestOrchestrationCycle:
 
     @pytest.mark.asyncio
     async def test_run_orchestration_cycle_success(
-        self, multi_orchestrator, project_manager, workflow_orchestrator, event_emitter
+        self, multi_orchestrator, project_manager, workflow_orchestrator, board_service, event_emitter
     ):
         """Test successful orchestration cycle with multiple projects."""
         # Setup
@@ -75,6 +82,7 @@ class TestOrchestrationCycle:
         project_manager.ensure_project_cloned = AsyncMock(
             return_value="/workspace/project"
         )
+        board_service.reconcile_board = AsyncMock()
         workflow_orchestrator.orchestrate_project = AsyncMock(
             side_effect=[5, 3]  # 5 actions for api-service, 3 for web-app
         )
@@ -97,12 +105,13 @@ class TestOrchestrationCycle:
         assert project_manager.ensure_project_cloned.call_count == 2
         assert workflow_orchestrator.orchestrate_project.call_count == 2
 
-        # Verify event emission
-        event_emitter.emit.assert_called_once()
-        emitted_event = event_emitter.emit.call_args[0][0]
-        assert isinstance(emitted_event, OrchestrationCycleCompletedEvent)
-        assert emitted_event.projects_processed == 2
-        assert emitted_event.work_items_found == 8
+        # Verify event emissions (ProjectCloned x2 + OrchestrationCycleCompleted)
+        assert event_emitter.emit.call_count == 3
+        # Last emit call should be the cycle completed event
+        cycle_event = event_emitter.emit.call_args_list[-1][0][0]
+        assert isinstance(cycle_event, OrchestrationCycleCompletedEvent)
+        assert cycle_event.projects_processed == 2
+        assert cycle_event.work_items_found == 8
 
     @pytest.mark.asyncio
     async def test_run_orchestration_cycle_no_enabled_projects(
@@ -131,6 +140,7 @@ class TestOrchestrationCycle:
         multi_orchestrator,
         project_manager,
         workflow_orchestrator,
+        board_service,
         event_emitter,
     ):
         """Test that error in one project doesn't block others."""
@@ -153,6 +163,7 @@ class TestOrchestrationCycle:
                 "/workspace/web-app",
             ]
         )
+        board_service.reconcile_board = AsyncMock()
         workflow_orchestrator.orchestrate_project = AsyncMock(return_value=5)
 
         # Execute
@@ -170,7 +181,7 @@ class TestOrchestrationCycle:
 
     @pytest.mark.asyncio
     async def test_run_orchestration_cycle_get_enabled_projects_fails(
-        self, multi_orchestrator, project_manager, event_emitter
+        self, multi_orchestrator, project_manager, board_service, event_emitter
     ):
         """Test orchestration cycle when getting enabled projects fails."""
         # Setup
@@ -190,7 +201,7 @@ class TestOrchestrationCycle:
 
     @pytest.mark.asyncio
     async def test_run_orchestration_cycle_reload_config_fails(
-        self, multi_orchestrator, project_manager, workflow_orchestrator
+        self, multi_orchestrator, project_manager, workflow_orchestrator, board_service
     ):
         """Test that reload_config failure doesn't block the cycle."""
         # Setup
@@ -211,6 +222,7 @@ class TestOrchestrationCycle:
         project_manager.ensure_project_cloned = AsyncMock(
             return_value="/workspace/api-service"
         )
+        board_service.reconcile_board = AsyncMock()
         workflow_orchestrator.orchestrate_project = AsyncMock(return_value=3)
 
         # Execute
@@ -227,7 +239,7 @@ class TestPerProjectOrchestration:
 
     @pytest.mark.asyncio
     async def test_orchestrate_project_success(
-        self, multi_orchestrator, project_manager, workflow_orchestrator
+        self, multi_orchestrator, project_manager, workflow_orchestrator, event_emitter
     ):
         """Test successful orchestration of a single project."""
         # Setup
@@ -284,7 +296,7 @@ class TestPerProjectOrchestration:
 
     @pytest.mark.asyncio
     async def test_orchestrate_project_clone_fails(
-        self, multi_orchestrator, project_manager
+        self, multi_orchestrator, project_manager, event_emitter
     ):
         """Test orchestration when project clone fails."""
         # Setup
@@ -298,6 +310,7 @@ class TestPerProjectOrchestration:
         project_manager.ensure_project_cloned = AsyncMock(
             side_effect=ExternalServiceError("git", "Network timeout")
         )
+        event_emitter.emit = MagicMock()
 
         # Execute
         result = await multi_orchestrator.orchestrate_project("api-service")
@@ -306,11 +319,14 @@ class TestPerProjectOrchestration:
         assert result.success is False
         assert result.actions_taken == 0
         assert len(result.errors) == 1
-        assert "External service error" in result.errors[0]
+        assert "Clone failed" in result.errors[0]
+
+        # Verify ProjectCloneFailedEvent emitted
+        event_emitter.emit.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_orchestrate_project_workflow_orchestrator_error(
-        self, multi_orchestrator, project_manager, workflow_orchestrator
+        self, multi_orchestrator, project_manager, workflow_orchestrator, event_emitter
     ):
         """Test orchestration when workflow orchestrator raises unexpected error."""
         # Setup
@@ -324,6 +340,7 @@ class TestPerProjectOrchestration:
         project_manager.ensure_project_cloned = AsyncMock(
             return_value="/workspace/api-service"
         )
+        event_emitter.emit = MagicMock()
         workflow_orchestrator.orchestrate_project = AsyncMock(
             side_effect=RuntimeError("Unexpected error")
         )
@@ -382,56 +399,8 @@ class TestProjectStatus:
             await multi_orchestrator.get_project_status("nonexistent")
 
 
-class TestProjectEnableDisable:
-    """Tests for enabling and disabling projects."""
-
-    @pytest.mark.asyncio
-    async def test_enable_project_success(self, multi_orchestrator, project_manager):
-        """Test enabling a project."""
-        # Setup
-        config = ProjectConfig(
-            repo_url="https://github.com/acme/api-service.git",
-            branch="main",
-            enabled=False,
-            org="acme",
-        )
-        project_manager.get_project_config = AsyncMock(return_value=config)
-
-        # Execute
-        await multi_orchestrator.enable_project("api-service")
-
-        # Assert
-        project_manager.get_project_config.assert_called_with("api-service")
-
-    @pytest.mark.asyncio
-    async def test_enable_project_not_found(self, multi_orchestrator, project_manager):
-        """Test enabling non-existent project."""
-        # Setup
-        project_manager.get_project_config = AsyncMock(
-            side_effect=ResourceNotFoundError("Project", "nonexistent")
-        )
-
-        # Execute & Assert
-        with pytest.raises(ResourceNotFoundError):
-            await multi_orchestrator.enable_project("nonexistent")
-
-    @pytest.mark.asyncio
-    async def test_disable_project_success(self, multi_orchestrator, project_manager):
-        """Test disabling a project."""
-        # Setup
-        config = ProjectConfig(
-            repo_url="https://github.com/acme/api-service.git",
-            branch="main",
-            enabled=True,
-            org="acme",
-        )
-        project_manager.get_project_config = AsyncMock(return_value=config)
-
-        # Execute
-        await multi_orchestrator.disable_project("api-service")
-
-        # Assert
-        project_manager.get_project_config.assert_called_with("api-service")
+class TestProjectStatus:
+    """Tests for project status and listing."""
 
     @pytest.mark.asyncio
     async def test_list_enabled_projects(self, multi_orchestrator, project_manager):
@@ -454,12 +423,13 @@ class TestCycleMetrics:
 
     @pytest.mark.asyncio
     async def test_cycle_count_increments(
-        self, multi_orchestrator, project_manager, workflow_orchestrator
+        self, multi_orchestrator, project_manager, workflow_orchestrator, board_service
     ):
         """Test that cycle counter increments with each run."""
         # Setup
         project_manager.reload_config = AsyncMock()
         project_manager.get_enabled_projects = AsyncMock(return_value=[])
+        board_service.reconcile_board = AsyncMock()
 
         # Execute - run cycle twice
         await multi_orchestrator.run_orchestration_cycle()
@@ -471,12 +441,13 @@ class TestCycleMetrics:
 
     @pytest.mark.asyncio
     async def test_cycle_duration_measured(
-        self, multi_orchestrator, project_manager, workflow_orchestrator
+        self, multi_orchestrator, project_manager, workflow_orchestrator, board_service
     ):
         """Test that cycle duration is accurately measured."""
         # Setup
         project_manager.reload_config = AsyncMock()
         project_manager.get_enabled_projects = AsyncMock(return_value=[])
+        board_service.reconcile_board = AsyncMock()
 
         # Execute
         result = await multi_orchestrator.run_orchestration_cycle()
@@ -487,7 +458,7 @@ class TestCycleMetrics:
 
     @pytest.mark.asyncio
     async def test_event_emitted_with_correct_metrics(
-        self, multi_orchestrator, project_manager, workflow_orchestrator, event_emitter
+        self, multi_orchestrator, project_manager, workflow_orchestrator, board_service, event_emitter
     ):
         """Test that emitted event contains correct metrics."""
         # Setup
@@ -506,6 +477,7 @@ class TestCycleMetrics:
         project_manager.ensure_project_cloned = AsyncMock(
             return_value="/workspace/project"
         )
+        board_service.reconcile_board = AsyncMock()
         workflow_orchestrator.orchestrate_project = AsyncMock(
             side_effect=[7, 3]  # Total 10 actions
         )
@@ -543,13 +515,14 @@ class TestErrorHandling:
 
     @pytest.mark.asyncio
     async def test_no_event_emission_without_emitter(
-        self, project_manager, workflow_orchestrator
+        self, project_manager, workflow_orchestrator, board_service
     ):
         """Test orchestration works without event emitter."""
         # Setup
         orchestrator = MultiProjectOrchestrator(
             project_manager=project_manager,
             workflow_orchestrator=workflow_orchestrator,
+            board_service=board_service,
             event_emitter=None,  # No emitter
         )
         project_manager.reload_config = AsyncMock()

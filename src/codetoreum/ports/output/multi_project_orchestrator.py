@@ -9,7 +9,7 @@ cross-project state management.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
@@ -142,7 +142,7 @@ class IMultiProjectOrchestrator(ABC):
         pass
 
     @abstractmethod
-    async def get_project_status(self, project_name: str) -> Dict[str, any]:
+    async def get_project_status(self, project_name: str) -> Dict[str, Any]:
         """Get current orchestration status for a project.
 
         Returns information about:
@@ -159,40 +159,6 @@ class IMultiProjectOrchestrator(ABC):
 
         Raises:
             ResourceNotFoundError: Project doesn't exist
-        """
-        pass
-
-    @abstractmethod
-    async def enable_project(self, project_name: str) -> None:
-        """Enable a project for orchestration.
-
-        Marks a project as enabled so it will be processed in
-        orchestration cycles. If the project configuration doesn't
-        exist, raises ResourceNotFoundError.
-
-        Args:
-            project_name: Name of the project
-
-        Raises:
-            ResourceNotFoundError: Project configuration doesn't exist
-            ExternalServiceError: Configuration update failed
-        """
-        pass
-
-    @abstractmethod
-    async def disable_project(self, project_name: str) -> None:
-        """Disable a project from orchestration.
-
-        Marks a project as disabled so it won't be processed in
-        orchestration cycles. Does not delete project configuration,
-        just marks it as inactive.
-
-        Args:
-            project_name: Name of the project
-
-        Raises:
-            ResourceNotFoundError: Project configuration doesn't exist
-            ExternalServiceError: Configuration update failed
         """
         pass
 
