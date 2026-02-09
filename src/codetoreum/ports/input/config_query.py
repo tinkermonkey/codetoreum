@@ -213,42 +213,42 @@ class IConfigurationQueryPort(ABC):
     @abstractmethod
     async def list_agents(
         self,
-        project_id: str,
+        project_id: Optional[str] = None,
         pagination: Optional[PaginationParams] = None
     ) -> List[AgentConfigInfo]:
         """
-        List all agents for a project.
+        List agents. When project_id is None, returns agents across all projects.
 
         Args:
-            project_id: Project ID
+            project_id: Project ID (None for all projects)
             pagination: Optional pagination parameters
 
         Returns:
             List of agent configurations
 
         Raises:
-            ProjectNotFoundError: If project doesn't exist
+            ProjectNotFoundError: If project_id is specified and doesn't exist
         """
         pass
 
     @abstractmethod
     async def list_pipelines(
         self,
-        project_id: str,
+        project_id: Optional[str] = None,
         pagination: Optional[PaginationParams] = None
     ) -> List[PipelineConfigInfo]:
         """
-        List all pipelines for a project.
+        List pipelines. When project_id is None, returns pipelines across all projects.
 
         Args:
-            project_id: Project ID
+            project_id: Project ID (None for all projects)
             pagination: Optional pagination parameters
 
         Returns:
             List of pipeline configurations
 
         Raises:
-            ProjectNotFoundError: If project doesn't exist
+            ProjectNotFoundError: If project_id is specified and doesn't exist
         """
         pass
 

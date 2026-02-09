@@ -1992,10 +1992,10 @@ def create_development_app() -> FastAPI:
         async def list_projects(self, pagination=None):
             return []
 
-        async def list_agents(self, project_id: str, pagination=None):
+        async def list_agents(self, project_id=None, pagination=None):
             return []
 
-        async def list_pipelines(self, project_id: str, pagination=None):
+        async def list_pipelines(self, project_id=None, pagination=None):
             return []
 
         async def search_configs(self, query: str, config_type=None, project_id=None, pagination=None):

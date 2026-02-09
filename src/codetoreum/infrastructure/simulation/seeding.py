@@ -29,7 +29,11 @@ from codetoreum.ports.output.config_store import (
     WorkflowTemplate,
 )
 from codetoreum.ports.exceptions import ValidationError
-from codetoreum.ports.input.config_query import ProjectConfigInfo
+from codetoreum.ports.input.config_query import (
+    AgentConfigInfo,
+    PipelineConfigInfo,
+    ProjectConfigInfo,
+)
 from codetoreum.infrastructure.simulation.scenario_models import ScenarioModel
 
 logger = logging.getLogger(__name__)
@@ -266,6 +270,22 @@ class SimulationDataSeeder:
 
         await self._config_store.save_pipeline_config(pipeline_config)
 
+        # Also seed the config query adapter so the /config API returns pipeline data
+        if self.bootstrap.ports:
+            config_query = self.bootstrap.ports.config_query
+            if hasattr(config_query, 'add_pipeline_config'):
+                config_query.add_pipeline_config(PipelineConfigInfo(
+                    id=pipeline_config.id,
+                    project_id=project_id,
+                    name=name,
+                    description=description,
+                    version=1,
+                    stages=stage_configs,
+                    created_at=datetime.now(timezone.utc),
+                    updated_at=datetime.now(timezone.utc),
+                    metadata={"description": description},
+                ))
+
         if self.track_items:
             self.created_items.pipelines.append(pipeline_config.id)
             self.created_items.workflows.append(workflow_id)
@@ -330,6 +350,29 @@ class SimulationDataSeeder:
             )
 
             await self._config_store.save_agent_config(agent_config)
+
+            # Also seed the config query adapter so the /config API returns agent data
+            if self.bootstrap.ports:
+                config_query = self.bootstrap.ports.config_query
+                if hasattr(config_query, 'add_agent_config'):
+                    config_query.add_agent_config(AgentConfigInfo(
+                        project_id=project_id,
+                        agent_name=agent_name,
+                        display_name=agent_def.get("description", agent_name),
+                        model=agent_def.get("llm_model", "claude-3-5-sonnet-20241022"),
+                        timeout_seconds=agent_def.get("timeout", 3600),
+                        max_retries=3,
+                        requires_docker=agent_def.get("requires_docker", True),
+                        requires_dev_container=False,
+                        makes_code_changes=agent_def.get("makes_code_changes", True),
+                        filesystem_write_allowed=True,
+                        version=1,
+                        created_at=datetime.now(timezone.utc),
+                        updated_at=datetime.now(timezone.utc),
+                        mcp_servers=[],
+                        capabilities={"capabilities": capabilities},
+                        metadata=metadata,
+                    ))
 
             if self.track_items:
                 self.created_items.agents.append(agent_name)

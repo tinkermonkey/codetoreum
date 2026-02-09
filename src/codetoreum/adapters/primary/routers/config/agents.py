@@ -37,6 +37,67 @@ def register_agent_endpoints(
     """Register agent configuration endpoints on the router."""
 
     @router.get(
+        "/agents",
+        response_model=AgentListResponse,
+        summary="List all agents across all projects",
+        response_description="List of agent configurations",
+    )
+    async def list_all_agents(
+        offset: int = Query(DEFAULT_OFFSET, ge=0, description="Pagination offset"),
+        limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description=f"Pagination limit (max {MAX_PAGE_SIZE})"),
+    ) -> AgentListResponse:
+        """
+        List all agents across all projects with pagination.
+
+        **Query Parameters:**
+        - offset: Pagination offset (default: 0)
+        - limit: Pagination limit (default: 20, max: 100)
+
+        **Returns:**
+        - 200 OK: List of agents
+        - 401 Unauthorized: Authentication required
+        """
+        try:
+            pagination = PaginationParams(offset=offset, limit=limit)
+            configs = await query_port.list_agents(
+                project_id=None,
+                pagination=pagination
+            )
+
+            agents = []
+            for config in configs:
+                agents.append(AgentConfigResponse(
+                    project_id=config.project_id,
+                    agent_name=config.agent_name,
+                    display_name=config.display_name,
+                    model=config.model,
+                    timeout_seconds=config.timeout_seconds,
+                    max_retries=config.max_retries,
+                    requires_docker=config.requires_docker,
+                    requires_dev_container=config.requires_dev_container,
+                    makes_code_changes=config.makes_code_changes,
+                    filesystem_write_allowed=config.filesystem_write_allowed,
+                    version=config.version,
+                    created_at=config.created_at,
+                    updated_at=config.updated_at,
+                    mcp_servers=config.mcp_servers,
+                    capabilities=config.capabilities,
+                    metadata=config.metadata,
+                ))
+
+            total = await query_port.count_configs(config_type="agent")
+
+            return AgentListResponse(agents=agents, total_count=total)
+
+        except (DomainError, PortError, PortException) as e:
+            raise map_exception_to_http(e)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to list agents: {str(e)}",
+            )
+
+    @router.get(
         "/projects/{project_id}/agents/{agent_name}",
         response_model=AgentConfigResponse,
         summary="Get agent configuration",

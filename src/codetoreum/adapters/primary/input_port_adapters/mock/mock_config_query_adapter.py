@@ -96,14 +96,20 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
             return projects
 
     async def list_agents(
-        self, project_id: str, pagination: Optional[PaginationParams] = None
+        self, project_id: Optional[str] = None, pagination: Optional[PaginationParams] = None
     ) -> List[AgentConfigInfo]:
-        """List all agents for a project."""
+        """List agents. When project_id is None, returns agents across all projects."""
         with self._lock:
-            if project_id not in self._agents:
-                raise ProjectNotFoundError(f"Project with ID {project_id} not found")
-
-            agents = list(self._agents[project_id].values())
+            if project_id is None:
+                agents = [
+                    agent
+                    for project_agents in self._agents.values()
+                    for agent in project_agents.values()
+                ]
+            else:
+                if project_id not in self._agents:
+                    return []
+                agents = list(self._agents[project_id].values())
 
             if pagination:
                 offset = pagination.offset
@@ -113,14 +119,20 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
             return agents
 
     async def list_pipelines(
-        self, project_id: str, pagination: Optional[PaginationParams] = None
+        self, project_id: Optional[str] = None, pagination: Optional[PaginationParams] = None
     ) -> List[PipelineConfigInfo]:
-        """List all pipelines for a project."""
+        """List pipelines. When project_id is None, returns pipelines across all projects."""
         with self._lock:
-            if project_id not in self._pipelines:
-                raise ProjectNotFoundError(f"Project with ID {project_id} not found")
-
-            pipelines = list(self._pipelines[project_id].values())
+            if project_id is None:
+                pipelines = [
+                    pipeline
+                    for project_pipelines in self._pipelines.values()
+                    for pipeline in project_pipelines.values()
+                ]
+            else:
+                if project_id not in self._pipelines:
+                    return []
+                pipelines = list(self._pipelines[project_id].values())
 
             if pagination:
                 offset = pagination.offset
@@ -207,6 +219,16 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
             count = 0
             if not config_type or config_type == "project":
                 count += len(self._projects)
+            if not config_type or config_type == "agent":
+                if project_id:
+                    count += len(self._agents.get(project_id, {}))
+                else:
+                    count += sum(len(agents) for agents in self._agents.values())
+            if not config_type or config_type == "pipeline":
+                if project_id:
+                    count += len(self._pipelines.get(project_id, {}))
+                else:
+                    count += sum(len(pipelines) for pipelines in self._pipelines.values())
             return count
 
     def add_project_config(self, config: ProjectConfigInfo):

@@ -386,7 +386,10 @@ export const projectConfigApi = {
 // =============================================================================
 
 export const agentConfigApi = {
-  getAll: () => apiClient.get<AgentConfig[]>('/config/agents'),
+  getAll: async () => {
+    const response = await apiClient.get<{ agents: AgentConfig[]; total_count: number }>('/config/agents')
+    return response.agents
+  },
 
   getByName: (agentName: string) => apiClient.get<AgentConfig>(`/config/agents/${agentName}`),
 
@@ -418,7 +421,10 @@ export const agentConfigApi = {
 // =============================================================================
 
 export const pipelineConfigApi = {
-  getAll: () => apiClient.get<PipelineConfig[]>('/config/pipelines'),
+  getAll: async () => {
+    const response = await apiClient.get<{ pipelines: PipelineConfig[]; total_count: number }>('/config/pipelines')
+    return response.pipelines
+  },
 
   getByName: (pipelineName: string) =>
     apiClient.get<PipelineConfig>(`/config/pipelines/${pipelineName}`),

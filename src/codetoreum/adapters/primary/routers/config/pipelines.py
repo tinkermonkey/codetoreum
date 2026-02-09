@@ -36,6 +36,60 @@ def register_pipeline_endpoints(
     """Register pipeline configuration endpoints on the router."""
 
     @router.get(
+        "/pipelines",
+        response_model=PipelineListResponse,
+        summary="List all pipelines across all projects",
+        response_description="List of pipeline configurations",
+    )
+    async def list_all_pipelines(
+        offset: int = Query(DEFAULT_OFFSET, ge=0, description="Pagination offset"),
+        limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description=f"Pagination limit (max {MAX_PAGE_SIZE})"),
+    ) -> PipelineListResponse:
+        """
+        List all pipelines across all projects with pagination.
+
+        **Query Parameters:**
+        - offset: Pagination offset (default: 0)
+        - limit: Pagination limit (default: 20, max: 100)
+
+        **Returns:**
+        - 200 OK: List of pipelines
+        - 401 Unauthorized: Authentication required
+        """
+        try:
+            pagination = PaginationParams(offset=offset, limit=limit)
+            configs = await query_port.list_pipelines(
+                project_id=None,
+                pagination=pagination
+            )
+
+            pipelines = []
+            for config in configs:
+                pipelines.append(PipelineConfigResponse(
+                    id=config.id,
+                    project_id=config.project_id,
+                    name=config.name,
+                    description=config.description,
+                    version=config.version,
+                    stages=config.stages,
+                    created_at=config.created_at,
+                    updated_at=config.updated_at,
+                    metadata=config.metadata,
+                ))
+
+            total = await query_port.count_configs(config_type="pipeline")
+
+            return PipelineListResponse(pipelines=pipelines, total_count=total)
+
+        except (DomainError, PortError, PortException) as e:
+            raise map_exception_to_http(e)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to list pipelines: {str(e)}",
+            )
+
+    @router.get(
         "/projects/{project_id}/pipelines/{pipeline_name}",
         response_model=PipelineConfigResponse,
         summary="Get pipeline configuration",
