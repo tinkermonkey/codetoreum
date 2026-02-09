@@ -271,16 +271,27 @@ class SimulationDataSeeder:
         await self._config_store.save_pipeline_config(pipeline_config)
 
         # Also seed the config query adapter so the /config API returns pipeline data
+        # Map stage fields to match PipelineStageInfo DTO schema
         if self.bootstrap.ports:
             config_query = self.bootstrap.ports.config_query
             if hasattr(config_query, 'add_pipeline_config'):
+                dto_stages = []
+                for sc in stage_configs:
+                    dto_stages.append({
+                        "name": sc["name"],
+                        "agent_name": sc.get("agent_type", "generic"),
+                        "timeout_seconds": sc.get("timeout_seconds", 3600),
+                        "retry_count": sc.get("max_retries", 3),
+                        "entry_conditions": list(sc.get("entry_conditions", {}).items()) if isinstance(sc.get("entry_conditions"), dict) else sc.get("entry_conditions", []),
+                        "metadata": {"description": sc.get("description", ""), "order": sc.get("order", 0)},
+                    })
                 config_query.add_pipeline_config(PipelineConfigInfo(
                     id=pipeline_config.id,
                     project_id=project_id,
                     name=name,
                     description=description,
                     version=1,
-                    stages=stage_configs,
+                    stages=dto_stages,
                     created_at=datetime.now(timezone.utc),
                     updated_at=datetime.now(timezone.utc),
                     metadata={"description": description},
