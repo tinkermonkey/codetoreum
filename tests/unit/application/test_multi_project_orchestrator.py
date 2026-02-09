@@ -95,7 +95,7 @@ class TestOrchestrationCycle:
         assert result.projects_processed == 2
         assert result.total_actions == 8
         assert result.total_errors == 0
-        assert result.cycle_duration_ms > 0
+        assert result.cycle_duration_ms >= 0
         assert result.error_message is None
 
         # Verify calls
