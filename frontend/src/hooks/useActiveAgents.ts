@@ -40,13 +40,13 @@ function convertExecution(execution: Execution): AgentExecution {
  * Fetch active agent executions from API
  */
 async function fetchActiveAgents(): Promise<AgentExecution[]> {
-  const executions = await apiClient.get<Execution[]>('/executions', {
+  const response = await apiClient.get<{ executions: Execution[]; total_count: number }>('/executions', {
     params: {
       status: 'running',
       limit: 50,
     },
   })
-  return executions.map(convertExecution)
+  return response.executions.map(convertExecution)
 }
 
 /**

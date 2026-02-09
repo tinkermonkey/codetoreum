@@ -762,18 +762,7 @@ class SimulationApplicationBootstrap:
             config_service=config_service_interface,
             logger=logger_interface,
             disable_auth=True,  # ADR-003: Disable authentication in simulation
-            cors_origins=[
-                "http://localhost:3000",  # Vite default dev server
-                "http://localhost:3001",  # Vite when 3000 is in use
-                "http://localhost:3010",  # Configured Vite port
-                "http://localhost:5173",  # Vite alternative port
-                "http://localhost:8080",  # Common alternative
-                "http://127.0.0.1:3000",
-                "http://127.0.0.1:3001",
-                "http://127.0.0.1:3010",
-                "http://127.0.0.1:5173",
-                "http://127.0.0.1:8080",
-            ],
+            cors_origins=["*"],  # Allow all origins in simulation mode (auth is disabled)
             container_recovery_service=self.services.container_recovery_service,
         )
 

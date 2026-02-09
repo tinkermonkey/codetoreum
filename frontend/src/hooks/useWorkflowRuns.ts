@@ -23,7 +23,7 @@ export function useActiveWorkflowRuns(
       });
 
       const response = await apiClient.get<WorkflowRunsResponse>(
-        `/api/v2/workflows/runs?${params.toString()}`
+        `/workflows/runs?${params.toString()}`
       );
       return response.runs;
     },
@@ -54,7 +54,7 @@ export function useCompletedWorkflowRuns(
       });
 
       const response = await apiClient.get<WorkflowRunsResponse>(
-        `/api/v2/workflows/runs?${params.toString()}`
+        `/workflows/runs?${params.toString()}`
       );
       return response;
     },
@@ -76,7 +76,7 @@ export function useWorkflowRun(
         throw new Error('Workflow run ID is required');
       }
       const response = await apiClient.get<WorkflowRun>(
-        `/api/v2/workflows/runs/${workflowRunId}`
+        `/workflows/runs/${workflowRunId}`
       );
       return response;
     },

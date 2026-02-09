@@ -21,7 +21,7 @@ export function useWorkflowEvents(
       }
 
       const response = await apiClient.get<WorkflowEventsResponse>(
-        `/api/v2/workflows/runs/${workflowRunId}/events`
+        `/workflows/runs/${workflowRunId}/events`
       );
       return response.events;
     },

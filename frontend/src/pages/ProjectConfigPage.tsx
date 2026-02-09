@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2, Eye, EyeOff, Save } from 'lucide-react'
 import { Button } from '../components/ui/button'
@@ -14,18 +14,27 @@ import { projectConfigApi } from '../api/client'
 import type { ProjectConfig } from '../types'
 
 export default function ProjectConfigPage() {
-  const [projectName, setProjectName] = useState('codetoreum')
-  const [selectedProject, setSelectedProject] = useState<string>('codetoreum')
+  const [selectedProjectIndex, setSelectedProjectIndex] = useState(0)
   const queryClient = useQueryClient()
 
-  const { data: config, isLoading, error } = useQuery({
-    queryKey: ['projectConfig', selectedProject],
-    queryFn: () => projectConfigApi.getByName(selectedProject),
-    enabled: !!selectedProject,
+  // Fetch project list (each item already contains full config)
+  const { data: projects = [], isLoading, error } = useQuery({
+    queryKey: ['projectList'],
+    queryFn: () => projectConfigApi.getAll(),
   })
+
+  const config = projects[selectedProjectIndex] as ProjectConfig | undefined
 
   if (isLoading) {
     return <div className="flex justify-center p-8">Loading configuration...</div>
+  }
+
+  if (projects.length === 0) {
+    return (
+      <div className="text-muted-foreground p-8 text-center">
+        No projects configured. Create a project to get started.
+      </div>
+    )
   }
 
   if (error) {

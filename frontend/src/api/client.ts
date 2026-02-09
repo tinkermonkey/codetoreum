@@ -341,7 +341,10 @@ const apiClient = new APIClient()
 // =============================================================================
 
 export const projectConfigApi = {
-  getAll: () => apiClient.get<ProjectConfig[]>('/config/projects'),
+  getAll: async () => {
+    const response = await apiClient.get<{ projects: ProjectConfig[]; total_count: number }>('/config/projects')
+    return response.projects
+  },
 
   getByName: (projectName: string) =>
     apiClient.get<ProjectConfig>(`/config/projects/${projectName}`),
@@ -459,10 +462,12 @@ export const configurationCommandsApi = {
 // =============================================================================
 
 export const workItemsApi = {
-  getAll: (projectId?: string) =>
-    apiClient.get<WorkItem[]>('/work-items', {
+  getAll: async (projectId?: string) => {
+    const response = await apiClient.get<{ work_items: WorkItem[]; total_count: number }>('/work-items', {
       params: projectId ? { projectId } : undefined,
-    }),
+    })
+    return response.work_items
+  },
 
   getById: (workItemId: string) => apiClient.get<WorkItem>(`/work-items/${workItemId}`),
 
@@ -485,10 +490,12 @@ export const workItemsApi = {
 // =============================================================================
 
 export const executionsApi = {
-  getAll: (workItemId?: string) =>
-    apiClient.get<ExecutionSummary[]>('/executions', {
+  getAll: async (workItemId?: string) => {
+    const response = await apiClient.get<{ executions: ExecutionSummary[]; total_count: number }>('/executions', {
       params: workItemId ? { workItemId } : undefined,
-    }),
+    })
+    return response.executions
+  },
 
   getById: (executionId: string) => apiClient.get<Execution>(`/executions/${executionId}`),
 
@@ -508,14 +515,14 @@ export const executionsApi = {
 // =============================================================================
 
 export const authApi = {
-  logout: () => apiClient.post<{ message: string }>('/api/v2/auth/logout'),
+  logout: () => apiClient.post<{ message: string }>('/auth/logout'),
 
   getTokenInfo: () => apiClient.get<{
     issued_at: string
     expires_at: string
     subject: string
     is_valid: boolean
-  }>('/api/v2/auth/token-info'),
+  }>('/auth/token-info'),
 }
 
 // Export client for advanced usage

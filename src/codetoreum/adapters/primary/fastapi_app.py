@@ -725,8 +725,8 @@ def create_app(
             return TokenInfoResponse(
                 issued_at="N/A",
                 expires_at="N/A",
-                subject="N/A",
-                is_valid=False,
+                subject="simulation-user",
+                is_valid=disable_auth,
             )
 
         info = auth_manager.get_token_info()

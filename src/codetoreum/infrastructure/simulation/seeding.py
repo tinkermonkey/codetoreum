@@ -29,6 +29,7 @@ from codetoreum.ports.output.config_store import (
     WorkflowTemplate,
 )
 from codetoreum.ports.exceptions import ValidationError
+from codetoreum.ports.input.config_query import ProjectConfigInfo
 from codetoreum.infrastructure.simulation.scenario_models import ScenarioModel
 
 logger = logging.getLogger(__name__)
@@ -159,6 +160,25 @@ class SimulationDataSeeder:
         )
 
         await self._config_store.save_project_config(project_config)
+
+        # Also seed the config query adapter so the /config API returns data
+        if self.bootstrap.ports:
+            config_query = self.bootstrap.ports.config_query
+            if hasattr(config_query, 'add_project_config'):
+                config_query.add_project_config(ProjectConfigInfo(
+                    id=project_id,
+                    name=name,
+                    description=description,
+                    github_org=github_org,
+                    github_repo=github_repo,
+                    version=1,
+                    created_at=datetime.now(timezone.utc),
+                    updated_at=datetime.now(timezone.utc),
+                    environment_variables={},
+                    mounted_commands=[],
+                    mounted_subagents=[],
+                    metadata=meta,
+                ))
 
         if self.track_items:
             self.created_items.projects.append(project_id)

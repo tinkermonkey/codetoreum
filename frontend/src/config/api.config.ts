@@ -9,7 +9,7 @@ export const apiConfig = {
   // Base URL for API requests
   // Use relative path to leverage Vite proxy in development
   // In production, set VITE_API_BASE_URL to full backend URL
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v2',
 
   // Request timeout in milliseconds
   timeout: parseInt(import.meta.env.VITE_API_TIMEOUT || '30000', 10),

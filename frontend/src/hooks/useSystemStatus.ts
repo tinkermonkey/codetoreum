@@ -21,7 +21,7 @@ export const systemHealthQueryKey = ['system-health']
  * Fetch system health from API
  */
 async function fetchSystemHealth(): Promise<SystemHealth> {
-  return await apiClient.get<SystemHealth>('/api/v2/metrics/health')
+  return await apiClient.get<SystemHealth>('/metrics/health')
 }
 
 /**

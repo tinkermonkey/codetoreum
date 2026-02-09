@@ -75,7 +75,7 @@ export function useAuth() {
 
           // Make a request with the token to set the httpOnly cookie
           // The backend will set the cookie when it validates the token
-          await api.get('/v2/health', {
+          await api.get('/health', {
             params: { token: urlToken }
           })
 
@@ -107,7 +107,7 @@ export function useAuth() {
 
       // Validate the httpOnly cookie
       try {
-        await api.get('/v2/auth/token-info')
+        await api.get('/auth/token-info')
         setAuthenticated(true)
       } catch (error) {
         setAuthenticated(false)
