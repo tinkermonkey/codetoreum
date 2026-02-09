@@ -110,6 +110,15 @@ from .container_recovery_events import (
     ContainerRecoveryCompletedEvent,
 )
 
+# Project management events
+from .project_events import (
+    ProjectClonedEvent,
+    ProjectCloneFailedEvent,
+    ProjectEnabledEvent,
+    ProjectDisabledEvent,
+    OrchestrationCycleCompletedEvent,
+)
+
 __all__ = [
     # Legacy domain events (from events.py)
     "DomainEvent",
@@ -228,4 +237,10 @@ __all__ = [
     "ContainerRecoveredEvent",
     "ContainerKilledEvent",
     "ContainerRecoveryCompletedEvent",
+    # Project management events
+    "ProjectClonedEvent",
+    "ProjectCloneFailedEvent",
+    "ProjectEnabledEvent",
+    "ProjectDisabledEvent",
+    "OrchestrationCycleCompletedEvent",
 ]

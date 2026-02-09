@@ -1,5 +1,6 @@
 """Output port interfaces."""
 
+from codetoreum.domain.value_objects import ProjectConfig
 from codetoreum.ports.output.agent_executor import IAgentExecutor
 from codetoreum.ports.output.container_recovery import (
     ContainerMetadata,
@@ -79,6 +80,7 @@ from codetoreum.ports.output.pipeline_lock_service import (
     IPipelineLockService,
     PipelineLock,
 )
+from codetoreum.ports.output.project_manager_service import IProjectManagerService
 from codetoreum.ports.output.pipeline_queue_service import (
     IPipelineQueueService,
     PipelineQueueEntry,
@@ -179,6 +181,9 @@ __all__ = [
     # Pipeline Lock Service
     "IPipelineLockService",
     "PipelineLock",
+    # Project Manager Service
+    "IProjectManagerService",
+    "ProjectConfig",
     # Pipeline Queue Service
     "IPipelineQueueService",
     "PipelineQueueEntry",

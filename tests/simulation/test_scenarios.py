@@ -367,3 +367,5 @@ async def test_mock_adapters_integration(
     )
     assert notif_result.success
     assert mock_notifier.get_notification_count() == 1
+
+

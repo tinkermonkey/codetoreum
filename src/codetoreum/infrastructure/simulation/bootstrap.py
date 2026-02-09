@@ -1,13 +1,19 @@
 """
 Simulation Application Bootstrap
 
-Wires up the entire application stack in simulation mode including:
-- All 9 mock adapters
-- All 8 application services
-- All input/output ports
-- FastAPI application
+Wires up the entire application stack in simulation mode through 6 phases:
 
-This is the foundational component that enables simulation testing.
+**Phase 0**: Create simulation engine (encapsulates clock and timing)
+**Phase 1**: Create adapters (12 mock adapters: ticket system, LLM, container, repository,
+           event store, metrics, storage, config, notifier, encryption, repair cycle, project manager)
+**Phase 2**: Create infrastructure (event bus, logger, error registry)
+**Phase 3**: Create services (8 application services with their dependencies)
+**Phase 4**: Create ports (16 input port implementations)
+**Phase 5**: Create FastAPI app (wire all ports to API endpoints, register event handlers)
+
+This is the foundational component that enables simulation testing. It provides a complete
+application bootstrap that wires together all components in the correct order with proper
+dependency injection.
 """
 
 import logging
@@ -31,6 +37,9 @@ from codetoreum.adapters.testing import (
 from codetoreum.adapters.testing.mock_container_recovery_adapter import (
     MockContainerRecoveryAdapter,
 )
+from codetoreum.adapters.testing.mock_project_manager_adapter import (
+    MockProjectManagerAdapter,
+)
 from codetoreum.adapters.testing.in_memory_config_store import InMemoryConfigStore
 from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
@@ -46,6 +55,7 @@ from codetoreum.application.workspace_router import WorkspaceRouter
 from codetoreum.application.configuration_service import ConfigurationService
 from codetoreum.application.work_item_service import WorkItemService
 from codetoreum.application.container_recovery_service import ContainerRecoveryService
+from codetoreum.application.multi_project_orchestrator import MultiProjectOrchestrator
 
 # Infrastructure
 from codetoreum.infrastructure.event_bus import EventBus
@@ -120,6 +130,7 @@ class SimulationAdapters:
     notifier: MockNotifierAdapter
     encryption: SimpleEncryptionAdapter
     repair_cycle: Any  # MockRepairCycleAdapter - lazy imported to avoid circular dependency
+    project_manager: Any  # IProjectManagerService - multi-project management
 
 
 @dataclass
@@ -135,6 +146,7 @@ class SimulationServices:
     workspace_router: WorkspaceRouter
     configuration_service: ConfigurationService
     work_item_service: WorkItemService
+    multi_project_orchestrator: Optional[Any] = None  # MultiProjectOrchestrator
     container_recovery_service: Optional[Any] = None
 
 
@@ -180,7 +192,7 @@ class SimulationApplicationBootstrap:
     Bootstrap the entire application stack in simulation mode.
 
     This class wires up:
-    1. All 9 mock adapters (via AdapterFactory)
+    1. All 12 mock adapters (5 via AdapterFactory + 7 additional)
     2. Infrastructure (event bus, clock, logger)
     3. All 8 application services
     4. All input/output ports
@@ -222,13 +234,13 @@ class SimulationApplicationBootstrap:
         """
         Set up the entire application stack.
 
-        This method executes all 5 bootstrap phases in order:
-        1. Create clock (early, shared by adapters and infrastructure)
-        2. Create adapters
-        3. Create infrastructure
-        4. Create services
-        5. Create ports
-        6. Create FastAPI app
+        This method executes all 6 bootstrap phases in order:
+        - Phase 0: Create simulation engine (encapsulates clock and timing)
+        - Phase 1: Create adapters (12 mock adapters for all output ports)
+        - Phase 2: Create infrastructure (event bus, logger, error registry)
+        - Phase 3: Create services (8 application services with dependencies)
+        - Phase 4: Create ports (16 input port implementations)
+        - Phase 5: Create FastAPI app (wire all ports to API endpoints, register handlers)
 
         Returns:
             Fully configured FastAPI application
@@ -246,8 +258,8 @@ class SimulationApplicationBootstrap:
             logger.info("Phase 0: Creating simulation engine...")
             self._engine = SimulationEngine.create(self.config)
 
-            # Phase 1: Create adapters
-            logger.info("Phase 1: Creating adapters...")
+            # Phase 1: Create adapters (12 total)
+            logger.info("Phase 1: Creating 12 adapters...")
             self.adapters = await self._create_adapters()
 
             # Phase 2: Create infrastructure
@@ -327,14 +339,24 @@ class SimulationApplicationBootstrap:
 
     async def _create_adapters(self) -> SimulationAdapters:
         """
-        Create all 10 mock adapters using AdapterFactory in simulation mode.
+        Create all 12 mock adapters in simulation mode.
+
+        5 adapters created via AdapterFactory:
+        - ticket_system (in_memory)
+        - llm_provider (mock)
+        - container (fake)
+        - repository (in_memory)
+        - event_store (in_memory)
+
+        7 additional adapters created directly:
+        - metrics, storage, config_store, notifier, encryption, repair_cycle, project_manager
 
         The SimulationEngine automatically injects the clock into time-aware
-        adapters (repair_cycle, review_cycle, metrics_query), hiding simulation
-        implementation details from the adapter constructors.
+        adapters (repair_cycle), hiding simulation implementation details from
+        the adapter constructors.
 
         Returns:
-            SimulationAdapters with all adapters configured
+            SimulationAdapters with all 12 adapters configured
         """
         if not self._engine:
             raise RuntimeError("SimulationEngine must be created before adapters")
@@ -368,7 +390,22 @@ class SimulationApplicationBootstrap:
         # Create time-aware adapters via engine (clock is injected internally)
         repair_cycle = self._engine.create_repair_cycle_adapter()
 
-        logger.info("Created 10 simulation adapters")
+        # Create project manager adapter
+        project_manager = MockProjectManagerAdapter()
+
+        # Pre-configure default test project for simulation testing
+        from codetoreum.domain.value_objects import ProjectConfig
+        project_manager.add_project(
+            "default_project",
+            ProjectConfig(
+                repo_url="https://vcs.example.com/org/default.git",
+                branch="main",
+                enabled=True,
+                org="test-org",
+            ),
+        )
+
+        logger.info("Created 12 simulation adapters")
 
         return SimulationAdapters(
             ticket_system=ticket_system,
@@ -382,6 +419,7 @@ class SimulationApplicationBootstrap:
             notifier=notifier,
             encryption=encryption,
             repair_cycle=repair_cycle,
+            project_manager=project_manager,
         )
 
     # =========================================================================
@@ -581,7 +619,19 @@ class SimulationApplicationBootstrap:
             container_timeout_hours=2,
         )
 
-        logger.info("Created all application services with simulation dependencies (including container recovery)")
+        # Multi-Project Orchestrator - Note: workflow_orchestrator and board_service
+        # will be None initially; the orchestrator is created with minimal dependencies
+        # and can be updated after Phase 4 if needed for full multi-project workflows.
+        # For simulation testing, the orchestrator can function with just the project manager.
+        multi_project_orchestrator = MultiProjectOrchestrator(
+            project_manager=self.adapters.project_manager,
+            workflow_orchestrator=workflow_orchestrator,
+            board_service=None,  # No board service in simulation mode yet
+            event_emitter=mock_event_emitter,
+            poll_interval_seconds=30,
+        )
+
+        logger.info("Created all application services with simulation dependencies (including container recovery and multi-project orchestrator)")
 
         return SimulationServices(
             workflow_orchestrator=workflow_orchestrator,
@@ -593,6 +643,7 @@ class SimulationApplicationBootstrap:
             workspace_router=workspace_router,
             configuration_service=configuration_service,
             work_item_service=work_item_service,
+            multi_project_orchestrator=multi_project_orchestrator,
             container_recovery_service=container_recovery_service,
         )
 
@@ -656,41 +707,27 @@ class SimulationApplicationBootstrap:
         )
 
     # =========================================================================
-    # Phase 5: Create FastAPI App
+    # Phase 5: Create FastAPI App and Register Event Handlers
     # =========================================================================
-
-    # =========================================================================
-    # Helper Methods
-    # =========================================================================
-
-    def _register_repair_cycle_handler(self) -> None:
-        """
-        Register repair cycle event handler with the event bus.
-
-        This handler listens for WorkItemColumnChanged events and invokes
-        the repair cycle when items enter the configured repair cycle stage.
-
-        The SimulationEngine injects the clock into the handler, keeping
-        simulation details encapsulated.
-        """
-        if not self.adapters or not self.infrastructure or not self._engine:
-            logger.warning("Cannot register repair cycle handler: components not ready")
-            return
-
-        handler = self._engine.create_repair_cycle_event_handler(
-            repair_cycle=self.adapters.repair_cycle,
-            event_bus=self.infrastructure.event_bus,
-        )
-
-        self.infrastructure.event_bus.register_handler(handler)
-        logger.info("Registered RepairCycleEventHandler with event bus")
 
     def _create_fastapi_app(self) -> FastAPI:
         """
         Create FastAPI application with all routers wired to ports.
 
+        This is the final step in Phase 5, which:
+        1. Creates FastAPI app instance using create_app() factory
+        2. Wires all 16 input ports (7 command + 9 query) to API endpoints
+        3. Wires infrastructure components (event store, event bus)
+        4. Wires application services (configuration service, logger, recovery service)
+        5. Configures CORS for localhost development
+        6. Disables authentication (ADR-003: simulation mode requirement)
+        7. Registers event handlers for cross-cutting concerns
+
         Returns:
             Configured FastAPI application ready for testing
+
+        Raises:
+            RuntimeError: If ports, infrastructure, or services not created first
         """
         if not self.ports or not self.infrastructure or not self.services:
             raise RuntimeError("Ports and infrastructure must be created first")
@@ -740,7 +777,7 @@ class SimulationApplicationBootstrap:
             container_recovery_service=self.services.container_recovery_service,
         )
 
-        logger.info("Created FastAPI application")
+        logger.info("Created FastAPI application with all ports wired")
 
         # Register repair cycle event handler with event bus
         # This allows the handler to listen for WorkItemColumnChanged events
@@ -748,6 +785,34 @@ class SimulationApplicationBootstrap:
         self._register_repair_cycle_handler()
 
         return app
+
+    def _register_repair_cycle_handler(self) -> None:
+        """
+        Register repair cycle event handler with the event bus.
+
+        Part of Phase 5: Event handler registration for cross-cutting concerns.
+
+        This handler listens for WorkItemColumnChanged events and invokes
+        the repair cycle when items enter the configured repair cycle stage.
+
+        The SimulationEngine injects the clock into the handler, keeping
+        simulation details encapsulated and allowing deterministic test
+        execution with controlled timing.
+
+        Logs a warning if components are not yet initialized, allowing
+        graceful degradation if called before full setup completion.
+        """
+        if not self.adapters or not self.infrastructure or not self._engine:
+            logger.warning("Cannot register repair cycle handler: components not ready")
+            return
+
+        handler = self._engine.create_repair_cycle_event_handler(
+            repair_cycle=self.adapters.repair_cycle,
+            event_bus=self.infrastructure.event_bus,
+        )
+
+        self.infrastructure.event_bus.register_handler(handler)
+        logger.info("Registered RepairCycleEventHandler with event bus")
 
     # =========================================================================
     # Public API

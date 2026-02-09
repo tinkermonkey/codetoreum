@@ -19,6 +19,10 @@ from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
 from codetoreum.adapters.testing.mock_container_recovery_adapter import (
     MockContainerRecoveryAdapter,
 )
+from codetoreum.adapters.testing.mock_project_manager_adapter import (
+    MockProjectManagerAdapter,
+)
+from codetoreum.adapters.testing.capturing_mock_event_emitter import CapturingMockEventEmitter
 
 __all__ = [
     "InMemoryEventStore",
@@ -35,4 +39,6 @@ __all__ = [
     "MockRepairCycleAdapter",
     "CircuitBreakerTripped",
     "MockContainerRecoveryAdapter",
+    "MockProjectManagerAdapter",
+    "CapturingMockEventEmitter",
 ]
