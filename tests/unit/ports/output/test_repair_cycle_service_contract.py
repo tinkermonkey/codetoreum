@@ -596,8 +596,10 @@ class TestRepairCycleAdapterMethodContract:
     async def test_fix_failures_by_file_method_exists(self) -> None:
         """Verify fix_failures_by_file() method exists with correct signature."""
         from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
+        from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 
-        adapter = MockRepairCycleAdapter()
+        clock = SimulationClock(speed_multiplier=100_000.0)
+        adapter = MockRepairCycleAdapter(clock=clock)
         adapter.current_project = "test-proj"
 
         failures_by_file = {
@@ -629,8 +631,10 @@ class TestRepairCycleAdapterMethodContract:
     async def test_handle_warnings_method_exists(self) -> None:
         """Verify handle_warnings() method exists with correct signature."""
         from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
+        from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 
-        adapter = MockRepairCycleAdapter()
+        clock = SimulationClock(speed_multiplier=100_000.0)
+        adapter = MockRepairCycleAdapter(clock=clock)
         adapter.current_project = "test-proj"
 
         test_result = RepairTestResult(

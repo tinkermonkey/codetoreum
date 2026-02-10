@@ -314,13 +314,13 @@ async def test_simulation_clock_manipulation(simulation_clock):
     start_time = clock.now()
     assert start_time == datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
-    # Advance time
-    await clock.advance(timedelta(hours=1))
-    assert clock.now() == datetime(2025, 1, 1, 13, 0, 0, tzinfo=timezone.utc)
+    # Advance time (1 minute simulated = 0.6s real at 100x speed)
+    await clock.advance(timedelta(minutes=1))
+    assert clock.now() == datetime(2025, 1, 1, 12, 1, 0, tzinfo=timezone.utc)
 
     # Advance to specific time
-    await clock.advance_to(datetime(2025, 1, 1, 15, 30, 0, tzinfo=timezone.utc))
-    assert clock.now() == datetime(2025, 1, 1, 15, 30, 0, tzinfo=timezone.utc)
+    await clock.advance_to(datetime(2025, 1, 1, 12, 5, 0, tzinfo=timezone.utc))
+    assert clock.now() == datetime(2025, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
 
 
 @pytest.mark.simulation

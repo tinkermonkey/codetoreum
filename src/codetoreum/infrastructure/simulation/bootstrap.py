@@ -664,14 +664,19 @@ class SimulationApplicationBootstrap:
         if not self.services:
             raise RuntimeError("Services must be created first")
 
-        # Create all mock port adapters (standalone implementations for simulation)
+        # Create mock port adapters, injecting Phase 1 backing stores where available
+        # so query adapters read directly from the canonical data source.
         work_item_command = MockWorkItemCommandAdapter()
-        work_item_query = MockWorkItemQueryAdapter()
+        work_item_query = MockWorkItemQueryAdapter(
+            ticket_adapter=self.adapters.ticket_system,
+        )
         agent_command = MockAgentCommandAdapter()
         agent_query = MockAgentQueryAdapter()
         execution_command = MockExecutionCommandAdapter()
         execution_query = MockExecutionQueryAdapter()
-        config_query = MockConfigQueryAdapter()
+        config_query = MockConfigQueryAdapter(
+            config_store=self.adapters.config_store,
+        )
         # Create metrics query adapter via engine (clock is injected internally)
         if not self._engine:
             raise RuntimeError("SimulationEngine must be created before ports")
@@ -822,28 +827,60 @@ class SimulationApplicationBootstrap:
         """
         Bridge board adapter events to the central EventBus.
 
-        The MockBoardAdapter emits events via its own listener mechanism.
-        This bridge forwards those events to the central EventBus so that
-        all event handlers (repair cycle, logging, etc.) can react to
-        board changes.
+        The MockBoardAdapter emits CodetoreumEvent objects (which have `.type`),
+        but the EventBus expects DomainEvent objects (which have `.event_type`).
+        This bridge translates between the two event hierarchies before publishing.
         """
         if not self.adapters or not self.infrastructure:
             logger.warning("Cannot register board event bridge: components not ready")
             return
 
         import asyncio
+        from codetoreum.domain.events import WorkItemColumnChanged, BoardReconciled
 
         event_bus = self.infrastructure.event_bus
 
-        def board_event_bridge(event):
+        def board_column_changed_bridge(event):
+            """Translate WorkItemColumnChangedEvent (CodetoreumEvent) to WorkItemColumnChanged (DomainEvent)."""
             try:
                 loop = asyncio.get_running_loop()
-                loop.create_task(event_bus.publish(event))
+                domain_event = WorkItemColumnChanged(
+                    aggregate_id=event.work_item_id,
+                    aggregate_type="WorkItem",
+                    payload={
+                        "work_item_id": event.work_item_id,
+                        "board_id": event.board_id,
+                        "project_id": event.project_id,
+                        "from_column": event.from_column,
+                        "to_column": event.to_column,
+                        "moved_by": event.moved_by,
+                    },
+                )
+                loop.create_task(event_bus.publish(domain_event))
             except RuntimeError:
                 pass
 
-        self.adapters.board.on("workitem.column_changed", board_event_bridge)
-        self.adapters.board.on("board.reconciled", board_event_bridge)
+        def board_reconciled_bridge(event):
+            """Translate BoardReconciledEvent (CodetoreumEvent) to BoardReconciled (DomainEvent)."""
+            try:
+                loop = asyncio.get_running_loop()
+                domain_event = BoardReconciled(
+                    aggregate_id=event.board_id,
+                    aggregate_type="Board",
+                    payload={
+                        "board_id": event.board_id,
+                        "project_id": event.project_id,
+                        "columns_added": list(event.columns_added) if hasattr(event, 'columns_added') else [],
+                        "columns_removed": list(event.columns_removed) if hasattr(event, 'columns_removed') else [],
+                        "orphaned_items": [],
+                    },
+                )
+                loop.create_task(event_bus.publish(domain_event))
+            except RuntimeError:
+                pass
+
+        self.adapters.board.on("workitem.column_changed", board_column_changed_bridge)
+        self.adapters.board.on("board.reconciled", board_reconciled_bridge)
         logger.info("Registered board event bridge to central EventBus")
 
     # =========================================================================

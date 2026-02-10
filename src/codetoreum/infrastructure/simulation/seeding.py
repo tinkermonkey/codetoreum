@@ -30,12 +30,6 @@ from codetoreum.ports.output.config_store import (
     WorkflowTemplate,
 )
 from codetoreum.ports.exceptions import ValidationError
-from codetoreum.ports.input.config_query import (
-    AgentConfigInfo,
-    ConfigVersionInfo,
-    PipelineConfigInfo,
-    ProjectConfigInfo,
-)
 from codetoreum.infrastructure.simulation.scenario_models import ScenarioModel
 
 logger = logging.getLogger(__name__)
@@ -170,54 +164,6 @@ class SimulationDataSeeder:
 
         await self._config_store.save_project_config(project_config)
 
-        # Also seed the config query adapter so the /config API returns data
-        if self.bootstrap.ports:
-            config_query = self.bootstrap.ports.config_query
-            if hasattr(config_query, 'add_project_config'):
-                config_query.add_project_config(ProjectConfigInfo(
-                    id=project_id,
-                    name=name,
-                    description=description,
-                    github_org=github_org,
-                    github_repo=github_repo,
-                    version=1,
-                    created_at=datetime.now(timezone.utc),
-                    updated_at=datetime.now(timezone.utc),
-                    environment_variables={},
-                    mounted_commands=[],
-                    mounted_subagents=[],
-                    metadata=meta,
-                ))
-
-        # Seed version history for this project
-        if self.bootstrap.ports:
-            config_query = self.bootstrap.ports.config_query
-            if hasattr(config_query, 'add_version_history'):
-                from datetime import timedelta
-                import random
-                random.seed(hash(name))  # Deterministic per project name
-                base_time = datetime.now(timezone.utc) - timedelta(days=14)
-                history_entries = [
-                    ("created", "Initial project creation", {"name": name, "description": description}),
-                    ("updated", "Added CI/CD pipeline configuration", {"metadata.ci_enabled": True}),
-                    ("updated", "Updated default branch settings", {"metadata.default_branch": "main"}),
-                    ("updated", "Added environment variables for staging", {"environment_variables": {"NODE_ENV": "staging"}}),
-                    ("updated", "Configured agent timeout defaults", {"metadata.agent_timeout": 3600}),
-                    ("updated", "Updated repository access permissions", {"metadata.access_level": "write"}),
-                    ("updated", "Added Docker build configuration", {"metadata.docker_enabled": True}),
-                ]
-                for i, (change_type, reason, changes) in enumerate(history_entries):
-                    config_query.add_version_history(
-                        project_id,
-                        ConfigVersionInfo(
-                            version=i + 1,
-                            created_at=base_time + timedelta(days=i * 2, hours=random.randint(0, 12)),
-                            created_by="admin" if i == 0 else random.choice(["admin", "ci-bot", "dev-lead"]),
-                            changes=changes,
-                            reason=reason,
-                        ),
-                    )
-
         if self.track_items:
             self.created_items.projects.append(project_id)
 
@@ -304,33 +250,6 @@ class SimulationDataSeeder:
 
         await self._config_store.save_pipeline_config(pipeline_config)
 
-        # Also seed the config query adapter so the /config API returns pipeline data
-        # Map stage fields to match PipelineStageInfo DTO schema
-        if self.bootstrap.ports:
-            config_query = self.bootstrap.ports.config_query
-            if hasattr(config_query, 'add_pipeline_config'):
-                dto_stages = []
-                for sc in stage_configs:
-                    dto_stages.append({
-                        "name": sc["name"],
-                        "agent_name": sc.get("agent_type", "generic"),
-                        "timeout_seconds": sc.get("timeout_seconds", 3600),
-                        "retry_count": sc.get("max_retries", 3),
-                        "entry_conditions": list(sc.get("entry_conditions", {}).items()) if isinstance(sc.get("entry_conditions"), dict) else sc.get("entry_conditions", []),
-                        "metadata": {"description": sc.get("description", ""), "order": sc.get("order", 0)},
-                    })
-                config_query.add_pipeline_config(PipelineConfigInfo(
-                    id=pipeline_config.id,
-                    project_id=project_id,
-                    name=name,
-                    description=description,
-                    version=1,
-                    stages=dto_stages,
-                    created_at=datetime.now(timezone.utc),
-                    updated_at=datetime.now(timezone.utc),
-                    metadata={"description": description},
-                ))
-
         if self.track_items:
             self.created_items.pipelines.append(pipeline_config.id)
             self.created_items.workflows.append(workflow_id)
@@ -395,29 +314,6 @@ class SimulationDataSeeder:
             )
 
             await self._config_store.save_agent_config(agent_config)
-
-            # Also seed the config query adapter so the /config API returns agent data
-            if self.bootstrap.ports:
-                config_query = self.bootstrap.ports.config_query
-                if hasattr(config_query, 'add_agent_config'):
-                    config_query.add_agent_config(AgentConfigInfo(
-                        project_id=project_id,
-                        agent_name=agent_name,
-                        display_name=agent_def.get("description", agent_name),
-                        model=agent_def.get("llm_model", "claude-3-5-sonnet-20241022"),
-                        timeout_seconds=agent_def.get("timeout", 3600),
-                        max_retries=3,
-                        requires_docker=agent_def.get("requires_docker", True),
-                        requires_dev_container=False,
-                        makes_code_changes=agent_def.get("makes_code_changes", True),
-                        filesystem_write_allowed=True,
-                        version=1,
-                        created_at=datetime.now(timezone.utc),
-                        updated_at=datetime.now(timezone.utc),
-                        mcp_servers=[],
-                        capabilities={"capabilities": capabilities},
-                        metadata=metadata,
-                    ))
 
             if self.track_items:
                 self.created_items.agents.append(agent_name)
