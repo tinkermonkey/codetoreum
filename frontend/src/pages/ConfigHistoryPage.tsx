@@ -38,7 +38,8 @@ export default function ConfigHistoryPage() {
       const histories = await Promise.all(
         projects.map(async (project) => {
           try {
-            return await projectConfigApi.getHistory(project.id)
+            const entries = await projectConfigApi.getHistory(project.id)
+            return entries.map((entry) => ({ ...entry, config_name: project.name }))
           } catch {
             return []
           }

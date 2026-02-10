@@ -31,6 +31,7 @@ from codetoreum.ports.output.config_store import (
 from codetoreum.ports.exceptions import ValidationError
 from codetoreum.ports.input.config_query import (
     AgentConfigInfo,
+    ConfigVersionInfo,
     PipelineConfigInfo,
     ProjectConfigInfo,
 )
@@ -183,6 +184,35 @@ class SimulationDataSeeder:
                     mounted_subagents=[],
                     metadata=meta,
                 ))
+
+        # Seed version history for this project
+        if self.bootstrap.ports:
+            config_query = self.bootstrap.ports.config_query
+            if hasattr(config_query, 'add_version_history'):
+                from datetime import timedelta
+                import random
+                random.seed(hash(name))  # Deterministic per project name
+                base_time = datetime.now(timezone.utc) - timedelta(days=14)
+                history_entries = [
+                    ("created", "Initial project creation", {"name": name, "description": description}),
+                    ("updated", "Added CI/CD pipeline configuration", {"metadata.ci_enabled": True}),
+                    ("updated", "Updated default branch settings", {"metadata.default_branch": "main"}),
+                    ("updated", "Added environment variables for staging", {"environment_variables": {"NODE_ENV": "staging"}}),
+                    ("updated", "Configured agent timeout defaults", {"metadata.agent_timeout": 3600}),
+                    ("updated", "Updated repository access permissions", {"metadata.access_level": "write"}),
+                    ("updated", "Added Docker build configuration", {"metadata.docker_enabled": True}),
+                ]
+                for i, (change_type, reason, changes) in enumerate(history_entries):
+                    config_query.add_version_history(
+                        project_id,
+                        ConfigVersionInfo(
+                            version=i + 1,
+                            created_at=base_time + timedelta(days=i * 2, hours=random.randint(0, 12)),
+                            created_by="admin" if i == 0 else random.choice(["admin", "ci-bot", "dev-lead"]),
+                            changes=changes,
+                            reason=reason,
+                        ),
+                    )
 
         if self.track_items:
             self.created_items.projects.append(project_id)

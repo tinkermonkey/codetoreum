@@ -251,6 +251,13 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
                 self._pipelines[config.project_id] = {}
             self._pipelines[config.project_id][config.name] = config
 
+    def add_version_history(self, config_id: str, entry: ConfigVersionInfo):
+        """Helper method to add a version history entry (for testing)."""
+        with self._lock:
+            if config_id not in self._version_history:
+                self._version_history[config_id] = []
+            self._version_history[config_id].append(entry)
+
     def clear(self):
         """Clear all data (useful for testing)."""
         with self._lock:

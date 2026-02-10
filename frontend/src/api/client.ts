@@ -358,8 +358,39 @@ export const projectConfigApi = {
   delete: (projectName: string) =>
     apiClient.delete<void>(`/config/projects/${projectName}`),
 
-  getHistory: (projectName: string) =>
-    apiClient.get<ConfigurationHistory[]>(`/config/projects/${projectName}/history`),
+  getHistory: async (projectId: string): Promise<ConfigurationHistory[]> => {
+    const response = await apiClient.get<{
+      config_id: string
+      config_type: string
+      current_version: number
+      history: Array<{
+        version: number
+        created_at: string
+        created_by: string | null
+        changes: Record<string, any>
+        reason: string | null
+      }>
+      total_versions: number
+    }>(`/config/projects/${projectId}/history`)
+    return response.history.map((entry, index) => ({
+      id: `${response.config_id}-v${entry.version}`,
+      project_id: response.config_id,
+      config_type: response.config_type as 'project' | 'agent' | 'pipeline',
+      config_name: response.config_id,
+      config_version: entry.version,
+      change_type: entry.version === 1 ? 'created' as const : 'updated' as const,
+      changes: Object.entries(entry.changes).map(([field, value]) => ({
+        field,
+        old_value: null,
+        new_value: value,
+        operation: (entry.version === 1 ? 'add' : 'modify') as 'add' | 'remove' | 'modify',
+      })),
+      changed_by: entry.created_by || 'system',
+      changed_at: entry.created_at,
+      reason: entry.reason || undefined,
+      can_rollback: entry.version < response.current_version,
+    }))
+  },
 
   addEnvironmentVariable: (projectName: string, request: AddEnvironmentVariableRequest) =>
     apiClient.post<ProjectConfig>(
