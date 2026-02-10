@@ -154,8 +154,14 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
     set({ isConnecting: true, error: null })
 
     try {
-      // WebSocket will use cookies for authentication (browser sends them automatically)
-      const ws = new WebSocket(state.config.url)
+      // Get token from auth store for WebSocket authentication
+      // (WebSocket connections cannot use httpOnly cookies)
+      const token = useAuthStore.getState().token
+      const wsUrl = token
+        ? `${state.config.url}?token=${encodeURIComponent(token)}`
+        : state.config.url
+
+      const ws = new WebSocket(wsUrl)
 
       ws.onopen = () => {
         console.log('[WebSocket] Connected')
@@ -336,7 +342,9 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
           JSON.stringify({
             type: 'subscribe',
             subscription_type: 'all_events',
-            event_types: [eventType],  // Send as array, matching backend expectation
+            // REMOVED event_types filter - subscribe to ALL events for now
+            // This allows all domain events (WorkItemColumnChanged, ExecutionStarted, etc.)
+            // to be received. Can be optimized later with specific filters.
           })
         )
       }
@@ -356,7 +364,7 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
           JSON.stringify({
             type: 'unsubscribe',
             subscription_type: 'all_events',
-            event_types: [eventType],  // Send as array, matching backend expectation
+            // REMOVED event_types filter to match subscribe behavior
           })
         )
       }

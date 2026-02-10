@@ -4,9 +4,9 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 /**
  * Authentication State Interface
  *
- * Note: This store tracks authentication state but does NOT store the actual token.
- * The application uses httpOnly cookies for security (XSS protection).
- * The isAuthenticated flag is derived from successful API responses.
+ * Note: This store tracks authentication state and stores the token for WebSocket use.
+ * HTTP API requests use httpOnly cookies for security (XSS protection).
+ * The token is stored in sessionStorage for WebSocket connections which cannot use cookies.
  */
 interface AuthState {
   /** Whether the user is currently authenticated */
@@ -21,11 +21,15 @@ interface AuthState {
   /** Timestamp of last successful authentication */
   lastAuthTime: number | null
 
+  /** Authentication token (stored for WebSocket connections only) */
+  token: string | null
+
   // Actions
-  setAuthenticated: (authenticated: boolean) => void
+  setAuthenticated: (authenticated: boolean, token?: string) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
   clearAuth: () => void
+  getToken: () => string | null
 }
 
 /**
@@ -59,17 +63,19 @@ interface AuthState {
  */
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       isAuthenticated: false,
       isLoading: true, // Start as loading to prevent race conditions
       error: null,
       lastAuthTime: null,
+      token: null,
 
-      setAuthenticated: (authenticated: boolean) => {
+      setAuthenticated: (authenticated: boolean, token?: string) => {
         set({
           isAuthenticated: authenticated,
           error: null,
-          lastAuthTime: authenticated ? Date.now() : null
+          lastAuthTime: authenticated ? Date.now() : null,
+          token: authenticated && token ? token : get().token
         })
       },
 
@@ -86,15 +92,19 @@ export const useAuthStore = create<AuthState>()(
           isAuthenticated: false,
           isLoading: false,
           error: null,
-          lastAuthTime: null
+          lastAuthTime: null,
+          token: null
         }),
+
+      getToken: () => get().token,
     }),
     {
       name: 'auth-storage',
       storage: createJSONStorage(() => sessionStorage),
       partialize: (state) => ({
         isAuthenticated: state.isAuthenticated,
-        lastAuthTime: state.lastAuthTime
+        lastAuthTime: state.lastAuthTime,
+        token: state.token
       })
     }
   )

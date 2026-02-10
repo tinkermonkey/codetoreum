@@ -1,5 +1,5 @@
 import React from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Activity, Clock, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 import { format, formatDistanceToNow } from 'date-fns'
 import { workItemsApi, executionsApi } from '../api/client'
@@ -10,6 +10,7 @@ import type { WorkItemStatus, ExecutionStatus, WorkItem, ExecutionSummary } from
 
 export default function DashboardPage() {
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth()
+  const queryClient = useQueryClient()
 
   // Fetch work items
   const { data: workItems = [], isLoading: loadingWorkItems } = useQuery({
@@ -35,6 +36,33 @@ export default function DashboardPage() {
       subscribe('ExecutionFailed')
     }
   }, [isConnected, subscribe])
+
+  // Process incoming events and invalidate queries to trigger UI updates
+  React.useEffect(() => {
+    if (events.length === 0) {
+      return
+    }
+
+    // Get the latest event
+    const latestEvent = events[0]
+
+    // Invalidate workItems query when work item column changes
+    if (latestEvent.type === 'event' && latestEvent.data?.event_type === 'WorkItemColumnChanged') {
+      console.log('[Dashboard] WorkItemColumnChanged event received, invalidating workItems query')
+      queryClient.invalidateQueries({ queryKey: ['workItems'] })
+    }
+
+    // Invalidate executions query when execution status changes
+    if (
+      latestEvent.type === 'event' &&
+      (latestEvent.data?.event_type === 'ExecutionStarted' ||
+        latestEvent.data?.event_type === 'ExecutionCompleted' ||
+        latestEvent.data?.event_type === 'ExecutionFailed')
+    ) {
+      console.log(`[Dashboard] ${latestEvent.data?.event_type} event received, invalidating executions query`)
+      queryClient.invalidateQueries({ queryKey: ['executions'] })
+    }
+  }, [events, queryClient])
 
   const getStatusColor = (status: WorkItemStatus | ExecutionStatus) => {
     switch (status) {

@@ -8,9 +8,17 @@ board column via BoardColumnEventHandler.handle_agent_completion().
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Any, Callable, Coroutine, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Coroutine, Dict, List, Optional
+from uuid import uuid4
 
+from codetoreum.domain.agent_execution import ExecutionStatus
+from codetoreum.ports.input.execution_query import ExecutionInfo
 from codetoreum.ports.output.agent_executor import IAgentExecutor
+
+if TYPE_CHECKING:
+    from codetoreum.adapters.primary.input_port_adapters.mock.mock_execution_query_adapter import (
+        MockExecutionQueryAdapter,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +46,7 @@ class MockAgentExecutor(IAgentExecutor):
         self._default_board_id = "board-1"
         self._executions: List[Dict[str, Any]] = []
         self._pending_tasks: set[asyncio.Task] = set()
+        self._execution_query: Optional["MockExecutionQueryAdapter"] = None
 
     def set_completion_handler(
         self,
@@ -56,6 +65,17 @@ class MockAgentExecutor(IAgentExecutor):
         self._completion_callback = callback
         self._default_board_id = default_board_id
 
+    def set_execution_query(self, adapter: "MockExecutionQueryAdapter") -> None:
+        """Wire execution query adapter for UX visibility.
+
+        When set, the executor creates ExecutionInfo records on execute/complete
+        so that GET /api/v2/executions returns real data.
+
+        Args:
+            adapter: MockExecutionQueryAdapter to push records into
+        """
+        self._execution_query = adapter
+
     async def execute(self, work_item_id: str, agent_id: str) -> None:
         """Execute an agent on a work item (fire-and-forget).
 
@@ -66,18 +86,53 @@ class MockAgentExecutor(IAgentExecutor):
             work_item_id: ID of the work item to process
             agent_id: ID of the agent to execute
         """
+        execution_id = str(uuid4())
+        now = datetime.now(timezone.utc)
         self._executions.append({
             "work_item_id": work_item_id,
             "agent_id": agent_id,
-            "started_at": datetime.now(timezone.utc).isoformat(),
+            "started_at": now.isoformat(),
+            "execution_id": execution_id,
         })
         logger.info(f"Agent '{agent_id}' started on work item '{work_item_id}'")
-        task = asyncio.create_task(self._simulate_execution(work_item_id, agent_id))
+
+        # Push RUNNING record to execution query adapter for UX visibility
+        if self._execution_query:
+            info = ExecutionInfo(
+                id=execution_id,
+                agent_id=agent_id,
+                agent_name=agent_id,
+                work_item_id=work_item_id,
+                workflow_id="simulation",
+                stage_name=agent_id,
+                status=ExecutionStatus.RUNNING,
+                container_name=None,
+                container_id=None,
+                output=None,
+                error_message=None,
+                error_detail=None,
+                exit_code=None,
+                input_tokens=0,
+                output_tokens=0,
+                duration_seconds=None,
+                initialized_at=now,
+                started_at=now,
+                completed_at=None,
+            )
+            self._execution_query.add_execution(info)
+
+        task = asyncio.create_task(
+            self._simulate_execution(work_item_id, agent_id, execution_id, now)
+        )
         self._pending_tasks.add(task)
         task.add_done_callback(self._pending_tasks.discard)
 
     async def _simulate_execution(
-        self, work_item_id: str, agent_id: str
+        self,
+        work_item_id: str,
+        agent_id: str,
+        execution_id: str,
+        started_at: datetime,
     ) -> None:
         """Simulate agent work then invoke completion callback."""
         try:
@@ -85,6 +140,13 @@ class MockAgentExecutor(IAgentExecutor):
             logger.info(
                 f"Agent '{agent_id}' completed on work item '{work_item_id}'"
             )
+
+            # Update execution record to COMPLETED
+            self._update_execution_record(
+                execution_id, agent_id, work_item_id, started_at,
+                ExecutionStatus.COMPLETED,
+            )
+
             if self._completion_callback:
                 await self._completion_callback(
                     work_item_id, self._default_board_id, True
@@ -102,6 +164,13 @@ class MockAgentExecutor(IAgentExecutor):
                 f"Simulated execution failed for {work_item_id}: {e}",
                 exc_info=True,
             )
+
+            # Update execution record to FAILED
+            self._update_execution_record(
+                execution_id, agent_id, work_item_id, started_at,
+                ExecutionStatus.FAILED, error_message=str(e),
+            )
+
             if self._completion_callback:
                 try:
                     await self._completion_callback(
@@ -112,6 +181,43 @@ class MockAgentExecutor(IAgentExecutor):
                         f"Completion callback also failed for {work_item_id}: {cb_err}",
                         exc_info=True,
                     )
+
+    def _update_execution_record(
+        self,
+        execution_id: str,
+        agent_id: str,
+        work_item_id: str,
+        started_at: datetime,
+        status: ExecutionStatus,
+        error_message: Optional[str] = None,
+    ) -> None:
+        """Replace execution record with final status in the query adapter."""
+        if not self._execution_query:
+            return
+        now = datetime.now(timezone.utc)
+        duration = (now - started_at).total_seconds()
+        info = ExecutionInfo(
+            id=execution_id,
+            agent_id=agent_id,
+            agent_name=agent_id,
+            work_item_id=work_item_id,
+            workflow_id="simulation",
+            stage_name=agent_id,
+            status=status,
+            container_name=None,
+            container_id=None,
+            output=None,
+            error_message=error_message,
+            error_detail=None,
+            exit_code=0 if status == ExecutionStatus.COMPLETED else 1,
+            input_tokens=0,
+            output_tokens=0,
+            duration_seconds=duration,
+            initialized_at=started_at,
+            started_at=started_at,
+            completed_at=now,
+        )
+        self._execution_query.add_execution(info)
 
     @property
     def executions(self) -> List[Dict[str, Any]]:

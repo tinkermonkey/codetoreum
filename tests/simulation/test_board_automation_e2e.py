@@ -158,13 +158,13 @@ async def test_cascade_stops_on_agent_failure(e2e_env):
     original_simulate = executor._simulate_execution
     call_count = 0
 
-    async def failing_simulate(work_item_id, agent_id):
+    async def failing_simulate(work_item_id, agent_id, execution_id, started_at):
         nonlocal call_count
         call_count += 1
         if call_count == 2:
             # Second agent (coder) fails
             raise RuntimeError("Simulated coder failure")
-        return await original_simulate(work_item_id, agent_id)
+        return await original_simulate(work_item_id, agent_id, execution_id, started_at)
 
     executor._simulate_execution = failing_simulate
 

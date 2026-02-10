@@ -816,6 +816,10 @@ class SimulationApplicationBootstrap:
         # and invoke the repair cycle when items enter the configured repair cycle stage
         self._register_repair_cycle_handler()
 
+        # Wire execution query adapter to agent executor for UX visibility
+        # (ports.execution_query is the MockExecutionQueryAdapter created in Phase 4)
+        self.adapters.agent_executor.set_execution_query(self.ports.execution_query)
+
         return app
 
     def _register_repair_cycle_handler(self) -> None:
@@ -860,11 +864,26 @@ class SimulationApplicationBootstrap:
 
         import asyncio
         from codetoreum.domain.events import WorkItemColumnChanged, BoardReconciled
+        from codetoreum.domain.work_item import WorkItemStatus
 
         event_bus = self.infrastructure.event_bus
+        ticket_adapter = self.adapters.ticket_system
+
+        # Map board columns to work item statuses
+        _column_to_status = {
+            "Backlog": WorkItemStatus.NEW,
+            "Ready": WorkItemStatus.ASSIGNED,
+            "In Progress": WorkItemStatus.IN_PROGRESS,
+            "Review": WorkItemStatus.UNDER_REVIEW,
+            "Done": WorkItemStatus.COMPLETED,
+        }
 
         def board_column_changed_bridge(event):
-            """Translate WorkItemColumnChangedEvent (CodetoreumEvent) to WorkItemColumnChanged (DomainEvent)."""
+            """Translate WorkItemColumnChangedEvent (CodetoreumEvent) to WorkItemColumnChanged (DomainEvent).
+
+            Also syncs work item status in the ticket adapter so the UX
+            reflects the current column position.
+            """
             try:
                 loop = asyncio.get_running_loop()
                 domain_event = WorkItemColumnChanged(
@@ -879,8 +898,95 @@ class SimulationApplicationBootstrap:
                     },
                 )
                 loop.create_task(event_bus.publish(domain_event))
+
+                # Sync work item status based on target column (best-effort)
+                target_status = _column_to_status.get(event.to_column)
+                if target_status is not None:
+                    loop.create_task(
+                        _sync_work_item_status(event.work_item_id, target_status)
+                    )
             except RuntimeError:
                 pass
+
+        async def _sync_work_item_status(
+            work_item_id: str, target_status: WorkItemStatus
+        ) -> None:
+            """Best-effort sync of work item status in ticket adapter.
+
+            The domain model validates transitions strictly, so some jumps
+            (e.g. NEW -> IN_PROGRESS) will be rejected. We apply intermediate
+            steps where needed and silently ignore validation failures.
+            """
+            try:
+                work_item = await ticket_adapter.get_work_item(work_item_id)
+                if work_item.status == target_status:
+                    return
+
+                # For ASSIGNED: use assign_agent directly since update_status
+                # doesn't handle NEW -> ASSIGNED
+                if target_status == WorkItemStatus.ASSIGNED:
+                    if work_item.status == WorkItemStatus.NEW:
+                        work_item.assign_agent("simulation-agent", "Board column sync")
+                        work_item.clear_events()
+                    return
+
+                # For IN_PROGRESS: must go through ASSIGNED first
+                if target_status == WorkItemStatus.IN_PROGRESS:
+                    if work_item.status == WorkItemStatus.NEW:
+                        work_item.assign_agent("simulation-agent", "Board column sync")
+                        work_item.clear_events()
+                    if work_item.status == WorkItemStatus.ASSIGNED:
+                        await ticket_adapter.update_status(
+                            work_item_id, WorkItemStatus.IN_PROGRESS
+                        )
+                    return
+
+                # For UNDER_REVIEW: must go through ASSIGNED -> IN_PROGRESS first
+                if target_status == WorkItemStatus.UNDER_REVIEW:
+                    if work_item.status == WorkItemStatus.NEW:
+                        work_item.assign_agent("simulation-agent", "Board column sync")
+                        work_item.clear_events()
+                    if work_item.status == WorkItemStatus.ASSIGNED:
+                        await ticket_adapter.update_status(
+                            work_item_id, WorkItemStatus.IN_PROGRESS
+                        )
+                    # Re-read after intermediate transition
+                    work_item = await ticket_adapter.get_work_item(work_item_id)
+                    if work_item.status == WorkItemStatus.IN_PROGRESS:
+                        await ticket_adapter.update_status(
+                            work_item_id, WorkItemStatus.UNDER_REVIEW
+                        )
+                    return
+
+                # For COMPLETED: must go through the full chain
+                if target_status == WorkItemStatus.COMPLETED:
+                    if work_item.status == WorkItemStatus.NEW:
+                        work_item.assign_agent("simulation-agent", "Board column sync")
+                        work_item.clear_events()
+                    if work_item.status == WorkItemStatus.ASSIGNED:
+                        await ticket_adapter.update_status(
+                            work_item_id, WorkItemStatus.IN_PROGRESS
+                        )
+                    work_item = await ticket_adapter.get_work_item(work_item_id)
+                    if work_item.status == WorkItemStatus.IN_PROGRESS:
+                        await ticket_adapter.update_status(
+                            work_item_id, WorkItemStatus.UNDER_REVIEW
+                        )
+                    work_item = await ticket_adapter.get_work_item(work_item_id)
+                    if work_item.status == WorkItemStatus.UNDER_REVIEW:
+                        await ticket_adapter.update_status(
+                            work_item_id, WorkItemStatus.COMPLETED
+                        )
+                    return
+
+                # Fallback: try direct update
+                await ticket_adapter.update_status(work_item_id, target_status)
+
+            except Exception as e:
+                logger.debug(
+                    f"Best-effort status sync failed for {work_item_id} -> "
+                    f"{target_status.value}: {e}"
+                )
 
         def board_reconciled_bridge(event):
             """Translate BoardReconciledEvent (CodetoreumEvent) to BoardReconciled (DomainEvent)."""

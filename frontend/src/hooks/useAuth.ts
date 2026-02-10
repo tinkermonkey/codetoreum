@@ -75,7 +75,8 @@ export function useAuth() {
 
           // Make a request with the token to set the httpOnly cookie
           // The backend will set the cookie when it validates the token
-          await api.get('/health', {
+          // Using /auth/token-info instead of /health because it has the auth dependency
+          await api.get('/auth/token-info', {
             params: { token: urlToken }
           })
 
@@ -85,7 +86,8 @@ export function useAuth() {
           // - Session hijacking via URL
           window.history.replaceState({}, document.title, window.location.pathname)
 
-          setAuthenticated(true)
+          // Store token for WebSocket connections (httpOnly cookies don't work with WebSocket)
+          setAuthenticated(true, urlToken)
           setLoading(false)
           return
         } catch (error) {
