@@ -17,6 +17,11 @@ import yaml
 from codetoreum.adapters.testing.in_memory_config_store import InMemoryConfigStore
 from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
+from codetoreum.domain.board_workflow_template import (
+    BoardWorkflowTemplate,
+    ColumnTemplate,
+    ColumnType,
+)
 from codetoreum.domain.types import ProjectId, UserId, WorkItemId
 from codetoreum.domain.work_item import WorkItemPriority, WorkItemStatus
 from codetoreum.infrastructure.simulation.bootstrap import (
@@ -444,6 +449,85 @@ class SimulationDataSeeder:
         logger.info(f"Placed work item {work_item_id} in column '{column_name}' on board {board_id}")
         return self
 
+    def register_workflow_template(
+        self,
+        board_id: str,
+        column_names: List[str],
+        agent_types: List[str],
+    ) -> "SimulationDataSeeder":
+        """Build and register a BoardWorkflowTemplate for board automation.
+
+        Maps board columns to workflow agents:
+        - First column -> MANUAL (no agent)
+        - Last column -> MANUAL, exit column (no agent)
+        - Middle columns -> AUTOMATED, mapped to agent_types in order
+        - First automated column -> pipeline trigger
+
+        Args:
+            board_id: Board to register template for
+            column_names: Ordered column names from the board
+            agent_types: Agent type IDs from workflow stages (ordered)
+
+        Returns:
+            Self for chaining
+        """
+        if not hasattr(self.bootstrap.adapters, "workflow_config"):
+            logger.warning("workflow_config not available, skipping template registration")
+            return self
+
+        columns: List[ColumnTemplate] = []
+        # Middle columns get agents; we take min(middle_count, agent_count)
+        middle_columns = column_names[1:-1] if len(column_names) > 2 else []
+        agent_index = 0
+
+        for pos, col_name in enumerate(column_names):
+            is_first = pos == 0
+            is_last = pos == len(column_names) - 1
+            is_middle = not is_first and not is_last
+
+            if is_middle and agent_index < len(agent_types):
+                agent_id = agent_types[agent_index]
+                is_trigger = agent_index == 0  # First automated column
+                columns.append(ColumnTemplate(
+                    name=col_name,
+                    type=ColumnType.AUTOMATED,
+                    agent_id=agent_id,
+                    is_pipeline_trigger=is_trigger,
+                    is_exit_column=False,
+                    position=pos,
+                    auto_progress_on_completion=True,
+                ))
+                agent_index += 1
+            else:
+                columns.append(ColumnTemplate(
+                    name=col_name,
+                    type=ColumnType.MANUAL,
+                    agent_id=None,
+                    is_pipeline_trigger=False,
+                    is_exit_column=is_last,
+                    position=pos,
+                    auto_progress_on_completion=False,
+                ))
+
+        # Derive trigger/exit column names
+        trigger_cols = tuple(c.name for c in columns if c.is_pipeline_trigger)
+        exit_cols = tuple(c.name for c in columns if c.is_exit_column)
+
+        template = BoardWorkflowTemplate(
+            id=f"template-{board_id}",
+            name=f"Workflow for {board_id}",
+            pipeline_trigger_columns=trigger_cols,
+            exit_columns=exit_cols,
+            columns=tuple(columns),
+        )
+
+        self.bootstrap.adapters.workflow_config.register_template(board_id, template)
+        logger.info(
+            f"Registered workflow template for board {board_id}: "
+            f"{[c.name + ('*' if c.agent_id else '') for c in columns]}"
+        )
+        return self
+
     # =========================================================================
     # Pre-built Scenarios
     # =========================================================================
@@ -500,6 +584,13 @@ class SimulationDataSeeder:
             board_id="board-1",
             board_name="Default Board",
             column_names=["Backlog", "Ready", "In Progress", "Review", "Done"],
+        )
+
+        # Register workflow template for board automation
+        self.register_workflow_template(
+            board_id="board-1",
+            column_names=["Backlog", "Ready", "In Progress", "Review", "Done"],
+            agent_types=["architect", "coder", "tester"],
         )
 
         # Place created work items in Backlog
@@ -912,13 +1003,26 @@ class SimulationDataSeeder:
                 metadata=work_item_model.metadata,
             )
 
-        # Seed boards
+        # Seed boards and register workflow templates for board automation
+        # Extract agent types from workflow stages (ordered by stage order)
+        agent_types: List[str] = []
+        for workflow_model in scenario.workflows:
+            sorted_stages = sorted(workflow_model.stages, key=lambda s: s.order)
+            agent_types = [stage.agent_type for stage in sorted_stages]
+            break  # Use first workflow's agents
+
         for board_model in scenario.boards:
             await self.create_board(
                 board_id=board_model.board_id,
                 board_name=board_model.board_name,
                 column_names=board_model.columns,
             )
+            if agent_types:
+                self.register_workflow_template(
+                    board_id=board_model.board_id,
+                    column_names=board_model.columns,
+                    agent_types=agent_types,
+                )
 
         # Seed board placements (match work items by title prefix)
         if scenario.board_placements:

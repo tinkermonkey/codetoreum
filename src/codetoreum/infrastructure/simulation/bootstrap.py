@@ -4,7 +4,7 @@ Simulation Application Bootstrap
 Wires up the entire application stack in simulation mode through 6 phases:
 
 **Phase 0**: Create simulation engine (encapsulates clock and timing)
-**Phase 1**: Create adapters (13 mock adapters: ticket system, LLM, container, repository,
+**Phase 1**: Create adapters (16 mock adapters: ticket system, LLM, container, repository,
            event store, metrics, storage, config, notifier, encryption, board, repair cycle, project manager)
 **Phase 2**: Create infrastructure (event bus, logger, error registry)
 **Phase 3**: Create services (8 application services with their dependencies)
@@ -40,6 +40,13 @@ from codetoreum.adapters.testing.mock_container_recovery_adapter import (
 )
 from codetoreum.adapters.testing.mock_project_manager_adapter import (
     MockProjectManagerAdapter,
+)
+from codetoreum.adapters.testing.mock_agent_executor import MockAgentExecutor
+from codetoreum.adapters.testing.in_memory_workflow_config_service import (
+    InMemoryWorkflowConfigService,
+)
+from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
+    InMemoryLockService,
 )
 from codetoreum.adapters.testing.in_memory_config_store import InMemoryConfigStore
 from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
@@ -133,6 +140,9 @@ class SimulationAdapters:
     board: MockBoardAdapter
     repair_cycle: Any  # MockRepairCycleAdapter - lazy imported to avoid circular dependency
     project_manager: Any  # IProjectManagerService - multi-project management
+    lock_service: Any  # InMemoryLockService - pipeline lock management
+    workflow_config: Any  # InMemoryWorkflowConfigService - workflow template storage
+    agent_executor: Any  # MockAgentExecutor - simulated agent execution
 
 
 @dataclass
@@ -194,7 +204,7 @@ class SimulationApplicationBootstrap:
     Bootstrap the entire application stack in simulation mode.
 
     This class wires up:
-    1. All 13 mock adapters (5 via AdapterFactory + 8 additional)
+    1. All 16 mock adapters (5 via AdapterFactory + 8 additional)
     2. Infrastructure (event bus, clock, logger)
     3. All 8 application services
     4. All input/output ports
@@ -260,8 +270,8 @@ class SimulationApplicationBootstrap:
             logger.info("Phase 0: Creating simulation engine...")
             self._engine = SimulationEngine.create(self.config)
 
-            # Phase 1: Create adapters (13 total)
-            logger.info("Phase 1: Creating 13 adapters...")
+            # Phase 1: Create adapters (16 total)
+            logger.info("Phase 1: Creating 16 adapters...")
             self.adapters = await self._create_adapters()
 
             # Phase 2: Create infrastructure
@@ -341,7 +351,7 @@ class SimulationApplicationBootstrap:
 
     async def _create_adapters(self) -> SimulationAdapters:
         """
-        Create all 13 mock adapters in simulation mode.
+        Create all 16 mock adapters in simulation mode.
 
         5 adapters created via AdapterFactory:
         - ticket_system (in_memory)
@@ -350,15 +360,16 @@ class SimulationApplicationBootstrap:
         - repository (in_memory)
         - event_store (in_memory)
 
-        8 additional adapters created directly:
+        11 additional adapters created directly:
         - metrics, storage, config_store, notifier, encryption, board, repair_cycle, project_manager
+        - lock_service, workflow_config, agent_executor
 
         The SimulationEngine automatically injects the clock into time-aware
         adapters (repair_cycle), hiding simulation implementation details from
         the adapter constructors.
 
         Returns:
-            SimulationAdapters with all 12 adapters configured
+            SimulationAdapters with all 16 adapters configured
         """
         if not self._engine:
             raise RuntimeError("SimulationEngine must be created before adapters")
@@ -398,6 +409,11 @@ class SimulationApplicationBootstrap:
         # Create project manager adapter
         project_manager = MockProjectManagerAdapter()
 
+        # Create pipeline lock, workflow config, and agent executor for board automation
+        lock_service = InMemoryLockService()
+        workflow_config = InMemoryWorkflowConfigService()
+        agent_executor = MockAgentExecutor(execution_delay_seconds=3.0)
+
         # Pre-configure default test project for simulation testing
         from codetoreum.domain.value_objects import ProjectConfig
         project_manager.add_project(
@@ -410,7 +426,7 @@ class SimulationApplicationBootstrap:
             ),
         )
 
-        logger.info("Created 13 simulation adapters")
+        logger.info("Created 16 simulation adapters")
 
         return SimulationAdapters(
             ticket_system=ticket_system,
@@ -426,6 +442,9 @@ class SimulationApplicationBootstrap:
             board=board,
             repair_cycle=repair_cycle,
             project_manager=project_manager,
+            lock_service=lock_service,
+            workflow_config=workflow_config,
+            agent_executor=agent_executor,
         )
 
     # =========================================================================
@@ -788,6 +807,9 @@ class SimulationApplicationBootstrap:
         # Bridge board adapter events to central EventBus
         self._register_board_event_bridge()
 
+        # Register board column event handler for automation (agent execution + auto-progression)
+        self._register_board_column_handler()
+
         # Register repair cycle event handler with event bus
         # This allows the handler to listen for WorkItemColumnChanged events
         # and invoke the repair cycle when items enter the configured repair cycle stage
@@ -880,6 +902,38 @@ class SimulationApplicationBootstrap:
         self.adapters.board.on("workitem.column_changed", board_column_changed_bridge)
         self.adapters.board.on("board.reconciled", board_reconciled_bridge)
         logger.info("Registered board event bridge to central EventBus")
+
+    def _register_board_column_handler(self) -> None:
+        """Register BoardColumnEventHandler for automated column processing.
+
+        Creates the handler with its 5 dependencies and wires the agent
+        executor's completion callback to the handler's handle_agent_completion
+        method. This closes the loop: column change -> agent execution ->
+        completion callback -> auto-progress to next column.
+        """
+        if not self.adapters or not self.infrastructure:
+            logger.warning("Cannot register board column handler: components not ready")
+            return
+
+        from codetoreum.application.event_handlers.board_event_handler import (
+            BoardColumnEventHandler,
+        )
+
+        handler = BoardColumnEventHandler(
+            board_service=self.adapters.board,
+            lock_service=self.adapters.lock_service,
+            workflow_config=self.adapters.workflow_config,
+            agent_executor=self.adapters.agent_executor,
+            event_bus=self.infrastructure.event_bus,
+        )
+
+        # Wire completion callback: executor -> handler.handle_agent_completion
+        self.adapters.agent_executor.set_completion_handler(
+            handler.handle_agent_completion, "board-1"
+        )
+
+        self.infrastructure.event_bus.register_handler(handler)
+        logger.info("Registered BoardColumnEventHandler with event bus")
 
     # =========================================================================
     # Public API
