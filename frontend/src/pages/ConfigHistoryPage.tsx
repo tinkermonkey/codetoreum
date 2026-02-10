@@ -142,15 +142,18 @@ export default function ConfigHistoryPage() {
                 <p className="text-muted-foreground">No configuration changes found</p>
               </div>
             ) : (
-              filteredHistory.map((item) => (
-                <HistoryItem
-                  key={item.id}
-                  item={item}
-                  isExpanded={expandedItem === item.id}
-                  onToggle={() => setExpandedItem(expandedItem === item.id ? null : item.id)}
-                  queryClient={queryClient}
-                />
-              ))
+              filteredHistory.map((item, index) => {
+                const itemKey = item.id || `${item.config_type}-${item.config_name}-${item.config_version}-${index}`
+                return (
+                  <HistoryItem
+                    key={itemKey}
+                    item={{ ...item, id: item.id || itemKey }}
+                    isExpanded={expandedItem === (item.id || itemKey)}
+                    onToggle={() => setExpandedItem(expandedItem === (item.id || itemKey) ? null : (item.id || itemKey))}
+                    queryClient={queryClient}
+                  />
+                )
+              })
             )}
           </div>
         </CardContent>
