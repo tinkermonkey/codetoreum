@@ -227,6 +227,25 @@ work_items:
       requires_reviews: 2
       breaking_changes_risk: "low"
 
+# Boards
+boards:
+  - board_id: "board-1"
+    board_name: "Review Cycle Board"
+    columns: ["Backlog", "Ready", "In Progress", "Review", "Done"]
+
+# Board placements
+board_placements:
+  - work_item_title: "Implement user profile API"
+    column: "Backlog"
+  - work_item_title: "Add password reset functionality"
+    column: "Backlog"
+  - work_item_title: "Create data export utility"
+    column: "Backlog"
+  - work_item_title: "Optimize image upload pipeline"
+    column: "Backlog"
+  - work_item_title: "Refactor authentication middleware"
+    column: "Backlog"
+
 # Additional metadata
 metadata:
   scenario_type: "review_cycle"

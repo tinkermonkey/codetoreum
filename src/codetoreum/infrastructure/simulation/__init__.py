@@ -39,6 +39,8 @@ from .scenario_models import (
     ScenarioStageModel,
     ScenarioAgentModel,
     ScenarioWorkItemModel,
+    ScenarioBoardModel,
+    ScenarioBoardItemPlacementModel,
 )
 
 __all__ = [
@@ -77,4 +79,6 @@ __all__ = [
     "ScenarioStageModel",
     "ScenarioAgentModel",
     "ScenarioWorkItemModel",
+    "ScenarioBoardModel",
+    "ScenarioBoardItemPlacementModel",
 ]

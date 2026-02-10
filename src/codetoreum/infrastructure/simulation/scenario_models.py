@@ -116,6 +116,23 @@ class ScenarioAgentModel(BaseModel):
         return v
 
 
+class ScenarioBoardModel(BaseModel):
+    """Board configuration in scenario file."""
+
+    board_id: str = Field(..., description="Board ID")
+    board_name: str = Field(..., description="Board display name")
+    columns: List[str] = Field(..., description="Column names in order", min_length=1)
+
+
+class ScenarioBoardItemPlacementModel(BaseModel):
+    """Board item placement in scenario file."""
+
+    work_item_title: str = Field(
+        ..., description="Work item title prefix to match"
+    )
+    column: str = Field(..., description="Column to place the item in")
+
+
 class ScenarioWorkItemModel(BaseModel):
     """Work item configuration in scenario file."""
 
@@ -187,6 +204,12 @@ class ScenarioModel(BaseModel):
     )
     work_items: List[ScenarioWorkItemModel] = Field(
         default_factory=list, description="Work items to create"
+    )
+    boards: List[ScenarioBoardModel] = Field(
+        default_factory=list, description="Boards to create"
+    )
+    board_placements: List[ScenarioBoardItemPlacementModel] = Field(
+        default_factory=list, description="Work item placements on boards"
     )
 
     # Additional metadata

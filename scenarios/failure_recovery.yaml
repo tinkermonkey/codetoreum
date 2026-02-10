@@ -207,6 +207,25 @@ work_items:
         - "validation"
       recovery_strategy: "multi-stage"
 
+# Boards
+boards:
+  - board_id: "board-1"
+    board_name: "Failure Recovery Board"
+    columns: ["Backlog", "Ready", "In Progress", "Review", "Done"]
+
+# Board placements
+board_placements:
+  - work_item_title: "Task with retry scenario"
+    column: "Backlog"
+  - work_item_title: "Task with timeout scenario"
+    column: "Backlog"
+  - work_item_title: "Task with permanent failure"
+    column: "Backlog"
+  - work_item_title: "Task with recovery scenario"
+    column: "Backlog"
+  - work_item_title: "Task with cascading failures"
+    column: "Backlog"
+
 # Additional metadata
 metadata:
   scenario_type: "chaos_testing"

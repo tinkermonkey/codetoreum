@@ -4,8 +4,8 @@ Simulation Application Bootstrap
 Wires up the entire application stack in simulation mode through 6 phases:
 
 **Phase 0**: Create simulation engine (encapsulates clock and timing)
-**Phase 1**: Create adapters (12 mock adapters: ticket system, LLM, container, repository,
-           event store, metrics, storage, config, notifier, encryption, repair cycle, project manager)
+**Phase 1**: Create adapters (13 mock adapters: ticket system, LLM, container, repository,
+           event store, metrics, storage, config, notifier, encryption, board, repair cycle, project manager)
 **Phase 2**: Create infrastructure (event bus, logger, error registry)
 **Phase 3**: Create services (8 application services with their dependencies)
 **Phase 4**: Create ports (16 input port implementations)
@@ -32,6 +32,7 @@ from codetoreum.adapters.testing import (
     InMemoryMetricsAdapter,
     MockNotifierAdapter,
     SimpleEncryptionAdapter,
+    MockBoardAdapter,
 )
 # Lazy import to avoid circular dependency
 from codetoreum.adapters.testing.mock_container_recovery_adapter import (
@@ -129,6 +130,7 @@ class SimulationAdapters:
     config_store: InMemoryConfigStore
     notifier: MockNotifierAdapter
     encryption: SimpleEncryptionAdapter
+    board: MockBoardAdapter
     repair_cycle: Any  # MockRepairCycleAdapter - lazy imported to avoid circular dependency
     project_manager: Any  # IProjectManagerService - multi-project management
 
@@ -192,7 +194,7 @@ class SimulationApplicationBootstrap:
     Bootstrap the entire application stack in simulation mode.
 
     This class wires up:
-    1. All 12 mock adapters (5 via AdapterFactory + 7 additional)
+    1. All 13 mock adapters (5 via AdapterFactory + 8 additional)
     2. Infrastructure (event bus, clock, logger)
     3. All 8 application services
     4. All input/output ports
@@ -258,8 +260,8 @@ class SimulationApplicationBootstrap:
             logger.info("Phase 0: Creating simulation engine...")
             self._engine = SimulationEngine.create(self.config)
 
-            # Phase 1: Create adapters (12 total)
-            logger.info("Phase 1: Creating 12 adapters...")
+            # Phase 1: Create adapters (13 total)
+            logger.info("Phase 1: Creating 13 adapters...")
             self.adapters = await self._create_adapters()
 
             # Phase 2: Create infrastructure
@@ -339,7 +341,7 @@ class SimulationApplicationBootstrap:
 
     async def _create_adapters(self) -> SimulationAdapters:
         """
-        Create all 12 mock adapters in simulation mode.
+        Create all 13 mock adapters in simulation mode.
 
         5 adapters created via AdapterFactory:
         - ticket_system (in_memory)
@@ -348,8 +350,8 @@ class SimulationApplicationBootstrap:
         - repository (in_memory)
         - event_store (in_memory)
 
-        7 additional adapters created directly:
-        - metrics, storage, config_store, notifier, encryption, repair_cycle, project_manager
+        8 additional adapters created directly:
+        - metrics, storage, config_store, notifier, encryption, board, repair_cycle, project_manager
 
         The SimulationEngine automatically injects the clock into time-aware
         adapters (repair_cycle), hiding simulation implementation details from
@@ -390,6 +392,9 @@ class SimulationApplicationBootstrap:
         # Create time-aware adapters via engine (clock is injected internally)
         repair_cycle = self._engine.create_repair_cycle_adapter()
 
+        # Create board adapter
+        board = MockBoardAdapter()
+
         # Create project manager adapter
         project_manager = MockProjectManagerAdapter()
 
@@ -405,7 +410,7 @@ class SimulationApplicationBootstrap:
             ),
         )
 
-        logger.info("Created 12 simulation adapters")
+        logger.info("Created 13 simulation adapters")
 
         return SimulationAdapters(
             ticket_system=ticket_system,
@@ -418,6 +423,7 @@ class SimulationApplicationBootstrap:
             config_store=config_store,
             notifier=notifier,
             encryption=encryption,
+            board=board,
             repair_cycle=repair_cycle,
             project_manager=project_manager,
         )
@@ -619,14 +625,11 @@ class SimulationApplicationBootstrap:
             container_timeout_hours=2,
         )
 
-        # Multi-Project Orchestrator - Note: workflow_orchestrator and board_service
-        # will be None initially; the orchestrator is created with minimal dependencies
-        # and can be updated after Phase 4 if needed for full multi-project workflows.
-        # For simulation testing, the orchestrator can function with just the project manager.
+        # Multi-Project Orchestrator
         multi_project_orchestrator = MultiProjectOrchestrator(
             project_manager=self.adapters.project_manager,
             workflow_orchestrator=workflow_orchestrator,
-            board_service=None,  # No board service in simulation mode yet
+            board_service=self.adapters.board,
             event_emitter=mock_event_emitter,
             poll_interval_seconds=30,
         )
@@ -766,7 +769,19 @@ class SimulationApplicationBootstrap:
             container_recovery_service=self.services.container_recovery_service,
         )
 
+        # Mount simulation-only ticketing router (never in production create_app)
+        from codetoreum.adapters.primary.routers.simulation_ticketing import (
+            create_simulation_ticketing_router,
+        )
+        sim_router = create_simulation_ticketing_router(
+            self.adapters.ticket_system, self.adapters.board
+        )
+        app.include_router(sim_router)
+
         logger.info("Created FastAPI application with all ports wired")
+
+        # Bridge board adapter events to central EventBus
+        self._register_board_event_bridge()
 
         # Register repair cycle event handler with event bus
         # This allows the handler to listen for WorkItemColumnChanged events
@@ -802,6 +817,34 @@ class SimulationApplicationBootstrap:
 
         self.infrastructure.event_bus.register_handler(handler)
         logger.info("Registered RepairCycleEventHandler with event bus")
+
+    def _register_board_event_bridge(self) -> None:
+        """
+        Bridge board adapter events to the central EventBus.
+
+        The MockBoardAdapter emits events via its own listener mechanism.
+        This bridge forwards those events to the central EventBus so that
+        all event handlers (repair cycle, logging, etc.) can react to
+        board changes.
+        """
+        if not self.adapters or not self.infrastructure:
+            logger.warning("Cannot register board event bridge: components not ready")
+            return
+
+        import asyncio
+
+        event_bus = self.infrastructure.event_bus
+
+        def board_event_bridge(event):
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(event_bus.publish(event))
+            except RuntimeError:
+                pass
+
+        self.adapters.board.on("workitem.column_changed", board_event_bridge)
+        self.adapters.board.on("board.reconciled", board_event_bridge)
+        logger.info("Registered board event bridge to central EventBus")
 
     # =========================================================================
     # Public API

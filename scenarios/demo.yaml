@@ -223,6 +223,25 @@ work_items:
     metadata:
       estimated_hours: 6
 
+# Boards
+boards:
+  - board_id: "board-1"
+    board_name: "Feature Development Board"
+    columns: ["Backlog", "Ready", "In Progress", "Review", "Done"]
+
+# Board placements
+board_placements:
+  - work_item_title: "Add user authentication system"
+    column: "Backlog"
+  - work_item_title: "Implement real-time notifications"
+    column: "Backlog"
+  - work_item_title: "Create admin dashboard"
+    column: "Backlog"
+  - work_item_title: "Optimize database queries"
+    column: "Backlog"
+  - work_item_title: "Add API rate limiting"
+    column: "Backlog"
+
 # Additional metadata
 metadata:
   scenario_type: "demo"

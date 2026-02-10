@@ -106,6 +106,21 @@ work_items:
     priority: "high"
     status: "new"
 
+# Boards
+boards:
+  - board_id: "board-1"
+    board_name: "Default Board"
+    columns: ["Backlog", "Ready", "In Progress", "Review", "Done"]
+
+# Board placements
+board_placements:
+  - work_item_title: "Default Issue #1"
+    column: "Backlog"
+  - work_item_title: "Default Issue #2"
+    column: "Backlog"
+  - work_item_title: "Default Issue #3"
+    column: "Backlog"
+
 # Additional metadata
 metadata:
   scenario_type: "smoke_test"

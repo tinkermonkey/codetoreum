@@ -16,6 +16,7 @@ import yaml
 
 from codetoreum.adapters.testing.in_memory_config_store import InMemoryConfigStore
 from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
+from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
 from codetoreum.domain.types import ProjectId, UserId, WorkItemId
 from codetoreum.domain.work_item import WorkItemPriority, WorkItemStatus
 from codetoreum.infrastructure.simulation.bootstrap import (
@@ -49,6 +50,7 @@ class CreatedItems:
     agents: List[str] = field(default_factory=list)
     work_items: List[str] = field(default_factory=list)
     pipelines: List[str] = field(default_factory=list)
+    boards: List[str] = field(default_factory=list)
 
     def clear(self) -> None:
         """Clear all tracking."""
@@ -57,6 +59,7 @@ class CreatedItems:
         self.agents.clear()
         self.work_items.clear()
         self.pipelines.clear()
+        self.boards.clear()
 
 
 class SimulationDataSeeder:
@@ -104,6 +107,7 @@ class SimulationDataSeeder:
         # Quick access to adapters
         self._ticket_adapter: InMemoryTicketAdapter = self.adapters.ticket_system
         self._config_store: InMemoryConfigStore = self.adapters.config_store
+        self._board_adapter: MockBoardAdapter = self.adapters.board
 
         # Defaults
         self._current_project_id: Optional[str] = None
@@ -477,6 +481,74 @@ class SimulationDataSeeder:
         return self
 
     # =========================================================================
+    # Board Operations
+    # =========================================================================
+
+    async def create_board(
+        self,
+        board_id: str,
+        board_name: str,
+        column_names: List[str],
+        project_id: Optional[str] = None,
+    ) -> "SimulationDataSeeder":
+        """
+        Create a board with specified columns.
+
+        Args:
+            board_id: Board identifier
+            board_name: Display name for the board
+            column_names: List of column names in order
+            project_id: Project ID (uses current if not specified)
+
+        Returns:
+            Self for chaining
+        """
+        project_id = project_id or self._current_project_id
+
+        if not project_id:
+            raise ValidationError("No project context. Create a project first or provide project_id.")
+
+        self._board_adapter.create_board(project_id, board_id, board_name, column_names)
+        self._board_adapter.current_project = project_id
+        self._board_adapter.current_board = board_id
+
+        if self.track_items:
+            self.created_items.boards.append(board_id)
+
+        logger.info(f"Created board: {board_name} ({board_id}) with columns {column_names}")
+        return self
+
+    async def place_item_on_board(
+        self,
+        board_id: str,
+        column_name: str,
+        work_item_id: str,
+        project_id: Optional[str] = None,
+    ) -> "SimulationDataSeeder":
+        """
+        Place a work item on a board column.
+
+        Args:
+            board_id: Board identifier
+            column_name: Target column name
+            work_item_id: Work item to place
+            project_id: Project ID (uses current if not specified)
+
+        Returns:
+            Self for chaining
+        """
+        project_id = project_id or self._current_project_id
+
+        if not project_id:
+            raise ValidationError("No project context. Create a project first or provide project_id.")
+
+        self._board_adapter.current_project = project_id
+        self._board_adapter.add_item_to_column(board_id, column_name, work_item_id)
+
+        logger.info(f"Placed work item {work_item_id} in column '{column_name}' on board {board_id}")
+        return self
+
+    # =========================================================================
     # Pre-built Scenarios
     # =========================================================================
 
@@ -527,6 +599,16 @@ class SimulationDataSeeder:
             title_prefix="Default Issue",
             labels=["test", "default"],
         )
+
+        await self.create_board(
+            board_id="board-1",
+            board_name="Default Board",
+            column_names=["Backlog", "Ready", "In Progress", "Review", "Done"],
+        )
+
+        # Place created work items in Backlog
+        for work_item_id in self.created_items.work_items:
+            await self.place_item_on_board("board-1", "Backlog", work_item_id)
 
         logger.info("Default scenario seeded successfully")
         return self
@@ -596,6 +678,15 @@ class SimulationDataSeeder:
             labels=["workflow-test"],
         )
 
+        await self.create_board(
+            board_id="board-1",
+            board_name="Simple Workflow Board",
+            column_names=["Backlog", "Ready", "In Progress", "Review", "Done"],
+        )
+
+        for work_item_id in self.created_items.work_items:
+            await self.place_item_on_board("board-1", "Backlog", work_item_id)
+
         logger.info("Simple workflow scenario seeded successfully")
         return self
 
@@ -643,6 +734,15 @@ class SimulationDataSeeder:
             title_prefix="Parallel Task",
             labels=["parallel", "concurrent"],
         )
+
+        await self.create_board(
+            board_id="board-1",
+            board_name="Parallel Workflow Board",
+            column_names=["Backlog", "Ready", "In Progress", "Review", "Done"],
+        )
+
+        for work_item_id in self.created_items.work_items:
+            await self.place_item_on_board("board-1", "Backlog", work_item_id)
 
         logger.info("Parallel workflow scenario seeded successfully")
         return self
@@ -709,6 +809,15 @@ class SimulationDataSeeder:
             labels=["review", "feedback"],
         )
 
+        await self.create_board(
+            board_id="board-1",
+            board_name="Review Cycle Board",
+            column_names=["Backlog", "Ready", "In Progress", "Review", "Done"],
+        )
+
+        for work_item_id in self.created_items.work_items:
+            await self.place_item_on_board("board-1", "Backlog", work_item_id)
+
         logger.info("Review cycle scenario seeded successfully")
         return self
 
@@ -768,6 +877,15 @@ class SimulationDataSeeder:
             title_prefix="Failure Test Task",
             labels=["failure", "retry"],
         )
+
+        await self.create_board(
+            board_id="board-1",
+            board_name="Failure Recovery Board",
+            column_names=["Backlog", "Ready", "In Progress", "Review", "Done"],
+        )
+
+        for work_item_id in self.created_items.work_items:
+            await self.place_item_on_board("board-1", "Backlog", work_item_id)
 
         logger.info("Failure scenario seeded successfully")
         return self
@@ -897,6 +1015,46 @@ class SimulationDataSeeder:
                 status=status,
                 metadata=work_item_model.metadata,
             )
+
+        # Seed boards
+        for board_model in scenario.boards:
+            await self.create_board(
+                board_id=board_model.board_id,
+                board_name=board_model.board_name,
+                column_names=board_model.columns,
+            )
+
+        # Seed board placements (match work items by title prefix)
+        if scenario.board_placements:
+            # Build a map of work item title -> id from the ticket adapter
+            all_items = {}
+            for item_id in self.created_items.work_items:
+                try:
+                    item = await self._ticket_adapter.get_work_item(item_id)
+                    all_items[item.title] = item.id
+                except Exception:
+                    pass
+
+            board_id = scenario.boards[0].board_id if scenario.boards else "board-1"
+
+            for placement in scenario.board_placements:
+                # Match by title prefix (work items created from YAML get " #1" appended)
+                matched_id = None
+                for title, item_id in all_items.items():
+                    if title.startswith(placement.work_item_title):
+                        matched_id = item_id
+                        break
+
+                if matched_id:
+                    await self.place_item_on_board(
+                        board_id=board_id,
+                        column_name=placement.column,
+                        work_item_id=matched_id,
+                    )
+                else:
+                    logger.warning(
+                        f"Board placement: no work item found matching title '{placement.work_item_title}'"
+                    )
 
         logger.info(f"Scenario seeded successfully from {file_path}")
         return self
