@@ -275,11 +275,15 @@ function HistoryItem({
       {/* Expanded Details */}
       {isExpanded && (
         <div className="border-t p-4 bg-muted/20">
-          <h4 className="font-medium mb-3">Changes ({item.changes.length})</h4>
+          <h4 className="font-medium mb-3">Changes ({(item.changes ?? []).length})</h4>
           <div className="space-y-2">
-            {item.changes.map((change, index) => (
-              <ChangeDetails key={index} change={change} />
-            ))}
+            {(item.changes ?? []).length > 0 ? (
+              (item.changes ?? []).map((change, index) => (
+                <ChangeDetails key={index} change={change} />
+              ))
+            ) : (
+              <p className="text-muted-foreground text-sm">No detailed changes available</p>
+            )}
           </div>
         </div>
       )}
