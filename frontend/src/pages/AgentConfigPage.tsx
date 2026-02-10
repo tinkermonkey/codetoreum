@@ -158,17 +158,14 @@ function CreateAgentButton({ queryClient }: { queryClient: any }) {
             project_id: 'codetoreum',
             agent_name: name,
             model,
-            timeout: 300,
+            timeout_seconds: 300,
+            max_retries: 3,
             requires_docker: false,
+            requires_dev_container: false,
             makes_code_changes: false,
+            filesystem_write_allowed: true,
             mcp_servers: [],
-            capabilities: [],
-            constraints: {
-              allowed_operations: [],
-              blocked_operations: [],
-              allowed_paths: [],
-              blocked_paths: [],
-            },
+            capabilities: {},
             version: 1,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
@@ -197,7 +194,7 @@ function AgentDetailsCard({
 }) {
   const [isEditing, setIsEditing] = useState(false)
   const [model, setModel] = useState(agent.model)
-  const [timeout, setTimeout] = useState(agent.timeout.toString())
+  const [timeout, setTimeout] = useState(agent.timeout_seconds.toString())
   const [description, setDescription] = useState(agent.metadata.description || '')
 
   const updateMutation = useMutation({
@@ -218,7 +215,7 @@ function AgentDetailsCard({
   const handleSave = () => {
     updateMutation.mutate({
       model,
-      timeout: parseInt(timeout),
+      timeout_seconds: parseInt(timeout),
       metadata: { ...agent.metadata, description },
     })
   }
@@ -315,7 +312,7 @@ function AgentDetailsCard({
                 className="mt-1"
               />
             ) : (
-              <p className="mt-1 font-medium">{agent.timeout}s</p>
+              <p className="mt-1 font-medium">{agent.timeout_seconds}s</p>
             )}
           </div>
           <div>
@@ -354,16 +351,22 @@ function CapabilitiesCard({
     },
   })
 
+  const capabilitiesList: string[] = Array.isArray(agent.capabilities)
+    ? agent.capabilities
+    : Array.isArray(agent.capabilities?.capabilities)
+      ? agent.capabilities.capabilities
+      : []
+
   const addCapability = () => {
     if (!newCapability) return
     updateMutation.mutate({
-      capabilities: [...agent.capabilities, newCapability],
+      capabilities: [...capabilitiesList, newCapability],
     })
   }
 
   const removeCapability = (capability: string) => {
     updateMutation.mutate({
-      capabilities: agent.capabilities.filter((c) => c !== capability),
+      capabilities: capabilitiesList.filter((c) => c !== capability),
     })
   }
 
@@ -396,7 +399,7 @@ function CapabilitiesCard({
         <div className="space-y-3">
           {/* Existing Capabilities */}
           <div className="flex flex-wrap gap-2">
-            {agent.capabilities.map((capability) => (
+            {capabilitiesList.map((capability) => (
               <div
                 key={capability}
                 className="flex items-center space-x-2 bg-primary/10 border border-primary px-3 py-1 rounded-md"
@@ -410,7 +413,7 @@ function CapabilitiesCard({
                 </button>
               </div>
             ))}
-            {agent.capabilities.length === 0 && (
+            {capabilitiesList.length === 0 && (
               <p className="text-muted-foreground text-sm">No capabilities configured</p>
             )}
           </div>
@@ -421,13 +424,13 @@ function CapabilitiesCard({
               <h4 className="text-sm font-medium">Add Capability</h4>
               <div className="flex flex-wrap gap-2">
                 {predefinedCapabilities
-                  .filter((cap) => !agent.capabilities.includes(cap))
+                  .filter((cap) => !capabilitiesList.includes(cap))
                   .map((cap) => (
                     <button
                       key={cap}
                       onClick={() => {
                         updateMutation.mutate({
-                          capabilities: [...agent.capabilities, cap],
+                          capabilities: [...capabilitiesList, cap],
                         })
                       }}
                       className="text-sm bg-muted hover:bg-muted/80 px-3 py-1 rounded-md"
@@ -590,14 +593,15 @@ function ConstraintsCard({
   agent: AgentConfig
   queryClient: any
 }) {
+  const constraints = (agent as any).constraints ?? {}
   const [isEditing, setIsEditing] = useState(false)
   const [requiresDocker, setRequiresDocker] = useState(agent.requires_docker)
   const [makesCodeChanges, setMakesCodeChanges] = useState(agent.makes_code_changes)
   const [maxTokens, setMaxTokens] = useState(
-    agent.constraints.max_tokens?.toString() || '100000'
+    constraints.max_tokens?.toString() || '100000'
   )
   const [rateLimit, setRateLimit] = useState(
-    agent.constraints.rate_limit?.toString() || '10'
+    constraints.rate_limit?.toString() || '10'
   )
 
   const updateMutation = useMutation({
@@ -613,7 +617,7 @@ function ConstraintsCard({
       requires_docker: requiresDocker,
       makes_code_changes: makesCodeChanges,
       constraints: {
-        ...agent.constraints,
+        ...constraints,
         max_tokens: maxTokens ? parseInt(maxTokens) : undefined,
         rate_limit: rateLimit ? parseInt(rateLimit) : undefined,
       },
@@ -683,7 +687,7 @@ function ConstraintsCard({
                   className="mt-1"
                 />
               ) : (
-                <p className="mt-1 font-medium">{agent.constraints.max_tokens || 'N/A'}</p>
+                <p className="mt-1 font-medium">{constraints.max_tokens || 'N/A'}</p>
               )}
             </div>
             <div>
@@ -698,7 +702,7 @@ function ConstraintsCard({
                   className="mt-1"
                 />
               ) : (
-                <p className="mt-1 font-medium">{agent.constraints.rate_limit || 'N/A'}</p>
+                <p className="mt-1 font-medium">{constraints.rate_limit || 'N/A'}</p>
               )}
             </div>
           </div>

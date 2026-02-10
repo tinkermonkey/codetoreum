@@ -163,25 +163,19 @@ export interface ProjectMetadata {
   last_modified_by?: string
 }
 
-export interface AgentConstraints {
-  max_tokens?: number
-  rate_limit?: number
-  allowed_operations?: string[]
-  blocked_operations?: string[]
-  allowed_paths?: string[]
-  blocked_paths?: string[]
-}
-
 export interface AgentConfig {
   project_id: string
   agent_name: string
+  display_name?: string
   model: string
-  timeout: number
+  timeout_seconds: number
+  max_retries: number
   requires_docker: boolean
+  requires_dev_container: boolean
   makes_code_changes: boolean
+  filesystem_write_allowed: boolean
   mcp_servers: string[]
-  capabilities: string[]
-  constraints: AgentConstraints
+  capabilities: Record<string, any>
   version: number
   created_at: string
   updated_at: string
