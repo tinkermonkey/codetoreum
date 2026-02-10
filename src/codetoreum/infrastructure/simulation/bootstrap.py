@@ -846,7 +846,6 @@ class SimulationApplicationBootstrap:
                 loop = asyncio.get_running_loop()
                 domain_event = WorkItemColumnChanged(
                     aggregate_id=event.work_item_id,
-                    aggregate_type="WorkItem",
                     payload={
                         "work_item_id": event.work_item_id,
                         "board_id": event.board_id,
@@ -866,7 +865,6 @@ class SimulationApplicationBootstrap:
                 loop = asyncio.get_running_loop()
                 domain_event = BoardReconciled(
                     aggregate_id=event.board_id,
-                    aggregate_type="Board",
                     payload={
                         "board_id": event.board_id,
                         "project_id": event.project_id,
