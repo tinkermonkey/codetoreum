@@ -5,7 +5,8 @@ Wires up the entire application stack in simulation mode through 6 phases:
 
 **Phase 0**: Create simulation engine (encapsulates clock and timing)
 **Phase 1**: Create adapters (16 mock adapters: ticket system, LLM, container, repository,
-           event store, metrics, storage, config, notifier, encryption, board, repair cycle, project manager)
+           event store, metrics, storage, config, notifier, encryption, board, repair cycle,
+           project manager, lock service, workflow config, agent executor)
 **Phase 2**: Create infrastructure (event bus, logger, error registry)
 **Phase 3**: Create services (8 application services with their dependencies)
 **Phase 4**: Create ports (16 input port implementations)
@@ -140,9 +141,9 @@ class SimulationAdapters:
     board: MockBoardAdapter
     repair_cycle: Any  # MockRepairCycleAdapter - lazy imported to avoid circular dependency
     project_manager: Any  # IProjectManagerService - multi-project management
-    lock_service: Any  # InMemoryLockService - pipeline lock management
-    workflow_config: Any  # InMemoryWorkflowConfigService - workflow template storage
-    agent_executor: Any  # MockAgentExecutor - simulated agent execution
+    lock_service: InMemoryLockService
+    workflow_config: InMemoryWorkflowConfigService
+    agent_executor: MockAgentExecutor
 
 
 @dataclass

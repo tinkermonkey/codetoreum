@@ -23,6 +23,10 @@ from codetoreum.adapters.testing.mock_project_manager_adapter import (
     MockProjectManagerAdapter,
 )
 from codetoreum.adapters.testing.capturing_mock_event_emitter import CapturingMockEventEmitter
+from codetoreum.adapters.testing.mock_agent_executor import MockAgentExecutor
+from codetoreum.adapters.testing.in_memory_workflow_config_service import (
+    InMemoryWorkflowConfigService,
+)
 
 __all__ = [
     "InMemoryEventStore",
@@ -41,4 +45,6 @@ __all__ = [
     "MockContainerRecoveryAdapter",
     "MockProjectManagerAdapter",
     "CapturingMockEventEmitter",
+    "MockAgentExecutor",
+    "InMemoryWorkflowConfigService",
 ]

@@ -471,13 +471,7 @@ class SimulationDataSeeder:
         Returns:
             Self for chaining
         """
-        if not hasattr(self.bootstrap.adapters, "workflow_config"):
-            logger.warning("workflow_config not available, skipping template registration")
-            return self
-
         columns: List[ColumnTemplate] = []
-        # Middle columns get agents; we take min(middle_count, agent_count)
-        middle_columns = column_names[1:-1] if len(column_names) > 2 else []
         agent_index = 0
 
         for pos, col_name in enumerate(column_names):

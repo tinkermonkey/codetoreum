@@ -37,6 +37,7 @@ class MockAgentExecutor(IAgentExecutor):
         ] = None
         self._default_board_id = "board-1"
         self._executions: List[Dict[str, Any]] = []
+        self._pending_tasks: set[asyncio.Task] = set()
 
     def set_completion_handler(
         self,
@@ -71,7 +72,9 @@ class MockAgentExecutor(IAgentExecutor):
             "started_at": datetime.now(timezone.utc).isoformat(),
         })
         logger.info(f"Agent '{agent_id}' started on work item '{work_item_id}'")
-        asyncio.create_task(self._simulate_execution(work_item_id, agent_id))
+        task = asyncio.create_task(self._simulate_execution(work_item_id, agent_id))
+        self._pending_tasks.add(task)
+        task.add_done_callback(self._pending_tasks.discard)
 
     async def _simulate_execution(
         self, work_item_id: str, agent_id: str
@@ -86,15 +89,29 @@ class MockAgentExecutor(IAgentExecutor):
                 await self._completion_callback(
                     work_item_id, self._default_board_id, True
                 )
+            else:
+                logger.warning(
+                    f"No completion callback set for MockAgentExecutor. "
+                    f"Work item '{work_item_id}' completed but auto-progression will not occur."
+                )
+        except asyncio.CancelledError:
+            logger.info(f"Execution cancelled for {work_item_id}")
+            raise
         except Exception as e:
             logger.error(
                 f"Simulated execution failed for {work_item_id}: {e}",
                 exc_info=True,
             )
             if self._completion_callback:
-                await self._completion_callback(
-                    work_item_id, self._default_board_id, False
-                )
+                try:
+                    await self._completion_callback(
+                        work_item_id, self._default_board_id, False
+                    )
+                except Exception as cb_err:
+                    logger.error(
+                        f"Completion callback also failed for {work_item_id}: {cb_err}",
+                        exc_info=True,
+                    )
 
     @property
     def executions(self) -> List[Dict[str, Any]]:
