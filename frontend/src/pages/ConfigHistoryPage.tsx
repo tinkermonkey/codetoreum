@@ -24,11 +24,29 @@ export default function ConfigHistoryPage() {
   const [expandedItem, setExpandedItem] = useState<string | null>(null)
   const queryClient = useQueryClient()
 
-  // Fetch history for each type
+  // Fetch projects so we can get history by project ID
+  const { data: projects } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => projectConfigApi.getAll(),
+  })
+
+  // Fetch history for each project
   const { data: projectHistory } = useQuery({
-    queryKey: ['projectHistory', 'codetoreum'],
-    queryFn: () => projectConfigApi.getHistory('codetoreum'),
-    enabled: configType === 'all' || configType === 'project',
+    queryKey: ['projectHistory', projects?.map((p) => p.id)],
+    queryFn: async () => {
+      if (!projects?.length) return []
+      const histories = await Promise.all(
+        projects.map(async (project) => {
+          try {
+            return await projectConfigApi.getHistory(project.id)
+          } catch {
+            return []
+          }
+        })
+      )
+      return histories.flat()
+    },
+    enabled: (configType === 'all' || configType === 'project') && !!projects?.length,
   })
 
   const { data: agents } = useQuery({
@@ -41,51 +59,11 @@ export default function ConfigHistoryPage() {
     queryFn: () => pipelineConfigApi.getAll(),
   })
 
-  // Fetch agent histories
-  const agentHistories = useQuery({
-    queryKey: ['agentHistories'],
-    queryFn: async () => {
-      if (!agents) return []
-      const histories = await Promise.all(
-        agents.map(async (agent) => {
-          try {
-            const history = await agentConfigApi.getHistory(agent.agent_name)
-            return history
-          } catch {
-            return []
-          }
-        })
-      )
-      return histories.flat()
-    },
-    enabled: (configType === 'all' || configType === 'agent') && !!agents,
-  })
-
-  // Fetch pipeline histories
-  const pipelineHistories = useQuery({
-    queryKey: ['pipelineHistories'],
-    queryFn: async () => {
-      if (!pipelines) return []
-      const histories = await Promise.all(
-        pipelines.map(async (pipeline) => {
-          try {
-            const history = await pipelineConfigApi.getHistory(pipeline.name)
-            return history
-          } catch {
-            return []
-          }
-        })
-      )
-      return histories.flat()
-    },
-    enabled: (configType === 'all' || configType === 'pipeline') && !!pipelines,
-  })
-
   // Combine all histories
+  // Note: Only project-level version history is currently supported by the backend.
+  // Agent and pipeline history endpoints are not yet implemented.
   const allHistory: ConfigurationHistory[] = [
-    ...(configType === 'all' || configType === 'project' ? projectHistory || [] : []),
-    ...(configType === 'all' || configType === 'agent' ? agentHistories.data || [] : []),
-    ...(configType === 'all' || configType === 'pipeline' ? pipelineHistories.data || [] : []),
+    ...(projectHistory || []),
   ].sort((a, b) => new Date(b.changed_at).getTime() - new Date(a.changed_at).getTime())
 
   // Filter history
