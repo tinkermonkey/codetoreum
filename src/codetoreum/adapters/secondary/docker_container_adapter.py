@@ -12,8 +12,14 @@ from dateutil import parser as dateparser
 
 from codetoreum.domain.types import ContainerId
 from codetoreum.infrastructure.observability.instrumentation import (
+    add_span_attributes,
     instrument_async_function,
 )
+
+try:
+    from opentelemetry import trace
+except ImportError:
+    trace = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 from codetoreum.ports.exceptions import (
@@ -161,7 +167,7 @@ class DockerContainerAdapter(IContainer):
             "service": "docker_container_adapter",
             "operation": "run",
         },
-        capture_args=True,
+        capture_args=False,
         capture_result=False,
     )
     async def run(
@@ -208,6 +214,8 @@ class DockerContainerAdapter(IContainer):
 
         def _run_container():
             container = None
+            container_id = None
+            start_time = time.time()
             try:
                 # Check if image exists locally
                 try:
@@ -217,8 +225,7 @@ class DockerContainerAdapter(IContainer):
 
                 # Create and start container with auto-removal enabled
                 container = client.containers.run(**container_config)
-
-                start_time = time.time()
+                container_id = container.id
 
                 # Buffer for collecting logs
                 log_buffer = []
@@ -270,6 +277,7 @@ class DockerContainerAdapter(IContainer):
                         raise
 
                 duration_ms = int((time.time() - start_time) * 1000)
+                duration_seconds = duration_ms / 1000.0
 
                 # Reconstruct stdout/stderr from buffered logs
                 # Note: Docker's logs API doesn't cleanly separate stdout/stderr when streaming
@@ -314,6 +322,17 @@ class DockerContainerAdapter(IContainer):
 
             # Await with cancellation support
             result = await executor_task
+
+            # Add execution metrics to span after returning from executor
+            add_span_attributes(
+                **{
+                    "container.id": str(result.container_id),
+                    "container.exit_code": result.exit_code,
+                    "container.duration_seconds": result.duration_ms / 1000.0,
+                    "container.failed": result.exit_code != 0,
+                }
+            )
+
             return result
 
         except asyncio.CancelledError:
@@ -332,7 +351,7 @@ class DockerContainerAdapter(IContainer):
             "service": "docker_container_adapter",
             "operation": "create",
         },
-        capture_args=True,
+        capture_args=False,
         capture_result=False,
     )
     async def create(
@@ -383,7 +402,26 @@ class DockerContainerAdapter(IContainer):
                     raise ImageNotFoundError(f"Image not found: {image}")
                 raise ContainerError(f"Failed to create container: {str(e)}")
 
-        return await loop.run_in_executor(None, _create)
+        container_id = await loop.run_in_executor(None, _create)
+
+        # Add container-specific span attributes after returning from executor
+        add_span_attributes(
+            **{
+                "container.id": container_id,
+                "container.image": image,
+                # Extract context from labels if available
+                **(
+                    {
+                        "work_item.id": labels.get("org.codetoreum.work_item_id"),
+                        "agent.type": labels.get("org.codetoreum.agent"),
+                    }
+                    if labels
+                    else {}
+                ),
+            }
+        )
+
+        return container_id
 
     @instrument_async_function(
         name="container.start",
@@ -391,7 +429,7 @@ class DockerContainerAdapter(IContainer):
             "service": "docker_container_adapter",
             "operation": "start",
         },
-        capture_args=True,
+        capture_args=False,
     )
     async def start(self, container_id: str) -> None:
         """Start a container."""
@@ -409,13 +447,21 @@ class DockerContainerAdapter(IContainer):
 
         await loop.run_in_executor(None, _start)
 
+        # Add start attributes to span
+        add_span_attributes(
+            **{
+                "container.id": container_id,
+                "container.started": True,
+            }
+        )
+
     @instrument_async_function(
         name="container.stop",
         attributes={
             "service": "docker_container_adapter",
             "operation": "stop",
         },
-        capture_args=True,
+        capture_args=False,
     )
     async def stop(self, container_id: str, timeout: int = 10) -> None:
         """Stop a container."""
@@ -433,18 +479,27 @@ class DockerContainerAdapter(IContainer):
 
         await loop.run_in_executor(None, _stop)
 
+        # Add stop attributes to span
+        add_span_attributes(
+            **{
+                "container.id": container_id,
+                "container.stopped": True,
+            }
+        )
+
     @instrument_async_function(
         name="container.remove",
         attributes={
             "service": "docker_container_adapter",
             "operation": "remove",
         },
-        capture_args=True,
+        capture_args=False,
     )
     async def remove(self, container_id: str, force: bool = False) -> None:
         """Remove a container."""
         client = self._get_client()
         loop = asyncio.get_event_loop()
+        already_removed = False
 
         def _remove():
             try:
@@ -452,10 +507,32 @@ class DockerContainerAdapter(IContainer):
                 container.remove(force=force)
             except Exception as e:
                 if "not found" in str(e).lower():
+                    # Container already removed - still success
+                    nonlocal already_removed
+                    already_removed = True
                     raise ResourceNotFoundError("Container", container_id)
                 raise ContainerError(f"Failed to remove container: {str(e)}")
 
-        await loop.run_in_executor(None, _remove)
+        try:
+            await loop.run_in_executor(None, _remove)
+        except ResourceNotFoundError:
+            # Container was already removed, add attributes and re-raise
+            add_span_attributes(
+                **{
+                    "container.id": container_id,
+                    "container.removed": True,
+                    "container.already_removed": True,
+                }
+            )
+            raise
+
+        # Add cleanup attributes to span on success
+        add_span_attributes(
+            **{
+                "container.id": container_id,
+                "container.removed": True,
+            }
+        )
 
     @instrument_async_function(
         name="container.kill",
@@ -848,7 +925,7 @@ class DockerContainerAdapter(IContainer):
             "service": "docker_container_adapter",
             "operation": "wait",
         },
-        capture_args=True,
+        capture_args=False,
         capture_result=False,
     )
     async def wait(
@@ -859,12 +936,14 @@ class DockerContainerAdapter(IContainer):
         """Wait for a container to stop."""
         client = self._get_client()
         loop = asyncio.get_event_loop()
+        start_time = time.time()
 
         def _wait():
             try:
                 container = client.containers.get(container_id)
                 result = container.wait(timeout=timeout)
-                return result.get("StatusCode", 0)
+                exit_code = result.get("StatusCode", 0)
+                return exit_code
             except Exception as e:
                 if "not found" in str(e).lower():
                     raise ResourceNotFoundError("Container", container_id)
@@ -872,7 +951,19 @@ class DockerContainerAdapter(IContainer):
                     raise ContainerTimeoutError(f"Wait timed out after {timeout}s")
                 raise ContainerError(f"Failed to wait for container: {str(e)}")
 
-        return await loop.run_in_executor(None, _wait)
+        exit_code = await loop.run_in_executor(None, _wait)
+        duration_seconds = time.time() - start_time
+
+        # Add wait attributes to span
+        add_span_attributes(
+            **{
+                "container.id": container_id,
+                "container.exit_code": exit_code,
+                "container.wait_duration_seconds": duration_seconds,
+            }
+        )
+
+        return exit_code
 
     @instrument_async_function(
         name="container.copy_to_container",
