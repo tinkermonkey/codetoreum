@@ -59,7 +59,9 @@ def is_docker_available() -> bool:
             except Exception:
                 # Ignore cleanup errors
                 pass
-            # Force garbage collection to close any remaining sockets
+            # Force garbage collection multiple times to close any remaining sockets
+            # The first gc.collect() might not be enough for some pools to release resources
+            gc.collect()
             gc.collect()
     except (docker.errors.DockerException, Exception):
         return False
@@ -120,7 +122,9 @@ def docker_client() -> Generator[docker.DockerClient, None, None]:
         except Exception:
             # Ignore cleanup errors
             pass
-        # Force garbage collection to close any remaining sockets
+        # Force garbage collection multiple times to close any remaining sockets
+        # The first gc.collect() might not be enough for some pools to release resources
+        gc.collect()
         gc.collect()
 
 

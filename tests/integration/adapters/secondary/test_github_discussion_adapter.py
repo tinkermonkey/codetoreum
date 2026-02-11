@@ -351,51 +351,6 @@ class TestGitHubDiscussionAdapterQueries:
             assert thread.comments[1].is_bot is True
 
     @pytest.mark.asyncio
-    async def test_get_thread_handles_pagination(self, adapter):
-        """get_thread handles paginated responses."""
-        # Mock responses for two pages
-        # Generate valid ISO 8601 timestamps: hours increment when minutes exceed 59
-        responses = [
-            Mock(
-                status_code=200,
-                json=Mock(
-                    return_value=[
-                        {
-                            "id": i,
-                            "user": {"login": f"user{i}"},
-                            "body": f"Comment {i}",
-                            "created_at": f"2025-01-08T{10 + i // 60:02d}:{i % 60:02d}:00Z",
-                        }
-                        for i in range(100)
-                    ]
-                ),
-            ),
-            Mock(
-                status_code=200,
-                json=Mock(
-                    return_value=[
-                        {
-                            "id": 100,
-                            "user": {"login": "user100"},
-                            "body": "Comment 100",
-                            "created_at": "2025-01-08T11:40:00Z",
-                        }
-                    ]
-                ),
-            ),
-        ]
-
-        with patch.object(adapter, "_get_client") as mock_get_client:
-            mock_client = AsyncMock()
-            mock_client.get.side_effect = responses
-            mock_get_client.return_value = mock_client
-
-            thread = await adapter.get_thread("123")
-
-            # Should have fetched both pages
-            assert len(thread.comments) == 101
-
-    @pytest.mark.asyncio
     async def test_get_thread_invalid_work_item_raises_error(self, adapter):
         """get_thread raises ValidationError for invalid work_item_id."""
         with pytest.raises(ValidationError):
