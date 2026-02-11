@@ -996,7 +996,7 @@ def create_development_app() -> FastAPI:
         async def get_execution_status(
             self, execution_id: str
         ) -> ExecutionStatusInfo:
-            from datetime import datetime
+            from datetime import datetime, timezone
             return ExecutionStatusInfo(
                 execution_id=execution_id,
                 workflow_run_id="mock-workflow-123",
