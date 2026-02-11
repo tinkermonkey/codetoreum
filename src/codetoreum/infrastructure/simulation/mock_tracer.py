@@ -128,6 +128,31 @@ class MockSpan:
         """Mark that trace context was injected into an event."""
         self.span_context_injected = True
 
+    @property
+    def duration_ms(self) -> Optional[float]:
+        """Get span duration in milliseconds."""
+        if self.end_time is None:
+            return None
+        return (self.end_time - self.start_time).total_seconds() * 1000
+
+    @property
+    def traceparent(self) -> str:
+        """Get W3C Trace Context traceparent header."""
+        trace_flags = "01" if self.status != SpanStatus.ERROR else "00"
+        parent_id = self.parent_span_id or "0000000000000000"
+        return f"00-{self.trace_id}-{self.span_id}-{trace_flags}"
+
+    def record_exception(self, exception: Exception) -> None:
+        """Record an exception on the span."""
+        self.add_event(
+            "exception",
+            attributes={
+                "exception.type": type(exception).__name__,
+                "exception.message": str(exception),
+            },
+        )
+        self.set_status(SpanStatus.ERROR)
+
     def to_capture(self) -> SpanCapture:
         """Convert to SpanCapture for immutable storage."""
         return SpanCapture(

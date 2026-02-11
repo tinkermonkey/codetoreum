@@ -228,15 +228,15 @@ export SIGNOZ_TRACE_API_KEY=optional_key
 
 ## Next Steps
 
-The complete instrumentation roadmap now includes:
-1. ✅ Phase 1: Basic OpenTelemetry setup
-2. ✅ Phase 2: Log correlation with trace IDs
-3. ✅ Phase 3: Event bus W3C Trace Context propagation
-4. ✅ Phase 4: WebSocket instrumentation
-5. ✅ Phase 5: Pipeline locking
-6. ✅ **Phase 6: Docker container lifecycle operations** (THIS PHASE)
+The complete instrumentation roadmap includes:
+1. ✅ Basic OpenTelemetry setup
+2. ✅ Log correlation with trace IDs
+3. ✅ Event bus W3C Trace Context propagation
+4. ✅ WebSocket instrumentation
+5. ✅ Pipeline locking
+6. ✅ **Docker container lifecycle operations** (CURRENT)
 
-Remaining phases would focus on:
+Remaining instrumentation areas include:
 - Application services (orchestrator, scheduler, execution)
 - Domain layer business operations
 - External integrations (GitHub API, LLM providers)

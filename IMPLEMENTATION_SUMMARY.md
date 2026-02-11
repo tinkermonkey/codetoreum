@@ -282,7 +282,7 @@ if trace_data:
 3. **No baggage** - OpenTelemetry baggage not propagated
 4. **No sampling control** - Parent's sampling decision not enforced
 
-These are intentional limitations for Phase 3, with future enhancements possible.
+These are intentional limitations for W3C Trace Context propagation, with future enhancements possible.
 
 ## Future Work
 
@@ -318,7 +318,7 @@ These are intentional limitations for Phase 3, with future enhancements possible
 ## Commit
 
 ```
-Phase 3: Implement W3C Trace Context propagation in event bus
+Implement W3C Trace Context propagation in event bus
 
 Enables complete distributed tracing of events through the event bus using
 W3C Trace Context standard (traceparent format). This allows visibility into
