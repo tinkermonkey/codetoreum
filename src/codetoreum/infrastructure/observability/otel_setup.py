@@ -6,11 +6,14 @@ Supports configurable sampling strategies, performance tuning, and granular enab
 """
 
 import logging
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from opentelemetry.sdk.resources import Resource
 
 # Try to import OpenTelemetry - it's optional
 try:
-    from opentelemetry import trace
+    from opentelemetry import trace, logs
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor
     from opentelemetry.sdk.trace.sampling import (
@@ -28,7 +31,11 @@ try:
         SERVICE_VERSION,
     )
     from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+    from opentelemetry.exporter.otlp.proto.http.log_exporter import OTLPLogExporter
+    from opentelemetry.sdk.logs import LoggerProvider
+    from opentelemetry.sdk.logs.export import BatchLogRecordProcessor
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+    from opentelemetry.instrumentation.logging import LoggingInstrumentor
 
     OPENTELEMETRY_AVAILABLE = True
 except ImportError:
@@ -68,6 +75,81 @@ def _get_sampler(config: ObservabilityConfig):
             f"Unknown sampler type '{sampler_type}', defaulting to ALWAYS_ON"
         )
         return ALWAYS_ON
+
+
+def _setup_log_export(config: ObservabilityConfig, resource: "Resource") -> None:
+    """
+    Initialize OpenTelemetry log export to Signoz.
+
+    This function:
+    1. Creates an OTLPLogExporter configured for the logs HTTP endpoint
+    2. Sets up a LoggerProvider with batch processing
+    3. Instruments Python's logging module to export logs to OTLP
+    4. Ensures logs are correlated with traces via trace context injection
+
+    Args:
+        config: Observability configuration
+        resource: OpenTelemetry resource with service identification
+
+    Note:
+        - Log export is only configured if logs_enabled is True and an endpoint is configured
+        - Graceful degradation: failures in log setup don't crash the application
+        - Trace context is automatically injected into logs when this is enabled
+    """
+    if not config.logs_enabled:
+        logger.debug("Log export disabled (OTEL_LOGS_ENABLED=false)")
+        return
+
+    if not config.logs_endpoint:
+        logger.warning(
+            "Logs enabled but no logs endpoint configured. "
+            "Check OTEL_EXPORTER_OTLP_LOGS_ENDPOINT or Signoz HTTP configuration."
+        )
+        return
+
+    try:
+        # Create OTLP log exporter for Signoz
+        # Logs use HTTP/protobuf instead of gRPC
+        log_exporter = OTLPLogExporter(
+            endpoint=config.logs_endpoint,
+            insecure=config.signoz.insecure,
+        )
+
+        # Create logger provider with resource
+        logger_provider = LoggerProvider(resource=resource)
+
+        # Create batch log record processor with performance tuning
+        batch_log_processor = BatchLogRecordProcessor(
+            log_exporter,
+            max_queue_size=config.batch_max_queue_size,
+            max_export_batch_size=config.batch_max_export_batch_size,
+            schedule_delay_millis=config.batch_schedule_delay_millis,
+        )
+        logger_provider.add_log_record_processor(batch_log_processor)
+
+        # Set global logger provider
+        logs.set_logger_provider(logger_provider)
+
+        # Instrument Python's logging module to export logs to OTLP
+        # This hooks into the Python logging module and exports records to the OTLP backend
+        # Trace context (trace_id, span_id) is automatically correlated
+        LoggingInstrumentor().instrument(
+            set_logging_format=False,  # Keep existing logging format
+        )
+
+        print("[OTEL] ✓ Log export configured", flush=True)
+        logger.info(
+            f"OTLP log export configured. "
+            f"Sending logs to {config.logs_endpoint}"
+        )
+
+    except Exception as e:
+        logger.error(
+            f"Failed to configure log export: {e}",
+            exc_info=True,
+            extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+        )
+        logger.warning("Application will continue without OTLP log export")
 
 
 def setup_opentelemetry(config: ObservabilityConfig, app=None) -> None:
@@ -166,6 +248,10 @@ def setup_opentelemetry(config: ObservabilityConfig, app=None) -> None:
         # Set global tracer provider
         trace.set_tracer_provider(tracer_provider)
 
+        # Configure OTLP log export with trace correlation
+        print("[OTEL] Setting up OTLP log export...", flush=True)
+        _setup_log_export(config, resource)
+
         # Instrument FastAPI if app provided
         # This automatically creates spans for all HTTP requests
         if app:
@@ -181,18 +267,22 @@ def setup_opentelemetry(config: ObservabilityConfig, app=None) -> None:
 
         print(f"[OTEL] ✓ OpenTelemetry initialized successfully", flush=True)
         print(f"[OTEL]   → Sending traces to Signoz at {config.signoz.grpc_endpoint}", flush=True)
+        if config.logs_enabled:
+            print(f"[OTEL]   → Sending logs to Signoz at {config.logs_endpoint}", flush=True)
         print(f"[OTEL]   → Service: {config.signoz.service_name}, Env: {config.signoz.environment}", flush=True)
         print(f"[OTEL]   → Sampler: {config.sampler_type} ({config.sampler_arg if config.sampler_type == 'traceidratio' else 'N/A'})", flush=True)
 
         logger.info(
-            f"OpenTelemetry tracing initialized successfully. "
+            f"OpenTelemetry initialized successfully. "
             f"Sending traces to Signoz at {config.signoz.grpc_endpoint} "
             f"(service: {config.signoz.service_name}, "
             f"env: {config.signoz.environment}, "
             f"sampler: {config.sampler_type})"
         )
+        if config.logs_enabled:
+            logger.info(f"OTLP log export enabled, sending logs to {config.logs_endpoint}")
 
     except Exception as e:
         # Don't crash the application if observability fails
         logger.error(f"Failed to initialize OpenTelemetry: {e}", exc_info=True, extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR})
-        logger.warning("Application will continue without distributed tracing")
+        logger.warning("Application will continue without distributed tracing and log export")
