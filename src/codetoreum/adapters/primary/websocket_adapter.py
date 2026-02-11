@@ -36,6 +36,10 @@ from codetoreum.config import (
 )
 from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.infrastructure.observability.websocket_instrumentation import (
+    WebSocketSessionTracer,
+    WebSocketMessageTracer,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1077,6 +1081,11 @@ class WebSocketAdapter:
         self._heartbeat_task: Optional[asyncio.Task] = None
         self._background_tasks: set[asyncio.Task] = set()
 
+        # Instrumentation for distributed tracing
+        self._session_tracer = WebSocketSessionTracer()
+        self._session_spans: Dict[str, Optional[Any]] = {}
+        self._message_tracers: Dict[str, Optional[WebSocketMessageTracer]] = {}
+
     def get_next_connection_id(self) -> str:
         """
         Generate unique connection ID.
@@ -1105,6 +1114,15 @@ class WebSocketAdapter:
             return
 
         connection_id = self.get_next_connection_id()
+
+        # Start session span for distributed tracing
+        session_span = self._session_tracer.start_session(
+            connection_id=connection_id,
+            client_ip=websocket.client.host if websocket.client else None,
+            token_present=bool(token),
+        )
+        self._session_spans[connection_id] = session_span
+        self._message_tracers[connection_id] = WebSocketMessageTracer(session_span)
 
         try:
             # Accept connection
@@ -1197,11 +1215,15 @@ class WebSocketAdapter:
                     message_type = message.get("type")
 
                     if message_type == "subscribe":
-                        await self._handle_subscribe(connection_id, message)
+                        await self._handle_subscribe_with_instrumentation(
+                            connection_id, message
+                        )
                     elif message_type == "unsubscribe":
-                        await self._handle_unsubscribe(connection_id, message)
+                        await self._handle_unsubscribe_with_instrumentation(
+                            connection_id, message
+                        )
                     elif message_type == "ping":
-                        await self._handle_ping(connection_id)
+                        await self._handle_ping_with_instrumentation(connection_id)
                     else:
                         # Unknown message type
                         await self.manager.send_personal_message(
@@ -1216,6 +1238,7 @@ class WebSocketAdapter:
             except WebSocketDisconnect:
                 # Client disconnected
                 logger.info(f"WebSocket client {connection_id} disconnected")
+                self._cleanup_session_span(connection_id, reason="client_disconnect")
                 self.manager.disconnect(connection_id)
             except ValueError as e:
                 # Invalid message format or data
@@ -1236,6 +1259,7 @@ class WebSocketAdapter:
                 except Exception:
                     pass
                 finally:
+                    self._cleanup_session_span(connection_id, reason="invalid_message")
                     self.manager.disconnect(connection_id)
             except json.JSONDecodeError as e:
                 # JSON parsing error
@@ -1256,6 +1280,7 @@ class WebSocketAdapter:
                 except Exception:
                     pass
                 finally:
+                    self._cleanup_session_span(connection_id, reason="json_parse_error")
                     self.manager.disconnect(connection_id)
             except Exception as e:
                 # Unexpected error
@@ -1275,8 +1300,13 @@ class WebSocketAdapter:
                     )
                 except Exception:
                     pass
+                finally:
+                    self._cleanup_session_span(connection_id, reason="unexpected_error")
+                    self.manager.disconnect(connection_id)
             finally:
-                self.manager.disconnect(connection_id)
+                # Make sure session span is cleaned up
+                if connection_id in self._session_spans:
+                    self._cleanup_session_span(connection_id, reason="final_cleanup")
         finally:
             # Cancel heartbeat task
             if heartbeat_task:
@@ -1331,6 +1361,133 @@ class WebSocketAdapter:
         except asyncio.CancelledError:
             # Task cancelled, connection closing
             pass
+
+    def _cleanup_session_span(
+        self, connection_id: str, reason: str = "normal_closure"
+    ) -> None:
+        """
+        Clean up session span for a disconnected connection.
+
+        Args:
+            connection_id: Connection identifier
+            reason: Reason for disconnection
+        """
+        session_span = self._session_spans.pop(connection_id, None)
+        self._message_tracers.pop(connection_id, None)
+
+        if connection_id in self.manager.connections:
+            conn_state = self.manager.connections[connection_id]
+            message_count = len(conn_state.buffer)
+            buffered_events = len(conn_state.subscriptions)
+        else:
+            message_count = 0
+            buffered_events = 0
+
+        self._session_tracer.end_session(
+            session_span,
+            reason=reason,
+            message_count=message_count,
+            buffered_events=buffered_events,
+        )
+
+    async def _handle_subscribe_with_instrumentation(
+        self, connection_id: str, message: Dict[str, Any]
+    ) -> None:
+        """
+        Handle subscribe message with instrumentation.
+
+        Args:
+            connection_id: Connection identifier
+            message: Subscribe message
+        """
+        message_tracer = self._message_tracers.get(connection_id)
+        if not message_tracer:
+            await self._handle_subscribe(connection_id, message)
+            return
+
+        # Count filters
+        filter_attrs = [
+            message.get("event_types"),
+            message.get("work_item_id"),
+            message.get("workflow_id"),
+            message.get("agent_id"),
+            message.get("project_name"),
+        ]
+        filter_count = sum(1 for attr in filter_attrs if attr)
+
+        # Start message span
+        message_span = message_tracer.start_subscribe_message(
+            subscription_type=message.get("subscription_type", "all_events"),
+            filter_count=filter_count,
+        )
+
+        try:
+            await self._handle_subscribe(connection_id, message)
+            message_tracer.end_message_span(message_span, success=True)
+        except Exception as e:
+            message_tracer.end_message_span(
+                message_span,
+                success=False,
+                error_code="subscribe_error",
+            )
+            raise
+
+    async def _handle_unsubscribe_with_instrumentation(
+        self, connection_id: str, message: Dict[str, Any]
+    ) -> None:
+        """
+        Handle unsubscribe message with instrumentation.
+
+        Args:
+            connection_id: Connection identifier
+            message: Unsubscribe message
+        """
+        message_tracer = self._message_tracers.get(connection_id)
+        if not message_tracer:
+            await self._handle_unsubscribe(connection_id, message)
+            return
+
+        subscription_id = message.get("subscription_id", "unknown")
+
+        # Start message span
+        message_span = message_tracer.start_unsubscribe_message(subscription_id)
+
+        try:
+            await self._handle_unsubscribe(connection_id, message)
+            message_tracer.end_message_span(message_span, success=True)
+        except Exception as e:
+            message_tracer.end_message_span(
+                message_span,
+                success=False,
+                error_code="unsubscribe_error",
+            )
+            raise
+
+    async def _handle_ping_with_instrumentation(self, connection_id: str) -> None:
+        """
+        Handle ping message with instrumentation.
+
+        Args:
+            connection_id: Connection identifier
+        """
+        message_tracer = self._message_tracers.get(connection_id)
+        if not message_tracer:
+            await self._handle_ping(connection_id)
+            return
+
+        # Start message span
+        message_span = message_tracer.start_ping_message()
+
+        try:
+            await self._handle_ping(connection_id)
+            message_tracer.end_message_span(message_span, success=True)
+        except Exception as e:
+            message_tracer.end_message_span(
+                message_span,
+                success=False,
+                error_code="ping_error",
+            )
+            raise
 
     async def _handle_subscribe(self, connection_id: str, message: Dict[str, Any]) -> None:
         """
@@ -1430,11 +1587,104 @@ class WebSocketAdapter:
         Broadcast domain event to subscribed connections.
 
         This method is called by the event bus when domain events are published.
+        Creates MESSAGE spans for each client that receives the event, linking
+        to the event's trace context for distributed tracing.
 
         Args:
             event: Domain event to broadcast
         """
+        # Delegate to manager to actually broadcast
         await self.manager.broadcast_event(event)
+
+        # Record event deliveries with instrumentation
+        # (async, doesn't block broadcasting)
+        self._record_event_deliveries(event)
+
+    def _record_event_deliveries(self, event: DomainEvent) -> None:
+        """
+        Record event delivery to clients for tracing purposes.
+
+        Creates MESSAGE spans for each subscribed client, linking to the event's
+        trace context. This enables end-to-end tracing from event creation
+        through publication to client delivery.
+
+        Args:
+            event: Domain event being delivered
+        """
+        try:
+            for connection_id, message_tracer in self._message_tracers.items():
+                if not message_tracer:
+                    continue
+
+                try:
+                    # Check if this connection has subscriptions that match the event
+                    if connection_id not in self.manager.connections:
+                        continue
+
+                    conn_state = self.manager.connections[connection_id]
+                    for subscription in conn_state.subscriptions:
+                        # Check if subscription matches event
+                        if self._subscription_matches_event(subscription, event):
+                            # Create MESSAGE span for this delivery
+                            span = message_tracer.start_event_delivery_span(
+                                event_type=event.event_type,
+                                event_id=str(event.event_id),
+                                subscription_type=subscription.subscription_type.value,
+                            )
+
+                            # Link to event's trace context for distributed tracing
+                            message_tracer.link_to_event_trace_context(span, event)
+
+                            # End span (in production, might be held open while
+                            # message is in buffer for more accurate timing)
+                            message_tracer.end_message_span(span, success=True)
+                except Exception as e:
+                    logger.debug(
+                        f"Error recording event delivery for {connection_id}: {e}",
+                        exc_info=False,
+                    )
+        except Exception as e:
+            logger.debug(f"Error in _record_event_deliveries: {e}", exc_info=False)
+
+    @staticmethod
+    def _subscription_matches_event(subscription: Any, event: DomainEvent) -> bool:
+        """
+        Check if a subscription matches an event.
+
+        Args:
+            subscription: EventFilter subscription
+            event: Domain event
+
+        Returns:
+            True if event matches subscription filters
+        """
+        try:
+            # Check event type filters (OR logic)
+            if subscription.event_types:
+                if event.event_type not in subscription.event_types:
+                    return False
+
+            # Check aggregate ID filters (AND logic)
+            if subscription.work_item_id:
+                if hasattr(event, "work_item_id") and event.work_item_id != subscription.work_item_id:
+                    return False
+
+            if subscription.workflow_id:
+                if hasattr(event, "workflow_id") and event.workflow_id != subscription.workflow_id:
+                    return False
+
+            if subscription.agent_id:
+                if hasattr(event, "agent_id") and event.agent_id != subscription.agent_id:
+                    return False
+
+            if subscription.project_name:
+                if hasattr(event, "project_name") and event.project_name != subscription.project_name:
+                    return False
+
+            return True
+        except Exception:
+            # If matching fails, assume it doesn't match
+            return False
 
     async def close(self):
         """
