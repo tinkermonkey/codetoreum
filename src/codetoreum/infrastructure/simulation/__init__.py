@@ -21,6 +21,13 @@ from .simulation_runner import (
     SimulationResult,
     SimulationRunner,
 )
+from .mock_tracer import (
+    MockTracer,
+    SpanCapture,
+    SpanKind,
+    SpanStatus,
+    TraceContextValidator,
+)
 from .bootstrap import (
     SimulationApplicationBootstrap,
     SimulationAdapters,
@@ -63,6 +70,12 @@ __all__ = [
     "SimulationRunner",
     "SimulationResult",
     "AssertionResult",
+    # Mock Tracer
+    "MockTracer",
+    "SpanCapture",
+    "SpanKind",
+    "SpanStatus",
+    "TraceContextValidator",
     # Bootstrap
     "SimulationApplicationBootstrap",
     "SimulationAdapters",
