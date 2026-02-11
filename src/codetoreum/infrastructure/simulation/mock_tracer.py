@@ -217,12 +217,16 @@ class MockTracer(ITracerPort):
         Returns:
             MockSpan instance
         """
-        return self.start_span_sync(
+        span = self.start_span_sync(
             name=name,
             kind=kind,
             parent_context=parent_context,
-            attributes=attributes,
         )
+        # Set initial attributes if provided
+        if attributes:
+            for key, value in attributes.items():
+                span.set_attribute(key, value)
+        return span
 
     def _start_span_internal(
         self,
