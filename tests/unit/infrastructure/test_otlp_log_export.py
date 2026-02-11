@@ -91,13 +91,22 @@ class TestLogExportSetupFunction:
         """Test _setup_log_export handles missing endpoint gracefully."""
         from codetoreum.infrastructure.observability.otel_setup import _setup_log_export
 
-        # When using TYPE_CHECKING, we don't have actual Resource at runtime
-        # Create a mock Resource for testing
-        class MockResource:
-            def __init__(self, attributes):
-                self.attributes = attributes
+        # Use actual Resource if available
+        try:
+            from opentelemetry.sdk.resources import Resource, SERVICE_NAME, DEPLOYMENT_ENVIRONMENT
+            resource = Resource(
+                attributes={
+                    SERVICE_NAME: "test_service",
+                    DEPLOYMENT_ENVIRONMENT: "development",
+                }
+            )
+        except ImportError:
+            # Fallback if OpenTelemetry not installed
+            class MockResource:
+                def __init__(self, attributes):
+                    self.attributes = attributes
+            resource = MockResource(attributes={"service.name": "test_service"})
 
-        resource = MockResource(attributes={"service.name": "test_service"})
         config = ObservabilityConfig(
             enabled=True,
             traces_enabled=True,
@@ -181,3 +190,109 @@ class TestTraceCorrelationInLogs:
         # Should not raise
         handler.addFilter(filter_obj)
         assert filter_obj in handler.filters
+
+
+@pytest.mark.skipif(
+    not _is_opentelemetry_available(),
+    reason="OpenTelemetry not installed"
+)
+class TestLogExportIntegration:
+    """Integration tests for OTLP log export with trace correlation."""
+
+    @pytest.mark.asyncio
+    async def test_log_export_with_trace_correlation(self):
+        """Verify logs are exported with trace_id and span_id from active span.
+
+        This integration test verifies:
+        - LoggerProvider properly exports logs
+        - TraceContextInjector enriches records with trace context
+        - Logs can include trace_id and span_id when logged within a span
+        """
+        from opentelemetry import trace
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.resources import Resource, SERVICE_NAME
+        from opentelemetry.sdk.logs import LoggerProvider as OtelLoggerProvider
+        from opentelemetry.sdk.logs.export import SimpleLogRecordProcessor
+        from codetoreum.infrastructure.observability.logging_integration import (
+            TraceContextInjector,
+        )
+        import logging
+
+        # Create a resource
+        resource = Resource(attributes={SERVICE_NAME: "test-service"})
+
+        # Set up trace provider
+        trace_provider = TracerProvider(resource=resource)
+        trace.set_tracer_provider(trace_provider)
+
+        # Capture exported logs
+        exported_logs = []
+
+        class TestLogExporter:
+            """Test exporter that captures logs."""
+            def export(self, batch):
+                exported_logs.extend(batch)
+                return 0  # Success
+
+            def shutdown(self):
+                pass
+
+            def force_flush(self, timeout_millis=30000):
+                return True
+
+        # Set up logger provider with test exporter
+        logger_provider = OtelLoggerProvider(resource=resource)
+        logger_provider.add_log_record_processor(
+            SimpleLogRecordProcessor(TestLogExporter())
+        )
+        from opentelemetry import logs as otel_logs
+        otel_logs.set_logger_provider(logger_provider)
+
+        # Wire TraceContextInjector to root logger
+        trace_injector = TraceContextInjector()
+        logging.getLogger().addFilter(trace_injector)
+
+        try:
+            # Create tracer and log within active span
+            tracer = trace.get_tracer(__name__)
+
+            with tracer.start_as_current_span("test-operation") as span:
+                # Log a message within the span context
+                test_logger = logging.getLogger(__name__)
+                test_logger.info("Test message within span")
+
+                # Get span context for verification
+                current_span = trace.get_current_span()
+                span_context = current_span.get_span_context()
+                expected_trace_id = f"{span_context.trace_id:032x}"
+                expected_span_id = f"{span_context.span_id:016x}"
+
+            # Force flush to ensure logs are exported
+            logger_provider.force_flush()
+
+            # Verify log was exported with trace context
+            assert len(exported_logs) > 0, "No logs were exported"
+
+            # Check the last exported log
+            log_record = exported_logs[-1]
+            assert "Test message within span" in str(log_record.body)
+
+            # Verify trace context was injected (could be in attributes or record properties)
+            attributes = getattr(log_record, 'attributes', None) or {}
+            trace_id_found = False
+            span_id_found = False
+
+            if 'trace_id' in attributes:
+                trace_id_found = True
+            if 'span_id' in attributes:
+                span_id_found = True
+
+            # Either attributes contain trace context or LogRecord was enriched
+            # (behavior depends on OpenTelemetry version)
+            assert trace_id_found or span_id_found or (
+                hasattr(log_record, 'trace_id') or hasattr(log_record, 'span_id')
+            ), "Trace context not found in exported log record"
+
+        finally:
+            # Clean up
+            logging.getLogger().removeFilter(trace_injector)

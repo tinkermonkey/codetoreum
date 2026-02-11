@@ -5,7 +5,7 @@ Initializes OpenTelemetry tracing with Signoz OTLP exporter.
 Supports configurable sampling strategies, performance tuning, and granular enable/disable.
 """
 
-import logging
+import logging as stdlib_logging
 from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -47,7 +47,7 @@ except ImportError:
 from .config import ObservabilityConfig
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 
-logger = logging.getLogger(__name__)
+logger = stdlib_logging.getLogger(__name__)
 
 
 def _get_sampler(config: ObservabilityConfig):
@@ -77,6 +77,40 @@ def _get_sampler(config: ObservabilityConfig):
         return ALWAYS_ON
 
 
+def _record_log_export_error(error: Exception, config: ObservabilityConfig) -> None:
+    """
+    Record metric for log export error and log warning.
+
+    Emits otel.log.export.failures counter metric to track export errors.
+    Logs warning message with error details to aid troubleshooting.
+
+    Args:
+        error: The exception that occurred during log export setup
+        config: The observability configuration
+    """
+    # Record failure metric
+    try:
+        from opentelemetry import metrics
+        meter = metrics.get_meter("codetoreum.observability")
+        counter = meter.create_counter(
+            "otel.log.export.failures",
+            description="Number of OTLP log export failures"
+        )
+        counter.add(1)
+    except Exception as metric_error:
+        logger.debug(
+            f"Failed to record log export error metric: {metric_error}",
+            exc_info=False
+        )
+
+    logger.warning(
+        f"OTLP log export setup failed: {error}. "
+        f"Continuing without log export to {config.logs_endpoint}",
+        exc_info=True,
+        extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+    )
+
+
 def _setup_log_export(config: ObservabilityConfig, resource: "Resource") -> None:
     """
     Initialize OpenTelemetry log export to Signoz.
@@ -86,18 +120,23 @@ def _setup_log_export(config: ObservabilityConfig, resource: "Resource") -> None
     2. Sets up a LoggerProvider with batch processing
     3. Instruments Python's logging module to export logs to OTLP
     4. Ensures logs are correlated with traces via trace context injection
+    5. Wires TraceContextInjector filter to root logger for trace correlation
 
     Args:
         config: Observability configuration
         resource: OpenTelemetry resource with service identification
 
     Note:
-        - Log export is only configured if logs_enabled is True and an endpoint is configured
+        - Log export is only configured if logs_enabled is True, signoz.enabled is True, and an endpoint is configured
         - Graceful degradation: failures in log setup don't crash the application
         - Trace context is automatically injected into logs when this is enabled
     """
     if not config.logs_enabled:
         logger.debug("Log export disabled (OTEL_LOGS_ENABLED=false)")
+        return
+
+    if not config.signoz.enabled:
+        logger.debug("Log export disabled (SIGNOZ_ENABLED=false)")
         return
 
     if not config.logs_endpoint:
@@ -137,19 +176,19 @@ def _setup_log_export(config: ObservabilityConfig, resource: "Resource") -> None
             set_logging_format=False,  # Keep existing logging format
         )
 
-        print("[OTEL] ✓ Log export configured", flush=True)
+        # Wire TraceContextInjector filter to root logger for trace correlation
+        from codetoreum.infrastructure.observability.logging_integration import TraceContextInjector
+        trace_filter = TraceContextInjector()
+        stdlib_logging.getLogger().addFilter(trace_filter)
+
         logger.info(
             f"OTLP log export configured. "
             f"Sending logs to {config.logs_endpoint}"
         )
+        logger.debug("TraceContextInjector wired to root logger for trace correlation")
 
     except Exception as e:
-        logger.error(
-            f"Failed to configure log export: {e}",
-            exc_info=True,
-            extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
-        )
-        logger.warning("Application will continue without OTLP log export")
+        _record_log_export_error(e, config)
 
 
 def setup_opentelemetry(config: ObservabilityConfig, app=None) -> None:
@@ -185,29 +224,22 @@ def setup_opentelemetry(config: ObservabilityConfig, app=None) -> None:
     # Check if OpenTelemetry is available
     if not OPENTELEMETRY_AVAILABLE:
         msg = "OpenTelemetry packages not installed - observability disabled"
-        print(f"[OTEL] {msg}")
         logger.info(msg)
         return
-
-    # DEBUG: Print to stdout since logger might not be configured yet
-    print(f"[OTEL] setup_opentelemetry called with config.enabled={config.enabled}, traces_enabled={config.traces_enabled}, signoz.enabled={config.signoz.enabled}")
 
     # Check master switches
     if not config.enabled:
         msg = "Observability is disabled (OTEL_ENABLED=false)"
-        print(f"[OTEL] {msg}")
         logger.info(msg)
         return
 
     if not config.traces_enabled:
         msg = "Tracing is disabled (OTEL_TRACES_ENABLED=false)"
-        print(f"[OTEL] {msg}")
         logger.info(msg)
         return
 
     if not config.signoz.enabled:
         msg = "Signoz integration is disabled (SIGNOZ_ENABLED=false)"
-        print(f"[OTEL] {msg}")
         logger.info(msg)
         return
 
@@ -249,28 +281,18 @@ def setup_opentelemetry(config: ObservabilityConfig, app=None) -> None:
         trace.set_tracer_provider(tracer_provider)
 
         # Configure OTLP log export with trace correlation
-        print("[OTEL] Setting up OTLP log export...", flush=True)
         _setup_log_export(config, resource)
 
         # Instrument FastAPI if app provided
         # This automatically creates spans for all HTTP requests
         if app:
             FastAPIInstrumentor.instrument_app(app)
-            print("[OTEL] ✓ FastAPI auto-instrumentation enabled", flush=True)
             logger.info("FastAPI auto-instrumentation enabled")
 
         # Instrument third-party libraries (SQLAlchemy, Redis, HTTP clients)
         from .auto_instrument import setup_library_instrumentation
 
-        print("[OTEL] Setting up library auto-instrumentation...", flush=True)
         setup_library_instrumentation(config)
-
-        print(f"[OTEL] ✓ OpenTelemetry initialized successfully", flush=True)
-        print(f"[OTEL]   → Sending traces to Signoz at {config.signoz.grpc_endpoint}", flush=True)
-        if config.logs_enabled:
-            print(f"[OTEL]   → Sending logs to Signoz at {config.logs_endpoint}", flush=True)
-        print(f"[OTEL]   → Service: {config.signoz.service_name}, Env: {config.signoz.environment}", flush=True)
-        print(f"[OTEL]   → Sampler: {config.sampler_type} ({config.sampler_arg if config.sampler_type == 'traceidratio' else 'N/A'})", flush=True)
 
         logger.info(
             f"OpenTelemetry initialized successfully. "
