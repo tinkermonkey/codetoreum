@@ -27,6 +27,7 @@ from codetoreum.domain.value_objects import (
 )
 from codetoreum.domain.work_item import WorkItem
 from codetoreum.domain.workspace_context import WorkspaceContext
+from codetoreum.infrastructure.observability.instrumentation import instrument_async_function
 from codetoreum.ports.exceptions import (
     ContainerExecutionError,
     ContainerTimeoutError,
@@ -127,6 +128,10 @@ class ExecutionService:
         self._active_executions: Dict[str, AgentExecution] = {}
         self._log_subscribers: Dict[str, List[Callable[[LogEntry], None]]] = {}
 
+    @instrument_async_function(
+        name="execution.create_execution",
+        attributes={"service": "execution_service", "operation": "create"}
+    )
     async def create_execution(
         self,
         agent: Agent,
@@ -192,6 +197,10 @@ class ExecutionService:
             )
             raise
 
+    @instrument_async_function(
+        name="execution.start_execution",
+        attributes={"service": "execution_service", "operation": "start"}
+    )
     async def start_execution(
         self,
         execution: AgentExecution,
@@ -272,6 +281,10 @@ class ExecutionService:
                 failure_reason=ExecutionFailureReason.VALIDATION_ERROR,
             )
 
+    @instrument_async_function(
+        name="execution.execute_with_llm",
+        attributes={"service": "execution_service", "operation": "execute_llm"}
+    )
     async def execute_with_llm(
         self,
         execution: AgentExecution,
@@ -436,6 +449,10 @@ class ExecutionService:
         }
         return labels
 
+    @instrument_async_function(
+        name="execution.execute_with_container",
+        attributes={"service": "execution_service", "operation": "execute_container"}
+    )
     async def execute_with_container(
         self,
         execution: AgentExecution,
@@ -621,6 +638,10 @@ class ExecutionService:
             # Clean up tracking
             self._active_executions.pop(execution.id, None)
 
+    @instrument_async_function(
+        name="execution.cancel_execution",
+        attributes={"service": "execution_service", "operation": "cancel"}
+    )
     async def cancel_execution(self, execution: AgentExecution) -> ExecutionServiceResult:
         """
         Cancel running execution.

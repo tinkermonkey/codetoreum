@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional
 
 from codetoreum.domain.agent import Agent
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority
+from codetoreum.infrastructure.observability.instrumentation import instrument_async_function
 from codetoreum.ports.exceptions import PortError
 from codetoreum.ports.output import IEventStore
 
@@ -169,6 +170,10 @@ class AgentScheduler:
         self.scheduling_events = scheduling_events
         self.event_store = event_store
 
+    @instrument_async_function(
+        name="agent.schedule_execution",
+        attributes={"service": "agent_scheduler", "operation": "schedule"}
+    )
     async def schedule(
         self, work_item: WorkItem, agent: Agent, priority: WorkItemPriority
     ) -> ScheduleResult:
@@ -308,6 +313,10 @@ class AgentScheduler:
             reason="Task successfully queued",
         )
 
+    @instrument_async_function(
+        name="agent.check_scheduling_capability",
+        attributes={"service": "agent_scheduler", "operation": "check_capability"}
+    )
     async def can_schedule(self, agent_config: AgentConfig, project: str) -> bool:
         """
         Check if agent can be scheduled (resource availability).
@@ -347,6 +356,10 @@ class AgentScheduler:
 
         return True
 
+    @instrument_async_function(
+        name="agent.get_queue_depth",
+        attributes={"service": "agent_scheduler", "operation": "get_depth"}
+    )
     async def get_queue_depth(self, agent: str) -> int:
         """
         Get number of queued tasks for agent.

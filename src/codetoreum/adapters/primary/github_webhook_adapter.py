@@ -15,9 +15,11 @@ from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional
 
 from fastapi import Header, HTTPException, Request
+from opentelemetry import trace
 
 from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.infrastructure.observability.instrumentation import instrument_async_function
 from codetoreum.ports.output.config_store import IConfigStore
 from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.ports.input.workflow_command import (
@@ -158,6 +160,10 @@ class GitHubWebhookAdapter:
         # Track processed delivery IDs for idempotency (in-memory for now)
         self._processed_deliveries: Dict[str, WebhookProcessingResult] = {}
 
+    @instrument_async_function(
+        name="github.webhook.receive",
+        attributes={"service": "github_webhook"}
+    )
     async def receive_webhook(
         self,
         request: Request,
@@ -180,6 +186,10 @@ class GitHubWebhookAdapter:
         Raises:
             HTTPException: On verification or processing failure
         """
+        # Add webhook-specific attributes to span
+        span = trace.get_current_span()
+        span.set_attribute("github.delivery_id", x_github_delivery)
+        span.set_attribute("github.event_type", x_github_event)
         start_time = time.time()
 
         try:
@@ -337,6 +347,10 @@ class GitHubWebhookAdapter:
         """Validate discussion event payload"""
         return "action" in payload and "discussion" in payload
 
+    @instrument_async_function(
+        name="github.webhook.process_event",
+        attributes={"service": "github_webhook"}
+    )
     async def _process_event(self, event: WebhookEvent) -> WebhookProcessingResult:
         """
         Process webhook event and create commands.
@@ -347,6 +361,11 @@ class GitHubWebhookAdapter:
         Returns:
             Processing result
         """
+        # Add event details to span
+        span = trace.get_current_span()
+        span.set_attribute("github.event_type", event.event_type)
+        span.set_attribute("github.delivery_id", event.delivery_id)
+        span.set_attribute("github.repository", event.repository)
         # Get event handler
         handler = self.handlers.get(event.event_type)
         if not handler:
@@ -373,6 +392,10 @@ class GitHubWebhookAdapter:
             commands_created=[cmd for cmd in commands],
         )
 
+    @instrument_async_function(
+        name="github.webhook.handle_project_card",
+        attributes={"service": "github_webhook", "event_type": "project_card"}
+    )
     async def _handle_project_card_event(
         self, event: WebhookEvent, project: str
     ) -> List[str]:
@@ -386,6 +409,11 @@ class GitHubWebhookAdapter:
         Returns:
             List of created command IDs
         """
+        # Add project card context to span
+        span = trace.get_current_span()
+        span.set_attribute("github.project", project)
+        if "action" in event.payload:
+            span.set_attribute("github.action", event.payload["action"])
         payload = event.payload
         action = payload.get("action")
 
@@ -434,6 +462,10 @@ class GitHubWebhookAdapter:
 
         return [result.workflow_run_id]
 
+    @instrument_async_function(
+        name="github.webhook.handle_issues",
+        attributes={"service": "github_webhook", "event_type": "issues"}
+    )
     async def _handle_issues_event(
         self, event: WebhookEvent, project: str
     ) -> List[str]:
@@ -447,9 +479,18 @@ class GitHubWebhookAdapter:
         Returns:
             List of created command IDs
         """
+        # Add issue context to span
+        span = trace.get_current_span()
+        span.set_attribute("github.project", project)
+        if "action" in event.payload:
+            span.set_attribute("github.action", event.payload["action"])
         # Placeholder for future implementation
         return []
 
+    @instrument_async_function(
+        name="github.webhook.handle_issue_comment",
+        attributes={"service": "github_webhook", "event_type": "issue_comment"}
+    )
     async def _handle_issue_comment_event(
         self, event: WebhookEvent, project: str
     ) -> List[str]:
@@ -463,9 +504,22 @@ class GitHubWebhookAdapter:
         Returns:
             List of created command IDs
         """
+        # Add issue comment context to span
+        span = trace.get_current_span()
+        span.set_attribute("github.project", project)
+        if "action" in event.payload:
+            span.set_attribute("github.action", event.payload["action"])
+        if "issue" in event.payload and "number" in event.payload["issue"]:
+            span.set_attribute("github.issue_number", event.payload["issue"]["number"])
+        if "comment" in event.payload and "id" in event.payload["comment"]:
+            span.set_attribute("github.comment_id", event.payload["comment"]["id"])
         # Placeholder for future implementation
         return []
 
+    @instrument_async_function(
+        name="github.webhook.handle_pull_request",
+        attributes={"service": "github_webhook", "event_type": "pull_request"}
+    )
     async def _handle_pull_request_event(
         self, event: WebhookEvent, project: str
     ) -> List[str]:
@@ -479,9 +533,20 @@ class GitHubWebhookAdapter:
         Returns:
             List of created command IDs
         """
+        # Add PR context to span
+        span = trace.get_current_span()
+        span.set_attribute("github.project", project)
+        if "action" in event.payload:
+            span.set_attribute("github.action", event.payload["action"])
+        if "number" in event.payload:
+            span.set_attribute("github.pr_number", event.payload["number"])
         # Placeholder for future implementation
         return []
 
+    @instrument_async_function(
+        name="github.webhook.handle_discussion",
+        attributes={"service": "github_webhook", "event_type": "discussion"}
+    )
     async def _handle_discussion_event(
         self, event: WebhookEvent, project: str
     ) -> List[str]:
@@ -495,6 +560,11 @@ class GitHubWebhookAdapter:
         Returns:
             List of created command IDs
         """
+        # Add discussion context to span
+        span = trace.get_current_span()
+        span.set_attribute("github.project", project)
+        if "action" in event.payload:
+            span.set_attribute("github.action", event.payload["action"])
         # Placeholder for future implementation
         return []
 
