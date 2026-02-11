@@ -53,6 +53,10 @@ from .trace_context_propagation import (
     extract_and_activate_trace_context,
 )
 
+# Note: InstrumentedEventBus and InstrumentedEventHandler are available via:
+# from codetoreum.infrastructure.observability.event_bus_instrumentation import ...
+# They are not imported here to avoid circular dependencies with event_bus.py
+
 __all__ = [
     # Configuration
     "SignozConfig",

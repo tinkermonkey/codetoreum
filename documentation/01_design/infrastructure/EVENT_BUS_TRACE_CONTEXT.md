@@ -1,6 +1,6 @@
 # Event Bus W3C Trace Context Propagation
 
-**Status:** Implemented (Phase 3)
+**Status:** Implemented
 **Date:** February 2026
 **Version:** 1.0
 

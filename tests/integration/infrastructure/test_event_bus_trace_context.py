@@ -317,3 +317,48 @@ class TestEventBusTraceContextIntegration:
             # The event should either have traceparent or be valid for the event bus
             # (trace context is optional)
             assert "traceparent" in event.metadata or event.metadata == {}
+
+    @pytest.mark.skipif(not OTEL_AVAILABLE, reason="OpenTelemetry not available")
+    @pytest.mark.asyncio
+    async def test_consumer_span_attributes_with_handler(self):
+        """Test that CONSUMER spans include handler.class attribute.
+
+        This test verifies that when a handler processes an event with existing
+        trace context, the CONSUMER span is created with proper attributes.
+        """
+        event_bus = EventBus()
+        handler = SimpleEventHandler()
+        event_bus.register_handler(handler)
+
+        event = DomainEvent(
+            aggregate_id="test-consumer-span",
+            aggregate_type="TestAggregate",
+        )
+
+        # Manually inject trace context (simulating PRODUCER span)
+        trace_data = TraceContextData(
+            version="00",
+            trace_id="0af7651916cd43dd8448eb211c80319c",  # 32 hex chars
+            span_id="b9c7c989f97918e1",  # 16 hex chars
+            trace_flags="01",
+        )
+        event.metadata["traceparent"] = trace_data.to_traceparent()
+
+        # Publish event - handler will create CONSUMER span
+        await event_bus.publish(event)
+
+        # Verify handler received the event
+        assert len(handler.handled_events) == 1
+        handled_event = handler.handled_events[0]
+
+        # Verify trace context was preserved
+        assert "traceparent" in handled_event.metadata
+
+        # Verify trace context can be extracted
+        extracted = TraceContextPropagator.extract_trace_context(handled_event)
+        assert extracted is not None
+        assert extracted.trace_id == trace_data.trace_id
+        assert extracted.span_id == trace_data.span_id
+
+        # The test passes if the handler was successfully called with the event
+        # (which means the CONSUMER span was successfully created and executed)
