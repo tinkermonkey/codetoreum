@@ -28,6 +28,7 @@ from codetoreum.ports.exceptions import (
     ResourceNotFoundError,
     ValidationError,
 )
+from tests.conftest import wait_for_polling_cycle
 from .conftest import MockIdentityService
 
 
@@ -250,7 +251,7 @@ class TestGitHubDiscussionAdapterPolling:
         polling_adapter.on("comment.needs_response", events.append)
 
         # Wait for two polling cycles (initial interval is 1 second)
-        await asyncio.sleep(2.5)
+        await wait_for_polling_cycle(events, expected_count=1, timeout=10.0)
 
         # Should have detected new comment (charlie's comment)
         assert len(events) >= 1
@@ -289,8 +290,8 @@ class TestGitHubDiscussionAdapterPolling:
 
         adapter.get_thread = mock_get_thread
 
-        # Wait for 5 seconds to see multiple polls
-        await asyncio.sleep(5)
+        # Wait for at least 2 polling calls
+        await wait_for_polling_cycle(call_times, expected_count=2, timeout=15.0)
 
         adapter.stop_monitoring("123")
 

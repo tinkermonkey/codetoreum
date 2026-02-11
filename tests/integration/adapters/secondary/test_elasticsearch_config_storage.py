@@ -20,7 +20,12 @@ from codetoreum.ports.output.config_store import (
     ProjectConfig,
     WorkflowTemplate,
 )
-from tests.conftest import docker_available, ModernElasticsearchContainer
+from tests.conftest import (
+    docker_available,
+    ModernElasticsearchContainer,
+    wait_for_condition,
+    wait_for_elasticsearch_indexing,
+)
 
 # Mark all tests in this module as requiring Docker
 pytestmark = docker_available
@@ -73,8 +78,16 @@ async def config_storage(es_client):
     # Initialize storage (create indices)
     await storage.initialize()
 
-    # Wait for indices to be ready
-    await asyncio.sleep(1)
+    # Wait for indices to be ready by checking cluster health
+    async def indices_ready():
+        try:
+            health = await es_client.cluster.health()
+            # Wait for at least one index to be ready
+            return health.get("active_shards", 0) > 0
+        except Exception:
+            return False
+
+    await wait_for_condition(indices_ready, timeout=10.0)
 
     yield storage
 
@@ -168,7 +181,7 @@ async def test_save_and_get_project_config(config_storage, sample_project_config
     await config_storage.save_project_config(sample_project_config)
 
     # Wait for indexing
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Retrieve by ID
     retrieved = await config_storage.get_project_config(sample_project_config.id)
@@ -191,7 +204,7 @@ async def test_get_project_config_by_name(config_storage, sample_project_config)
     await config_storage.save_project_config(sample_project_config)
 
     # Wait for indexing
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Retrieve by name
     retrieved = await config_storage.get_project_config_by_name(
@@ -210,14 +223,14 @@ async def test_update_project_config_versioning(config_storage, sample_project_c
     await config_storage.save_project_config(sample_project_config)
 
     # Wait for indexing
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Update config
     sample_project_config.tech_stacks["typescript"] = "5.0"
     await config_storage.save_project_config(sample_project_config)
 
     # Wait for indexing
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Retrieve updated config
     retrieved = await config_storage.get_project_config(sample_project_config.id)
@@ -242,7 +255,7 @@ async def test_save_and_get_agent_config(config_storage, sample_agent_config):
     await config_storage.save_agent_config(sample_agent_config)
 
     # Wait for indexing
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Retrieve agent config
     retrieved = await config_storage.get_agent_config(
@@ -266,7 +279,7 @@ async def test_save_and_get_pipeline_config(config_storage, sample_pipeline_conf
     await config_storage.save_pipeline_config(sample_pipeline_config)
 
     # Wait for indexing
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Retrieve pipeline config
     retrieved = await config_storage.get_pipeline_config(
@@ -289,7 +302,7 @@ async def test_save_and_get_workflow_template(config_storage, sample_workflow_te
     await config_storage.save_workflow_template(sample_workflow_template)
 
     # Wait for indexing
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Retrieve workflow template
     retrieved = await config_storage.get_workflow_template(
@@ -320,7 +333,7 @@ async def test_list_projects(config_storage, sample_project_config):
     await config_storage.save_project_config(project2)
 
     # Wait for indexing
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # List projects
     projects = await config_storage.list_projects()
@@ -350,7 +363,7 @@ async def test_list_agents(config_storage, sample_agent_config):
     await config_storage.save_agent_config(agent2)
 
     # Wait for indexing
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # List agents
     agents = await config_storage.list_agents(agent1.project_id)
@@ -371,7 +384,7 @@ async def test_search_configs(config_storage, sample_project_config):
     await config_storage.save_project_config(project)
 
     # Wait for indexing
-    await asyncio.sleep(2)
+    await wait_for_elasticsearch_indexing(es_client, timeout=10.0)
 
     # Search for project
     results = await config_storage.search_configs(
@@ -388,13 +401,13 @@ async def test_config_version_history(config_storage, sample_project_config):
     """Test configuration version history tracking."""
     # Save initial version
     await config_storage.save_project_config(sample_project_config)
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Update config multiple times
     for i in range(3):
         sample_project_config.tech_stacks[f"tool{i}"] = f"v{i}"
         await config_storage.save_project_config(sample_project_config)
-        await asyncio.sleep(1)
+        await wait_for_elasticsearch_indexing(es_client)
 
     # Get version history
     versions = await config_storage.list_config_versions(sample_project_config.id)
@@ -410,12 +423,12 @@ async def test_get_specific_config_version(config_storage, sample_project_config
     """Test retrieving a specific version of a configuration."""
     # Save initial version
     await config_storage.save_project_config(sample_project_config)
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Update config
     sample_project_config.tech_stacks["new_tool"] = "1.0"
     await config_storage.save_project_config(sample_project_config)
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Get version 1
     version_1 = await config_storage.get_config_version(sample_project_config.id, 1)
@@ -430,14 +443,14 @@ async def test_delete_project_config(config_storage, sample_project_config):
     """Test deleting a project configuration."""
     # Save project
     await config_storage.save_project_config(sample_project_config)
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Verify it exists
     assert await config_storage.exists(sample_project_config.id)
 
     # Delete project
     await config_storage.delete_project_config(sample_project_config.id)
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Verify it's deleted
     assert not await config_storage.exists(sample_project_config.id)
@@ -453,13 +466,13 @@ async def test_delete_agent_config(config_storage, sample_agent_config):
     """Test deleting an agent configuration."""
     # Save agent
     await config_storage.save_agent_config(sample_agent_config)
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Delete agent
     await config_storage.delete_agent_config(
         sample_agent_config.project_id, sample_agent_config.agent_name
     )
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Try to get deleted agent
     with pytest.raises(ConfigNotFoundError):
@@ -476,7 +489,7 @@ async def test_exists_returns_true_for_existing_project(
     """Test that exists() returns True for existing project."""
     # Save project
     await config_storage.save_project_config(sample_project_config)
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Check existence
     assert await config_storage.exists(sample_project_config.id)
@@ -497,7 +510,7 @@ async def test_concurrent_updates_increment_versions(
     """Test that concurrent updates properly increment versions."""
     # Save initial version
     await config_storage.save_project_config(sample_project_config)
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Perform multiple updates
     async def update_config(field_name: str):
@@ -507,11 +520,11 @@ async def test_concurrent_updates_increment_versions(
 
     # Run updates sequentially (concurrent updates would need optimistic locking)
     await update_config("tool1")
-    await asyncio.sleep(0.5)
+    await asyncio.sleep(0.05)
     await update_config("tool2")
-    await asyncio.sleep(0.5)
+    await asyncio.sleep(0.05)
     await update_config("tool3")
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Check final version
     final = await config_storage.get_project_config(sample_project_config.id)
