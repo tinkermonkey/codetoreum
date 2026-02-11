@@ -5,7 +5,7 @@ OpenTelemetry spans with proper GitHub-specific metadata.
 """
 
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -122,7 +122,7 @@ async def test_github_webhook_process_event_project_card(
             "changes": {"column_id": {"from": 789}},
         },
         signature="sha256=test",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         repository="org/repo",
     )
 
@@ -206,7 +206,7 @@ async def test_github_webhook_complete_trace_chain(
             "changes": {"column_id": {"from": 456}},
         },
         signature="sha256=comprehensive",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         repository="acme/platform",
     )
 

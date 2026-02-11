@@ -8,7 +8,7 @@ loss and reconnection, event persistence and replay, and high-frequency event ha
 
 import pytest
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import AsyncGenerator, List
 
 from codetoreum.domain.work_item import WorkItemStatus
@@ -506,14 +506,14 @@ class TestHighFrequencyEvents:
         execution_id = await start_execution_with_verbose_logging()
 
         events = []
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         async for event in websocket_connect(f"executions/{execution_id}/logs"):
             if event["type"] == "log_entry":
                 events.append(event)
 
             # Collect for 5 seconds
-            if (datetime.utcnow() - start_time).total_seconds() > 5:
+            if (datetime.now(timezone.utc) - start_time).total_seconds() > 5:
                 break
 
         # Verify high event rate
@@ -539,7 +539,7 @@ class TestHighFrequencyEvents:
         async for event in websocket_connect(f"executions/{execution_id}"):
             if event["type"] == "progress_update":
                 progress_events.append({
-                    "timestamp": datetime.utcnow(),
+                    "timestamp": datetime.now(timezone.utc),
                     "progress": event["progress"],
                 })
                 last_progress = event["progress"]
@@ -592,7 +592,7 @@ async def simulate_disconnect():
 
 
 async def websocket_connect_with_tracking(path: str) -> AsyncGenerator:
-    yield {"type": "connection_attempt", "timestamp": datetime.utcnow()}
+    yield {"type": "connection_attempt", "timestamp": datetime.now(timezone.utc)}
     yield {"type": "connected"}
 
 

@@ -12,7 +12,7 @@ Supports multiple metrics backends (in-memory, Prometheus, etc.)
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 
@@ -258,7 +258,7 @@ class RepairCycleMetricsCollector:
             self.event_bus.emit(
                 RepairCycleMetricsBackendFailedEvent(
                     type="repair_cycle.metrics_backend_failed",
-                    timestamp=datetime.utcnow().isoformat(),
+                    timestamp=datetime.now(timezone.utc).isoformat(),
                     source="repair_cycle_metrics_collector",
                     operation=operation,
                     error_type=type(error).__name__,

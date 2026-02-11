@@ -8,7 +8,7 @@ state recovery, cascading failure prevention, and circuit breaker behavior.
 
 import pytest
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import AsyncGenerator
 
 from codetoreum.domain.agent_execution import ExecutionStatus
@@ -402,11 +402,11 @@ class TestCascadingFailurePrevention:
         assert circuit_state == "open"
 
         # Verify subsequent requests fail fast
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         try:
             await start_execution()
         except Exception as e:
-            elapsed = (datetime.utcnow() - start_time).total_seconds()
+            elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
             assert elapsed < 1.0  # Failed fast, didn't wait for timeout
             assert "circuit breaker" in str(e).lower()
 

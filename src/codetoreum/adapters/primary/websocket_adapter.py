@@ -19,7 +19,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
@@ -120,7 +120,7 @@ class WebSocketMessage(BaseModel):
 
     type: str
     data: Dict[str, Any]
-    timestamp: datetime = datetime.utcnow()
+    timestamp: datetime = datetime.now(timezone.utc)
 
 
 class SubscribeMessage(BaseModel):
@@ -725,7 +725,7 @@ class ConnectionManager:
             max_buffer_size=self.config.max_buffer_size,
             message=f"Warning: Buffer at {buffer_usage*100:.1f}% capacity. "
             f"Please consume messages faster or you will be disconnected.",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         ).model_dump(mode="json")
 
         try:
@@ -752,7 +752,7 @@ class ConnectionManager:
             error_msg = ErrorMessage(
                 code=str(code),
                 message=reason,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
             ).model_dump(mode="json")
             await conn_state.websocket.send_json(error_msg)
         except Exception:
@@ -847,7 +847,7 @@ class ConnectionManager:
             event_id=str(event_dict.get("event_id", "")),
             event_type=event_type,
             data=event_dict,
-            timestamp=event_dict.get("occurred_at") or datetime.utcnow(),
+            timestamp=event_dict.get("occurred_at") or datetime.now(timezone.utc),
         )
 
         message_dict = event_message.model_dump(mode="json")
@@ -1134,7 +1134,7 @@ class WebSocketAdapter:
                 ConnectedMessage(
                     client_id=connection_id,
                     message="Connected to Codetoreum event stream",
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                 ).model_dump(mode="json"),
                 connection_id,
             )
@@ -1158,7 +1158,7 @@ class WebSocketAdapter:
                             ErrorMessage(
                                 code="message_too_large",
                                 message=f"Message size {len(data)} bytes exceeds maximum {MAX_MESSAGE_SIZE} bytes",
-                                timestamp=datetime.utcnow(),
+                                timestamp=datetime.now(timezone.utc),
                             ).model_dump(mode="json"),
                             connection_id,
                         )
@@ -1173,7 +1173,7 @@ class WebSocketAdapter:
                             ErrorMessage(
                                 code="invalid_message",
                                 message="Message must be a JSON object",
-                                timestamp=datetime.utcnow(),
+                                timestamp=datetime.now(timezone.utc),
                             ).model_dump(mode="json"),
                             connection_id,
                         )
@@ -1185,7 +1185,7 @@ class WebSocketAdapter:
                             ErrorMessage(
                                 code="invalid_message",
                                 message="Message must contain 'type' field",
-                                timestamp=datetime.utcnow(),
+                                timestamp=datetime.now(timezone.utc),
                             ).model_dump(mode="json"),
                             connection_id,
                         )
@@ -1205,7 +1205,7 @@ class WebSocketAdapter:
                                 ErrorMessage(
                                     code="rate_limit_exceeded",
                                     message="Rate limit exceeded. Slow down message rate.",
-                                    timestamp=datetime.utcnow(),
+                                    timestamp=datetime.now(timezone.utc),
                                 ).model_dump(mode="json"),
                                 connection_id,
                             )
@@ -1231,7 +1231,7 @@ class WebSocketAdapter:
                             ErrorMessage(
                                 code="unknown_message_type",
                                 message=f"Unknown message type: {message_type}",
-                                timestamp=datetime.utcnow(),
+                                timestamp=datetime.now(timezone.utc),
                             ).model_dump(mode="json"),
                             connection_id,
                         )
@@ -1253,7 +1253,7 @@ class WebSocketAdapter:
                         ErrorMessage(
                             code="invalid_message",
                             message=f"Invalid message: {str(e)}",
-                            timestamp=datetime.utcnow(),
+                            timestamp=datetime.now(timezone.utc),
                         ).model_dump(mode="json"),
                         connection_id,
                     )
@@ -1274,7 +1274,7 @@ class WebSocketAdapter:
                         ErrorMessage(
                             code="json_error",
                             message=f"Invalid JSON: {str(e)}",
-                            timestamp=datetime.utcnow(),
+                            timestamp=datetime.now(timezone.utc),
                         ).model_dump(mode="json"),
                         connection_id,
                     )
@@ -1295,7 +1295,7 @@ class WebSocketAdapter:
                         ErrorMessage(
                             code="internal_error",
                             message=f"Internal error: {str(e)}",
-                            timestamp=datetime.utcnow(),
+                            timestamp=datetime.now(timezone.utc),
                         ).model_dump(mode="json"),
                         connection_id,
                     )
@@ -1349,7 +1349,7 @@ class WebSocketAdapter:
                 # Send ping to client
                 try:
                     await conn_state.websocket.send_json(
-                        {"type": "ping", "timestamp": datetime.utcnow().isoformat()}
+                        {"type": "ping", "timestamp": datetime.now(timezone.utc).isoformat()}
                     )
                 except Exception as e:
                     logger.error(
@@ -1536,7 +1536,7 @@ class WebSocketAdapter:
                         "project_name": filter.project_name,
                         "event_types": filter.event_types,
                     },
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 },
                 connection_id,
             )
@@ -1551,7 +1551,7 @@ class WebSocketAdapter:
                 ErrorMessage(
                     code="subscribe_failed",
                     message=f"Failed to subscribe: {str(e)}",
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                 ).model_dump(mode="json"),
                 connection_id,
             )
@@ -1569,7 +1569,7 @@ class WebSocketAdapter:
         await self.manager.send_personal_message(
             {
                 "type": "unsubscribed",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             },
             connection_id,
         )
@@ -1582,7 +1582,7 @@ class WebSocketAdapter:
             connection_id: Connection identifier
         """
         await self.manager.send_personal_message(
-            {"type": "pong", "timestamp": datetime.utcnow().isoformat()},
+            {"type": "pong", "timestamp": datetime.now(timezone.utc).isoformat()},
             connection_id,
         )
 

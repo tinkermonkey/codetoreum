@@ -1006,8 +1006,8 @@ def create_development_app() -> FastAPI:
                 stage_name="test-stage",
                 agent_name="test-agent",
                 status=ExecutionStatus.COMPLETED,
-                started_at=datetime.utcnow(),
-                completed_at=datetime.utcnow(),
+                started_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(timezone.utc),
                 duration_seconds=10.5,
             )
 
@@ -1379,20 +1379,20 @@ def create_development_app() -> FastAPI:
                         name="implementation",
                         agent_name="developer_agent",
                         status="completed",
-                        started_at=datetime.utcnow(),
-                        completed_at=datetime.utcnow(),
+                        started_at=datetime.now(timezone.utc),
+                        completed_at=datetime.now(timezone.utc),
                         execution_id="exec-111",
                     ),
                     WorkflowRunStageInfo(
                         name="review",
                         agent_name="reviewer_agent",
                         status="running",
-                        started_at=datetime.utcnow(),
+                        started_at=datetime.now(timezone.utc),
                         completed_at=None,
                         execution_id="exec-222",
                     ),
                 ],
-                started_at=datetime.utcnow(),
+                started_at=datetime.now(timezone.utc),
                 completed_at=None,
                 duration=None,
                 issue_title="Fix authentication bug",
@@ -1415,7 +1415,7 @@ def create_development_app() -> FastAPI:
                         status=WorkflowRunStatus.RUNNING,
                         current_stage_index=1,
                         current_stage_name="review",
-                        started_at=datetime.utcnow(),
+                        started_at=datetime.now(timezone.utc),
                         completed_at=None,
                         duration=None,
                         issue_title="Fix authentication bug",
@@ -1438,7 +1438,7 @@ def create_development_app() -> FastAPI:
                         "id": "evt-mock-123",
                         "event_type": "WorkflowStarted",
                         "workflow_run_id": workflow_run_id,
-                        "timestamp": datetime.utcnow(),
+                        "timestamp": datetime.now(timezone.utc),
                         "agent_name": None,
                         "stage_name": "implementation",
                         "status": None,
@@ -1479,8 +1479,8 @@ def create_development_app() -> FastAPI:
                 work_item_types=["issue"],
                 is_template=False,
                 is_active=True,
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
                 metadata={},
             )
 
@@ -1496,8 +1496,8 @@ def create_development_app() -> FastAPI:
                 work_item_types=["issue"],
                 is_template=False,
                 is_active=True,
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
             )
             return WorkflowListResult(
                 workflows=[summary],
@@ -1514,7 +1514,7 @@ def create_development_app() -> FastAPI:
                 versions=[
                     WorkflowVersionInfo(
                         version=1,
-                        created_at=datetime.utcnow(),
+                        created_at=datetime.now(timezone.utc),
                         created_by=None,
                         changes_summary="Initial version",
                     )
@@ -1595,7 +1595,7 @@ def create_development_app() -> FastAPI:
                 workflow_run_id="wr-mock-123",
                 status="ACCEPTED",
                 message="Execution started (mock)",
-                started_at=datetime.utcnow(),
+                started_at=datetime.now(timezone.utc),
             )
 
         async def cancel_execution(self, command):
@@ -1752,8 +1752,8 @@ def create_development_app() -> FastAPI:
                 makes_code_changes=False,
                 filesystem_write_allowed=True,
                 mcp_servers=[],
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
                 capabilities={},
             )
 
@@ -1773,8 +1773,8 @@ def create_development_app() -> FastAPI:
                 makes_code_changes=False,
                 filesystem_write_allowed=True,
                 mcp_servers=[],
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
                 capabilities={},
             )
 
@@ -1796,8 +1796,8 @@ def create_development_app() -> FastAPI:
                         makes_code_changes=False,
                         filesystem_write_allowed=True,
                         mcp_servers=[],
-                        created_at=datetime.utcnow(),
-                        updated_at=datetime.utcnow(),
+                        created_at=datetime.now(timezone.utc),
+                        updated_at=datetime.now(timezone.utc),
                         capabilities={},
                     )
                 ],
@@ -1873,8 +1873,8 @@ def create_development_app() -> FastAPI:
                 input_tokens=0,
                 output_tokens=0,
                 duration_seconds=None,
-                initialized_at=datetime.utcnow(),
-                started_at=datetime.utcnow(),
+                initialized_at=datetime.now(timezone.utc),
+                started_at=datetime.now(timezone.utc),
                 completed_at=None,
             )
 
@@ -1900,8 +1900,8 @@ def create_development_app() -> FastAPI:
                         input_tokens=0,
                         output_tokens=0,
                         duration_seconds=None,
-                        initialized_at=datetime.utcnow(),
-                        started_at=datetime.utcnow(),
+                        initialized_at=datetime.now(timezone.utc),
+                        started_at=datetime.now(timezone.utc),
                         completed_at=None,
                     )
                 ],
@@ -1944,8 +1944,8 @@ def create_development_app() -> FastAPI:
                 github_org="mock-org",
                 github_repo="mock-repo",
                 version=1,
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
                 environment_variables={"DEBUG": "true"},
                 mounted_commands=[],
                 mounted_subagents=[],
@@ -1969,8 +1969,8 @@ def create_development_app() -> FastAPI:
                 makes_code_changes=False,
                 filesystem_write_allowed=True,
                 version=1,
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
                 mcp_servers=[],
                 capabilities={},
                 metadata={},
@@ -1985,8 +1985,8 @@ def create_development_app() -> FastAPI:
                 description="Mock pipeline",
                 version=1,
                 stages=[],
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
                 metadata={},
             )
 
@@ -2024,12 +2024,12 @@ def create_development_app() -> FastAPI:
                         component_name="event_store",
                         status=ComponentHealth.HEALTHY,
                         message="Connected",
-                        last_check=datetime.utcnow(),
+                        last_check=datetime.now(timezone.utc),
                         response_time_ms=5.0,
                         details={},
                     )
                 ],
-                checked_at=datetime.utcnow(),
+                checked_at=datetime.now(timezone.utc),
                 uptime_seconds=3600.0,
                 version="2.0.0",
             )
@@ -2040,7 +2040,7 @@ def create_development_app() -> FastAPI:
                 component_name=component_name,
                 status=ComponentHealth.HEALTHY,
                 message="OK",
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 response_time_ms=5.0,
                 details={},
             )
@@ -2087,7 +2087,7 @@ def create_development_app() -> FastAPI:
             return IntegrationStatus(
                 github_connected=True,
                 github_api_calls_remaining=5000,
-                github_rate_limit_reset=datetime.utcnow() + timedelta(hours=1),
+                github_rate_limit_reset=datetime.now(timezone.utc) + timedelta(hours=1),
                 github_webhook_health=ComponentHealth.HEALTHY,
                 docker_connected=True,
                 docker_version="24.0.7",
@@ -2096,7 +2096,7 @@ def create_development_app() -> FastAPI:
                 event_store_latency_ms=5.0,
                 config_store_connected=True,
                 config_store_latency_ms=3.0,
-                checked_at=datetime.utcnow(),
+                checked_at=datetime.now(timezone.utc),
             )
 
         async def get_simulation_mode_info(self):
@@ -2141,7 +2141,7 @@ def create_development_app() -> FastAPI:
                     project="codetoreum",
                     issue_number=42,
                     status="running",
-                    started_at=datetime.utcnow(),
+                    started_at=datetime.now(timezone.utc),
                     container_name="claude-code-exec-123",
                 ),
                 ActiveAgentInfo(
@@ -2151,7 +2151,7 @@ def create_development_app() -> FastAPI:
                     project="codetoreum",
                     issue_number=43,
                     status="running",
-                    started_at=datetime.utcnow() - timedelta(minutes=15),
+                    started_at=datetime.now(timezone.utc) - timedelta(minutes=15),
                     container_name="claude-code-exec-124",
                 ),
             ]
@@ -2240,10 +2240,10 @@ def create_development_app() -> FastAPI:
                 artifacts_path="/artifacts",
                 environment_variables={"DEBUG": "true"},
                 working_directory="/workspace",
-                created_at=datetime.utcnow(),
-                started_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
+                started_at=datetime.now(timezone.utc),
                 stopped_at=None,
-                last_activity=datetime.utcnow(),
+                last_activity=datetime.now(timezone.utc),
                 metadata={},
             )
 

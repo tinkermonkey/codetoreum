@@ -6,7 +6,7 @@ Command-line interface for querying and managing audit logs.
 
 import asyncio
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import click
@@ -73,7 +73,7 @@ def query(
         # Build filters
         start_time = None
         if days_ago:
-            start_time = datetime.utcnow() - timedelta(days=days_ago)
+            start_time = datetime.now(timezone.utc) - timedelta(days=days_ago)
 
         filters = AuditQueryFilters(
             event_type=event_type,
@@ -223,7 +223,7 @@ def stats(store_type: str, file_path: str):
         click.echo(f"  Failed: {failure_count}")
 
         # Count recent events (last 24 hours)
-        yesterday = datetime.utcnow() - timedelta(days=1)
+        yesterday = datetime.now(timezone.utc) - timedelta(days=1)
         recent_filters = AuditQueryFilters(start_time=yesterday, limit=1000000)
         recent_count = await store.count_events(recent_filters)
 

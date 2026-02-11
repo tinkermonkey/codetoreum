@@ -5,7 +5,7 @@ Provides REST endpoints for historical event queries and event replay.
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -214,7 +214,7 @@ def create_events_router(
                         event_version=event_dict.get("event_version", 1),
                         aggregate_id=event_dict.get("aggregate_id", ""),
                         aggregate_type=event_dict.get("aggregate_type", ""),
-                        occurred_at=event_dict.get("occurred_at", datetime.utcnow()),
+                        occurred_at=event_dict.get("occurred_at", datetime.now(timezone.utc)),
                         correlation_id=str(event_dict.get("correlation_id"))
                         if event_dict.get("correlation_id")
                         else None,

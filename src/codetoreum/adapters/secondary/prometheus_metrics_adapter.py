@@ -10,7 +10,7 @@ Provides detailed metrics for:
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 try:
@@ -302,8 +302,8 @@ class PrometheusMetricsAdapter(IMetrics):
         Returns:
             str: Timer ID
         """
-        timer_id = f"{name}_{id(self)}_{datetime.utcnow().timestamp()}"
-        self._timers[timer_id] = datetime.utcnow().timestamp()
+        timer_id = f"{name}_{id(self)}_{datetime.now(timezone.utc).timestamp()}"
+        self._timers[timer_id] = datetime.now(timezone.utc).timestamp()
         return timer_id
 
     async def stop_timer(
@@ -326,7 +326,7 @@ class PrometheusMetricsAdapter(IMetrics):
             return 0.0
 
         start_time = self._timers.pop(timer_id)
-        duration = datetime.utcnow().timestamp() - start_time
+        duration = datetime.now(timezone.utc).timestamp() - start_time
 
         return duration
 

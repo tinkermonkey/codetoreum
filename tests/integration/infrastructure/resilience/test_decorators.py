@@ -4,7 +4,7 @@ Tests the full integration of resilience patterns with adapters.
 """
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 import pytest
@@ -52,8 +52,8 @@ class FlakyTicketSystem(ITicketSystem):
             assigned_at=None,
             current_workflow_id=None,
             current_stage=None,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
             completed_at=None
         )
 

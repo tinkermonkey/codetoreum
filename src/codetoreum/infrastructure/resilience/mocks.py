@@ -6,7 +6,7 @@ enabling fast simulation tests.
 
 import time
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Tuple, Optional, Callable, TypeVar, Dict, Any
 
 from .interfaces import (
@@ -59,7 +59,7 @@ class MockRateLimiter(IRateLimiter):
 
     async def acquire(self, operation: str, cost: int = 1) -> None:
         """Record acquire call and optionally enforce limits."""
-        self.acquire_calls.append((operation, cost, datetime.utcnow()))
+        self.acquire_calls.append((operation, cost, datetime.now(timezone.utc)))
 
         if self._delegate:
             await self._delegate.acquire(operation, cost)
@@ -68,7 +68,7 @@ class MockRateLimiter(IRateLimiter):
 
     def try_acquire(self, operation: str, cost: int = 1) -> bool:
         """Always succeeds in mock mode."""
-        self.acquire_calls.append((operation, cost, datetime.utcnow()))
+        self.acquire_calls.append((operation, cost, datetime.now(timezone.utc)))
 
         if self._delegate:
             return self._delegate.try_acquire(operation, cost)
@@ -146,7 +146,7 @@ class MockCircuitBreaker(ICircuitBreaker):
         self.call_history.append({
             "operation": operation_name,
             "state": self._state,
-            "timestamp": datetime.utcnow(),
+            "timestamp": datetime.now(timezone.utc),
             "call_number": self._call_count
         })
 
@@ -174,7 +174,7 @@ class MockCircuitBreaker(ICircuitBreaker):
             failure_count=0,
             success_count=self._call_count,
             last_failure_time=None,
-            last_success_time=datetime.utcnow(),
+            last_success_time=datetime.now(timezone.utc),
             total_calls=self._call_count,
             total_failures=0,
             total_successes=self._call_count
@@ -252,7 +252,7 @@ class MockRetryPolicy(IRetryPolicy):
         """Execute with optional retry simulation."""
         self.execution_history.append({
             "operation": operation_name,
-            "timestamp": datetime.utcnow()
+            "timestamp": datetime.now(timezone.utc)
         })
 
         if self._delegate:

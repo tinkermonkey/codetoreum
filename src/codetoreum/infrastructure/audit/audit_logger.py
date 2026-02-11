@@ -7,7 +7,7 @@ structured event data, user context, and correlation ID support.
 
 import logging
 from dataclasses import dataclass, field, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional, Dict, Any
 
@@ -197,7 +197,7 @@ class AuditLogger:
 
         # Create audit event
         event = AuditEvent(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             event_type=event_type,
             resource_type=resource_type,
             resource_id=resource_id,

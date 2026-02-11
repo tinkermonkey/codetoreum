@@ -12,41 +12,18 @@ This module implements:
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from codetoreum.infrastructure.observability.trace_context_propagation import TraceContextData
-from codetoreum.ports.output.i_tracer import ITracer as ITracerPort
+from codetoreum.ports.output.i_tracer import (
+    ITracer as ITracerPort,
+    SpanKind,
+    SpanStatus,
+    SpanEvent,
+)
 
 logger = logging.getLogger(__name__)
-
-
-class SpanKind(str, Enum):
-    """OpenTelemetry-compatible span kinds."""
-
-    INTERNAL = "INTERNAL"
-    SERVER = "SERVER"
-    CLIENT = "CLIENT"
-    PRODUCER = "PRODUCER"
-    CONSUMER = "CONSUMER"
-
-
-class SpanStatus(str, Enum):
-    """Span status."""
-
-    UNSET = "UNSET"
-    OK = "OK"
-    ERROR = "ERROR"
-
-
-@dataclass
-class SpanEvent:
-    """Event recorded on a span."""
-
-    name: str
-    timestamp: datetime
-    attributes: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

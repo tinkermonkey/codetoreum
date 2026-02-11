@@ -5,7 +5,7 @@ authentication and authorization in the Codetoreum system.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 from uuid import UUID, uuid4
@@ -131,13 +131,13 @@ class User:
     def add_role(self, role: UserRole) -> None:
         """Add a role to the user."""
         self.roles.add(role)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
     def remove_role(self, role: UserRole) -> None:
         """Remove a role from the user."""
         if role in self.roles:
             self.roles.remove(role)
-            self.updated_at = datetime.utcnow()
+            self.updated_at = datetime.now(timezone.utc)
 
     def has_role(self, role: UserRole) -> bool:
         """Check if user has a specific role."""
@@ -161,26 +161,26 @@ class User:
     def deactivate(self) -> None:
         """Deactivate user account."""
         self.is_active = False
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
     def activate(self) -> None:
         """Activate user account."""
         self.is_active = True
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
     def verify_email(self) -> None:
         """Mark email as verified."""
         self.is_verified = True
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
     def record_login(self) -> None:
         """Record user login timestamp."""
-        self.last_login_at = datetime.utcnow()
+        self.last_login_at = datetime.now(timezone.utc)
 
     def update_password(self, hashed_password: str) -> None:
         """Update user password."""
         self.hashed_password = hashed_password
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
 
 @dataclass
@@ -231,7 +231,7 @@ class APIKey:
         """Check if API key is expired."""
         if self.expires_at is None:
             return False
-        return datetime.utcnow() > self.expires_at
+        return datetime.now(timezone.utc) > self.expires_at
 
     def is_valid(self) -> bool:
         """Check if API key is valid (active and not expired)."""
@@ -239,7 +239,7 @@ class APIKey:
 
     def record_usage(self) -> None:
         """Record API key usage timestamp."""
-        self.last_used_at = datetime.utcnow()
+        self.last_used_at = datetime.now(timezone.utc)
 
     def revoke(self) -> None:
         """Revoke API key."""

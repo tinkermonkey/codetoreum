@@ -13,7 +13,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import psutil
 import tracemalloc
 from codetoreum.infrastructure.error_ids import ErrorRegistry
@@ -373,7 +373,7 @@ class PerformanceThresholdMonitor:
             self._violations.append({
                 "operation": profile.operation,
                 "violations": violations,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             })
 
         return violations

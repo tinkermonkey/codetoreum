@@ -7,7 +7,7 @@ Tests the JupyterLab-style token generation, validation, and security properties
 import os
 import pytest
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from jose import jwt
 from unittest.mock import patch
 
@@ -96,8 +96,8 @@ class TestSimpleTokenAuthManager:
             {
                 "sub": "wrong-subject",
                 "type": "access",
-                "iat": datetime.utcnow(),
-                "exp": datetime.utcnow() + timedelta(days=1),
+                "iat": datetime.now(timezone.utc),
+                "exp": datetime.now(timezone.utc) + timedelta(days=1),
             },
             secret_key,
             algorithm="HS256"
@@ -115,8 +115,8 @@ class TestSimpleTokenAuthManager:
             {
                 "sub": "codetoreum-server",
                 "type": "refresh",  # Wrong type
-                "iat": datetime.utcnow(),
-                "exp": datetime.utcnow() + timedelta(days=1),
+                "iat": datetime.now(timezone.utc),
+                "exp": datetime.now(timezone.utc) + timedelta(days=1),
             },
             secret_key,
             algorithm="HS256"
@@ -133,8 +133,8 @@ class TestSimpleTokenAuthManager:
             {
                 "sub": "codetoreum-server",
                 "type": "access",
-                "iat": datetime.utcnow() - timedelta(days=2),
-                "exp": datetime.utcnow() - timedelta(days=1),  # Expired yesterday
+                "iat": datetime.now(timezone.utc) - timedelta(days=2),
+                "exp": datetime.now(timezone.utc) - timedelta(days=1),  # Expired yesterday
             },
             secret_key,
             algorithm="HS256"

@@ -5,7 +5,7 @@ Provides deterministic behavior for testing workflows that use DLQ.
 
 import asyncio
 from typing import Any, Callable, Dict, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from .dead_letter_queue import (
     DeadLetterQueue,
@@ -57,7 +57,7 @@ class MockDeadLetterQueue(DeadLetterQueue):
         # Testing features
         self._auto_succeed_after = auto_succeed_after
         self._event_history: List[Dict[str, Any]] = []
-        self._current_time = datetime.utcnow()
+        self._current_time = datetime.now(timezone.utc)
         self._retry_outcomes: Dict[str, bool] = {}  # event_id -> should_succeed
 
     def set_current_time(self, time: datetime) -> None:
@@ -236,4 +236,4 @@ class MockDeadLetterQueue(DeadLetterQueue):
         self._total_retries_attempted = 0
         self._total_retries_succeeded = 0
         self._total_retries_failed = 0
-        self._current_time = datetime.utcnow()
+        self._current_time = datetime.now(timezone.utc)

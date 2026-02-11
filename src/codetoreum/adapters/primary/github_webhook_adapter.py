@@ -11,7 +11,7 @@ import json
 import logging
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 from fastapi import Header, HTTPException, Request
@@ -216,7 +216,7 @@ class GitHubWebhookAdapter:
                 event_type=x_github_event,
                 payload=payload,
                 signature=x_hub_signature_256,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 repository=payload.get("repository", {}).get("full_name", ""),
             )
 
