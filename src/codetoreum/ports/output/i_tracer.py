@@ -10,7 +10,7 @@ for simulation testing without external infrastructure.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Protocol, runtime_checkable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
@@ -41,6 +41,50 @@ class SpanEvent:
     name: str
     timestamp: datetime
     attributes: Dict[str, Any]
+
+
+@runtime_checkable
+class SpanProtocol(Protocol):
+    """Protocol for span objects (both Span dataclass and MockSpan)."""
+
+    span_id: str
+    trace_id: str
+    parent_span_id: Optional[str]
+    name: str
+    kind: SpanKind
+    status: SpanStatus
+    start_time: datetime
+    end_time: Optional[datetime]
+    attributes: Dict[str, Any]
+    events: list[SpanEvent]
+
+    @property
+    def duration_ms(self) -> Optional[float]:
+        """Calculate span duration in milliseconds."""
+        ...
+
+    @property
+    def traceparent(self) -> str:
+        """Get W3C traceparent format for this span."""
+        ...
+
+    def set_attribute(self, key: str, value: Any) -> None:
+        """Set an attribute on the span."""
+        ...
+
+    def add_event(
+        self, name: str, attributes: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """Add an event to the span."""
+        ...
+
+    def set_status(self, status: SpanStatus) -> None:
+        """Set the span status."""
+        ...
+
+    def record_exception(self, exception: Exception) -> None:
+        """Record an exception in the span."""
+        ...
 
 
 @dataclass
@@ -120,7 +164,7 @@ class ITracer(ABC):
         kind: SpanKind = SpanKind.INTERNAL,
         parent_context: Optional[str] = None,
         attributes: Optional[Dict[str, Any]] = None,
-    ) -> Span:
+    ) -> SpanProtocol:
         """
         Start a new span.
 
@@ -131,7 +175,7 @@ class ITracer(ABC):
             attributes: Initial span attributes
 
         Returns:
-            Span: New span instance
+            SpanProtocol: New span instance (Span or MockSpan)
 
         Example:
             span = await tracer.start_span(
@@ -143,7 +187,7 @@ class ITracer(ABC):
         pass
 
     @abstractmethod
-    async def end_span(self, span: Span) -> None:
+    async def end_span(self, span: SpanProtocol) -> None:
         """
         End a span.
 
@@ -157,7 +201,7 @@ class ITracer(ABC):
     @abstractmethod
     async def add_event(
         self,
-        span: Span,
+        span: SpanProtocol,
         name: str,
         attributes: Optional[Dict[str, Any]] = None,
     ) -> None:
@@ -176,7 +220,7 @@ class ITracer(ABC):
     @abstractmethod
     async def set_attribute(
         self,
-        span: Span,
+        span: SpanProtocol,
         key: str,
         value: Any,
     ) -> None:
@@ -195,7 +239,7 @@ class ITracer(ABC):
     @abstractmethod
     async def record_exception(
         self,
-        span: Span,
+        span: SpanProtocol,
         exception: Exception,
     ) -> None:
         """
@@ -227,7 +271,7 @@ class ITracer(ABC):
     @abstractmethod
     async def inject_context(
         self,
-        span: Span,
+        span: SpanProtocol,
         carrier: Dict[str, str],
     ) -> None:
         """

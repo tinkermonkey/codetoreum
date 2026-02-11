@@ -177,7 +177,7 @@ class MockTracer(ITracerPort):
         kind: SpanKind = SpanKind.INTERNAL,
         parent_context: Optional[str] = None,
         attributes: Optional[Dict[str, Any]] = None,
-    ) -> Span:
+    ) -> MockSpan:
         """
         Start a new span (ITracer protocol).
 
@@ -190,22 +190,10 @@ class MockTracer(ITracerPort):
         Returns:
             MockSpan instance
         """
-        parent_span_id = None
-        trace_id = None
-
-        # Extract parent info from context if provided
-        if parent_context:
-            # Format: "00-{trace_id}-{span_id}-01"
-            parts = parent_context.split("-")
-            if len(parts) >= 3:
-                trace_id = parts[1]
-                parent_span_id = parts[2]
-
-        return self._start_span_internal(
+        return self.start_span_sync(
             name=name,
             kind=kind,
-            parent_span_id=parent_span_id,
-            trace_id=trace_id,
+            parent_context=parent_context,
             attributes=attributes,
         )
 
@@ -271,10 +259,7 @@ class MockTracer(ITracerPort):
         Args:
             span: Span to end
         """
-        span.end()
-        self.spans.append(span.to_capture())
-        self.active_span = None
-        logger.debug(f"Ended span: {span.name} (id={span.span_id})")
+        self.end_span_sync(span)
 
     async def add_event(
         self,
@@ -435,21 +420,31 @@ class MockTracer(ITracerPort):
         self,
         name: str,
         kind: SpanKind = SpanKind.INTERNAL,
+        parent_context: Optional[str] = None,
         parent_span_id: Optional[str] = None,
         trace_id: Optional[str] = None,
     ) -> MockSpan:
         """
-        Start a new span (synchronous version for backwards compatibility).
+        Start a new span (synchronous version).
 
         Args:
             name: Span name
             kind: Span kind (INTERNAL, CLIENT, etc.)
+            parent_context: Parent span context for linking (W3C traceparent format)
             parent_span_id: Parent span ID if child of existing span
             trace_id: Trace ID (creates new if not provided)
 
         Returns:
             MockSpan instance
         """
+        # If parent_context is provided, extract parent info from it
+        if parent_context:
+            # Format: "00-{trace_id}-{span_id}-01"
+            parts = parent_context.split("-")
+            if len(parts) >= 3:
+                trace_id = parts[1]
+                parent_span_id = parts[2]
+
         return self._start_span_internal(
             name=name,
             kind=kind,
