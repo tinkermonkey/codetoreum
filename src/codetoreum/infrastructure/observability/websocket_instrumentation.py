@@ -81,7 +81,7 @@ class WebSocketSessionTracer:
             return None
 
         span = self._tracer.start_span(
-            f"websocket.session",
+            "websocket.session",
             kind=SpanKind.SERVER,
             attributes={
                 "websocket.client.id": connection_id,
@@ -141,7 +141,7 @@ class WebSocketSessionTracer:
         except Exception as e:
             logger.warning(
                 f"Error ending WebSocket session span: {e}",
-                exc_info=False,
+                exc_info=True,
             )
 
     def add_session_event(
@@ -164,7 +164,7 @@ class WebSocketSessionTracer:
         try:
             session_span.add_event(event_name, attributes=attributes or {})
         except Exception as e:
-            logger.warning(f"Error adding session event: {e}", exc_info=False)
+            logger.warning(f"Error adding session event: {e}", exc_info=True)
 
 
 class WebSocketMessageTracer:
@@ -389,7 +389,7 @@ class WebSocketMessageTracer:
                 },
             )
         except Exception as e:
-            logger.warning(f"Error ending message span: {e}", exc_info=False)
+            logger.warning(f"Error ending message span: {e}", exc_info=True)
 
     def link_to_event_trace_context(
         self,

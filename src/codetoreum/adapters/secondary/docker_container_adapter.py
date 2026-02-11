@@ -272,7 +272,6 @@ class DockerContainerAdapter(IContainer):
                         raise
 
                 duration_ms = int((time.time() - start_time) * 1000)
-                duration_seconds = duration_ms / 1000.0
 
                 # Reconstruct stdout/stderr from buffered logs
                 # Note: Docker's logs API doesn't cleanly separate stdout/stderr when streaming
@@ -494,7 +493,6 @@ class DockerContainerAdapter(IContainer):
         """Remove a container."""
         client = self._get_client()
         loop = asyncio.get_event_loop()
-        already_removed = False
 
         def _remove():
             try:
@@ -503,8 +501,6 @@ class DockerContainerAdapter(IContainer):
             except Exception as e:
                 if "not found" in str(e).lower():
                     # Container already removed - still success
-                    nonlocal already_removed
-                    already_removed = True
                     raise ResourceNotFoundError("Container", container_id)
                 raise ContainerError(f"Failed to remove container: {str(e)}")
 

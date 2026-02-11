@@ -24,7 +24,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
 from fastapi import WebSocket, WebSocketDisconnect, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from codetoreum.config import (
     DEFAULT_WS_HEARTBEAT_INTERVAL,
@@ -120,7 +120,7 @@ class WebSocketMessage(BaseModel):
 
     type: str
     data: Dict[str, Any]
-    timestamp: datetime = datetime.now(timezone.utc)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class SubscribeMessage(BaseModel):
@@ -1687,8 +1687,11 @@ class WebSocketAdapter:
                     return False
 
             return True
-        except Exception:
-            # If matching fails, assume it doesn't match
+        except Exception as e:
+            logger.warning(
+                f"Error matching subscription to event: {e}",
+                exc_info=True,
+            )
             return False
 
     async def close(self):

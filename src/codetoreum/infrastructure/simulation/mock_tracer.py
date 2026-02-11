@@ -139,7 +139,6 @@ class MockSpan:
     def traceparent(self) -> str:
         """Get W3C Trace Context traceparent header."""
         trace_flags = "01" if self.status != SpanStatus.ERROR else "00"
-        parent_id = self.parent_span_id or "0000000000000000"
         return f"00-{self.trace_id}-{self.span_id}-{trace_flags}"
 
     def record_exception(self, exception: Exception) -> None:

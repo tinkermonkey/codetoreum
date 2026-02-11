@@ -17,7 +17,18 @@ from enum import Enum
 
 
 class SpanKind(str, Enum):
-    """OpenTelemetry-compatible span kinds."""
+    """
+    OpenTelemetry-compatible span kinds.
+
+    NOTE: This is a vendor-agnostic enum defined in the port layer.
+    Infrastructure code also imports SpanKind directly from opentelemetry.trace.
+    Both enums have identical string values and purposes, so they can be used
+    interchangeably in practice. The port-level enum allows the domain/application
+    layers to remain independent of OpenTelemetry imports.
+
+    Infrastructure adapters convert between the port-level enum and OpenTelemetry's
+    enum as needed when creating real spans. Mock adapters use the port-level enum.
+    """
 
     INTERNAL = "INTERNAL"
     SERVER = "SERVER"

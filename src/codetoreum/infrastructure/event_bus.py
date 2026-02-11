@@ -127,6 +127,9 @@ class EventBus:
         self.redis_client = redis_client
         self.redis_stream_prefix = redis_stream_prefix
 
+        # Cache tracer instance for OpenTelemetry instrumentation
+        self._tracer = trace.get_tracer(__name__) if OPENTELEMETRY_AVAILABLE else None
+
         # Handler registry: event_type -> list of handlers
         self._handlers: Dict[str, List[EventHandler]] = {}
 
@@ -303,33 +306,23 @@ class EventBus:
         self._stats["events_published"] += 1
 
         # Create PRODUCER span if OpenTelemetry available
-        if OPENTELEMETRY_AVAILABLE:
-            tracer = trace.get_tracer(__name__)
-            span_context = {
-                "kind": SpanKind.PRODUCER,
-                "attributes": {
-                    "event.type": event.event_type,
-                    "event.id": str(event.event_id),
-                    "aggregate.id": str(event.aggregate_id),
-                    "aggregate.type": event.aggregate_type,
-                },
-            }
-        else:
-            tracer = None
-            span_context = None
+        span = None
+        token = None
 
         try:
-            if tracer:
+            if self._tracer:
                 # Start PRODUCER span
-                span = tracer.start_span(
+                span = self._tracer.start_span(
                     f"event.publish.{event.event_type}",
-                    kind=span_context["kind"],
-                    attributes=span_context["attributes"],
+                    kind=SpanKind.PRODUCER,
+                    attributes={
+                        "event.type": event.event_type,
+                        "event.id": str(event.event_id),
+                        "aggregate.id": str(event.aggregate_id),
+                        "aggregate.type": event.aggregate_type,
+                    },
                 )
                 token = context.attach(trace.set_span_in_context(span))
-            else:
-                span = None
-                token = None
 
             try:
                 # Inject current trace context into event for downstream propagation
@@ -497,16 +490,18 @@ class EventBus:
         """
         last_exception = None
 
+        # Extract and activate trace context from event once (outside retry loop)
+        # This ensures the handler's spans are children of the event's trace
+        ctx = extract_and_activate_trace_context(event)
+
         for attempt in range(self.max_retries + 1):
             try:
-                # Extract and activate trace context from event
-                # This ensures the handler's spans are children of the event's trace
-                ctx = extract_and_activate_trace_context(event)
 
                 # Create CONSUMER span if OpenTelemetry available
-                if OPENTELEMETRY_AVAILABLE:
-                    tracer = trace.get_tracer(__name__)
-                    span = tracer.start_span(
+                span = None
+                token = None
+                if self._tracer:
+                    span = self._tracer.start_span(
                         f"event.handle.{event.event_type}",
                         kind=SpanKind.CONSUMER,
                         attributes={
@@ -519,9 +514,6 @@ class EventBus:
                         token = context.attach(ctx)
                     else:
                         token = None
-                else:
-                    span = None
-                    token = None
 
                 try:
                     # Call handler
@@ -572,21 +564,23 @@ class EventBus:
         """
         last_exception = None
 
+        # Extract and activate trace context from event once (outside retry loop)
+        # This ensures the callback's spans are children of the event's trace
+        ctx = extract_and_activate_trace_context(event)
+
         for attempt in range(self.max_retries + 1):
             try:
-                # Extract and activate trace context from event
-                # This ensures the callback's spans are children of the event's trace
-                ctx = extract_and_activate_trace_context(event)
 
                 # Create CONSUMER span if OpenTelemetry available
-                if OPENTELEMETRY_AVAILABLE:
-                    tracer = trace.get_tracer(__name__)
+                span = None
+                token = None
+                if self._tracer:
                     callback_name = (
                         callback.__name__
                         if hasattr(callback, "__name__")
                         else str(callback)
                     )
-                    span = tracer.start_span(
+                    span = self._tracer.start_span(
                         f"event.handle.{event.event_type}",
                         kind=SpanKind.CONSUMER,
                         attributes={
@@ -599,9 +593,6 @@ class EventBus:
                         token = context.attach(ctx)
                     else:
                         token = None
-                else:
-                    span = None
-                    token = None
 
                 try:
                     # Check if callback is async
@@ -651,9 +642,9 @@ class EventBus:
 
         try:
             # Create INTERNAL span if OpenTelemetry available
-            if OPENTELEMETRY_AVAILABLE:
-                tracer = trace.get_tracer(__name__)
-                span = tracer.start_span(
+            span = None
+            if self._tracer:
+                span = self._tracer.start_span(
                     "event.persist.redis",
                     kind=SpanKind.INTERNAL,
                     attributes={
@@ -661,8 +652,6 @@ class EventBus:
                         "event.id": str(event.event_id),
                     },
                 )
-            else:
-                span = None
 
             try:
                 # Create stream key from event type (e.g., "events:WorkItemCreated")
