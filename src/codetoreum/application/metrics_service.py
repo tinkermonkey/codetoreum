@@ -58,7 +58,8 @@ class MetricsService(IMetricsQueryPort):
             version: System version string
         """
         self.event_store = event_store
-        self.start_time = start_time
+        # Normalize start_time to UTC-aware datetime
+        self.start_time = start_time if start_time.tzinfo is not None else start_time.replace(tzinfo=timezone.utc)
         self.version = version
 
     async def get_system_health(self) -> SystemHealthInfo:
@@ -466,13 +467,15 @@ class MetricsService(IMetricsQueryPort):
         for event in execution_events:
             execution_id = event.payload.get("execution_id")
             if execution_id and execution_id not in finished_ids:
+                # Normalize event.occurred_at to aware datetime if needed
+                occurred_at = event.occurred_at if event.occurred_at.tzinfo is not None else event.occurred_at.replace(tzinfo=timezone.utc)
                 active_agents.append(
                     {
                         "execution_id": execution_id,
                         "agent_name": event.payload.get("agent_name"),
                         "work_item_id": event.payload.get("work_item_id"),
-                        "started_at": event.occurred_at.isoformat(),
-                        "duration_seconds": (datetime.now(timezone.utc) - event.occurred_at).total_seconds(),
+                        "started_at": occurred_at.isoformat(),
+                        "duration_seconds": (datetime.now(timezone.utc) - occurred_at).total_seconds(),
                     }
                 )
 
