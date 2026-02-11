@@ -228,6 +228,7 @@ class InstrumentedEventBus:
 
             with self._tracer.start_as_current_span(
                 span_name,
+                context=trace_context,
                 kind=SpanKind.CONSUMER,
                 attributes={
                     "event.type": event.event_type,
@@ -295,6 +296,7 @@ class InstrumentedEventHandler:
 
         with self._tracer.start_as_current_span(
             span_name,
+            context=trace_context,
             kind=SpanKind.CONSUMER,
             attributes={
                 "event.type": event.event_type,
