@@ -15,6 +15,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 
+# W3C Trace Context version constant (RFC: https://www.w3.org/TR/trace-context/)
+# Update this when W3C releases new trace context versions
+W3C_TRACE_CONTEXT_VERSION = "00"
+
 
 class SpanKind(str, Enum):
     """
@@ -123,7 +127,7 @@ class Span:
     @property
     def traceparent(self) -> str:
         """Get W3C traceparent format for this span."""
-        return f"00-{self.trace_id}-{self.span_id}-01"
+        return f"{W3C_TRACE_CONTEXT_VERSION}-{self.trace_id}-{self.span_id}-01"
 
     def set_attribute(self, key: str, value: Any) -> None:
         """Set an attribute on the span."""

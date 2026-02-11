@@ -17,7 +17,7 @@ Key Concepts:
 - Trace ID: 32-character hex identifier for the entire trace
 - Parent ID (Span ID): 16-character hex identifier for the parent span
 - Trace Flags: Single byte with flags (01 = sampled/traced, 00 = not sampled)
-- Version: Always 00 for current version
+- Version: Always 00 for current W3C Trace Context version
 """
 
 import logging
@@ -45,6 +45,10 @@ from codetoreum.domain.events import DomainEvent
 
 logger = logging.getLogger(__name__)
 
+# W3C Trace Context version constant (RFC: https://www.w3.org/TR/trace-context/)
+# Update this when W3C releases new trace context versions
+W3C_TRACE_CONTEXT_VERSION = "00"
+
 
 @dataclass
 class TraceContextData:
@@ -53,7 +57,7 @@ class TraceContextData:
     trace_id: str  # 32-character hex string
     span_id: str  # 16-character hex string
     trace_flags: str  # 2-character hex string (e.g., "01")
-    version: str = "00"  # W3C Trace Context version
+    version: str = W3C_TRACE_CONTEXT_VERSION  # W3C Trace Context version
 
     def to_traceparent(self) -> str:
         """
@@ -123,7 +127,7 @@ class TraceContextData:
         """
         trace_flags = "01" if span_context.trace_flags.sampled else "00"
         return cls(
-            version="00",
+            version=W3C_TRACE_CONTEXT_VERSION,
             trace_id=format(span_context.trace_id, "032x"),
             span_id=format(span_context.span_id, "016x"),
             trace_flags=trace_flags,

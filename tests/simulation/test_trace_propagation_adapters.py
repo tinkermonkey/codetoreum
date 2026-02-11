@@ -32,56 +32,56 @@ async def test_container_adapter_span_context():
 
     async def scenario(sim: SimulationRunner):
         # Parent span: agent execution
-        agent_span = sim.mock_tracer.start_span(
+        agent_span = await sim.mock_tracer.start_span(
             "agent_execution",
             kind=SpanKind.INTERNAL,
         )
 
         try:
             # Child span: container create
-            create_span = sim.mock_tracer.start_span(
+            create_span = await sim.mock_tracer.start_span(
                 "container.create",
                 kind=SpanKind.CLIENT,
                 parent_span_id=agent_span.span_id,
                 trace_id=agent_span.trace_id,
             )
-            create_span.set_attribute("image", "python:3.11")
-            create_span.set_attribute("container_name", "agent-work-001")
-            sim.mock_tracer.end_span(create_span)
+            await sim.mock_tracer.set_attribute(create_span, "image", "python:3.11")
+            await sim.mock_tracer.set_attribute(create_span, "container_name", "agent-work-001")
+            await sim.mock_tracer.end_span(create_span)
 
             # Child span: container start
-            start_span = sim.mock_tracer.start_span(
+            start_span = await sim.mock_tracer.start_span(
                 "container.start",
                 kind=SpanKind.CLIENT,
                 parent_span_id=agent_span.span_id,
                 trace_id=agent_span.trace_id,
             )
-            start_span.set_attribute("container_id", "abc123")
-            sim.mock_tracer.end_span(start_span)
+            await sim.mock_tracer.set_attribute(start_span, "container_id", "abc123")
+            await sim.mock_tracer.end_span(start_span)
 
             # Child span: container execute
-            exec_span = sim.mock_tracer.start_span(
+            exec_span = await sim.mock_tracer.start_span(
                 "container.exec",
                 kind=SpanKind.CLIENT,
                 parent_span_id=agent_span.span_id,
                 trace_id=agent_span.trace_id,
             )
-            exec_span.set_attribute("command", "python script.py")
-            exec_span.set_attribute("exit_code", 0)
-            sim.mock_tracer.end_span(exec_span)
+            await sim.mock_tracer.set_attribute(exec_span, "command", "python script.py")
+            await sim.mock_tracer.set_attribute(exec_span, "exit_code", 0)
+            await sim.mock_tracer.end_span(exec_span)
 
             # Child span: container cleanup
-            cleanup_span = sim.mock_tracer.start_span(
+            cleanup_span = await sim.mock_tracer.start_span(
                 "container.cleanup",
                 kind=SpanKind.CLIENT,
                 parent_span_id=agent_span.span_id,
                 trace_id=agent_span.trace_id,
             )
-            cleanup_span.set_attribute("container_id", "abc123")
-            sim.mock_tracer.end_span(cleanup_span)
+            await sim.mock_tracer.set_attribute(cleanup_span, "container_id", "abc123")
+            await sim.mock_tracer.end_span(cleanup_span)
 
         finally:
-            sim.mock_tracer.end_span(agent_span)
+            await sim.mock_tracer.end_span(agent_span)
 
         # Verify parent-child relationships
         sim.assert_span_exists("agent_execution")
@@ -115,30 +115,30 @@ async def test_llm_adapter_span_context():
 
     async def scenario(sim: SimulationRunner):
         # Parent span: agent execution
-        exec_span = sim.mock_tracer.start_span(
+        exec_span = await sim.mock_tracer.start_span(
             "agent_execute",
             kind=SpanKind.INTERNAL,
         )
 
         try:
             # Child span: LLM call
-            llm_span = sim.mock_tracer.start_span(
+            llm_span = await sim.mock_tracer.start_span(
                 "llm.chat_completion",
                 kind=SpanKind.CLIENT,
                 parent_span_id=exec_span.span_id,
                 trace_id=exec_span.trace_id,
             )
 
-            llm_span.set_attribute("model", "claude-opus-4-6")
-            llm_span.set_attribute("messages", 5)
-            llm_span.set_attribute("max_tokens", 2000)
-            llm_span.add_event("llm_request_sent", {"tokens": 1500})
-            llm_span.add_event("llm_response_received", {"tokens": 500})
+            await sim.mock_tracer.set_attribute(llm_span, "model", "claude-opus-4-6")
+            await sim.mock_tracer.set_attribute(llm_span, "messages", 5)
+            await sim.mock_tracer.set_attribute(llm_span, "max_tokens", 2000)
+            await sim.mock_tracer.add_event(llm_span, "llm_request_sent", {"tokens": 1500})
+            await sim.mock_tracer.add_event(llm_span, "llm_response_received", {"tokens": 500})
 
-            sim.mock_tracer.end_span(llm_span)
+            await sim.mock_tracer.end_span(llm_span)
 
         finally:
-            sim.mock_tracer.end_span(exec_span)
+            await sim.mock_tracer.end_span(exec_span)
 
         # Verify LLM span has attributes
         sim.assert_span_attribute("llm.chat_completion", "model", "claude-opus-4-6")
@@ -167,24 +167,25 @@ async def test_adapter_error_handling_with_spans():
         from codetoreum.infrastructure.simulation.mock_tracer import SpanStatus
 
         # Successful operation
-        success_span = sim.mock_tracer.start_span(
+        success_span = await sim.mock_tracer.start_span(
             "container.create",
             kind=SpanKind.CLIENT,
         )
         success_span.set_status(SpanStatus.OK)
-        sim.mock_tracer.end_span(success_span)
+        await sim.mock_tracer.end_span(success_span)
 
         # Failed operation
-        error_span = sim.mock_tracer.start_span(
+        error_span = await sim.mock_tracer.start_span(
             "container.start",
             kind=SpanKind.CLIENT,
         )
         error_span.set_status(SpanStatus.ERROR)
-        error_span.add_event(
+        await sim.mock_tracer.add_event(
+            error_span,
             "error",
             {"message": "Container startup failed", "error_code": 1},
         )
-        sim.mock_tracer.end_span(error_span)
+        await sim.mock_tracer.end_span(error_span)
 
         # Verify spans recorded with correct status
         spans = sim.mock_tracer.get_spans()
@@ -208,7 +209,7 @@ async def test_parallel_adapter_calls_same_trace():
 
     async def scenario(sim: SimulationRunner):
         # Parent operation
-        parent_span = sim.mock_tracer.start_span(
+        parent_span = await sim.mock_tracer.start_span(
             "multi_adapter_operation",
             kind=SpanKind.INTERNAL,
         )
@@ -225,18 +226,18 @@ async def test_parallel_adapter_calls_same_trace():
             ]
 
             for span_name, attrs in adapter_calls:
-                call_span = sim.mock_tracer.start_span(
+                call_span = await sim.mock_tracer.start_span(
                     span_name,
                     kind=SpanKind.CLIENT,
                     parent_span_id=parent_id,
                     trace_id=trace_id,
                 )
                 for key, value in attrs.items():
-                    call_span.set_attribute(key, value)
-                sim.mock_tracer.end_span(call_span)
+                    await sim.mock_tracer.set_attribute(call_span, key, value)
+                await sim.mock_tracer.end_span(call_span)
 
         finally:
-            sim.mock_tracer.end_span(parent_span)
+            await sim.mock_tracer.end_span(parent_span)
 
         # Verify all operations in same trace
         sim.assert_span_count(4)  # parent + 3 children
@@ -262,7 +263,7 @@ async def test_adapter_span_timing():
     async def scenario(sim: SimulationRunner):
         import time
 
-        span = sim.mock_tracer.start_span(
+        span = await sim.mock_tracer.start_span(
             "container.exec",
             kind=SpanKind.CLIENT,
         )
@@ -270,7 +271,7 @@ async def test_adapter_span_timing():
         # Simulate some work
         time.sleep(0.01)  # 10ms of real work
 
-        sim.mock_tracer.end_span(span)  # Use mock_tracer.end_span instead of span.end()
+        await sim.mock_tracer.end_span(span)  # Use async interface
 
         # Verify duration is recorded
         spans = sim.mock_tracer.get_spans()
@@ -307,48 +308,48 @@ async def test_github_adapter_span_context():
 
     async def scenario(sim: SimulationRunner):
         # Workflow operation
-        workflow_span = sim.mock_tracer.start_span(
+        workflow_span = await sim.mock_tracer.start_span(
             "github_workflow",
             kind=SpanKind.INTERNAL,
         )
 
         try:
             # Create PR
-            create_pr_span = sim.mock_tracer.start_span(
+            create_pr_span = await sim.mock_tracer.start_span(
                 "github.create_pull_request",
                 kind=SpanKind.CLIENT,
                 parent_span_id=workflow_span.span_id,
                 trace_id=workflow_span.trace_id,
             )
-            create_pr_span.set_attribute("repo", "codetoreum")
-            create_pr_span.set_attribute("title", "Feature: auth")
-            create_pr_span.set_attribute("pr_number", 42)
-            sim.mock_tracer.end_span(create_pr_span)
+            await sim.mock_tracer.set_attribute(create_pr_span, "repo", "codetoreum")
+            await sim.mock_tracer.set_attribute(create_pr_span, "title", "Feature: auth")
+            await sim.mock_tracer.set_attribute(create_pr_span, "pr_number", 42)
+            await sim.mock_tracer.end_span(create_pr_span)
 
             # Add review comment
-            comment_span = sim.mock_tracer.start_span(
+            comment_span = await sim.mock_tracer.start_span(
                 "github.add_review_comment",
                 kind=SpanKind.CLIENT,
                 parent_span_id=workflow_span.span_id,
                 trace_id=workflow_span.trace_id,
             )
-            comment_span.set_attribute("pr_number", 42)
-            comment_span.set_attribute("comment_id", "c123")
-            sim.mock_tracer.end_span(comment_span)
+            await sim.mock_tracer.set_attribute(comment_span, "pr_number", 42)
+            await sim.mock_tracer.set_attribute(comment_span, "comment_id", "c123")
+            await sim.mock_tracer.end_span(comment_span)
 
             # Request review
-            review_span = sim.mock_tracer.start_span(
+            review_span = await sim.mock_tracer.start_span(
                 "github.request_review",
                 kind=SpanKind.CLIENT,
                 parent_span_id=workflow_span.span_id,
                 trace_id=workflow_span.trace_id,
             )
-            review_span.set_attribute("pr_number", 42)
-            review_span.set_attribute("reviewers", ["alice", "bob"])
-            sim.mock_tracer.end_span(review_span)
+            await sim.mock_tracer.set_attribute(review_span, "pr_number", 42)
+            await sim.mock_tracer.set_attribute(review_span, "reviewers", ["alice", "bob"])
+            await sim.mock_tracer.end_span(review_span)
 
         finally:
-            sim.mock_tracer.end_span(workflow_span)
+            await sim.mock_tracer.end_span(workflow_span)
 
         # Verify GitHub operations traced
         sim.assert_span_exists("github.create_pull_request")

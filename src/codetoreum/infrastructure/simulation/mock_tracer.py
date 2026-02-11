@@ -15,7 +15,10 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from codetoreum.infrastructure.observability.trace_context_propagation import TraceContextData
+from codetoreum.infrastructure.observability.trace_context_propagation import (
+    TraceContextData,
+    W3C_TRACE_CONTEXT_VERSION,
+)
 from codetoreum.ports.output.i_tracer import (
     ITracer as ITracerPort,
     SpanKind,
@@ -52,7 +55,7 @@ class SpanCapture:
     @property
     def traceparent(self) -> str:
         """Get W3C traceparent format for this span."""
-        return f"00-{self.trace_id}-{self.span_id}-01"
+        return f"{W3C_TRACE_CONTEXT_VERSION}-{self.trace_id}-{self.span_id}-01"
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -139,7 +142,7 @@ class MockSpan:
     def traceparent(self) -> str:
         """Get W3C Trace Context traceparent header."""
         trace_flags = "01" if self.status != SpanStatus.ERROR else "00"
-        return f"00-{self.trace_id}-{self.span_id}-{trace_flags}"
+        return f"{W3C_TRACE_CONTEXT_VERSION}-{self.trace_id}-{self.span_id}-{trace_flags}"
 
     def record_exception(self, exception: Exception) -> None:
         """Record an exception on the span."""
@@ -367,7 +370,7 @@ class MockTracer(ITracerPort):
             span: Span to inject context from
             carrier: Dictionary to inject context into
         """
-        carrier["traceparent"] = f"00-{span.trace_id}-{span.span_id}-01"
+        carrier["traceparent"] = f"{W3C_TRACE_CONTEXT_VERSION}-{span.trace_id}-{span.span_id}-01"
         span.mark_context_injected()
 
     def start_new_trace(self) -> None:
@@ -408,7 +411,7 @@ class MockTracer(ITracerPort):
             return None
 
         return TraceContextData(
-            version="00",
+            version=W3C_TRACE_CONTEXT_VERSION,
             trace_id=self.active_span.trace_id,
             span_id=self.active_span.span_id,
             trace_flags="01",
