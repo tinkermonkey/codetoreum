@@ -183,6 +183,7 @@ def test_message_tracer_start_subscribe_message():
 
     # Start subscribe message
     message_span = message_tracer.start_subscribe_message(
+        connection_id="test-conn-sub-1",
         subscription_type="all_events",
         filter_count=2,
     )
@@ -209,7 +210,10 @@ def test_message_tracer_start_unsubscribe_message():
     message_tracer = WebSocketMessageTracer(session_span)
 
     # Start unsubscribe message
-    message_span = message_tracer.start_unsubscribe_message(subscription_id="sub-123")
+    message_span = message_tracer.start_unsubscribe_message(
+        connection_id="test-conn-unsub-1",
+        subscription_id="sub-123",
+    )
 
     assert message_span is not None
 
@@ -231,7 +235,7 @@ def test_message_tracer_start_ping_message():
     message_tracer = WebSocketMessageTracer(session_span)
 
     # Start ping message
-    message_span = message_tracer.start_ping_message()
+    message_span = message_tracer.start_ping_message("test-conn-ping-1")
 
     assert message_span is not None
 
@@ -254,6 +258,7 @@ def test_message_tracer_end_message_span():
 
     # Start and end message
     message_span = message_tracer.start_subscribe_message(
+        connection_id="test-conn-end-1",
         subscription_type="workflow_events",
         filter_count=1,
     )
@@ -284,7 +289,9 @@ def test_message_tracer_end_message_span_with_error():
     message_tracer = WebSocketMessageTracer(session_span)
 
     # Start and end message with error
-    message_span = message_tracer.start_subscribe_message()
+    message_span = message_tracer.start_subscribe_message(
+        connection_id="test-conn-error-1",
+    )
     message_tracer.end_message_span(
         message_span,
         success=False,
@@ -309,6 +316,7 @@ def test_message_tracer_start_event_delivery_span():
 
     # Start event delivery
     event_span = message_tracer.start_event_delivery_span(
+        connection_id="test-conn-delivery-1",
         event_type="ExecutionStarted",
         event_id="evt-12345",
         subscription_type="workflow_events",
@@ -358,6 +366,7 @@ def test_message_tracer_link_to_event_trace_context():
 
     # Start and link message span
     message_span = message_tracer.start_event_delivery_span(
+        connection_id="test-conn-link-1",
         event_type=event.event_type,
         event_id=str(event.event_id),
     )
@@ -551,6 +560,7 @@ async def test_websocket_instrumentation_end_to_end():
     # Simulate subscription
     message_tracer = adapter._message_tracers[connection_id]
     sub_span = message_tracer.start_subscribe_message(
+        connection_id=connection_id,
         subscription_type="all_events",
         filter_count=1,
     )
@@ -563,6 +573,7 @@ async def test_websocket_instrumentation_end_to_end():
     )
 
     event_span = message_tracer.start_event_delivery_span(
+        connection_id=connection_id,
         event_type=event.event_type,
         event_id=str(event.event_id),
         subscription_type="all_events",

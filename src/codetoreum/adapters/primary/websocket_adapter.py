@@ -755,12 +755,12 @@ class ConnectionManager:
                 timestamp=datetime.utcnow(),
             ).model_dump(mode="json")
             await conn_state.websocket.send_json(error_msg)
-        except:
+        except Exception:
             pass  # Best effort
 
         try:
             await conn_state.websocket.close(code=code, reason=reason)
-        except:
+        except Exception:
             pass
 
         self.disconnect(connection_id)
@@ -1124,6 +1124,7 @@ class WebSocketAdapter:
         self._session_spans[connection_id] = session_span
         self._message_tracers[connection_id] = WebSocketMessageTracer(session_span)
 
+        heartbeat_task = None
         try:
             # Accept connection
             await self.manager.connect(websocket, connection_id)
@@ -1417,6 +1418,7 @@ class WebSocketAdapter:
 
         # Start message span
         message_span = message_tracer.start_subscribe_message(
+            connection_id=connection_id,
             subscription_type=message.get("subscription_type", "all_events"),
             filter_count=filter_count,
         )
@@ -1450,7 +1452,9 @@ class WebSocketAdapter:
         subscription_id = message.get("subscription_id", "unknown")
 
         # Start message span
-        message_span = message_tracer.start_unsubscribe_message(subscription_id)
+        message_span = message_tracer.start_unsubscribe_message(
+            connection_id, subscription_id
+        )
 
         try:
             await self._handle_unsubscribe(connection_id, message)
@@ -1476,7 +1480,7 @@ class WebSocketAdapter:
             return
 
         # Start message span
-        message_span = message_tracer.start_ping_message()
+        message_span = message_tracer.start_ping_message(connection_id)
 
         try:
             await self._handle_ping(connection_id)
@@ -1627,6 +1631,7 @@ class WebSocketAdapter:
                         if self._subscription_matches_event(subscription, event):
                             # Create MESSAGE span for this delivery
                             span = message_tracer.start_event_delivery_span(
+                                connection_id=connection_id,
                                 event_type=event.event_type,
                                 event_id=str(event.event_id),
                                 subscription_type=subscription.subscription_type.value,

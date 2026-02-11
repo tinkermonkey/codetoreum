@@ -84,7 +84,7 @@ class WebSocketSessionTracer:
             f"websocket.session",
             kind=SpanKind.SERVER,
             attributes={
-                "connection.id": connection_id,
+                "websocket.client.id": connection_id,
                 "connection.type": "websocket",
                 "websocket.session.client_ip": client_ip or "unknown",
                 "websocket.session.authenticated": token_present,
@@ -198,6 +198,7 @@ class WebSocketMessageTracer:
 
     def start_subscribe_message(
         self,
+        connection_id: str,
         subscription_type: Optional[str] = None,
         filter_count: int = 0,
     ) -> Optional[Any]:
@@ -205,6 +206,7 @@ class WebSocketMessageTracer:
         Start a MESSAGE span for subscribe operation.
 
         Args:
+            connection_id: Client connection ID
             subscription_type: Type of subscription (e.g., "all_events", "workflow_events")
             filter_count: Number of filters applied
 
@@ -218,7 +220,9 @@ class WebSocketMessageTracer:
             "websocket.message.subscribe",
             kind=SpanKind.INTERNAL,
             attributes={
-                "message.type": "subscribe",
+                "websocket.client.id": connection_id,
+                "websocket.message.type": "subscribe",
+                "websocket.event": "subscribe",
                 "websocket.subscription_type": subscription_type or "unknown",
                 "websocket.filter_count": filter_count,
                 "component": "websocket_adapter",
@@ -232,11 +236,14 @@ class WebSocketMessageTracer:
 
         return span
 
-    def start_unsubscribe_message(self, subscription_id: str) -> Optional[Any]:
+    def start_unsubscribe_message(
+        self, connection_id: str, subscription_id: str
+    ) -> Optional[Any]:
         """
         Start a MESSAGE span for unsubscribe operation.
 
         Args:
+            connection_id: Client connection ID
             subscription_id: Subscription identifier being removed
 
         Returns:
@@ -249,7 +256,9 @@ class WebSocketMessageTracer:
             "websocket.message.unsubscribe",
             kind=SpanKind.INTERNAL,
             attributes={
-                "message.type": "unsubscribe",
+                "websocket.client.id": connection_id,
+                "websocket.message.type": "unsubscribe",
+                "websocket.event": "unsubscribe",
                 "websocket.subscription_id": subscription_id,
                 "component": "websocket_adapter",
             },
@@ -262,9 +271,12 @@ class WebSocketMessageTracer:
 
         return span
 
-    def start_ping_message(self) -> Optional[Any]:
+    def start_ping_message(self, connection_id: str) -> Optional[Any]:
         """
         Start a MESSAGE span for ping operation.
+
+        Args:
+            connection_id: Client connection ID
 
         Returns:
             Span object if OpenTelemetry available, None otherwise
@@ -276,7 +288,9 @@ class WebSocketMessageTracer:
             "websocket.message.ping",
             kind=SpanKind.INTERNAL,
             attributes={
-                "message.type": "ping",
+                "websocket.client.id": connection_id,
+                "websocket.message.type": "ping",
+                "websocket.event": "ping",
                 "component": "websocket_adapter",
             },
         )
@@ -290,6 +304,7 @@ class WebSocketMessageTracer:
 
     def start_event_delivery_span(
         self,
+        connection_id: str,
         event_type: str,
         event_id: str,
         subscription_type: Optional[str] = None,
@@ -301,6 +316,7 @@ class WebSocketMessageTracer:
         It links to the original event's trace context for distributed tracing.
 
         Args:
+            connection_id: Client connection ID
             event_type: Type of domain event being delivered
             event_id: Unique event identifier
             subscription_type: Type of subscription receiving the event
@@ -315,7 +331,9 @@ class WebSocketMessageTracer:
             "websocket.message.event_delivery",
             kind=SpanKind.INTERNAL,
             attributes={
-                "message.type": "event",
+                "websocket.client.id": connection_id,
+                "websocket.message.type": "event_delivery",
+                "websocket.event": "event_delivery",
                 "event.type": event_type,
                 "event.id": event_id,
                 "websocket.subscription_type": subscription_type or "unknown",
@@ -413,317 +431,3 @@ class WebSocketMessageTracer:
                     )
         except Exception as e:
             logger.debug(f"Could not link to event trace context: {e}", exc_info=False)
-
-
-class InstrumentedConnectionManager:
-    """
-    Wraps a ConnectionManager with OpenTelemetry instrumentation.
-
-    Adds session and message span creation for all WebSocket operations.
-
-    Usage:
-        from codetoreum.adapters.primary.websocket_adapter import ConnectionManager
-
-        manager = ConnectionManager(config)
-        instrumented_manager = InstrumentedConnectionManager(manager)
-
-        # Spans are created automatically for all operations
-        await instrumented_manager.connect(websocket, connection_id)
-        await instrumented_manager.broadcast_event(event)
-    """
-
-    def __init__(self, manager: Any):
-        """
-        Initialize instrumented connection manager.
-
-        Args:
-            manager: ConnectionManager instance to wrap
-        """
-        self._manager = manager
-        self._session_tracer = WebSocketSessionTracer()
-        self._message_tracers: dict[str, WebSocketMessageTracer] = {}
-        self._session_spans: dict[str, Optional[Any]] = {}
-
-    async def connect(
-        self, websocket: "WebSocket", connection_id: str, client_ip: Optional[str] = None
-    ) -> bool:
-        """
-        Accept connection with SESSION span creation.
-
-        Args:
-            websocket: WebSocket connection
-            connection_id: Unique connection identifier
-            client_ip: Client IP address
-
-        Returns:
-            True if connection accepted, False if rejected
-        """
-        # Start session span
-        session_span = self._session_tracer.start_session(
-            connection_id=connection_id,
-            client_ip=client_ip,
-            token_present=True,
-        )
-        self._session_spans[connection_id] = session_span
-        self._message_tracers[connection_id] = WebSocketMessageTracer(session_span)
-
-        try:
-            # Delegate to wrapped manager
-            result = await self._manager.connect(websocket, connection_id)
-
-            if not result:
-                # Connection rejected - end the session span
-                self._session_tracer.end_session(
-                    session_span,
-                    reason="connection_rejected",
-                )
-                del self._session_spans[connection_id]
-                del self._message_tracers[connection_id]
-
-            return result
-        except Exception as e:
-            # Connection failed - end the session span
-            self._session_tracer.end_session(
-                session_span,
-                reason="connection_error",
-            )
-            del self._session_spans[connection_id]
-            del self._message_tracers[connection_id]
-            raise
-
-    def disconnect(self, connection_id: str, reason: str = "normal_closure") -> None:
-        """
-        Disconnect with SESSION span closure.
-
-        Args:
-            connection_id: Connection to disconnect
-            reason: Reason for disconnection
-        """
-        try:
-            # Get connection state for stats
-            if connection_id in self._manager.connections:
-                conn_state = self._manager.connections[connection_id]
-                message_count = len(conn_state.buffer)
-                buffered_events = len(conn_state.subscriptions)
-            else:
-                message_count = 0
-                buffered_events = 0
-
-            # End session span
-            session_span = self._session_spans.get(connection_id)
-            self._session_tracer.end_session(
-                session_span,
-                reason=reason,
-                message_count=message_count,
-                buffered_events=buffered_events,
-            )
-
-            # Delegate to wrapped manager
-            self._manager.disconnect(connection_id)
-        finally:
-            # Clean up span tracking
-            self._session_spans.pop(connection_id, None)
-            self._message_tracers.pop(connection_id, None)
-
-    async def subscribe(self, connection_id: str, event_filter: Any) -> bool:
-        """
-        Subscribe with MESSAGE span creation.
-
-        Args:
-            connection_id: Connection subscribing
-            event_filter: EventFilter with subscription details
-
-        Returns:
-            True if subscription successful, False otherwise
-        """
-        message_tracer = self._message_tracers.get(connection_id)
-        if not message_tracer:
-            message_tracer = WebSocketMessageTracer(None)
-
-        # Count active filters for instrumentation
-        filter_attrs = [
-            event_filter.event_types,
-            event_filter.work_item_id,
-            event_filter.workflow_id,
-            event_filter.agent_id,
-            event_filter.project_name,
-        ]
-        filter_count = sum(1 for attr in filter_attrs if attr)
-
-        # Start message span
-        message_span = message_tracer.start_subscribe_message(
-            subscription_type=event_filter.subscription_type.value,
-            filter_count=filter_count,
-        )
-
-        try:
-            # Delegate to wrapped manager
-            result = await self._manager.subscribe(connection_id, event_filter)
-
-            # End message span
-            message_tracer.end_message_span(
-                message_span,
-                success=result,
-            )
-
-            return result
-        except Exception as e:
-            message_tracer.end_message_span(
-                message_span,
-                success=False,
-                error_code="subscription_error",
-            )
-            raise
-
-    async def unsubscribe(self, connection_id: str, subscription_id: str) -> bool:
-        """
-        Unsubscribe with MESSAGE span creation.
-
-        Args:
-            connection_id: Connection unsubscribing
-            subscription_id: Subscription to remove
-
-        Returns:
-            True if successful, False otherwise
-        """
-        message_tracer = self._message_tracers.get(connection_id)
-        if not message_tracer:
-            message_tracer = WebSocketMessageTracer(None)
-
-        # Start message span
-        message_span = message_tracer.start_unsubscribe_message(subscription_id)
-
-        try:
-            # Delegate to wrapped manager
-            result = await self._manager.unsubscribe(connection_id, subscription_id)
-
-            # End message span
-            message_tracer.end_message_span(message_span, success=result)
-
-            return result
-        except Exception as e:
-            message_tracer.end_message_span(
-                message_span,
-                success=False,
-                error_code="unsubscribe_error",
-            )
-            raise
-
-    async def broadcast_event(self, event: DomainEvent) -> None:
-        """
-        Broadcast event with MESSAGE spans for each delivery.
-
-        Creates a MESSAGE span for each client that receives the event,
-        linking to the event's trace context.
-
-        Args:
-            event: Domain event to broadcast
-        """
-        try:
-            # Delegate to wrapped manager
-            await self._manager.broadcast_event(event)
-
-            # Create message spans for each connection that received the event
-            # This is done asynchronously to not block event broadcasting
-            self._record_event_deliveries(event)
-        except Exception as e:
-            logger.warning(f"Error broadcasting event: {e}", exc_info=False)
-            raise
-
-    def _record_event_deliveries(self, event: DomainEvent) -> None:
-        """
-        Record event delivery to all subscribed clients (async, doesn't block).
-
-        Args:
-            event: Event being delivered
-        """
-        # This is a non-blocking record of deliveries for tracing
-        # In a real implementation, this might be recorded as a background task
-        for connection_id, message_tracer in self._message_tracers.items():
-            try:
-                # Find relevant subscriptions for this connection
-                if connection_id in self._manager.connections:
-                    conn_state = self._manager.connections[connection_id]
-                    for subscription in conn_state.subscriptions:
-                        # Check if subscription matches event
-                        if self._subscription_matches_event(subscription, event):
-                            # Create message span for delivery
-                            span = message_tracer.start_event_delivery_span(
-                                event_type=event.event_type,
-                                event_id=str(event.event_id),
-                                subscription_type=subscription.subscription_type.value,
-                            )
-
-                            # Link to event trace context
-                            message_tracer.link_to_event_trace_context(span, event)
-
-                            # Immediately end the span
-                            # (in production, might be held open while message in buffer)
-                            message_tracer.end_message_span(span, success=True)
-            except Exception as e:
-                logger.debug(f"Error recording event delivery for {connection_id}: {e}")
-
-    @staticmethod
-    def _subscription_matches_event(subscription: Any, event: DomainEvent) -> bool:
-        """
-        Check if a subscription matches an event.
-
-        Args:
-            subscription: EventFilter subscription
-            event: Domain event
-
-        Returns:
-            True if event matches subscription filters
-        """
-        try:
-            # Check event type filters
-            if subscription.event_types:
-                if event.event_type not in subscription.event_types:
-                    return False
-
-            # Check aggregate type filters (if event has these)
-            if subscription.work_item_id:
-                if hasattr(event, "work_item_id") and event.work_item_id != subscription.work_item_id:
-                    return False
-
-            if subscription.workflow_id:
-                if hasattr(event, "workflow_id") and event.workflow_id != subscription.workflow_id:
-                    return False
-
-            if subscription.agent_id:
-                if hasattr(event, "agent_id") and event.agent_id != subscription.agent_id:
-                    return False
-
-            return True
-        except Exception:
-            # If matching fails, assume it doesn't match
-            return False
-
-    def get_session_span(self, connection_id: str) -> Optional[Any]:
-        """
-        Get the active session span for a connection.
-
-        Args:
-            connection_id: Connection identifier
-
-        Returns:
-            Span object if available, None otherwise
-        """
-        return self._session_spans.get(connection_id)
-
-    def get_message_tracer(self, connection_id: str) -> Optional[WebSocketMessageTracer]:
-        """
-        Get the message tracer for a connection.
-
-        Args:
-            connection_id: Connection identifier
-
-        Returns:
-            WebSocketMessageTracer if available, None otherwise
-        """
-        return self._message_tracers.get(connection_id)
-
-    # Delegate other methods to wrapped manager
-    def __getattr__(self, name: str) -> Any:
-        """Delegate unknown attributes to wrapped manager."""
-        return getattr(self._manager, name)
