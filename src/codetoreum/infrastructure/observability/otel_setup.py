@@ -77,6 +77,40 @@ def _get_sampler(config: ObservabilityConfig):
         return ALWAYS_ON
 
 
+def _record_trace_export_error(error: Exception, config: ObservabilityConfig) -> None:
+    """
+    Record metric for trace export error and log warning.
+
+    Emits otel.trace.export.failures counter metric to track export errors.
+    Logs warning message with error details to aid troubleshooting.
+
+    Args:
+        error: The exception that occurred during trace export setup
+        config: The observability configuration
+    """
+    # Record failure metric
+    try:
+        from opentelemetry import metrics
+        meter = metrics.get_meter("codetoreum.observability")
+        counter = meter.create_counter(
+            "otel.trace.export.failures",
+            description="Number of OTLP trace export failures"
+        )
+        counter.add(1)
+    except Exception as metric_error:
+        logger.debug(
+            f"Failed to record trace export error metric: {metric_error}",
+            exc_info=False
+        )
+
+    logger.warning(
+        f"OTLP trace export setup failed: {error}. "
+        f"Continuing without trace export to {config.signoz.grpc_endpoint}",
+        exc_info=True,
+        extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+    )
+
+
 def _record_log_export_error(error: Exception, config: ObservabilityConfig) -> None:
     """
     Record metric for log export error and log warning.
@@ -305,6 +339,8 @@ def setup_opentelemetry(config: ObservabilityConfig, app=None) -> None:
             logger.info(f"OTLP log export enabled, sending logs to {config.logs_endpoint}")
 
     except Exception as e:
+        # Record trace export failure metric
+        _record_trace_export_error(e, config)
         # Don't crash the application if observability fails
         logger.error(f"Failed to initialize OpenTelemetry: {e}", exc_info=True, extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR})
         logger.warning("Application will continue without distributed tracing and log export")

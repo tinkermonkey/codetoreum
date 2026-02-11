@@ -13,10 +13,11 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from codetoreum.infrastructure.observability.trace_context_propagation import TraceContextData
+from codetoreum.ports.output.i_tracer import ITracer as ITracerPort
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ class SpanEvent:
 
     name: str
     timestamp: datetime
-    attributes: Dict[str, any] = field(default_factory=dict)
+    attributes: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -60,7 +61,7 @@ class SpanCapture:
     status: SpanStatus
     start_time: datetime
     end_time: Optional[datetime]
-    attributes: Dict[str, any] = field(default_factory=dict)
+    attributes: Dict[str, Any] = field(default_factory=dict)
     events: List[SpanEvent] = field(default_factory=list)
     span_context_injected: bool = False
 
@@ -76,7 +77,7 @@ class SpanCapture:
         """Get W3C traceparent format for this span."""
         return f"00-{self.trace_id}-{self.span_id}-01"
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
             "span_id": self.span_id,
@@ -120,15 +121,15 @@ class MockSpan:
         self.status = SpanStatus.UNSET
         self.start_time = datetime.now(timezone.utc)
         self.end_time: Optional[datetime] = None
-        self.attributes: Dict[str, any] = {}
+        self.attributes: Dict[str, Any] = {}
         self.events: List[SpanEvent] = []
         self.span_context_injected = False
 
-    def set_attribute(self, key: str, value: any) -> None:
+    def set_attribute(self, key: str, value: Any) -> None:
         """Set an attribute on the span."""
         self.attributes[key] = value
 
-    def add_event(self, name: str, attributes: Optional[Dict[str, any]] = None) -> None:
+    def add_event(self, name: str, attributes: Optional[Dict[str, Any]] = None) -> None:
         """Add an event to the span."""
         self.events.append(
             SpanEvent(
@@ -167,17 +168,19 @@ class MockSpan:
         )
 
 
-class MockTracer:
+class MockTracer(ITracerPort):
     """Mock OpenTelemetry tracer for simulation testing.
 
     Records all spans in memory for verification of trace propagation.
     Does not require OpenTelemetry infrastructure.
+    Implements the ITracer port for async trace propagation testing.
 
     Usage:
         tracer = MockTracer()
-        with tracer.start_as_current_span("operation") as span:
-            span.set_attribute("key", "value")
-            # Do work
+        span = await tracer.start_span("operation")
+        await tracer.set_attribute(span, "key", "value")
+        # Do work
+        await tracer.end_span(span)
         # Verify
         spans = tracer.get_spans()
         assert len(spans) == 1
@@ -191,21 +194,61 @@ class MockTracer:
         self.span_counter = 0
         self.trace_counter = 0  # Counter for generating unique trace IDs
 
-    def start_span(
+    async def start_span(
+        self,
+        name: str,
+        kind: SpanKind = SpanKind.INTERNAL,
+        parent_context: Optional[str] = None,
+        attributes: Optional[Dict[str, Any]] = None,
+    ) -> MockSpan:
+        """
+        Start a new span (ITracer protocol).
+
+        Args:
+            name: Span name
+            kind: Span kind (INTERNAL, CLIENT, etc.)
+            parent_context: Parent span context (for linking)
+            attributes: Initial span attributes
+
+        Returns:
+            MockSpan instance
+        """
+        parent_span_id = None
+        trace_id = None
+
+        # Extract parent info from context if provided
+        if parent_context:
+            # Format: "00-{trace_id}-{span_id}-01"
+            parts = parent_context.split("-")
+            if len(parts) >= 3:
+                trace_id = parts[1]
+                parent_span_id = parts[2]
+
+        return self._start_span_internal(
+            name=name,
+            kind=kind,
+            parent_span_id=parent_span_id,
+            trace_id=trace_id,
+            attributes=attributes,
+        )
+
+    def _start_span_internal(
         self,
         name: str,
         kind: SpanKind = SpanKind.INTERNAL,
         parent_span_id: Optional[str] = None,
         trace_id: Optional[str] = None,
+        attributes: Optional[Dict[str, Any]] = None,
     ) -> MockSpan:
         """
-        Start a new span.
+        Internal span creation (used by both async and sync methods).
 
         Args:
             name: Span name
             kind: Span kind (INTERNAL, CLIENT, etc.)
             parent_span_id: Parent span ID if child of existing span
             trace_id: Trace ID (creates new if not provided)
+            attributes: Initial span attributes
 
         Returns:
             MockSpan instance
@@ -234,14 +277,19 @@ class MockTracer:
             kind=kind,
         )
 
+        # Set initial attributes
+        if attributes:
+            for key, value in attributes.items():
+                span.set_attribute(key, value)
+
         self.active_span = span
         logger.debug(f"Started span: {name} (id={span_id}, trace={trace_id})")
 
         return span
 
-    def end_span(self, span: MockSpan) -> None:
+    async def end_span(self, span: MockSpan) -> None:
         """
-        End a span.
+        End a span (ITracer protocol).
 
         Args:
             span: Span to end
@@ -250,6 +298,119 @@ class MockTracer:
         self.spans.append(span.to_capture())
         self.active_span = None
         logger.debug(f"Ended span: {span.name} (id={span.span_id})")
+
+    async def add_event(
+        self,
+        span: MockSpan,
+        name: str,
+        attributes: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """
+        Add an event to a span (ITracer protocol).
+
+        Args:
+            span: Span to add event to
+            name: Event name
+            attributes: Event attributes
+        """
+        span.add_event(name, attributes)
+
+    async def set_attribute(
+        self,
+        span: MockSpan,
+        key: str,
+        value: Any,
+    ) -> None:
+        """
+        Set a span attribute (ITracer protocol).
+
+        Args:
+            span: Span to set attribute on
+            key: Attribute key
+            value: Attribute value
+        """
+        span.set_attribute(key, value)
+
+    async def record_exception(
+        self,
+        span: MockSpan,
+        exception: Exception,
+    ) -> None:
+        """
+        Record an exception in a span (ITracer protocol).
+
+        Args:
+            span: Span to record exception in
+            exception: Exception that occurred
+        """
+        span.set_status(SpanStatus.ERROR)
+        span.add_event(
+            "exception",
+            {
+                "exception.type": type(exception).__name__,
+                "exception.message": str(exception),
+            },
+        )
+
+    async def extract_context(self, carrier: Dict[str, str]) -> Optional[str]:
+        """
+        Extract trace context from a carrier (ITracer protocol).
+
+        Args:
+            carrier: Dictionary containing trace context
+
+        Returns:
+            Context string in W3C traceparent format or None
+        """
+        # Look for traceparent header
+        if "traceparent" in carrier:
+            return carrier["traceparent"]
+        if "Traceparent" in carrier:
+            return carrier["Traceparent"]
+        return None
+
+    async def inject_context(
+        self,
+        span: MockSpan,
+        carrier: Dict[str, str],
+    ) -> None:
+        """
+        Inject trace context into a carrier (ITracer protocol).
+
+        Args:
+            span: Span to inject context from
+            carrier: Dictionary to inject context into
+        """
+        carrier["traceparent"] = f"00-{span.trace_id}-{span.span_id}-01"
+        span.mark_context_injected()
+
+    def start_new_trace(self) -> None:
+        """
+        Start a new trace, resetting trace context for independent operations.
+
+        Use this method to reset just the trace context without clearing
+        all recorded spans. Useful for testing independent operations in
+        the same test scenario.
+
+        Example:
+            # Test first operation
+            span1 = await tracer.start_span("operation1")
+            await tracer.end_span(span1)
+
+            # Reset trace context for independent operation
+            tracer.start_new_trace()
+
+            # Test second operation (separate trace)
+            span2 = await tracer.start_span("operation2")
+            await tracer.end_span(span2)
+
+            # Both operations recorded, different trace IDs
+            spans = tracer.get_spans()
+            assert spans[0].trace_id != spans[1].trace_id
+        """
+        self.root_trace_id = None
+        self.active_span = None
+        logger.debug("Started new trace (trace context reset)")
 
     def get_current_span(self) -> Optional[MockSpan]:
         """Get the currently active span."""
@@ -292,6 +453,44 @@ class MockTracer:
                 hierarchy[parent_id] = []
             hierarchy[parent_id].append(span)
         return hierarchy
+
+    def start_span_sync(
+        self,
+        name: str,
+        kind: SpanKind = SpanKind.INTERNAL,
+        parent_span_id: Optional[str] = None,
+        trace_id: Optional[str] = None,
+    ) -> MockSpan:
+        """
+        Start a new span (synchronous version for backwards compatibility).
+
+        Args:
+            name: Span name
+            kind: Span kind (INTERNAL, CLIENT, etc.)
+            parent_span_id: Parent span ID if child of existing span
+            trace_id: Trace ID (creates new if not provided)
+
+        Returns:
+            MockSpan instance
+        """
+        return self._start_span_internal(
+            name=name,
+            kind=kind,
+            parent_span_id=parent_span_id,
+            trace_id=trace_id,
+        )
+
+    def end_span_sync(self, span: MockSpan) -> None:
+        """
+        End a span (synchronous version for backwards compatibility).
+
+        Args:
+            span: Span to end
+        """
+        span.end()
+        self.spans.append(span.to_capture())
+        self.active_span = None
+        logger.debug(f"Ended span: {span.name} (id={span.span_id})")
 
     def clear(self) -> None:
         """Clear all recorded spans."""
@@ -347,8 +546,8 @@ class TraceContextValidator:
             )
 
     def assert_span_attribute(
-        self, name: str, key: str, expected_value: Optional[any] = None
-    ) -> any:
+        self, name: str, key: str, expected_value: Optional[Any] = None
+    ) -> Any:
         """Assert a span has an attribute."""
         span = self.assert_span_exists(name)
         if key not in span.attributes:
