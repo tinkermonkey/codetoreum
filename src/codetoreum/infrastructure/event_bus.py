@@ -1,4 +1,13 @@
-"""In-process event bus for real-time event handling with optional Redis persistence."""
+"""In-process event bus for real-time event handling with optional Redis persistence.
+
+Includes W3C Trace Context propagation to support distributed tracing through
+the event bus. Trace context is automatically:
+- Injected into events when published (captures current span)
+- Extracted from events when handling them (activates parent span)
+- Stored in event.metadata['traceparent'] in W3C format
+
+This enables complete trace correlation across async event handlers.
+"""
 
 import asyncio
 import logging
@@ -6,6 +15,11 @@ from typing import Any, Callable, Dict, List, Optional, Set, Type
 
 from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.infrastructure.observability.trace_context_propagation import (
+    TraceContextPropagator,
+    inject_current_trace_context_into_event,
+    extract_and_activate_trace_context,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -253,6 +267,11 @@ class EventBus:
 
         Also persists event to Redis Streams if Redis client is configured.
 
+        W3C Trace Context Propagation:
+        - Injects current trace context into event.metadata['traceparent']
+        - Downstream handlers can extract and continue the trace
+        - Enables complete distributed tracing through event bus
+
         Error Handling:
         - asyncio.CancelledError: Always propagated (not caught)
         - ConnectionError/TimeoutError: Logged with retry hint (transient)
@@ -269,6 +288,9 @@ class EventBus:
         self._stats["events_published"] += 1
 
         try:
+            # Inject current trace context into event for downstream propagation
+            inject_current_trace_context_into_event(event)
+
             # Persist event to Redis Streams if available
             if self.redis_client:
                 await self._persist_to_redis(event)
@@ -407,6 +429,11 @@ class EventBus:
         """
         Dispatch event to a handler with retry logic.
 
+        W3C Trace Context Propagation:
+        - Extracts trace context from event.metadata['traceparent']
+        - Activates it in the current execution context
+        - Ensures handler spans are children of the event's trace
+
         Args:
             handler: Event handler
             event: Domain event
@@ -418,6 +445,11 @@ class EventBus:
 
         for attempt in range(self.max_retries + 1):
             try:
+                # Extract and activate trace context from event
+                # This ensures the handler's spans are children of the event's trace
+                trace_context = extract_and_activate_trace_context(event)
+
+                # Call handler - span context is active during execution
                 await handler.handle(event)
                 return  # Success!
 
@@ -441,6 +473,11 @@ class EventBus:
         """
         Dispatch event to a callback with retry logic.
 
+        W3C Trace Context Propagation:
+        - Extracts trace context from event.metadata['traceparent']
+        - Activates it in the current execution context
+        - Ensures callback spans are children of the event's trace
+
         Args:
             callback: Callback function
             event: Domain event
@@ -452,6 +489,10 @@ class EventBus:
 
         for attempt in range(self.max_retries + 1):
             try:
+                # Extract and activate trace context from event
+                # This ensures the callback's spans are children of the event's trace
+                trace_context = extract_and_activate_trace_context(event)
+
                 # Check if callback is async
                 if asyncio.iscoroutinefunction(callback):
                     await callback(event)
