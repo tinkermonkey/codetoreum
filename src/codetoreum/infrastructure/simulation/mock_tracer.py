@@ -177,7 +177,7 @@ class MockTracer(ITracerPort):
         kind: SpanKind = SpanKind.INTERNAL,
         parent_context: Optional[str] = None,
         attributes: Optional[Dict[str, Any]] = None,
-    ) -> MockSpan:
+    ) -> Span:
         """
         Start a new span (ITracer protocol).
 
