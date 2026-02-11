@@ -7,7 +7,10 @@ Supports granular control over tracing, metrics, and logging.
 
 from dataclasses import dataclass
 from typing import Literal
+import logging
 import os
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -120,6 +123,36 @@ class ObservabilityConfig:
             self.traces_enabled or self.metrics_enabled or self.logs_enabled
         )
 
+    @property
+    def traces_endpoint(self) -> str:
+        """
+        Returns trace-specific endpoint or falls back to unified gRPC endpoint.
+
+        Priority: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT > signoz.grpc_endpoint
+
+        Returns:
+            The gRPC endpoint for traces without http:// prefix
+        """
+        env_traces = os.getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
+        if env_traces:
+            return env_traces
+        return self.signoz.grpc_endpoint
+
+    @property
+    def logs_endpoint(self) -> str:
+        """
+        Returns log-specific endpoint or falls back to unified HTTP endpoint.
+
+        Priority: OTEL_EXPORTER_OTLP_LOGS_ENDPOINT > signoz.logs_endpoint
+
+        Returns:
+            The HTTP endpoint for logs with /v1/logs path
+        """
+        env_logs = os.getenv("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT")
+        if env_logs:
+            return env_logs
+        return self.signoz.logs_endpoint
+
     @classmethod
     def from_env(cls) -> 'ObservabilityConfig':
         """
@@ -130,6 +163,8 @@ class ObservabilityConfig:
             OTEL_TRACES_ENABLED: Enable/disable traces (default: true)
             OTEL_METRICS_ENABLED: Enable/disable metrics (default: false)
             OTEL_LOGS_ENABLED: Enable/disable log export (default: false)
+            OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: Trace-specific gRPC endpoint (uses signoz.grpc_endpoint if not set)
+            OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: Log-specific HTTP endpoint (uses signoz.logs_endpoint if not set)
             OTEL_TRACES_SAMPLER: Sampling strategy (default: always_on)
             OTEL_TRACES_SAMPLER_ARG: Sampler argument (default: 1.0)
             OTEL_AUTO_INSTRUMENT_LIBRARIES: Auto-instrument libraries (default: true)
@@ -186,3 +221,22 @@ class ObservabilityConfig:
             ),
             log_level=os.getenv("OTEL_LOG_LEVEL", "info"),
         )
+
+    def validate(self) -> None:
+        """
+        Validate configuration and log warnings for misconfigured signals.
+
+        Warnings:
+            Logs warning if a signal is enabled but its endpoint is not configured.
+        """
+        if self.traces_enabled and not self.traces_endpoint:
+            logger.warning(
+                "Traces enabled but traces_endpoint is not configured. "
+                "Check OTEL_EXPORTER_OTLP_TRACES_ENDPOINT or Signoz gRPC configuration."
+            )
+
+        if self.logs_enabled and not self.logs_endpoint:
+            logger.warning(
+                "Logs enabled but logs_endpoint is not configured. "
+                "Check OTEL_EXPORTER_OTLP_LOGS_ENDPOINT or Signoz HTTP configuration."
+            )
