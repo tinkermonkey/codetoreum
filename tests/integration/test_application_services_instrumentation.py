@@ -37,13 +37,16 @@ from unittest.mock import AsyncMock, MagicMock
 
 @pytest.fixture
 def tracer_provider():
-    """Provide a test tracer with in-memory span exporter."""
+    """Provide a test tracer with in-memory span exporter.
+
+    Yields the InMemorySpanExporter which has get_finished_spans() method.
+    """
     provider = TracerProvider()
     exporter = InMemorySpanExporter()
     processor = SimpleSpanProcessor(exporter)
     provider.add_span_processor(processor)
     trace.set_tracer_provider(provider)
-    yield provider
+    yield exporter
     provider.force_flush()
 
 
