@@ -580,9 +580,9 @@ class TestConcurrency:
                     # Read operation
                     adapter.get_project_state("test-project")
                 else:
-                    # Clone operation (read+write)
+                    # Read-write operation (synchronous, internal lock contention)
                     try:
-                        adapter.get_project_path("test-project")
+                        adapter.get_project_state("test-project")
                     except Exception:
                         pass
 
