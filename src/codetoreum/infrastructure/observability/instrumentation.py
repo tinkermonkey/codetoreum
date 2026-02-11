@@ -15,13 +15,17 @@ try:
     from opentelemetry.trace import Status, StatusCode
 
     OPENTELEMETRY_AVAILABLE = True
-    # Get tracer for instrumentation
-    _tracer = trace.get_tracer(__name__)
 except ImportError:
     OPENTELEMETRY_AVAILABLE = False
-    _tracer = None
     Status = None  # type: ignore
     StatusCode = None  # type: ignore
+
+
+def _get_tracer():
+    """Get tracer lazily to support test provider switching."""
+    if not OPENTELEMETRY_AVAILABLE:
+        return None
+    return trace.get_tracer(__name__)
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +66,10 @@ def instrument_function(
 
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            with _tracer.start_as_current_span(span_name) as span:
+            tracer = _get_tracer()
+            if not tracer:
+                return func(*args, **kwargs)
+            with tracer.start_as_current_span(span_name) as span:
                 # Add custom attributes
                 if attributes:
                     for key, value in attributes.items():
@@ -129,7 +136,10 @@ def instrument_async_function(
 
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
-            with _tracer.start_as_current_span(span_name) as span:
+            tracer = _get_tracer()
+            if not tracer:
+                return await func(*args, **kwargs)
+            with tracer.start_as_current_span(span_name) as span:
                 # Add custom attributes
                 if attributes:
                     for key, value in attributes.items():
