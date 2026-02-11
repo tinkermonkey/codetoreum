@@ -250,11 +250,13 @@ class TestGitHubDiscussionAdapterPolling:
         events = []
         polling_adapter.on("comment.needs_response", events.append)
 
-        # Wait for two polling cycles (initial interval is 1 second)
-        await wait_for_polling_cycle(events, expected_count=1, timeout=10.0)
+        # Wait for 3 events total: alice, bob (first cycle) + charlie (second cycle)
+        # The first polling cycle will return alice and bob (2 events)
+        # The second polling cycle will return charlie (1 new event)
+        await wait_for_polling_cycle(events, expected_count=3, timeout=10.0)
 
-        # Should have detected new comment (charlie's comment)
-        assert len(events) >= 1
+        # Should have detected all comments including charlie's
+        assert len(events) >= 3
         assert any(e.comment.author == "charlie" for e in events)
 
         polling_adapter.stop_monitoring("123")
