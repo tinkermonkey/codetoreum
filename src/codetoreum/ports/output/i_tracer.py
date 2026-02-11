@@ -12,7 +12,7 @@ for simulation testing without external infrastructure.
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 
@@ -81,7 +81,7 @@ class Span:
         self.events.append(
             SpanEvent(
                 name=name,
-                timestamp=datetime.now(),
+                timestamp=datetime.now(timezone.utc),
                 attributes=attributes or {},
             )
         )
