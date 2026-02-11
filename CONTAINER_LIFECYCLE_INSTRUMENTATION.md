@@ -1,8 +1,8 @@
-# Phase 6: Instrument Docker Container Lifecycle Operations
+# Docker Container Lifecycle Instrumentation
 
 **Date:** February 11, 2026
 **Status:** Complete
-**Goal:** Add OpenTelemetry instrumentation to all Docker container lifecycle operations
+**Goal:** Add OpenTelemetry instrumentation to all Docker container lifecycle operations (Issue #249, Phase 6)
 
 ## Summary
 

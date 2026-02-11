@@ -16,11 +16,6 @@ from codetoreum.infrastructure.observability.instrumentation import (
     instrument_async_function,
 )
 
-try:
-    from opentelemetry import trace
-except ImportError:
-    trace = None  # type: ignore
-
 logger = logging.getLogger(__name__)
 from codetoreum.ports.exceptions import (
     AuthenticationError,
