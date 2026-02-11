@@ -11,6 +11,9 @@ from typing import Any, Callable, Dict, List, Optional
 from dateutil import parser as dateparser
 
 from codetoreum.domain.types import ContainerId
+from codetoreum.infrastructure.observability.instrumentation import (
+    instrument_async_function,
+)
 
 logger = logging.getLogger(__name__)
 from codetoreum.ports.exceptions import (
@@ -152,6 +155,15 @@ class DockerContainerAdapter(IContainer):
 
         return docker_volumes
 
+    @instrument_async_function(
+        name="container.run",
+        attributes={
+            "service": "docker_container_adapter",
+            "operation": "run",
+        },
+        capture_args=True,
+        capture_result=False,
+    )
     async def run(
         self,
         image: str,
@@ -314,6 +326,15 @@ class DockerContainerAdapter(IContainer):
         except Exception as e:
             raise ContainerExecutionError(f"Unexpected error: {str(e)}")
 
+    @instrument_async_function(
+        name="container.create",
+        attributes={
+            "service": "docker_container_adapter",
+            "operation": "create",
+        },
+        capture_args=True,
+        capture_result=False,
+    )
     async def create(
         self,
         image: str,
@@ -364,6 +385,14 @@ class DockerContainerAdapter(IContainer):
 
         return await loop.run_in_executor(None, _create)
 
+    @instrument_async_function(
+        name="container.start",
+        attributes={
+            "service": "docker_container_adapter",
+            "operation": "start",
+        },
+        capture_args=True,
+    )
     async def start(self, container_id: str) -> None:
         """Start a container."""
         client = self._get_client()
@@ -380,6 +409,14 @@ class DockerContainerAdapter(IContainer):
 
         await loop.run_in_executor(None, _start)
 
+    @instrument_async_function(
+        name="container.stop",
+        attributes={
+            "service": "docker_container_adapter",
+            "operation": "stop",
+        },
+        capture_args=True,
+    )
     async def stop(self, container_id: str, timeout: int = 10) -> None:
         """Stop a container."""
         client = self._get_client()
@@ -396,6 +433,14 @@ class DockerContainerAdapter(IContainer):
 
         await loop.run_in_executor(None, _stop)
 
+    @instrument_async_function(
+        name="container.remove",
+        attributes={
+            "service": "docker_container_adapter",
+            "operation": "remove",
+        },
+        capture_args=True,
+    )
     async def remove(self, container_id: str, force: bool = False) -> None:
         """Remove a container."""
         client = self._get_client()
@@ -412,6 +457,14 @@ class DockerContainerAdapter(IContainer):
 
         await loop.run_in_executor(None, _remove)
 
+    @instrument_async_function(
+        name="container.kill",
+        attributes={
+            "service": "docker_container_adapter",
+            "operation": "kill",
+        },
+        capture_args=True,
+    )
     async def kill(self, container_id: str, signal: str = "SIGKILL") -> None:
         """Kill a container."""
         client = self._get_client()
@@ -428,6 +481,15 @@ class DockerContainerAdapter(IContainer):
 
         await loop.run_in_executor(None, _kill)
 
+    @instrument_async_function(
+        name="container.logs",
+        attributes={
+            "service": "docker_container_adapter",
+            "operation": "logs",
+        },
+        capture_args=True,
+        capture_result=False,
+    )
     async def logs(
         self,
         container_id: str,
@@ -474,6 +536,15 @@ class DockerContainerAdapter(IContainer):
 
         return await loop.run_in_executor(None, _get_logs)
 
+    @instrument_async_function(
+        name="container.status",
+        attributes={
+            "service": "docker_container_adapter",
+            "operation": "status",
+        },
+        capture_args=True,
+        capture_result=False,
+    )
     async def status(self, container_id: str) -> ContainerStatus:
         """Get container status."""
         client = self._get_client()
@@ -537,6 +608,15 @@ class DockerContainerAdapter(IContainer):
 
         return await loop.run_in_executor(None, _get_status)
 
+    @instrument_async_function(
+        name="container.exec",
+        attributes={
+            "service": "docker_container_adapter",
+            "operation": "exec",
+        },
+        capture_args=True,
+        capture_result=False,
+    )
     async def exec(
         self,
         container_id: str,
@@ -589,6 +669,15 @@ class DockerContainerAdapter(IContainer):
 
         return await loop.run_in_executor(None, _exec)
 
+    @instrument_async_function(
+        name="container.list_containers",
+        attributes={
+            "service": "docker_container_adapter",
+            "operation": "list_containers",
+        },
+        capture_args=True,
+        capture_result=False,
+    )
     async def list_containers(
         self,
         all: bool = False,
@@ -667,6 +756,14 @@ class DockerContainerAdapter(IContainer):
 
         return await loop.run_in_executor(None, _list)
 
+    @instrument_async_function(
+        name="container.pull_image",
+        attributes={
+            "service": "docker_container_adapter",
+            "operation": "pull_image",
+        },
+        capture_args=True,
+    )
     async def pull_image(
         self,
         image: str,
@@ -696,6 +793,15 @@ class DockerContainerAdapter(IContainer):
 
         await loop.run_in_executor(None, _pull)
 
+    @instrument_async_function(
+        name="container.image_exists",
+        attributes={
+            "service": "docker_container_adapter",
+            "operation": "image_exists",
+        },
+        capture_args=True,
+        capture_result=False,
+    )
     async def image_exists(self, image: str, tag: str = "latest") -> bool:
         """Check if an image exists locally."""
         client = self._get_client()
@@ -711,6 +817,15 @@ class DockerContainerAdapter(IContainer):
 
         return await loop.run_in_executor(None, _check)
 
+    @instrument_async_function(
+        name="container.inspect",
+        attributes={
+            "service": "docker_container_adapter",
+            "operation": "inspect",
+        },
+        capture_args=True,
+        capture_result=False,
+    )
     async def inspect(self, container_id: str) -> Dict[str, Any]:
         """Get detailed container information."""
         client = self._get_client()
@@ -727,6 +842,15 @@ class DockerContainerAdapter(IContainer):
 
         return await loop.run_in_executor(None, _inspect)
 
+    @instrument_async_function(
+        name="container.wait",
+        attributes={
+            "service": "docker_container_adapter",
+            "operation": "wait",
+        },
+        capture_args=True,
+        capture_result=False,
+    )
     async def wait(
         self,
         container_id: str,
@@ -750,6 +874,14 @@ class DockerContainerAdapter(IContainer):
 
         return await loop.run_in_executor(None, _wait)
 
+    @instrument_async_function(
+        name="container.copy_to_container",
+        attributes={
+            "service": "docker_container_adapter",
+            "operation": "copy_to_container",
+        },
+        capture_args=True,
+    )
     async def copy_to_container(
         self,
         container_id: str,
@@ -783,6 +915,14 @@ class DockerContainerAdapter(IContainer):
 
         await loop.run_in_executor(None, _copy)
 
+    @instrument_async_function(
+        name="container.copy_from_container",
+        attributes={
+            "service": "docker_container_adapter",
+            "operation": "copy_from_container",
+        },
+        capture_args=True,
+    )
     async def copy_from_container(
         self,
         container_id: str,

@@ -29,6 +29,9 @@ from codetoreum.domain.types import (
     CONTAINER_TYPE_AGENT,
     CONTAINER_TYPE_REPAIR_CYCLE,
 )
+from codetoreum.infrastructure.observability.instrumentation import (
+    instrument_async_function,
+)
 from codetoreum.ports.exceptions import ContainerError, StorageError
 from codetoreum.ports.output.container_recovery import (
     ContainerMetadata,
@@ -177,6 +180,14 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
 
         return self._docker_client
 
+    @instrument_async_function(
+        name="container_recovery.get_running_agent_containers",
+        attributes={
+            "service": "docker_container_recovery_adapter",
+            "operation": "list_agent_containers",
+        },
+        capture_result=False,
+    )
     async def get_running_agent_containers(self) -> List[ContainerMetadata]:
         """
         List running agent containers with Codetoreum labels.
@@ -234,6 +245,14 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
 
         return await loop.run_in_executor(None, _list_containers)
 
+    @instrument_async_function(
+        name="container_recovery.get_running_repair_cycle_containers",
+        attributes={
+            "service": "docker_container_recovery_adapter",
+            "operation": "list_repair_cycle_containers",
+        },
+        capture_result=False,
+    )
     async def get_running_repair_cycle_containers(
         self,
     ) -> List[ContainerMetadata]:
@@ -387,6 +406,15 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
             execution_id=execution_id,
         )
 
+    @instrument_async_function(
+        name="container_recovery.assess_container",
+        attributes={
+            "service": "docker_container_recovery_adapter",
+            "operation": "assess_container",
+        },
+        capture_args=True,
+        capture_result=False,
+    )
     async def assess_container(
         self, metadata: ContainerMetadata
     ) -> RecoveryAssessment:
@@ -527,6 +555,15 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
             execution_id=metadata.execution_id,
         )
 
+    @instrument_async_function(
+        name="container_recovery.assess_repair_cycle_container",
+        attributes={
+            "service": "docker_container_recovery_adapter",
+            "operation": "assess_repair_cycle_container",
+        },
+        capture_args=True,
+        capture_result=False,
+    )
     async def assess_repair_cycle_container(
         self, metadata: ContainerMetadata
     ) -> RecoveryAssessment:
@@ -703,6 +740,15 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                 execution_id=metadata.execution_id,
             )
 
+    @instrument_async_function(
+        name="container_recovery.execute_recovery_action",
+        attributes={
+            "service": "docker_container_recovery_adapter",
+            "operation": "execute_recovery_action",
+        },
+        capture_args=True,
+        capture_result=False,
+    )
     async def execute_recovery_action(self, assessment: RecoveryAssessment) -> bool:
         """
         Execute reconnect or kill action.
@@ -873,6 +919,14 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
             )
             return False
 
+    @instrument_async_function(
+        name="container_recovery.process_orphaned_repair_results",
+        attributes={
+            "service": "docker_container_recovery_adapter",
+            "operation": "process_orphaned_repair_results",
+        },
+        capture_result=False,
+    )
     async def process_orphaned_repair_results(self) -> int:
         """
         Process completed repair cycle results in storage.
