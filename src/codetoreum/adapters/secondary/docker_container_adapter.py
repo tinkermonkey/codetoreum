@@ -1,6 +1,7 @@
 """Docker adapter for IContainer interface."""
 
 import asyncio
+import gc
 import logging
 import time
 from dataclasses import dataclass
@@ -853,6 +854,13 @@ class DockerContainerAdapter(IContainer):
                 logger.debug("Error closing Docker client", exc_info=True)
             finally:
                 self._docker_client = None
+
+            # Force garbage collection to ensure all socket connections are released
+            # The docker-py library uses connection pools that may keep sockets open
+            # even after closing. Multiple gc.collect() calls may be needed as some
+            # pools release resources asynchronously.
+            gc.collect()
+            gc.collect()
 
     async def __aenter__(self):
         """Async context manager entry."""
