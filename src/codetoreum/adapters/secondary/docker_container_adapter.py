@@ -11,6 +11,7 @@ from typing import Any, Callable, Dict, List, Optional
 from dateutil import parser as dateparser
 
 from codetoreum.domain.types import ContainerId
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.observability.instrumentation import (
     add_span_attributes,
     instrument_async_function,
@@ -1104,7 +1105,13 @@ class DockerContainerAdapter(IContainer):
                         try:
                             api._session.close()
                         except Exception as e:
-                            logger.debug(f"Error closing Docker API session: {e}", exc_info=True)
+                            logger.warning(
+                                f"Error closing Docker API session: {e}",
+                                exc_info=True,
+                                extra={
+                                    "error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR
+                                }
+                            )
                     # Close adapters (which hold socket connections)
                     if hasattr(api, '_adapters') and api._adapters:
                         try:
@@ -1112,19 +1119,43 @@ class DockerContainerAdapter(IContainer):
                                 if hasattr(adapter, 'close'):
                                     adapter.close()
                         except Exception as e:
-                            logger.debug(f"Error closing Docker API adapters: {e}", exc_info=True)
+                            logger.warning(
+                                f"Error closing Docker API adapters: {e}",
+                                exc_info=True,
+                                extra={
+                                    "error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR
+                                }
+                            )
                     if hasattr(api, 'close'):
                         try:
                             api.close()
                         except Exception as e:
-                            logger.debug(f"Error closing Docker API: {e}", exc_info=True)
+                            logger.warning(
+                                f"Error closing Docker API: {e}",
+                                exc_info=True,
+                                extra={
+                                    "error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR
+                                }
+                            )
             except Exception as e:
-                logger.debug(f"Error cleaning up Docker API client: {e}", exc_info=True)
+                logger.warning(
+                    f"Error cleaning up Docker API client: {e}",
+                    exc_info=True,
+                    extra={
+                        "error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR
+                    }
+                )
 
             try:
                 self._docker_client.close()
             except Exception as e:
-                logger.debug(f"Error closing Docker client: {e}", exc_info=True)
+                logger.warning(
+                    f"Error closing Docker client: {e}",
+                    exc_info=True,
+                    extra={
+                        "error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR
+                    }
+                )
             finally:
                 self._docker_client = None
 

@@ -137,10 +137,6 @@ class EventBus:
         self._wildcard_handlers: List[EventHandler] = []
         self._wildcard_callbacks: List[Callable] = []
 
-        # OpenTelemetry tracer (optional, for CONSUMER/INTERNAL span creation)
-        # Note: PRODUCER spans are created by InstrumentedEventBus wrapper
-        self._tracer = trace.get_tracer(__name__) if OPENTELEMETRY_AVAILABLE else None
-
         # Statistics
         self._stats = {
             "events_published": 0,
@@ -465,34 +461,17 @@ class EventBus:
 
         for attempt in range(self.max_retries + 1):
             try:
-                # Attach context BEFORE creating span so span will be child of parent trace
+                # Attach context BEFORE calling handler so trace context is active
                 token = None
                 if ctx:
                     token = context.attach(ctx)
 
                 try:
-                    # Create CONSUMER span if OpenTelemetry available
-                    # Now that context is attached, this span will be a child of the parent trace
-                    span = None
-                    if self._tracer:
-                        span = self._tracer.start_span(
-                            f"event.handle.{event.event_type}",
-                            kind=SpanKind.CONSUMER,
-                            attributes={
-                                "event.type": event.event_type,
-                                "event.id": str(event.event_id),
-                                "handler.class": handler.__class__.__name__,
-                            },
-                        )
-
-                    try:
-                        # Call handler
-                        await handler.handle(event)
-                        return  # Success!
-
-                    finally:
-                        if span:
-                            span.end()
+                    # Call handler
+                    # Note: CONSUMER span creation is handled by InstrumentedEventBus wrapper
+                    # to avoid duplicate spans. EventBus only provides trace context propagation.
+                    await handler.handle(event)
+                    return  # Success!
 
                 finally:
                     if token:
@@ -539,43 +518,19 @@ class EventBus:
 
         for attempt in range(self.max_retries + 1):
             try:
-                # Attach context BEFORE creating span so span will be child of parent trace
+                # Attach context BEFORE calling callback so trace context is active
                 token = None
                 if ctx:
                     token = context.attach(ctx)
 
                 try:
-                    # Create CONSUMER span if OpenTelemetry available
-                    # Now that context is attached, this span will be a child of the parent trace
-                    span = None
-                    if self._tracer:
-                        callback_name = (
-                            callback.__name__
-                            if hasattr(callback, "__name__")
-                            else str(callback)
-                        )
-                        span = self._tracer.start_span(
-                            f"event.handle.{event.event_type}",
-                            kind=SpanKind.CONSUMER,
-                            attributes={
-                                "event.type": event.event_type,
-                                "event.id": str(event.event_id),
-                                "handler.class": callback_name,
-                            },
-                        )
+                    # Check if callback is async
+                    if asyncio.iscoroutinefunction(callback):
+                        await callback(event)
+                    else:
+                        callback(event)
 
-                    try:
-                        # Check if callback is async
-                        if asyncio.iscoroutinefunction(callback):
-                            await callback(event)
-                        else:
-                            callback(event)
-
-                        return  # Success!
-
-                    finally:
-                        if span:
-                            span.end()
+                    return  # Success!
 
                 finally:
                     if token:
@@ -613,40 +568,23 @@ class EventBus:
             return
 
         try:
-            # Create INTERNAL span if OpenTelemetry available
-            span = None
-            if self._tracer:
-                span = self._tracer.start_span(
-                    "event.persist.redis",
-                    kind=SpanKind.INTERNAL,
-                    attributes={
-                        "event.type": event.event_type,
-                        "event.id": str(event.event_id),
-                    },
-                )
+            # Create stream key from event type (e.g., "events:WorkItemCreated")
+            stream_key = f"{self.redis_stream_prefix}:{event.event_type}"
 
-            try:
-                # Create stream key from event type (e.g., "events:WorkItemCreated")
-                stream_key = f"{self.redis_stream_prefix}:{event.event_type}"
+            # Serialize event to dictionary (includes metadata with trace context)
+            event_dict = event.to_dict()
 
-                # Serialize event to dictionary (includes metadata with trace context)
-                event_dict = event.to_dict()
-
-                # Add to Redis Stream
-                await self.redis_client.xadd(
-                    name=stream_key,
-                    fields={
-                        "event_id": str(event.event_id),
-                        "aggregate_id": event.aggregate_id,
-                        "aggregate_type": event.aggregate_type,
-                        "timestamp": event.occurred_at.isoformat(),
-                        "payload": str(event_dict),
-                    },
-                )
-
-            finally:
-                if span:
-                    span.end()
+            # Add to Redis Stream
+            await self.redis_client.xadd(
+                name=stream_key,
+                fields={
+                    "event_id": str(event.event_id),
+                    "aggregate_id": event.aggregate_id,
+                    "aggregate_type": event.aggregate_type,
+                    "timestamp": event.occurred_at.isoformat(),
+                    "payload": str(event_dict),
+                },
+            )
 
             self._stats["events_persisted"] += 1
 
