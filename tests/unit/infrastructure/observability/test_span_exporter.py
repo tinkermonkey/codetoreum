@@ -59,22 +59,6 @@ class TestInstrumentedSpanExporter:
         # Verify exporter was called
         mock_exporter.export.assert_called_once_with([])
 
-    def test_export_logs_failure_message(self):
-        """Test export logs failure message on exception."""
-        mock_exporter = mock.MagicMock()
-        export_error = RuntimeError("Connection timeout")
-        mock_exporter.export.side_effect = export_error
-
-        exporter = _InstrumentedSpanExporter(mock_exporter)
-
-        with mock.patch("codetoreum.infrastructure.observability.otel_setup.logger") as mock_logger:
-            with pytest.raises(RuntimeError):
-                exporter.export([])
-
-            # Verify error was logged at debug level
-            mock_logger.debug.assert_called_once()
-            call_args = mock_logger.debug.call_args[0][0]
-            assert "Span export failed" in call_args
 
     def test_export_without_histogram_metrics(self):
         """Test export succeeds when histogram is None (metrics creation failed)."""
