@@ -15,7 +15,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 from fastapi import Header, HTTPException, Request
-from opentelemetry import trace
+
+try:
+    from opentelemetry import trace
+except ImportError:
+    trace = None
 
 from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.event_bus import EventBus
@@ -127,6 +131,16 @@ class GitHubWebhookAdapter:
     into domain commands via input ports.
     """
 
+    @staticmethod
+    def _get_span():
+        """Get current span if OpenTelemetry is available, otherwise return None."""
+        if trace is None:
+            return None
+        try:
+            return trace.get_current_span()
+        except Exception:
+            return None
+
     def __init__(
         self,
         workflow_command_port: IWorkflowCommandPort,
@@ -187,9 +201,10 @@ class GitHubWebhookAdapter:
             HTTPException: On verification or processing failure
         """
         # Add webhook-specific attributes to span
-        span = trace.get_current_span()
-        span.set_attribute("github.delivery_id", x_github_delivery)
-        span.set_attribute("github.event_type", x_github_event)
+        span = self._get_span()
+        if span:
+            span.set_attribute("github.delivery_id", x_github_delivery)
+            span.set_attribute("github.event_type", x_github_event)
         start_time = time.time()
 
         try:
@@ -362,10 +377,11 @@ class GitHubWebhookAdapter:
             Processing result
         """
         # Add event details to span
-        span = trace.get_current_span()
-        span.set_attribute("github.event_type", event.event_type)
-        span.set_attribute("github.delivery_id", event.delivery_id)
-        span.set_attribute("github.repository", event.repository)
+        span = self._get_span()
+        if span:
+            span.set_attribute("github.event_type", event.event_type)
+            span.set_attribute("github.delivery_id", event.delivery_id)
+            span.set_attribute("github.repository", event.repository)
         # Get event handler
         handler = self.handlers.get(event.event_type)
         if not handler:
@@ -410,10 +426,11 @@ class GitHubWebhookAdapter:
             List of created command IDs
         """
         # Add project card context to span
-        span = trace.get_current_span()
-        span.set_attribute("github.project", project)
-        if "action" in event.payload:
-            span.set_attribute("github.action", event.payload["action"])
+        span = self._get_span()
+        if span:
+            span.set_attribute("github.project", project)
+            if "action" in event.payload:
+                span.set_attribute("github.action", event.payload["action"])
         payload = event.payload
         action = payload.get("action")
 
@@ -480,10 +497,11 @@ class GitHubWebhookAdapter:
             List of created command IDs
         """
         # Add issue context to span
-        span = trace.get_current_span()
-        span.set_attribute("github.project", project)
-        if "action" in event.payload:
-            span.set_attribute("github.action", event.payload["action"])
+        span = self._get_span()
+        if span:
+            span.set_attribute("github.project", project)
+            if "action" in event.payload:
+                span.set_attribute("github.action", event.payload["action"])
         # Placeholder for future implementation
         return []
 
@@ -505,14 +523,15 @@ class GitHubWebhookAdapter:
             List of created command IDs
         """
         # Add issue comment context to span
-        span = trace.get_current_span()
-        span.set_attribute("github.project", project)
-        if "action" in event.payload:
-            span.set_attribute("github.action", event.payload["action"])
-        if "issue" in event.payload and "number" in event.payload["issue"]:
-            span.set_attribute("github.issue_number", event.payload["issue"]["number"])
-        if "comment" in event.payload and "id" in event.payload["comment"]:
-            span.set_attribute("github.comment_id", event.payload["comment"]["id"])
+        span = self._get_span()
+        if span:
+            span.set_attribute("github.project", project)
+            if "action" in event.payload:
+                span.set_attribute("github.action", event.payload["action"])
+            if "issue" in event.payload and "number" in event.payload["issue"]:
+                span.set_attribute("github.issue_number", event.payload["issue"]["number"])
+            if "comment" in event.payload and "id" in event.payload["comment"]:
+                span.set_attribute("github.comment_id", event.payload["comment"]["id"])
         # Placeholder for future implementation
         return []
 
@@ -534,12 +553,13 @@ class GitHubWebhookAdapter:
             List of created command IDs
         """
         # Add PR context to span
-        span = trace.get_current_span()
-        span.set_attribute("github.project", project)
-        if "action" in event.payload:
-            span.set_attribute("github.action", event.payload["action"])
-        if "number" in event.payload:
-            span.set_attribute("github.pr_number", event.payload["number"])
+        span = self._get_span()
+        if span:
+            span.set_attribute("github.project", project)
+            if "action" in event.payload:
+                span.set_attribute("github.action", event.payload["action"])
+            if "number" in event.payload:
+                span.set_attribute("github.pr_number", event.payload["number"])
         # Placeholder for future implementation
         return []
 
@@ -561,10 +581,11 @@ class GitHubWebhookAdapter:
             List of created command IDs
         """
         # Add discussion context to span
-        span = trace.get_current_span()
-        span.set_attribute("github.project", project)
-        if "action" in event.payload:
-            span.set_attribute("github.action", event.payload["action"])
+        span = self._get_span()
+        if span:
+            span.set_attribute("github.project", project)
+            if "action" in event.payload:
+                span.set_attribute("github.action", event.payload["action"])
         # Placeholder for future implementation
         return []
 

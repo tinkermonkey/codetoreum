@@ -29,7 +29,7 @@ from codetoreum.ports.output.i_tracer import (
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(frozen=True)
 class SpanCapture:
     """Immutable record of a span for testing."""
 
@@ -141,8 +141,11 @@ class MockSpan:
     @property
     def traceparent(self) -> str:
         """Get W3C Trace Context traceparent header."""
-        trace_flags = "01" if self.status != SpanStatus.ERROR else "00"
-        return f"{W3C_TRACE_CONTEXT_VERSION}-{self.trace_id}-{self.span_id}-{trace_flags}"
+        # Per W3C spec, trace_flags (least significant bit) indicates sampling decision:
+        # 01 = sampled (trace should be sampled/collected)
+        # 00 = not sampled
+        # Error status is tracked in span status, not in trace_flags
+        return f"{W3C_TRACE_CONTEXT_VERSION}-{self.trace_id}-{self.span_id}-01"
 
     def record_exception(self, exception: Exception) -> None:
         """Record an exception on the span."""
