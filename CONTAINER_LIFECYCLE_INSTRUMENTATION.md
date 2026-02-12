@@ -210,7 +210,7 @@ export SIGNOZ_TRACE_API_KEY=optional_key
 
 ## Files Modified
 
-1. `src/codetoreum/adapters/secondary/docker_container_adapter.py` - Added 15 decorators
+1. `src/codetoreum/adapters/secondary/docker_container_adapter.py` - Added 16 decorators
 2. `src/codetoreum/adapters/secondary/docker_container_recovery_adapter.py` - Added 6 decorators
 3. `src/codetoreum/application/container_recovery_service.py` - Added 1 decorator
 

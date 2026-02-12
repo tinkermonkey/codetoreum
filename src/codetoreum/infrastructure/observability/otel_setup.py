@@ -98,9 +98,9 @@ def _record_trace_export_error(error: Exception, config: ObservabilityConfig) ->
         )
         counter.add(1)
     except Exception as metric_error:
-        logger.debug(
+        logger.warning(
             f"Failed to record trace export error metric: {metric_error}",
-            exc_info=False
+            exc_info=True
         )
 
     logger.warning(
@@ -132,9 +132,9 @@ def _record_log_export_error(error: Exception, config: ObservabilityConfig) -> N
         )
         counter.add(1)
     except Exception as metric_error:
-        logger.debug(
+        logger.warning(
             f"Failed to record log export error metric: {metric_error}",
-            exc_info=False
+            exc_info=True
         )
 
     logger.warning(

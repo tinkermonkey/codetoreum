@@ -755,13 +755,19 @@ class ConnectionManager:
                 timestamp=datetime.now(timezone.utc),
             ).model_dump(mode="json")
             await conn_state.websocket.send_json(error_msg)
-        except Exception:
-            pass  # Best effort
+        except Exception as e:
+            logger.debug(
+                f"Failed to send error message for connection {connection_id}: {e}",
+                exc_info=True
+            )
 
         try:
             await conn_state.websocket.close(code=code, reason=reason)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(
+                f"Failed to close connection {connection_id}: {e}",
+                exc_info=True
+            )
 
         self.disconnect(connection_id)
 
@@ -1257,8 +1263,11 @@ class WebSocketAdapter:
                         ).model_dump(mode="json"),
                         connection_id,
                     )
-                except Exception:
-                    pass
+                except Exception as send_error:
+                    logger.debug(
+                        f"Failed to send invalid message error for connection {connection_id}: {send_error}",
+                        exc_info=True
+                    )
                 finally:
                     self._cleanup_session_span(connection_id, reason="invalid_message")
                     self.manager.disconnect(connection_id)
@@ -1278,8 +1287,11 @@ class WebSocketAdapter:
                         ).model_dump(mode="json"),
                         connection_id,
                     )
-                except Exception:
-                    pass
+                except Exception as send_error:
+                    logger.debug(
+                        f"Failed to send JSON error message for connection {connection_id}: {send_error}",
+                        exc_info=True
+                    )
                 finally:
                     self._cleanup_session_span(connection_id, reason="json_parse_error")
                     self.manager.disconnect(connection_id)
@@ -1288,7 +1300,7 @@ class WebSocketAdapter:
                 logger.error(
                     f"Unexpected WebSocket error for client {connection_id}: {e}",
                     exc_info=True,
-                    extra={"error_id": "ERR_UNHANDLED_EXCEPTION"}
+                    extra={"error_id": ErrorRegistry.ERR_UNHANDLED_EXCEPTION}
                 )
                 try:
                     await self.manager.send_personal_message(
@@ -1299,8 +1311,11 @@ class WebSocketAdapter:
                         ).model_dump(mode="json"),
                         connection_id,
                     )
-                except Exception:
-                    pass
+                except Exception as send_error:
+                    logger.debug(
+                        f"Failed to send internal error message for connection {connection_id}: {send_error}",
+                        exc_info=True
+                    )
                 finally:
                     self._cleanup_session_span(connection_id, reason="unexpected_error")
                     self.manager.disconnect(connection_id)

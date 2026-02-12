@@ -234,7 +234,7 @@ class TraceContextPropagator:
         Activate trace context in the current execution context.
 
         Creates a new SpanContext with the provided trace data and returns it.
-        Callers should attach the context using trace.attach_context() if they
+        Callers should attach the context using context.attach() if they
         want to make it the active context for downstream spans.
 
         Args:
@@ -245,15 +245,16 @@ class TraceContextPropagator:
             Returns None if OpenTelemetry unavailable or on error
 
         Example:
+            from opentelemetry import context
             trace_data = TraceContextData.from_traceparent(traceparent)
             ctx = TraceContextPropagator.activate_trace_context(trace_data)
             if ctx:
-                token = trace.attach_context(ctx)
+                token = context.attach(ctx)
                 try:
                     # Any spans created here will be children of this trace
                     pass
                 finally:
-                    trace.detach_context(token)
+                    context.detach(token)
         """
         if not OPENTELEMETRY_AVAILABLE or SpanContext is None:
             return None
