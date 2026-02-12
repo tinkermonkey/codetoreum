@@ -251,6 +251,8 @@ class InstrumentedEventBus:
                 attributes={
                     "event.type": event.event_type,
                     "event.id": str(event.event_id),
+                    "aggregate.id": str(event.aggregate_id),
+                    "aggregate.type": event.aggregate_type,
                     "handler.class": callback.__name__,
                 },
             ) as span:
@@ -326,6 +328,8 @@ class InstrumentedEventHandler:
             attributes={
                 "event.type": event.event_type,
                 "event.id": str(event.event_id),
+                "aggregate.id": str(event.aggregate_id),
+                "aggregate.type": event.aggregate_type,
                 "handler.class": self._handler.__class__.__name__,
             },
         ) as span:
