@@ -334,8 +334,15 @@ class InstrumentedEventHandler:
                 extra={"span_id": span.get_span_context().span_id},
             )
 
-            # Delegate to wrapped handler
-            await self._handler.handle(event)
+            # Delegate to wrapped handler with exception instrumentation
+            try:
+                await self._handler.handle(event)
+            except Exception as e:
+                # Record exception in span
+                span.set_attribute("exception.type", type(e).__name__)
+                span.set_attribute("exception.message", str(e))
+                span.record_exception(e)
+                raise
 
     def get_event_types(self) -> List[str]:
         """
