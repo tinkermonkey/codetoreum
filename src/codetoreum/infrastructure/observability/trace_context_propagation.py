@@ -43,11 +43,9 @@ except ImportError:
 
 from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.ports.output.i_tracer import W3C_TRACE_CONTEXT_VERSION
 
 logger = logging.getLogger(__name__)
-
-# Import W3C Trace Context version from port layer to avoid duplication
-from codetoreum.ports.output.i_tracer import W3C_TRACE_CONTEXT_VERSION  # noqa: F401, E402
 
 
 @dataclass

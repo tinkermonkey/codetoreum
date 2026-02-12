@@ -23,8 +23,8 @@ from codetoreum.infrastructure.simulation.mock_tracer import SpanKind
 
 
 @pytest.mark.asyncio
-class TestTraceContextInjectionInEventBus:
-    """Tests for trace context injection in event publishing."""
+class TestMockTracerContextInjection:
+    """Tests for trace context injection with MockTracer."""
 
     async def test_trace_context_injected_in_published_event(self):
         """Test that trace context is injected when publishing events."""
