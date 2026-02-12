@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 # Try to import OpenTelemetry - it's optional
 try:
-    from opentelemetry import trace, logs
+    from opentelemetry import trace, logs, metrics
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor
     from opentelemetry.sdk.trace.sampling import (
@@ -32,8 +32,11 @@ try:
     )
     from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
     from opentelemetry.exporter.otlp.proto.http.log_exporter import OTLPLogExporter
+    from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
     from opentelemetry.sdk.logs import LoggerProvider
     from opentelemetry.sdk.logs.export import BatchLogRecordProcessor
+    from opentelemetry.sdk.metrics import MeterProvider
+    from opentelemetry.sdk.metrics.export import BatchMetricExporter, PeriodicExportingMetricReader
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
     from opentelemetry.instrumentation.logging import LoggingInstrumentor
 
@@ -303,6 +306,103 @@ def _setup_log_export(config: ObservabilityConfig, resource: "Resource") -> None
         _record_log_export_error(e, config)
 
 
+def _record_metrics_export_error(error: Exception, config: ObservabilityConfig) -> None:
+    """
+    Record metric for metrics export error and log warning.
+
+    Emits otel.metrics.export.failures counter metric to track export errors.
+    Logs warning message with error details to aid troubleshooting.
+
+    Args:
+        error: The exception that occurred during metrics export setup
+        config: The observability configuration
+    """
+    # Record failure metric (if metrics are available)
+    try:
+        meter = metrics.get_meter("codetoreum.observability")
+        counter = meter.create_counter(
+            "otel.metrics.export.failures",
+            description="Number of OTLP metrics export failures"
+        )
+        counter.add(1)
+    except Exception as metric_error:
+        logger.warning(
+            f"Failed to record metrics export error metric: {metric_error}",
+            exc_info=True
+        )
+
+    logger.warning(
+        f"OTLP metrics export setup failed: {error}. "
+        f"Continuing without metrics export to {config.metrics_endpoint}",
+        exc_info=True,
+        extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+    )
+
+
+def _setup_metrics_export(config: ObservabilityConfig, resource: "Resource") -> None:
+    """
+    Initialize OpenTelemetry metrics export to Signoz.
+
+    This function:
+    1. Creates an OTLPMetricExporter configured for the metrics HTTP endpoint
+    2. Sets up a MeterProvider with periodic metric export
+    3. Instruments the Python process for automatic metric collection
+    4. Enables custom metrics for observability monitoring
+
+    Args:
+        config: Observability configuration
+        resource: OpenTelemetry resource with service identification
+
+    Note:
+        - Metrics export is only configured if metrics_enabled is True, signoz.enabled is True, and an endpoint is configured
+        - Graceful degradation: failures in metrics setup don't crash the application
+        - Metrics are exported periodically (default 60000ms) to reduce overhead
+    """
+    if not config.metrics_enabled:
+        logger.debug("Metrics export disabled (OTEL_METRICS_ENABLED=false)")
+        return
+
+    if not config.signoz.enabled:
+        logger.debug("Metrics export disabled (SIGNOZ_ENABLED=false)")
+        return
+
+    if not config.metrics_endpoint:
+        logger.warning(
+            "Metrics enabled but no metrics endpoint configured. "
+            "Check OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or Signoz HTTP configuration."
+        )
+        return
+
+    try:
+        # Create OTLP metric exporter for Signoz
+        # Metrics use HTTP/protobuf
+        metric_exporter = OTLPMetricExporter(
+            endpoint=config.metrics_endpoint,
+            insecure=config.signoz.insecure,
+        )
+
+        # Create periodic metric reader for interval-based export
+        # This controls the frequency of metric exports (default 60 seconds)
+        metric_reader = PeriodicExportingMetricReader(
+            metric_exporter,
+            interval_millis=60000,  # Export metrics every 60 seconds
+        )
+
+        # Create meter provider with resource
+        meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
+
+        # Set global meter provider
+        metrics.set_meter_provider(meter_provider)
+
+        logger.info(
+            f"OTLP metrics export configured. "
+            f"Sending metrics to {config.metrics_endpoint}"
+        )
+
+    except Exception as e:
+        _record_metrics_export_error(e, config)
+
+
 def setup_opentelemetry(config: ObservabilityConfig, app=None) -> None:
     """
     Initialize OpenTelemetry with Signoz OTLP exporter.
@@ -313,7 +413,9 @@ def setup_opentelemetry(config: ObservabilityConfig, app=None) -> None:
     3. Configures sampling strategy based on configuration
     4. Configures OTLP span exporter for Signoz
     5. Sets up TracerProvider with batch processing and performance tuning
-    6. Optionally instruments FastAPI for automatic request tracing
+    6. Configures OTLP log export to Signoz
+    7. Configures OTLP metrics export to Signoz
+    8. Optionally instruments FastAPI for automatic request tracing
 
     Args:
         config: Comprehensive observability configuration
@@ -398,6 +500,9 @@ def setup_opentelemetry(config: ObservabilityConfig, app=None) -> None:
         # Configure OTLP log export with trace correlation
         _setup_log_export(config, resource)
 
+        # Configure OTLP metrics export
+        _setup_metrics_export(config, resource)
+
         # Instrument FastAPI if app provided
         # This automatically creates spans for all HTTP requests
         if app:
@@ -418,6 +523,8 @@ def setup_opentelemetry(config: ObservabilityConfig, app=None) -> None:
         )
         if config.logs_enabled:
             logger.info(f"OTLP log export enabled, sending logs to {config.logs_endpoint}")
+        if config.metrics_enabled:
+            logger.info(f"OTLP metrics export enabled, sending metrics to {config.metrics_endpoint}")
 
     except Exception as e:
         # Record trace export failure metric

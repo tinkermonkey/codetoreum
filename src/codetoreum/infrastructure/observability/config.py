@@ -44,6 +44,11 @@ class SignozConfig:
         """Get the HTTP endpoint for OTLP logs."""
         return f"{self.http_endpoint}/v1/logs"
 
+    @property
+    def metrics_endpoint(self) -> str:
+        """Get the HTTP endpoint for OTLP metrics."""
+        return f"{self.http_endpoint}/v1/metrics"
+
     @classmethod
     def from_env(cls) -> 'SignozConfig':
         """
@@ -153,6 +158,21 @@ class ObservabilityConfig:
             return env_logs
         return self.signoz.logs_endpoint
 
+    @property
+    def metrics_endpoint(self) -> str:
+        """
+        Returns metrics-specific endpoint or falls back to unified HTTP endpoint.
+
+        Priority: OTEL_EXPORTER_OTLP_METRICS_ENDPOINT > signoz.metrics_endpoint
+
+        Returns:
+            The HTTP endpoint for metrics with /v1/metrics path
+        """
+        env_metrics = os.getenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT")
+        if env_metrics:
+            return env_metrics
+        return self.signoz.metrics_endpoint
+
     @classmethod
     def from_env(cls) -> 'ObservabilityConfig':
         """
@@ -164,6 +184,7 @@ class ObservabilityConfig:
             OTEL_METRICS_ENABLED: Enable/disable metrics (default: false)
             OTEL_LOGS_ENABLED: Enable/disable log export (default: false)
             OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: Trace-specific gRPC endpoint (uses signoz.grpc_endpoint if not set)
+            OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: Metrics-specific HTTP endpoint (uses signoz.metrics_endpoint if not set)
             OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: Log-specific HTTP endpoint (uses signoz.logs_endpoint if not set)
             OTEL_TRACES_SAMPLER: Sampling strategy (default: always_on)
             OTEL_TRACES_SAMPLER_ARG: Sampler argument (default: 1.0)
@@ -239,4 +260,10 @@ class ObservabilityConfig:
             logger.warning(
                 "Logs enabled but logs_endpoint is not configured. "
                 "Check OTEL_EXPORTER_OTLP_LOGS_ENDPOINT or Signoz HTTP configuration."
+            )
+
+        if self.metrics_enabled and not self.metrics_endpoint:
+            logger.warning(
+                "Metrics enabled but metrics_endpoint is not configured. "
+                "Check OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or Signoz HTTP configuration."
             )
