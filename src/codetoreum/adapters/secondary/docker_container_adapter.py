@@ -174,7 +174,27 @@ class DockerContainerAdapter(IContainer):
         timeout: int = 300,
         stream_callback: Optional[Callable] = None,
     ) -> ContainerResult:
-        """Run a command in a container."""
+        """Run a command in a container.
+
+        Creates a span named "container.run" with service and operation attributes.
+
+        Args:
+            image: Docker image name to run
+            command: Command and arguments to execute
+            volumes: Volume mount mappings
+            environment: Environment variables for the container
+            timeout: Execution timeout in seconds
+            stream_callback: Optional callback for stream output lines
+
+        Returns:
+            ContainerResult with exit code, stdout, and stderr
+
+        Raises:
+            ValidationError: If image name is missing
+            ImageNotFoundError: If image not found
+            ContainerTimeoutError: If execution exceeds timeout
+            ContainerExecutionError: On execution failure
+        """
         if not image:
             raise ValidationError("Image name is required")
 
@@ -360,7 +380,28 @@ class DockerContainerAdapter(IContainer):
         network: Optional[str] = None,
         labels: Optional[Dict[str, str]] = None,
     ) -> str:
-        """Create a container without starting it."""
+        """Create a container without starting it.
+
+        Creates a span named "container.create" with service and operation attributes.
+
+        Args:
+            image: Docker image name to use
+            name: Optional container name
+            command: Optional command to run
+            volumes: Optional volume mount mappings
+            environment: Optional environment variables
+            working_dir: Optional working directory
+            user: Optional user to run as
+            network: Optional network to connect to
+            labels: Optional labels for the container
+
+        Returns:
+            Container ID as string
+
+        Raises:
+            ImageNotFoundError: If image not found
+            ContainerError: On creation failure
+        """
         client = self._get_client()
 
         container_config = {
@@ -426,7 +467,17 @@ class DockerContainerAdapter(IContainer):
         capture_args=False,
     )
     async def start(self, container_id: str) -> None:
-        """Start a container."""
+        """Start a container.
+
+        Creates a span named "container.start" with service and operation attributes.
+
+        Args:
+            container_id: ID of container to start
+
+        Raises:
+            ResourceNotFoundError: If container not found
+            ContainerError: On start failure
+        """
         client = self._get_client()
         loop = asyncio.get_event_loop()
 

@@ -49,7 +49,7 @@ class SpanStatus(str, Enum):
     ERROR = "ERROR"
 
 
-@dataclass
+@dataclass(frozen=True)
 class SpanEvent:
     """Event recorded on a span."""
 

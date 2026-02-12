@@ -286,7 +286,10 @@ class TraceContextPropagator:
             return ctx
 
         except Exception as e:
-            logger.warning(f"Failed to activate trace context: {e}")
+            logger.warning(
+                f"Failed to activate trace context: {e}",
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+            )
             return None
 
 

@@ -192,6 +192,9 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
         """
         List running agent containers with Codetoreum labels.
 
+        Creates a span named "container_recovery.get_running_agent_containers" with service
+        and operation attributes.
+
         Uses Docker label filtering to ONLY return agent containers (not repair-cycle).
         This ensures:
         - Unrelated containers are never returned
@@ -258,6 +261,9 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
     ) -> List[ContainerMetadata]:
         """
         List running repair cycle containers using label filtering.
+
+        Creates a span named "container_recovery.get_running_repair_cycle_containers" with
+        service and operation attributes.
 
         Separately enumerates containers matching repair-cycle type.
         Uses Docker label filtering to ONLY return repair cycle containers:
@@ -421,6 +427,9 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
         """
         Assess recovery action for a single container.
 
+        Creates a span named "container_recovery.assess_container" with service and operation
+        attributes. Captures container ID and assessment parameters.
+
         See class docstring for complete decision tree.
 
         Args:
@@ -569,6 +578,9 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
     ) -> RecoveryAssessment:
         """
         Assess recovery action for a repair cycle container.
+
+        Creates a span named "container_recovery.assess_repair_cycle_container" with service
+        and operation attributes. Captures container ID and assessment parameters.
 
         Evaluates repair cycle container state using specialized logic:
         1. Check for completed result in storage

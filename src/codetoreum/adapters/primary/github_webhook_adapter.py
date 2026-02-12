@@ -188,6 +188,11 @@ class GitHubWebhookAdapter:
         """
         FastAPI endpoint handler for webhook reception.
 
+        Creates a span named "github.webhook.receive" with service attribute.
+        Span attributes are populated with:
+        - github.delivery_id: Unique GitHub delivery ID
+        - github.event_type: GitHub event type (e.g., 'push', 'pull_request')
+
         Args:
             request: FastAPI request object
             x_github_delivery: Unique delivery ID header
