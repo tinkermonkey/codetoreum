@@ -12,8 +12,9 @@ This module implements:
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Mapping
 from uuid import uuid4
+from types import MappingProxyType
 
 from codetoreum.infrastructure.observability.trace_context_propagation import (
     TraceContextData,
@@ -41,8 +42,8 @@ class SpanCapture:
     status: SpanStatus
     start_time: datetime
     end_time: Optional[datetime]
-    attributes: Dict[str, Any] = field(default_factory=dict)
-    events: List[SpanEvent] = field(default_factory=list)
+    attributes: Mapping[str, Any] = field(default_factory=dict)
+    events: tuple = field(default_factory=tuple)  # Tuple of SpanEvent instead of list
     span_context_injected: bool = False
 
     @property
@@ -69,12 +70,12 @@ class SpanCapture:
             "start_time": self.start_time.isoformat(),
             "end_time": self.end_time.isoformat() if self.end_time else None,
             "duration_ms": self.duration_ms,
-            "attributes": self.attributes,
+            "attributes": dict(self.attributes),
             "events": [
                 {
                     "name": e.name,
                     "timestamp": e.timestamp.isoformat(),
-                    "attributes": e.attributes,
+                    "attributes": dict(e.attributes),
                 }
                 for e in self.events
             ],
@@ -169,8 +170,8 @@ class MockSpan:
             status=self.status,
             start_time=self.start_time,
             end_time=self.end_time,
-            attributes=self.attributes.copy(),
-            events=self.events.copy(),
+            attributes=MappingProxyType(self.attributes),
+            events=tuple(self.events),
             span_context_injected=self.span_context_injected,
         )
 
@@ -197,6 +198,7 @@ class MockTracer(ITracerPort):
         self.service_name = service_name
         self.spans: List[SpanCapture] = []
         self.active_span: Optional[MockSpan] = None
+        self.span_stack: List[MockSpan] = []  # Stack for nested span tracking
         self.root_trace_id: Optional[str] = None
         self.span_counter = 0
         self.trace_counter = 0  # Counter for generating unique trace IDs
@@ -281,6 +283,8 @@ class MockTracer(ITracerPort):
             for key, value in attributes.items():
                 span.set_attribute(key, value)
 
+        # Push onto span stack for nested span tracking
+        self.span_stack.append(span)
         self.active_span = span
         logger.debug(f"Started span: {name} (id={span_id}, trace={trace_id})")
 
@@ -495,13 +499,20 @@ class MockTracer(ITracerPort):
         """
         span.end()
         self.spans.append(span.to_capture())
-        self.active_span = None
+
+        # Pop from span stack if it's the active span
+        if self.span_stack and self.span_stack[-1] == span:
+            self.span_stack.pop()
+
+        # Restore parent span as active (if any)
+        self.active_span = self.span_stack[-1] if self.span_stack else None
         logger.debug(f"Ended span: {span.name} (id={span.span_id})")
 
     def clear(self) -> None:
         """Clear all recorded spans."""
         self.spans.clear()
         self.active_span = None
+        self.span_stack.clear()
         self.root_trace_id = None
         self.span_counter = 0
 

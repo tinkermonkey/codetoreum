@@ -225,7 +225,7 @@ class ObservabilityConfig:
                 and otel_enabled
             ),
             signoz=SignozConfig.from_env(),
-            sampler_type=os.getenv("OTEL_TRACES_SAMPLER", "always_on"),
+            sampler_type=cls._validate_sampler_type(os.getenv("OTEL_TRACES_SAMPLER", "always_on")),
             sampler_arg=float(os.getenv("OTEL_TRACES_SAMPLER_ARG", "1.0")),
             auto_instrument_libraries=(
                 os.getenv("OTEL_AUTO_INSTRUMENT_LIBRARIES", "true").lower() == "true"
@@ -250,6 +250,26 @@ class ObservabilityConfig:
             ),
             log_level=os.getenv("OTEL_LOG_LEVEL", "info"),
         )
+
+    @staticmethod
+    def _validate_sampler_type(sampler_value: str) -> str:
+        """
+        Validate and normalize sampler_type at runtime.
+
+        Args:
+            sampler_value: Raw sampler type value from environment
+
+        Returns:
+            Valid sampler type or 'always_on' if invalid
+        """
+        valid_samplers = {'always_on', 'always_off', 'traceidratio', 'parentbased_always_on'}
+        if sampler_value not in valid_samplers:
+            logger.warning(
+                f"Invalid sampler_type '{sampler_value}'. "
+                f"Valid options: {valid_samplers}. Defaulting to 'always_on'."
+            )
+            return 'always_on'
+        return sampler_value
 
     def validate(self) -> None:
         """

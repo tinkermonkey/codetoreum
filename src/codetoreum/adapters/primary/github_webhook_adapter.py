@@ -138,7 +138,8 @@ class GitHubWebhookAdapter:
             return None
         try:
             return trace.get_current_span()
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to get current span: {e}", exc_info=True)
             return None
 
     def __init__(

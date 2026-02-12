@@ -304,7 +304,7 @@ export OTEL_BATCH_SPAN_PROCESSOR_MAX_EXPORT_BATCH_SIZE=128
 ### Unit Test with Mock Tracer
 
 ```python
-from codetoreum.adapters.testing.mock_tracer import MockTracer
+from codetoreum.infrastructure.simulation.mock_tracer import MockTracer
 
 @pytest.mark.asyncio
 async def test_operation():

@@ -112,7 +112,10 @@ class TraceContextData:
                 trace_flags=flags,
             )
         except Exception as e:
-            logger.warning(f"Failed to parse traceparent: {e}")
+            logger.warning(
+                f"Failed to parse traceparent: {e}",
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+            )
             return None
 
     @classmethod
@@ -195,7 +198,10 @@ class TraceContextPropagator:
             )
 
         except Exception as e:
-            logger.warning(f"Failed to inject trace context: {e}")
+            logger.warning(
+                f"Failed to inject trace context: {e}",
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+            )
 
     @staticmethod
     def extract_trace_context(event: DomainEvent) -> Optional[TraceContextData]:

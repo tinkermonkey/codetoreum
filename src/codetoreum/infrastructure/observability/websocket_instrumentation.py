@@ -430,4 +430,4 @@ class WebSocketMessageTracer:
                         },
                     )
         except Exception as e:
-            logger.debug(f"Could not link to event trace context: {e}", exc_info=False)
+            logger.debug(f"Could not link to event trace context: {e}", exc_info=True)

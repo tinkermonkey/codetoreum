@@ -16,7 +16,7 @@ try:
     from opentelemetry import trace, metrics
     from opentelemetry._logs import set_logger_provider
     from opentelemetry.sdk.trace import TracerProvider
-    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter
     from opentelemetry.sdk.trace.sampling import (
         TraceIdRatioBased,
         StaticSampler,
@@ -124,7 +124,7 @@ def _record_trace_export_error(error: Exception, config: ObservabilityConfig) ->
     )
 
 
-class _InstrumentedSpanExporter:
+class _InstrumentedSpanExporter(SpanExporter):
     """
     Wrapper around OTLPSpanExporter that measures export duration and records metrics.
 

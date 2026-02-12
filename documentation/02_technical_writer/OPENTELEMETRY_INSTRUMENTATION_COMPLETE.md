@@ -696,7 +696,7 @@ async def process_work_item(self, work_item_id: str):
 For tests that need to verify trace context propagation without OTLP export:
 
 ```python
-from codetoreum.adapters.testing.mock_tracer import MockTracer
+from codetoreum.infrastructure.simulation.mock_tracer import MockTracer
 
 @pytest.mark.asyncio
 async def test_event_trace_propagation():

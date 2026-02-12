@@ -10,10 +10,11 @@ for simulation testing without external infrastructure.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any, Protocol, runtime_checkable, Callable
-from dataclasses import dataclass
+from typing import Optional, Dict, Any, Protocol, runtime_checkable, Callable, Mapping
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
+from types import MappingProxyType
 
 # W3C Trace Context version constant (RFC: https://www.w3.org/TR/trace-context/)
 # Update this when W3C releases new trace context versions
@@ -55,7 +56,12 @@ class SpanEvent:
 
     name: str
     timestamp: datetime
-    attributes: Dict[str, Any]
+    attributes: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        """Convert attributes to immutable MappingProxyType."""
+        if not isinstance(self.attributes, MappingProxyType):
+            object.__setattr__(self, 'attributes', MappingProxyType(self.attributes))
 
 
 @runtime_checkable
