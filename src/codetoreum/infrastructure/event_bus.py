@@ -137,6 +137,10 @@ class EventBus:
         self._wildcard_handlers: List[EventHandler] = []
         self._wildcard_callbacks: List[Callable] = []
 
+        # OpenTelemetry tracer (optional, for CONSUMER/INTERNAL span creation)
+        # Note: PRODUCER spans are created by InstrumentedEventBus wrapper
+        self._tracer = trace.get_tracer(__name__) if OPENTELEMETRY_AVAILABLE else None
+
         # Statistics
         self._stats = {
             "events_published": 0,
