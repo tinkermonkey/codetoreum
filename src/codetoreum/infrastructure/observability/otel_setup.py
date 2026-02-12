@@ -111,6 +111,84 @@ def _record_trace_export_error(error: Exception, config: ObservabilityConfig) ->
     )
 
 
+class _InstrumentedSpanExporter:
+    """
+    Wrapper around OTLPSpanExporter that measures export duration and records metrics.
+
+    This exporter wraps an actual OTLP exporter and measures the time taken
+    to export spans, recording the duration as a histogram metric.
+    """
+
+    def __init__(self, exporter):
+        """
+        Initialize with a wrapped exporter.
+
+        Args:
+            exporter: The OTLPSpanExporter to wrap
+        """
+        self._exporter = exporter
+        self._meter = None
+        self._duration_histogram = None
+        self._export_counter = None
+
+        try:
+            from opentelemetry import metrics
+            self._meter = metrics.get_meter("codetoreum.observability")
+
+            # Create histogram for export duration in milliseconds
+            self._duration_histogram = self._meter.create_histogram(
+                "otel.trace.export.duration",
+                description="Duration of OTLP trace export in milliseconds",
+                unit="ms"
+            )
+
+            # Create counter for successful exports
+            self._export_counter = self._meter.create_counter(
+                "otel.trace.export.success",
+                description="Number of successful OTLP trace exports"
+            )
+        except Exception as e:
+            logger.debug(f"Failed to create metrics for span export: {e}")
+
+    def export(self, spans):
+        """
+        Export spans and measure duration.
+
+        Args:
+            spans: List of spans to export
+
+        Returns:
+            Export result
+        """
+        import time
+        start_time = time.time()
+
+        try:
+            result = self._exporter.export(spans)
+
+            # Record duration metric
+            if self._duration_histogram:
+                duration_ms = (time.time() - start_time) * 1000
+                self._duration_histogram.record(duration_ms)
+
+            # Record success count
+            if self._export_counter:
+                self._export_counter.add(1)
+
+            return result
+        except Exception as e:
+            logger.debug(f"Span export failed: {e}")
+            raise
+
+    def shutdown(self):
+        """Shutdown the wrapped exporter."""
+        return self._exporter.shutdown()
+
+    def force_flush(self, timeout_millis: int = 30000):
+        """Force flush the wrapped exporter."""
+        return self._exporter.force_flush(timeout_millis)
+
+
 def _record_log_export_error(error: Exception, config: ObservabilityConfig) -> None:
     """
     Record metric for log export error and log warning.
@@ -296,6 +374,9 @@ def setup_opentelemetry(config: ObservabilityConfig, app=None) -> None:
             insecure=config.signoz.insecure,
         )
 
+        # Wrap exporter with instrumentation to measure export duration
+        instrumented_exporter = _InstrumentedSpanExporter(otlp_exporter)
+
         # Create tracer provider with configured sampling
         tracer_provider = TracerProvider(
             resource=resource,
@@ -304,7 +385,7 @@ def setup_opentelemetry(config: ObservabilityConfig, app=None) -> None:
 
         # Create batch span processor with performance tuning
         batch_processor = BatchSpanProcessor(
-            otlp_exporter,
+            instrumented_exporter,
             max_queue_size=config.batch_max_queue_size,
             max_export_batch_size=config.batch_max_export_batch_size,
             schedule_delay_millis=config.batch_schedule_delay_millis,
