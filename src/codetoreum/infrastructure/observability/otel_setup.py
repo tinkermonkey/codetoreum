@@ -13,7 +13,8 @@ if TYPE_CHECKING:
 
 # Try to import OpenTelemetry - it's optional
 try:
-    from opentelemetry import trace, logs, metrics
+    from opentelemetry import trace, metrics
+    from opentelemetry._logs import set_logger_provider
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor
     from opentelemetry.sdk.trace.sampling import (
@@ -31,14 +32,21 @@ try:
         SERVICE_VERSION,
     )
     from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-    from opentelemetry.exporter.otlp.proto.http.log_exporter import OTLPLogExporter
+    from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
     from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
-    from opentelemetry.sdk.logs import LoggerProvider
-    from opentelemetry.sdk.logs.export import BatchLogRecordProcessor
+    from opentelemetry.sdk._logs import LoggerProvider
+    from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
     from opentelemetry.sdk.metrics import MeterProvider
     from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-    from opentelemetry.instrumentation.logging import LoggingInstrumentor
+
+    # LoggingInstrumentor is optional - not in current dependencies
+    try:
+        from opentelemetry.instrumentation.logging import LoggingInstrumentor
+        LOGGING_INSTRUMENTATION_AVAILABLE = True
+    except ImportError:
+        LOGGING_INSTRUMENTATION_AVAILABLE = False
+        LoggingInstrumentor = None  # type: ignore
 
     OPENTELEMETRY_AVAILABLE = True
 except ImportError:
@@ -46,6 +54,8 @@ except ImportError:
     # Provide dummy values for when opentelemetry is not installed
     ALWAYS_ON = None
     ALWAYS_OFF = None
+    set_logger_provider = None  # type: ignore
+    LOGGING_INSTRUMENTATION_AVAILABLE = False
 
 from .config import ObservabilityConfig
 from codetoreum.infrastructure.error_ids import ErrorRegistry
@@ -282,14 +292,20 @@ def _setup_log_export(config: ObservabilityConfig, resource: "Resource") -> None
         logger_provider.add_log_record_processor(batch_log_processor)
 
         # Set global logger provider
-        logs.set_logger_provider(logger_provider)
+        set_logger_provider(logger_provider)
 
-        # Instrument Python's logging module to export logs to OTLP
+        # Instrument Python's logging module to export logs to OTLP (if available)
         # This hooks into the Python logging module and exports records to the OTLP backend
         # Trace context (trace_id, span_id) is automatically correlated
-        LoggingInstrumentor().instrument(
-            set_logging_format=False,  # Keep existing logging format
-        )
+        if LOGGING_INSTRUMENTATION_AVAILABLE:
+            LoggingInstrumentor().instrument(
+                set_logging_format=False,  # Keep existing logging format
+            )
+        else:
+            logger.debug(
+                "opentelemetry-instrumentation-logging not installed. "
+                "Logging instrumentation disabled."
+            )
 
         # Wire TraceContextInjector filter to root logger for trace correlation
         from codetoreum.infrastructure.observability.logging_integration import TraceContextInjector

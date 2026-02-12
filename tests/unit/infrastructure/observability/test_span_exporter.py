@@ -109,22 +109,28 @@ class TestInstrumentedSpanExporter:
 
     def test_init_handles_metrics_creation_failure(self):
         """Test __init__ gracefully handles metrics creation failure."""
+        import sys
         mock_exporter = mock.MagicMock()
 
         with mock.patch("codetoreum.infrastructure.observability.otel_setup.logger") as mock_logger:
-            with mock.patch("codetoreum.infrastructure.observability.otel_setup.metrics") as mock_metrics:
-                mock_metrics.get_meter.side_effect = ImportError("metrics not available")
+            # Mock the metrics module to raise when get_meter is called
+            mock_metrics = mock.MagicMock()
+            mock_metrics.get_meter.side_effect = ImportError("metrics not available")
 
-                # Should not raise
-                exporter = _InstrumentedSpanExporter(mock_exporter)
+            # Patch sys.modules to make 'from opentelemetry import metrics' work with our mock
+            with mock.patch.dict(sys.modules, {"opentelemetry": mock.MagicMock(metrics=mock_metrics)}):
+                # Patch the import statement in the __init__ method
+                with mock.patch("opentelemetry.metrics", mock_metrics):
+                    # Should not raise
+                    exporter = _InstrumentedSpanExporter(mock_exporter)
 
-                # Metrics should be None
-                assert exporter._meter is None
-                assert exporter._duration_histogram is None
-                assert exporter._export_counter is None
+                    # Metrics should be None
+                    assert exporter._meter is None
+                    assert exporter._duration_histogram is None
+                    assert exporter._export_counter is None
 
-                # Failure should be logged at debug level
-                mock_logger.debug.assert_called_once()
+                    # Failure should be logged at debug level
+                    mock_logger.debug.assert_called_once()
 
     def test_histogram_record_failure_still_returns_result(self):
         """Test export returns result even if histogram recording fails."""
