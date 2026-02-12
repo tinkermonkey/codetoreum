@@ -15,13 +15,14 @@ import logging
 from typing import Any, Callable, List, Optional, TYPE_CHECKING
 
 try:
-    from opentelemetry import trace
+    from opentelemetry import trace, context as otel_context
     from opentelemetry.trace import SpanKind
 
     OPENTELEMETRY_AVAILABLE = True
 except ImportError:
     OPENTELEMETRY_AVAILABLE = False
     SpanKind = None
+    otel_context = None
 
 from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.observability.trace_context_propagation import (
@@ -73,6 +74,9 @@ class InstrumentedEventBus:
         - aggregate.id: Aggregate being modified
         - aggregate.type: Type of aggregate
 
+        If the event already has trace context, the PRODUCER span will be created
+        as part of the existing trace. Otherwise, a new trace is started.
+
         Args:
             event: Domain event to publish
 
@@ -86,26 +90,41 @@ class InstrumentedEventBus:
 
         span_name = f"event.publish.{event.event_type}"
 
-        with self._tracer.start_as_current_span(
-            span_name,
-            kind=SpanKind.PRODUCER,
-            attributes={
-                "event.type": event.event_type,
-                "event.id": str(event.event_id),
-                "aggregate.id": str(event.aggregate_id),
-                "aggregate.type": event.aggregate_type,
-            },
-        ) as span:
-            logger.debug(
-                f"Created PRODUCER span for {event.event_type}",
-                extra={"span_id": span.get_span_context().span_id},
-            )
+        # Extract and activate existing trace context from event if present
+        # This preserves upstream trace context and makes PRODUCER span part of that trace
+        trace_context = extract_and_activate_trace_context(event)
+        token = None
 
-            # Inject trace context into event for downstream handlers
-            inject_current_trace_context_into_event(event)
+        try:
+            if trace_context:
+                # Attach existing trace context before creating PRODUCER span
+                token = otel_context.attach(trace_context)
 
-            # Delegate to wrapped event bus
-            await self._event_bus.publish(event)
+            with self._tracer.start_as_current_span(
+                span_name,
+                kind=SpanKind.PRODUCER,
+                attributes={
+                    "event.type": event.event_type,
+                    "event.id": str(event.event_id),
+                    "aggregate.id": str(event.aggregate_id),
+                    "aggregate.type": event.aggregate_type,
+                },
+            ) as span:
+                logger.debug(
+                    f"Created PRODUCER span for {event.event_type}",
+                    extra={"span_id": span.get_span_context().span_id},
+                )
+
+                # Inject trace context into event for downstream handlers
+                # Only inject if not already present to preserve existing context
+                if not TraceContextPropagator.extract_trace_context(event):
+                    inject_current_trace_context_into_event(event)
+
+                # Delegate to wrapped event bus
+                await self._event_bus.publish(event)
+        finally:
+            if token:
+                otel_context.detach(token)
 
     async def publish_batch(self, events: List[DomainEvent]) -> None:
         """
