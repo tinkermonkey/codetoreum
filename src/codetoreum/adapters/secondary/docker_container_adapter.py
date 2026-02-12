@@ -1103,28 +1103,28 @@ class DockerContainerAdapter(IContainer):
                     if hasattr(api, '_session') and api._session:
                         try:
                             api._session.close()
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug(f"Error closing Docker API session: {e}", exc_info=True)
                     # Close adapters (which hold socket connections)
                     if hasattr(api, '_adapters') and api._adapters:
                         try:
                             for adapter in api._adapters.values():
                                 if hasattr(adapter, 'close'):
                                     adapter.close()
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug(f"Error closing Docker API adapters: {e}", exc_info=True)
                     if hasattr(api, 'close'):
                         try:
                             api.close()
-                        except Exception:
-                            pass
-            except Exception:
-                logger.debug("Error cleaning up Docker API client", exc_info=True)
+                        except Exception as e:
+                            logger.debug(f"Error closing Docker API: {e}", exc_info=True)
+            except Exception as e:
+                logger.debug(f"Error cleaning up Docker API client: {e}", exc_info=True)
 
             try:
                 self._docker_client.close()
-            except Exception:
-                logger.debug("Error closing Docker client", exc_info=True)
+            except Exception as e:
+                logger.debug(f"Error closing Docker client: {e}", exc_info=True)
             finally:
                 self._docker_client = None
 

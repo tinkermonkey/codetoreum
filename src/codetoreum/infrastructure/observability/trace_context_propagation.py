@@ -262,6 +262,7 @@ class TraceContextPropagator:
 
         try:
             from opentelemetry import context as otel_context
+            from opentelemetry.trace import NonRecordingSpan
 
             # Parse trace IDs from hex strings
             trace_id_int = int(trace_data.trace_id, 16)
@@ -276,8 +277,12 @@ class TraceContextPropagator:
                 trace_flags=TraceFlags(0x01 if sampled else 0x00),
             )
 
+            # Wrap span context in NonRecordingSpan (required by set_span_in_context)
+            # This represents a span that cannot record data but has valid trace context
+            non_recording_span = NonRecordingSpan(span_context)
+
             # Create context with this span context
-            ctx = set_span_in_context(span_context)
+            ctx = set_span_in_context(non_recording_span)
 
             logger.debug(
                 f"Activated trace context: trace_id={trace_data.trace_id}, "

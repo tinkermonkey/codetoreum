@@ -127,9 +127,6 @@ class EventBus:
         self.redis_client = redis_client
         self.redis_stream_prefix = redis_stream_prefix
 
-        # Cache tracer instance for OpenTelemetry instrumentation
-        self._tracer = trace.get_tracer(__name__) if OPENTELEMETRY_AVAILABLE else None
-
         # Handler registry: event_type -> list of handlers
         self._handlers: Dict[str, List[EventHandler]] = {}
 
@@ -281,14 +278,10 @@ class EventBus:
 
         Also persists event to Redis Streams if Redis client is configured.
 
-        OpenTelemetry Instrumentation:
-        - Creates PRODUCER span with event attributes
-        - Injects trace context into event.metadata['traceparent']
-        - Downstream handlers can extract and continue the trace
-
         W3C Trace Context Propagation:
-        - Enables complete distributed tracing through event bus
-        - Handlers create CONSUMER spans linked via trace context
+        - Injects trace context into event.metadata['traceparent']
+        - Handlers can extract and continue the trace
+        - Use InstrumentedEventBus wrapper for PRODUCER/CONSUMER span creation
 
         Error Handling:
         - asyncio.CancelledError: Always propagated (not caught)
@@ -305,80 +298,55 @@ class EventBus:
         """
         self._stats["events_published"] += 1
 
-        # Create PRODUCER span if OpenTelemetry available
-        span = None
-        token = None
-
         try:
-            if self._tracer:
-                # Start PRODUCER span
-                span = self._tracer.start_span(
-                    f"event.publish.{event.event_type}",
-                    kind=SpanKind.PRODUCER,
-                    attributes={
-                        "event.type": event.event_type,
-                        "event.id": str(event.event_id),
-                        "aggregate.id": str(event.aggregate_id),
-                        "aggregate.type": event.aggregate_type,
-                    },
-                )
-                token = context.attach(trace.set_span_in_context(span))
+            # Inject current trace context into event for downstream propagation
+            inject_current_trace_context_into_event(event)
 
-            try:
-                # Inject current trace context into event for downstream propagation
-                inject_current_trace_context_into_event(event)
+            # Persist event to Redis Streams if available
+            if self.redis_client:
+                await self._persist_to_redis(event)
 
-                # Persist event to Redis Streams if available
-                if self.redis_client:
-                    await self._persist_to_redis(event)
+            # Get handlers for this event type
+            handlers = self._get_handlers_for_event(event)
 
-                # Get handlers for this event type
-                handlers = self._get_handlers_for_event(event)
+            # Get callbacks for this event type
+            callbacks = self._get_callbacks_for_event(event)
 
-                # Get callbacks for this event type
-                callbacks = self._get_callbacks_for_event(event)
+            # Dispatch to all handlers and callbacks
+            tasks = []
 
-                # Dispatch to all handlers and callbacks
-                tasks = []
+            for handler in handlers:
+                tasks.append(self._dispatch_to_handler(handler, event))
 
-                for handler in handlers:
-                    tasks.append(self._dispatch_to_handler(handler, event))
+            for callback in callbacks:
+                tasks.append(self._dispatch_to_callback(callback, event))
 
-                for callback in callbacks:
-                    tasks.append(self._dispatch_to_callback(callback, event))
+            # Wait for all handlers to complete
+            if tasks:
+                results = await asyncio.gather(*tasks, return_exceptions=True)
 
-                # Wait for all handlers to complete
-                if tasks:
-                    results = await asyncio.gather(*tasks, return_exceptions=True)
+                # Check for errors
+                for idx, result in enumerate(results):
+                    if isinstance(result, Exception):
+                        handler_name = f"handler_{idx}"
+                        logger.error(
+                            f"Handler {handler_name} failed for event {event.event_type}: {result}",
+                            exc_info=result,
+                            extra={
+                                "event_type": event.event_type,
+                                "event_id": event.event_id,
+                                "handler_index": idx,
+                                "error_type": type(result).__name__,
+                            "error_id": ErrorRegistry.ERR_EVENT_BUS_ERROR}
+                        )
+                        self._stats["handler_errors"] += 1
 
-                    # Check for errors
-                    for idx, result in enumerate(results):
-                        if isinstance(result, Exception):
-                            handler_name = f"handler_{idx}"
-                            logger.error(
-                                f"Handler {handler_name} failed for event {event.event_type}: {result}",
-                                exc_info=result,
-                                extra={
-                                    "event_type": event.event_type,
-                                    "event_id": event.event_id,
-                                    "handler_index": idx,
-                                    "error_type": type(result).__name__,
-                                "error_id": ErrorRegistry.ERR_EVENT_BUS_ERROR}
-                            )
-                            self._stats["handler_errors"] += 1
+            self._stats["events_handled"] += len(handlers) + len(callbacks)
 
-                self._stats["events_handled"] += len(handlers) + len(callbacks)
-
-                logger.debug(
-                    f"Published event {event.event_type} to "
-                    f"{len(handlers)} handlers and {len(callbacks)} callbacks"
-                )
-
-            finally:
-                if span:
-                    span.end()
-                if token:
-                    context.detach(token)
+            logger.debug(
+                f"Published event {event.event_type} to "
+                f"{len(handlers)} handlers and {len(callbacks)} callbacks"
+            )
 
         except asyncio.CancelledError:
             # Always propagate cancellation - don't suppress system signals
@@ -470,16 +438,13 @@ class EventBus:
         self, handler: EventHandler, event: DomainEvent
     ) -> None:
         """
-        Dispatch event to a handler with retry logic and CONSUMER span.
-
-        OpenTelemetry Instrumentation:
-        - Creates CONSUMER span linked to PRODUCER span via trace context
-        - Adds event attributes and handler class name to span
+        Dispatch event to a handler with retry logic and trace context.
 
         W3C Trace Context Propagation:
         - Extracts trace context from event.metadata['traceparent']
         - Activates it in the current execution context
-        - Ensures handler spans are children of the event's trace
+        - Enables CONSUMER spans to be created as children of the event's trace
+        - Use InstrumentedEventBus wrapper for automatic CONSUMER span creation
 
         Args:
             handler: Event handler
@@ -496,33 +461,36 @@ class EventBus:
 
         for attempt in range(self.max_retries + 1):
             try:
-
-                # Create CONSUMER span if OpenTelemetry available
-                span = None
+                # Attach context BEFORE creating span so span will be child of parent trace
                 token = None
-                if self._tracer:
-                    span = self._tracer.start_span(
-                        f"event.handle.{event.event_type}",
-                        kind=SpanKind.CONSUMER,
-                        attributes={
-                            "event.type": event.event_type,
-                            "event.id": str(event.event_id),
-                            "handler.class": handler.__class__.__name__,
-                        },
-                    )
-                    if ctx:
-                        token = context.attach(ctx)
-                    else:
-                        token = None
+                if ctx:
+                    token = context.attach(ctx)
 
                 try:
-                    # Call handler
-                    await handler.handle(event)
-                    return  # Success!
+                    # Create CONSUMER span if OpenTelemetry available
+                    # Now that context is attached, this span will be a child of the parent trace
+                    span = None
+                    if self._tracer:
+                        span = self._tracer.start_span(
+                            f"event.handle.{event.event_type}",
+                            kind=SpanKind.CONSUMER,
+                            attributes={
+                                "event.type": event.event_type,
+                                "event.id": str(event.event_id),
+                                "handler.class": handler.__class__.__name__,
+                            },
+                        )
+
+                    try:
+                        # Call handler
+                        await handler.handle(event)
+                        return  # Success!
+
+                    finally:
+                        if span:
+                            span.end()
 
                 finally:
-                    if span:
-                        span.end()
                     if token:
                         context.detach(token)
 
@@ -544,16 +512,13 @@ class EventBus:
         self, callback: Callable, event: DomainEvent
     ) -> None:
         """
-        Dispatch event to a callback with retry logic and CONSUMER span.
-
-        OpenTelemetry Instrumentation:
-        - Creates CONSUMER span linked to PRODUCER span via trace context
-        - Adds event attributes and handler class name to span
+        Dispatch event to a callback with retry logic and trace context.
 
         W3C Trace Context Propagation:
         - Extracts trace context from event.metadata['traceparent']
         - Activates it in the current execution context
-        - Ensures callback spans are children of the event's trace
+        - Enables CONSUMER spans to be created as children of the event's trace
+        - Use InstrumentedEventBus wrapper for automatic CONSUMER span creation
 
         Args:
             callback: Callback function
@@ -570,42 +535,45 @@ class EventBus:
 
         for attempt in range(self.max_retries + 1):
             try:
-
-                # Create CONSUMER span if OpenTelemetry available
-                span = None
+                # Attach context BEFORE creating span so span will be child of parent trace
                 token = None
-                if self._tracer:
-                    callback_name = (
-                        callback.__name__
-                        if hasattr(callback, "__name__")
-                        else str(callback)
-                    )
-                    span = self._tracer.start_span(
-                        f"event.handle.{event.event_type}",
-                        kind=SpanKind.CONSUMER,
-                        attributes={
-                            "event.type": event.event_type,
-                            "event.id": str(event.event_id),
-                            "handler.class": callback_name,
-                        },
-                    )
-                    if ctx:
-                        token = context.attach(ctx)
-                    else:
-                        token = None
+                if ctx:
+                    token = context.attach(ctx)
 
                 try:
-                    # Check if callback is async
-                    if asyncio.iscoroutinefunction(callback):
-                        await callback(event)
-                    else:
-                        callback(event)
+                    # Create CONSUMER span if OpenTelemetry available
+                    # Now that context is attached, this span will be a child of the parent trace
+                    span = None
+                    if self._tracer:
+                        callback_name = (
+                            callback.__name__
+                            if hasattr(callback, "__name__")
+                            else str(callback)
+                        )
+                        span = self._tracer.start_span(
+                            f"event.handle.{event.event_type}",
+                            kind=SpanKind.CONSUMER,
+                            attributes={
+                                "event.type": event.event_type,
+                                "event.id": str(event.event_id),
+                                "handler.class": callback_name,
+                            },
+                        )
 
-                    return  # Success!
+                    try:
+                        # Check if callback is async
+                        if asyncio.iscoroutinefunction(callback):
+                            await callback(event)
+                        else:
+                            callback(event)
+
+                        return  # Success!
+
+                    finally:
+                        if span:
+                            span.end()
 
                 finally:
-                    if span:
-                        span.end()
                     if token:
                         context.detach(token)
 
