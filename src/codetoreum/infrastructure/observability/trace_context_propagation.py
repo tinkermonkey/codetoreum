@@ -42,6 +42,7 @@ except ImportError:
     Context = None
 
 from codetoreum.domain.events import DomainEvent
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 
