@@ -161,7 +161,7 @@ class _InstrumentedSpanExporter(SpanExporter):
                 description="Number of successful OTLP trace exports"
             )
         except Exception as e:
-            logger.debug(f"Failed to create metrics for span export: {e}")
+            logger.debug(f"Failed to create metrics for span export: {e}", exc_info=True)
 
     def export(self, spans):
         """
@@ -190,7 +190,7 @@ class _InstrumentedSpanExporter(SpanExporter):
 
             return result
         except Exception as e:
-            logger.debug(f"Span export failed: {e}")
+            logger.debug(f"Span export failed: {e}", exc_info=True)
             raise
 
     def shutdown(self):

@@ -6,7 +6,6 @@ to the event bus with W3C Trace Context propagation.
 Creates:
 - PRODUCER spans when publishing events
 - CONSUMER spans when handling events
-- INTERNAL spans when persisting to Redis
 
 All spans are linked via trace context to enable complete distributed tracing.
 """
@@ -222,7 +221,7 @@ class InstrumentedEventBus:
         Returns:
             Dictionary of stats from wrapped bus
         """
-        return self._event_bus.get_stats()
+        return self._event_bus.get_statistics()
 
     def _create_instrumented_callback(
         self, callback: Callable[[DomainEvent], Any]
@@ -260,12 +259,19 @@ class InstrumentedEventBus:
                     extra={"span_id": span.get_span_context().span_id},
                 )
 
-                # Call original callback
-                if hasattr(callback, "__call__"):
-                    result = callback(event)
-                    if hasattr(result, "__await__"):
-                        return await result
-                    return result
+                # Call original callback with exception handling
+                try:
+                    if hasattr(callback, "__call__"):
+                        result = callback(event)
+                        if hasattr(result, "__await__"):
+                            return await result
+                        return result
+                except Exception as e:
+                    # Record exception in span
+                    span.set_attribute("exception.type", type(e).__name__)
+                    span.set_attribute("exception.message", str(e))
+                    span.record_exception(e)
+                    raise
 
         # Store reference to original callback for unsubscribe
         instrumented_callback.__wrapped__ = callback
