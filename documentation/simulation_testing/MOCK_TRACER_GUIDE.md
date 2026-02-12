@@ -369,7 +369,7 @@ class SpanCapture:
     status: SpanStatus
     start_time: datetime
     end_time: Optional[datetime]
-    attributes: Dict[str, any]
+    attributes: Dict[str, Any]
     events: List[SpanEvent]
     span_context_injected: bool
 

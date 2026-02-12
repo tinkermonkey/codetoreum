@@ -1,11 +1,18 @@
-"""Tests for trace propagation through event bus with MockTracer.
+"""Simulation tests for MockTracer trace context propagation.
+
+Tests the MockTracer implementation in isolation (not integrated with EventBus).
+For integration tests that verify trace context propagation through the real
+EventBus, see tests/integration/infrastructure/test_event_bus_trace_context.py
 
 Tests cover:
-- Trace context injection into published events
-- Trace propagation through event handler chains
+- Trace context injection and extraction with MockTracer
 - PRODUCER and CONSUMER span kinds
+- Span parent-child relationships
 - Async/await patterns for MockTracer methods
-- W3C Trace Context format compliance
+- W3C Trace Context format compliance in mock implementation
+
+NOTE: These tests verify MockTracer behavior for simulation scenarios.
+The actual EventBus integration is tested in the integration test suite.
 """
 
 import pytest

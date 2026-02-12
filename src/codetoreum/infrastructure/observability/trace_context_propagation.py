@@ -46,9 +46,8 @@ from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 
-# W3C Trace Context version constant (RFC: https://www.w3.org/TR/trace-context/)
-# Update this when W3C releases new trace context versions
-W3C_TRACE_CONTEXT_VERSION = "00"
+# Import W3C Trace Context version from port layer to avoid duplication
+from codetoreum.ports.output.i_tracer import W3C_TRACE_CONTEXT_VERSION  # noqa: F401, E402
 
 
 @dataclass

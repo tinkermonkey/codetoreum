@@ -499,8 +499,8 @@ All new code has been:
 ## Files Changed/Created
 
 ### New Files
-- `src/codetoreum/ports/output/i_tracer.py` - ITracer protocol (215 lines)
-- `src/codetoreum/infrastructure/simulation/mock_tracer.py` - Core implementation (510 lines)
+- `src/codetoreum/ports/output/i_tracer.py` - ITracer protocol (368 lines)
+- `src/codetoreum/infrastructure/simulation/mock_tracer.py` - Core implementation (622 lines)
 - `tests/simulation/test_trace_propagation_event_bus.py` - Event bus tests (345 lines)
 - `tests/simulation/test_trace_propagation_adapters.py` - Adapter tests (352 lines)
 - `tests/simulation/test_trace_propagation_services.py` - Service tests (449 lines)
@@ -514,11 +514,11 @@ All new code has been:
 - `src/codetoreum/infrastructure/observability/otel_setup.py` - Added trace export failure metric
 
 ### Total Lines of Code
-- Port definition: 215 lines
-- Implementation: 510 lines
+- Port definition: 368 lines
+- Implementation: 622 lines
 - Tests: 1,146 lines
 - Documentation: 500+ lines
-- **Total: 2,371+ lines**
+- **Total: 2,636+ lines**
 
 ## Benefits
 
