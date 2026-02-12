@@ -10,7 +10,7 @@ for simulation testing without external infrastructure.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any, Protocol, runtime_checkable, Callable, Mapping
+from typing import Optional, Dict, Any, Protocol, runtime_checkable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum

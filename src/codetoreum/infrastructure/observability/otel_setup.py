@@ -190,7 +190,7 @@ class _InstrumentedSpanExporter(SpanExporter):
 
             return result
         except Exception as e:
-            logger.debug(f"Span export failed: {e}", exc_info=True)
+            logger.error(f"Span export failed: {e}", exc_info=True)
             raise
 
     def shutdown(self):

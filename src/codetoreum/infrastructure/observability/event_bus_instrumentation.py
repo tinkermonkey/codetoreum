@@ -89,8 +89,10 @@ class InstrumentedEventBus:
 
         span_name = f"event.publish.{event.event_type}"
 
-        # Extract and activate existing trace context from event if present
-        # This preserves upstream trace context and makes PRODUCER span part of that trace
+        # Extract trace context from event (if present) to continue upstream trace in PRODUCER span.
+        # This does NOT modify the event. Instead, it extracts the context and creates a new
+        # context token in the current execution context, allowing the PRODUCER span to be
+        # a child of the upstream trace.
         trace_context = extract_and_activate_trace_context(event)
         token = None
 
@@ -157,6 +159,19 @@ class InstrumentedEventBus:
     def unregister_handler(self, handler: "EventHandler") -> None:
         """
         Unregister an event handler.
+
+        **Design Note on Private Attribute Access:**
+        This method directly accesses private EventBus attributes (_handlers, _wildcard_handlers)
+        to find and remove instrumented handler wrappers. This is intentional to support the
+        decorator pattern: we wrap each handler to add instrumentation, then need to find the
+        wrapped version to unregister.
+
+        The alternative would be to add public methods like get_registered_handlers() to EventBus,
+        but this adds API surface for a single use case. The current design:
+        - Keeps EventBus API minimal
+        - Documents the encapsulation boundary clearly
+        - Remains resilient: EventBus refactoring is documented in this location
+        - Follows Python conventions: accessing internals with clear intent is acceptable when documented
 
         Args:
             handler: Event handler instance

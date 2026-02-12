@@ -111,6 +111,7 @@ class TraceContextData:
         except Exception as e:
             logger.warning(
                 f"Failed to parse traceparent: {e}",
+                exc_info=True,
                 extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
             )
             return None
@@ -197,6 +198,7 @@ class TraceContextPropagator:
         except Exception as e:
             logger.warning(
                 f"Failed to inject trace context: {e}",
+                exc_info=True,
                 extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
             )
 
@@ -297,6 +299,7 @@ class TraceContextPropagator:
         except Exception as e:
             logger.warning(
                 f"Failed to activate trace context: {e}",
+                exc_info=True,
                 extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
             )
             return None
