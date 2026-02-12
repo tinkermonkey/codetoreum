@@ -360,33 +360,3 @@ class ITracer(ABC):
             carrier: Dictionary to inject context into
         """
         pass
-
-    @abstractmethod
-    def instrument_async_function(
-        self,
-        func: Callable,
-        name: Optional[str] = None,
-        attributes: Optional[Dict[str, Any]] = None,
-    ) -> Callable:
-        """
-        Create a decorator to instrument async functions with spans.
-
-        This is a cross-cutting concern for tracing that can be applied to
-        domain layer, application services, and adapters.
-
-        Args:
-            func: The async function to instrument
-            name: Span name (defaults to function qualified name)
-            attributes: Additional attributes to add to span
-
-        Returns:
-            Decorated function that creates spans for each invocation
-
-        Example:
-            tracer = get_tracer()
-
-            @tracer.instrument_async_function(name="execute_agent")
-            async def execute(self, task):
-                ...
-        """
-        pass

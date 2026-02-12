@@ -3,6 +3,25 @@ Core Instrumentation Utilities for Codetoreum
 
 Provides decorators and utilities for manual instrumentation of functions and methods.
 These can be applied to domain layer, application services, and adapters.
+
+ARCHITECTURE NOTE - Cross-Cutting Concern:
+Instrumentation decorators are imported directly from this module rather than from
+the ITracer port interface because Python decorators are applied at class definition
+time, before dependency injection can provide a tracer instance. This is a pragmatic
+exception to the port-based architecture and aligns with CLAUDE.md's principle that
+"resilience patterns MUST be centralized in infrastructure layer." The decorator
+pattern is part of that infrastructure concern and cannot be port-based.
+
+When this module is imported, it uses the global tracer provider. This enables:
+- Application services to instrument methods without ITracer injection
+- Domain layer to add instrumentation without external dependencies
+- Adapters to instrument operations with consistent tracing
+
+The trade-off (direct import from infrastructure) is acceptable because:
+1. Instrumentation is infrastructure concern, not domain logic
+2. The infrastructure is completely mocked during simulation/testing
+3. Time manipulation in SimulationClock automatically works with instrumented functions
+4. OpenTelemetry support is optional (OPENTELEMETRY_AVAILABLE flag)
 """
 
 import functools
