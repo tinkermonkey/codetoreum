@@ -105,8 +105,8 @@ class User:
     roles: set[UserRole] = field(default_factory=set)
     is_active: bool = field(default=True)
     is_verified: bool = field(default=False)
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     last_login_at: Optional[datetime] = field(default=None)
     metadata: dict = field(default_factory=dict)
 
@@ -209,7 +209,7 @@ class APIKey:
     roles: set[UserRole] = field(default_factory=set)
     is_active: bool = field(default=True)
     expires_at: Optional[datetime] = field(default=None)
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     last_used_at: Optional[datetime] = field(default=None)
     metadata: dict = field(default_factory=dict)
 

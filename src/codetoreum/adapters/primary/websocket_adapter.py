@@ -1644,12 +1644,12 @@ class WebSocketAdapter:
                             # message is in buffer for more accurate timing)
                             message_tracer.end_message_span(span, success=True)
                 except Exception as e:
-                    logger.debug(
+                    logger.warning(
                         f"Error recording event delivery for {connection_id}: {e}",
-                        exc_info=False,
+                        exc_info=True,
                     )
         except Exception as e:
-            logger.debug(f"Error in _record_event_deliveries: {e}", exc_info=False)
+            logger.warning(f"Error in _record_event_deliveries: {e}", exc_info=True)
 
     @staticmethod
     def _subscription_matches_event(subscription: Any, event: DomainEvent) -> bool:

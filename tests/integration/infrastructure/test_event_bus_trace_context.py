@@ -362,3 +362,153 @@ class TestEventBusTraceContextIntegration:
 
         # The test passes if the handler was successfully called with the event
         # (which means the CONSUMER span was successfully created and executed)
+
+    @pytest.mark.skipif(not OTEL_AVAILABLE, reason="OpenTelemetry not available")
+    @pytest.mark.asyncio
+    async def test_consumer_span_attributes_handler_class(self):
+        """Test that CONSUMER spans include handler.class attribute.
+
+        Verifies that when processing an event with a handler, the CONSUMER
+        span is created with the handler.class attribute set correctly.
+        """
+        event_bus = EventBus()
+        handler = SimpleEventHandler()
+        event_bus.register_handler(handler)
+
+        event = DomainEvent(
+            aggregate_id="test-handler-class",
+            aggregate_type="TestAggregate",
+        )
+
+        # Track spans created during event handling
+        spans_created = []
+        original_start_span = event_bus._tracer.start_span
+
+        def track_start_span(*args, **kwargs):
+            span = original_start_span(*args, **kwargs)
+            spans_created.append({
+                "name": args[0] if args else "",
+                "kind": kwargs.get("kind"),
+                "attributes": kwargs.get("attributes", {}),
+                "span": span,
+            })
+            return span
+
+        event_bus._tracer.start_span = track_start_span
+
+        # Publish event - handler will create CONSUMER span
+        await event_bus.publish(event)
+
+        # Find the CONSUMER span in the spans we tracked
+        consumer_spans = [s for s in spans_created if "handle" in s["name"]]
+        assert len(consumer_spans) > 0, "No CONSUMER spans were created"
+
+        consumer_span = consumer_spans[0]
+        assert "handler.class" in consumer_span["attributes"]
+        assert consumer_span["attributes"]["handler.class"] == "SimpleEventHandler"
+        assert "event.type" in consumer_span["attributes"]
+        assert "event.id" in consumer_span["attributes"]
+
+    @pytest.mark.skipif(not OTEL_AVAILABLE, reason="OpenTelemetry not available")
+    @pytest.mark.asyncio
+    async def test_consumer_span_kind_is_correct(self):
+        """Test that CONSUMER spans have the correct span kind.
+
+        Verifies that CONSUMER spans created during event dispatching have
+        SpanKind.CONSUMER set correctly.
+        """
+        from opentelemetry.trace import SpanKind
+
+        event_bus = EventBus()
+        handler = SimpleEventHandler()
+        event_bus.register_handler(handler)
+
+        event = DomainEvent(
+            aggregate_id="test-span-kind",
+            aggregate_type="TestAggregate",
+        )
+
+        # Track spans created during event handling
+        spans_created = []
+        original_start_span = event_bus._tracer.start_span
+
+        def track_start_span(*args, **kwargs):
+            span = original_start_span(*args, **kwargs)
+            spans_created.append({
+                "name": args[0] if args else "",
+                "kind": kwargs.get("kind"),
+                "span": span,
+            })
+            return span
+
+        event_bus._tracer.start_span = track_start_span
+
+        # Publish event
+        await event_bus.publish(event)
+
+        # Find and verify CONSUMER spans
+        consumer_spans = [s for s in spans_created if "handle" in s["name"]]
+        assert len(consumer_spans) > 0, "No CONSUMER spans were created"
+
+        for span_info in consumer_spans:
+            assert span_info["kind"] == SpanKind.CONSUMER, (
+                f"Expected SpanKind.CONSUMER, got {span_info['kind']}"
+            )
+
+    @pytest.mark.skipif(not OTEL_AVAILABLE, reason="OpenTelemetry not available")
+    @pytest.mark.asyncio
+    async def test_producer_consumer_span_relationship(self):
+        """Test parent-child relationship between PRODUCER and CONSUMER spans.
+
+        Verifies that CONSUMER spans are created with appropriate linkage to
+        PRODUCER spans through trace context.
+        """
+        event_bus = EventBus()
+        handler = SimpleEventHandler()
+        event_bus.register_handler(handler)
+
+        # Create event with trace context metadata
+        event = DomainEvent(
+            aggregate_id="test-span-relationship",
+            aggregate_type="TestAggregate",
+        )
+
+        # Manually inject trace context to simulate PRODUCER span
+        trace_data = TraceContextData(
+            version="00",
+            trace_id="1234567890abcdef1234567890abcdef",
+            span_id="fedcba0987654321",
+            trace_flags="01",
+        )
+        event.metadata["traceparent"] = trace_data.to_traceparent()
+
+        # Track spans created during event handling
+        spans_created = []
+        original_start_span = event_bus._tracer.start_span
+
+        def track_start_span(*args, **kwargs):
+            span = original_start_span(*args, **kwargs)
+            spans_created.append({
+                "name": args[0] if args else "",
+                "span": span,
+            })
+            return span
+
+        event_bus._tracer.start_span = track_start_span
+
+        # Publish event
+        await event_bus.publish(event)
+
+        # Verify that CONSUMER spans were created
+        consumer_spans = [s for s in spans_created if "handle" in s["name"]]
+        assert len(consumer_spans) > 0, "No CONSUMER spans were created"
+
+        # Verify event handler received the event with trace context intact
+        assert len(handler.handled_events) == 1
+        handled_event = handler.handled_events[0]
+
+        # Verify trace context was preserved in the handled event
+        assert "traceparent" in handled_event.metadata
+        extracted = TraceContextPropagator.extract_trace_context(handled_event)
+        assert extracted is not None
+        assert extracted.trace_id == trace_data.trace_id
