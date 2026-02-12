@@ -1377,7 +1377,6 @@ class WebSocketAdapter:
         except asyncio.CancelledError:
             # Task cancelled, connection closing - expected behavior
             logger.debug(f"Heartbeat monitor cancelled for connection {connection_id}")
-            pass
 
     def _cleanup_session_span(
         self, connection_id: str, reason: str = "normal_closure"
