@@ -36,7 +36,7 @@ try:
     from opentelemetry.sdk.logs import LoggerProvider
     from opentelemetry.sdk.logs.export import BatchLogRecordProcessor
     from opentelemetry.sdk.metrics import MeterProvider
-    from opentelemetry.sdk.metrics.export import BatchMetricExporter, PeriodicExportingMetricReader
+    from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
     from opentelemetry.instrumentation.logging import LoggingInstrumentor
 
