@@ -13,9 +13,14 @@ import os
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(frozen=True)
 class SignozConfig:
-    """Signoz observability configuration."""
+    """
+    Signoz observability configuration.
+
+    Immutable configuration object that prevents accidental modification
+    after initialization, ensuring consistency across the application.
+    """
 
     enabled: bool
     host: str
@@ -81,7 +86,7 @@ class SignozConfig:
         )
 
 
-@dataclass
+@dataclass(frozen=True)
 class ObservabilityConfig:
     """
     Comprehensive observability configuration for the entire platform.
@@ -92,6 +97,9 @@ class ObservabilityConfig:
     - Logs (log export enabled/disabled)
     - Auto-instrumentation (libraries, domain, application, adapters)
     - Performance tuning (batch sizes, queue sizes, delays)
+
+    Immutable configuration object that prevents accidental modification
+    after initialization, ensuring consistency across the application.
     """
 
     # Master switches

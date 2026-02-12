@@ -10,7 +10,7 @@ for simulation testing without external infrastructure.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any, Protocol, runtime_checkable
+from typing import Optional, Dict, Any, Protocol, runtime_checkable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
@@ -117,6 +117,58 @@ class Span:
     attributes: Dict[str, Any]
     events: list[SpanEvent]
 
+    def __post_init__(self) -> None:
+        """Validate span state after initialization."""
+        # Validate trace_id and span_id format (should be hex strings)
+        if not self._is_valid_trace_id(self.trace_id):
+            raise ValueError(
+                f"Invalid trace_id format: '{self.trace_id}' (must be 32-char hex string)"
+            )
+        if not self._is_valid_span_id(self.span_id):
+            raise ValueError(
+                f"Invalid span_id format: '{self.span_id}' (must be 16-char hex string)"
+            )
+
+        # Validate parent_span_id if provided
+        if self.parent_span_id is not None and not self._is_valid_span_id(self.parent_span_id):
+            raise ValueError(
+                f"Invalid parent_span_id format: '{self.parent_span_id}' (must be 16-char hex string)"
+            )
+
+        # Validate time ordering
+        if self.end_time is not None and self.end_time < self.start_time:
+            raise ValueError(
+                "end_time cannot be before start_time"
+            )
+
+    @staticmethod
+    def _is_valid_trace_id(trace_id: str) -> bool:
+        """Validate trace_id format (32-char hex string, not all zeros)."""
+        if not isinstance(trace_id, str):
+            return False
+        if len(trace_id) != 32:
+            return False
+        if not all(c in '0123456789abcdef' for c in trace_id.lower()):
+            return False
+        # Reject all-zeros trace IDs
+        if trace_id == '0' * 32:
+            return False
+        return True
+
+    @staticmethod
+    def _is_valid_span_id(span_id: str) -> bool:
+        """Validate span_id format (16-char hex string, not all zeros)."""
+        if not isinstance(span_id, str):
+            return False
+        if len(span_id) != 16:
+            return False
+        if not all(c in '0123456789abcdef' for c in span_id.lower()):
+            return False
+        # Reject all-zeros span IDs
+        if span_id == '0' * 16:
+            return False
+        return True
+
     @property
     def duration_ms(self) -> Optional[float]:
         """Calculate span duration in milliseconds."""
@@ -136,7 +188,16 @@ class Span:
     def add_event(
         self, name: str, attributes: Optional[Dict[str, Any]] = None
     ) -> None:
-        """Add an event to the span."""
+        """
+        Add an event to the span.
+
+        Raises:
+            RuntimeError: If the span has already ended
+        """
+        if self.end_time is not None:
+            raise RuntimeError(
+                "Cannot add events to a span that has already ended"
+            )
         self.events.append(
             SpanEvent(
                 name=name,
@@ -297,5 +358,35 @@ class ITracer(ABC):
         Args:
             span: Span to inject context from
             carrier: Dictionary to inject context into
+        """
+        pass
+
+    @abstractmethod
+    def instrument_async_function(
+        self,
+        func: Callable,
+        name: Optional[str] = None,
+        attributes: Optional[Dict[str, Any]] = None,
+    ) -> Callable:
+        """
+        Create a decorator to instrument async functions with spans.
+
+        This is a cross-cutting concern for tracing that can be applied to
+        domain layer, application services, and adapters.
+
+        Args:
+            func: The async function to instrument
+            name: Span name (defaults to function qualified name)
+            attributes: Additional attributes to add to span
+
+        Returns:
+            Decorated function that creates spans for each invocation
+
+        Example:
+            tracer = get_tracer()
+
+            @tracer.instrument_async_function(name="execute_agent")
+            async def execute(self, task):
+                ...
         """
         pass

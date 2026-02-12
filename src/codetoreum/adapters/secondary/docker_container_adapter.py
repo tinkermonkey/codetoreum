@@ -1182,7 +1182,7 @@ class DockerContainerAdapter(IContainer):
             # Suppress cleanup errors to avoid masking original exception
             # but log for observability
             logger.debug(
-                f"Cleanup error in docker container context manager, suppressed to avoid masking original exception",
+                f"Cleanup error in docker container context manager ({type(e).__name__}: {e}), suppressed to avoid masking original exception",
                 exc_info=True
             )
         return False  # Don't suppress exceptions
