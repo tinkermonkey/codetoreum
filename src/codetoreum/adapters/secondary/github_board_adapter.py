@@ -10,7 +10,7 @@ Implements IBoardService interface for GitHub Projects v2, supporting:
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -145,7 +145,7 @@ class GitHubBoardAdapter(IBoardService):
         self._monitoring[key] = MonitoringStatus(
             state=MonitoringState.ACTIVE,
             project_id=project_id,
-            started_at=datetime.utcnow().isoformat(),
+            started_at=datetime.now(timezone.utc).isoformat(),
         )
 
         # Initialize activity tracking
@@ -451,7 +451,7 @@ class GitHubBoardAdapter(IBoardService):
         self.emit(
             WorkItemColumnChangedEvent(
                 type="workitem.column_changed",
-                timestamp=datetime.utcnow().isoformat(),
+                timestamp=datetime.now(timezone.utc).isoformat(),
                 source="github",
                 work_item_id=work_item_id,
                 project_id=self._current_project_id,
@@ -508,7 +508,7 @@ class GitHubBoardAdapter(IBoardService):
         self.emit(
             BoardReconciledEvent(
                 type="board.reconciled",
-                timestamp=datetime.utcnow().isoformat(),
+                timestamp=datetime.now(timezone.utc).isoformat(),
                 source="github",
                 project_id=project_id,
                 board_id=config.board_id,
@@ -552,7 +552,7 @@ class GitHubBoardAdapter(IBoardService):
         self.emit(
             WorkItemColumnChangedEvent(
                 type="workitem.column_changed",
-                timestamp=datetime.utcnow().isoformat(),
+                timestamp=datetime.now(timezone.utc).isoformat(),
                 source="github",
                 work_item_id=work_item_id,
                 project_id=payload.get("organization", {}).get("id", ""),
@@ -697,7 +697,7 @@ class GitHubBoardAdapter(IBoardService):
                     changes.append(
                         WorkItemColumnChangedEvent(
                             type="workitem.column_changed",
-                            timestamp=datetime.utcnow().isoformat(),
+                            timestamp=datetime.now(timezone.utc).isoformat(),
                             source="github",
                             work_item_id=work_item_id,
                             project_id=project_id,

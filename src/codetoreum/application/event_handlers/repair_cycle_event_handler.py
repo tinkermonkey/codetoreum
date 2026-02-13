@@ -18,6 +18,7 @@ from codetoreum.domain.repair_cycle_types import (
 from codetoreum.infrastructure.event_bus import EventHandler, event_handler, EventBus
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
+from codetoreum.infrastructure.observability.instrumentation import instrument_async_function
 from codetoreum.ports.exceptions import ExternalServiceError
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle
 
@@ -108,6 +109,13 @@ class RepairCycleEventHandler(EventHandler):
         """
         return ["WorkItemColumnChanged"]
 
+    @instrument_async_function(
+        name="repair_cycle_event_handler.handle",
+        attributes={
+            "component": "repair_cycle",
+            "layer": "application",
+        }
+    )
     async def handle(self, event: DomainEvent) -> None:
         """
         Handle column change event and trigger repair cycle if appropriate.
@@ -134,6 +142,13 @@ class RepairCycleEventHandler(EventHandler):
             )
             raise
 
+    @instrument_async_function(
+        name="repair_cycle_event_handler.handle_column_change",
+        attributes={
+            "component": "repair_cycle",
+            "layer": "application",
+        }
+    )
     async def handle_column_change(self, event: WorkItemColumnChanged) -> None:
         """
         Process column movement and trigger repair cycle if entering configured repair stage.

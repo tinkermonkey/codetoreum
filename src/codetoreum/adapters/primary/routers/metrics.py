@@ -5,7 +5,7 @@ Provides RESTful endpoints for system metrics, health checks, performance statis
 and resilience infrastructure monitoring.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -191,7 +191,7 @@ def create_metrics_router(
         try:
             # Default to last hour if not specified
             if not end_time:
-                end_time = datetime.utcnow()
+                end_time = datetime.now(timezone.utc)
             if not start_time:
                 start_time = end_time - timedelta(hours=1)
 
@@ -266,7 +266,7 @@ def create_metrics_router(
         try:
             # Default to last hour
             if not end_time:
-                end_time = datetime.utcnow()
+                end_time = datetime.now(timezone.utc)
             if not start_time:
                 start_time = end_time - timedelta(hours=1)
 
@@ -464,7 +464,7 @@ def create_metrics_router(
         try:
             # Default to last hour
             if not end_time:
-                end_time = datetime.utcnow()
+                end_time = datetime.now(timezone.utc)
             if not start_time:
                 start_time = end_time - timedelta(hours=1)
 
@@ -540,7 +540,7 @@ def create_metrics_router(
         try:
             # Default to last hour
             if not end_time:
-                end_time = datetime.utcnow()
+                end_time = datetime.now(timezone.utc)
             if not start_time:
                 start_time = end_time - timedelta(hours=1)
 
@@ -681,7 +681,7 @@ def create_metrics_router(
                     project=agent_data.get("project", ""),
                     issueNumber=agent_data.get("issue_number"),
                     status=agent_data.get("status", "unknown"),
-                    startedAt=agent_data.get("started_at", datetime.utcnow()),
+                    startedAt=agent_data.get("started_at", datetime.now(timezone.utc)),
                     containerName=agent_data.get("container_name"),
                 ))
 
@@ -806,7 +806,7 @@ def create_metrics_router(
         try:
             # Default to last hour
             if not end_time:
-                end_time = datetime.utcnow()
+                end_time = datetime.now(timezone.utc)
             if not start_time:
                 start_time = end_time - timedelta(hours=1)
 

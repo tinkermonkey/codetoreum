@@ -19,7 +19,7 @@ dependency) will remain similar, making the migration straightforward.
 import logging
 import os
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from jose import JWTError, jwt
@@ -94,7 +94,7 @@ class SimpleTokenAuthManager:
             )
 
         # Generate the server token
-        self.server_start_time = datetime.utcnow()
+        self.server_start_time = datetime.now(timezone.utc)
         self.token_expiry_days = token_expiry_days
         self.server_token = self._generate_server_token()
 

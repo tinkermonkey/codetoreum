@@ -19,7 +19,7 @@ import hmac
 import json
 import pytest
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -136,7 +136,7 @@ class TestWebhookPayloadValidation:
                 # Missing "issue" field
             },
             signature="sha256=test",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             repository="test-org/test-repo",
         )
 
@@ -162,7 +162,7 @@ class TestWebhookPayloadValidation:
                 "repository": {"full_name": "test-org/test-repo"},
             },
             signature="sha256=test",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             repository="test-org/test-repo",
         )
 
@@ -177,7 +177,7 @@ class TestWebhookPayloadValidation:
             event_type="issues",
             payload={},
             signature="sha256=test",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             repository="test-org/test-repo",
         )
 
@@ -200,7 +200,7 @@ class TestWebhookPayloadValidation:
                 "repository": {"full_name": "test-org/test-repo"},
             },
             signature="sha256=test",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             repository="test-org/test-repo",
         )
 

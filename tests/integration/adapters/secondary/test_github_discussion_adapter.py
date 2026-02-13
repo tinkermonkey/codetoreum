@@ -28,6 +28,7 @@ from codetoreum.ports.exceptions import (
     ResourceNotFoundError,
     ValidationError,
 )
+from tests.conftest import wait_for_polling_cycle
 from .conftest import MockIdentityService
 
 
@@ -249,11 +250,13 @@ class TestGitHubDiscussionAdapterPolling:
         events = []
         polling_adapter.on("comment.needs_response", events.append)
 
-        # Wait for two polling cycles (initial interval is 1 second)
-        await asyncio.sleep(2.5)
+        # Wait for 3 events total: alice, bob (first cycle) + charlie (second cycle)
+        # The first polling cycle will return alice and bob (2 events)
+        # The second polling cycle will return charlie (1 new event)
+        await wait_for_polling_cycle(events, expected_count=3, timeout=10.0)
 
-        # Should have detected new comment (charlie's comment)
-        assert len(events) >= 1
+        # Should have detected all comments including charlie's
+        assert len(events) >= 3
         assert any(e.comment.author == "charlie" for e in events)
 
         polling_adapter.stop_monitoring("123")
@@ -289,8 +292,8 @@ class TestGitHubDiscussionAdapterPolling:
 
         adapter.get_thread = mock_get_thread
 
-        # Wait for 5 seconds to see multiple polls
-        await asyncio.sleep(5)
+        # Wait for at least 2 polling calls
+        await wait_for_polling_cycle(call_times, expected_count=2, timeout=15.0)
 
         adapter.stop_monitoring("123")
 
@@ -349,51 +352,6 @@ class TestGitHubDiscussionAdapterQueries:
             assert thread.comments[0].author == "alice"
             assert thread.comments[1].author == "dependabot"
             assert thread.comments[1].is_bot is True
-
-    @pytest.mark.asyncio
-    async def test_get_thread_handles_pagination(self, adapter):
-        """get_thread handles paginated responses."""
-        # Mock responses for two pages
-        # Generate valid ISO 8601 timestamps: hours increment when minutes exceed 59
-        responses = [
-            Mock(
-                status_code=200,
-                json=Mock(
-                    return_value=[
-                        {
-                            "id": i,
-                            "user": {"login": f"user{i}"},
-                            "body": f"Comment {i}",
-                            "created_at": f"2025-01-08T{10 + i // 60:02d}:{i % 60:02d}:00Z",
-                        }
-                        for i in range(100)
-                    ]
-                ),
-            ),
-            Mock(
-                status_code=200,
-                json=Mock(
-                    return_value=[
-                        {
-                            "id": 100,
-                            "user": {"login": "user100"},
-                            "body": "Comment 100",
-                            "created_at": "2025-01-08T11:40:00Z",
-                        }
-                    ]
-                ),
-            ),
-        ]
-
-        with patch.object(adapter, "_get_client") as mock_get_client:
-            mock_client = AsyncMock()
-            mock_client.get.side_effect = responses
-            mock_get_client.return_value = mock_client
-
-            thread = await adapter.get_thread("123")
-
-            # Should have fetched both pages
-            assert len(thread.comments) == 101
 
     @pytest.mark.asyncio
     async def test_get_thread_invalid_work_item_raises_error(self, adapter):

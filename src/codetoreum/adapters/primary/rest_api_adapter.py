@@ -18,6 +18,8 @@ from codetoreum.config import (
 )
 from pydantic import BaseModel, Field
 
+from codetoreum.adapters.primary.exception_mapper import map_exception_to_http
+from codetoreum.infrastructure.logging import get_logger
 from codetoreum.ports.input.config_command import (
     AddEnvironmentVariableCommand,
     ConfigurationCommandResult,
@@ -44,6 +46,8 @@ from codetoreum.ports.input.workflow_command import (
     StartWorkflowCommand,
     TriggerType,
 )
+
+logger = get_logger(__name__)
 
 
 # ============================================================================
@@ -310,7 +314,8 @@ class RestAPIAdapter:
                 )
 
             except Exception as e:
-                raise HTTPException(status_code=400, detail=str(e))
+                logger.exception("Failed to start workflow", extra={"error": str(e)})
+                raise map_exception_to_http(e, "Failed to start workflow")
 
         @self.router.post(
             "/workflows/{workflow_run_id}/pause",
@@ -349,7 +354,8 @@ class RestAPIAdapter:
                 )
 
             except Exception as e:
-                raise HTTPException(status_code=400, detail=str(e))
+                logger.exception("Failed to pause workflow", extra={"workflow_run_id": workflow_run_id})
+                raise map_exception_to_http(e, "Failed to pause workflow")
 
         @self.router.post(
             "/workflows/{workflow_run_id}/resume",
@@ -386,7 +392,8 @@ class RestAPIAdapter:
                 )
 
             except Exception as e:
-                raise HTTPException(status_code=400, detail=str(e))
+                logger.exception("Failed to resume workflow", extra={"workflow_run_id": workflow_run_id})
+                raise map_exception_to_http(e, "Failed to resume workflow")
 
         @self.router.post(
             "/workflows/{workflow_run_id}/cancel",
@@ -424,7 +431,8 @@ class RestAPIAdapter:
                 )
 
             except Exception as e:
-                raise HTTPException(status_code=400, detail=str(e))
+                logger.exception("Failed to cancel workflow", extra={"workflow_run_id": workflow_run_id})
+                raise map_exception_to_http(e, "Failed to cancel workflow")
 
         @self.router.post(
             "/workflows/{workflow_run_id}/retry",
@@ -466,7 +474,8 @@ class RestAPIAdapter:
                 )
 
             except Exception as e:
-                raise HTTPException(status_code=400, detail=str(e))
+                logger.exception("Failed to retry stage", extra={"workflow_run_id": workflow_run_id, "stage_name": request.stage_name})
+                raise map_exception_to_http(e, "Failed to retry stage")
 
         # ====================================================================
         # Task Query Endpoints
@@ -535,7 +544,8 @@ class RestAPIAdapter:
                 )
 
             except Exception as e:
-                raise HTTPException(status_code=400, detail=str(e))
+                logger.exception("Request failed", extra={"status_code": 400})
+                raise map_exception_to_http(e, "Request failed")
 
         @self.router.get(
             "/executions/{execution_id}",
@@ -574,7 +584,8 @@ class RestAPIAdapter:
                 )
 
             except Exception as e:
-                raise HTTPException(status_code=404, detail=str(e))
+                logger.exception("Request failed", extra={"status_code": 404})
+                raise map_exception_to_http(e, "Request failed")
 
         @self.router.get(
             "/executions/{execution_id}/artifacts",
@@ -619,7 +630,8 @@ class RestAPIAdapter:
                 )
 
             except Exception as e:
-                raise HTTPException(status_code=404, detail=str(e))
+                logger.exception("Request failed", extra={"status_code": 404})
+                raise map_exception_to_http(e, "Request failed")
 
         # ====================================================================
         # Configuration Command Endpoints
@@ -668,7 +680,8 @@ class RestAPIAdapter:
                 )
 
             except Exception as e:
-                raise HTTPException(status_code=400, detail=str(e))
+                logger.exception("Request failed", extra={"status_code": 400})
+                raise map_exception_to_http(e, "Request failed")
 
         @self.router.post(
             "/configurations/projects/{project_name}/environment",
@@ -716,7 +729,8 @@ class RestAPIAdapter:
                 )
 
             except Exception as e:
-                raise HTTPException(status_code=400, detail=str(e))
+                logger.exception("Request failed", extra={"status_code": 400})
+                raise map_exception_to_http(e, "Request failed")
 
         @self.router.delete(
             "/configurations/projects/{project_name}/environment/{variable_name}",
@@ -756,7 +770,8 @@ class RestAPIAdapter:
                 )
 
             except Exception as e:
-                raise HTTPException(status_code=400, detail=str(e))
+                logger.exception("Request failed", extra={"status_code": 400})
+                raise map_exception_to_http(e, "Request failed")
 
         # ====================================================================
         # Configuration Query Endpoints (NEW)
@@ -782,7 +797,8 @@ class RestAPIAdapter:
                 result = await self.config_port.get_project_config(project_name)
                 return result
             except Exception as e:
-                raise HTTPException(status_code=404, detail=str(e))
+                logger.exception("Request failed", extra={"status_code": 404})
+                raise map_exception_to_http(e, "Request failed")
 
         @self.router.get(
             "/configurations/agents",
@@ -807,7 +823,8 @@ class RestAPIAdapter:
                 )
                 return result
             except Exception as e:
-                raise HTTPException(status_code=400, detail=str(e))
+                logger.exception("Request failed", extra={"status_code": 400})
+                raise map_exception_to_http(e, "Request failed")
 
         @self.router.get(
             "/configurations/agents/{agent_name}",
@@ -829,7 +846,8 @@ class RestAPIAdapter:
                 result = await self.config_port.get_agent_config(agent_name)
                 return result
             except Exception as e:
-                raise HTTPException(status_code=404, detail=str(e))
+                logger.exception("Request failed", extra={"status_code": 404})
+                raise map_exception_to_http(e, "Request failed")
 
         @self.router.get(
             "/configurations/pipelines",
@@ -854,7 +872,8 @@ class RestAPIAdapter:
                 )
                 return result
             except Exception as e:
-                raise HTTPException(status_code=400, detail=str(e))
+                logger.exception("Request failed", extra={"status_code": 400})
+                raise map_exception_to_http(e, "Request failed")
 
         @self.router.get(
             "/configurations/pipelines/{pipeline_name}",
@@ -876,7 +895,8 @@ class RestAPIAdapter:
                 result = await self.config_port.get_pipeline_config(pipeline_name)
                 return result
             except Exception as e:
-                raise HTTPException(status_code=404, detail=str(e))
+                logger.exception("Request failed", extra={"status_code": 404})
+                raise map_exception_to_http(e, "Request failed")
 
         @self.router.get(
             "/configurations/history",
@@ -912,7 +932,8 @@ class RestAPIAdapter:
                 )
                 return result
             except Exception as e:
-                raise HTTPException(status_code=400, detail=str(e))
+                logger.exception("Request failed", extra={"status_code": 400})
+                raise map_exception_to_http(e, "Request failed")
 
         @self.router.post(
             "/configurations/rollback/{change_id}",
@@ -949,4 +970,5 @@ class RestAPIAdapter:
                 )
 
             except Exception as e:
-                raise HTTPException(status_code=400, detail=str(e))
+                logger.exception("Request failed", extra={"status_code": 400})
+                raise map_exception_to_http(e, "Request failed")

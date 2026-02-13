@@ -72,7 +72,7 @@ def _instrument_sqlalchemy() -> None:
             "(install: opentelemetry-instrumentation-sqlalchemy)"
         )
     except Exception as e:
-        logger.warning(f"Failed to instrument SQLAlchemy: {e}")
+        logger.warning(f"Failed to instrument SQLAlchemy: {e}", exc_info=True)
 
 
 def _instrument_redis() -> None:
@@ -90,7 +90,7 @@ def _instrument_redis() -> None:
             "(install: opentelemetry-instrumentation-redis)"
         )
     except Exception as e:
-        logger.warning(f"Failed to instrument Redis: {e}")
+        logger.warning(f"Failed to instrument Redis: {e}", exc_info=True)
 
 
 def _instrument_http_clients() -> None:
@@ -109,7 +109,7 @@ def _instrument_http_clients() -> None:
             "(install: opentelemetry-instrumentation-requests)"
         )
     except Exception as e:
-        logger.warning(f"Failed to instrument requests: {e}")
+        logger.warning(f"Failed to instrument requests: {e}", exc_info=True)
 
     # HTTPX library (async HTTP client)
     try:
@@ -125,7 +125,7 @@ def _instrument_http_clients() -> None:
             "(install: opentelemetry-instrumentation-httpx)"
         )
     except Exception as e:
-        logger.warning(f"Failed to instrument httpx: {e}")
+        logger.warning(f"Failed to instrument httpx: {e}", exc_info=True)
 
 
 def instrument_sqlalchemy_engine(engine, config: Optional['ObservabilityConfig'] = None) -> None:
@@ -155,4 +155,4 @@ def instrument_sqlalchemy_engine(engine, config: Optional['ObservabilityConfig']
     except ImportError:
         logger.debug("SQLAlchemy instrumentation not available")
     except Exception as e:
-        logger.warning(f"Failed to instrument SQLAlchemy engine: {e}")
+        logger.warning(f"Failed to instrument SQLAlchemy engine: {e}", exc_info=True)

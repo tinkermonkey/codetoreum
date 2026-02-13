@@ -5,6 +5,7 @@ These tests interact with the actual Docker daemon and require:
 - Permissions to run Docker commands
 """
 
+import gc
 import os
 import shutil
 import tempfile
@@ -72,6 +73,12 @@ def docker_adapter(docker_config):
 
     # Close the Docker client to release resources
     adapter.close()
+
+    # Force garbage collection to close any remaining socket connections
+    # Multiple collections may be needed as some connection pools
+    # release resources asynchronously
+    gc.collect()
+    gc.collect()
 
 
 @pytest.mark.asyncio
@@ -355,17 +362,22 @@ async def test_exec_on_stopped_container(docker_adapter):
 @pytest.mark.asyncio
 async def test_context_manager(docker_config):
     """Test using adapter as async context manager."""
-    async with DockerContainerAdapter(docker_config) as adapter:
-        # Check if Docker is available
-        try:
-            adapter._get_client()
-        except ContainerError:
-            pytest.skip("Docker is not available")
+    try:
+        async with DockerContainerAdapter(docker_config) as adapter:
+            # Check if Docker is available
+            try:
+                adapter._get_client()
+            except ContainerError:
+                pytest.skip("Docker is not available")
 
-        result = await adapter.run(
-            image="alpine:latest",
-            command=["echo", "test"],
-            volumes={},
-            environment={},
-        )
-        assert result.exit_code == 0
+            result = await adapter.run(
+                image="alpine:latest",
+                command=["echo", "test"],
+                volumes={},
+                environment={},
+            )
+            assert result.exit_code == 0
+    finally:
+        # Force garbage collection after test to close any remaining socket connections
+        gc.collect()
+        gc.collect()

@@ -11,7 +11,7 @@ Implements ICodeReviewService interface for GitHub pull requests, supporting:
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 from codetoreum.adapters.secondary.github_ticket_adapter import GitHubTicketAdapter
@@ -232,7 +232,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
         self._monitoring[project_id] = MonitoringStatus(
             state=MonitoringState.ACTIVE,
             project_id=project_id,
-            started_at=datetime.utcnow().isoformat(),
+            started_at=datetime.now(timezone.utc).isoformat(),
         )
 
         # Initialize polling configuration

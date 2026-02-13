@@ -5,7 +5,7 @@ It handles command and query operations by coordinating with the event store
 and reconstructing work items from their event streams.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from codetoreum.domain.exceptions import DomainError
@@ -148,11 +148,11 @@ class WorkItemService(IWorkItemCommandPort, IWorkItemQueryPort):
             # For now, we'll update the field directly
             # In production, add a proper domain method
             work_item.title = command.title
-            work_item.updated_at = datetime.now(datetime.now().astimezone().tzinfo)
+            work_item.updated_at = datetime.now(timezone.utc)
 
         if command.description is not None:
             work_item.description = command.description
-            work_item.updated_at = datetime.now(datetime.now().astimezone().tzinfo)
+            work_item.updated_at = datetime.now(timezone.utc)
 
         if command.labels is not None:
             work_item.update_labels(command.labels)

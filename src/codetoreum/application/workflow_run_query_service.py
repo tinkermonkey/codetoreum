@@ -7,7 +7,7 @@ from the event store using event sourcing.
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
@@ -70,7 +70,7 @@ class LRUCache:
 
         # Check if expired
         _, timestamp = self._cache[key]
-        if datetime.now() - timestamp > self.ttl:
+        if datetime.now(timezone.utc) - timestamp > self.ttl:
             del self._cache[key]
             if key in self._access_order:
                 self._access_order.remove(key)
@@ -94,7 +94,7 @@ class LRUCache:
         value, timestamp = self._cache[key]
 
         # Check if expired
-        if datetime.now() - timestamp > self.ttl:
+        if datetime.now(timezone.utc) - timestamp > self.ttl:
             del self._cache[key]
             if key in self._access_order:
                 self._access_order.remove(key)
@@ -126,7 +126,7 @@ class LRUCache:
             del self._cache[lru_key]
 
         # Add new entry
-        self._cache[key] = (value, datetime.now())
+        self._cache[key] = (value, datetime.now(timezone.utc))
         self._access_order.append(key)
 
     def clear(self) -> None:

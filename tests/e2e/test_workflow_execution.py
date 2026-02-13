@@ -8,7 +8,7 @@ WebSocket event streaming, and concurrent workflow execution.
 
 import pytest
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import AsyncGenerator
 
 from codetoreum.domain.work_item import WorkItem, WorkItemStatus
@@ -29,7 +29,7 @@ async def test_work_item() -> WorkItem:
         source="github",
         source_id="issue-123",
         status=WorkItemStatus.PENDING,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
         metadata={"priority": "high", "labels": ["feature", "security"]},
     )
 
@@ -399,11 +399,11 @@ class TestConcurrentWorkflowExecution:
         completion_times = []
 
         async def wait_for_completion(execution_id):
-            start_time = datetime.utcnow()
+            start_time = datetime.now(timezone.utc)
             async for event in monitor_workflow_events(execution_id):
                 if event["type"] == "workflow_completed":
                     completion_times.append(
-                        (datetime.utcnow() - start_time).total_seconds()
+                        (datetime.now(timezone.utc) - start_time).total_seconds()
                     )
                     break
 

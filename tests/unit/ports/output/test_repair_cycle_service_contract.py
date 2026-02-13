@@ -15,7 +15,7 @@ Subclasses must implement create_context() to provide context for testing.
 """
 
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Tuple
 
 import pytest
@@ -138,7 +138,7 @@ class TestRepairCycleDomainTypesContract(ABC):
             failures=(),
             warning_list=(),  # Empty warnings list
             raw_output="No warnings",
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
         )
 
         # Verify test result represents zero warnings correctly
@@ -235,7 +235,7 @@ class TestRepairCycleDomainTypesContract(ABC):
             failures=failures,
             warning_list=(),
             raw_output="2 failures",
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
         )
 
         # Verify consistency: failed count matches failures tuple length
@@ -264,7 +264,7 @@ class TestRepairCycleDomainTypesContract(ABC):
             failures=(),
             warning_list=warnings,
             raw_output="",
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
         )
 
         # Verify warning count consistency
@@ -296,7 +296,7 @@ class TestRepairCycleDomainTypesContract(ABC):
             ),
             warning_list=(RepairTestWarning(file="auth.py", message="deprecated API"),),
             raw_output="Partial failure - 3 failures, 1 warning",
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
         )
 
         # Verify state consistency under partial failure
@@ -448,7 +448,7 @@ class TestRepairCycleDomainTypesContract(ABC):
             overall_success=True,
             total_agent_calls=0,
             duration_seconds=1.0,
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
         )
 
         # Attempting to modify should raise FrozenInstanceError or similar
@@ -467,7 +467,7 @@ class TestRepairCycleDomainTypesContract(ABC):
             failures=(),
             warning_list=(),
             raw_output="",
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
         )
 
         # Attempting to modify should raise FrozenInstanceError or similar
@@ -499,7 +499,7 @@ class TestRepairCycleDomainTypesContract(ABC):
             failures=(),
             warning_list=(),
             raw_output="",
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
         )
 
         cycle = CycleResult(
@@ -649,7 +649,7 @@ class TestRepairCycleAdapterMethodContract:
                 RepairTestWarning(file="db.py", message="PendingDeprecationWarning"),
             ),
             raw_output="Tests passed with warnings",
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
         )
 
         config = RepairTestRunConfig(

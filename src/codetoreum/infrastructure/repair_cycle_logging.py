@@ -12,7 +12,7 @@ import logging
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 from enum import Enum
 from codetoreum.infrastructure.error_ids import ErrorRegistry
@@ -57,7 +57,7 @@ class RepairCycleLogContext:
     def __post_init__(self):
         """Initialize timestamp if not provided."""
         if self.timestamp is None:
-            self.timestamp = datetime.utcnow()
+            self.timestamp = datetime.now(timezone.utc)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert context to dictionary for structured logging."""

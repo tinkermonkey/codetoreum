@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Type, TypeVar, Generic, Callable, Any, Union
 from dataclasses import dataclass
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 T = TypeVar('T')  # Port interface type
@@ -106,7 +106,7 @@ class AdapterRegistry(ABC, Generic[T]):
                 description=description,
                 version=version,
                 tags=tags or [],
-                registered_at=datetime.utcnow(),
+                registered_at=datetime.now(timezone.utc),
                 config_schema=config_schema
             )
 

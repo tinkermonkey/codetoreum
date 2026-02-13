@@ -26,6 +26,9 @@ from codetoreum.domain.types import (
     CONTAINER_TYPE_REPAIR_CYCLE,
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.infrastructure.observability.instrumentation import (
+    instrument_async_function,
+)
 from codetoreum.ports.exceptions import ContainerError, StorageError
 from codetoreum.ports.output.container_recovery import (
     ContainerMetadata,
@@ -79,6 +82,14 @@ class ContainerRecoveryService:
         self.event_emitter = event_emitter
         self.container_timeout_hours = container_timeout_hours
 
+    @instrument_async_function(
+        name="container_recovery.recover_or_cleanup_containers",
+        attributes={
+            "service": "container_recovery_service",
+            "operation": "full_recovery_cycle",
+        },
+        capture_result=False,
+    )
     async def recover_or_cleanup_containers(self) -> RecoveryResult:
         """
         Execute full recovery/cleanup cycle on startup.

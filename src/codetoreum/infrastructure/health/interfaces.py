@@ -5,7 +5,7 @@ Defines contracts for liveness and readiness probes.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, Optional, List
 
@@ -40,7 +40,7 @@ class HealthCheckResult:
 
     def __post_init__(self):
         if self.timestamp is None:
-            self.timestamp = datetime.utcnow()
+            self.timestamp = datetime.now(timezone.utc)
         if self.dependencies is None:
             self.dependencies = []
         if self.metadata is None:

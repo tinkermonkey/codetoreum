@@ -6,7 +6,7 @@ storage, and retrieval.
 """
 
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 
 from codetoreum.infrastructure.audit.audit_logger import (
     AuditLogger,
@@ -22,7 +22,7 @@ class TestAuditEvent:
     def test_audit_event_creation(self):
         """Test creating an audit event."""
         event = AuditEvent(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             event_type=AuditEventType.AGENT_CREATED,
             resource_type="agent",
             resource_id="agent-123",
@@ -42,7 +42,7 @@ class TestAuditEvent:
 
     def test_audit_event_to_dict(self):
         """Test converting audit event to dictionary."""
-        timestamp = datetime.utcnow()
+        timestamp = datetime.now(timezone.utc)
         event = AuditEvent(
             timestamp=timestamp,
             event_type=AuditEventType.AGENT_DELETED,

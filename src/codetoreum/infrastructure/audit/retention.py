@@ -7,7 +7,7 @@ Implements configurable retention policies for audit logs with automatic cleanup
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from codetoreum.infrastructure.audit.interfaces import IAuditStore
@@ -83,7 +83,7 @@ class RetentionPolicyManager:
         )
 
         stats = {
-            "start_time": datetime.utcnow().isoformat(),
+            "start_time": datetime.now(timezone.utc).isoformat(),
             "dry_run": dry_run,
             "events_deleted": 0,
             "errors": [],
@@ -96,7 +96,7 @@ class RetentionPolicyManager:
                     AuditQueryFilters,
                 )
 
-                cutoff_date = datetime.utcnow() - timedelta(
+                cutoff_date = datetime.now(timezone.utc) - timedelta(
                     days=self.policy.default_retention_days
                 )
                 filters = AuditQueryFilters(
@@ -121,7 +121,7 @@ class RetentionPolicyManager:
                 extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
             )
 
-        stats["end_time"] = datetime.utcnow().isoformat()
+        stats["end_time"] = datetime.now(timezone.utc).isoformat()
         return stats
 
     async def start_periodic_cleanup(self) -> None:

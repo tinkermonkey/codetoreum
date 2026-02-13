@@ -16,6 +16,11 @@ from codetoreum.adapters.testing.in_memory_metrics_adapter import (
 from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
 from codetoreum.adapters.testing.mock_notifier_adapter import MockNotifierAdapter
 from codetoreum.domain.events import DomainEvent
+from codetoreum.infrastructure.simulation.mock_tracer import (
+    MockTracer,
+    SpanKind,
+    TraceContextValidator,
+)
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
@@ -36,6 +41,7 @@ class SimulationResult:
     notifications_sent: int
     assertions_passed: int
     assertions_failed: int
+    spans_captured: int = 0
     errors: List[str] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -57,6 +63,7 @@ class SimulationResult:
             "events_captured": self.events_captured,
             "metrics_captured": self.metrics_captured,
             "notifications_sent": self.notifications_sent,
+            "spans_captured": self.spans_captured,
             "assertions_passed": self.assertions_passed,
             "assertions_failed": self.assertions_failed,
             "errors": self.errors,
@@ -137,6 +144,10 @@ class SimulationRunner:
             simulate_failures=config.notifications.simulate_failures,
             failure_rate=config.notifications.failure_rate,
         )
+
+        # Create mock tracer
+        self.mock_tracer = MockTracer(service_name=config.scenario_name)
+        self.trace_validator = TraceContextValidator(self.mock_tracer)
 
         # Configure adapters based on config
         self._configure_adapters()
@@ -233,6 +244,7 @@ class SimulationRunner:
                 len(metrics) for metrics in self.metrics_adapter.get_all_metrics().values()
             ),
             notifications_sent=self.notifier_adapter.get_notification_count(),
+            spans_captured=len(self.mock_tracer.get_spans()),
             assertions_passed=passed,
             assertions_failed=failed,
             errors=errors,
@@ -408,6 +420,144 @@ class SimulationRunner:
             f"No notification sent to {recipient}",
         )
 
+    def assert_span_exists(
+        self,
+        span_name: str,
+        assertion_name: Optional[str] = None,
+    ) -> None:
+        """
+        Assert a span with given name exists.
+
+        Args:
+            span_name: Name of span to look for
+            assertion_name: Name of the assertion
+        """
+        assertion_name = assertion_name or f"Span {span_name} exists"
+        spans = self.mock_tracer.get_spans_by_name(span_name)
+
+        self.assert_true(
+            len(spans) > 0,
+            assertion_name,
+            f"No span found with name: {span_name}",
+        )
+
+    def assert_span_kind(
+        self,
+        span_name: str,
+        expected_kind: SpanKind,
+        assertion_name: Optional[str] = None,
+    ) -> None:
+        """
+        Assert a span has a specific kind.
+
+        Args:
+            span_name: Name of span
+            expected_kind: Expected SpanKind
+            assertion_name: Name of the assertion
+        """
+        assertion_name = assertion_name or f"Span {span_name} kind is {expected_kind.value}"
+        spans = self.mock_tracer.get_spans_by_name(span_name)
+
+        if not spans:
+            self.assert_true(False, assertion_name, f"No span found: {span_name}")
+            return
+
+        span = spans[0]
+        self.assert_equal(
+            span.kind.value,
+            expected_kind.value,
+            assertion_name,
+            f"Span {span_name} has kind {span.kind.value}",
+        )
+
+    def assert_span_attribute(
+        self,
+        span_name: str,
+        attr_key: str,
+        attr_value: Optional[any] = None,
+        assertion_name: Optional[str] = None,
+    ) -> None:
+        """
+        Assert a span has an attribute.
+
+        Args:
+            span_name: Name of span
+            attr_key: Attribute key
+            attr_value: Optional expected value
+            assertion_name: Name of the assertion
+        """
+        assertion_name = assertion_name or f"Span {span_name} has attribute {attr_key}"
+        spans = self.mock_tracer.get_spans_by_name(span_name)
+
+        if not spans:
+            self.assert_true(False, assertion_name, f"No span found: {span_name}")
+            return
+
+        span = spans[0]
+        has_attr = attr_key in span.attributes
+        self.assert_true(
+            has_attr,
+            assertion_name,
+            f"Span {span_name} missing attribute: {attr_key}",
+        )
+
+        if has_attr and attr_value is not None:
+            actual_value = span.attributes[attr_key]
+            self.assert_equal(
+                actual_value,
+                attr_value,
+                f"{assertion_name} (value check)",
+                f"Attribute {attr_key}={actual_value}, expected {attr_value}",
+            )
+
+    def assert_span_context_injected(
+        self,
+        span_name: str,
+        assertion_name: Optional[str] = None,
+    ) -> None:
+        """
+        Assert trace context was injected for a span.
+
+        Args:
+            span_name: Name of span
+            assertion_name: Name of the assertion
+        """
+        assertion_name = assertion_name or f"Span {span_name} injected trace context"
+        spans = self.mock_tracer.get_spans_by_name(span_name)
+
+        if not spans:
+            self.assert_true(False, assertion_name, f"No span found: {span_name}")
+            return
+
+        span = spans[0]
+        self.assert_true(
+            span.span_context_injected,
+            assertion_name,
+            f"Span {span_name} did not inject trace context",
+        )
+
+    def assert_span_count(
+        self,
+        expected_count: int,
+        assertion_name: Optional[str] = None,
+    ) -> None:
+        """
+        Assert total span count.
+
+        Args:
+            expected_count: Expected number of spans
+            assertion_name: Name of the assertion
+        """
+        assertion_name = assertion_name or f"Span count = {expected_count}"
+        actual_count = len(self.mock_tracer.get_spans())
+
+        self.assert_equal(
+            actual_count,
+            expected_count,
+            assertion_name,
+            f"Expected {expected_count} spans, got {actual_count}",
+        )
+
     async def advance_time(self, delta: timedelta) -> None:
         """
         Advance simulation time.
@@ -457,13 +607,14 @@ class SimulationRunner:
         return [e for e in self.captured_events if e.aggregate_id == aggregate_id]
 
     def clear_captured_data(self) -> None:
-        """Clear all captured events, metrics, and notifications."""
+        """Clear all captured events, metrics, notifications, and spans."""
         self.captured_events.clear()
         self.assertions.clear()
         self.metrics_adapter.clear()
         self.notifier_adapter.clear()
         self.llm_adapter.clear_conversations()
         self.container_adapter.clear()
+        self.mock_tracer.clear()
 
     def print_summary(self) -> None:
         """Print a summary of the simulation run."""
@@ -478,6 +629,7 @@ class SimulationRunner:
         print(f"\nEvents captured: {len(self.captured_events)}")
         print(f"Metrics recorded: {sum(len(m) for m in self.metrics_adapter.get_all_metrics().values())}")
         print(f"Notifications sent: {self.notifier_adapter.get_notification_count()}")
+        print(f"Spans captured: {len(self.mock_tracer.get_spans())}")
         print(f"\nAssertions passed: {sum(1 for a in self.assertions if a.passed)}")
         print(f"Assertions failed: {sum(1 for a in self.assertions if not a.passed)}")
 
@@ -488,3 +640,7 @@ class SimulationRunner:
                     print(f"  - {assertion.assertion_name}: {assertion.message}")
 
         print("=" * 60)
+
+    def print_spans(self) -> None:
+        """Print all captured spans for debugging."""
+        self.mock_tracer.print_spans()

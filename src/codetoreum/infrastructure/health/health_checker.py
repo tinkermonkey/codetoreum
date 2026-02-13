@@ -6,7 +6,7 @@ Provides concrete health check implementations for various system components.
 import asyncio
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Callable
 
 from .interfaces import (
@@ -97,7 +97,7 @@ class HealthChecker(IHealthCheck):
                     name="unknown",
                     status=HealthStatus.UNHEALTHY,
                     message=f"Health check failed with exception: {str(result)}",
-                    last_check=datetime.utcnow()
+                    last_check=datetime.now(timezone.utc)
                 ))
             else:
                 processed_results.append(result)
@@ -163,14 +163,14 @@ class HealthChecker(IHealthCheck):
                 name=name,
                 status=HealthStatus.UNHEALTHY,
                 message=f"Health check timed out after {self.check_timeout} seconds",
-                last_check=datetime.utcnow()
+                last_check=datetime.now(timezone.utc)
             )
         except Exception as e:
             return DependencyHealth(
                 name=name,
                 status=HealthStatus.UNHEALTHY,
                 message=f"Health check failed: {str(e)}",
-                last_check=datetime.utcnow()
+                last_check=datetime.now(timezone.utc)
             )
 
     def _generate_readiness_message(

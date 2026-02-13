@@ -10,7 +10,7 @@ Tests verify that:
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from codetoreum.adapters.secondary.github_board_adapter import GitHubBoardAdapter
 from codetoreum.ports.exceptions import RateLimitError, ValidationError
@@ -119,7 +119,7 @@ class TestGitHubRateLimiting:
     async def test_rate_limit_reset_calculation(self):
         """Test calculation of when rate limit resets."""
         # Mock current time and reset time
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
         reset_timestamp = int((current_time + timedelta(seconds=300)).timestamp())
 
         # Calculate wait time
@@ -132,7 +132,7 @@ class TestGitHubRateLimiting:
         response_headers = {
             "X-RateLimit-Limit": "5000",
             "X-RateLimit-Remaining": "4999",
-            "X-RateLimit-Reset": str(int(datetime.utcnow().timestamp()) + 3600),
+            "X-RateLimit-Reset": str(int(datetime.now(timezone.utc).timestamp()) + 3600),
             "Retry-After": "3600",
         }
 

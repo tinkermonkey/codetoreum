@@ -35,6 +35,8 @@ from codetoreum.adapters.testing import (
     SimpleEncryptionAdapter,
     MockBoardAdapter,
 )
+# Mock tracer for trace propagation testing
+from codetoreum.infrastructure.simulation.mock_tracer import MockTracer
 # Lazy import to avoid circular dependency
 from codetoreum.adapters.testing.mock_container_recovery_adapter import (
     MockContainerRecoveryAdapter,
@@ -198,6 +200,7 @@ class SimulationInfrastructure:
 
     event_bus: EventBus
     logger: logging.Logger
+    mock_tracer: MockTracer
 
 
 class SimulationApplicationBootstrap:
@@ -471,6 +474,9 @@ class SimulationApplicationBootstrap:
         # Get logger
         app_logger = logging.getLogger("codetoreum")
 
+        # Create mock tracer for trace propagation testing in simulation mode
+        mock_tracer = MockTracer(service_name="simulation")
+
         logger.info("Created infrastructure components")
 
         # Note: Clock is no longer exposed here - it's managed by SimulationEngine
@@ -478,6 +484,7 @@ class SimulationApplicationBootstrap:
         return SimulationInfrastructure(
             event_bus=event_bus,
             logger=app_logger,
+            mock_tracer=mock_tracer,
         )
 
     # =========================================================================

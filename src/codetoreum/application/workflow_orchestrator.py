@@ -17,6 +17,7 @@ from codetoreum.domain.workflow import Workflow, WorkflowStatus
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.event_types import EventTypes
+from codetoreum.infrastructure.observability.instrumentation import instrument_async_function
 from codetoreum.ports.exceptions import TimeoutError as PortTimeoutError
 from codetoreum.ports.output import IEventStore, ITicketSystem, IBoardService
 
@@ -337,6 +338,10 @@ class WorkflowOrchestrator:
         if self.event_bus:
             self._subscribe_to_events()
 
+    @instrument_async_function(
+        name="workflow.handle_card_movement",
+        attributes={"service": "workflow_orchestrator", "operation": "card_movement"}
+    )
     async def handle_card_movement(self, event: CardMovedEvent) -> WorkflowResult:
         """
         Handle card movement from GitHub Projects.
@@ -535,6 +540,10 @@ class WorkflowOrchestrator:
             next_column=None,
         )
 
+    @instrument_async_function(
+        name="workflow.handle_stage_completion",
+        attributes={"service": "workflow_orchestrator", "operation": "stage_completion"}
+    )
     async def handle_stage_completion(
         self, event: StageCompletedEvent
     ) -> WorkflowResult:
@@ -637,6 +646,10 @@ class WorkflowOrchestrator:
             reason="Stage complete, waiting for manual progression",
         )
 
+    @instrument_async_function(
+        name="workflow.handle_review_cycle_completion",
+        attributes={"service": "workflow_orchestrator", "operation": "review_completion"}
+    )
     async def handle_review_cycle_completion(
         self, event: ReviewCycleCompletedEvent
     ) -> WorkflowResult:
@@ -727,6 +740,10 @@ class WorkflowOrchestrator:
                 reason=f"Changes requested, queued revision (iteration {event.iteration + 1})",
             )
 
+    @instrument_async_function(
+        name="workflow.handle_feedback",
+        attributes={"service": "workflow_orchestrator", "operation": "feedback"}
+    )
     async def handle_feedback(self, event: FeedbackEvent) -> WorkflowResult:
         """
         Process human feedback and route to appropriate agent.
@@ -936,6 +953,10 @@ class WorkflowOrchestrator:
 
         logger.info("WorkflowOrchestrator subscribed to adapter events")
 
+    @instrument_async_function(
+        name="workflow.handle_column_change",
+        attributes={"service": "workflow_orchestrator", "event_handler": "true"}
+    )
     async def _handle_column_change(self, event: DomainEvent) -> None:
         """
         Handle work item column change event.
@@ -1084,6 +1105,10 @@ class WorkflowOrchestrator:
                 }
             )
 
+    @instrument_async_function(
+        name="workflow.handle_comment_needs_response",
+        attributes={"service": "workflow_orchestrator", "event_handler": "true"}
+    )
     async def _handle_comment_needs_response(self, event: DomainEvent) -> None:
         """
         Handle comment requiring response event.
@@ -1160,6 +1185,10 @@ class WorkflowOrchestrator:
                 }
             )
 
+    @instrument_async_function(
+        name="workflow.handle_lock_released",
+        attributes={"service": "workflow_orchestrator", "event_handler": "true"}
+    )
     async def _handle_lock_released(self, event: DomainEvent) -> None:
         """
         Handle pipeline lock released event.
@@ -1284,6 +1313,10 @@ class WorkflowOrchestrator:
                 }
             )
 
+    @instrument_async_function(
+        name="workflow.handle_review_status_changed",
+        attributes={"service": "workflow_orchestrator", "event_handler": "true"}
+    )
     async def _handle_review_status_changed(self, event: DomainEvent) -> None:
         """
         Handle code review status change event.

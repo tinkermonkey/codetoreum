@@ -7,7 +7,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 from uuid import uuid4
@@ -60,7 +60,7 @@ class FailedEvent:
         if not self.can_retry():
             return False
 
-        if self.next_retry_at and datetime.utcnow() < self.next_retry_at:
+        if self.next_retry_at and datetime.now(timezone.utc) < self.next_retry_at:
             return False
 
         return True
@@ -80,7 +80,7 @@ class FailedEvent:
         # Cap at 1 hour
         delay_seconds = min(delay_seconds, 3600)
 
-        return datetime.utcnow() + timedelta(seconds=delay_seconds)
+        return datetime.now(timezone.utc) + timedelta(seconds=delay_seconds)
 
 
 @dataclass
@@ -180,7 +180,7 @@ class DeadLetterQueue:
             event_data=event_data,
             failure_reason=failure_reason,
             error_message=error_message,
-            failed_at=datetime.utcnow(),
+            failed_at=datetime.now(timezone.utc),
             max_retries=self._max_retries,
             metadata=metadata or {}
         )
@@ -219,7 +219,7 @@ class DeadLetterQueue:
 
         self._total_retries_attempted += 1
         event.retry_count += 1
-        event.last_retry_at = datetime.utcnow()
+        event.last_retry_at = datetime.now(timezone.utc)
 
         try:
             # Call the retry handler
@@ -447,7 +447,7 @@ class DeadLetterQueue:
         Returns:
             Number of events removed
         """
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
         old_events = [
             event_id

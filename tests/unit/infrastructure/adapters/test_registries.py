@@ -5,7 +5,7 @@ Tests the registration, lookup, and management of adapter implementations.
 """
 
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 
 from codetoreum.infrastructure.adapters import (
     TicketSystemRegistry,
@@ -426,7 +426,7 @@ class TestAdapterMetadata:
             description="Test",
             version="1.0.0",
             tags=["production", "github", "issues"],
-            registered_at=datetime.utcnow()
+            registered_at=datetime.now(timezone.utc)
         )
 
         assert metadata.matches_tags(["production"])

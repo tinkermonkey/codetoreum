@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, AsyncIterator, Callable, Dict, List, Optional
 
 from codetoreum.domain.events import DomainEvent
@@ -89,7 +89,7 @@ class EventReplayer:
             EventReplayerError: If replay fails
         """
         self._reset_stats()
-        self._stats["started_at"] = datetime.utcnow()
+        self._stats["started_at"] = datetime.now(timezone.utc)
 
         try:
             # Get events from event store
@@ -138,7 +138,7 @@ class EventReplayer:
                         sleep_time = min(sleep_time, 1.0)
                         await asyncio.sleep(sleep_time)
 
-            self._stats["completed_at"] = datetime.utcnow()
+            self._stats["completed_at"] = datetime.now(timezone.utc)
 
             logger.info(f"Replay completed: {self._stats['events_replayed']} events")
 
@@ -173,7 +173,7 @@ class EventReplayer:
             EventReplayerError: If replay fails
         """
         self._reset_stats()
-        self._stats["started_at"] = datetime.utcnow()
+        self._stats["started_at"] = datetime.now(timezone.utc)
 
         try:
             # Get events from event store
@@ -202,7 +202,7 @@ class EventReplayer:
                 if progress_callback:
                     progress_callback(i + 1, total_events)
 
-            self._stats["completed_at"] = datetime.utcnow()
+            self._stats["completed_at"] = datetime.now(timezone.utc)
 
             logger.info(f"Stream replay completed: {self._stats['events_replayed']} events")
 
@@ -235,7 +235,7 @@ class EventReplayer:
             EventReplayerError: If replay fails
         """
         self._reset_stats()
-        self._stats["started_at"] = datetime.utcnow()
+        self._stats["started_at"] = datetime.now(timezone.utc)
 
         try:
             # Get events from event store
@@ -255,7 +255,7 @@ class EventReplayer:
 
                 self._stats["events_replayed"] += 1
 
-            self._stats["completed_at"] = datetime.utcnow()
+            self._stats["completed_at"] = datetime.now(timezone.utc)
 
             logger.info(f"Event type replay completed: {self._stats['events_replayed']} events")
 
@@ -323,7 +323,7 @@ class EventReplayer:
             EventReplayerError: If rebuild fails
         """
         self._reset_stats()
-        self._stats["started_at"] = datetime.utcnow()
+        self._stats["started_at"] = datetime.now(timezone.utc)
 
         try:
             # Get events
@@ -360,7 +360,7 @@ class EventReplayer:
                 if progress_callback:
                     progress_callback(i + 1, total_events)
 
-            self._stats["completed_at"] = datetime.utcnow()
+            self._stats["completed_at"] = datetime.now(timezone.utc)
 
             logger.info(f"Projection rebuild completed: {self._stats['events_replayed']} events")
 
@@ -446,7 +446,7 @@ class TimeManipulationReplayer(EventReplayer):
 
         # Replay with time manipulation
         return await self.replay_from_timestamp(
-            since=events[0].occurred_at if events else datetime.utcnow(),
+            since=events[0].occurred_at if events else datetime.now(timezone.utc),
             until=target_timestamp,
             stream_id=stream_id,
             speed_multiplier=speed_multiplier,

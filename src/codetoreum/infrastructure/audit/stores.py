@@ -8,7 +8,7 @@ storage backends.
 import json
 import logging
 from collections import defaultdict, OrderedDict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict, Any
 from uuid import uuid4
 
@@ -191,7 +191,7 @@ class InMemoryAuditStore(IAuditStore):
 
     async def cleanup_old_events(self, retention_days: int) -> int:
         """Delete audit events older than retention period."""
-        cutoff_date = datetime.utcnow() - timedelta(days=retention_days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=retention_days)
 
         # Find old events
         old_event_ids = [
@@ -408,7 +408,7 @@ class FileAuditStore(IAuditStore):
         Note: This rewrites the entire file. For production,
         use a database backend with efficient deletion.
         """
-        cutoff_date = datetime.utcnow() - timedelta(days=retention_days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=retention_days)
         kept_events = []
         deleted_count = 0
 
@@ -730,7 +730,7 @@ class PostgreSQLAuditStore(IAuditStore):
         """Delete audit events older than retention period efficiently."""
         from sqlalchemy import text
 
-        cutoff_date = datetime.utcnow() - timedelta(days=retention_days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=retention_days)
 
         async with self.async_session() as session:
             try:

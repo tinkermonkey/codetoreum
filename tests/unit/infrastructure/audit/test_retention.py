@@ -5,7 +5,7 @@ Tests the retention policy manager and cleanup functionality.
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from codetoreum.infrastructure.audit.stores import InMemoryAuditStore
 from codetoreum.infrastructure.audit.retention import (
@@ -63,7 +63,7 @@ class TestRetentionPolicyManager:
         manager = RetentionPolicyManager(store, policy)
 
         # Add old events
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         old_date = now - timedelta(days=100)
 
         for i in range(5):
@@ -114,7 +114,7 @@ class TestRetentionPolicyManager:
         manager = RetentionPolicyManager(store, policy)
 
         # Add old events
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         old_date = now - timedelta(days=100)
 
         for i in range(5):
@@ -167,7 +167,7 @@ class TestRetentionPolicyManager:
         manager = RetentionPolicyManager(store, policy)
 
         # Add only recent events
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         for i in range(3):
             await store.store_event(
                 timestamp=now,
@@ -204,7 +204,7 @@ class TestRetentionPolicyManager:
         )
 
         # Add events at different ages
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         date_40_days_ago = now - timedelta(days=40)
         date_100_days_ago = now - timedelta(days=100)
 

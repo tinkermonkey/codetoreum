@@ -1,4 +1,13 @@
-"""In-process event bus for real-time event handling with optional Redis persistence."""
+"""In-process event bus for real-time event handling with optional Redis persistence.
+
+Includes W3C Trace Context propagation to support distributed tracing through
+the event bus. Trace context is automatically:
+- Injected into events when published (captures current span)
+- Extracted from events when handling them (activates parent span)
+- Stored in event.metadata['traceparent'] in W3C format
+
+This enables complete trace correlation across async event handlers.
+"""
 
 import asyncio
 import logging
@@ -6,8 +15,24 @@ from typing import Any, Callable, Dict, List, Optional, Set, Type
 
 from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.infrastructure.observability.trace_context_propagation import (
+    TraceContextPropagator,
+    inject_current_trace_context_into_event,
+    extract_and_activate_trace_context,
+)
 
 logger = logging.getLogger(__name__)
+
+# Optional OpenTelemetry support for span creation
+try:
+    from opentelemetry import trace, context
+    from opentelemetry.trace import SpanKind
+
+    OPENTELEMETRY_AVAILABLE = True
+except ImportError:
+    OPENTELEMETRY_AVAILABLE = False
+    SpanKind = None
+    context = None
 
 # Optional Redis support
 try:
@@ -253,6 +278,11 @@ class EventBus:
 
         Also persists event to Redis Streams if Redis client is configured.
 
+        W3C Trace Context Propagation:
+        - Injects trace context into event.metadata['traceparent']
+        - Handlers can extract and continue the trace
+        - Use InstrumentedEventBus wrapper for PRODUCER/CONSUMER span creation
+
         Error Handling:
         - asyncio.CancelledError: Always propagated (not caught)
         - ConnectionError/TimeoutError: Logged with retry hint (transient)
@@ -269,6 +299,9 @@ class EventBus:
         self._stats["events_published"] += 1
 
         try:
+            # Inject current trace context into event for downstream propagation
+            inject_current_trace_context_into_event(event)
+
             # Persist event to Redis Streams if available
             if self.redis_client:
                 await self._persist_to_redis(event)
@@ -405,7 +438,13 @@ class EventBus:
         self, handler: EventHandler, event: DomainEvent
     ) -> None:
         """
-        Dispatch event to a handler with retry logic.
+        Dispatch event to a handler with retry logic and trace context.
+
+        W3C Trace Context Propagation:
+        - Extracts trace context from event.metadata['traceparent']
+        - Activates it in the current execution context
+        - Enables CONSUMER spans to be created as children of the event's trace
+        - Use InstrumentedEventBus wrapper for automatic CONSUMER span creation
 
         Args:
             handler: Event handler
@@ -416,10 +455,27 @@ class EventBus:
         """
         last_exception = None
 
+        # Extract and activate trace context from event once (outside retry loop)
+        # This ensures the handler's spans are children of the event's trace
+        ctx = extract_and_activate_trace_context(event)
+
         for attempt in range(self.max_retries + 1):
             try:
-                await handler.handle(event)
-                return  # Success!
+                # Attach context BEFORE calling handler so trace context is active
+                token = None
+                if ctx:
+                    token = context.attach(ctx)
+
+                try:
+                    # Call handler
+                    # Note: CONSUMER span creation is handled by InstrumentedEventBus wrapper
+                    # to avoid duplicate spans. EventBus only provides trace context propagation.
+                    await handler.handle(event)
+                    return  # Success!
+
+                finally:
+                    if token:
+                        context.detach(token)
 
             except Exception as e:
                 last_exception = e
@@ -439,7 +495,13 @@ class EventBus:
         self, callback: Callable, event: DomainEvent
     ) -> None:
         """
-        Dispatch event to a callback with retry logic.
+        Dispatch event to a callback with retry logic and trace context.
+
+        W3C Trace Context Propagation:
+        - Extracts trace context from event.metadata['traceparent']
+        - Activates it in the current execution context
+        - Enables CONSUMER spans to be created as children of the event's trace
+        - Use InstrumentedEventBus wrapper for automatic CONSUMER span creation
 
         Args:
             callback: Callback function
@@ -450,15 +512,29 @@ class EventBus:
         """
         last_exception = None
 
+        # Extract and activate trace context from event once (outside retry loop)
+        # This ensures the callback's spans are children of the event's trace
+        ctx = extract_and_activate_trace_context(event)
+
         for attempt in range(self.max_retries + 1):
             try:
-                # Check if callback is async
-                if asyncio.iscoroutinefunction(callback):
-                    await callback(event)
-                else:
-                    callback(event)
+                # Attach context BEFORE calling callback so trace context is active
+                token = None
+                if ctx:
+                    token = context.attach(ctx)
 
-                return  # Success!
+                try:
+                    # Check if callback is async
+                    if asyncio.iscoroutinefunction(callback):
+                        await callback(event)
+                    else:
+                        callback(event)
+
+                    return  # Success!
+
+                finally:
+                    if token:
+                        context.detach(token)
 
             except Exception as e:
                 last_exception = e
@@ -475,7 +551,11 @@ class EventBus:
 
     async def _persist_to_redis(self, event: DomainEvent) -> None:
         """
-        Persist event to Redis Streams.
+        Persist event to Redis Streams with INTERNAL span.
+
+        OpenTelemetry Instrumentation:
+        - Creates INTERNAL span for Redis persistence operation
+        - Includes event attributes in span
 
         Args:
             event: Domain event to persist
@@ -491,7 +571,7 @@ class EventBus:
             # Create stream key from event type (e.g., "events:WorkItemCreated")
             stream_key = f"{self.redis_stream_prefix}:{event.event_type}"
 
-            # Serialize event to dictionary
+            # Serialize event to dictionary (includes metadata with trace context)
             event_dict = event.to_dict()
 
             # Add to Redis Stream

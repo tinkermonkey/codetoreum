@@ -5,7 +5,7 @@ token generation, API key management, and permission checking.
 """
 
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -118,9 +118,9 @@ class AuthenticationService(IAuthenticationPort):
         to_encode = data.copy()
 
         if expires_delta:
-            expire = datetime.utcnow() + expires_delta
+            expire = datetime.now(timezone.utc) + expires_delta
         else:
-            expire = datetime.utcnow() + timedelta(minutes=self.access_token_expire_minutes)
+            expire = datetime.now(timezone.utc) + timedelta(minutes=self.access_token_expire_minutes)
 
         to_encode.update({"exp": expire, "type": "access"})
 
@@ -133,9 +133,9 @@ class AuthenticationService(IAuthenticationPort):
         to_encode = data.copy()
 
         if expires_delta:
-            expire = datetime.utcnow() + expires_delta
+            expire = datetime.now(timezone.utc) + expires_delta
         else:
-            expire = datetime.utcnow() + timedelta(days=self.refresh_token_expire_days)
+            expire = datetime.now(timezone.utc) + timedelta(days=self.refresh_token_expire_days)
 
         to_encode.update({"exp": expire, "type": "refresh"})
 
@@ -219,7 +219,7 @@ class AuthenticationService(IAuthenticationPort):
         if command.metadata is not None:
             user.metadata.update(command.metadata)
 
-        user.updated_at = datetime.utcnow()
+        user.updated_at = datetime.now(timezone.utc)
 
         # Save user
         await self.user_repo.save(user)

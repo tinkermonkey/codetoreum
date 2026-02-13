@@ -7,7 +7,7 @@ Tests validate:
 4. All methods have correct signatures and return types
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Tuple
 
 import pytest
@@ -104,7 +104,7 @@ class MockRepairCycle:
             failures=(),
             warning_list=(),
             raw_output="All tests passed",
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
         )
 
         cycle_result = CycleResult(
@@ -124,7 +124,7 @@ class MockRepairCycle:
             overall_success=True,
             total_agent_calls=0,
             duration_seconds=5.0,
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
         )
 
     async def run_tests(
@@ -142,7 +142,7 @@ class MockRepairCycle:
             failures=(),
             warning_list=(),
             raw_output="Tests completed successfully",
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
         )
 
     async def fix_failures_by_file(
@@ -297,7 +297,7 @@ class TestIRepairCycleProtocol:
                 ),
             ),
             raw_output="Test output with warnings",
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
         )
 
         result = await impl.handle_warnings(test_result, config, ctx)
