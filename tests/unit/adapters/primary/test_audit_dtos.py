@@ -67,6 +67,49 @@ class TestAuditValidationResult:
         assert len(result.unexpectedEvents) == 0
         assert len(result.outOfOrderEvents) == 0
 
+    def test_validation_result_rejects_sequence_valid_with_missing_events(self):
+        """Test that sequenceValid=True is rejected when missingEvents is non-empty."""
+        with pytest.raises(ValueError, match="sequenceValid is True but error lists are not empty"):
+            AuditValidationResult(
+                sequenceValid=True,
+                expectedSequence=["WorkflowCreated", "WorkflowStarted", "WorkflowCompleted"],
+                actualSequence=["WorkflowCreated", "WorkflowStarted", "WorkflowCompleted"],
+                missingEvents=["WorkflowStageAdvanced"],
+                unexpectedEvents=[],
+                outOfOrderEvents=[]
+            )
+
+    def test_validation_result_rejects_sequence_valid_with_unexpected_events(self):
+        """Test that sequenceValid=True is rejected when unexpectedEvents is non-empty."""
+        with pytest.raises(ValueError, match="sequenceValid is True but error lists are not empty"):
+            AuditValidationResult(
+                sequenceValid=True,
+                expectedSequence=["WorkflowCreated", "WorkflowStarted", "WorkflowCompleted"],
+                actualSequence=["WorkflowCreated", "WorkflowStarted", "WorkflowCompleted"],
+                missingEvents=[],
+                unexpectedEvents=["UnexpectedEvent"],
+                outOfOrderEvents=[]
+            )
+
+    def test_validation_result_rejects_sequence_valid_with_out_of_order_events(self):
+        """Test that sequenceValid=True is rejected when outOfOrderEvents is non-empty."""
+        out_of_order = OutOfOrderEvent(
+            eventType="WorkflowStageAdvanced",
+            timestamp=datetime(2025, 11, 8, 10, 15, 0, tzinfo=timezone.utc),
+            expectedPosition=2,
+            actualPosition=1
+        )
+
+        with pytest.raises(ValueError, match="sequenceValid is True but error lists are not empty"):
+            AuditValidationResult(
+                sequenceValid=True,
+                expectedSequence=["WorkflowCreated", "WorkflowStarted", "WorkflowCompleted"],
+                actualSequence=["WorkflowCreated", "WorkflowStarted", "WorkflowCompleted"],
+                missingEvents=[],
+                unexpectedEvents=[],
+                outOfOrderEvents=[out_of_order]
+            )
+
     def test_validation_result_invalid_sequence(self):
         """Test validation result for invalid sequence."""
         out_of_order = OutOfOrderEvent(
@@ -200,6 +243,32 @@ class TestAuditStageInfo:
         assert "startedAt" in data
         assert "completedAt" in data
         assert "durationSeconds" in data
+
+    def test_audit_stage_info_rejects_completed_before_started(self):
+        """Test that AuditStageInfo rejects completedAt < startedAt."""
+        with pytest.raises(ValueError, match="completedAt .* must be >= startedAt"):
+            AuditStageInfo(
+                name="implementation",
+                status="completed",
+                startedAt=datetime(2025, 11, 8, 10, 15, 0, tzinfo=timezone.utc),
+                completedAt=datetime(2025, 11, 8, 10, 0, 0, tzinfo=timezone.utc),
+                durationSeconds=900.0,
+                events=[]
+            )
+
+    def test_audit_stage_info_allows_same_start_and_completion(self):
+        """Test that AuditStageInfo allows completedAt == startedAt."""
+        same_time = datetime(2025, 11, 8, 10, 0, 0, tzinfo=timezone.utc)
+        stage = AuditStageInfo(
+            name="implementation",
+            status="completed",
+            startedAt=same_time,
+            completedAt=same_time,
+            durationSeconds=0.0,
+            events=[]
+        )
+
+        assert stage.startedAt == stage.completedAt
 
 
 class TestWorkflowRunAuditResponse:

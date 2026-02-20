@@ -24,6 +24,7 @@ from codetoreum.ports.input.workflow_run_query import (
     WorkflowRunSummary,
     WorkflowRunListResult,
     WorkflowRunStageInfo,
+    WorkflowRunAuditResult,
 )
 
 
@@ -168,12 +169,12 @@ class WorkflowRunMapper:
         )
 
     @staticmethod
-    def to_audit_response(audit_data: dict) -> WorkflowRunAuditResponse:
+    def to_audit_response(audit_result: WorkflowRunAuditResult) -> WorkflowRunAuditResponse:
         """
-        Convert audit data dictionary to WorkflowRunAuditResponse DTO.
+        Convert audit result to WorkflowRunAuditResponse DTO.
 
         Args:
-            audit_data: Dictionary containing:
+            audit_result: WorkflowRunAuditResult containing:
                 - workflow_run: WorkflowRunSummary
                 - events: List[event_dict]
                 - stages: List[stage_info_dict]
@@ -188,18 +189,18 @@ class WorkflowRunMapper:
         """
         # Convert workflow run summary
         workflow_run_summary = WorkflowRunMapper.to_summary_response(
-            audit_data["workflow_run"]
+            audit_result.workflow_run
         )
 
         # Convert events
         events = [
             WorkflowRunMapper.to_event_response(event)
-            for event in audit_data["events"]
+            for event in audit_result.events
         ]
 
         # Convert stage info (including nested events)
         stages = []
-        for stage_dict in audit_data["stages"]:
+        for stage_dict in audit_result.stages:
             # Map events within each stage
             stage_events = [
                 WorkflowRunMapper.to_event_response(event)
@@ -220,16 +221,16 @@ class WorkflowRunMapper:
 
         # Convert validation result (if present)
         validation = None
-        if audit_data["validation"] is not None:
-            validation = AuditValidationResult(**audit_data["validation"])
+        if audit_result.validation is not None:
+            validation = AuditValidationResult(**audit_result.validation)
 
         return WorkflowRunAuditResponse(
             workflowRun=workflow_run_summary,
             events=events,
             stages=stages,
             validation=validation,
-            totalEventCount=audit_data["total_event_count"],
-            offset=audit_data["offset"],
-            limit=audit_data["limit"],
-            hasNext=audit_data["has_next"],
+            totalEventCount=audit_result.total_event_count,
+            offset=audit_result.offset,
+            limit=audit_result.limit,
+            hasNext=audit_result.has_next,
         )

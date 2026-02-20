@@ -375,11 +375,11 @@ class TestGetWorkflowRunEvents:
         result = await query_service.get_workflow_run_events(workflow_id)
 
         # Assert
-        assert "events" in result
-        assert "total_count" in result
-        assert result["total_count"] == 3  # Created, Started, Completed
-        assert len(result["events"]) == 3
-        assert result["has_next"] is False
+        assert hasattr(result, "events")
+        assert hasattr(result, "total_count")
+        assert result.total_count == 3  # Created, Started, Completed
+        assert len(result.events) == 3
+        assert result.has_next is False
 
     @pytest.mark.asyncio
     async def test_get_workflow_run_events_with_pagination(
@@ -394,9 +394,9 @@ class TestGetWorkflowRunEvents:
         )
 
         # Assert
-        assert result["total_count"] == 3
-        assert len(result["events"]) == 2
-        assert result["has_next"] is True
+        assert result.total_count == 3
+        assert len(result.events) == 2
+        assert result.has_next is True
 
     @pytest.mark.asyncio
     async def test_get_workflow_run_events_filter_by_type(
@@ -412,9 +412,9 @@ class TestGetWorkflowRunEvents:
         )
 
         # Assert
-        assert result["total_count"] == 2
-        assert len(result["events"]) == 2
-        event_types = [e["event_type"] for e in result["events"]]
+        assert result.total_count == 2
+        assert len(result.events) == 2
+        event_types = [e["event_type"] for e in result.events]
         assert "WorkflowStarted" in event_types
         assert "WorkflowCompleted" in event_types
 
@@ -437,7 +437,7 @@ class TestGetWorkflowRunEvents:
         result = await query_service.get_workflow_run_events(workflow_id, limit=1)
 
         # Assert
-        event = result["events"][0]
+        event = result.events[0]
         assert "id" in event
         assert "event_type" in event
         assert "aggregate_id" in event

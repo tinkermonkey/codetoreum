@@ -214,28 +214,28 @@ async def test_get_workflow_run_audit_basic(query_service, workflow_with_stages)
 
     audit_data = await query_service.get_workflow_run_audit(workflow_id)
 
-    # Verify all required fields are present
-    assert "workflow_run" in audit_data
-    assert "events" in audit_data
-    assert "stages" in audit_data
-    assert "validation" in audit_data
-    assert "total_event_count" in audit_data
-    assert "offset" in audit_data
-    assert "limit" in audit_data
-    assert "has_next" in audit_data
+    # Verify all required fields are present (using dataclass attributes)
+    assert hasattr(audit_data, "workflow_run")
+    assert hasattr(audit_data, "events")
+    assert hasattr(audit_data, "stages")
+    assert hasattr(audit_data, "validation")
+    assert hasattr(audit_data, "total_event_count")
+    assert hasattr(audit_data, "offset")
+    assert hasattr(audit_data, "limit")
+    assert hasattr(audit_data, "has_next")
 
     # Verify workflow run summary
-    assert audit_data["workflow_run"].id == workflow_id
-    assert audit_data["workflow_run"].work_item_id == workflow_with_stages["work_item_id"]
-    assert audit_data["workflow_run"].issue_title == "Test workflow for audit"
+    assert audit_data.workflow_run.id == workflow_id
+    assert audit_data.workflow_run.work_item_id == workflow_with_stages["work_item_id"]
+    assert audit_data.workflow_run.issue_title == "Test workflow for audit"
 
     # Verify event count
-    assert audit_data["total_event_count"] == workflow_with_stages["event_count"]
-    assert len(audit_data["events"]) == workflow_with_stages["event_count"]
+    assert audit_data.total_event_count == workflow_with_stages["event_count"]
+    assert len(audit_data.events) == workflow_with_stages["event_count"]
 
     # Verify stages (note: may be empty if workflow doesn't have properly initialized stages)
-    assert "stages" in audit_data
-    assert isinstance(audit_data["stages"], list)
+    assert hasattr(audit_data, "stages")
+    assert isinstance(audit_data.stages, list)
 
 
 @pytest.mark.asyncio
@@ -266,11 +266,11 @@ async def test_audit_event_pagination_first_page(query_service, workflow_with_ma
         limit=50,
     )
 
-    assert audit_data["total_event_count"] == workflow_with_many_events["event_count"]
-    assert len(audit_data["events"]) == 50
-    assert audit_data["offset"] == 0
-    assert audit_data["limit"] == 50
-    assert audit_data["has_next"] is True
+    assert audit_data.total_event_count == workflow_with_many_events["event_count"]
+    assert len(audit_data.events) == 50
+    assert audit_data.offset == 0
+    assert audit_data.limit == 50
+    assert audit_data.has_next is True
 
 
 @pytest.mark.asyncio
@@ -284,11 +284,11 @@ async def test_audit_event_pagination_middle_page(query_service, workflow_with_m
         limit=50,
     )
 
-    assert audit_data["total_event_count"] == workflow_with_many_events["event_count"]
-    assert len(audit_data["events"]) == 50
-    assert audit_data["offset"] == 50
-    assert audit_data["limit"] == 50
-    assert audit_data["has_next"] is True
+    assert audit_data.total_event_count == workflow_with_many_events["event_count"]
+    assert len(audit_data.events) == 50
+    assert audit_data.offset == 50
+    assert audit_data.limit == 50
+    assert audit_data.has_next is True
 
 
 @pytest.mark.asyncio
@@ -305,11 +305,11 @@ async def test_audit_event_pagination_last_page(query_service, workflow_with_man
         limit=100,
     )
 
-    assert audit_data["total_event_count"] == total_events
-    assert len(audit_data["events"]) == 49  # Remaining events: 149 total - 100 offset = 49
-    assert audit_data["offset"] == 100
-    assert audit_data["limit"] == 100
-    assert audit_data["has_next"] is False
+    assert audit_data.total_event_count == total_events
+    assert len(audit_data.events) == 49  # Remaining events: 149 total - 100 offset = 49
+    assert audit_data.offset == 100
+    assert audit_data.limit == 100
+    assert audit_data.has_next is False
 
 
 @pytest.mark.asyncio
@@ -323,9 +323,9 @@ async def test_audit_event_pagination_beyond_end(query_service, workflow_with_ma
         limit=50,
     )
 
-    assert audit_data["total_event_count"] == workflow_with_many_events["event_count"]
-    assert len(audit_data["events"]) == 0
-    assert audit_data["has_next"] is False
+    assert audit_data.total_event_count == workflow_with_many_events["event_count"]
+    assert len(audit_data.events) == 0
+    assert audit_data.has_next is False
 
 
 # ============================================================================
@@ -340,7 +340,7 @@ async def test_audit_stage_grouping(query_service, workflow_with_stages):
 
     audit_data = await query_service.get_workflow_run_audit(workflow_id)
 
-    stages = audit_data["stages"]
+    stages = audit_data.stages
     assert isinstance(stages, list)
 
     # Verify stage structure (if any stages present)
@@ -365,7 +365,7 @@ async def test_audit_sequence_validation_valid(query_service, workflow_with_stag
 
     audit_data = await query_service.get_workflow_run_audit(workflow_id)
 
-    validation = audit_data["validation"]
+    validation = audit_data.validation
     assert "sequenceValid" in validation
     assert "expectedSequence" in validation
     assert "actualSequence" in validation
@@ -385,7 +385,7 @@ async def test_audit_sequence_validation_structure(query_service, workflow_with_
 
     audit_data = await query_service.get_workflow_run_audit(workflow_id)
 
-    validation = audit_data["validation"]
+    validation = audit_data.validation
 
     # Verify lists are present and properly typed
     assert isinstance(validation["expectedSequence"], list)
@@ -420,9 +420,9 @@ async def test_audit_caching_same_request(query_service, workflow_with_stages):
     )
 
     # Should return identical data
-    assert audit_data_1["workflow_run"].id == audit_data_2["workflow_run"].id
-    assert audit_data_1["total_event_count"] == audit_data_2["total_event_count"]
-    assert len(audit_data_1["events"]) == len(audit_data_2["events"])
+    assert audit_data_1.workflow_run.id == audit_data_2.workflow_run.id
+    assert audit_data_1.total_event_count == audit_data_2.total_event_count
+    assert len(audit_data_1.events) == len(audit_data_2.events)
 
 
 @pytest.mark.asyncio
@@ -445,13 +445,13 @@ async def test_audit_caching_different_pagination(query_service, workflow_with_m
     )
 
     # Should have different events but same total count
-    assert audit_data_1["total_event_count"] == audit_data_2["total_event_count"]
-    assert len(audit_data_1["events"]) == 50
-    assert len(audit_data_2["events"]) == 50
+    assert audit_data_1.total_event_count == audit_data_2.total_event_count
+    assert len(audit_data_1.events) == 50
+    assert len(audit_data_2.events) == 50
 
     # Events should be different (different pages)
-    first_event_1 = audit_data_1["events"][0]
-    first_event_2 = audit_data_2["events"][0]
+    first_event_1 = audit_data_1.events[0]
+    first_event_2 = audit_data_2.events[0]
     assert first_event_1["id"] != first_event_2["id"]
 
 
@@ -467,7 +467,7 @@ async def test_audit_event_format(query_service, workflow_with_stages):
 
     audit_data = await query_service.get_workflow_run_audit(workflow_id)
 
-    events = audit_data["events"]
+    events = audit_data.events
     assert len(events) > 0
 
     # Verify event structure
@@ -498,8 +498,8 @@ async def test_audit_invalid_pagination(query_service, workflow_with_stages):
     )
 
     # Should return at least the structure
-    assert "events" in audit_data
-    assert len(audit_data["events"]) == 1
+    assert hasattr(audit_data, "events")
+    assert len(audit_data.events) == 1
 
 
 @pytest.mark.asyncio
@@ -515,5 +515,5 @@ async def test_audit_zero_limit(query_service, workflow_with_stages):
     )
 
     # Should return structure with no events
-    assert audit_data["total_event_count"] > 0
-    assert len(audit_data["events"]) == 0
+    assert audit_data.total_event_count > 0
+    assert len(audit_data.events) == 0

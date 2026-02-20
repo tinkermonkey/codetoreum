@@ -25,6 +25,8 @@ from codetoreum.ports.input.workflow_run_query import (
     WorkflowRunStageInfo,
     WorkflowRunStatus,
     WorkflowRunSummary,
+    WorkflowRunEventsResult,
+    WorkflowRunAuditResult,
 )
 from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.ports.exceptions import WorkItemNotFoundError
@@ -316,7 +318,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         limit: int = 50,
         event_types: Optional[List[str]] = None,
         since: Optional[datetime] = None,
-    ) -> dict:
+    ) -> WorkflowRunEventsResult:
         """
         Retrieve events for a specific workflow run.
 
@@ -328,7 +330,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
             since: Optional timestamp - events after this time
 
         Returns:
-            Dictionary containing events list and pagination info
+            WorkflowRunEventsResult containing events list and pagination info
 
         Raises:
             ResourceNotFoundError: If workflow run doesn't exist
@@ -366,13 +368,13 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         # Convert events to dict format
         events_data = [self._event_to_dict(event) for event in paginated_events]
 
-        return {
-            "events": events_data,
-            "total_count": total_count,
-            "offset": offset,
-            "limit": limit,
-            "has_next": (offset + limit) < total_count,
-        }
+        return WorkflowRunEventsResult(
+            events=events_data,
+            total_count=total_count,
+            offset=offset,
+            limit=limit,
+            has_next=(offset + limit) < total_count,
+        )
 
     async def get_workflow_run_audit(
         self,
@@ -380,7 +382,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         offset: int = 0,
         limit: int = 100,
         include_validation: bool = True,
-    ) -> dict:
+    ) -> WorkflowRunAuditResult:
         """
         Retrieve comprehensive audit information for a workflow run.
 
@@ -408,7 +410,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
             include_validation: Whether to validate event sequence (default: True)
 
         Returns:
-            Dictionary containing audit data compatible with WorkflowRunAuditResponse
+            WorkflowRunAuditResult containing audit data
 
         Raises:
             ResourceNotFoundError: If workflow run doesn't exist
@@ -464,16 +466,16 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
             )
 
         # Build audit response
-        audit_data = {
-            "workflow_run": workflow_run_summary,
-            "events": paginated_events,
-            "stages": stages_info,
-            "validation": validation_result,
-            "total_event_count": total_event_count,
-            "offset": offset,
-            "limit": limit,
-            "has_next": (offset + limit) < total_event_count,
-        }
+        audit_data = WorkflowRunAuditResult(
+            workflow_run=workflow_run_summary,
+            events=paginated_events,
+            stages=stages_info,
+            validation=validation_result,
+            total_event_count=total_event_count,
+            offset=offset,
+            limit=limit,
+            has_next=(offset + limit) < total_event_count,
+        )
 
         # Cache the result
         await self._audit_cache.set(cache_key, audit_data)
@@ -481,7 +483,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         logger.debug(
             f"Audit for {workflow_run_id}: {total_event_count} total events, "
             f"{len(paginated_events)} returned"
-            + (f", validation={'valid' if validation_result and validation_result['sequenceValid'] else 'invalid'}" if include_validation else "")
+            + (f", validation={'valid' if validation_result and validation_result.get('sequenceValid') else 'invalid'}" if include_validation else "")
         )
 
         return audit_data

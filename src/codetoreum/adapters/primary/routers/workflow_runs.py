@@ -27,6 +27,7 @@ from codetoreum.ports.input.workflow_run_query import (
     WorkflowRunStatus,
     SortOrder,
 )
+from codetoreum.ports.exceptions import ResourceNotFoundError
 from codetoreum.config import (
     DEFAULT_PAGE_SIZE,
     MAX_PAGE_SIZE,
@@ -205,15 +206,14 @@ def create_workflow_runs_router(
             # Convert to response DTO
             return WorkflowRunMapper.to_response(run_info)
 
+        except ResourceNotFoundError as e:
+            raise HTTPException(
+                status_code=http_status.HTTP_404_NOT_FOUND,
+                detail=f"Workflow run not found: {workflow_run_id}",
+            )
         except HTTPException:
             raise
         except Exception as e:
-            error_msg = str(e).lower()
-            if "not found" in error_msg:
-                raise HTTPException(
-                    status_code=http_status.HTTP_404_NOT_FOUND,
-                    detail=f"Workflow run not found: {workflow_run_id}",
-                )
             logger.error(
                 "Unexpected error retrieving workflow run",
                 exc_info=True,
@@ -280,22 +280,21 @@ def create_workflow_runs_router(
 
             # Convert to response DTO
             return WorkflowRunMapper.to_events_list_response(
-                events=result.get("events", []),
-                total_count=result.get("total_count", 0),
-                offset=result.get("offset", offset),
-                limit=result.get("limit", limit),
-                has_next=result.get("has_next", False),
+                events=result.events,
+                total_count=result.total_count,
+                offset=result.offset,
+                limit=result.limit,
+                has_next=result.has_next,
             )
 
+        except ResourceNotFoundError as e:
+            raise HTTPException(
+                status_code=http_status.HTTP_404_NOT_FOUND,
+                detail=f"Workflow run not found: {workflow_run_id}",
+            )
         except HTTPException:
             raise
         except Exception as e:
-            error_msg = str(e).lower()
-            if "not found" in error_msg:
-                raise HTTPException(
-                    status_code=http_status.HTTP_404_NOT_FOUND,
-                    detail=f"Workflow run not found: {workflow_run_id}",
-                )
             logger.error(
                 "Unexpected error retrieving workflow run events",
                 exc_info=True,
@@ -367,15 +366,14 @@ def create_workflow_runs_router(
             # Convert to response DTO
             return WorkflowRunMapper.to_audit_response(audit_data)
 
+        except ResourceNotFoundError as e:
+            raise HTTPException(
+                status_code=http_status.HTTP_404_NOT_FOUND,
+                detail=f"Workflow run not found: {workflow_run_id}",
+            )
         except HTTPException:
             raise
         except Exception as e:
-            error_msg = str(e).lower()
-            if "not found" in error_msg:
-                raise HTTPException(
-                    status_code=http_status.HTTP_404_NOT_FOUND,
-                    detail=f"Workflow run not found: {workflow_run_id}",
-                )
             logger.error(
                 "Unexpected error retrieving workflow run audit",
                 exc_info=True,

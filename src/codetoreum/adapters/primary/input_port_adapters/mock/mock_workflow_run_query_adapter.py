@@ -17,6 +17,8 @@ from codetoreum.ports.input.workflow_run_query import (
     WorkflowRunListResult,
     WorkflowRunFilters,
     WorkflowRunPaginationParams,
+    WorkflowRunEventsResult,
+    WorkflowRunAuditResult,
 )
 
 
@@ -107,10 +109,10 @@ class MockWorkflowRunQueryAdapter(IWorkflowRunQueryPort):
         limit: int = 50,
         event_types: Optional[List[str]] = None,
         since: Optional[datetime] = None,
-    ) -> Dict:
+    ) -> WorkflowRunEventsResult:
         """Get events for a workflow run."""
-        return {
-            "events": [
+        return WorkflowRunEventsResult(
+            events=[
                 {
                     "id": "evt-mock-123",
                     "event_type": "WorkflowStarted",
@@ -125,11 +127,11 @@ class MockWorkflowRunQueryAdapter(IWorkflowRunQueryPort):
                     },
                 }
             ],
-            "totalCount": 1,
-            "offset": offset,
-            "limit": limit,
-            "hasNext": False,
-        }
+            total_count=1,
+            offset=offset,
+            limit=limit,
+            has_next=False,
+        )
 
     async def get_workflow_run_audit(
         self,
@@ -137,7 +139,7 @@ class MockWorkflowRunQueryAdapter(IWorkflowRunQueryPort):
         offset: int = 0,
         limit: int = 100,
         include_validation: bool = True,
-    ) -> Dict:
+    ) -> WorkflowRunAuditResult:
         """Get comprehensive audit information for a workflow run."""
         # Mock workflow run summary
         workflow_run = WorkflowRunSummary(
@@ -229,18 +231,18 @@ class MockWorkflowRunQueryAdapter(IWorkflowRunQueryPort):
             "missingEvents": [],
             "unexpectedEvents": [],
             "outOfOrderEvents": [],
-        }
+        } if include_validation else None
 
-        return {
-            "workflow_run": workflow_run,
-            "events": paginated_events,
-            "stages": stages,
-            "validation": validation,
-            "total_event_count": len(mock_events),
-            "offset": offset,
-            "limit": limit,
-            "has_next": (offset + limit) < len(mock_events),
-        }
+        return WorkflowRunAuditResult(
+            workflow_run=workflow_run,
+            events=paginated_events,
+            stages=stages,
+            validation=validation,
+            total_event_count=len(mock_events),
+            offset=offset,
+            limit=limit,
+            has_next=(offset + limit) < len(mock_events),
+        )
 
     def clear(self):
         """Clear all data (useful for testing)."""

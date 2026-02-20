@@ -140,6 +140,29 @@ class WorkflowRunListResult:
     has_next: bool
 
 
+@dataclass
+class WorkflowRunEventsResult:
+    """Result of querying workflow run events"""
+    events: List[dict]  # List of event dictionaries
+    total_count: int
+    offset: int
+    limit: int
+    has_next: bool
+
+
+@dataclass
+class WorkflowRunAuditResult:
+    """Result of querying workflow run audit information"""
+    workflow_run: WorkflowRunSummary
+    events: List[dict]  # List of event dictionaries
+    stages: List[dict]  # List of stage information dictionaries
+    validation: Optional[dict]  # Validation result dictionary (None if not requested)
+    total_event_count: int
+    offset: int
+    limit: int
+    has_next: bool
+
+
 class IWorkflowRunQueryPort(ABC):
     """
     Input port for workflow run queries.
@@ -202,7 +225,7 @@ class IWorkflowRunQueryPort(ABC):
         limit: int = 50,
         event_types: Optional[List[str]] = None,
         since: Optional[datetime] = None
-    ) -> dict:
+    ) -> WorkflowRunEventsResult:
         """
         Retrieves events for a specific workflow run.
 
@@ -214,7 +237,7 @@ class IWorkflowRunQueryPort(ABC):
             since: Optional ISO timestamp - events after this time
 
         Returns:
-            Dictionary containing events list and pagination info
+            WorkflowRunEventsResult containing events list and pagination info
 
         Raises:
             WorkflowRunNotFoundError: If workflow run doesn't exist
@@ -228,7 +251,7 @@ class IWorkflowRunQueryPort(ABC):
         offset: int = 0,
         limit: int = 100,
         include_validation: bool = True,
-    ) -> dict:
+    ) -> WorkflowRunAuditResult:
         """
         Retrieves comprehensive audit information for a workflow run.
 
@@ -245,17 +268,15 @@ class IWorkflowRunQueryPort(ABC):
             include_validation: Whether to validate event sequence (default: True)
 
         Returns:
-            Dictionary containing audit data compatible with WorkflowRunAuditResponse:
-            {
-                "workflow_run": WorkflowRunSummary,
-                "events": List[event_dict],
-                "stages": List[stage_info_dict],
-                "validation": validation_result_dict or None,
-                "total_event_count": int,
-                "offset": int,
-                "limit": int,
-                "has_next": bool
-            }
+            WorkflowRunAuditResult containing:
+            - workflow_run: WorkflowRunSummary
+            - events: List of event dictionaries
+            - stages: List of stage info dictionaries
+            - validation: Validation result dictionary or None
+            - total_event_count: Total number of events
+            - offset: Pagination offset
+            - limit: Pagination limit
+            - has_next: Whether more events are available
 
         Raises:
             WorkflowRunNotFoundError: If workflow run doesn't exist
