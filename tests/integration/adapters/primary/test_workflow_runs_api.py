@@ -355,3 +355,254 @@ class TestGetWorkflowRunEvents:
         assert response.status_code == 404
         data = response.json()
         assert "not found" in data["detail"].lower()
+
+
+class TestGetWorkflowRunAudit:
+    """Tests for GET /api/v2/workflows/runs/{workflow_run_id}/audit endpoint."""
+
+    def test_get_workflow_run_audit_success(self, client, mock_query_port):
+        """Test successful workflow run audit retrieval."""
+        # Arrange
+        from codetoreum.ports.input.workflow_run_query import WorkflowRunSummary
+
+        now = datetime.now(timezone.utc)
+        audit_data = {
+            "workflow_run": WorkflowRunSummary(
+                id="wfrun-123",
+                work_item_id="wi-456",
+                workflow_id="wf-789",
+                project_id="proj-1",
+                status=WorkflowRunStatus.COMPLETED,
+                current_stage_index=2,
+                current_stage_name="completed",
+                started_at=now,
+                completed_at=now,
+                duration=100.0,
+                issue_title="Test issue",
+                issue_number=1,
+                project="test-project",
+                triggered_by="user",
+                priority="medium",
+            ),
+            "events": [
+                {
+                    "id": "evt-1",
+                    "event_type": "WorkflowStarted",
+                    "workflow_run_id": "wfrun-123",
+                    "occurred_at": now,
+                    "agent_name": None,
+                    "stage_name": None,
+                    "status": None,
+                    "data": {},
+                }
+            ],
+            "stages": [
+                {
+                    "name": "implementation",
+                    "status": "completed",
+                    "startedAt": now,
+                    "completedAt": now,
+                    "durationSeconds": 50.0,
+                    "events": [],
+                }
+            ],
+            "validation": {
+                "sequenceValid": True,
+                "expectedSequence": ["WorkflowStarted", "WorkflowCompleted"],
+                "actualSequence": ["WorkflowStarted", "WorkflowCompleted"],
+                "missingEvents": [],
+                "unexpectedEvents": [],
+                "outOfOrderEvents": [],
+            },
+            "total_event_count": 10,
+            "offset": 0,
+            "limit": 100,
+            "has_next": False,
+        }
+        mock_query_port._get_workflow_run_audit.return_value = audit_data
+
+        # Act
+        response = client.get("/api/v2/workflows/runs/wfrun-123/audit")
+
+        # Assert
+        assert response.status_code == 200
+        data = response.json()
+        assert "workflowRun" in data
+        assert "events" in data
+        assert "stages" in data
+        assert "validation" in data
+        assert data["totalEventCount"] == 10
+        assert data["validation"]["sequenceValid"] is True
+
+        # Verify query port was called
+        mock_query_port._get_workflow_run_audit.assert_called_once_with(
+            "wfrun-123", 0, 100, True
+        )
+
+    def test_get_workflow_run_audit_with_pagination(self, client, mock_query_port):
+        """Test workflow run audit retrieval with custom pagination."""
+        # Arrange
+        from codetoreum.ports.input.workflow_run_query import WorkflowRunSummary
+
+        now = datetime.now(timezone.utc)
+        audit_data = {
+            "workflow_run": WorkflowRunSummary(
+                id="wfrun-123",
+                work_item_id="wi-456",
+                workflow_id="wf-789",
+                project_id="proj-1",
+                status=WorkflowRunStatus.COMPLETED,
+                current_stage_index=2,
+                current_stage_name="completed",
+                started_at=now,
+                completed_at=now,
+                duration=100.0,
+                issue_title="Test issue",
+                issue_number=1,
+                project="test-project",
+                triggered_by="user",
+                priority="medium",
+            ),
+            "events": [],
+            "stages": [],
+            "validation": {
+                "sequenceValid": True,
+                "expectedSequence": [],
+                "actualSequence": [],
+                "missingEvents": [],
+                "unexpectedEvents": [],
+                "outOfOrderEvents": [],
+            },
+            "total_event_count": 500,
+            "offset": 100,
+            "limit": 50,
+            "has_next": True,
+        }
+        mock_query_port._get_workflow_run_audit.return_value = audit_data
+
+        # Act
+        response = client.get(
+            "/api/v2/workflows/runs/wfrun-123/audit?offset=100&limit=50"
+        )
+
+        # Assert
+        assert response.status_code == 200
+        data = response.json()
+        assert data["offset"] == 100
+        assert data["limit"] == 50
+        assert data["hasNext"] is True
+        assert data["totalEventCount"] == 500
+
+        # Verify query port was called with correct parameters
+        mock_query_port._get_workflow_run_audit.assert_called_once_with(
+            "wfrun-123", 100, 50, True
+        )
+
+    def test_get_workflow_run_audit_without_validation(self, client, mock_query_port):
+        """Test workflow run audit retrieval without validation."""
+        # Arrange
+        from codetoreum.ports.input.workflow_run_query import WorkflowRunSummary
+
+        now = datetime.now(timezone.utc)
+        # When validation is not requested, return empty validation result
+        audit_data = {
+            "workflow_run": WorkflowRunSummary(
+                id="wfrun-123",
+                work_item_id="wi-456",
+                workflow_id="wf-789",
+                project_id="proj-1",
+                status=WorkflowRunStatus.COMPLETED,
+                current_stage_index=2,
+                current_stage_name="completed",
+                started_at=now,
+                completed_at=now,
+                duration=100.0,
+                issue_title="Test issue",
+                issue_number=1,
+                project="test-project",
+                triggered_by="user",
+                priority="medium",
+            ),
+            "events": [],
+            "stages": [],
+            "validation": {
+                "sequenceValid": True,
+                "expectedSequence": [],
+                "actualSequence": [],
+                "missingEvents": [],
+                "unexpectedEvents": [],
+                "outOfOrderEvents": [],
+            },
+            "total_event_count": 10,
+            "offset": 0,
+            "limit": 100,
+            "has_next": False,
+        }
+        mock_query_port._get_workflow_run_audit.return_value = audit_data
+
+        # Act
+        response = client.get(
+            "/api/v2/workflows/runs/wfrun-123/audit?include_validation=false"
+        )
+
+        # Assert
+        assert response.status_code == 200
+        data = response.json()
+        # Validation should be empty when not requested, but still present
+        assert "validation" in data
+        assert data["validation"]["sequenceValid"] is True
+
+        # Verify query port was called with include_validation=False
+        mock_query_port._get_workflow_run_audit.assert_called_once_with(
+            "wfrun-123", 0, 100, False
+        )
+
+    def test_get_workflow_run_audit_not_found(self, client, mock_query_port):
+        """Test workflow run audit not found."""
+        # Arrange
+        mock_query_port._get_workflow_run_audit.side_effect = Exception(
+            "Workflow run not found"
+        )
+
+        # Act
+        response = client.get("/api/v2/workflows/runs/wfrun-999/audit")
+
+        # Assert
+        assert response.status_code == 404
+        data = response.json()
+        assert "not found" in data["detail"].lower()
+
+    def test_get_workflow_run_audit_server_error(self, client, mock_query_port):
+        """Test workflow run audit server error."""
+        # Arrange
+        mock_query_port._get_workflow_run_audit.side_effect = Exception(
+            "Database connection failed"
+        )
+
+        # Act
+        response = client.get("/api/v2/workflows/runs/wfrun-123/audit")
+
+        # Assert
+        assert response.status_code == 500
+        data = response.json()
+        assert "Internal server error" in data["detail"]
+
+    def test_get_workflow_run_audit_invalid_pagination(self, client, mock_query_port):
+        """Test workflow run audit with invalid pagination parameters."""
+        # Act - negative offset
+        response = client.get("/api/v2/workflows/runs/wfrun-123/audit?offset=-1")
+
+        # Assert
+        assert response.status_code == 422  # FastAPI validation error
+
+        # Act - limit too high
+        response = client.get("/api/v2/workflows/runs/wfrun-123/audit?limit=500")
+
+        # Assert
+        assert response.status_code == 422  # FastAPI validation error
+
+        # Act - limit too low
+        response = client.get("/api/v2/workflows/runs/wfrun-123/audit?limit=0")
+
+        # Assert
+        assert response.status_code == 422  # FastAPI validation error

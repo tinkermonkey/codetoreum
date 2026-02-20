@@ -4,6 +4,7 @@ Workflow Runs REST API Router
 Provides RESTful endpoints for querying workflow execution runs.
 """
 
+import logging
 from datetime import datetime
 from typing import Optional
 
@@ -31,6 +32,9 @@ from codetoreum.config import (
     MAX_PAGE_SIZE,
     DEFAULT_OFFSET,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 def create_workflow_runs_router(
@@ -155,9 +159,14 @@ def create_workflow_runs_router(
         except HTTPException:
             raise
         except Exception as e:
+            logger.error(
+                "Unexpected error listing workflow runs",
+                exc_info=True,
+                extra={"error": str(e)},
+            )
             raise HTTPException(
-                status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=str(e),
+                status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Internal server error while listing workflow runs",
             )
 
     # ========================================================================
@@ -203,9 +212,14 @@ def create_workflow_runs_router(
                     status_code=http_status.HTTP_404_NOT_FOUND,
                     detail=f"Workflow run not found: {workflow_run_id}",
                 )
+            logger.error(
+                "Unexpected error retrieving workflow run",
+                exc_info=True,
+                extra={"workflow_run_id": workflow_run_id, "error": str(e)},
+            )
             raise HTTPException(
-                status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=str(e),
+                status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Internal server error while retrieving workflow run",
             )
 
     # ========================================================================
@@ -278,9 +292,14 @@ def create_workflow_runs_router(
                     status_code=http_status.HTTP_404_NOT_FOUND,
                     detail=f"Workflow run not found: {workflow_run_id}",
                 )
+            logger.error(
+                "Unexpected error retrieving workflow run events",
+                exc_info=True,
+                extra={"workflow_run_id": workflow_run_id, "error": str(e)},
+            )
             raise HTTPException(
-                status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=str(e),
+                status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Internal server error while retrieving workflow run events",
             )
 
     # ========================================================================
@@ -351,9 +370,14 @@ def create_workflow_runs_router(
                     status_code=http_status.HTTP_404_NOT_FOUND,
                     detail=f"Workflow run not found: {workflow_run_id}",
                 )
+            logger.error(
+                "Unexpected error retrieving workflow run audit",
+                exc_info=True,
+                extra={"workflow_run_id": workflow_run_id, "error": str(e)},
+            )
             raise HTTPException(
-                status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=str(e),
+                status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Internal server error while retrieving workflow run audit",
             )
 
     return router

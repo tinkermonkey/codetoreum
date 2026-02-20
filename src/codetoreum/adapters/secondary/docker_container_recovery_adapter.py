@@ -1072,7 +1072,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                         try:
                             api._session.close()
                         except Exception:
-                            pass
+                            logger.debug("Error closing Docker API session", exc_info=True)
                     # Close adapters (which hold socket connections)
                     if hasattr(api, '_adapters') and api._adapters:
                         try:
@@ -1080,12 +1080,12 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                                 if hasattr(adapter, 'close'):
                                     adapter.close()
                         except Exception:
-                            pass
+                            logger.debug("Error closing Docker API adapters", exc_info=True)
                     if hasattr(api, 'close'):
                         try:
                             api.close()
                         except Exception:
-                            pass
+                            logger.debug("Error closing Docker API", exc_info=True)
             except Exception:
                 logger.debug("Error cleaning up Docker API client", exc_info=True)
 
