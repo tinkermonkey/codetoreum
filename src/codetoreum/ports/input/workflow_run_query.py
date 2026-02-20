@@ -42,6 +42,16 @@ class WorkflowRunFilters:
     work_item_id: Optional[str] = None  # Filter by work item
     workflow_id: Optional[str] = None  # Filter by workflow template
 
+    def __post_init__(self):
+        """Validate filter fields."""
+        # Validate non-empty string IDs
+        if self.project_id is not None and not self.project_id.strip():
+            raise ValueError("project_id must be non-empty if provided")
+        if self.work_item_id is not None and not self.work_item_id.strip():
+            raise ValueError("work_item_id must be non-empty if provided")
+        if self.workflow_id is not None and not self.workflow_id.strip():
+            raise ValueError("workflow_id must be non-empty if provided")
+
 
 @dataclass
 class WorkflowRunPaginationParams:
@@ -50,6 +60,13 @@ class WorkflowRunPaginationParams:
     limit: int = 20
     sort_by: WorkflowRunSortField = WorkflowRunSortField.STARTED_AT
     sort_order: SortOrder = SortOrder.DESC
+
+    def __post_init__(self):
+        """Validate pagination parameters."""
+        if self.offset < 0:
+            raise ValueError(f"offset must be >= 0, got {self.offset}")
+        if self.limit <= 0:
+            raise ValueError(f"limit must be > 0, got {self.limit}")
 
 
 @dataclass

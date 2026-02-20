@@ -8,7 +8,7 @@ audit information with sequence validation and stage grouping.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from codetoreum.adapters.primary.api_models import PaginatedResponse
 from codetoreum.adapters.primary.workflow_run_dtos import (
@@ -73,6 +73,37 @@ class AuditValidationResult(BaseModel):
             }
         }
     )
+
+    @model_validator(mode='after')
+    def validate_consistency(self) -> 'AuditValidationResult':
+        """
+        Validate consistency between sequenceValid and error lists.
+
+        If sequenceValid is True, then all error lists (missingEvents, unexpectedEvents,
+        outOfOrderEvents) must be empty. Otherwise, the response is contradictory.
+
+        Raises:
+            ValueError: If sequenceValid=True but error lists are not empty
+        """
+        if self.sequenceValid:
+            errors = []
+
+            if self.missingEvents:
+                errors.append(f"missingEvents is not empty: {self.missingEvents}")
+
+            if self.unexpectedEvents:
+                errors.append(f"unexpectedEvents is not empty: {self.unexpectedEvents}")
+
+            if self.outOfOrderEvents:
+                errors.append(f"outOfOrderEvents is not empty: {self.outOfOrderEvents}")
+
+            if errors:
+                raise ValueError(
+                    f"sequenceValid is True but error lists are not empty. "
+                    f"This is a contradictory validation result. Errors: {'; '.join(errors)}"
+                )
+
+        return self
 
 
 # ============================================================================

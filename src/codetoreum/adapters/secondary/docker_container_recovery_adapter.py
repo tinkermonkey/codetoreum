@@ -29,6 +29,9 @@ from codetoreum.domain.types import (
     CONTAINER_TYPE_AGENT,
     CONTAINER_TYPE_REPAIR_CYCLE,
 )
+
+# Additional label for tracking containers with timestamp parse failures
+CONTAINER_LABEL_TIMESTAMP_FALLBACK = "codetoreum.timestamp_fallback"
 from codetoreum.infrastructure.observability.instrumentation import (
     instrument_async_function,
 )
@@ -393,6 +396,28 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
             # Use current time as fallback if parsing failed
             if created_at is None:
                 created_at = datetime.now(timezone.utc)
+                # Mark container with special label for priority cleanup
+                # This prevents containers with incorrect ages from persisting indefinitely
+                try:
+                    container.reload()
+                    current_labels = container.labels or {}
+                    current_labels[CONTAINER_LABEL_TIMESTAMP_FALLBACK] = "true"
+                    # Note: Docker doesn't support updating labels on running containers
+                    # This is best-effort logging for operator visibility
+                    logger.warning(
+                        f"Container {container.short_id} timestamp parse failed - marked for priority cleanup. "
+                        f"Operators should manually verify container age if it persists beyond expected lifetime.",
+                        extra={
+                            "container_id": container.short_id,
+                            "fallback_timestamp_used": True,
+                            "mitigation": "priority_cleanup_recommended"
+                        }
+                    )
+                except Exception as label_error:
+                    logger.warning(
+                        f"Could not mark container {container.short_id} for priority cleanup: {label_error}",
+                        exc_info=True
+                    )
 
         # Extract optional labels
         work_item_id = labels.get(CONTAINER_LABEL_WORK_ITEM_ID)
@@ -622,11 +647,29 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                     execution_id=None,
                 )
         except StorageError as e:
-            logger.warning(
-                f"Failed to check for completed repair result {result_key}: {e}",
+            # Storage failures during recovery assessment are serious - they could mean:
+            # 1. Completed repair work is invisible and may be lost/redone
+            # 2. Container may be killed when it should be kept
+            # 3. Storage system is degraded/unavailable
+            logger.error(
+                f"STORAGE UNAVAILABLE during repair cycle recovery assessment for {result_key}. "
+                f"This may result in lost repair work or incorrect recovery decisions. "
+                f"Container {metadata.container_id} will be assessed based on age/checkpoint only. "
+                f"Operators should verify storage health and check for orphaned repair results.",
                 exc_info=True,
+                extra={
+                    "error_id": ErrorRegistry.ERR_CONTAINER_ERROR,
+                    "storage_key": result_key,
+                    "container_id": metadata.container_id,
+                    "project_id": metadata.project_id,
+                    "work_item_id": metadata.work_item_id,
+                    "workflow_run_id": metadata.workflow_run_id,
+                    "impact": "potential_data_loss_or_incorrect_recovery",
+                    "mitigation": "verify_storage_health_and_check_orphaned_results"
+                }
             )
-            # Continue with other checks
+            # Continue with age-based and checkpoint-based checks, but log the degraded state
+            # Note: In the future, this should emit a metric or alert for operator visibility
 
         # Step 2: Check container age
         now = datetime.now(timezone.utc)

@@ -822,8 +822,9 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             List of RepairTestFailure objects
         """
         failures = []
+        parse_errors = []
 
-        for failure_data in test_output.get("failures", []):
+        for idx, failure_data in enumerate(test_output.get("failures", [])):
             try:
                 failure = RepairTestFailure(
                     file=failure_data.get("file", "unknown"),
@@ -832,26 +833,58 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 )
                 failures.append(failure)
             except ValueError as e:
-                # Parse error indicates agent returned invalid format or parser bug
+                # Collect parse errors but continue processing other failures
+                parse_errors.append({
+                    "index": idx,
+                    "data": failure_data,
+                    "error": str(e)
+                })
                 logger.error(
-                    "PARSE ERROR: Test failure data is invalid - agent may be malfunctioning",
+                    f"PARSE ERROR: Test failure #{idx} data is invalid - agent may be malfunctioning. "
+                    f"Continuing to process remaining failures.",
                     extra={
                         "test_type": test_type.value,
+                        "failure_index": idx,
                         "failure_data": failure_data,
                         "validation_error": str(e),
-                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
+                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR
+                    },
                     exc_info=True,
                 )
 
-                # Don't create synthetic data - fail loudly
-                raise TestOutputParseError(
-                    f"Invalid test failure data for {test_type.value}. "
-                    f"This indicates either: (1) Test framework output changed, "
-                    f"(2) Agent prompt needs updating, or (3) Agent is malfunctioning. "
-                    f"Validation error: {e}",
-                    test_type=test_type.value,
-                    raw_data=failure_data,
-                ) from e
+        # If we collected any valid failures, log parse errors but return valid data
+        if failures and parse_errors:
+            logger.warning(
+                f"Extracted {len(failures)} valid test failures despite {len(parse_errors)} parse errors. "
+                f"Agent output may be partially corrupt.",
+                extra={
+                    "test_type": test_type.value,
+                    "valid_failures": len(failures),
+                    "parse_errors": len(parse_errors),
+                    "error_indices": [e["index"] for e in parse_errors]
+                }
+            )
+        # If ALL failures failed to parse, raise error with details
+        elif parse_errors and not failures:
+            logger.error(
+                f"ALL test failure entries failed to parse ({len(parse_errors)} errors). "
+                f"This indicates either: (1) Test framework output changed, "
+                f"(2) Agent prompt needs updating, or (3) Agent is malfunctioning.",
+                extra={
+                    "test_type": test_type.value,
+                    "total_failures": len(test_output.get("failures", [])),
+                    "parse_errors": parse_errors,
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR
+                }
+            )
+            raise TestOutputParseError(
+                f"All {len(parse_errors)} test failure entries for {test_type.value} failed to parse. "
+                f"This indicates either: (1) Test framework output changed, "
+                f"(2) Agent prompt needs updating, or (3) Agent is malfunctioning. "
+                f"First error: {parse_errors[0]['error']}",
+                test_type=test_type.value,
+                raw_data=test_output.get("failures", []),
+            )
 
         return failures
 
@@ -878,8 +911,9 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             List of RepairTestWarning objects
         """
         warnings = []
+        parse_errors = []
 
-        for warning_data in test_output.get("warnings", []):
+        for idx, warning_data in enumerate(test_output.get("warnings", [])):
             try:
                 warning = RepairTestWarning(
                     file=warning_data.get("file", "unknown"),
@@ -887,26 +921,58 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 )
                 warnings.append(warning)
             except ValueError as e:
-                # Parse error indicates agent returned invalid format or parser bug
+                # Collect parse errors but continue processing other warnings
+                parse_errors.append({
+                    "index": idx,
+                    "data": warning_data,
+                    "error": str(e)
+                })
                 logger.error(
-                    "PARSE ERROR: Test warning data is invalid - agent may be malfunctioning",
+                    f"PARSE ERROR: Test warning #{idx} data is invalid - agent may be malfunctioning. "
+                    f"Continuing to process remaining warnings.",
                     extra={
                         "test_type": test_type.value,
+                        "warning_index": idx,
                         "warning_data": warning_data,
                         "validation_error": str(e),
-                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
+                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR
+                    },
                     exc_info=True,
                 )
 
-                # Don't create synthetic data - fail loudly
-                raise TestOutputParseError(
-                    f"Invalid test warning data for {test_type.value}. "
-                    f"This indicates either: (1) Test framework output changed, "
-                    f"(2) Agent prompt needs updating, or (3) Agent is malfunctioning. "
-                    f"Validation error: {e}",
-                    test_type=test_type.value,
-                    raw_data=warning_data,
-                ) from e
+        # If we collected any valid warnings, log parse errors but return valid data
+        if warnings and parse_errors:
+            logger.warning(
+                f"Extracted {len(warnings)} valid test warnings despite {len(parse_errors)} parse errors. "
+                f"Agent output may be partially corrupt.",
+                extra={
+                    "test_type": test_type.value,
+                    "valid_warnings": len(warnings),
+                    "parse_errors": len(parse_errors),
+                    "error_indices": [e["index"] for e in parse_errors]
+                }
+            )
+        # If ALL warnings failed to parse, raise error with details
+        elif parse_errors and not warnings:
+            logger.error(
+                f"ALL test warning entries failed to parse ({len(parse_errors)} errors). "
+                f"This indicates either: (1) Test framework output changed, "
+                f"(2) Agent prompt needs updating, or (3) Agent is malfunctioning.",
+                extra={
+                    "test_type": test_type.value,
+                    "total_warnings": len(test_output.get("warnings", [])),
+                    "parse_errors": parse_errors,
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR
+                }
+            )
+            raise TestOutputParseError(
+                f"All {len(parse_errors)} test warning entries for {test_type.value} failed to parse. "
+                f"This indicates either: (1) Test framework output changed, "
+                f"(2) Agent prompt needs updating, or (3) Agent is malfunctioning. "
+                f"First error: {parse_errors[0]['error']}",
+                test_type=test_type.value,
+                raw_data=test_output.get("warnings", []),
+            )
 
         return warnings
 

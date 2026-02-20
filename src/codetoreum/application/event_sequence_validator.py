@@ -271,9 +271,18 @@ class EventSequenceValidator:
         This is a convenience method for creating validation results that match
         the AuditValidationResult DTO structure from audit_dtos.py.
 
-        Note: Out-of-order event detection is not currently implemented, so
-        outOfOrderEvents will always be an empty list. When implemented, the
-        timestamp field will be populated based on the actual event timestamp.
+        LIMITATION: Out-of-order event detection is NOT IMPLEMENTED in the current
+        validator implementation. The outOfOrderEvents field will ALWAYS be an empty
+        list, regardless of whether events are actually out of order. The validator
+        currently only detects:
+        - Missing events (expected but not present)
+        - Unexpected events (present but not expected)
+
+        It does NOT detect events that are present but in the wrong sequence position.
+
+        When out-of-order detection is implemented, the timestamp field will need to
+        be populated based on actual event timestamps (not currently available to
+        this method).
 
         Args:
             expected_pattern: List of pattern strings
@@ -281,7 +290,7 @@ class EventSequenceValidator:
 
         Returns:
             Dictionary with keys: sequenceValid, expectedSequence, actualSequence,
-            missingEvents, unexpectedEvents, outOfOrderEvents
+            missingEvents, unexpectedEvents, outOfOrderEvents (always empty)
         """
         result = self.validate(expected_pattern, actual_events)
 
