@@ -25,6 +25,7 @@ class MockWorkflowRunQueryPort(IWorkflowRunQueryPort):
         self._get_workflow_run = AsyncMock()
         self._list_workflow_runs = AsyncMock()
         self._get_workflow_run_events = AsyncMock()
+        self._get_workflow_run_audit = AsyncMock()
 
     async def get_workflow_run(self, workflow_run_id):
         return await self._get_workflow_run(workflow_run_id)
@@ -34,6 +35,9 @@ class MockWorkflowRunQueryPort(IWorkflowRunQueryPort):
 
     async def get_workflow_run_events(self, workflow_run_id, offset=0, limit=50, event_types=None, since=None):
         return await self._get_workflow_run_events(workflow_run_id, offset, limit, event_types, since)
+
+    async def get_workflow_run_audit(self, workflow_run_id, offset=0, limit=100, include_validation=True):
+        return await self._get_workflow_run_audit(workflow_run_id, offset, limit, include_validation)
 
 
 @pytest.fixture
