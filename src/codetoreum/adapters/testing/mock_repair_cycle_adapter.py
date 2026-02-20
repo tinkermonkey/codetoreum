@@ -318,7 +318,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                     type="repair_cycle.resumed",
                     timestamp=self.clock.now().isoformat(),
                     source="mock",
-                    pipeline_run_id=context.pipeline_run_id,
+                    workflow_run_id=context.workflow_run_id,
                     test_type=checkpoint.test_type,
                     iteration=checkpoint.iteration,
                     elapsed_time=self._elapsed_time,
@@ -327,7 +327,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             )
 
             logger.info(
-                f"Resumed repair cycle for {context.pipeline_run_id}: "
+                f"Resumed repair cycle for {context.workflow_run_id}: "
                 f"iteration={checkpoint.iteration}, agent_calls={self.total_agent_calls}"
             )
         else:
@@ -349,7 +349,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                     source="mock_repair_cycle",
                     stage_name=context.stage_name,
                     test_types=tuple(cfg.test_type for cfg in context.test_configs),
-                    pipeline_run_id=context.pipeline_run_id,
+                    workflow_run_id=context.workflow_run_id,
                 ))
                 self._log_event({
                     "type": "REPAIR_CYCLE_STARTED",
@@ -389,7 +389,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                             source="mock_repair_cycle",
                             test_type=config.test_type,
                             reason="cycle_failed",
-                            pipeline_run_id=context.pipeline_run_id,
+                            workflow_run_id=context.workflow_run_id,
                         ))
                     break
         except Exception as e:
@@ -403,7 +403,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         # Delete checkpoint on success
         if checkpoint and overall_success and self._checkpoint_store:
             try:
-                await self._checkpoint_store.delete_checkpoint(context.pipeline_run_id)
+                await self._checkpoint_store.delete_checkpoint(context.workflow_run_id)
             except Exception as e:
                 logger.error(f"Failed to delete checkpoint: {e}", exc_info=True, extra={"error_id": ErrorRegistry.ERR_STORAGE_ERROR})
 
@@ -418,7 +418,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 test_results=tuple(cycle_results),
                 total_agent_calls=self.total_agent_calls or self.agent_call_count,
                 duration_seconds=duration_seconds,
-                pipeline_run_id=context.pipeline_run_id,
+                workflow_run_id=context.workflow_run_id,
             ))
             self._log_event({
                 "type": "REPAIR_CYCLE_COMPLETED",
@@ -450,7 +450,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             # Check all test types for checkpoints
             for config in context.test_configs:
                 checkpoint = await self._checkpoint_store.get_checkpoint(
-                    context.pipeline_run_id,
+                    context.workflow_run_id,
                     config.test_type.value,
                 )
 
@@ -510,7 +510,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         logger.info(
             "Checkpoint state restored and validated",
             extra={
-                "pipeline_run_id": checkpoint.pipeline_run_id,
+                "workflow_run_id": checkpoint.workflow_run_id,
                 "iteration": checkpoint.iteration,
             }
         )
@@ -688,7 +688,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 warnings=result.warnings,
                 has_failures=(result.failed > 0),
                 failures=result.failures,
-                pipeline_run_id=context.pipeline_run_id,
+                workflow_run_id=context.workflow_run_id,
             ))
 
         return result
@@ -726,7 +726,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                     test_file=file_path,
                     failure_count=len(failures),
                     test_type=config.test_type,
-                    pipeline_run_id=context.pipeline_run_id,
+                    workflow_run_id=context.workflow_run_id,
                 ))
 
                 self.emit(RepairCycleFileFixCompletedEvent(
@@ -737,7 +737,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                     failure_count=len(failures),
                     test_type=config.test_type,
                     success=True,
-                    pipeline_run_id=context.pipeline_run_id,
+                    workflow_run_id=context.workflow_run_id,
                 ))
 
             fixed += 1
@@ -781,7 +781,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                     warning_count=1,
                     test_type=config.test_type,
                     warnings=(warning,),
-                    pipeline_run_id=context.pipeline_run_id,
+                    workflow_run_id=context.workflow_run_id,
                 ))
 
                 self.emit(RepairCycleWarningReviewCompletedEvent(
@@ -792,7 +792,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                     warning_count=1,
                     test_type=config.test_type,
                     success=True,
-                    pipeline_run_id=context.pipeline_run_id,
+                    workflow_run_id=context.workflow_run_id,
                 ))
 
             reviewed += 1
@@ -814,7 +814,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         """
         if not self._checkpoint_store:
             logger.debug(
-                f"Checkpoint: project={context.pipeline_run_id}, "
+                f"Checkpoint: project={context.workflow_run_id}, "
                 f"test_type={test_type}, iteration={iteration} (no store configured)"
             )
             return
@@ -826,7 +826,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
             # Create checkpoint with accumulated state
             checkpoint = RepairCycleCheckpoint(
-                pipeline_run_id=context.pipeline_run_id,
+                workflow_run_id=context.workflow_run_id,
                 test_type=test_type.value,
                 iteration=iteration,
                 total_agent_calls=self.total_agent_calls,
@@ -842,7 +842,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             await self._checkpoint_store.save_checkpoint(checkpoint)
 
             logger.debug(
-                f"Checkpoint saved: project={context.pipeline_run_id}, "
+                f"Checkpoint saved: project={context.workflow_run_id}, "
                 f"test_type={test_type}, iteration={iteration}, "
                 f"agent_calls={self.total_agent_calls}"
             )
@@ -850,7 +850,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             logger.error(
                 "Failed to save checkpoint - repair cycle may not be resumable",
                 extra={
-                    "pipeline_run_id": context.pipeline_run_id,
+                    "workflow_run_id": context.workflow_run_id,
                     "test_type": test_type.value,
                     "iteration": iteration,
                     "error": str(e),
@@ -864,7 +864,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 type="repair_cycle.checkpoint_failed",
                 timestamp=self.clock.now().isoformat(),
                 source="mock_repair_cycle",
-                pipeline_run_id=context.pipeline_run_id,
+                workflow_run_id=context.workflow_run_id,
                 test_type=test_type.value,
                 iteration=iteration,
                 error_type=type(e).__name__,
@@ -1170,7 +1170,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                         source="mock_repair_cycle",
                         test_type=config.test_type,
                         reason="circuit_breaker_triggered",
-                        pipeline_run_id=context.pipeline_run_id,
+                        workflow_run_id=context.workflow_run_id,
                     ))
                 error = "Circuit breaker: max agent calls reached"
                 break
@@ -1242,7 +1242,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 warnings_reviewed=warnings_reviewed,
                 error=error,
                 duration_seconds=(self.clock.now() - start_time).total_seconds(),
-                pipeline_run_id=context.pipeline_run_id,
+                workflow_run_id=context.workflow_run_id,
             ))
 
         self._log_event({

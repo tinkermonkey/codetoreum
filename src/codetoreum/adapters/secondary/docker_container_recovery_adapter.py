@@ -21,7 +21,7 @@ from dateutil import parser as dateparser
 from codetoreum.domain.types import (
     CONTAINER_LABEL_AGENT,
     CONTAINER_LABEL_EXECUTION_ID,
-    CONTAINER_LABEL_PIPELINE_RUN_ID,
+    CONTAINER_LABEL_WORKFLOW_RUN_ID,
     CONTAINER_LABEL_PROJECT,
     CONTAINER_LABEL_TASK_ID,
     CONTAINER_LABEL_TYPE,
@@ -396,7 +396,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
 
         # Extract optional labels
         work_item_id = labels.get(CONTAINER_LABEL_WORK_ITEM_ID)
-        pipeline_run_id = labels.get(CONTAINER_LABEL_PIPELINE_RUN_ID)
+        workflow_run_id = labels.get(CONTAINER_LABEL_WORKFLOW_RUN_ID)
         execution_id = labels.get(CONTAINER_LABEL_EXECUTION_ID)
 
         return ContainerMetadata(
@@ -408,7 +408,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
             created_at=created_at,
             labels=MappingProxyType(labels),
             work_item_id=work_item_id,
-            pipeline_run_id=pipeline_run_id,
+            workflow_run_id=workflow_run_id,
             execution_id=execution_id,
         )
 
@@ -602,7 +602,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
         # Step 1: Check for completed result in storage
         result_key = (
             f"repair_cycle:result:{metadata.project_id}:"
-            f"{metadata.work_item_id}:{metadata.pipeline_run_id}"
+            f"{metadata.work_item_id}:{metadata.workflow_run_id}"
         )
 
         try:
@@ -612,7 +612,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                 # Repair cycle completed during downtime - will be processed separately
                 logger.info(
                     f"Found completed repair cycle result in storage for "
-                    f"{metadata.project_id}/{metadata.work_item_id}/{metadata.pipeline_run_id}"
+                    f"{metadata.project_id}/{metadata.work_item_id}/{metadata.workflow_run_id}"
                 )
                 return RecoveryAssessment(
                     container_id=metadata.container_id,
@@ -636,21 +636,21 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
             # Container is old (>2 hours) - check checkpoint staleness
             checkpoint = None
 
-            if self.checkpoint_store and metadata.pipeline_run_id:
+            if self.checkpoint_store and metadata.workflow_run_id:
                 try:
                     # Try to get checkpoint - use generic "all" test type for repair cycles
                     checkpoint = await self.checkpoint_store.get_checkpoint(
-                        pipeline_run_id=metadata.pipeline_run_id, test_type="all"
+                        workflow_run_id=metadata.workflow_run_id, test_type="all"
                     )
                 except (KeyError, AttributeError, ValueError) as e:
                     logger.warning(
-                        f"Failed to get checkpoint for {metadata.pipeline_run_id}: {e}",
+                        f"Failed to get checkpoint for {metadata.workflow_run_id}: {e}",
                         exc_info=True,
                         extra={"error_id": ErrorRegistry.ERR_CHECKPOINT_ERROR, "error_type": "expected"}
                     )
                 except Exception as e:
                     logger.error(
-                        f"UNEXPECTED error getting checkpoint for {metadata.pipeline_run_id}: {e}",
+                        f"UNEXPECTED error getting checkpoint for {metadata.workflow_run_id}: {e}",
                         exc_info=True,
                         extra={"error_id": ErrorRegistry.ERR_CHECKPOINT_ERROR, "error_type": "unexpected"}
                     )
@@ -662,7 +662,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                     checkpoint_time = dateparser.isoparse(checkpoint.timestamp)
                 except (ValueError, TypeError, AttributeError) as e:
                     logger.error(
-                        f"Failed to parse checkpoint timestamp for repair cycle {metadata.pipeline_run_id}: {e}. "
+                        f"Failed to parse checkpoint timestamp for repair cycle {metadata.workflow_run_id}: {e}. "
                         f"Treating checkpoint as stale and will kill container. "
                         f"Raw timestamp value: {getattr(checkpoint, 'timestamp', 'MISSING')}",
                         exc_info=True,
@@ -670,7 +670,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                             "error_id": ErrorRegistry.ERR_CHECKPOINT_ERROR,
                             "error_type": "expected",
                             "container_id": metadata.container_id,
-                            "pipeline_run_id": metadata.pipeline_run_id,
+                            "workflow_run_id": metadata.workflow_run_id,
                             "raw_checkpoint_timestamp": getattr(checkpoint, "timestamp", "MISSING"),
                             "impact": "checkpoint_treated_as_stale_will_kill_container",
                         }
@@ -681,14 +681,14 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                     )
                 except Exception as e:
                     logger.error(
-                        f"UNEXPECTED error parsing checkpoint timestamp for repair cycle {metadata.pipeline_run_id}: {e}. "
+                        f"UNEXPECTED error parsing checkpoint timestamp for repair cycle {metadata.workflow_run_id}: {e}. "
                         f"Treating checkpoint as stale and will kill container.",
                         exc_info=True,
                         extra={
                             "error_id": ErrorRegistry.ERR_CHECKPOINT_ERROR,
                             "error_type": "unexpected",
                             "container_id": metadata.container_id,
-                            "pipeline_run_id": metadata.pipeline_run_id,
+                            "workflow_run_id": metadata.workflow_run_id,
                             "raw_checkpoint_timestamp": getattr(checkpoint, "timestamp", "MISSING"),
                             "impact": "checkpoint_treated_as_stale_will_kill_container",
                         }

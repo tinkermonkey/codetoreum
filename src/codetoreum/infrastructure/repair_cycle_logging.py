@@ -2,7 +2,7 @@
 
 Provides structured logging for repair cycle stages with:
 - Correlation IDs for request tracing
-- Structured fields for log aggregation (pipeline_run_id, test_type, agent_name, etc.)
+- Structured fields for log aggregation (workflow_run_id, test_type, agent_name, etc.)
 - Performance timing for each stage
 - Detailed error logging with context
 - Log levels appropriate to severity
@@ -43,7 +43,7 @@ class RepairCycleLogLevel(str, Enum):
 class RepairCycleLogContext:
     """Structured context for repair cycle logging."""
 
-    pipeline_run_id: str
+    workflow_run_id: str
     stage_name: str
     agent_name: str
     test_type: Optional[str] = None

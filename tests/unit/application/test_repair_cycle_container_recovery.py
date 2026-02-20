@@ -32,7 +32,7 @@ from codetoreum.ports.exceptions import StorageError
 
 
 def create_test_checkpoint(
-    pipeline_run_id: str,
+    workflow_run_id: str,
     test_type: str = "all",
     iteration: int = 1,
     timestamp_offset: timedelta = timedelta(minutes=0),
@@ -43,7 +43,7 @@ def create_test_checkpoint(
     expires_at = checkpoint_time + timedelta(hours=24)
 
     return RepairCycleCheckpoint(
-        pipeline_run_id=pipeline_run_id,
+        workflow_run_id=workflow_run_id,
         test_type=test_type,
         iteration=iteration,
         total_agent_calls=5,
@@ -81,7 +81,7 @@ class TestGetRunningRepairCycleContainers:
                     "org.codetoreum.agent": "agent-1",
                     "org.codetoreum.task_id": "task-1",
                     "org.codetoreum.work_item_id": "100",
-                    "org.codetoreum.pipeline_run_id": "run-abc",
+                    "org.codetoreum.workflow_run_id": "run-abc",
                     "org.codetoreum.execution_id": "exec-123",
                 }
             },
@@ -164,7 +164,7 @@ class TestRepairCycleContainerAssessment:
                 "org.codetoreum.agent": "repair-agent",
             }),
             work_item_id="100",
-            pipeline_run_id="run-abc",
+            workflow_run_id="run-abc",
             execution_id="exec-123",
         )
 
@@ -206,7 +206,7 @@ class TestRepairCycleContainerAssessment:
                 "org.codetoreum.agent": "repair-agent",
             }),
             work_item_id="100",
-            pipeline_run_id="run-abc",
+            workflow_run_id="run-abc",
             execution_id="exec-123",
         )
 
@@ -244,7 +244,7 @@ class TestRepairCycleContainerAssessment:
                 "org.codetoreum.agent": "repair-agent",
             }),
             work_item_id="100",
-            pipeline_run_id="run-abc",
+            workflow_run_id="run-abc",
             execution_id="exec-123",
         )
 
@@ -286,7 +286,7 @@ class TestRepairCycleContainerAssessment:
                 "org.codetoreum.agent": "repair-agent",
             }),
             work_item_id="100",
-            pipeline_run_id="run-abc",
+            workflow_run_id="run-abc",
             execution_id="exec-123",
         )
 
@@ -324,7 +324,7 @@ class TestRepairCycleContainerAssessment:
                 "org.codetoreum.agent": "repair-agent",
             }),
             work_item_id="100",
-            pipeline_run_id="run-abc",
+            workflow_run_id="run-abc",
             execution_id="exec-123",
         )
 
@@ -360,7 +360,7 @@ class TestRepairCycleContainerAssessment:
                 "org.codetoreum.agent": "repair-agent",
             }),
             work_item_id="100",
-            pipeline_run_id="run-abc",
+            workflow_run_id="run-abc",
             execution_id="exec-123",
         )
 

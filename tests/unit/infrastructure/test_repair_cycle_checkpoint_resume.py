@@ -24,7 +24,7 @@ from codetoreum.infrastructure.simulation.simulation_clock import SimulationCloc
 class _RepairCycleContextImpl:
     """Concrete implementation of RepairCycleContext Protocol for testing."""
     stage_name: str
-    pipeline_run_id: str
+    workflow_run_id: str
     test_configs: tuple
     agent_name: str
     max_total_agent_calls: int
@@ -35,7 +35,7 @@ def _create_repair_cycle_context(**kwargs) -> RepairCycleContext:
     """Factory function to create RepairCycleContext instances for testing."""
     defaults = {
         "stage_name": "code_review",
-        "pipeline_run_id": "run-123",
+        "workflow_run_id": "run-123",
         "test_configs": (),
         "agent_name": "reviewer",
         "max_total_agent_calls": 10,
@@ -59,7 +59,7 @@ class TestCheckpointStorage:
         """Create a valid checkpoint."""
         now = datetime.now(timezone.utc)
         return RepairCycleCheckpoint(
-            pipeline_run_id="run-123",
+            workflow_run_id="run-123",
             test_type="UNIT",
             iteration=2,
             total_agent_calls=5,
@@ -81,7 +81,7 @@ class TestCheckpointStorage:
         await store.save_checkpoint(checkpoint)
         retrieved = await store.get_checkpoint("run-123", "UNIT")
         assert retrieved is not None
-        assert retrieved.pipeline_run_id == "run-123"
+        assert retrieved.workflow_run_id == "run-123"
         assert retrieved.test_type == "UNIT"
         assert retrieved.iteration == 2
         assert retrieved.total_agent_calls == 5
@@ -110,7 +110,7 @@ class TestCheckpointStorage:
         # Create checkpoints for multiple test types
         for test_type in ["UNIT", "INTEGRATION", "E2E"]:
             checkpoint = RepairCycleCheckpoint(
-                pipeline_run_id="run-123",
+                workflow_run_id="run-123",
                 test_type=test_type,
                 iteration=1,
                 total_agent_calls=1,
@@ -143,7 +143,7 @@ class TestCheckpointStorage:
         # Create checkpoints for different runs
         for i in range(1, 4):
             checkpoint = RepairCycleCheckpoint(
-                pipeline_run_id=f"run-{i}",
+                workflow_run_id=f"run-{i}",
                 test_type="UNIT",
                 iteration=i,
                 total_agent_calls=i,
@@ -166,7 +166,7 @@ class TestCheckpointStorage:
         """Test that invalid checkpoint raises error."""
         with pytest.raises(ValueError):
             checkpoint = RepairCycleCheckpoint(
-                pipeline_run_id="",  # Empty - invalid
+                workflow_run_id="",  # Empty - invalid
                 test_type="UNIT",
                 iteration=1,
                 total_agent_calls=0,
@@ -203,7 +203,7 @@ class TestRepairCycleCheckpoint:
         """Create repair cycle context."""
         return _create_repair_cycle_context(
             stage_name="code_review",
-            pipeline_run_id="run-123",
+            workflow_run_id="run-123",
             test_configs=(
                 RepairTestRunConfig(test_type=RepairTestType.UNIT, max_iterations=3),
             ),
@@ -273,7 +273,7 @@ class TestRepairCycleResume:
         """Create repair cycle context."""
         return _create_repair_cycle_context(
             stage_name="code_review",
-            pipeline_run_id="run-123",
+            workflow_run_id="run-123",
             test_configs=(
                 RepairTestRunConfig(test_type=RepairTestType.UNIT, max_iterations=3),
             ),
@@ -287,7 +287,7 @@ class TestRepairCycleResume:
         # Save checkpoint with state
         now = datetime.now(timezone.utc)
         checkpoint = RepairCycleCheckpoint(
-            pipeline_run_id="run-123",
+            workflow_run_id="run-123",
             test_type="UNIT",
             iteration=2,
             total_agent_calls=3,
@@ -311,7 +311,7 @@ class TestRepairCycleResume:
         """Test that resume restores internal state."""
         now = datetime.now(timezone.utc)
         checkpoint = RepairCycleCheckpoint(
-            pipeline_run_id="run-123",
+            workflow_run_id="run-123",
             test_type="UNIT",
             iteration=2,
             total_agent_calls=5,

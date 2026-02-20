@@ -14,7 +14,7 @@ from codetoreum.domain.agent_execution import AgentExecution
 from codetoreum.domain.types import (
     CONTAINER_LABEL_AGENT,
     CONTAINER_LABEL_EXECUTION_ID,
-    CONTAINER_LABEL_PIPELINE_RUN_ID,
+    CONTAINER_LABEL_WORKFLOW_RUN_ID,
     CONTAINER_LABEL_PROJECT,
     CONTAINER_LABEL_TASK_ID,
     CONTAINER_LABEL_TYPE,
@@ -129,7 +129,7 @@ class TestExecutionServiceLabelBuilding:
         assert CONTAINER_LABEL_AGENT in labels
         assert CONTAINER_LABEL_WORK_ITEM_ID in labels
         assert CONTAINER_LABEL_TASK_ID in labels
-        assert CONTAINER_LABEL_PIPELINE_RUN_ID in labels
+        assert CONTAINER_LABEL_WORKFLOW_RUN_ID in labels
         assert CONTAINER_LABEL_EXECUTION_ID in labels
 
     def test_build_container_labels_values_match_execution_context(self):
@@ -187,7 +187,7 @@ class TestExecutionServiceLabelBuilding:
         assert labels[CONTAINER_LABEL_AGENT] == "agent-1"
         assert labels[CONTAINER_LABEL_WORK_ITEM_ID] == "work-item-456"
         assert labels[CONTAINER_LABEL_TASK_ID] == "exec-123"
-        assert labels[CONTAINER_LABEL_PIPELINE_RUN_ID] == "workflow-789"
+        assert labels[CONTAINER_LABEL_WORKFLOW_RUN_ID] == "workflow-789"
         assert labels[CONTAINER_LABEL_EXECUTION_ID] == "exec-123"
 
     def test_build_container_labels_uses_execution_id_as_task_id(self):
@@ -243,7 +243,7 @@ class TestExecutionServiceLabelBuilding:
         assert labels[CONTAINER_LABEL_TASK_ID] == "exec-abc123"
         assert labels[CONTAINER_LABEL_EXECUTION_ID] == "exec-abc123"
 
-    def test_build_container_labels_uses_workflow_id_as_pipeline_run_id(self):
+    def test_build_container_labels_uses_workflow_id_as_workflow_run_id(self):
         """Pipeline run ID label should use workflow ID."""
         execution = AgentExecution(
             id="exec-123",
@@ -293,7 +293,7 @@ class TestExecutionServiceLabelBuilding:
         labels = self.service._build_container_labels(execution, context)
 
         # Pipeline run ID should be workflow ID
-        assert labels[CONTAINER_LABEL_PIPELINE_RUN_ID] == "workflow-xyz789"
+        assert labels[CONTAINER_LABEL_WORKFLOW_RUN_ID] == "workflow-xyz789"
 
     def test_build_container_labels_returns_dict(self):
         """Container labels should be a dict."""

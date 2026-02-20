@@ -58,7 +58,7 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
         task_id: str,
         work_item_id: Optional[str] = None,
         execution_id: Optional[str] = None,
-        pipeline_run_id: Optional[str] = None,
+        workflow_run_id: Optional[str] = None,
         created_at: Optional[datetime] = None,
         age_hours: Optional[float] = None,
         container_type: str = CONTAINER_TYPE_AGENT,
@@ -74,7 +74,7 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
             task_id: Task ID
             work_item_id: Optional work item ID
             execution_id: Optional execution ID
-            pipeline_run_id: Optional pipeline run ID
+            workflow_run_id: Optional pipeline run ID
             created_at: Optional creation timestamp (defaults to now)
             age_hours: Optional age in hours (used instead of created_at)
             container_type: Container type (agent or repair-cycle)
@@ -103,7 +103,7 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
             }),
             work_item_id=work_item_id,
             execution_id=execution_id,
-            pipeline_run_id=pipeline_run_id,
+            workflow_run_id=workflow_run_id,
         )
 
         if container_type == CONTAINER_TYPE_REPAIR_CYCLE:

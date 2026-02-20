@@ -30,7 +30,7 @@ class RepairCycleEventContext:
     """Context for repair cycle execution from column change event."""
 
     stage_name: str
-    pipeline_run_id: str
+    workflow_run_id: str
     test_configs: Tuple[RepairTestRunConfig, ...]
     agent_name: str
     max_total_agent_calls: int
@@ -175,7 +175,7 @@ class RepairCycleEventHandler(EventHandler):
             # Create repair cycle context
             context = RepairCycleEventContext(
                 stage_name="Testing",
-                pipeline_run_id=work_item_id,
+                workflow_run_id=work_item_id,
                 test_configs=(
                     RepairTestRunConfig(test_type=RepairTestType.UNIT),
                     RepairTestRunConfig(test_type=RepairTestType.INTEGRATION),

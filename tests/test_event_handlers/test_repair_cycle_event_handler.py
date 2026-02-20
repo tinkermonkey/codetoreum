@@ -297,7 +297,7 @@ class TestRepairCycleEventHandlerColumnChange:
 
         await handler.handle_column_change(event)
 
-        assert repair_cycle_adapter.last_context.pipeline_run_id == "item-123"
+        assert repair_cycle_adapter.last_context.workflow_run_id == "item-123"
         assert repair_cycle_adapter.last_context.stage_name == "Testing"
 
     @pytest.mark.asyncio
@@ -498,7 +498,7 @@ class TestRepairCycleEventContext:
         """Test context can be created with required fields."""
         context = RepairCycleEventContext(
             stage_name="Testing",
-            pipeline_run_id="item-1",
+            workflow_run_id="item-1",
             test_configs=(
                 RepairTestRunConfig(test_type=RepairTestType.UNIT),
             ),
@@ -508,7 +508,7 @@ class TestRepairCycleEventContext:
         )
 
         assert context.stage_name == "Testing"
-        assert context.pipeline_run_id == "item-1"
+        assert context.workflow_run_id == "item-1"
         assert context.agent_name == "senior_software_engineer"
         assert context.max_total_agent_calls == 100
         assert context.checkpoint_interval == 5
@@ -521,7 +521,7 @@ class TestRepairCycleEventContext:
         )
         context = RepairCycleEventContext(
             stage_name="Testing",
-            pipeline_run_id="item-1",
+            workflow_run_id="item-1",
             test_configs=configs,
             agent_name="senior_software_engineer",
             max_total_agent_calls=100,

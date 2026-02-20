@@ -265,7 +265,7 @@ class RepairCycleMetricsCollector:
                     error_message=str(error),
                     consecutive_failures=self._backend_consecutive_failures,
                     circuit_breaker_open=self._backend_circuit_open,
-                    pipeline_run_id=getattr(error, 'pipeline_run_id', ''),
+                    workflow_run_id=getattr(error, 'workflow_run_id', ''),
                 )
             )
 

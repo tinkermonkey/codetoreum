@@ -36,7 +36,7 @@ class RepairCycleTestContext:
     """Test implementation of RepairCycleContext protocol."""
 
     stage_name: str
-    pipeline_run_id: str
+    workflow_run_id: str
     test_configs: Tuple[RepairTestRunConfig, ...]
     agent_name: str
     max_total_agent_calls: int
@@ -64,7 +64,7 @@ def create_repair_context(
     """Create repair cycle context from config."""
     return RepairCycleTestContext(
         stage_name=stage_name,
-        pipeline_run_id="test-run-123",
+        workflow_run_id="test-run-123",
         test_configs=test_configs,
         agent_name="repair_agent",
         max_total_agent_calls=max_total_agent_calls,

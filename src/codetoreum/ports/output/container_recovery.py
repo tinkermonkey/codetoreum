@@ -48,7 +48,7 @@ class ContainerMetadata:
         created_at: Container creation timestamp from Docker API
         labels: Complete label mapping from container for reference (immutable MappingProxyType)
         work_item_id: Work item ID from org.codetoreum.work_item_id label (optional)
-        pipeline_run_id: Pipeline run ID from org.codetoreum.pipeline_run_id label (optional)
+        workflow_run_id: Pipeline run ID from org.codetoreum.workflow_run_id label (optional)
         execution_id: Execution ID from org.codetoreum.execution_id label (optional)
 
     Validation Rules:
@@ -71,7 +71,7 @@ class ContainerMetadata:
     created_at: datetime
     labels: MappingProxyType
     work_item_id: Optional[str] = None
-    pipeline_run_id: Optional[str] = None
+    workflow_run_id: Optional[str] = None
     execution_id: Optional[str] = None
 
     def __post_init__(self) -> None:
@@ -100,8 +100,8 @@ class ContainerMetadata:
         # Validate optional fields if provided
         if self.work_item_id is not None and not self.work_item_id.strip():
             raise ValueError("work_item_id must be non-empty if provided")
-        if self.pipeline_run_id is not None and not self.pipeline_run_id.strip():
-            raise ValueError("pipeline_run_id must be non-empty if provided")
+        if self.workflow_run_id is not None and not self.workflow_run_id.strip():
+            raise ValueError("workflow_run_id must be non-empty if provided")
         if self.execution_id is not None and not self.execution_id.strip():
             raise ValueError("execution_id must be non-empty if provided")
 

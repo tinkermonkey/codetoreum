@@ -14,7 +14,7 @@ from codetoreum.domain.project_context import ProjectContext
 from codetoreum.domain.types import (
     CONTAINER_LABEL_AGENT,
     CONTAINER_LABEL_EXECUTION_ID,
-    CONTAINER_LABEL_PIPELINE_RUN_ID,
+    CONTAINER_LABEL_WORKFLOW_RUN_ID,
     CONTAINER_LABEL_PROJECT,
     CONTAINER_LABEL_TASK_ID,
     CONTAINER_LABEL_TYPE,
@@ -444,7 +444,7 @@ class ExecutionService:
             # Phase 2 recovery service uses these for container identification and tracking.
             # Future phases may introduce separate task IDs from an external scheduler.
             CONTAINER_LABEL_TASK_ID: execution.id,
-            CONTAINER_LABEL_PIPELINE_RUN_ID: execution.workflow_id,
+            CONTAINER_LABEL_WORKFLOW_RUN_ID: execution.workflow_id,
             CONTAINER_LABEL_EXECUTION_ID: execution.id,
         }
         return labels
