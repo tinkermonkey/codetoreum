@@ -39,6 +39,15 @@ class PatternElement:
     min_occurrences: int  # Minimum required occurrences
     max_occurrences: Optional[int]  # Maximum allowed occurrences (None = unlimited)
 
+    def __post_init__(self):
+        """Validate pattern element after initialization."""
+        if not self.event_types:
+            raise ValueError("event_types must be a non-empty list")
+        if self.min_occurrences < 0:
+            raise ValueError("min_occurrences must be >= 0")
+        if self.max_occurrences is not None and self.max_occurrences < self.min_occurrences:
+            raise ValueError("max_occurrences must be >= min_occurrences")
+
 
 @dataclass
 class ValidationResult:
@@ -46,7 +55,7 @@ class ValidationResult:
     is_valid: bool
     missing_events: List[str]  # Expected events that didn't occur
     unexpected_events: List[str]  # Events that shouldn't have occurred
-    out_of_order_events: List[Tuple[str, int, int]]  # (event_type, expected_pos, actual_pos)
+    out_of_order_events: List[Tuple[str, int, int]]  # NOT IMPLEMENTED - always empty list
     error_message: Optional[str] = None
 
     def __post_init__(self):

@@ -46,6 +46,27 @@ class TestOutOfOrderEvent:
         assert "expectedPosition" in data
         assert "actualPosition" in data
 
+    def test_out_of_order_event_with_none_timestamp(self):
+        """Test OutOfOrderEvent with optional timestamp=None."""
+        event = OutOfOrderEvent(
+            eventType="WorkflowStageAdvanced",
+            timestamp=None,
+            expectedPosition=5,
+            actualPosition=3
+        )
+
+        assert event.eventType == "WorkflowStageAdvanced"
+        assert event.timestamp is None
+        assert event.expectedPosition == 5
+        assert event.actualPosition == 3
+
+        # Verify serialization works with None timestamp
+        data = event.model_dump(by_alias=True, mode='json')
+        assert data["eventType"] == "WorkflowStageAdvanced"
+        assert data["timestamp"] is None
+        assert data["expectedPosition"] == 5
+        assert data["actualPosition"] == 3
+
 
 class TestAuditValidationResult:
     """Tests for AuditValidationResult DTO."""

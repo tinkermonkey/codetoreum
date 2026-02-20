@@ -133,8 +133,8 @@ class RecoveryAssessment:
         - action must be one of: "reconnect" or "kill"
         - reason must be non-empty and non-whitespace (required)
         - with_monitoring must be a boolean
-        - execution_id must be non-empty if provided, or None
-        - If action is "reconnect", execution_id is required
+        - execution_id must be non-empty string (no whitespace-only) if provided, or None
+        - If action is "reconnect", execution_id is required (not None, not empty)
         - If action is "kill", execution_id must be None
     """
 
