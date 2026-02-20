@@ -210,7 +210,7 @@ class ObservabilityConfig:
         """
         otel_enabled = os.getenv("OTEL_ENABLED", "true").lower() == "true"
 
-        return cls(
+        config = cls(
             enabled=otel_enabled,
             traces_enabled=(
                 os.getenv("OTEL_TRACES_ENABLED", "true").lower() == "true"
@@ -251,6 +251,11 @@ class ObservabilityConfig:
             log_level=os.getenv("OTEL_LOG_LEVEL", "info"),
         )
 
+        # Validate configuration before returning
+        config.validate()
+
+        return config
+
     @staticmethod
     def _validate_sampler_type(sampler_value: str) -> str:
         """
@@ -273,11 +278,24 @@ class ObservabilityConfig:
 
     def validate(self) -> None:
         """
-        Validate configuration and log warnings for misconfigured signals.
+        Validate configuration and raise errors for critical issues.
+
+        Raises:
+            ValueError: If observability is enabled but no signals are configured,
+                       or if a signal is enabled without a valid endpoint.
 
         Warnings:
             Logs warning if a signal is enabled but its endpoint is not configured.
         """
+        # Critical: Observability enabled but no signals configured
+        if self.enabled and not self.traces_enabled and not self.metrics_enabled and not self.logs_enabled:
+            raise ValueError(
+                "Observability enabled but no signals (traces/metrics/logs) are enabled. "
+                "Either enable at least one signal or disable observability entirely "
+                "(set OTEL_ENABLED=false)."
+            )
+
+        # Validate each enabled signal has an endpoint
         if self.traces_enabled and not self.traces_endpoint:
             logger.warning(
                 "Traces enabled but traces_endpoint is not configured. "

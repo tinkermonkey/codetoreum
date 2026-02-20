@@ -63,6 +63,57 @@ from codetoreum.infrastructure.error_ids import ErrorRegistry
 logger = stdlib_logging.getLogger(__name__)
 
 
+def _check_otlp_connectivity(config: ObservabilityConfig) -> None:
+    """
+    Check connectivity to OTLP endpoint before full setup.
+
+    Attempts to verify that the OTLP endpoint is reachable by testing the network
+    connection. Logs a warning if the endpoint is not reachable but does not fail setup.
+
+    Args:
+        config: Observability configuration containing OTLP endpoint details
+    """
+    try:
+        import socket
+
+        # Parse endpoint to extract host and port
+        endpoint = config.signoz.grpc_endpoint
+
+        # Handle format: "host:port" or "http://host:port"
+        endpoint_parts = endpoint.replace("http://", "").replace("https://", "").split(":")
+        if len(endpoint_parts) < 2:
+            logger.debug(f"Could not parse OTLP endpoint for connectivity check: {endpoint}")
+            return
+
+        host = endpoint_parts[0]
+        port_str = endpoint_parts[1].split("/")[0]  # Remove path if present
+
+        try:
+            port = int(port_str)
+        except ValueError:
+            logger.debug(f"Invalid port in OTLP endpoint: {port_str}")
+            return
+
+        # Test connectivity with timeout
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(2)
+        result = sock.connect_ex((host, port))
+        sock.close()
+
+        if result != 0:
+            logger.warning(
+                f"OTLP endpoint {endpoint} is not reachable (connection failed with code {result}). "
+                f"Observability will be degraded until endpoint is available. "
+                f"Verify that Signoz is running and accessible.",
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+            )
+        else:
+            logger.debug(f"OTLP endpoint {endpoint} connectivity check passed")
+    except Exception as e:
+        # Don't fail setup on connectivity check errors
+        logger.debug(f"Could not verify OTLP endpoint connectivity: {e}")
+
+
 def _get_sampler(config: ObservabilityConfig):
     """
     Create sampler based on configuration.
@@ -143,6 +194,7 @@ class _InstrumentedSpanExporter(SpanExporter):
         self._meter = None
         self._duration_histogram = None
         self._export_counter = None
+        self._failure_counter = None
 
         try:
             from opentelemetry import metrics
@@ -159,6 +211,12 @@ class _InstrumentedSpanExporter(SpanExporter):
             self._export_counter = self._meter.create_counter(
                 "otel.trace.export.success",
                 description="Number of successful OTLP trace exports"
+            )
+
+            # Create counter for failed exports
+            self._failure_counter = self._meter.create_counter(
+                "otel.trace.export.failures",
+                description="Number of failed OTLP trace exports"
             )
         except Exception as e:
             logger.debug(f"Failed to create metrics for span export: {e}", exc_info=True)
@@ -190,7 +248,19 @@ class _InstrumentedSpanExporter(SpanExporter):
 
             return result
         except Exception as e:
-            logger.error(f"Span export failed: {e}", exc_info=True)
+            # Record failure metric even if spans aren't exported
+            if self._failure_counter:
+                try:
+                    self._failure_counter.add(1)
+                except Exception:
+                    pass  # Metrics failure shouldn't prevent span export error propagation
+
+            # Log at ERROR level so operators know observability is failing
+            logger.error(
+                f"Failed to export {len(spans)} spans to OTLP endpoint: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+            )
             raise
 
     def shutdown(self):
@@ -277,6 +347,7 @@ def _setup_log_export(config: ObservabilityConfig, resource: "Resource") -> None
         log_exporter = OTLPLogExporter(
             endpoint=config.logs_endpoint,
             insecure=config.signoz.insecure,
+            timeout=5,  # 5 second timeout for export connection
         )
 
         # Create logger provider with resource
@@ -407,6 +478,7 @@ def _setup_metrics_export(config: ObservabilityConfig, resource: "Resource") -> 
         metric_exporter = OTLPMetricExporter(
             endpoint=config.metrics_endpoint,
             insecure=config.signoz.insecure,
+            timeout=5,  # 5 second timeout for export connection
         )
 
         # Create periodic metric reader for interval-based export
@@ -498,10 +570,14 @@ def setup_opentelemetry(config: ObservabilityConfig, app=None) -> None:
         # Create sampler based on configuration
         sampler = _get_sampler(config)
 
+        # Health check: verify OTLP endpoint connectivity
+        _check_otlp_connectivity(config)
+
         # Create OTLP span exporter for Signoz
         otlp_exporter = OTLPSpanExporter(
             endpoint=config.signoz.grpc_endpoint,
             insecure=config.signoz.insecure,
+            timeout=5,  # 5 second timeout for export connection
         )
 
         # Wrap exporter with instrumentation to measure export duration
