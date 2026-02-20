@@ -1454,7 +1454,7 @@ def create_development_app() -> FastAPI:
                 "hasNext": False,
             }
 
-        async def get_workflow_run_audit(self, workflow_run_id: str, offset=0, limit=100):
+        async def get_workflow_run_audit(self, workflow_run_id: str, offset=0, limit=100, include_validation=True):
             from codetoreum.ports.input.workflow_run_query import WorkflowRunSummary, WorkflowRunStatus
             # Mock audit response
             return {

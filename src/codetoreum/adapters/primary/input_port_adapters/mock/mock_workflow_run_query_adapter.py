@@ -136,6 +136,7 @@ class MockWorkflowRunQueryAdapter(IWorkflowRunQueryPort):
         workflow_run_id: str,
         offset: int = 0,
         limit: int = 100,
+        include_validation: bool = True,
     ) -> Dict:
         """Get comprehensive audit information for a workflow run."""
         # Mock workflow run summary

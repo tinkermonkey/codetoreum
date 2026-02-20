@@ -202,6 +202,7 @@ class IWorkflowRunQueryPort(ABC):
         workflow_run_id: str,
         offset: int = 0,
         limit: int = 100,
+        include_validation: bool = True,
     ) -> dict:
         """
         Retrieves comprehensive audit information for a workflow run.
@@ -210,12 +211,13 @@ class IWorkflowRunQueryPort(ABC):
         - Workflow run summary
         - All events with pagination
         - Stage-grouped events
-        - Sequence validation results
+        - Sequence validation results (optional)
 
         Args:
             workflow_run_id: Unique identifier for the workflow run
             offset: Event pagination offset (default: 0)
-            limit: Event pagination limit (default: 100, max: 500)
+            limit: Event pagination limit (default: 100, max: 200)
+            include_validation: Whether to validate event sequence (default: True)
 
         Returns:
             Dictionary containing audit data compatible with WorkflowRunAuditResponse:
@@ -223,7 +225,7 @@ class IWorkflowRunQueryPort(ABC):
                 "workflow_run": WorkflowRunSummary,
                 "events": List[event_dict],
                 "stages": List[stage_info_dict],
-                "validation": validation_result_dict,
+                "validation": validation_result_dict or None,
                 "total_event_count": int,
                 "offset": int,
                 "limit": int,

@@ -133,7 +133,7 @@ class WorkflowRunMapper:
         return WorkflowEventResponse(
             id=event.get("id") or event.get("event_id", ""),
             eventType=event.get("eventType") or event.get("event_type", ""),
-            workflowRunId=event.get("workflowRunId") or event.get("workflow_run_id", ""),
+            workflowRunId=event.get("workflowRunId") or event.get("workflow_run_id") or event.get("aggregate_id", ""),
             timestamp=event.get("timestamp") or event.get("occurred_at"),
             agentName=event.get("agentName") or event.get("agent_name"),
             stageName=event.get("stageName") or event.get("stage_name"),

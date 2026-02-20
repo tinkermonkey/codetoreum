@@ -7,8 +7,8 @@ from the event store using event sourcing.
 
 import asyncio
 import logging
+from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
-from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
 from codetoreum.domain.events import DomainEvent, WorkflowCreated
@@ -37,12 +37,13 @@ logger = logging.getLogger(__name__)
 
 class LRUCache:
     """
-    Simple LRU cache with size limit and TTL support.
+    Thread-safe LRU cache with size limit and TTL support.
 
     Features:
     - Maximum size limit with LRU eviction
     - TTL (time-to-live) for cache entries
-    - Thread-safe operations (async-safe)
+    - Async-safe operations using asyncio.Lock
+    - O(1) operations using OrderedDict
     """
 
     def __init__(self, max_size: int = 1000, ttl_seconds: int = 300):
@@ -55,10 +56,10 @@ class LRUCache:
         """
         self.max_size = max_size
         self.ttl = timedelta(seconds=ttl_seconds)
-        self._cache: Dict[str, tuple[Any, datetime]] = {}
-        self._access_order: List[str] = []
+        self._cache: OrderedDict[str, tuple[Any, datetime]] = OrderedDict()
+        self._lock = asyncio.Lock()
 
-    def __contains__(self, key: str) -> bool:
+    async def __contains__(self, key: str) -> bool:
         """
         Check if key exists in cache (supports 'in' operator).
 
@@ -68,20 +69,19 @@ class LRUCache:
         Returns:
             True if key exists and is not expired, False otherwise
         """
-        if key not in self._cache:
-            return False
+        async with self._lock:
+            if key not in self._cache:
+                return False
 
-        # Check if expired
-        _, timestamp = self._cache[key]
-        if datetime.now(timezone.utc) - timestamp > self.ttl:
-            del self._cache[key]
-            if key in self._access_order:
-                self._access_order.remove(key)
-            return False
+            # Check if expired
+            _, timestamp = self._cache[key]
+            if datetime.now(timezone.utc) - timestamp > self.ttl:
+                del self._cache[key]
+                return False
 
-        return True
+            return True
 
-    def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Optional[Any]:
         """
         Get value from cache.
 
@@ -91,26 +91,23 @@ class LRUCache:
         Returns:
             Cached value or None if not found or expired
         """
-        if key not in self._cache:
-            return None
+        async with self._lock:
+            if key not in self._cache:
+                return None
 
-        value, timestamp = self._cache[key]
+            value, timestamp = self._cache[key]
 
-        # Check if expired
-        if datetime.now(timezone.utc) - timestamp > self.ttl:
-            del self._cache[key]
-            if key in self._access_order:
-                self._access_order.remove(key)
-            return None
+            # Check if expired
+            if datetime.now(timezone.utc) - timestamp > self.ttl:
+                del self._cache[key]
+                return None
 
-        # Update access order (move to end = most recently used)
-        if key in self._access_order:
-            self._access_order.remove(key)
-        self._access_order.append(key)
+            # Update access order (move to end = most recently used)
+            self._cache.move_to_end(key)
 
-        return value
+            return value
 
-    def set(self, key: str, value: Any) -> None:
+    async def set(self, key: str, value: Any) -> None:
         """
         Set value in cache.
 
@@ -118,28 +115,27 @@ class LRUCache:
             key: Cache key
             value: Value to cache
         """
-        # If key exists, update it
-        if key in self._cache:
-            if key in self._access_order:
-                self._access_order.remove(key)
+        async with self._lock:
+            # If key exists, remove it (we'll re-add at end)
+            if key in self._cache:
+                del self._cache[key]
 
-        # Evict least recently used if at max size
-        elif len(self._cache) >= self.max_size:
-            lru_key = self._access_order.pop(0)
-            del self._cache[lru_key]
+            # Evict least recently used if at max size
+            elif len(self._cache) >= self.max_size:
+                self._cache.popitem(last=False)
 
-        # Add new entry
-        self._cache[key] = (value, datetime.now(timezone.utc))
-        self._access_order.append(key)
+            # Add new entry (at end = most recently used)
+            self._cache[key] = (value, datetime.now(timezone.utc))
 
-    def clear(self) -> None:
+    async def clear(self) -> None:
         """Clear all cached entries."""
-        self._cache.clear()
-        self._access_order.clear()
+        async with self._lock:
+            self._cache.clear()
 
-    def size(self) -> int:
+    async def size(self) -> int:
         """Get current cache size."""
-        return len(self._cache)
+        async with self._lock:
+            return len(self._cache)
 
 
 class WorkflowRunQueryService(IWorkflowRunQueryPort):
@@ -405,6 +401,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         workflow_run_id: str,
         offset: int = 0,
         limit: int = 100,
+        include_validation: bool = True,
     ) -> dict:
         """
         Retrieve comprehensive audit information for a workflow run.
@@ -412,19 +409,25 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         This method provides:
         - Workflow run summary with metadata enrichment
         - Paginated events list
-        - Stage-grouped events with duration calculations
-        - Sequence validation against expected patterns
+        - Stage-grouped events with duration calculations (always complete, not paginated)
+        - Sequence validation against expected patterns (optional)
 
         **Caching Strategy**:
         - Full audit results are cached with TTL
-        - Cache key includes pagination parameters for correctness
+        - Cache key includes pagination and validation parameters
         - Workflow run summary is cached separately via work item cache
         - Invalidation: Cache entries expire after TTL (default 5 minutes)
+
+        **Stage Grouping Note**:
+        The `stages` field in the response always contains complete stage information
+        (all events for each stage), regardless of the pagination applied to the main
+        `events` field. This ensures stage summaries provide a complete picture.
 
         Args:
             workflow_run_id: Unique identifier for the workflow run
             offset: Event pagination offset (default: 0)
-            limit: Event pagination limit (default: 100, max: 500)
+            limit: Event pagination limit (default: 100, max: 200)
+            include_validation: Whether to validate event sequence (default: True)
 
         Returns:
             Dictionary containing audit data compatible with WorkflowRunAuditResponse
@@ -434,12 +437,12 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         """
         logger.debug(
             f"Getting audit for workflow run: {workflow_run_id}, "
-            f"offset={offset}, limit={limit}"
+            f"offset={offset}, limit={limit}, include_validation={include_validation}"
         )
 
-        # Check cache (include pagination in cache key)
-        cache_key = f"{workflow_run_id}:audit:offset={offset}:limit={limit}"
-        cached_audit = self._audit_cache.get(cache_key)
+        # Check cache (include all query params in cache key)
+        cache_key = f"{workflow_run_id}:audit:offset={offset}:limit={limit}:validation={include_validation}"
+        cached_audit = await self._audit_cache.get(cache_key)
         if cached_audit is not None:
             logger.debug(f"Audit cache hit for {workflow_run_id}")
             return cached_audit
@@ -469,16 +472,18 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         # Apply pagination to events
         paginated_events = events_data[offset : offset + limit]
 
-        # Build stage-grouped events
+        # Build stage-grouped events (always complete, not paginated)
         stages_info = self._build_stage_info(workflow, all_events)
 
-        # Validate event sequence
-        actual_sequence = [event.event_type for event in all_events]
-        expected_pattern = self._sequence_registry.get_expected_sequence("default")
-        validation_result = self._sequence_validator.create_audit_validation_result(
-            expected_pattern,
-            actual_sequence
-        )
+        # Validate event sequence (optional)
+        validation_result = None
+        if include_validation:
+            actual_sequence = [event.event_type for event in all_events]
+            expected_pattern = self._sequence_registry.get_expected_sequence("default")
+            validation_result = self._sequence_validator.create_audit_validation_result(
+                expected_pattern,
+                actual_sequence
+            )
 
         # Build audit response
         audit_data = {
@@ -493,11 +498,12 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         }
 
         # Cache the result
-        self._audit_cache.set(cache_key, audit_data)
+        await self._audit_cache.set(cache_key, audit_data)
 
         logger.debug(
             f"Audit for {workflow_run_id}: {total_event_count} total events, "
-            f"{len(paginated_events)} returned, validation={'valid' if validation_result['sequenceValid'] else 'invalid'}"
+            f"{len(paginated_events)} returned"
+            + (f", validation={'valid' if validation_result and validation_result['sequenceValid'] else 'invalid'}" if include_validation else "")
         )
 
         return audit_data
@@ -706,7 +712,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
             TicketNotFoundError: If work item doesn't exist (when ticket system is available)
         """
         # Check cache
-        cached = self._work_item_cache.get(work_item_id)
+        cached = await self._work_item_cache.get(work_item_id)
         if cached is not None:
             logger.debug(f"Cache hit for work item {work_item_id}")
             return cached
@@ -731,7 +737,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
                     extra={"error_id": "ERR_WORKFLOW_RUN_QUERY_METADATA_NOT_FOUND"}
                 )
                 # Cache the failure to avoid repeated lookups
-                self._work_item_cache.set(work_item_id, metadata)
+                await self._work_item_cache.set(work_item_id, metadata)
                 raise
             except Exception as e:
                 logger.error(
@@ -743,7 +749,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
                 return metadata
 
         # Cache the result
-        self._work_item_cache.set(work_item_id, metadata)
+        await self._work_item_cache.set(work_item_id, metadata)
 
         return metadata
 

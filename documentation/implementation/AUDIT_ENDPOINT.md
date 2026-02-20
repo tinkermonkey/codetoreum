@@ -1,8 +1,8 @@
-# Phase 4: Audit Endpoint with Pagination and Caching
+# Workflow Run Audit Endpoint
 
 ## Overview
 
-Phase 4 completes the workflow run audit system by implementing a comprehensive REST API endpoint that provides:
+This implementation provides a comprehensive REST API endpoint for workflow run auditing that delivers:
 - Complete audit trail for workflow runs
 - Event pagination for large workflows
 - Stage-grouped events with duration calculations
@@ -25,6 +25,7 @@ async def get_workflow_run_audit(
     workflow_run_id: str,
     offset: int = 0,
     limit: int = 100,
+    include_validation: bool = True,
 ) -> dict:
     """
     Retrieves comprehensive audit information for a workflow run.
@@ -32,8 +33,8 @@ async def get_workflow_run_audit(
     Returns dictionary containing:
     - workflow_run: WorkflowRunSummary
     - events: List[event_dict] (paginated)
-    - stages: List[stage_info_dict]
-    - validation: validation_result_dict
+    - stages: List[stage_info_dict] (always complete, not paginated)
+    - validation: validation_result_dict or None
     - total_event_count: int
     - offset: int
     - limit: int
@@ -46,8 +47,9 @@ async def get_workflow_run_audit(
 **Key Features:**
 
 #### Caching Strategy
-- **Audit Cache**: Separate LRU cache for audit results (max_size = cache_size // 2)
-- **Cache Key**: Includes pagination parameters (`{workflow_run_id}:audit:offset={offset}:limit={limit}`)
+- **Audit Cache**: Thread-safe LRU cache using `OrderedDict` with `asyncio.Lock` for O(1) operations
+- **Audit Cache Size**: Separate LRU cache for audit results (max_size = cache_size // 2)
+- **Cache Key**: Includes all query parameters (`{workflow_run_id}:audit:offset={offset}:limit={limit}:validation={include_validation}`)
 - **TTL**: Configurable (default: 300 seconds = 5 minutes)
 - **Work Item Cache**: Shared with other query methods for metadata enrichment
 
@@ -271,19 +273,19 @@ All 14 tests passing ✅
 - Auto-eviction via LRU when limit reached
 - TTL ensures stale data is removed
 
-## Integration with Previous Phases
+## Integration with Related Components
 
-### Phase 1: Audit DTOs
+### Audit Response DTOs
 - Uses `WorkflowRunAuditResponse` from audit_dtos.py
 - Uses `AuditValidationResult` for validation
 - Uses `AuditStageInfo` for stage grouping
 
-### Phase 2: Expected Sequence Registry
+### Expected Sequence Registry
 - Uses `ExpectedSequenceRegistry` for pattern retrieval
 - Validates against workflow lifecycle patterns
 - Supports stage execution, review, and repair patterns
 
-### Phase 3: Event Sequence Validator
+### Event Sequence Validator
 - Uses `EventSequenceValidator` for pattern matching
 - Leverages pattern caching (30-50% performance improvement)
 - Uses `create_audit_validation_result()` for DTO compatibility
@@ -315,8 +317,13 @@ The endpoint is automatically documented in the FastAPI OpenAPI schema:
         schema:
           type: integer
           minimum: 1
-          maximum: 500
+          maximum: 200
           default: 100
+      - name: include_validation
+        in: query
+        schema:
+          type: boolean
+          default: true
     responses:
       200:
         description: Complete audit information
@@ -370,27 +377,28 @@ The endpoint is automatically documented in the FastAPI OpenAPI schema:
 - `src/codetoreum/application/workflow_run_query_service.py` - Service implementation
 - `src/codetoreum/adapters/primary/routers/workflow_runs.py` - REST endpoint
 - `src/codetoreum/adapters/primary/workflow_run_mappers.py` - DTO mappers
-- `src/codetoreum/adapters/primary/audit_dtos.py` - Audit DTOs (Phase 1)
-- `src/codetoreum/application/event_sequence_validator.py` - Validator (Phase 3)
-- `src/codetoreum/application/expected_sequence_registry.py` - Patterns (Phase 2)
+- `src/codetoreum/adapters/primary/audit_dtos.py` - Audit DTOs
+- `src/codetoreum/application/event_sequence_validator.py` - Event sequence validator
+- `src/codetoreum/application/expected_sequence_registry.py` - Expected sequence patterns
 
 ### Tests
 - `tests/integration/application/test_workflow_run_audit.py` - Integration tests (14 tests)
 
 ### Documentation
-- `documentation/implementation/PHASE_4_AUDIT_ENDPOINT.md` - This document
-- `documentation/implementation/EVENT_SEQUENCE_VALIDATOR.md` - Phase 3 docs
+- `documentation/implementation/AUDIT_ENDPOINT.md` - This document
+- `documentation/implementation/EVENT_SEQUENCE_VALIDATOR.md` - Event sequence validation
 - `src/codetoreum/adapters/primary/audit_dtos.py` - DTO documentation
 
 ## Summary
 
-Phase 4 successfully implements a production-ready audit endpoint with:
+This implementation delivers a production-ready audit endpoint with:
 
 - ✅ Comprehensive audit information (workflow, events, stages, validation)
-- ✅ Pagination for large workflows (up to 500 events per request)
-- ✅ LRU caching with TTL (5 minute default, configurable)
-- ✅ Stage grouping with duration calculations
-- ✅ Event sequence validation against expected patterns
+- ✅ Pagination for large workflows (up to 200 events per request)
+- ✅ Thread-safe LRU caching with TTL (5 minute default, configurable)
+- ✅ O(1) cache operations using OrderedDict with asyncio.Lock
+- ✅ Stage grouping with duration calculations (always complete, not paginated)
+- ✅ Optional event sequence validation against expected patterns
 - ✅ Mock implementations for development and testing
 - ✅ 14 comprehensive integration tests (100% passing)
 - ✅ Complete API documentation (OpenAPI schema)

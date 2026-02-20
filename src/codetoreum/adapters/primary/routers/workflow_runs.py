@@ -296,7 +296,8 @@ def create_workflow_runs_router(
     async def get_workflow_run_audit(
         workflow_run_id: str,
         offset: int = Query(0, ge=0, description="Event pagination offset"),
-        limit: int = Query(100, ge=1, le=500, description="Event pagination limit (default 100, max 500)"),
+        limit: int = Query(100, ge=1, le=200, description="Event pagination limit (default 100, max 200)"),
+        include_validation: bool = Query(True, description="Whether to validate event sequence (default True)"),
     ) -> WorkflowRunAuditResponse:
         """
         Get comprehensive audit information for a specific workflow run.
@@ -306,7 +307,8 @@ def create_workflow_runs_router(
 
         **Query Parameters:**
         - offset: Event pagination offset (default: 0)
-        - limit: Event pagination limit (default: 100, max: 500)
+        - limit: Event pagination limit (default: 100, max: 200)
+        - include_validation: Whether to validate event sequence (default: True)
 
         **Returns:**
         - 200 OK: Complete audit information
@@ -316,13 +318,13 @@ def create_workflow_runs_router(
         **Response includes:**
         - Workflow run summary with metadata
         - Paginated events list
-        - Stage-grouped events with durations
-        - Event sequence validation results (expected vs actual)
+        - Stage-grouped events with durations (always complete, not paginated)
+        - Event sequence validation results (optional, expected vs actual)
         - Total event count and pagination metadata
 
         **Caching:**
         - Audit results are cached for 5 minutes (default TTL)
-        - Cache includes pagination parameters for correctness
+        - Cache includes pagination and validation parameters
         - Subsequent requests with same parameters return cached data
 
         **Performance:**
@@ -336,6 +338,7 @@ def create_workflow_runs_router(
                 workflow_run_id=workflow_run_id,
                 offset=offset,
                 limit=limit,
+                include_validation=include_validation,
             )
 
             # Convert to response DTO

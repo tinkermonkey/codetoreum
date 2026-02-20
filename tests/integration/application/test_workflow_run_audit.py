@@ -166,7 +166,8 @@ async def workflow_with_many_events(event_store, ticket_system):
         ),
     ]
 
-    # Add 146 more stage advancement events (for a total of 150)
+    # Add 146 more stage advancement events (for a total of 149 events:
+    # 1 Created + 1 Started + 146 StageAdvanced + 1 Completed = 149)
     for i in range(146):
         events.append(
             WorkflowStageAdvanced(
@@ -296,7 +297,8 @@ async def test_audit_event_pagination_last_page(query_service, workflow_with_man
     workflow_id = workflow_with_many_events["workflow_id"]
     total_events = workflow_with_many_events["event_count"]
 
-    # Request last page (150 events total, offset 100, limit 100)
+    # Request last page (149 events total, offset 100, limit 100)
+    # Expected: 49 remaining events (149 - 100 = 49)
     audit_data = await query_service.get_workflow_run_audit(
         workflow_id,
         offset=100,
@@ -304,7 +306,7 @@ async def test_audit_event_pagination_last_page(query_service, workflow_with_man
     )
 
     assert audit_data["total_event_count"] == total_events
-    assert len(audit_data["events"]) == 49  # Remaining events (149 total - 100 offset)
+    assert len(audit_data["events"]) == 49  # Remaining events: 149 total - 100 offset = 49
     assert audit_data["offset"] == 100
     assert audit_data["limit"] == 100
     assert audit_data["has_next"] is False
