@@ -827,7 +827,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             # Create checkpoint with accumulated state
             checkpoint = RepairCycleCheckpoint(
                 workflow_run_id=context.workflow_run_id,
-                test_type=test_type.value,
+                test_type=test_type,
                 iteration=iteration,
                 total_agent_calls=self.total_agent_calls,
                 files_fixed=self._files_fixed,

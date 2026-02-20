@@ -60,7 +60,7 @@ class TestCheckpointStorage:
         now = datetime.now(timezone.utc)
         return RepairCycleCheckpoint(
             workflow_run_id="run-123",
-            test_type="UNIT",
+            test_type=RepairTestType.UNIT,
             iteration=2,
             total_agent_calls=5,
             files_fixed=2,
@@ -82,7 +82,7 @@ class TestCheckpointStorage:
         retrieved = await store.get_checkpoint("run-123", "UNIT")
         assert retrieved is not None
         assert retrieved.workflow_run_id == "run-123"
-        assert retrieved.test_type == "UNIT"
+        assert retrieved.test_type == RepairTestType.UNIT
         assert retrieved.iteration == 2
         assert retrieved.total_agent_calls == 5
 
@@ -108,7 +108,7 @@ class TestCheckpointStorage:
         now = datetime.now(timezone.utc)
 
         # Create checkpoints for multiple test types
-        for test_type in ["UNIT", "INTEGRATION", "E2E"]:
+        for test_type in [RepairTestType.UNIT, RepairTestType.INTEGRATION, RepairTestType.E2E]:
             checkpoint = RepairCycleCheckpoint(
                 workflow_run_id="run-123",
                 test_type=test_type,
@@ -144,7 +144,7 @@ class TestCheckpointStorage:
         for i in range(1, 4):
             checkpoint = RepairCycleCheckpoint(
                 workflow_run_id=f"run-{i}",
-                test_type="UNIT",
+                test_type=RepairTestType.UNIT,
                 iteration=i,
                 total_agent_calls=i,
                 files_fixed=0,
@@ -167,7 +167,7 @@ class TestCheckpointStorage:
         with pytest.raises(ValueError):
             checkpoint = RepairCycleCheckpoint(
                 workflow_run_id="",  # Empty - invalid
-                test_type="UNIT",
+                test_type=RepairTestType.UNIT,
                 iteration=1,
                 total_agent_calls=0,
                 files_fixed=0,
@@ -288,7 +288,7 @@ class TestRepairCycleResume:
         now = datetime.now(timezone.utc)
         checkpoint = RepairCycleCheckpoint(
             workflow_run_id="run-123",
-            test_type="UNIT",
+            test_type=RepairTestType.UNIT,
             iteration=2,
             total_agent_calls=3,
             files_fixed=2,
@@ -312,7 +312,7 @@ class TestRepairCycleResume:
         now = datetime.now(timezone.utc)
         checkpoint = RepairCycleCheckpoint(
             workflow_run_id="run-123",
-            test_type="UNIT",
+            test_type=RepairTestType.UNIT,
             iteration=2,
             total_agent_calls=5,
             files_fixed=3,

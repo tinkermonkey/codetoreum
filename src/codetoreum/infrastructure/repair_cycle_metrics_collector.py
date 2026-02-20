@@ -308,6 +308,7 @@ class RepairCycleMetricsCollector:
                 f"Metrics backend failure during repair_cycle_started: {e}",
                 exc_info=True,
                 extra={
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_METRICS_ERROR,
                     "circuit_breaker_open": self._backend_circuit_open,
                     "consecutive_failures": self._backend_consecutive_failures,
                 }
@@ -382,6 +383,7 @@ class RepairCycleMetricsCollector:
                 f"Metrics backend failure during repair_cycle_completed: {e}",
                 exc_info=True,
                 extra={
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_METRICS_ERROR,
                     "circuit_breaker_open": self._backend_circuit_open,
                     "consecutive_failures": self._backend_consecutive_failures,
                 }
@@ -424,6 +426,7 @@ class RepairCycleMetricsCollector:
                 f"Metrics backend failure during repair_cycle_fast_fail: {e}",
                 exc_info=True,
                 extra={
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_METRICS_ERROR,
                     "circuit_breaker_open": self._backend_circuit_open,
                     "consecutive_failures": self._backend_consecutive_failures,
                 }

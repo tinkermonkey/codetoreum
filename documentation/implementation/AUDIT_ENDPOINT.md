@@ -83,7 +83,7 @@ async def get_workflow_run_audit(
 
 **Query Parameters:**
 - `offset`: Event pagination offset (default: 0, min: 0)
-- `limit`: Event pagination limit (default: 100, min: 1, max: 500)
+- `limit`: Event pagination limit (default: 100, min: 1, max: 200)
 
 **Response:** `WorkflowRunAuditResponse`
 

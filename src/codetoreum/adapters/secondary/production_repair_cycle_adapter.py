@@ -650,7 +650,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
             checkpoint = RepairCycleCheckpoint(
                 workflow_run_id=context.workflow_run_id,
-                test_type=test_type.value,
+                test_type=test_type,
                 iteration=iteration,
                 total_agent_calls=self.agent_call_count,
                 files_fixed=0,  # Would be tracked by application layer

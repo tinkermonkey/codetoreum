@@ -46,7 +46,9 @@ class InMemoryCheckpointStore(IRepairCycleCheckpointStore):
             raise ValueError("checkpoint cannot be None")
 
         with self._lock:
-            key = (checkpoint.workflow_run_id, checkpoint.test_type)
+            # Convert enum to string for key
+            test_type_str = checkpoint.test_type.value if hasattr(checkpoint.test_type, 'value') else str(checkpoint.test_type)
+            key = (checkpoint.workflow_run_id, test_type_str)
             saved_time = datetime.now(timezone.utc)
             self._checkpoints[key] = (checkpoint, saved_time)
 

@@ -318,7 +318,7 @@ class RepairCycleCheckpoint:
 
     Attributes:
         workflow_run_id: Unique identifier for this workflow run
-        test_type: Current test type being executed
+        test_type: Current test type being executed (RepairTestType enum for type safety)
         iteration: Current iteration number (1-indexed)
         total_agent_calls: Number of agent calls so far
         files_fixed: Number of files fixed so far
@@ -330,7 +330,7 @@ class RepairCycleCheckpoint:
     """
 
     workflow_run_id: str
-    test_type: str
+    test_type: RepairTestType
     iteration: int
     total_agent_calls: int
     files_fixed: int
@@ -344,8 +344,8 @@ class RepairCycleCheckpoint:
         """Validate checkpoint fields."""
         if not self.workflow_run_id or not self.workflow_run_id.strip():
             raise ValueError("workflow_run_id cannot be empty")
-        if not self.test_type or not self.test_type.strip():
-            raise ValueError("test_type cannot be empty")
+        if not isinstance(self.test_type, RepairTestType):
+            raise ValueError("test_type must be a RepairTestType enum")
         if self.iteration < 1:
             raise ValueError("iteration must be >= 1 (1-indexed)")
         if self.total_agent_calls < 0:

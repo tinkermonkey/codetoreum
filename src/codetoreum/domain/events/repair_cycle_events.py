@@ -216,6 +216,18 @@ class RepairCycleTestExecutionCompletedEvent(CodetoreumEvent):
         if not self.workflow_run_id:
             raise ValueError("workflow_run_id is required")
 
+        # Consistency validation: has_failures must match failed > 0
+        if self.has_failures != (self.failed > 0):
+            raise ValueError(
+                f"has_failures ({self.has_failures}) must match failed > 0 ({self.failed > 0})"
+            )
+
+        # Consistency validation: failed count must match failures tuple length
+        if self.failed != len(self.failures):
+            raise ValueError(
+                f"failed count ({self.failed}) must match len(failures) ({len(self.failures)})"
+            )
+
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
@@ -794,14 +806,14 @@ class RepairCycleResumedEvent(CodetoreumEvent):
     Attributes:
         type: Fixed to "repair_cycle.resumed"
         workflow_run_id: Unique identifier for this workflow run
-        test_type: Test type being resumed
+        test_type: Test type being resumed (RepairTestType enum for type safety)
         iteration: Iteration number being resumed from
         elapsed_time: Time already spent on this cycle
         agent_calls_so_far: Number of agent calls already made
     """
 
     workflow_run_id: str = ""
-    test_type: str = ""
+    test_type: RepairTestType = RepairTestType.UNIT
     iteration: int = 0
     elapsed_time: float = 0.0
     agent_calls_so_far: int = 0
@@ -821,7 +833,7 @@ class RepairCycleResumedEvent(CodetoreumEvent):
         d = super().to_dict()
         d.update({
             "workflow_run_id": self.workflow_run_id,
-            "test_type": self.test_type,
+            "test_type": self.test_type.value,  # Serialize enum as string
             "iteration": self.iteration,
             "elapsed_time": self.elapsed_time,
             "agent_calls_so_far": self.agent_calls_so_far,
@@ -833,6 +845,11 @@ class RepairCycleResumedEvent(CodetoreumEvent):
         """Deserialize from dictionary with backward compatibility."""
         # Backward compatibility: Support both old and new field names
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
+
+        # Deserialize test_type enum
+        test_type_str = data.get("test_type", "UNIT")
+        test_type = RepairTestType(test_type_str) if test_type_str else RepairTestType.UNIT
+
         return cls(
             type=data.get("type", "repair_cycle.resumed"),
             timestamp=data.get("timestamp", ""),
@@ -840,7 +857,7 @@ class RepairCycleResumedEvent(CodetoreumEvent):
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
             workflow_run_id=workflow_run_id,
-            test_type=data.get("test_type", ""),
+            test_type=test_type,
             iteration=data.get("iteration", 0),
             elapsed_time=data.get("elapsed_time", 0.0),
             agent_calls_so_far=data.get("agent_calls_so_far", 0),
