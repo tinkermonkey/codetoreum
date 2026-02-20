@@ -14,6 +14,11 @@ from codetoreum.adapters.primary.workflow_run_dtos import (
     WorkflowEventResponse,
     WorkflowEventsListResponse,
 )
+from codetoreum.adapters.primary.audit_dtos import (
+    WorkflowRunAuditResponse,
+    AuditValidationResult,
+    AuditStageInfo,
+)
 from codetoreum.ports.input.workflow_run_query import (
     WorkflowRunInfo,
     WorkflowRunSummary,
@@ -157,4 +162,54 @@ class WorkflowRunMapper:
             page=(offset // limit) + 1 if limit > 0 else 1,
             page_size=limit,
             has_next=has_next,
+        )
+
+    @staticmethod
+    def to_audit_response(audit_data: dict) -> WorkflowRunAuditResponse:
+        """
+        Convert audit data dictionary to WorkflowRunAuditResponse DTO.
+
+        Args:
+            audit_data: Dictionary containing:
+                - workflow_run: WorkflowRunSummary
+                - events: List[event_dict]
+                - stages: List[stage_info_dict]
+                - validation: validation_result_dict
+                - total_event_count: int
+                - offset: int
+                - limit: int
+                - has_next: bool
+
+        Returns:
+            WorkflowRunAuditResponse DTO
+        """
+        # Convert workflow run summary
+        workflow_run_summary = WorkflowRunMapper.to_summary_response(
+            audit_data["workflow_run"]
+        )
+
+        # Convert events
+        events = [
+            WorkflowRunMapper.to_event_response(event)
+            for event in audit_data["events"]
+        ]
+
+        # Convert stage info
+        stages = [
+            AuditStageInfo(**stage_dict)
+            for stage_dict in audit_data["stages"]
+        ]
+
+        # Convert validation result
+        validation = AuditValidationResult(**audit_data["validation"])
+
+        return WorkflowRunAuditResponse(
+            workflowRun=workflow_run_summary,
+            events=events,
+            stages=stages,
+            validation=validation,
+            totalEventCount=audit_data["total_event_count"],
+            offset=audit_data["offset"],
+            limit=audit_data["limit"],
+            hasNext=audit_data["has_next"],
         )

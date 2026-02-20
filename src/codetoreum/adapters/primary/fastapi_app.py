@@ -1454,6 +1454,56 @@ def create_development_app() -> FastAPI:
                 "hasNext": False,
             }
 
+        async def get_workflow_run_audit(self, workflow_run_id: str, offset=0, limit=100):
+            from codetoreum.ports.input.workflow_run_query import WorkflowRunSummary, WorkflowRunStatus
+            # Mock audit response
+            return {
+                "workflow_run": WorkflowRunSummary(
+                    id=workflow_run_id,
+                    work_item_id="wi-mock-123",
+                    workflow_id="wf-mock-123",
+                    project_id="proj-123",
+                    status=WorkflowRunStatus.COMPLETED,
+                    current_stage_index=2,
+                    current_stage_name="merge",
+                    started_at=datetime.now(timezone.utc),
+                    completed_at=datetime.now(timezone.utc),
+                    duration=300,
+                    issue_title="Mock workflow audit",
+                    issue_number=42,
+                    project="codetoreum",
+                    triggered_by="mock",
+                    priority="high",
+                ),
+                "events": [
+                    {
+                        "id": "evt-1",
+                        "event_type": "WorkflowCreated",
+                        "aggregate_id": workflow_run_id,
+                        "aggregate_type": "Workflow",
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "data": {},
+                        "correlation_id": None,
+                        "causation_id": None,
+                        "user_id": None,
+                        "metadata": {},
+                    }
+                ],
+                "stages": [],
+                "validation": {
+                    "sequenceValid": True,
+                    "expectedSequence": [],
+                    "actualSequence": [],
+                    "missingEvents": [],
+                    "unexpectedEvents": [],
+                    "outOfOrderEvents": [],
+                },
+                "total_event_count": 1,
+                "offset": offset,
+                "limit": limit,
+                "has_next": False,
+            }
+
     class MockWorkflowQueryPort(IWorkflowQueryPort):
         """Mock workflow query port for development."""
 

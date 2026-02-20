@@ -16,6 +16,7 @@ from codetoreum.adapters.primary.workflow_run_dtos import (
     WorkflowRunListResponse,
     WorkflowEventsListResponse,
 )
+from codetoreum.adapters.primary.audit_dtos import WorkflowRunAuditResponse
 from codetoreum.adapters.primary.workflow_run_mappers import WorkflowRunMapper
 from codetoreum.ports.input.workflow_run_query import (
     IWorkflowRunQueryPort,
@@ -269,6 +270,76 @@ def create_workflow_runs_router(
                 limit=result.get("limit", limit),
                 has_next=result.get("has_next", False),
             )
+
+        except Exception as e:
+            error_msg = str(e).lower()
+            if "not found" in error_msg:
+                raise HTTPException(
+                    status_code=http_status.HTTP_404_NOT_FOUND,
+                    detail=f"Workflow run not found: {workflow_run_id}",
+                )
+            raise HTTPException(
+                status_code=http_status.HTTP_400_BAD_REQUEST,
+                detail=str(e),
+            )
+
+    # ========================================================================
+    # Get Workflow Run Audit
+    # ========================================================================
+
+    @router.get(
+        "/{workflow_run_id}/audit",
+        response_model=WorkflowRunAuditResponse,
+        summary="Get comprehensive workflow run audit",
+        response_description="Complete audit information including events, stages, and validation",
+    )
+    async def get_workflow_run_audit(
+        workflow_run_id: str,
+        offset: int = Query(0, ge=0, description="Event pagination offset"),
+        limit: int = Query(100, ge=1, le=500, description="Event pagination limit (default 100, max 500)"),
+    ) -> WorkflowRunAuditResponse:
+        """
+        Get comprehensive audit information for a specific workflow run.
+
+        **Parameters:**
+        - workflow_run_id: Workflow run ID
+
+        **Query Parameters:**
+        - offset: Event pagination offset (default: 0)
+        - limit: Event pagination limit (default: 100, max: 500)
+
+        **Returns:**
+        - 200 OK: Complete audit information
+        - 401 Unauthorized: Authentication required
+        - 404 Not Found: Workflow run not found
+
+        **Response includes:**
+        - Workflow run summary with metadata
+        - Paginated events list
+        - Stage-grouped events with durations
+        - Event sequence validation results (expected vs actual)
+        - Total event count and pagination metadata
+
+        **Caching:**
+        - Audit results are cached for 5 minutes (default TTL)
+        - Cache includes pagination parameters for correctness
+        - Subsequent requests with same parameters return cached data
+
+        **Performance:**
+        - Optimized for workflows with 100-1000+ events
+        - Pagination prevents memory issues on large workflows
+        - Stage grouping and validation computed once and cached
+        """
+        try:
+            # Get audit data via port
+            audit_data = await query_port.get_workflow_run_audit(
+                workflow_run_id=workflow_run_id,
+                offset=offset,
+                limit=limit,
+            )
+
+            # Convert to response DTO
+            return WorkflowRunMapper.to_audit_response(audit_data)
 
         except Exception as e:
             error_msg = str(e).lower()

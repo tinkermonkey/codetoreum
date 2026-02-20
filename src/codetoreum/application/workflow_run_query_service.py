@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 
 from codetoreum.domain.events import DomainEvent, WorkflowCreated
 from codetoreum.domain.workflow import Workflow, WorkflowStatus
+from codetoreum.domain.pipeline_stage import StageStatus
 from codetoreum.ports.exceptions import ResourceNotFoundError
 from codetoreum.ports.input.workflow_run_query import (
     IWorkflowRunQueryPort,
@@ -28,6 +29,8 @@ from codetoreum.ports.input.workflow_run_query import (
 from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.ports.exceptions import WorkItemNotFoundError
 from codetoreum.ports.output.ticket_system import ITicketSystem
+from codetoreum.application.event_sequence_validator import EventSequenceValidator
+from codetoreum.application.expected_sequence_registry import ExpectedSequenceRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -185,6 +188,9 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         self.event_store = event_store
         self.ticket_system = ticket_system
         self._work_item_cache = LRUCache(max_size=cache_size, ttl_seconds=cache_ttl_seconds)
+        self._audit_cache = LRUCache(max_size=cache_size // 2, ttl_seconds=cache_ttl_seconds)
+        self._sequence_validator = EventSequenceValidator()
+        self._sequence_registry = ExpectedSequenceRegistry()
 
     async def get_workflow_run(self, workflow_run_id: str) -> WorkflowRunInfo:
         """
@@ -393,6 +399,108 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
             "limit": limit,
             "has_next": (offset + limit) < total_count,
         }
+
+    async def get_workflow_run_audit(
+        self,
+        workflow_run_id: str,
+        offset: int = 0,
+        limit: int = 100,
+    ) -> dict:
+        """
+        Retrieve comprehensive audit information for a workflow run.
+
+        This method provides:
+        - Workflow run summary with metadata enrichment
+        - Paginated events list
+        - Stage-grouped events with duration calculations
+        - Sequence validation against expected patterns
+
+        **Caching Strategy**:
+        - Full audit results are cached with TTL
+        - Cache key includes pagination parameters for correctness
+        - Workflow run summary is cached separately via work item cache
+        - Invalidation: Cache entries expire after TTL (default 5 minutes)
+
+        Args:
+            workflow_run_id: Unique identifier for the workflow run
+            offset: Event pagination offset (default: 0)
+            limit: Event pagination limit (default: 100, max: 500)
+
+        Returns:
+            Dictionary containing audit data compatible with WorkflowRunAuditResponse
+
+        Raises:
+            ResourceNotFoundError: If workflow run doesn't exist
+        """
+        logger.debug(
+            f"Getting audit for workflow run: {workflow_run_id}, "
+            f"offset={offset}, limit={limit}"
+        )
+
+        # Check cache (include pagination in cache key)
+        cache_key = f"{workflow_run_id}:audit:offset={offset}:limit={limit}"
+        cached_audit = self._audit_cache.get(cache_key)
+        if cached_audit is not None:
+            logger.debug(f"Audit cache hit for {workflow_run_id}")
+            return cached_audit
+
+        # Verify workflow exists and get all events
+        if not await self.event_store.stream_exists(workflow_run_id):
+            raise ResourceNotFoundError("WorkflowRun", workflow_run_id)
+
+        all_events = await self.event_store.get_events(stream_id=workflow_run_id)
+
+        if not all_events:
+            raise ResourceNotFoundError("WorkflowRun", workflow_run_id)
+
+        # Reconstruct workflow for summary and stage info
+        workflow = Workflow.from_events(all_events)
+
+        # Get work item metadata
+        work_item_metadata = await self._get_work_item_metadata(workflow.work_item_id)
+
+        # Build workflow run summary
+        workflow_run_summary = self._to_workflow_run_summary(workflow, work_item_metadata)
+
+        # Convert events to dict format for pagination
+        events_data = [self._event_to_dict(event) for event in all_events]
+        total_event_count = len(events_data)
+
+        # Apply pagination to events
+        paginated_events = events_data[offset : offset + limit]
+
+        # Build stage-grouped events
+        stages_info = self._build_stage_info(workflow, all_events)
+
+        # Validate event sequence
+        actual_sequence = [event.event_type for event in all_events]
+        expected_pattern = self._sequence_registry.get_expected_sequence("default")
+        validation_result = self._sequence_validator.create_audit_validation_result(
+            expected_pattern,
+            actual_sequence
+        )
+
+        # Build audit response
+        audit_data = {
+            "workflow_run": workflow_run_summary,
+            "events": paginated_events,
+            "stages": stages_info,
+            "validation": validation_result,
+            "total_event_count": total_event_count,
+            "offset": offset,
+            "limit": limit,
+            "has_next": (offset + limit) < total_event_count,
+        }
+
+        # Cache the result
+        self._audit_cache.set(cache_key, audit_data)
+
+        logger.debug(
+            f"Audit for {workflow_run_id}: {total_event_count} total events, "
+            f"{len(paginated_events)} returned, validation={'valid' if validation_result['sequenceValid'] else 'invalid'}"
+        )
+
+        return audit_data
 
     # Private helper methods
 
@@ -767,3 +875,57 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
             "user_id": event.user_id,
             "metadata": event.metadata,
         }
+
+    def _build_stage_info(self, workflow: Workflow, events: List[DomainEvent]) -> List[dict]:
+        """
+        Build stage-grouped event information for audit view.
+
+        Groups events by workflow stage and calculates stage durations.
+
+        Args:
+            workflow: Reconstructed workflow aggregate
+            events: All events for this workflow run
+
+        Returns:
+            List of stage info dictionaries compatible with AuditStageInfo DTO
+        """
+        stages_info = []
+
+        for stage in workflow.stages:
+            # Determine stage status
+            status = "pending"
+            if stage.status == StageStatus.RUNNING:
+                status = "running"
+            elif stage.status == StageStatus.COMPLETED:
+                status = "completed"
+            elif stage.status == StageStatus.FAILED:
+                status = "failed"
+
+            # Calculate duration
+            duration_seconds = None
+            if stage.started_at and stage.completed_at:
+                duration_seconds = (stage.completed_at - stage.started_at).total_seconds()
+
+            # Filter events for this stage (execution events with matching stage name or execution ID)
+            stage_events = []
+            for event in events:
+                # Check if event is related to this stage
+                event_data = event.payload if hasattr(event, 'payload') else {}
+                event_stage_name = event_data.get('stage_name')
+                event_execution_id = event_data.get('execution_id')
+
+                if (event_stage_name == stage.name or
+                    (stage.execution_id and event_execution_id == stage.execution_id)):
+                    stage_events.append(self._event_to_dict(event))
+
+            stage_info = {
+                "name": stage.name,
+                "status": status,
+                "startedAt": stage.started_at.isoformat() if stage.started_at else None,
+                "completedAt": stage.completed_at.isoformat() if stage.completed_at else None,
+                "durationSeconds": duration_seconds,
+                "events": stage_events,
+            }
+            stages_info.append(stage_info)
+
+        return stages_info
