@@ -212,8 +212,10 @@ class WorkflowRunMapper:
                 events=stage_events,
             ))
 
-        # Convert validation result
-        validation = AuditValidationResult(**audit_data["validation"])
+        # Convert validation result (if present)
+        validation = None
+        if audit_data["validation"] is not None:
+            validation = AuditValidationResult(**audit_data["validation"])
 
         return WorkflowRunAuditResponse(
             workflowRun=workflow_run_summary,

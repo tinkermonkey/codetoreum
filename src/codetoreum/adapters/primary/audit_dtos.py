@@ -26,7 +26,7 @@ class OutOfOrderEvent(BaseModel):
     """Event that occurred out of expected sequence."""
 
     eventType: str = Field(..., description="Event type name", serialization_alias="eventType")
-    timestamp: datetime = Field(..., description="When event occurred")
+    timestamp: Optional[datetime] = Field(None, description="When event occurred (optional until out-of-order detection is fully implemented)")
     expectedPosition: int = Field(..., description="Expected position in sequence", serialization_alias="expectedPosition")
     actualPosition: int = Field(..., description="Actual position in sequence", serialization_alias="actualPosition")
 
@@ -127,7 +127,7 @@ class WorkflowRunAuditResponse(BaseModel):
     workflowRun: WorkflowRunSummaryResponse = Field(..., description="Workflow run summary", serialization_alias="workflowRun")
     events: List[WorkflowEventResponse] = Field(..., description="All workflow events")
     stages: List[AuditStageInfo] = Field(..., description="Stage-grouped event information")
-    validation: AuditValidationResult = Field(..., description="Sequence validation results")
+    validation: Optional[AuditValidationResult] = Field(None, description="Sequence validation results (optional, only included when include_validation=true)")
     totalEventCount: int = Field(..., description="Total number of events", serialization_alias="totalEventCount")
     offset: int = Field(..., description="Event list offset for pagination")
     limit: int = Field(..., description="Event list limit for pagination")

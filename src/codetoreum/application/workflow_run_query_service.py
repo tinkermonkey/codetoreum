@@ -59,28 +59,6 @@ class LRUCache:
         self._cache: OrderedDict[str, tuple[Any, datetime]] = OrderedDict()
         self._lock = asyncio.Lock()
 
-    async def __contains__(self, key: str) -> bool:
-        """
-        Check if key exists in cache (supports 'in' operator).
-
-        Args:
-            key: Cache key
-
-        Returns:
-            True if key exists and is not expired, False otherwise
-        """
-        async with self._lock:
-            if key not in self._cache:
-                return False
-
-            # Check if expired
-            _, timestamp = self._cache[key]
-            if datetime.now(timezone.utc) - timestamp > self.ttl:
-                del self._cache[key]
-                return False
-
-            return True
-
     async def get(self, key: str) -> Optional[Any]:
         """
         Get value from cache.
@@ -853,6 +831,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         mapping = {
             WorkflowStatus.PENDING: WorkflowRunStatus.PENDING,
             WorkflowStatus.RUNNING: WorkflowRunStatus.RUNNING,
+            WorkflowStatus.PAUSED: WorkflowRunStatus.RUNNING,  # Paused workflows are still considered active/running
             WorkflowStatus.COMPLETED: WorkflowRunStatus.COMPLETED,
             WorkflowStatus.FAILED: WorkflowRunStatus.FAILED,
             WorkflowStatus.CANCELLED: WorkflowRunStatus.CANCELLED,
