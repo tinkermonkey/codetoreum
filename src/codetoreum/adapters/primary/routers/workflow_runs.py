@@ -205,6 +205,8 @@ def create_workflow_runs_router(
             # Convert to response DTO
             return WorkflowRunMapper.to_response(run_info)
 
+        except HTTPException:
+            raise
         except Exception as e:
             error_msg = str(e).lower()
             if "not found" in error_msg:
@@ -285,6 +287,8 @@ def create_workflow_runs_router(
                 has_next=result.get("has_next", False),
             )
 
+        except HTTPException:
+            raise
         except Exception as e:
             error_msg = str(e).lower()
             if "not found" in error_msg:
@@ -363,6 +367,8 @@ def create_workflow_runs_router(
             # Convert to response DTO
             return WorkflowRunMapper.to_audit_response(audit_data)
 
+        except HTTPException:
+            raise
         except Exception as e:
             error_msg = str(e).lower()
             if "not found" in error_msg:

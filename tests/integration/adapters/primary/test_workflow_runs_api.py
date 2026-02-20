@@ -606,3 +606,20 @@ class TestGetWorkflowRunAudit:
 
         # Assert
         assert response.status_code == 422  # FastAPI validation error
+
+    def test_get_workflow_run_audit_forbidden(self, client, mock_query_port):
+        """Test that HTTPExceptions from the port are properly re-raised."""
+        # Arrange - mock the port to raise an HTTPException
+        from fastapi import HTTPException
+
+        mock_query_port._get_workflow_run_audit.side_effect = HTTPException(
+            status_code=403, detail="Forbidden: Insufficient permissions"
+        )
+
+        # Act
+        response = client.get("/api/v2/workflows/runs/wfrun-123/audit")
+
+        # Assert - the HTTPException should be re-raised unchanged
+        assert response.status_code == 403
+        data = response.json()
+        assert data["detail"] == "Forbidden: Insufficient permissions"
