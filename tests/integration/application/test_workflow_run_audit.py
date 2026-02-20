@@ -517,3 +517,83 @@ async def test_audit_zero_limit(query_service, workflow_with_stages):
     # Should return structure with no events
     assert audit_data.total_event_count > 0
     assert len(audit_data.events) == 0
+
+
+@pytest.mark.asyncio
+async def test_audit_without_validation(query_service, workflow_with_stages):
+    """Test audit with include_validation=False excludes validation data."""
+    workflow_id = workflow_with_stages["workflow_id"]
+
+    # Get audit without validation
+    audit_data = await query_service.get_workflow_run_audit(
+        workflow_id,
+        offset=0,
+        limit=20,
+        include_validation=False,
+    )
+
+    # Should have basic audit data
+    assert audit_data.workflow_run.id == workflow_id
+    assert audit_data.total_event_count > 0
+    assert len(audit_data.events) > 0
+
+    # Validation field should be None
+    assert audit_data.validation is None
+
+
+@pytest.mark.asyncio
+async def test_audit_stage_with_no_events(event_store, ticket_system):
+    """Test audit handles stage with no matching events correctly."""
+    from codetoreum.domain.workflow import Workflow
+    from codetoreum.domain.pipeline_stage import PipelineStage, StageStatus
+    from codetoreum.domain.agent import Agent
+    from codetoreum.application.workflow_run_query_service import WorkflowRunQueryService
+
+    # Create a simple workflow with a stage that has no events
+    workflow_id = str(uuid4())
+    project_id = "test-project"
+    work_item_id = str(uuid4())
+
+    # Create workflow events
+    events = [
+        WorkflowCreated(
+            aggregate_id=workflow_id,
+            payload={
+                "work_item_id": work_item_id,
+                "template_id": "test-template",
+                "project_id": project_id,
+            }
+        ),
+        WorkflowStarted(
+            aggregate_id=workflow_id,
+            payload={}
+        )
+    ]
+    await event_store.append(workflow_id, events)
+
+    # Create service and get audit data
+    service = WorkflowRunQueryService(
+        event_store=event_store,
+        ticket_system=ticket_system,
+        cache_size=100,
+        cache_ttl_seconds=300,
+    )
+
+    audit_data = await service.get_workflow_run_audit(
+        workflow_id,
+        offset=0,
+        limit=20,
+    )
+
+    # Should have the workflow events but no stage-specific events
+    assert audit_data.workflow_run.id == workflow_id
+    assert audit_data.total_event_count == 2  # Created + Started
+    assert len(audit_data.events) == 2
+
+    # Stages info should be empty or have empty events arrays
+    # (depends on whether the workflow aggregate has stages with no events)
+    for stage_info in audit_data.stages:
+        # If a stage has no events, events should be an empty list
+        if not stage_info["events"]:
+            assert isinstance(stage_info["events"], list)
+            assert len(stage_info["events"]) == 0

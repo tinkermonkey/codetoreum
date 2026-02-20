@@ -74,17 +74,22 @@ class LRUCache:
         """
         async with self._lock:
             if key not in self._cache:
+                logger.debug(f"Cache miss: key={key}")
                 return None
 
             value, timestamp = self._cache[key]
 
             # Check if expired
-            if datetime.now(timezone.utc) - timestamp > self.ttl:
+            now = datetime.now(timezone.utc)
+            if now - timestamp > self.ttl:
+                age_seconds = (now - timestamp).total_seconds()
+                logger.debug(f"Cache expired: key={key}, age={age_seconds:.1f}s, ttl={self.ttl.total_seconds()}s")
                 del self._cache[key]
                 return None
 
             # Update access order (move to end = most recently used)
             self._cache.move_to_end(key)
+            logger.debug(f"Cache hit: key={key}")
 
             return value
 
@@ -99,14 +104,19 @@ class LRUCache:
         async with self._lock:
             # If key exists, remove it (we'll re-add at end)
             if key in self._cache:
+                logger.debug(f"Cache update: key={key}")
                 del self._cache[key]
 
             # Evict least recently used if at max size
             elif len(self._cache) >= self.max_size:
+                evicted_key = next(iter(self._cache))
+                logger.debug(f"Cache eviction: evicted_key={evicted_key}, cache_size={len(self._cache)}")
                 self._cache.popitem(last=False)
 
             # Add new entry (at end = most recently used)
             self._cache[key] = (value, datetime.now(timezone.utc))
+            if key not in [k for k, _ in list(self._cache.items())[:-1]]:  # New entry, not update
+                logger.debug(f"Cache set: key={key}, cache_size={len(self._cache)}")
 
     async def clear(self) -> None:
         """Clear all cached entries."""
@@ -423,6 +433,14 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
 
         # Cache key for non-paginated data (workflow summary, events, stages)
         # We cache the core data separately from pagination/validation options
+        #
+        # NOTE: Cache fragmentation issue (Medium priority from PR review):
+        # Each unique combination of (offset, limit, include_validation) creates a separate
+        # cache entry, leading to potential cache thrashing. For workflows with high audit
+        # query traffic and varying pagination parameters, this can significantly reduce
+        # cache hit rates. Consider implementing a shared cache strategy where pagination
+        # is applied to cached full results, or use a more sophisticated cache key scheme
+        # that normalizes pagination parameters (e.g., round to page boundaries).
         core_cache_key = f"{workflow_run_id}:audit_core"
         cached_core = await self._audit_cache.get(core_cache_key)
 
@@ -756,7 +774,6 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         stages: List[WorkflowRunStageInfo] = []
         for stage in workflow.stages:
             # Get metadata and wrap in MappingProxyType for immutability
-            stage_metadata = stage.metadata if hasattr(stage, 'metadata') else {}
             stage_info = WorkflowRunStageInfo(
                 name=stage.name,
                 agent_name=stage.agent_name,
@@ -764,9 +781,9 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
                 started_at=stage.started_at,
                 completed_at=stage.completed_at,
                 execution_id=stage.execution_id,
-                output=stage.output if hasattr(stage, 'output') else None,
-                error_message=stage.error_message if hasattr(stage, 'error_message') else None,
-                metadata=MappingProxyType(stage_metadata),
+                output=stage.output,
+                error_message=stage.error_message,
+                metadata=MappingProxyType(stage.metadata),
             )
             stages.append(stage_info)
 
@@ -953,9 +970,9 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
                 "completedAt": stage.completed_at.isoformat() if stage.completed_at else None,
                 "durationSeconds": duration_seconds,
                 "events": stage_events,
-                "output": stage.output if hasattr(stage, 'output') else None,
-                "errorMessage": stage.error_message if hasattr(stage, 'error_message') else None,
-                "metadata": stage.metadata if hasattr(stage, 'metadata') else {},
+                "output": stage.output,
+                "errorMessage": stage.error_message,
+                "metadata": stage.metadata,
             }
             stages_info.append(stage_info)
 

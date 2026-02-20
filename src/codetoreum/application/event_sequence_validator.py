@@ -15,9 +15,12 @@ Example:
     assert result.is_valid
 """
 
+import logging
 from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 
 class PatternOperator(Enum):
@@ -45,6 +48,23 @@ class ValidationResult:
     unexpected_events: List[str]  # Events that shouldn't have occurred
     out_of_order_events: List[Tuple[str, int, int]]  # (event_type, expected_pos, actual_pos)
     error_message: Optional[str] = None
+
+    def __post_init__(self):
+        """Validate consistency of is_valid flag with error lists."""
+        # If is_valid is True, all error lists should be empty
+        if self.is_valid:
+            if self.missing_events or self.unexpected_events or self.out_of_order_events:
+                raise ValueError(
+                    f"ValidationResult inconsistency: is_valid=True but errors present "
+                    f"(missing={len(self.missing_events)}, unexpected={len(self.unexpected_events)}, "
+                    f"out_of_order={len(self.out_of_order_events)})"
+                )
+        # If is_valid is False, at least one error list should be non-empty
+        else:
+            if not (self.missing_events or self.unexpected_events or self.out_of_order_events):
+                raise ValueError(
+                    "ValidationResult inconsistency: is_valid=False but no errors present"
+                )
 
     def __bool__(self) -> bool:
         """Allow using result in boolean context."""
@@ -164,6 +184,19 @@ class EventSequenceValidator:
             pattern_idx += 1
 
         is_valid = len(missing_events) == 0 and len(unexpected_events) == 0 and len(out_of_order) == 0
+
+        # Log validation failures for operational monitoring
+        if not is_valid:
+            logger.warning(
+                "Event sequence validation failed",
+                extra={
+                    "expected_pattern": expected_pattern,
+                    "actual_events": actual_events,
+                    "missing_events": missing_events,
+                    "unexpected_events": unexpected_events,
+                    "out_of_order_events": out_of_order,
+                }
+            )
 
         return ValidationResult(
             is_valid=is_valid,

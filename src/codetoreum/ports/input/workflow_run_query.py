@@ -35,7 +35,7 @@ class SortOrder(Enum):
     DESC = "desc"
 
 
-@dataclass
+@dataclass(frozen=True)
 class WorkflowRunFilters:
     """Filters for listing workflow runs"""
     status: Optional[List[WorkflowRunStatus]] = None  # Filter by status (comma-separated)
@@ -68,6 +68,8 @@ class WorkflowRunPaginationParams:
             raise ValueError(f"offset must be >= 0, got {self.offset}")
         if self.limit <= 0:
             raise ValueError(f"limit must be > 0, got {self.limit}")
+        if self.limit > 1000:
+            raise ValueError(f"limit must be <= 1000 to prevent excessive memory usage, got {self.limit}")
 
 
 @dataclass(frozen=True)
