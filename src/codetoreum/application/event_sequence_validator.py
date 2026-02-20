@@ -16,9 +16,8 @@ Example:
 """
 
 from dataclasses import dataclass
-from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Tuple
 
 
 class PatternOperator(Enum):

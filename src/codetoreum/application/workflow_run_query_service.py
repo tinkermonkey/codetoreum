@@ -11,7 +11,7 @@ from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from codetoreum.domain.events import DomainEvent, WorkflowCreated
+from codetoreum.domain.events import DomainEvent
 from codetoreum.domain.workflow import Workflow, WorkflowStatus
 from codetoreum.domain.pipeline_stage import StageStatus
 from codetoreum.ports.exceptions import ResourceNotFoundError

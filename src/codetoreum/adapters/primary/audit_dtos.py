@@ -6,11 +6,10 @@ audit information with sequence validation and stage grouping.
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from codetoreum.adapters.primary.api_models import PaginatedResponse
 from codetoreum.adapters.primary.workflow_run_dtos import (
     WorkflowRunSummaryResponse,
     WorkflowEventResponse,

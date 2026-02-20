@@ -20,6 +20,7 @@ Coverage:
 """
 
 import asyncio
+import logging
 import pytest
 from fastapi.testclient import TestClient
 
@@ -130,9 +131,10 @@ async def _wait_for_completion(
             # Status can be lowercase or uppercase depending on the system
             if status.upper() in ["DONE", "COMPLETED"]:
                 return True
-        except Exception:
-            # Ignore errors during polling
-            pass
+        except Exception as e:
+            # Continue polling even if individual check fails
+            # This can happen if work item is temporarily unavailable
+            logging.debug(f"Failed to check work item status during polling: {e}")
 
     return False
 
