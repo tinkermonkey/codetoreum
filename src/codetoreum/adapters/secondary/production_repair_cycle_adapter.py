@@ -313,7 +313,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 test_type=config.test_type,
                 iteration=1,  # Each run_tests call represents one iteration
                 passed=test_output.get("passed", 0),
-                failed=test_output.get("failed", 0),
+                failed=len(failures),  # Use actual parsed failures count, not raw test output
                 warnings=len(warnings),
                 failures=tuple(failures),
                 warning_list=tuple(warnings),

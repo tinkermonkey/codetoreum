@@ -69,7 +69,7 @@ class WorkflowRunPaginationParams:
             raise ValueError(f"limit must be > 0, got {self.limit}")
 
 
-@dataclass
+@dataclass(frozen=True)
 class WorkflowRunStageInfo:
     """Information about a workflow run stage"""
     name: str
@@ -85,7 +85,8 @@ class WorkflowRunStageInfo:
     def __post_init__(self):
         """Initialize metadata to empty dict if None."""
         if self.metadata is None:
-            self.metadata = {}
+            # Use object.__setattr__ since this is a frozen dataclass
+            object.__setattr__(self, 'metadata', {})
 
 
 @dataclass

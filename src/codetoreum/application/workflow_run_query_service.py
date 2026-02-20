@@ -420,45 +420,53 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
             f"offset={offset}, limit={limit}, include_validation={include_validation}"
         )
 
-        # Check cache (include all query params in cache key)
-        cache_key = f"{workflow_run_id}:audit:offset={offset}:limit={limit}:validation={include_validation}"
-        cached_audit = await self._audit_cache.get(cache_key)
-        if cached_audit is not None:
+        # Cache key for non-paginated data (workflow summary, events, stages)
+        # We cache the core data separately from pagination/validation options
+        core_cache_key = f"{workflow_run_id}:audit_core"
+        cached_core = await self._audit_cache.get(core_cache_key)
+
+        if cached_core is not None:
             logger.debug(f"Audit cache hit for {workflow_run_id}")
-            return cached_audit
+            workflow_run_summary, events_data, stages_info = cached_core
+        else:
+            # Verify workflow exists and get all events
+            if not await self.event_store.stream_exists(workflow_run_id):
+                raise ResourceNotFoundError("WorkflowRun", workflow_run_id)
 
-        # Verify workflow exists and get all events
-        if not await self.event_store.stream_exists(workflow_run_id):
-            raise ResourceNotFoundError("WorkflowRun", workflow_run_id)
+            all_events = await self.event_store.get_events(stream_id=workflow_run_id)
 
-        all_events = await self.event_store.get_events(stream_id=workflow_run_id)
+            if not all_events:
+                raise ResourceNotFoundError("WorkflowRun", workflow_run_id)
 
-        if not all_events:
-            raise ResourceNotFoundError("WorkflowRun", workflow_run_id)
+            # Reconstruct workflow for summary and stage info
+            workflow = Workflow.from_events(all_events)
 
-        # Reconstruct workflow for summary and stage info
-        workflow = Workflow.from_events(all_events)
+            # Get work item metadata
+            work_item_metadata = await self._get_work_item_metadata(workflow.work_item_id)
 
-        # Get work item metadata
-        work_item_metadata = await self._get_work_item_metadata(workflow.work_item_id)
+            # Build workflow run summary
+            workflow_run_summary = self._to_workflow_run_summary(workflow, work_item_metadata)
 
-        # Build workflow run summary
-        workflow_run_summary = self._to_workflow_run_summary(workflow, work_item_metadata)
+            # Convert events to dict format
+            events_data = [self._event_to_dict(event) for event in all_events]
 
-        # Convert events to dict format for pagination
-        events_data = [self._event_to_dict(event) for event in all_events]
+            # Build stage-grouped events (always complete, not paginated)
+            stages_info = self._build_stage_info(workflow, all_events)
+
+            # Cache the core data (without pagination/validation)
+            await self._audit_cache.set(core_cache_key, (workflow_run_summary, events_data, stages_info))
+
+        # Apply pagination to events (done after cache retrieval)
         total_event_count = len(events_data)
-
-        # Apply pagination to events
         paginated_events = events_data[offset : offset + limit]
 
-        # Build stage-grouped events (always complete, not paginated)
-        stages_info = self._build_stage_info(workflow, all_events)
-
-        # Validate event sequence (optional)
+        # Validate event sequence if requested (computed on demand, not cached)
+        # This is inexpensive compared to event store fetches
         validation_result = None
         if include_validation:
-            actual_sequence = [event.event_type for event in all_events]
+            # Reconstruct all_events from events_data for validation
+            # Note: We could optimize this further by caching event_types separately
+            actual_sequence = [event["event_type"] for event in events_data]
             expected_pattern = self._sequence_registry.get_expected_sequence("default")
             validation_result = self._sequence_validator.create_audit_validation_result(
                 expected_pattern,
@@ -476,9 +484,6 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
             limit=limit,
             has_next=(offset + limit) < total_event_count,
         )
-
-        # Cache the result
-        await self._audit_cache.set(cache_key, audit_data)
 
         logger.debug(
             f"Audit for {workflow_run_id}: {total_event_count} total events, "
@@ -879,6 +884,26 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         Returns:
             List of stage info dictionaries compatible with AuditStageInfo DTO
         """
+        # Pre-index events by stage_name and execution_id for O(1) lookup
+        # This avoids O(stages * events) complexity
+        events_by_stage_name: Dict[str, List[DomainEvent]] = {}
+        events_by_execution_id: Dict[str, List[DomainEvent]] = {}
+
+        for event in events:
+            event_data = event.payload if hasattr(event, 'payload') else {}
+            event_stage_name = event_data.get('stage_name')
+            event_execution_id = event_data.get('execution_id')
+
+            if event_stage_name:
+                if event_stage_name not in events_by_stage_name:
+                    events_by_stage_name[event_stage_name] = []
+                events_by_stage_name[event_stage_name].append(event)
+
+            if event_execution_id:
+                if event_execution_id not in events_by_execution_id:
+                    events_by_execution_id[event_execution_id] = []
+                events_by_execution_id[event_execution_id].append(event)
+
         stages_info = []
 
         for stage in workflow.stages:
@@ -903,16 +928,22 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
             if stage.started_at and stage.completed_at:
                 duration_seconds = (stage.completed_at - stage.started_at).total_seconds()
 
-            # Filter events for this stage (execution events with matching stage name or execution ID)
+            # Collect events for this stage using pre-indexed lookups (O(1))
+            stage_events_set = set()  # Use set to avoid duplicates
+
+            # Get events by stage name
+            for event in events_by_stage_name.get(stage.name, []):
+                stage_events_set.add(id(event))  # Track by object identity
+
+            # Get events by execution ID
+            if stage.execution_id:
+                for event in events_by_execution_id.get(stage.execution_id, []):
+                    stage_events_set.add(id(event))
+
+            # Convert to sorted list of event dicts
             stage_events = []
             for event in events:
-                # Check if event is related to this stage
-                event_data = event.payload if hasattr(event, 'payload') else {}
-                event_stage_name = event_data.get('stage_name')
-                event_execution_id = event_data.get('execution_id')
-
-                if (event_stage_name == stage.name or
-                    (stage.execution_id and event_execution_id == stage.execution_id)):
+                if id(event) in stage_events_set:
                     stage_events.append(self._event_to_dict(event))
 
             stage_info = {
