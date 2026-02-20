@@ -363,11 +363,11 @@ class TestGetWorkflowRunAudit:
     def test_get_workflow_run_audit_success(self, client, mock_query_port):
         """Test successful workflow run audit retrieval."""
         # Arrange
-        from codetoreum.ports.input.workflow_run_query import WorkflowRunSummary
+        from codetoreum.ports.input.workflow_run_query import WorkflowRunSummary, WorkflowRunAuditResult
 
         now = datetime.now(timezone.utc)
-        audit_data = {
-            "workflow_run": WorkflowRunSummary(
+        audit_data = WorkflowRunAuditResult(
+            workflow_run=WorkflowRunSummary(
                 id="wfrun-123",
                 work_item_id="wi-456",
                 workflow_id="wf-789",
@@ -384,7 +384,7 @@ class TestGetWorkflowRunAudit:
                 triggered_by="user",
                 priority="medium",
             ),
-            "events": [
+            events=[
                 {
                     "id": "evt-1",
                     "event_type": "WorkflowStarted",
@@ -396,7 +396,7 @@ class TestGetWorkflowRunAudit:
                     "data": {},
                 }
             ],
-            "stages": [
+            stages=[
                 {
                     "name": "implementation",
                     "status": "completed",
@@ -406,7 +406,7 @@ class TestGetWorkflowRunAudit:
                     "events": [],
                 }
             ],
-            "validation": {
+            validation={
                 "sequenceValid": True,
                 "expectedSequence": ["WorkflowStarted", "WorkflowCompleted"],
                 "actualSequence": ["WorkflowStarted", "WorkflowCompleted"],
@@ -414,11 +414,11 @@ class TestGetWorkflowRunAudit:
                 "unexpectedEvents": [],
                 "outOfOrderEvents": [],
             },
-            "total_event_count": 10,
-            "offset": 0,
-            "limit": 100,
-            "has_next": False,
-        }
+            total_event_count=10,
+            offset=0,
+            limit=100,
+            has_next=False,
+        )
         mock_query_port._get_workflow_run_audit.return_value = audit_data
 
         # Act
@@ -442,11 +442,11 @@ class TestGetWorkflowRunAudit:
     def test_get_workflow_run_audit_with_pagination(self, client, mock_query_port):
         """Test workflow run audit retrieval with custom pagination."""
         # Arrange
-        from codetoreum.ports.input.workflow_run_query import WorkflowRunSummary
+        from codetoreum.ports.input.workflow_run_query import WorkflowRunSummary, WorkflowRunAuditResult
 
         now = datetime.now(timezone.utc)
-        audit_data = {
-            "workflow_run": WorkflowRunSummary(
+        audit_data = WorkflowRunAuditResult(
+            workflow_run=WorkflowRunSummary(
                 id="wfrun-123",
                 work_item_id="wi-456",
                 workflow_id="wf-789",
@@ -463,9 +463,9 @@ class TestGetWorkflowRunAudit:
                 triggered_by="user",
                 priority="medium",
             ),
-            "events": [],
-            "stages": [],
-            "validation": {
+            events=[],
+            stages=[],
+            validation={
                 "sequenceValid": True,
                 "expectedSequence": [],
                 "actualSequence": [],
@@ -473,11 +473,11 @@ class TestGetWorkflowRunAudit:
                 "unexpectedEvents": [],
                 "outOfOrderEvents": [],
             },
-            "total_event_count": 500,
-            "offset": 100,
-            "limit": 50,
-            "has_next": True,
-        }
+            total_event_count=500,
+            offset=100,
+            limit=50,
+            has_next=True,
+        )
         mock_query_port._get_workflow_run_audit.return_value = audit_data
 
         # Act
@@ -501,12 +501,12 @@ class TestGetWorkflowRunAudit:
     def test_get_workflow_run_audit_without_validation(self, client, mock_query_port):
         """Test workflow run audit retrieval without validation."""
         # Arrange
-        from codetoreum.ports.input.workflow_run_query import WorkflowRunSummary
+        from codetoreum.ports.input.workflow_run_query import WorkflowRunSummary, WorkflowRunAuditResult
 
         now = datetime.now(timezone.utc)
         # When validation is not requested, return empty validation result
-        audit_data = {
-            "workflow_run": WorkflowRunSummary(
+        audit_data = WorkflowRunAuditResult(
+            workflow_run=WorkflowRunSummary(
                 id="wfrun-123",
                 work_item_id="wi-456",
                 workflow_id="wf-789",
@@ -523,9 +523,9 @@ class TestGetWorkflowRunAudit:
                 triggered_by="user",
                 priority="medium",
             ),
-            "events": [],
-            "stages": [],
-            "validation": {
+            events=[],
+            stages=[],
+            validation={
                 "sequenceValid": True,
                 "expectedSequence": [],
                 "actualSequence": [],
@@ -533,11 +533,11 @@ class TestGetWorkflowRunAudit:
                 "unexpectedEvents": [],
                 "outOfOrderEvents": [],
             },
-            "total_event_count": 10,
-            "offset": 0,
-            "limit": 100,
-            "has_next": False,
-        }
+            total_event_count=10,
+            offset=0,
+            limit=100,
+            has_next=False,
+        )
         mock_query_port._get_workflow_run_audit.return_value = audit_data
 
         # Act
@@ -560,8 +560,10 @@ class TestGetWorkflowRunAudit:
     def test_get_workflow_run_audit_not_found(self, client, mock_query_port):
         """Test workflow run audit not found."""
         # Arrange
-        mock_query_port._get_workflow_run_audit.side_effect = Exception(
-            "Workflow run not found"
+        from codetoreum.ports.exceptions import ResourceNotFoundError
+
+        mock_query_port._get_workflow_run_audit.side_effect = ResourceNotFoundError(
+            "WorkflowRun", "wfrun-999"
         )
 
         # Act
