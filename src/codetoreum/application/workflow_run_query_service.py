@@ -882,14 +882,21 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         stages_info = []
 
         for stage in workflow.stages:
-            # Determine stage status
-            status = "pending"
-            if stage.status == StageStatus.RUNNING:
+            # Determine stage status - map all StageStatus values explicitly
+            if stage.status == StageStatus.PENDING:
+                status = "pending"
+            elif stage.status == StageStatus.READY:
+                status = "ready"
+            elif stage.status == StageStatus.RUNNING:
                 status = "running"
             elif stage.status == StageStatus.COMPLETED:
                 status = "completed"
             elif stage.status == StageStatus.FAILED:
                 status = "failed"
+            elif stage.status == StageStatus.SKIPPED:
+                status = "skipped"
+            else:
+                status = "pending"  # Fallback for unknown status
 
             # Calculate duration
             duration_seconds = None

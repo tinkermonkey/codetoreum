@@ -114,7 +114,7 @@ class AuditStageInfo(BaseModel):
     """Stage-grouped events for audit."""
 
     name: str = Field(..., description="Stage name")
-    status: Literal["pending", "running", "completed", "failed"] = Field(..., description="Stage status")
+    status: Literal["pending", "ready", "running", "completed", "failed", "skipped"] = Field(..., description="Stage status")
     startedAt: Optional[datetime] = Field(None, description="Stage start time", serialization_alias="startedAt")
     completedAt: Optional[datetime] = Field(None, description="Stage completion time", serialization_alias="completedAt")
     durationSeconds: Optional[float] = Field(None, description="Stage duration in seconds", serialization_alias="durationSeconds")

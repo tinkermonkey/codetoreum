@@ -1432,8 +1432,9 @@ def create_development_app() -> FastAPI:
             )
 
         async def get_workflow_run_events(self, workflow_run_id: str, offset=0, limit=50, event_types=None, since=None):
-            return {
-                "events": [
+            from codetoreum.ports.input.workflow_run_query import WorkflowRunEventsResult
+            return WorkflowRunEventsResult(
+                events=[
                     {
                         "id": "evt-mock-123",
                         "event_type": "WorkflowStarted",
@@ -1448,17 +1449,17 @@ def create_development_app() -> FastAPI:
                         },
                     }
                 ],
-                "totalCount": 1,
-                "offset": offset,
-                "limit": limit,
-                "hasNext": False,
-            }
+                total_count=1,
+                offset=offset,
+                limit=limit,
+                has_next=False,
+            )
 
         async def get_workflow_run_audit(self, workflow_run_id: str, offset=0, limit=100, include_validation=True):
-            from codetoreum.ports.input.workflow_run_query import WorkflowRunSummary, WorkflowRunStatus
+            from codetoreum.ports.input.workflow_run_query import WorkflowRunSummary, WorkflowRunStatus, WorkflowRunAuditResult
             # Mock audit response
-            return {
-                "workflow_run": WorkflowRunSummary(
+            return WorkflowRunAuditResult(
+                workflow_run=WorkflowRunSummary(
                     id=workflow_run_id,
                     work_item_id="wi-mock-123",
                     workflow_id="wf-mock-123",
@@ -1475,7 +1476,7 @@ def create_development_app() -> FastAPI:
                     triggered_by="mock",
                     priority="high",
                 ),
-                "events": [
+                events=[
                     {
                         "id": "evt-1",
                         "event_type": "WorkflowCreated",
@@ -1489,20 +1490,20 @@ def create_development_app() -> FastAPI:
                         "metadata": {},
                     }
                 ],
-                "stages": [],
-                "validation": {
-                    "sequenceValid": True,
-                    "expectedSequence": [],
-                    "actualSequence": [],
-                    "missingEvents": [],
-                    "unexpectedEvents": [],
-                    "outOfOrderEvents": [],
+                stages=[],
+                validation={
+                    "sequence_valid": True,
+                    "expected_sequence": [],
+                    "actual_sequence": [],
+                    "missing_events": [],
+                    "unexpected_events": [],
+                    "out_of_order_events": [],
                 },
-                "total_event_count": 1,
-                "offset": offset,
-                "limit": limit,
-                "has_next": False,
-            }
+                total_event_count=1,
+                offset=offset,
+                limit=limit,
+                has_next=False,
+            )
 
     class MockWorkflowQueryPort(IWorkflowQueryPort):
         """Mock workflow query port for development."""
