@@ -261,8 +261,10 @@ class TestGetWorkflowRun:
     def test_get_workflow_run_not_found(self, client, mock_query_port):
         """Test workflow run not found."""
         # Arrange
-        mock_query_port._get_workflow_run.side_effect = Exception(
-            "Workflow run not found"
+        from codetoreum.ports.exceptions import ResourceNotFoundError
+
+        mock_query_port._get_workflow_run.side_effect = ResourceNotFoundError(
+            "WorkflowRun", "wfrun-999"
         )
 
         # Act
@@ -280,9 +282,11 @@ class TestGetWorkflowRunEvents:
     def test_get_workflow_run_events_success(self, client, mock_query_port):
         """Test successful workflow run events retrieval."""
         # Arrange
+        from codetoreum.ports.input.workflow_run_query import WorkflowRunEventsResult
+
         now = datetime.now(timezone.utc)
-        events_result = {
-            "events": [
+        events_result = WorkflowRunEventsResult(
+            events=[
                 {
                     "id": "evt-123",
                     "event_type": "WorkflowStarted",
@@ -294,11 +298,11 @@ class TestGetWorkflowRunEvents:
                     "data": {"workItemId": "wi-456"},
                 }
             ],
-            "total_count": 1,
-            "offset": 0,
-            "limit": 50,
-            "has_next": False,
-        }
+            total_count=1,
+            offset=0,
+            limit=50,
+            has_next=False,
+        )
         mock_query_port._get_workflow_run_events.return_value = events_result
 
         # Act
@@ -317,13 +321,15 @@ class TestGetWorkflowRunEvents:
     def test_get_workflow_run_events_with_filters(self, client, mock_query_port):
         """Test workflow run events retrieval with filters."""
         # Arrange
-        events_result = {
-            "events": [],
-            "total_count": 0,
-            "offset": 0,
-            "limit": 50,
-            "has_next": False,
-        }
+        from codetoreum.ports.input.workflow_run_query import WorkflowRunEventsResult
+
+        events_result = WorkflowRunEventsResult(
+            events=[],
+            total_count=0,
+            offset=0,
+            limit=50,
+            has_next=False,
+        )
         mock_query_port._get_workflow_run_events.return_value = events_result
 
         # Act
@@ -344,8 +350,10 @@ class TestGetWorkflowRunEvents:
     def test_get_workflow_run_events_not_found(self, client, mock_query_port):
         """Test workflow run events not found."""
         # Arrange
-        mock_query_port._get_workflow_run_events.side_effect = Exception(
-            "Workflow run not found"
+        from codetoreum.ports.exceptions import ResourceNotFoundError
+
+        mock_query_port._get_workflow_run_events.side_effect = ResourceNotFoundError(
+            "WorkflowRun", "wfrun-999"
         )
 
         # Act
