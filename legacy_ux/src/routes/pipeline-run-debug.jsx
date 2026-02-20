@@ -256,7 +256,7 @@ function PipelineRunDebugView() {
 
     try {
       setLoadingEvents(true)
-      const response = await fetch(`/pipeline-run-events?pipeline_run_id=${pipelineRunId}`)
+      const response = await fetch(`/pipeline-run-events?workflow_run_id=${pipelineRunId}`)
       const data = await response.json()
 
       if (data.success) {

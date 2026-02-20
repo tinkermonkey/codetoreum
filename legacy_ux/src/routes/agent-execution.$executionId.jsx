@@ -62,9 +62,9 @@ function AgentExecutionView() {
         setPromptEvent(current => mergeObjectStable(current, data.prompt_event || null))
         setError(null)
 
-        // Extract pipeline_run_id from execution data
-        if (data.execution?.pipeline_run_id) {
-          setPipelineRunId(data.execution.pipeline_run_id)
+        // Extract workflow_run_id from execution data
+        if (data.execution?.workflow_run_id) {
+          setPipelineRunId(data.execution.workflow_run_id)
         }
       } else {
         setError(data.error || 'Failed to load execution data')
@@ -95,7 +95,7 @@ function AgentExecutionView() {
       if (isInitialLoad) {
         setLoadingExecutions(true)
       }
-      const response = await fetch(`/pipeline-run-events?pipeline_run_id=${runId}`)
+      const response = await fetch(`/pipeline-run-events?workflow_run_id=${runId}`)
       const data = await response.json()
 
       if (data.success) {

@@ -137,10 +137,10 @@ export const mergePipelineRunEvents = (apiEvents, webSocketEvents, pipelineRun) 
   
   // Filter WebSocket events for this pipeline run that are newer than API events
   const newWebSocketEvents = webSocketEvents.filter(event => {
-    // Check if event is related to this pipeline run
-    // Pipeline run events have pipeline_run_id in their data
-    const eventPipelineRunId = event.data?.pipeline_run_id || event.pipeline_run_id
-    if (eventPipelineRunId !== pipelineRunId) return false
+    // Check if event is related to this workflow run
+    // Workflow run events have workflow_run_id in their data
+    const eventWorkflowRunId = event.data?.workflow_run_id || event.workflow_run_id
+    if (eventWorkflowRunId !== pipelineRunId) return false
     
     const eventTimestamp = normalizeTimestamp(event.timestamp)
     if (!eventTimestamp || !startTimestamp) return false

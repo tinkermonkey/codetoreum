@@ -19,6 +19,7 @@ about test execution and repair steps—they cannot be modified after creation.
 from dataclasses import dataclass
 from typing import Optional, Tuple
 from uuid import uuid4
+import warnings
 
 from .adapter_events import CodetoreumEvent
 from ..repair_cycle_types import (
@@ -77,6 +78,13 @@ class RepairCycleStartedEvent(CodetoreumEvent):
             for t in data.get("test_types", [])
         )
         # Backward compatibility: Support both old and new field names
+        if "pipeline_run_id" in data and "workflow_run_id" not in data:
+            warnings.warn(
+                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. "
+                "Use 'workflow_run_id' instead.",
+                DeprecationWarning,
+                stacklevel=2
+            )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
         return cls(
             type=data.get("type", "repair_cycle.started"),
@@ -152,6 +160,13 @@ class RepairCycleTestExecutionStartedEvent(CodetoreumEvent):
             else RepairTestType.UNIT
         )
         # Backward compatibility: Support both old and new field names
+        if "pipeline_run_id" in data and "workflow_run_id" not in data:
+            warnings.warn(
+                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. "
+                "Use 'workflow_run_id' instead.",
+                DeprecationWarning,
+                stacklevel=2
+            )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
         return cls(
             type=data.get("type", "repair_cycle.test_execution_started"),
@@ -264,6 +279,13 @@ class RepairCycleTestExecutionCompletedEvent(CodetoreumEvent):
             for f in data.get("failures", [])
         )
         # Backward compatibility: Support both old and new field names
+        if "pipeline_run_id" in data and "workflow_run_id" not in data:
+            warnings.warn(
+                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. "
+                "Use 'workflow_run_id' instead.",
+                DeprecationWarning,
+                stacklevel=2
+            )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
         return cls(
             type=data.get("type", "repair_cycle.test_execution_completed"),
@@ -345,6 +367,13 @@ class RepairCycleFixCycleStartedEvent(CodetoreumEvent):
             else RepairTestType.UNIT
         )
         # Backward compatibility: Support both old and new field names
+        if "pipeline_run_id" in data and "workflow_run_id" not in data:
+            warnings.warn(
+                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. "
+                "Use 'workflow_run_id' instead.",
+                DeprecationWarning,
+                stacklevel=2
+            )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
         return cls(
             type=data.get("type", "repair_cycle.fix_cycle_started"),
@@ -413,6 +442,13 @@ class RepairCycleFileFixStartedEvent(CodetoreumEvent):
             else RepairTestType.UNIT
         )
         # Backward compatibility: Support both old and new field names
+        if "pipeline_run_id" in data and "workflow_run_id" not in data:
+            warnings.warn(
+                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. "
+                "Use 'workflow_run_id' instead.",
+                DeprecationWarning,
+                stacklevel=2
+            )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
         return cls(
             type=data.get("type", "repair_cycle.file_fix_started"),
@@ -482,6 +518,13 @@ class RepairCycleFileFixCompletedEvent(CodetoreumEvent):
             else RepairTestType.UNIT
         )
         # Backward compatibility: Support both old and new field names
+        if "pipeline_run_id" in data and "workflow_run_id" not in data:
+            warnings.warn(
+                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. "
+                "Use 'workflow_run_id' instead.",
+                DeprecationWarning,
+                stacklevel=2
+            )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
         return cls(
             type=data.get("type", "repair_cycle.file_fix_completed"),
@@ -554,7 +597,7 @@ class RepairCycleWarningReviewStartedEvent(CodetoreumEvent):
             if isinstance(data.get("test_type"), str)
             else RepairTestType.UNIT
         )
-        warnings = tuple(
+        warnings_list = tuple(
             RepairTestWarning(
                 file=w.get("file", ""),
                 message=w.get("message", ""),
@@ -562,6 +605,13 @@ class RepairCycleWarningReviewStartedEvent(CodetoreumEvent):
             for w in data.get("warnings", [])
         )
         # Backward compatibility: Support both old and new field names
+        if "pipeline_run_id" in data and "workflow_run_id" not in data:
+            warnings.warn(
+                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. "
+                "Use 'workflow_run_id' instead.",
+                DeprecationWarning,
+                stacklevel=2
+            )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
         return cls(
             type=data.get("type", "repair_cycle.warning_review_started"),
@@ -572,7 +622,7 @@ class RepairCycleWarningReviewStartedEvent(CodetoreumEvent):
             source_file=data.get("source_file", ""),
             warning_count=data.get("warning_count", 0),
             test_type=test_type,
-            warnings=warnings,
+            warnings=warnings_list,
             workflow_run_id=workflow_run_id,
         )
 
@@ -632,6 +682,13 @@ class RepairCycleWarningReviewCompletedEvent(CodetoreumEvent):
             else RepairTestType.UNIT
         )
         # Backward compatibility: Support both old and new field names
+        if "pipeline_run_id" in data and "workflow_run_id" not in data:
+            warnings.warn(
+                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. "
+                "Use 'workflow_run_id' instead.",
+                DeprecationWarning,
+                stacklevel=2
+            )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
         return cls(
             type=data.get("type", "repair_cycle.warning_review_completed"),
@@ -720,6 +777,13 @@ class RepairCycleTestCycleCompletedEvent(CodetoreumEvent):
             else RepairTestType.UNIT
         )
         # Backward compatibility: Support both old and new field names
+        if "pipeline_run_id" in data and "workflow_run_id" not in data:
+            warnings.warn(
+                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. "
+                "Use 'workflow_run_id' instead.",
+                DeprecationWarning,
+                stacklevel=2
+            )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
         return cls(
             type=data.get("type", "repair_cycle.test_cycle_completed"),
@@ -786,6 +850,13 @@ class RepairCycleFastFailEvent(CodetoreumEvent):
             else RepairTestType.UNIT
         )
         # Backward compatibility: Support both old and new field names
+        if "pipeline_run_id" in data and "workflow_run_id" not in data:
+            warnings.warn(
+                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. "
+                "Use 'workflow_run_id' instead.",
+                DeprecationWarning,
+                stacklevel=2
+            )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
         return cls(
             type=data.get("type", "repair_cycle.fast_fail"),
@@ -852,6 +923,13 @@ class RepairCycleResumedEvent(CodetoreumEvent):
     def from_dict(cls, data: dict) -> "RepairCycleResumedEvent":
         """Deserialize from dictionary with backward compatibility."""
         # Backward compatibility: Support both old and new field names
+        if "pipeline_run_id" in data and "workflow_run_id" not in data:
+            warnings.warn(
+                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. "
+                "Use 'workflow_run_id' instead.",
+                DeprecationWarning,
+                stacklevel=2
+            )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
 
         # Deserialize test_type enum
@@ -929,6 +1007,13 @@ class RepairCycleCheckpointFailedEvent(CodetoreumEvent):
     def from_dict(cls, data: dict) -> "RepairCycleCheckpointFailedEvent":
         """Deserialize from dictionary with backward compatibility."""
         # Backward compatibility: Support both old and new field names
+        if "pipeline_run_id" in data and "workflow_run_id" not in data:
+            warnings.warn(
+                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. "
+                "Use 'workflow_run_id' instead.",
+                DeprecationWarning,
+                stacklevel=2
+            )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
         return cls(
             type=data.get("type", "repair_cycle.checkpoint_failed"),
@@ -1000,6 +1085,13 @@ class RepairCycleMetricsBackendFailedEvent(CodetoreumEvent):
     def from_dict(cls, data: dict) -> "RepairCycleMetricsBackendFailedEvent":
         """Deserialize from dictionary with backward compatibility."""
         # Backward compatibility: Support both old and new field names
+        if "pipeline_run_id" in data and "workflow_run_id" not in data:
+            warnings.warn(
+                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. "
+                "Use 'workflow_run_id' instead.",
+                DeprecationWarning,
+                stacklevel=2
+            )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
         return cls(
             type=data.get("type", "repair_cycle.metrics_backend_failed"),
@@ -1135,6 +1227,13 @@ class RepairCycleCompletedEvent(CodetoreumEvent):
             test_results.append(cycle_result)
 
         # Backward compatibility: Support both old and new field names
+        if "pipeline_run_id" in data and "workflow_run_id" not in data:
+            warnings.warn(
+                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. "
+                "Use 'workflow_run_id' instead.",
+                DeprecationWarning,
+                stacklevel=2
+            )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
         return cls(
             type=data.get("type", "repair_cycle.completed"),
