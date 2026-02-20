@@ -194,10 +194,15 @@ class TestRepairCycleTestExecutionCompletedEvent:
 
     def test_create_valid_event(self):
         """Test creating a valid test execution completed event."""
-        failure = RepairTestFailure(
+        failure1 = RepairTestFailure(
             file="test_auth.py",
             test="test_login",
             message="AssertionError: expected True",
+        )
+        failure2 = RepairTestFailure(
+            file="test_auth.py",
+            test="test_logout",
+            message="AssertionError: expected False",
         )
         timestamp = now_iso()
         event = RepairCycleTestExecutionCompletedEvent(
@@ -211,14 +216,14 @@ class TestRepairCycleTestExecutionCompletedEvent:
             failed=2,
             warnings=1,
             has_failures=True,
-            failures=(failure,),
+            failures=(failure1, failure2),
             workflow_run_id="run-123",
         )
 
         assert event.passed == 5
         assert event.failed == 2
         assert event.has_failures is True
-        assert len(event.failures) == 1
+        assert len(event.failures) == 2
 
     def test_serialization_with_failures(self):
         """Test serialization with failure details."""
@@ -267,6 +272,11 @@ class TestRepairCycleTestExecutionCompletedEvent:
                     "file": "test_auth.py",
                     "test": "test_login",
                     "message": "AssertionError",
+                },
+                {
+                    "file": "test_auth.py",
+                    "test": "test_logout",
+                    "message": "KeyError",
                 }
             ],
             "workflow_run_id": "run-123",
@@ -274,7 +284,7 @@ class TestRepairCycleTestExecutionCompletedEvent:
 
         event = RepairCycleTestExecutionCompletedEvent.from_dict(d)
         assert event.failed == 2
-        assert len(event.failures) == 1
+        assert len(event.failures) == 2
         assert event.failures[0].file == "test_auth.py"
 
 

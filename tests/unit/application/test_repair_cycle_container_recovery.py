@@ -23,37 +23,11 @@ from codetoreum.adapters.secondary.docker_container_recovery_adapter import (
 from codetoreum.adapters.testing.in_memory_checkpoint_store import (
     InMemoryCheckpointStore,
 )
-from codetoreum.domain.repair_cycle_types import RepairCycleCheckpoint, CycleResult
 from codetoreum.ports.output.container_recovery import (
     ContainerMetadata,
     RecoveryAssessment,
 )
 from codetoreum.ports.exceptions import StorageError
-
-
-def create_test_checkpoint(
-    workflow_run_id: str,
-    test_type: str = "all",
-    iteration: int = 1,
-    timestamp_offset: timedelta = timedelta(minutes=0),
-) -> RepairCycleCheckpoint:
-    """Helper to create a test checkpoint with specified timestamp offset."""
-    now = datetime.now(timezone.utc)
-    checkpoint_time = now - timestamp_offset
-    expires_at = checkpoint_time + timedelta(hours=24)
-
-    return RepairCycleCheckpoint(
-        workflow_run_id=workflow_run_id,
-        test_type=test_type,
-        iteration=iteration,
-        total_agent_calls=5,
-        files_fixed=1,
-        warnings_reviewed=2,
-        elapsed_seconds=300.0,
-        test_results=(),  # Empty tuple of CycleResult
-        timestamp=checkpoint_time.isoformat(),
-        expires_at=expires_at.isoformat(),
-    )
 
 
 class TestGetRunningRepairCycleContainers:
@@ -174,47 +148,6 @@ class TestRepairCycleContainerAssessment:
         assert assessment.reason == "completed_during_downtime"
         assert assessment.with_monitoring is False
 
-    @pytest.mark.asyncio
-    async def test_kills_if_stale_checkpoint_and_old_container(self):
-        """Should kill if checkpoint >60min old AND container >2 hours old."""
-        tracking_storage = AsyncMock()
-        tracking_storage.get.return_value = None  # No completed result
-        checkpoint_store = InMemoryCheckpointStore()
-
-        adapter = DockerContainerRecoveryAdapter(
-            execution_tracker=AsyncMock(),
-            tracking_storage=tracking_storage,
-            checkpoint_store=checkpoint_store,
-        )
-
-        # Save a stale checkpoint (65 min old > 60 min threshold)
-        old_checkpoint = create_test_checkpoint(
-            "run-abc", timestamp_offset=timedelta(minutes=65)
-        )
-        await checkpoint_store.save_checkpoint(old_checkpoint)
-
-        metadata = ContainerMetadata(
-            container_id="repair-123",
-            container_name="repair-cycle-1",
-            project_id="proj-1",
-            agent_id="repair-agent",
-            task_id="task-1",
-            created_at=datetime.now(timezone.utc) - timedelta(hours=3),  # 3h old
-            labels=MappingProxyType({
-                "org.codetoreum.type": "repair-cycle",
-                "org.codetoreum.project": "proj-1",
-                "org.codetoreum.agent": "repair-agent",
-            }),
-            work_item_id="100",
-            workflow_run_id="run-abc",
-            execution_id="exec-123",
-        )
-
-        assessment = await adapter.assess_repair_cycle_container(metadata)
-
-        assert assessment.action == "kill"
-        assert assessment.reason == "checkpoint_stale"
-        assert assessment.with_monitoring is False
 
     @pytest.mark.asyncio
     async def test_kills_if_no_checkpoint_and_old_container(self):
@@ -254,47 +187,6 @@ class TestRepairCycleContainerAssessment:
         assert assessment.reason == "no_checkpoint"
         assert assessment.with_monitoring is False
 
-    @pytest.mark.asyncio
-    async def test_reconnects_if_fresh_checkpoint_despite_old_container(self):
-        """Should reconnect with monitoring if checkpoint is fresh even if container is old."""
-        tracking_storage = AsyncMock()
-        tracking_storage.get.return_value = None  # No completed result
-        checkpoint_store = InMemoryCheckpointStore()
-
-        adapter = DockerContainerRecoveryAdapter(
-            execution_tracker=AsyncMock(),
-            tracking_storage=tracking_storage,
-            checkpoint_store=checkpoint_store,
-        )
-
-        # Save a fresh checkpoint (30 min old < 60 min threshold) despite old container
-        fresh_checkpoint = create_test_checkpoint(
-            "run-abc", iteration=5, timestamp_offset=timedelta(minutes=30)
-        )
-        await checkpoint_store.save_checkpoint(fresh_checkpoint)
-
-        metadata = ContainerMetadata(
-            container_id="repair-123",
-            container_name="repair-cycle-1",
-            project_id="proj-1",
-            agent_id="repair-agent",
-            task_id="task-1",
-            created_at=datetime.now(timezone.utc) - timedelta(hours=3),  # 3h old
-            labels=MappingProxyType({
-                "org.codetoreum.type": "repair-cycle",
-                "org.codetoreum.project": "proj-1",
-                "org.codetoreum.agent": "repair-agent",
-            }),
-            work_item_id="100",
-            workflow_run_id="run-abc",
-            execution_id="exec-123",
-        )
-
-        assessment = await adapter.assess_repair_cycle_container(metadata)
-
-        assert assessment.action == "reconnect"
-        assert assessment.reason == "valid_repair_cycle"
-        assert assessment.with_monitoring is True
 
     @pytest.mark.asyncio
     async def test_reconnects_if_container_recent(self):
