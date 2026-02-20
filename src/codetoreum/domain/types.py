@@ -2,6 +2,11 @@
 
 This module defines type aliases used throughout the domain layer to provide
 better type safety and expressiveness.
+
+Note: These NewType aliases provide static type checking only and do not perform
+runtime validation. For critical identifiers that require runtime validation
+(e.g., format validation, existence checks), consider implementing validated
+value objects as a future enhancement.
 """
 
 from typing import NewType

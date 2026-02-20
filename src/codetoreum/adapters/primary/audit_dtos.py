@@ -6,7 +6,7 @@ audit information with sequence validation and stage grouping.
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -34,7 +34,7 @@ class OutOfOrderEvent(BaseModel):
         json_schema_extra={
             "example": {
                 "eventType": "WorkflowStageAdvanced",
-                "timestamp": "2025-11-08T10:15:00Z",
+                "timestamp": "2026-02-20T10:15:00Z",
                 "expectedPosition": 5,
                 "actualPosition": 3
             }
@@ -64,7 +64,7 @@ class AuditValidationResult(BaseModel):
                 "outOfOrderEvents": [
                     {
                         "eventType": "WorkflowStageAdvanced",
-                        "timestamp": "2025-11-08T10:15:00Z",
+                        "timestamp": "2026-02-20T10:15:00Z",
                         "expectedPosition": 2,
                         "actualPosition": 1
                     }
@@ -114,11 +114,25 @@ class AuditStageInfo(BaseModel):
     """Stage-grouped events for audit."""
 
     name: str = Field(..., description="Stage name")
-    status: str = Field(..., description="Stage status (pending, running, completed, failed)")
+    status: Literal["pending", "running", "completed", "failed"] = Field(..., description="Stage status")
     startedAt: Optional[datetime] = Field(None, description="Stage start time", serialization_alias="startedAt")
     completedAt: Optional[datetime] = Field(None, description="Stage completion time", serialization_alias="completedAt")
     durationSeconds: Optional[float] = Field(None, description="Stage duration in seconds", serialization_alias="durationSeconds")
     events: List[WorkflowEventResponse] = Field(default_factory=list, description="Events for this stage")
+
+    @model_validator(mode="after")
+    def validate_temporal_consistency(self) -> "AuditStageInfo":
+        """Ensure completedAt >= startedAt when both are present.
+
+        Raises:
+            ValueError: If completedAt < startedAt
+        """
+        if self.startedAt is not None and self.completedAt is not None:
+            if self.completedAt < self.startedAt:
+                raise ValueError(
+                    f"completedAt ({self.completedAt}) must be >= startedAt ({self.startedAt})"
+                )
+        return self
 
     model_config = ConfigDict(
         populate_by_name=True,
@@ -126,15 +140,15 @@ class AuditStageInfo(BaseModel):
             "example": {
                 "name": "implementation",
                 "status": "completed",
-                "startedAt": "2025-11-08T10:00:00Z",
-                "completedAt": "2025-11-08T10:15:00Z",
+                "startedAt": "2026-02-20T10:00:00Z",
+                "completedAt": "2026-02-20T10:15:00Z",
                 "durationSeconds": 900.0,
                 "events": [
                     {
                         "id": "evt-123",
                         "eventType": "ExecutionStarted",
                         "workflowRunId": "wfrun-123",
-                        "timestamp": "2025-11-08T10:00:00Z",
+                        "timestamp": "2026-02-20T10:00:00Z",
                         "agentName": "developer_agent",
                         "stageName": "implementation",
                         "status": None,
@@ -175,8 +189,8 @@ class WorkflowRunAuditResponse(BaseModel):
                     "status": "completed",
                     "currentStageIndex": 2,
                     "currentStageName": "review",
-                    "startedAt": "2025-11-08T10:00:00Z",
-                    "completedAt": "2025-11-08T10:30:00Z",
+                    "startedAt": "2026-02-20T10:00:00Z",
+                    "completedAt": "2026-02-20T10:30:00Z",
                     "duration": 1800,
                     "issueTitle": "Fix authentication bug",
                     "issueNumber": 42,
@@ -189,7 +203,7 @@ class WorkflowRunAuditResponse(BaseModel):
                         "id": "evt-123",
                         "eventType": "WorkflowStarted",
                         "workflowRunId": "wfrun-123",
-                        "timestamp": "2025-11-08T10:00:00Z",
+                        "timestamp": "2026-02-20T10:00:00Z",
                         "agentName": None,
                         "stageName": None,
                         "status": None,
@@ -200,8 +214,8 @@ class WorkflowRunAuditResponse(BaseModel):
                     {
                         "name": "implementation",
                         "status": "completed",
-                        "startedAt": "2025-11-08T10:00:00Z",
-                        "completedAt": "2025-11-08T10:15:00Z",
+                        "startedAt": "2026-02-20T10:00:00Z",
+                        "completedAt": "2026-02-20T10:15:00Z",
                         "durationSeconds": 900.0,
                         "events": []
                     }

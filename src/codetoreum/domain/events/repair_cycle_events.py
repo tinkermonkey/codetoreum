@@ -803,6 +803,10 @@ class RepairCycleFastFailEvent(CodetoreumEvent):
 class RepairCycleResumedEvent(CodetoreumEvent):
     """Emitted when repair cycle resumes from a checkpoint.
 
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Attempting to modify any field will raise `FrozenInstanceError`.
+
     Attributes:
         type: Fixed to "repair_cycle.resumed"
         workflow_run_id: Unique identifier for this workflow run
@@ -827,6 +831,10 @@ class RepairCycleResumedEvent(CodetoreumEvent):
             raise ValueError("test_type is required")
         if self.iteration < 1:
             raise ValueError("iteration must be >= 1")
+        if self.elapsed_time < 0:
+            raise ValueError("elapsed_time must be >= 0")
+        if self.agent_calls_so_far < 0:
+            raise ValueError("agent_calls_so_far must be >= 0")
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
