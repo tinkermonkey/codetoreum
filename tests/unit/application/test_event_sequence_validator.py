@@ -52,7 +52,7 @@ class TestPatternParsing:
         assert "WorkflowCompleted" in elem.event_types
         assert "WorkflowFailed" in elem.event_types
         assert len(elem.event_types) == 2
-        assert elem.operator == PatternOperator.EXACT
+        assert elem.operator == PatternOperator.EITHER_OR
         assert elem.min_occurrences == 1
         assert elem.max_occurrences == 1
 

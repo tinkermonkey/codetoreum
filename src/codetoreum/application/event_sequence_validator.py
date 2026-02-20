@@ -16,9 +16,9 @@ Example:
 """
 
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
-from typing import List, Optional, Set, Tuple
-import re
+from typing import Dict, List, Optional, Set, Tuple
 
 
 class PatternOperator(Enum):
@@ -69,7 +69,7 @@ class EventSequenceValidator:
 
     def __init__(self):
         """Initialize validator."""
-        self._pattern_cache: dict[str, PatternElement] = {}
+        self._pattern_cache: Dict[str, PatternElement] = {}
 
     def validate(
         self,
@@ -208,8 +208,17 @@ class EventSequenceValidator:
         # Parse either/or alternatives
         event_types = [et.strip() for et in base_pattern.split('|')]
 
+        # Check if pattern uses either/or (mutual exclusion)
+        if len(event_types) > 1:
+            # Override operator to EITHER_OR if not already set
+            if operator == PatternOperator.EXACT:
+                operator = PatternOperator.EITHER_OR
+
         # Determine min/max occurrences based on operator
         if operator == PatternOperator.EXACT:
+            min_occ = 1
+            max_occ = 1
+        elif operator == PatternOperator.EITHER_OR:
             min_occ = 1
             max_occ = 1
         elif operator == PatternOperator.ZERO_OR_MORE:
@@ -262,6 +271,10 @@ class EventSequenceValidator:
         This is a convenience method for creating validation results that match
         the AuditValidationResult DTO structure from audit_dtos.py.
 
+        Note: Out-of-order event detection is not currently implemented, so
+        outOfOrderEvents will always be an empty list. When implemented, the
+        timestamp field will be populated based on the actual event timestamp.
+
         Args:
             expected_pattern: List of pattern strings
             actual_events: List of actual event type names
@@ -272,6 +285,8 @@ class EventSequenceValidator:
         """
         result = self.validate(expected_pattern, actual_events)
 
+        # Note: Out-of-order detection currently returns empty list
+        # When implemented, each tuple will need to include timestamp
         return {
             "sequenceValid": result.is_valid,
             "expectedSequence": expected_pattern,
@@ -281,6 +296,7 @@ class EventSequenceValidator:
             "outOfOrderEvents": [
                 {
                     "eventType": event_type,
+                    "timestamp": datetime.now(),  # Placeholder - should use actual event timestamp
                     "expectedPosition": expected_pos,
                     "actualPosition": actual_pos
                 }
