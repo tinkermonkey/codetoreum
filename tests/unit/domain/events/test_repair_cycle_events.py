@@ -769,7 +769,7 @@ class TestDeprecationWarnings:
             "timestamp": now_iso(),
             "source": "repair_cycle",
             "stage_name": "fix_failures",
-            "test_types": ["unit", "integration"],
+            "test_types": ["UNIT", "INTEGRATION"],
             "pipeline_run_id": "run-old-123",  # Old field name
         }
 
@@ -784,13 +784,15 @@ class TestDeprecationWarnings:
             "timestamp": now_iso(),
             "source": "repair_cycle",
             "stage_name": "fix_failures",
-            "test_types": ["unit"],
+            "test_types": ["UNIT"],
             "workflow_run_id": "run-new-456",  # New field name (preferred)
             "pipeline_run_id": "run-old-123",  # Old field name (ignored)
         }
 
         # Should NOT warn when workflow_run_id is present
-        with pytest.warns() as warning_list:
+        import warnings as warnings_module
+        with warnings_module.catch_warnings(record=True) as warning_list:
+            warnings_module.simplefilter("always")
             event = RepairCycleStartedEvent.from_dict(data)
             assert event.workflow_run_id == "run-new-456"
 
@@ -804,8 +806,8 @@ class TestDeprecationWarnings:
             "type": "repair_cycle.test_execution_started",
             "timestamp": now_iso(),
             "source": "repair_cycle",
-            "test_type": "unit",
-            "test_type_index": 0,
+            "test_type": "UNIT",
+            "test_type_index": 1,
             "test_cycle_iteration": 1,
             "max_test_cycle_iterations": 3,
             "timeout": 600,
@@ -818,16 +820,35 @@ class TestDeprecationWarnings:
 
     def test_completed_event_deprecation_warning(self):
         """Test deprecation warning for RepairCycleCompletedEvent."""
+        timestamp = now_iso()
         data = {
             "type": "repair_cycle.completed",
-            "timestamp": now_iso(),
+            "timestamp": timestamp,
             "source": "repair_cycle",
-            "stage_name": "fix_failures",
-            "result": "success",
-            "total_iterations": 2,
-            "total_files_fixed": 5,
-            "total_warnings_reviewed": 1,
-            "total_fast_fails": 0,
+            "overall_success": True,
+            "test_results": [
+                {
+                    "test_type": "UNIT",
+                    "passed": True,
+                    "iterations": 2,
+                    "final_result": {
+                        "test_type": "UNIT",
+                        "iteration": 2,
+                        "passed": 10,
+                        "failed": 0,
+                        "warnings": 0,
+                        "failures": [],
+                        "warning_list": [],
+                        "raw_output": "All tests passed",
+                        "timestamp": timestamp,
+                    },
+                    "files_fixed": 5,
+                    "warnings_reviewed": 1,
+                    "duration_seconds": 150.5,
+                    "error": None,
+                }
+            ],
+            "total_agent_calls": 10,
             "duration_seconds": 150.5,
             "pipeline_run_id": "run-completed",
         }

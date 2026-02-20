@@ -1195,7 +1195,7 @@ class RepairCycleCompletedEvent(CodetoreumEvent):
                     )
                     for f in fr.get("failures", [])
                 )
-                warnings = tuple(
+                warning_list = tuple(
                     RepairTestWarning(
                         file=w.get("file", ""),
                         message=w.get("message", ""),
@@ -1209,7 +1209,7 @@ class RepairCycleCompletedEvent(CodetoreumEvent):
                     failed=fr.get("failed", 0),
                     warnings=fr.get("warnings", 0),
                     failures=failures,
-                    warning_list=warnings,
+                    warning_list=warning_list,
                     raw_output=fr.get("raw_output", ""),
                     timestamp=fr.get("timestamp", ""),
                 )
