@@ -80,10 +80,18 @@ class TraceContextData:
         Example:
             data = TraceContextData.from_traceparent("00-0af7651916cd43dd8448eb211c80319c-b9c7c989f97918e1-01")
         """
+        # Type validation first to avoid AttributeError on split()
+        if not isinstance(traceparent, str):
+            logger.warning(
+                f"traceparent must be a string, got {type(traceparent).__name__}",
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+            )
+            return None
+
         try:
             parts = traceparent.split("-")
             if len(parts) < 4:
-                logger.warning(f"Invalid traceparent format: {traceparent}")
+                logger.warning(f"Invalid traceparent format (< 4 parts): {traceparent}")
                 return None
 
             version, trace_id, span_id, flags = parts[0], parts[1], parts[2], parts[3]
@@ -93,7 +101,7 @@ class TraceContextData:
                 logger.warning(f"Invalid traceparent component lengths: {traceparent}")
                 return None
 
-            # Validate hex format
+            # Validate hex format - this is where expected validation errors occur
             try:
                 int(trace_id, 16)
                 int(span_id, 16)
@@ -109,8 +117,9 @@ class TraceContextData:
                 trace_flags=flags,
             )
         except Exception as e:
-            logger.warning(
-                f"Failed to parse traceparent: {e}",
+            # Unexpected errors beyond format validation should be logged at ERROR level
+            logger.error(
+                f"Unexpected error parsing traceparent: {e}",
                 exc_info=True,
                 extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
             )

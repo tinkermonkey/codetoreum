@@ -291,6 +291,15 @@ def _setup_log_export(config: ObservabilityConfig, resource: "Resource") -> None
         )
         logger_provider.add_log_record_processor(batch_log_processor)
 
+        # Log batch processor configuration for observability
+        logger.info(
+            f"Batch log processor configured: "
+            f"max_queue={config.batch_max_queue_size}, "
+            f"max_batch={config.batch_max_export_batch_size}, "
+            f"schedule_delay_ms={config.batch_schedule_delay_millis}. "
+            f"Note: Logs may be dropped if queue is full."
+        )
+
         # Set global logger provider
         set_logger_provider(logger_provider)
 
@@ -349,7 +358,10 @@ def _record_metrics_export_error(error: Exception, config: ObservabilityConfig) 
 
     logger.warning(
         f"OTLP metrics export setup failed: {error}. "
-        f"Continuing without metrics export to {config.metrics_endpoint}",
+        f"Continuing without metrics export to {config.metrics_endpoint}. "
+        f"Application will continue without remote metrics export. "
+        f"Local metrics collection is unaffected. "
+        f"To enable metrics export, verify endpoint accessibility and restart the service.",
         exc_info=True,
         extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
     )
