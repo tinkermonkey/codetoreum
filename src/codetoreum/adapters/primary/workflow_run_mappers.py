@@ -194,11 +194,23 @@ class WorkflowRunMapper:
             for event in audit_data["events"]
         ]
 
-        # Convert stage info
-        stages = [
-            AuditStageInfo(**stage_dict)
-            for stage_dict in audit_data["stages"]
-        ]
+        # Convert stage info (including nested events)
+        stages = []
+        for stage_dict in audit_data["stages"]:
+            # Map events within each stage
+            stage_events = [
+                WorkflowRunMapper.to_event_response(event)
+                for event in stage_dict.get("events", [])
+            ]
+            # Create stage with mapped events
+            stages.append(AuditStageInfo(
+                name=stage_dict["name"],
+                status=stage_dict["status"],
+                startedAt=stage_dict.get("startedAt") or stage_dict.get("started_at"),
+                completedAt=stage_dict.get("completedAt") or stage_dict.get("completed_at"),
+                durationSeconds=stage_dict.get("durationSeconds") or stage_dict.get("duration_seconds"),
+                events=stage_events,
+            ))
 
         # Convert validation result
         validation = AuditValidationResult(**audit_data["validation"])
