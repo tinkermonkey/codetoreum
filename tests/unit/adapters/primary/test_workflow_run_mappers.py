@@ -54,7 +54,7 @@ class TestWorkflowRunMapperAuditResponse:
             "stages": [
                 {
                     "name": "Build",
-                    "status": "COMPLETED",
+                    "status": "completed",
                     "startedAt": datetime(2025, 1, 15, 10, 5, 0, tzinfo=timezone.utc),
                     "completedAt": datetime(2025, 1, 15, 10, 30, 0, tzinfo=timezone.utc),
                     "durationSeconds": 1500,
@@ -90,7 +90,7 @@ class TestWorkflowRunMapperAuditResponse:
             "stages": [
                 {
                     "name": "Test",
-                    "status": "RUNNING",
+                    "status": "running",
                     "started_at": datetime(2025, 1, 15, 11, 0, 0, tzinfo=timezone.utc),
                     "completed_at": None,
                     "duration_seconds": None,
@@ -110,7 +110,7 @@ class TestWorkflowRunMapperAuditResponse:
         # Assert - Stage fields mapped correctly from snake_case
         assert len(response.stages) == 1
         assert response.stages[0].name == "Test"
-        assert response.stages[0].status == "RUNNING"
+        assert response.stages[0].status == "running"
         assert response.stages[0].startedAt == datetime(2025, 1, 15, 11, 0, 0, tzinfo=timezone.utc)
         assert response.stages[0].completedAt is None
         assert response.stages[0].durationSeconds is None
