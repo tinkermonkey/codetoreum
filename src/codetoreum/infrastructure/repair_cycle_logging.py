@@ -105,8 +105,8 @@ class RepairCycleLogger:
         """Log error message with full exception info by default (per project requirements)."""
         self.logger.error(self._format_message(message, data), exc_info=exc_info, extra={"error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR})
 
-    def critical(self, message: str, data: Optional[Dict[str, Any]] = None, exc_info: bool = False) -> None:
-        """Log critical message."""
+    def critical(self, message: str, data: Optional[Dict[str, Any]] = None, exc_info: bool = True) -> None:
+        """Log critical message with full exception info by default (per project requirements)."""
         self.logger.critical(self._format_message(message, data), exc_info=exc_info)
 
     @contextmanager

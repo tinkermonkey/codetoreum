@@ -9,6 +9,7 @@ import asyncio
 import logging
 from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
+from types import MappingProxyType
 from typing import Any, Dict, List, Optional
 
 from codetoreum.domain.events import DomainEvent
@@ -754,6 +755,8 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         # Extract stage information
         stages: List[WorkflowRunStageInfo] = []
         for stage in workflow.stages:
+            # Get metadata and wrap in MappingProxyType for immutability
+            stage_metadata = stage.metadata if hasattr(stage, 'metadata') else {}
             stage_info = WorkflowRunStageInfo(
                 name=stage.name,
                 agent_name=stage.agent_name,
@@ -763,7 +766,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
                 execution_id=stage.execution_id,
                 output=stage.output if hasattr(stage, 'output') else None,
                 error_message=stage.error_message if hasattr(stage, 'error_message') else None,
-                metadata=stage.metadata if hasattr(stage, 'metadata') else {},
+                metadata=MappingProxyType(stage_metadata),
             )
             stages.append(stage_info)
 
@@ -929,22 +932,19 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
                 duration_seconds = (stage.completed_at - stage.started_at).total_seconds()
 
             # Collect events for this stage using pre-indexed lookups (O(1))
-            stage_events_set = set()  # Use set to avoid duplicates
+            stage_events_dict = {}  # Use dict keyed by id(event) to avoid duplicates
 
             # Get events by stage name
             for event in events_by_stage_name.get(stage.name, []):
-                stage_events_set.add(id(event))  # Track by object identity
+                stage_events_dict[id(event)] = event
 
             # Get events by execution ID
             if stage.execution_id:
                 for event in events_by_execution_id.get(stage.execution_id, []):
-                    stage_events_set.add(id(event))
+                    stage_events_dict[id(event)] = event
 
-            # Convert to sorted list of event dicts
-            stage_events = []
-            for event in events:
-                if id(event) in stage_events_set:
-                    stage_events.append(self._event_to_dict(event))
+            # Convert to list of event dicts (already deduped by dict keys)
+            stage_events = [self._event_to_dict(event) for event in stage_events_dict.values()]
 
             stage_info = {
                 "name": stage.name,

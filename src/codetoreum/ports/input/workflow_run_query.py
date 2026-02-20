@@ -9,7 +9,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
+from types import MappingProxyType
+from typing import List, Optional, Mapping
 
 
 class WorkflowRunStatus(Enum):
@@ -80,13 +81,14 @@ class WorkflowRunStageInfo:
     execution_id: Optional[str]
     output: Optional[str] = None
     error_message: Optional[str] = None
-    metadata: dict = None
+    metadata: Mapping = None
 
     def __post_init__(self):
-        """Initialize metadata to empty dict if None."""
+        """Initialize metadata to empty immutable mapping if None."""
         if self.metadata is None:
             # Use object.__setattr__ since this is a frozen dataclass
-            object.__setattr__(self, 'metadata', {})
+            # Use MappingProxyType for true immutability
+            object.__setattr__(self, 'metadata', MappingProxyType({}))
 
 
 @dataclass

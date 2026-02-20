@@ -29,9 +29,6 @@ from codetoreum.domain.types import (
     CONTAINER_TYPE_AGENT,
     CONTAINER_TYPE_REPAIR_CYCLE,
 )
-
-# Additional label for tracking containers with timestamp parse failures
-CONTAINER_LABEL_TIMESTAMP_FALLBACK = "codetoreum.timestamp_fallback"
 from codetoreum.infrastructure.observability.instrumentation import (
     instrument_async_function,
 )
@@ -42,6 +39,9 @@ from codetoreum.ports.output.container_recovery import (
     RecoveryAssessment,
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+
+# Additional label for tracking containers with timestamp parse failures
+CONTAINER_LABEL_TIMESTAMP_FALLBACK = "codetoreum.timestamp_fallback"
 
 # Import Docker SDK exceptions for proper error handling
 try:
@@ -396,28 +396,18 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
             # Use current time as fallback if parsing failed
             if created_at is None:
                 created_at = datetime.now(timezone.utc)
-                # Mark container with special label for priority cleanup
-                # This prevents containers with incorrect ages from persisting indefinitely
-                try:
-                    container.reload()
-                    current_labels = container.labels or {}
-                    current_labels[CONTAINER_LABEL_TIMESTAMP_FALLBACK] = "true"
-                    # Note: Docker doesn't support updating labels on running containers
-                    # This is best-effort logging for operator visibility
-                    logger.warning(
-                        f"Container {container.short_id} timestamp parse failed - marked for priority cleanup. "
-                        f"Operators should manually verify container age if it persists beyond expected lifetime.",
-                        extra={
-                            "container_id": container.short_id,
-                            "fallback_timestamp_used": True,
-                            "mitigation": "priority_cleanup_recommended"
-                        }
-                    )
-                except Exception as label_error:
-                    logger.warning(
-                        f"Could not mark container {container.short_id} for priority cleanup: {label_error}",
-                        exc_info=True
-                    )
+                # Log container for operator visibility and priority cleanup
+                # Note: Docker doesn't support updating labels on running containers,
+                # so operators must manually verify container age if it persists
+                logger.warning(
+                    f"Container {container.short_id} timestamp parse failed - priority cleanup recommended. "
+                    f"Operators should manually verify container age if it persists beyond expected lifetime.",
+                    extra={
+                        "container_id": container.short_id,
+                        "fallback_timestamp_used": True,
+                        "mitigation": "priority_cleanup_recommended"
+                    }
+                )
 
         # Extract optional labels
         work_item_id = labels.get(CONTAINER_LABEL_WORK_ITEM_ID)
