@@ -665,7 +665,7 @@ def test_circular_dependency_detection():
 |--------|--------|-------|
 | Pipeline execution | Workflow | Explicit aggregate |
 | Stage configs | Pipeline stages | First-class entities |
-| pipeline_run_id | workflow.id | Type-safe ID |
+| workflow_run_id | workflow.id | Type-safe ID |
 | Pipeline state dict | Workflow status | Structured state machine |
 
 ### Key Improvements

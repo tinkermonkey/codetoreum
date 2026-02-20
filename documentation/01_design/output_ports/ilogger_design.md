@@ -214,7 +214,7 @@ class InMemoryLogger(ILogger):
 - `project_id`: Project identifier
 - `agent_name`: Agent name
 - `task_id`: Task identifier
-- `pipeline_run_id`: Pipeline run ID
+- `workflow_run_id`: Pipeline run ID
 - `user_id`: User identifier
 
 ## Integration Points

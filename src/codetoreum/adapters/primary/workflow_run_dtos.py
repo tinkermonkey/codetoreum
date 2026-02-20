@@ -27,6 +27,9 @@ class WorkflowRunStageResponse(BaseModel):
     startedAt: Optional[datetime] = Field(None, description="Stage start time", serialization_alias="startedAt")
     completedAt: Optional[datetime] = Field(None, description="Stage completion time", serialization_alias="completedAt")
     executionId: Optional[str] = Field(None, description="Execution ID for this stage", serialization_alias="executionId")
+    output: Optional[str] = Field(None, description="Stage output content")
+    errorMessage: Optional[str] = Field(None, description="Error message if stage failed", serialization_alias="errorMessage")
+    metadata: dict = Field(default_factory=dict, description="Additional stage metadata")
 
     model_config = ConfigDict(
         populate_by_name=True,
@@ -37,7 +40,10 @@ class WorkflowRunStageResponse(BaseModel):
                 "status": "completed",
                 "startedAt": "2025-11-08T10:00:00Z",
                 "completedAt": "2025-11-08T10:15:00Z",
-                "executionId": "exec-111"
+                "executionId": "exec-111",
+                "output": "Implementation completed successfully",
+                "errorMessage": None,
+                "metadata": {}
             }
         }
     )

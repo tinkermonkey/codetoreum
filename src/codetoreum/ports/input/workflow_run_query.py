@@ -78,6 +78,14 @@ class WorkflowRunStageInfo:
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
     execution_id: Optional[str]
+    output: Optional[str] = None
+    error_message: Optional[str] = None
+    metadata: dict = None
+
+    def __post_init__(self):
+        """Initialize metadata to empty dict if None."""
+        if self.metadata is None:
+            self.metadata = {}
 
 
 @dataclass

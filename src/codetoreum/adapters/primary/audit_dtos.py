@@ -119,6 +119,9 @@ class AuditStageInfo(BaseModel):
     completedAt: Optional[datetime] = Field(None, description="Stage completion time", serialization_alias="completedAt")
     durationSeconds: Optional[float] = Field(None, description="Stage duration in seconds", serialization_alias="durationSeconds")
     events: List[WorkflowEventResponse] = Field(default_factory=list, description="Events for this stage")
+    output: Optional[str] = Field(None, description="Stage output content")
+    errorMessage: Optional[str] = Field(None, description="Error message if stage failed", serialization_alias="errorMessage")
+    metadata: dict = Field(default_factory=dict, description="Additional stage metadata")
 
     @model_validator(mode="after")
     def validate_temporal_consistency(self) -> "AuditStageInfo":

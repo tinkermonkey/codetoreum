@@ -33,7 +33,7 @@ agent_completed (or agent_failed)
     'agent': 'business_analyst',
     'task_id': 'task_business_analyst_1729945800',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_123_1729945800',
+    'workflow_run_id': 'pipeline_context-studio_123_1729945800',
     'data': {
         'issue_number': 123,
         'board': 'Planning',
@@ -73,7 +73,7 @@ agent_completed (or agent_failed)
     'agent': 'business_analyst',
     'task_id': 'task_business_analyst_1729945800',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_123_1729945800',
+    'workflow_run_id': 'pipeline_context-studio_123_1729945800',
     'data': {
         'agent_execution_id': 'exec-uuid-9876-5432',  # NEW: Unique execution ID
         'issue_number': 123,
@@ -122,7 +122,7 @@ agent_completed (or agent_failed)
     'agent': 'business_analyst',
     'task_id': 'task_business_analyst_1729945800',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_123_1729945800',
+    'workflow_run_id': 'pipeline_context-studio_123_1729945800',
     'data': {
         'agent_execution_id': 'exec-uuid-9876-5432',
         'prompt_length': 1234,  # Characters
@@ -159,7 +159,7 @@ agent_completed (or agent_failed)
     'agent': 'business_analyst',
     'task_id': 'task_business_analyst_1729945800',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_123_1729945800',
+    'workflow_run_id': 'pipeline_context-studio_123_1729945800',
     'data': {
         'agent_execution_id': 'exec-uuid-9876-5432',
         'model': 'claude-sonnet-4-5-20250929',
@@ -196,7 +196,7 @@ agent_completed (or agent_failed)
     'agent': 'business_analyst',
     'task_id': 'task_business_analyst_1729945800',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_123_1729945800',
+    'workflow_run_id': 'pipeline_context-studio_123_1729945800',
     'data': {
         'agent_execution_id': 'exec-uuid-9876-5432',
         'duration_ms': 335000,  # 5 minutes 35 seconds
@@ -238,7 +238,7 @@ agent_completed (or agent_failed)
     'agent': 'business_analyst',
     'task_id': 'task_business_analyst_1729945800',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_123_1729945800',
+    'workflow_run_id': 'pipeline_context-studio_123_1729945800',
     'data': {
         'agent_execution_id': 'exec-uuid-9876-5432',
         'success': True,
@@ -287,7 +287,7 @@ agent_completed (or agent_failed)
     'agent': 'business_analyst',
     'task_id': 'task_business_analyst_1729945800',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_123_1729945800',
+    'workflow_run_id': 'pipeline_context-studio_123_1729945800',
     'data': {
         'agent_execution_id': 'exec-uuid-9876-5432',
         'success': False,
@@ -333,7 +333,7 @@ agent_completed (or agent_failed)
     'agent': 'business_analyst',
     'task_id': 'task_business_analyst_1729945800',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_123_1729945800',
+    'workflow_run_id': 'pipeline_context-studio_123_1729945800',
     'data': {
         'agent_execution_id': 'exec-uuid-9876-5432',
         'tool_name': 'Read',
@@ -368,7 +368,7 @@ agent_completed (or agent_failed)
     'agent': 'business_analyst',
     'task_id': 'task_business_analyst_1729945800',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_123_1729945800',
+    'workflow_run_id': 'pipeline_context-studio_123_1729945800',
     'data': {
         'agent_execution_id': 'exec-uuid-9876-5432',
         'tool_name': 'Read',

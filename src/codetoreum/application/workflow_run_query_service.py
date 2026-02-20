@@ -754,6 +754,9 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
                 started_at=stage.started_at,
                 completed_at=stage.completed_at,
                 execution_id=stage.execution_id,
+                output=stage.output if hasattr(stage, 'output') else None,
+                error_message=stage.error_message if hasattr(stage, 'error_message') else None,
+                metadata=stage.metadata if hasattr(stage, 'metadata') else {},
             )
             stages.append(stage_info)
 
@@ -910,6 +913,9 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
                 "completedAt": stage.completed_at.isoformat() if stage.completed_at else None,
                 "durationSeconds": duration_seconds,
                 "events": stage_events,
+                "output": stage.output if hasattr(stage, 'output') else None,
+                "errorMessage": stage.error_message if hasattr(stage, 'error_message') else None,
+                "metadata": stage.metadata if hasattr(stage, 'metadata') else {},
             }
             stages_info.append(stage_info)
 

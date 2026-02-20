@@ -757,3 +757,81 @@ class TestRepairCycleEventsSerialization:
         assert restored.passed == original.passed
         assert restored.files_fixed == original.files_fixed
         assert restored.duration_seconds == original.duration_seconds
+
+
+class TestDeprecationWarnings:
+    """Test deprecation warnings for pipeline_run_id -> workflow_run_id migration."""
+
+    def test_repair_cycle_started_deprecation_warning(self):
+        """Test that using pipeline_run_id triggers a deprecation warning."""
+        data = {
+            "type": "repair_cycle.started",
+            "timestamp": now_iso(),
+            "source": "repair_cycle",
+            "stage_name": "fix_failures",
+            "test_types": ["unit", "integration"],
+            "pipeline_run_id": "run-old-123",  # Old field name
+        }
+
+        with pytest.warns(DeprecationWarning, match="pipeline_run_id.*deprecated.*workflow_run_id"):
+            event = RepairCycleStartedEvent.from_dict(data)
+            assert event.workflow_run_id == "run-old-123"
+
+    def test_workflow_run_id_preferred_over_pipeline_run_id(self):
+        """Test that workflow_run_id takes precedence when both fields are present."""
+        data = {
+            "type": "repair_cycle.started",
+            "timestamp": now_iso(),
+            "source": "repair_cycle",
+            "stage_name": "fix_failures",
+            "test_types": ["unit"],
+            "workflow_run_id": "run-new-456",  # New field name (preferred)
+            "pipeline_run_id": "run-old-123",  # Old field name (ignored)
+        }
+
+        # Should NOT warn when workflow_run_id is present
+        with pytest.warns() as warning_list:
+            event = RepairCycleStartedEvent.from_dict(data)
+            assert event.workflow_run_id == "run-new-456"
+
+        # Filter for DeprecationWarning
+        deprecation_warnings = [w for w in warning_list if issubclass(w.category, DeprecationWarning)]
+        assert len(deprecation_warnings) == 0, "Should not warn when workflow_run_id is present"
+
+    def test_test_execution_started_deprecation_warning(self):
+        """Test deprecation warning for RepairCycleTestExecutionStartedEvent."""
+        data = {
+            "type": "repair_cycle.test_execution_started",
+            "timestamp": now_iso(),
+            "source": "repair_cycle",
+            "test_type": "unit",
+            "test_type_index": 0,
+            "test_cycle_iteration": 1,
+            "max_test_cycle_iterations": 3,
+            "timeout": 600,
+            "pipeline_run_id": "run-789",
+        }
+
+        with pytest.warns(DeprecationWarning, match="pipeline_run_id.*deprecated"):
+            event = RepairCycleTestExecutionStartedEvent.from_dict(data)
+            assert event.workflow_run_id == "run-789"
+
+    def test_completed_event_deprecation_warning(self):
+        """Test deprecation warning for RepairCycleCompletedEvent."""
+        data = {
+            "type": "repair_cycle.completed",
+            "timestamp": now_iso(),
+            "source": "repair_cycle",
+            "stage_name": "fix_failures",
+            "result": "success",
+            "total_iterations": 2,
+            "total_files_fixed": 5,
+            "total_warnings_reviewed": 1,
+            "total_fast_fails": 0,
+            "duration_seconds": 150.5,
+            "pipeline_run_id": "run-completed",
+        }
+
+        with pytest.warns(DeprecationWarning, match="pipeline_run_id.*deprecated"):
+            event = RepairCycleCompletedEvent.from_dict(data)
+            assert event.workflow_run_id == "run-completed"

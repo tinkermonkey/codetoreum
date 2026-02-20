@@ -89,7 +89,7 @@ assert result.failed == len(result.failures)  # Must match
 
 #### Context Immutability
 - Calling any adapter method MUST NOT modify the `context` object
-- Context attributes (`stage_name`, `pipeline_run_id`, etc.) must remain unchanged
+- Context attributes (`stage_name`, `workflow_run_id`, etc.) must remain unchanged
 
 #### Result Completeness
 - All returned results MUST have all fields populated (non-None where required)
@@ -157,7 +157,7 @@ Implementations that emit events MUST follow these rules:
 #### Event Timestamps
 - All events MUST have valid ISO 8601 timestamps
 - Timestamps MUST be monotonically increasing within an execution
-- Events MUST include required context (pipeline_run_id, test_type, etc.)
+- Events MUST include required context (workflow_run_id, test_type, etc.)
 
 ## Test Coverage
 

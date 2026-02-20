@@ -513,3 +513,119 @@ class TestCaching:
         assert result.issue_title is None
         assert result.issue_number is None
         assert result.project == "project-1"  # from workflow, not work item
+
+
+class TestStageOutputFields:
+    """Tests for stage output fields in audit API."""
+
+    @pytest.mark.asyncio
+    async def test_stage_info_includes_output_fields(self, event_store):
+        """Test that WorkflowRunStageInfo includes output, error_message, and metadata fields."""
+        from codetoreum.ports.input.workflow_run_query import WorkflowRunStageInfo
+
+        # Create a stage info with all fields
+        stage = WorkflowRunStageInfo(
+            name="implementation",
+            agent_name="developer_agent",
+            status="completed",
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
+            execution_id="exec-123",
+            output="Implementation completed successfully",
+            error_message=None,
+            metadata={"iterations": 3, "files_changed": 5},
+        )
+
+        # Assert all fields are present
+        assert stage.name == "implementation"
+        assert stage.output == "Implementation completed successfully"
+        assert stage.error_message is None
+        assert stage.metadata == {"iterations": 3, "files_changed": 5}
+
+    @pytest.mark.asyncio
+    async def test_stage_info_with_error_message(self):
+        """Test that stage info can contain error messages."""
+        from codetoreum.ports.input.workflow_run_query import WorkflowRunStageInfo
+
+        stage = WorkflowRunStageInfo(
+            name="testing",
+            agent_name="test_agent",
+            status="failed",
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
+            execution_id="exec-456",
+            output=None,
+            error_message="Test suite failed with 3 errors",
+            metadata={"failed_tests": 3},
+        )
+
+        assert stage.status == "failed"
+        assert stage.output is None
+        assert stage.error_message == "Test suite failed with 3 errors"
+        assert stage.metadata["failed_tests"] == 3
+
+    @pytest.mark.asyncio
+    async def test_stage_dto_mapping_includes_output_fields(self):
+        """Test that WorkflowRunStageResponse DTO includes output fields."""
+        from codetoreum.adapters.primary.workflow_run_dtos import WorkflowRunStageResponse
+
+        response = WorkflowRunStageResponse(
+            name="review",
+            agentName="reviewer_agent",
+            status="completed",
+            startedAt=datetime.now(timezone.utc),
+            completedAt=datetime.now(timezone.utc),
+            executionId="exec-789",
+            output="Code review passed",
+            errorMessage=None,
+            metadata={"approval_count": 2},
+        )
+
+        assert response.output == "Code review passed"
+        assert response.errorMessage is None
+        assert response.metadata == {"approval_count": 2}
+
+    @pytest.mark.asyncio
+    async def test_audit_stage_info_includes_output_fields(self):
+        """Test that AuditStageInfo DTO includes output fields."""
+        from codetoreum.adapters.primary.audit_dtos import AuditStageInfo
+
+        stage_info = AuditStageInfo(
+            name="deployment",
+            status="completed",
+            startedAt=datetime.now(timezone.utc),
+            completedAt=datetime.now(timezone.utc),
+            durationSeconds=45.5,
+            events=[],
+            output="Deployment successful",
+            errorMessage=None,
+            metadata={"environment": "production"},
+        )
+
+        assert stage_info.output == "Deployment successful"
+        assert stage_info.errorMessage is None
+        assert stage_info.metadata == {"environment": "production"}
+
+    @pytest.mark.asyncio
+    async def test_mapper_preserves_output_fields(self):
+        """Test that WorkflowRunMapper preserves output fields during mapping."""
+        from codetoreum.ports.input.workflow_run_query import WorkflowRunStageInfo
+        from codetoreum.adapters.primary.workflow_run_mappers import WorkflowRunMapper
+
+        stage = WorkflowRunStageInfo(
+            name="build",
+            agent_name="build_agent",
+            status="completed",
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
+            execution_id="exec-build-1",
+            output="Build artifacts created",
+            error_message=None,
+            metadata={"build_number": 42},
+        )
+
+        response = WorkflowRunMapper.to_stage_response(stage)
+
+        assert response.output == "Build artifacts created"
+        assert response.errorMessage is None
+        assert response.metadata == {"build_number": 42}

@@ -235,7 +235,7 @@ All events share these common fields:
     'agent': str,              # Agent name (if applicable)
     'task_id': str,            # Task identifier (if applicable)
     'project': str,            # Project name
-    'pipeline_run_id': str,    # Pipeline run ID (if applicable)
+    'workflow_run_id': str,    # Pipeline run ID (if applicable)
     'data': Dict[str, Any]     # Event-specific payload
 }
 ```
@@ -300,11 +300,11 @@ Decision events have additional standardized fields in the `data` section:
 ## Observability Tracing
 
 ### Pipeline Run Tracing
-All events within a pipeline run include the `pipeline_run_id` field, allowing complete trace reconstruction.
+All events within a pipeline run include the `workflow_run_id` field, allowing complete trace reconstruction.
 
 Example flow:
 ```
-pipeline_run_id: pipeline_context-studio_123_1234567890
+workflow_run_id: pipeline_context-studio_123_1234567890
 
 Events:
 1. pipeline_started

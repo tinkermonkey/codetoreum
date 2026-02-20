@@ -48,6 +48,9 @@ class WorkflowRunMapper:
             startedAt=stage.started_at,
             completedAt=stage.completed_at,
             executionId=stage.execution_id,
+            output=stage.output,
+            errorMessage=stage.error_message,
+            metadata=stage.metadata,
         )
 
     @staticmethod
@@ -210,6 +213,9 @@ class WorkflowRunMapper:
                 completedAt=stage_dict.get("completedAt") or stage_dict.get("completed_at"),
                 durationSeconds=stage_dict.get("durationSeconds") or stage_dict.get("duration_seconds"),
                 events=stage_events,
+                output=stage_dict.get("output"),
+                errorMessage=stage_dict.get("errorMessage") or stage_dict.get("error_message"),
+                metadata=stage_dict.get("metadata", {}),
             ))
 
         # Convert validation result (if present)

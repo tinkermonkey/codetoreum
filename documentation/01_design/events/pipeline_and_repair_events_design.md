@@ -42,7 +42,7 @@ pipeline_started
     'agent': None,  # No specific agent yet
     'task_id': 'task_123',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_123_1729945200',
+    'workflow_run_id': 'pipeline_context-studio_123_1729945200',
     'data': {
         'issue_number': 123,
         'board': 'Development',
@@ -93,7 +93,7 @@ pipeline_started
     'agent': 'business_analyst',
     'task_id': 'task_123',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_123_1729945200',
+    'workflow_run_id': 'pipeline_context-studio_123_1729945200',
     'data': {
         'issue_number': 123,
         'board': 'Development',
@@ -139,7 +139,7 @@ pipeline_started
     'agent': 'business_analyst',
     'task_id': 'task_123',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_123_1729945200',
+    'workflow_run_id': 'pipeline_context-studio_123_1729945200',
     'data': {
         'issue_number': 123,
         'board': 'Development',
@@ -185,7 +185,7 @@ pipeline_started
     'agent': 'business_analyst',
     'task_id': 'task_123',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_123_1729945200',
+    'workflow_run_id': 'pipeline_context-studio_123_1729945200',
     'data': {
         'issue_number': 123,
         'board': 'Development',
@@ -232,7 +232,7 @@ pipeline_started
     'agent': None,
     'task_id': 'task_123',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_123_1729945200',
+    'workflow_run_id': 'pipeline_context-studio_123_1729945200',
     'data': {
         'issue_number': 123,
         'checkpoint_id': 'checkpoint_123_1729945200_stage0',
@@ -274,7 +274,7 @@ pipeline_started
     'agent': None,
     'task_id': 'task_123',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_123_1729945200',
+    'workflow_run_id': 'pipeline_context-studio_123_1729945200',
     'data': {
         'issue_number': 123,
         'checkpoint_id': 'checkpoint_123_1729945200_stage0',
@@ -315,7 +315,7 @@ pipeline_started
     'agent': None,
     'task_id': 'task_123',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_123_1729945200',
+    'workflow_run_id': 'pipeline_context-studio_123_1729945200',
     'data': {
         'issue_number': 123,
         'board': 'Development',
@@ -394,7 +394,7 @@ repair_cycle_started
     'agent': 'senior_software_engineer',
     'task_id': 'task_456',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_124_1729948800',
+    'workflow_run_id': 'pipeline_context-studio_124_1729948800',
     'data': {
         'issue_number': 124,
         'board': 'Development',
@@ -451,7 +451,7 @@ repair_cycle_started
     'agent': 'senior_software_engineer',
     'task_id': 'task_456',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_124_1729948800',
+    'workflow_run_id': 'pipeline_context-studio_124_1729948800',
     'data': {
         'issue_number': 124,
         'container_name': 'repair-context-studio-124',
@@ -493,7 +493,7 @@ repair_cycle_started
     'agent': 'senior_software_engineer',
     'task_id': 'task_456',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_124_1729948800',
+    'workflow_run_id': 'pipeline_context-studio_124_1729948800',
     'data': {
         'issue_number': 124,
         'iteration': 1,
@@ -537,7 +537,7 @@ repair_cycle_started
     'agent': 'senior_software_engineer',
     'task_id': 'task_456',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_124_1729948800',
+    'workflow_run_id': 'pipeline_context-studio_124_1729948800',
     'data': {
         'issue_number': 124,
         'test_type': 'unit',
@@ -592,7 +592,7 @@ repair_cycle_started
     'agent': 'senior_software_engineer',
     'task_id': 'task_456',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_124_1729948800',
+    'workflow_run_id': 'pipeline_context-studio_124_1729948800',
     'data': {
         'issue_number': 124,
         'file': 'tests/unit/test_service.py',
@@ -639,7 +639,7 @@ repair_cycle_started
     'agent': 'senior_software_engineer',
     'task_id': 'task_456',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_124_1729948800',
+    'workflow_run_id': 'pipeline_context-studio_124_1729948800',
     'data': {
         'issue_number': 124,
         'file': 'tests/unit/test_service.py',
@@ -683,7 +683,7 @@ repair_cycle_started
     'agent': 'senior_software_engineer',
     'task_id': 'task_456',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_124_1729948800',
+    'workflow_run_id': 'pipeline_context-studio_124_1729948800',
     'data': {
         'issue_number': 124,
         'container_name': 'repair-context-studio-124',
@@ -728,7 +728,7 @@ repair_cycle_started
     'agent': 'senior_software_engineer',
     'task_id': 'task_456',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_124_1729948800',
+    'workflow_run_id': 'pipeline_context-studio_124_1729948800',
     'data': {
         'issue_number': 124,
         'success': True,
@@ -768,11 +768,11 @@ repair_cycle_started
 ## Event Relationships
 
 ### Pipeline Run Tracing
-All events within a pipeline run share the same `pipeline_run_id`, enabling complete trace reconstruction:
+All events within a pipeline run share the same `workflow_run_id`, enabling complete trace reconstruction:
 
 ```sql
 SELECT * FROM events
-WHERE pipeline_run_id = 'pipeline_context-studio_123_1729945200'
+WHERE workflow_run_id = 'pipeline_context-studio_123_1729945200'
 ORDER BY timestamp ASC;
 ```
 
@@ -823,6 +823,6 @@ Pipeline and repair cycle events provide comprehensive visibility into complex, 
 - **Pipeline events**: Track end-to-end workflow execution
 - **Repair cycle events**: Track test-driven iterative fixing
 - **Checkpointing**: Enable recovery after failures
-- **Traceability**: Complete audit trail via pipeline_run_id
+- **Traceability**: Complete audit trail via workflow_run_id
 
 These events enable monitoring, debugging, recovery, and analytics for the most complex operations in Codetoreum.
