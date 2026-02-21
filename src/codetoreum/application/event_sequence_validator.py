@@ -31,10 +31,10 @@ class PatternOperator(Enum):
     EITHER_OR = "|"  # Mutual exclusion (either/or)
 
 
-@dataclass
+@dataclass(frozen=True)
 class PatternElement:
     """Parsed pattern element."""
-    event_types: List[str]  # Event types (multiple if using |)
+    event_types: Tuple[str, ...]  # Event types (multiple if using |)
     operator: PatternOperator
     min_occurrences: int  # Minimum required occurrences
     max_occurrences: Optional[int]  # Maximum allowed occurrences (None = unlimited)
@@ -42,20 +42,20 @@ class PatternElement:
     def __post_init__(self):
         """Validate pattern element after initialization."""
         if not self.event_types:
-            raise ValueError("event_types must be a non-empty list")
+            raise ValueError("event_types must be a non-empty tuple")
         if self.min_occurrences < 0:
             raise ValueError("min_occurrences must be >= 0")
         if self.max_occurrences is not None and self.max_occurrences < self.min_occurrences:
             raise ValueError("max_occurrences must be >= min_occurrences")
 
 
-@dataclass
+@dataclass(frozen=True)
 class ValidationResult:
     """Result of sequence validation."""
     is_valid: bool
-    missing_events: List[str]  # Expected events that didn't occur
-    unexpected_events: List[str]  # Events that shouldn't have occurred
-    out_of_order_events: List[Tuple[str, int, int]]  # NOT IMPLEMENTED - always empty list
+    missing_events: Tuple[str, ...]  # Expected events that didn't occur
+    unexpected_events: Tuple[str, ...]  # Events that shouldn't have occurred
+    out_of_order_events: Tuple[Tuple[str, int, int], ...]  # NOT IMPLEMENTED - always empty tuple
     error_message: Optional[str] = None
 
     def __post_init__(self):
@@ -127,9 +127,9 @@ class EventSequenceValidator:
         # Track validation state
         pattern_idx = 0
         event_idx = 0
-        missing_events: List[str] = []
-        unexpected_events: List[str] = []
-        out_of_order: List[Tuple[str, int, int]] = []
+        missing_events_list: List[str] = []
+        unexpected_events_list: List[str] = []
+        out_of_order_list: List[Tuple[str, int, int]] = []
 
         while pattern_idx < len(parsed_pattern) and event_idx <= len(actual_events):
             pattern_elem = parsed_pattern[pattern_idx]
@@ -159,25 +159,25 @@ class EventSequenceValidator:
                 # Missing required events
                 if pattern_elem.operator == PatternOperator.EITHER_OR:
                     # For either/or, report all alternatives
-                    missing_events.extend(pattern_elem.event_types)
+                    missing_events_list.extend(pattern_elem.event_types)
                 else:
                     for event_type in pattern_elem.event_types:
                         if pattern_elem.operator == PatternOperator.ONE_OR_MORE:
-                            missing_events.append(f"{event_type}+")
+                            missing_events_list.append(f"{event_type}+")
                         else:
-                            missing_events.append(event_type)
+                            missing_events_list.append(event_type)
 
             # Check if we exceeded maximum allowed matches
             if pattern_elem.max_occurrences is not None and matches_found > pattern_elem.max_occurrences:
                 for event_type in pattern_elem.event_types:
-                    unexpected_events.append(f"{event_type} (too many occurrences: {matches_found} > {pattern_elem.max_occurrences})")
+                    unexpected_events_list.append(f"{event_type} (too many occurrences: {matches_found} > {pattern_elem.max_occurrences})")
 
             # Move to next pattern element
             pattern_idx += 1
 
         # Check for unconsumed events (unexpected events remaining)
         while event_idx < len(actual_events):
-            unexpected_events.append(actual_events[event_idx])
+            unexpected_events_list.append(actual_events[event_idx])
             event_idx += 1
 
         # Check if we have unprocessed patterns that are required
@@ -187,12 +187,12 @@ class EventSequenceValidator:
                 # Missing required pattern
                 for event_type in pattern_elem.event_types:
                     if pattern_elem.operator == PatternOperator.ONE_OR_MORE:
-                        missing_events.append(f"{event_type}+")
+                        missing_events_list.append(f"{event_type}+")
                     else:
-                        missing_events.append(event_type)
+                        missing_events_list.append(event_type)
             pattern_idx += 1
 
-        is_valid = len(missing_events) == 0 and len(unexpected_events) == 0 and len(out_of_order) == 0
+        is_valid = len(missing_events_list) == 0 and len(unexpected_events_list) == 0 and len(out_of_order_list) == 0
 
         # Log validation failures for operational monitoring
         if not is_valid:
@@ -201,17 +201,17 @@ class EventSequenceValidator:
                 extra={
                     "expected_pattern": expected_pattern,
                     "actual_events": actual_events,
-                    "missing_events": missing_events,
-                    "unexpected_events": unexpected_events,
-                    "out_of_order_events": out_of_order,
+                    "missing_events": missing_events_list,
+                    "unexpected_events": unexpected_events_list,
+                    "out_of_order_events": out_of_order_list,
                 }
             )
 
         return ValidationResult(
             is_valid=is_valid,
-            missing_events=missing_events,
-            unexpected_events=unexpected_events,
-            out_of_order_events=out_of_order,
+            missing_events=tuple(missing_events_list),
+            unexpected_events=tuple(unexpected_events_list),
+            out_of_order_events=tuple(out_of_order_list),
             error_message=None if is_valid else "Sequence validation failed"
         )
 
@@ -247,7 +247,7 @@ class EventSequenceValidator:
             base_pattern = pattern_str[:-1]
 
         # Parse either/or alternatives
-        event_types = [et.strip() for et in base_pattern.split('|')]
+        event_types = tuple(et.strip() for et in base_pattern.split('|'))
 
         # Check if pattern uses either/or (mutual exclusion)
         if len(event_types) > 1:
@@ -341,8 +341,8 @@ class EventSequenceValidator:
             "sequenceValid": result.is_valid,
             "expectedSequence": expected_pattern,
             "actualSequence": actual_events,
-            "missingEvents": result.missing_events,
-            "unexpectedEvents": result.unexpected_events,
+            "missingEvents": list(result.missing_events),
+            "unexpectedEvents": list(result.unexpected_events),
             "outOfOrderEvents": [
                 {
                     "eventType": event_type,

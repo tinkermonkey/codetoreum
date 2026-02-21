@@ -346,9 +346,9 @@ def create_workflow_runs_router(
         - Total event count and pagination metadata
 
         **Caching:**
-        - Audit results are cached for 5 minutes (default TTL)
-        - Cache includes pagination and validation parameters
-        - Subsequent requests with same parameters return cached data
+        - Core audit data is cached for 5 minutes (default TTL)
+        - Pagination and validation parameters are applied after retrieval
+        - Cache key is based on workflow_run_id only
 
         **Performance:**
         - Optimized for workflows with 100-1000+ events

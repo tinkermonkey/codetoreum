@@ -19,7 +19,7 @@ class TestPatternParsing:
         validator = EventSequenceValidator()
         elem = validator._parse_pattern("WorkflowCreated")
 
-        assert elem.event_types == ["WorkflowCreated"]
+        assert elem.event_types == ("WorkflowCreated",)
         assert elem.operator == PatternOperator.EXACT
         assert elem.min_occurrences == 1
         assert elem.max_occurrences == 1
@@ -29,7 +29,7 @@ class TestPatternParsing:
         validator = EventSequenceValidator()
         elem = validator._parse_pattern("WorkflowStageAdvanced*")
 
-        assert elem.event_types == ["WorkflowStageAdvanced"]
+        assert elem.event_types == ("WorkflowStageAdvanced",)
         assert elem.operator == PatternOperator.ZERO_OR_MORE
         assert elem.min_occurrences == 0
         assert elem.max_occurrences is None  # Unlimited
@@ -39,7 +39,7 @@ class TestPatternParsing:
         validator = EventSequenceValidator()
         elem = validator._parse_pattern("ReviewIterationStarted+")
 
-        assert elem.event_types == ["ReviewIterationStarted"]
+        assert elem.event_types == ("ReviewIterationStarted",)
         assert elem.operator == PatternOperator.ONE_OR_MORE
         assert elem.min_occurrences == 1
         assert elem.max_occurrences is None  # Unlimited
@@ -420,9 +420,9 @@ class TestValidationResultBooleanContext:
         """Test that valid result is truthy."""
         result = ValidationResult(
             is_valid=True,
-            missing_events=[],
-            unexpected_events=[],
-            out_of_order_events=[]
+            missing_events=(),
+            unexpected_events=(),
+            out_of_order_events=()
         )
         assert result
         assert bool(result) is True
@@ -431,9 +431,9 @@ class TestValidationResultBooleanContext:
         """Test that invalid result is falsy."""
         result = ValidationResult(
             is_valid=False,
-            missing_events=["Event1"],
-            unexpected_events=[],
-            out_of_order_events=[]
+            missing_events=("Event1",),
+            unexpected_events=(),
+            out_of_order_events=()
         )
         assert not result
         assert bool(result) is False
@@ -553,3 +553,106 @@ class TestAuditIntegration:
         assert isinstance(audit_result["missingEvents"], list)
         assert isinstance(audit_result["unexpectedEvents"], list)
         assert isinstance(audit_result["outOfOrderEvents"], list)
+
+
+class TestPatternElementValidation:
+    """Tests for PatternElement.__post_init__ validation."""
+
+    def test_pattern_element_with_empty_event_types(self):
+        """Test that PatternElement rejects empty event_types."""
+        with pytest.raises(ValueError, match="event_types must be a non-empty tuple"):
+            PatternElement(
+                event_types=(),
+                operator=PatternOperator.EXACT,
+                min_occurrences=1,
+                max_occurrences=1
+            )
+
+    def test_pattern_element_with_negative_min_occurrences(self):
+        """Test that PatternElement rejects negative min_occurrences."""
+        with pytest.raises(ValueError, match="min_occurrences must be >= 0"):
+            PatternElement(
+                event_types=("Event1",),
+                operator=PatternOperator.EXACT,
+                min_occurrences=-1,
+                max_occurrences=1
+            )
+
+    def test_pattern_element_with_max_less_than_min(self):
+        """Test that PatternElement rejects max_occurrences < min_occurrences."""
+        with pytest.raises(ValueError, match="max_occurrences must be >= min_occurrences"):
+            PatternElement(
+                event_types=("Event1",),
+                operator=PatternOperator.EXACT,
+                min_occurrences=5,
+                max_occurrences=2
+            )
+
+    def test_pattern_element_valid_with_none_max(self):
+        """Test that PatternElement accepts None for max_occurrences (unlimited)."""
+        elem = PatternElement(
+            event_types=("Event1",),
+            operator=PatternOperator.ZERO_OR_MORE,
+            min_occurrences=0,
+            max_occurrences=None
+        )
+        assert elem.max_occurrences is None
+
+    def test_pattern_element_is_frozen(self):
+        """Test that PatternElement is immutable (frozen)."""
+        elem = PatternElement(
+            event_types=("Event1",),
+            operator=PatternOperator.EXACT,
+            min_occurrences=1,
+            max_occurrences=1
+        )
+        with pytest.raises(Exception):  # FrozenInstanceError
+            elem.min_occurrences = 5
+
+
+class TestValidationResultValidation:
+    """Tests for ValidationResult.__post_init__ validation."""
+
+    def test_validation_result_inconsistency_is_valid_true_with_errors(self):
+        """Test that ValidationResult rejects is_valid=True with errors present."""
+        with pytest.raises(ValueError, match="ValidationResult inconsistency: is_valid=True but errors present"):
+            ValidationResult(
+                is_valid=True,
+                missing_events=("Event1",),  # Error present
+                unexpected_events=(),
+                out_of_order_events=()
+            )
+
+    def test_validation_result_inconsistency_is_valid_false_no_errors(self):
+        """Test that ValidationResult rejects is_valid=False with no errors."""
+        with pytest.raises(ValueError, match="ValidationResult inconsistency: is_valid=False but no errors present"):
+            ValidationResult(
+                is_valid=False,
+                missing_events=(),
+                unexpected_events=(),
+                out_of_order_events=(),
+                error_message=None
+            )
+
+    def test_validation_result_is_valid_false_with_error_message_only(self):
+        """Test that ValidationResult accepts is_valid=False with only error_message."""
+        result = ValidationResult(
+            is_valid=False,
+            missing_events=(),
+            unexpected_events=(),
+            out_of_order_events=(),
+            error_message="Custom error message"
+        )
+        assert not result.is_valid
+        assert result.error_message == "Custom error message"
+
+    def test_validation_result_is_frozen(self):
+        """Test that ValidationResult is immutable (frozen)."""
+        result = ValidationResult(
+            is_valid=True,
+            missing_events=(),
+            unexpected_events=(),
+            out_of_order_events=()
+        )
+        with pytest.raises(Exception):  # FrozenInstanceError
+            result.is_valid = False

@@ -154,6 +154,15 @@ class WorkflowRunEventsResult:
     limit: int
     has_next: bool
 
+    def __post_init__(self):
+        """Validate pagination parameters."""
+        if self.offset < 0:
+            raise ValueError(f"offset must be non-negative, got {self.offset}")
+        if self.limit < 0:
+            raise ValueError(f"limit must be non-negative, got {self.limit}")
+        if self.total_count < 0:
+            raise ValueError(f"total_count must be non-negative, got {self.total_count}")
+
 
 @dataclass
 class WorkflowRunAuditResult:
@@ -166,6 +175,15 @@ class WorkflowRunAuditResult:
     offset: int
     limit: int
     has_next: bool
+
+    def __post_init__(self):
+        """Validate pagination parameters."""
+        if self.offset < 0:
+            raise ValueError(f"offset must be non-negative, got {self.offset}")
+        if self.limit < 0:
+            raise ValueError(f"limit must be non-negative, got {self.limit}")
+        if self.total_event_count < 0:
+            raise ValueError(f"total_event_count must be non-negative, got {self.total_event_count}")
 
 
 class IWorkflowRunQueryPort(ABC):
