@@ -437,13 +437,12 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         # Cache key for non-paginated data (workflow summary, events, stages)
         # We cache the core data separately from pagination/validation options
         #
-        # NOTE: Cache fragmentation issue (Medium priority from PR review):
-        # Each unique combination of (offset, limit, include_validation) creates a separate
-        # cache entry, leading to potential cache thrashing. For workflows with high audit
-        # query traffic and varying pagination parameters, this can significantly reduce
-        # cache hit rates. Consider implementing a shared cache strategy where pagination
-        # is applied to cached full results, or use a more sophisticated cache key scheme
-        # that normalizes pagination parameters (e.g., round to page boundaries).
+        # SOLUTION to cache fragmentation issue (Medium priority from PR review):
+        # To avoid cache thrashing from different pagination parameters, we cache only
+        # the core workflow data (summary, all events, stage info) using workflow_run_id
+        # as the cache key. Pagination and validation are applied AFTER cache retrieval,
+        # ensuring a single cache entry per workflow regardless of pagination parameters.
+        # This provides optimal cache hit rates even with varying offset/limit values.
         core_cache_key = f"{workflow_run_id}:audit_core"
         cached_core = await self._audit_cache.get(core_cache_key)
 
