@@ -19,6 +19,7 @@ from codetoreum.adapters.primary.workflow_run_dtos import (
 )
 from codetoreum.adapters.primary.audit_dtos import WorkflowRunAuditResponse
 from codetoreum.adapters.primary.workflow_run_mappers import WorkflowRunMapper
+from codetoreum.config.defaults import AUDIT_EVENTS_MAX_PAGE_SIZE
 from codetoreum.ports.input.workflow_run_query import (
     IWorkflowRunQueryPort,
     WorkflowRunFilters,
@@ -237,7 +238,7 @@ def create_workflow_runs_router(
     async def get_workflow_run_events(
         workflow_run_id: str,
         offset: int = Query(0, ge=0, description="Pagination offset"),
-        limit: int = Query(50, ge=1, le=200, description="Pagination limit (default 50, max 200)"),
+        limit: int = Query(50, ge=1, le=AUDIT_EVENTS_MAX_PAGE_SIZE, description=f"Pagination limit (default 50, max {AUDIT_EVENTS_MAX_PAGE_SIZE})"),
         eventTypes: Optional[str] = Query(None, description="Filter by event types (comma-separated)", alias="eventTypes"),
         since: Optional[datetime] = Query(None, description="ISO timestamp - events after this time"),
     ) -> WorkflowEventsListResponse:
@@ -318,7 +319,7 @@ def create_workflow_runs_router(
     async def get_workflow_run_audit(
         workflow_run_id: str,
         offset: int = Query(0, ge=0, description="Event pagination offset"),
-        limit: int = Query(100, ge=1, le=200, description="Event pagination limit (default 100, max 200)"),
+        limit: int = Query(100, ge=1, le=AUDIT_EVENTS_MAX_PAGE_SIZE, description=f"Event pagination limit (default 100, max {AUDIT_EVENTS_MAX_PAGE_SIZE})"),
         include_validation: bool = Query(True, description="Whether to validate event sequence (default True)"),
     ) -> WorkflowRunAuditResponse:
         """
