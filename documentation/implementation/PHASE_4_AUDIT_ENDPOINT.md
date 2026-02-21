@@ -6,7 +6,7 @@ Implementation of audit trail endpoints for workflow run and pipeline run events
 ## API Endpoints
 
 ### 1. Workflow Run Events
-`GET /api/workflow-runs/{workflow_run_id}/events`
+`GET /api/v2/workflows/runs/{workflow_run_id}/events`
 
 Retrieves a paginated list of events for a specific workflow run with optional filtering.
 
@@ -36,7 +36,7 @@ Retrieves a paginated list of events for a specific workflow run with optional f
 ```
 
 ### 2. Workflow Run Audit (Complete View)
-`GET /api/workflow-runs/{workflow_run_id}/audit`
+`GET /api/v2/workflows/runs/{workflow_run_id}/audit`
 
 Retrieves comprehensive audit information including events, stage transitions, and optional validation.
 
@@ -49,29 +49,60 @@ Retrieves comprehensive audit information including events, stage transitions, a
 **Response**: `WorkflowRunAuditResponse`
 ```json
 {
-  "workflow_run_id": "wfr_abc123",
-  "workflow_id": "wf_build_test_deploy",
-  "started_at": "2026-02-21T10:30:00Z",
-  "completed_at": "2026-02-21T10:45:00Z",
-  "status": "completed",
-  "events": {
-    "total": 150,
-    "offset": 0,
-    "limit": 100,
-    "items": [ ... ]
+  "workflowRun": {
+    "id": "wfr_abc123",
+    "workItemId": "wi-456",
+    "workflowId": "wf_build_test_deploy",
+    "projectId": "proj-1",
+    "status": "completed",
+    "currentStageIndex": 2,
+    "currentStageName": "build",
+    "startedAt": "2026-02-21T10:30:00Z",
+    "completedAt": "2026-02-21T10:45:00Z",
+    "duration": 900,
+    "issueTitle": "Build project",
+    "issueNumber": 123,
+    "project": "my-project",
+    "triggeredBy": "github_webhook",
+    "priority": "high"
   },
+  "events": [
+    {
+      "id": "evt-123",
+      "eventType": "WorkflowStarted",
+      "workflowRunId": "wfr_abc123",
+      "timestamp": "2026-02-21T10:30:00Z",
+      "agentName": null,
+      "stageName": null,
+      "status": null,
+      "data": {}
+    }
+  ],
   "stages": [
     {
-      "stage_name": "build",
-      "entered_at": "2026-02-21T10:30:05Z",
-      "exited_at": "2026-02-21T10:35:00Z",
-      "status": "completed"
+      "name": "build",
+      "status": "completed",
+      "startedAt": "2026-02-21T10:30:05Z",
+      "completedAt": "2026-02-21T10:35:00Z",
+      "durationSeconds": 295.0,
+      "events": [],
+      "output": null,
+      "errorMessage": null,
+      "metadata": {}
     }
   ],
   "validation": {
-    "is_valid": true,
-    "issues": []
-  }
+    "sequenceValid": true,
+    "expectedSequence": ["WorkflowCreated", "WorkflowStarted", "WorkflowCompleted"],
+    "actualSequence": ["WorkflowCreated", "WorkflowStarted", "WorkflowCompleted"],
+    "missingEvents": [],
+    "unexpectedEvents": [],
+    "outOfOrderEvents": []
+  },
+  "totalEventCount": 150,
+  "offset": 0,
+  "limit": 100,
+  "hasNext": true
 }
 ```
 
@@ -114,22 +145,22 @@ Retrieves a paginated list of events for a specific pipeline run.
 
 **Fetch first page**:
 ```
-GET /api/workflow-runs/wfr_abc123/events?limit=50&offset=0
+GET /api/v2/workflows/runs/wfr_abc123/events?limit=50&offset=0
 ```
 
 **Fetch second page**:
 ```
-GET /api/workflow-runs/wfr_abc123/events?limit=50&offset=50
+GET /api/v2/workflows/runs/wfr_abc123/events?limit=50&offset=50
 ```
 
 **Filter by event types**:
 ```
-GET /api/workflow-runs/wfr_abc123/events?eventTypes=WorkflowStarted,WorkflowCompleted
+GET /api/v2/workflows/runs/wfr_abc123/events?eventTypes=WorkflowStarted,WorkflowCompleted
 ```
 
 **Filter by time range**:
 ```
-GET /api/workflow-runs/wfr_abc123/events?since=2026-02-21T10:00:00Z
+GET /api/v2/workflows/runs/wfr_abc123/events?since=2026-02-21T10:00:00Z
 ```
 
 ## Implementation Files
@@ -158,7 +189,7 @@ GET /api/workflow-runs/wfr_abc123/events?since=2026-02-21T10:00:00Z
   - `get_workflow_run_audit()` - Complete audit data
 
 ### Implementation
-- **File**: `src/codetoreum/application/query_services/workflow_run_query_service.py`
+- **File**: `src/codetoreum/application/workflow_run_query_service.py`
 - **Service**: `WorkflowRunQueryService` - Business logic for event retrieval and validation
 
 ## Testing

@@ -146,8 +146,8 @@ class EventSequenceValidator:
                     matches_found += 1
                     event_idx += 1
 
-                    # For exact match, stop after one match
-                    if pattern_elem.operator == PatternOperator.EXACT:
+                    # For exact match and EITHER_OR, stop after one match
+                    if pattern_elem.operator in (PatternOperator.EXACT, PatternOperator.EITHER_OR):
                         break
                     # For + and *, continue consuming matches
                 else:
