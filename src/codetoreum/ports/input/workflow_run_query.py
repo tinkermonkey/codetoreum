@@ -52,6 +52,9 @@ class WorkflowRunFilters:
             raise ValueError("work_item_id must be non-empty if provided")
         if self.workflow_id is not None and not self.workflow_id.strip():
             raise ValueError("workflow_id must be non-empty if provided")
+        # Validate non-empty status tuple
+        if self.status is not None and len(self.status) == 0:
+            raise ValueError("status must be non-empty if provided")
 
 
 @dataclass
@@ -86,7 +89,19 @@ class WorkflowRunStageInfo:
     metadata: Mapping = None
 
     def __post_init__(self):
-        """Initialize metadata to empty immutable mapping if None."""
+        """Initialize metadata and validate fields."""
+        # Validate name is non-empty
+        if not self.name or not self.name.strip():
+            raise ValueError("name must be a non-empty string")
+
+        # Validate temporal consistency
+        if self.started_at is not None and self.completed_at is not None:
+            if self.completed_at < self.started_at:
+                raise ValueError(
+                    f"completedAt ({self.completed_at}) must be >= startedAt ({self.started_at})"
+                )
+
+        # Initialize metadata to empty immutable mapping if None
         if self.metadata is None:
             # Use object.__setattr__ since this is a frozen dataclass
             # Use MappingProxyType for true immutability

@@ -79,12 +79,14 @@ class AuditValidationResult(BaseModel):
         Validate consistency between sequenceValid and error lists.
 
         If sequenceValid is True, then all error lists (missingEvents, unexpectedEvents,
-        outOfOrderEvents) must be empty. Otherwise, the response is contradictory.
+        outOfOrderEvents) must be empty. If sequenceValid is False, at least one error
+        list must be non-empty. Otherwise, the response is contradictory.
 
         Raises:
-            ValueError: If sequenceValid=True but error lists are not empty
+            ValueError: If validation state is inconsistent with error lists
         """
         if self.sequenceValid:
+            # sequenceValid=True requires all error lists to be empty
             errors = []
 
             if self.missingEvents:
@@ -100,6 +102,13 @@ class AuditValidationResult(BaseModel):
                 raise ValueError(
                     f"sequenceValid is True but error lists are not empty. "
                     f"This is a contradictory validation result. Errors: {'; '.join(errors)}"
+                )
+        else:
+            # sequenceValid=False requires at least one error
+            if not (self.missingEvents or self.unexpectedEvents or self.outOfOrderEvents):
+                raise ValueError(
+                    "sequenceValid is False but all error lists are empty. "
+                    "At least one of missingEvents, unexpectedEvents, or outOfOrderEvents must be non-empty."
                 )
 
         return self
