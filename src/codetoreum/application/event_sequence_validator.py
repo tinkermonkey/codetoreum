@@ -346,9 +346,6 @@ class EventSequenceValidator:
             "outOfOrderEvents": [
                 {
                     "eventType": event_type,
-                    # TODO: Add timestamp when out-of-order detection is implemented
-                    # Currently this code path never executes as out-of-order detection
-                    # is not yet implemented in the validator
                     "expectedPosition": expected_pos,
                     "actualPosition": actual_pos
                 }

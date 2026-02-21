@@ -210,7 +210,7 @@ def create_workflow_runs_router(
         except ResourceNotFoundError as e:
             raise HTTPException(
                 status_code=http_status.HTTP_404_NOT_FOUND,
-                detail=f"Workflow run not found: {workflow_run_id}",
+                detail=str(e),
             )
         except HTTPException:
             raise
@@ -291,7 +291,7 @@ def create_workflow_runs_router(
         except ResourceNotFoundError as e:
             raise HTTPException(
                 status_code=http_status.HTTP_404_NOT_FOUND,
-                detail=f"Workflow run not found: {workflow_run_id}",
+                detail=str(e),
             )
         except HTTPException:
             raise
@@ -370,7 +370,7 @@ def create_workflow_runs_router(
         except ResourceNotFoundError as e:
             raise HTTPException(
                 status_code=http_status.HTTP_404_NOT_FOUND,
-                detail=f"Workflow run not found: {workflow_run_id}",
+                detail=str(e),
             )
         except HTTPException:
             raise

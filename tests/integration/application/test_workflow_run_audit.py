@@ -219,7 +219,7 @@ async def test_get_workflow_run_audit_basic(query_service, workflow_with_stages)
     assert hasattr(audit_data, "events")
     assert hasattr(audit_data, "stages")
     assert hasattr(audit_data, "validation")
-    assert hasattr(audit_data, "total_event_count")
+    assert hasattr(audit_data, "total_count")
     assert hasattr(audit_data, "offset")
     assert hasattr(audit_data, "limit")
     assert hasattr(audit_data, "has_next")
@@ -230,7 +230,7 @@ async def test_get_workflow_run_audit_basic(query_service, workflow_with_stages)
     assert audit_data.workflow_run.issue_title == "Test workflow for audit"
 
     # Verify event count
-    assert audit_data.total_event_count == workflow_with_stages["event_count"]
+    assert audit_data.total_count == workflow_with_stages["event_count"]
     assert len(audit_data.events) == workflow_with_stages["event_count"]
 
     # Verify stages (note: may be empty if workflow doesn't have properly initialized stages)
@@ -266,7 +266,7 @@ async def test_audit_event_pagination_first_page(query_service, workflow_with_ma
         limit=50,
     )
 
-    assert audit_data.total_event_count == workflow_with_many_events["event_count"]
+    assert audit_data.total_count == workflow_with_many_events["event_count"]
     assert len(audit_data.events) == 50
     assert audit_data.offset == 0
     assert audit_data.limit == 50
@@ -284,7 +284,7 @@ async def test_audit_event_pagination_middle_page(query_service, workflow_with_m
         limit=50,
     )
 
-    assert audit_data.total_event_count == workflow_with_many_events["event_count"]
+    assert audit_data.total_count == workflow_with_many_events["event_count"]
     assert len(audit_data.events) == 50
     assert audit_data.offset == 50
     assert audit_data.limit == 50
@@ -305,7 +305,7 @@ async def test_audit_event_pagination_last_page(query_service, workflow_with_man
         limit=100,
     )
 
-    assert audit_data.total_event_count == total_events
+    assert audit_data.total_count == total_events
     assert len(audit_data.events) == 49  # Remaining events: 149 total - 100 offset = 49
     assert audit_data.offset == 100
     assert audit_data.limit == 100
@@ -323,7 +323,7 @@ async def test_audit_event_pagination_beyond_end(query_service, workflow_with_ma
         limit=50,
     )
 
-    assert audit_data.total_event_count == workflow_with_many_events["event_count"]
+    assert audit_data.total_count == workflow_with_many_events["event_count"]
     assert len(audit_data.events) == 0
     assert audit_data.has_next is False
 
@@ -421,7 +421,7 @@ async def test_audit_caching_same_request(query_service, workflow_with_stages):
 
     # Should return identical data
     assert audit_data_1.workflow_run.id == audit_data_2.workflow_run.id
-    assert audit_data_1.total_event_count == audit_data_2.total_event_count
+    assert audit_data_1.total_count == audit_data_2.total_count
     assert len(audit_data_1.events) == len(audit_data_2.events)
 
 
@@ -445,7 +445,7 @@ async def test_audit_caching_different_pagination(query_service, workflow_with_m
     )
 
     # Should have different events but same total count
-    assert audit_data_1.total_event_count == audit_data_2.total_event_count
+    assert audit_data_1.total_count == audit_data_2.total_count
     assert len(audit_data_1.events) == 50
     assert len(audit_data_2.events) == 50
 
@@ -515,7 +515,7 @@ async def test_audit_zero_limit(query_service, workflow_with_stages):
     )
 
     # Should return structure with no events
-    assert audit_data.total_event_count > 0
+    assert audit_data.total_count > 0
     assert len(audit_data.events) == 0
 
 
@@ -534,7 +534,7 @@ async def test_audit_without_validation(query_service, workflow_with_stages):
 
     # Should have basic audit data
     assert audit_data.workflow_run.id == workflow_id
-    assert audit_data.total_event_count > 0
+    assert audit_data.total_count > 0
     assert len(audit_data.events) > 0
 
     # Validation field should be None
@@ -587,7 +587,7 @@ async def test_audit_stage_with_no_events(event_store, ticket_system):
 
     # Should have the workflow events but no stage-specific events
     assert audit_data.workflow_run.id == workflow_id
-    assert audit_data.total_event_count == 2  # Created + Started
+    assert audit_data.total_count == 2  # Created + Started
     assert len(audit_data.events) == 2
 
     # Stages info should be empty or have empty events arrays

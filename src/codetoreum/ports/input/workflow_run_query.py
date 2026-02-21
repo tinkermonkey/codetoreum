@@ -186,7 +186,7 @@ class WorkflowRunAuditResult:
     events: List[dict]  # List of event dictionaries
     stages: List[dict]  # List of stage information dictionaries
     validation: Optional[dict]  # Validation result dictionary (None if not requested)
-    total_event_count: int
+    total_count: int
     offset: int
     limit: int
     has_next: bool
@@ -197,8 +197,8 @@ class WorkflowRunAuditResult:
             raise ValueError(f"offset must be non-negative, got {self.offset}")
         if self.limit < 0:
             raise ValueError(f"limit must be non-negative, got {self.limit}")
-        if self.total_event_count < 0:
-            raise ValueError(f"total_event_count must be non-negative, got {self.total_event_count}")
+        if self.total_count < 0:
+            raise ValueError(f"total_count must be non-negative, got {self.total_count}")
 
 
 class IWorkflowRunQueryPort(ABC):

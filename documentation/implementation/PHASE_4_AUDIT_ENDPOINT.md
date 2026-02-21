@@ -168,8 +168,8 @@ GET /api/v2/workflows/runs/wfr_abc123/events?since=2026-02-21T10:00:00Z
 ### Router
 - **File**: `src/codetoreum/adapters/primary/routers/workflow_runs.py`
 - **Endpoints**:
-  - Line 237: `get_workflow_run_events()`
-  - Line 318: `get_workflow_run_audit()`
+  - `get_workflow_run_events()` - Retrieve paginated event list
+  - `get_workflow_run_audit()` - Retrieve complete audit trail
 
 ### Configuration
 - **File**: `src/codetoreum/config/defaults.py`

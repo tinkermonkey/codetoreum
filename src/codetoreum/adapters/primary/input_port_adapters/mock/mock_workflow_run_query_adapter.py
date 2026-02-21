@@ -238,7 +238,7 @@ class MockWorkflowRunQueryAdapter(IWorkflowRunQueryPort):
             events=paginated_events,
             stages=stages,
             validation=validation,
-            total_event_count=len(mock_events),
+            total_count=len(mock_events),
             offset=offset,
             limit=limit,
             has_next=(offset + limit) < len(mock_events),

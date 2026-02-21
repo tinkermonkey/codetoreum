@@ -500,7 +500,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
             events=paginated_events,
             stages=stages_info,
             validation=validation_result,
-            total_event_count=total_event_count,
+            total_count=total_event_count,
             offset=offset,
             limit=limit,
             has_next=(offset + limit) < total_event_count,

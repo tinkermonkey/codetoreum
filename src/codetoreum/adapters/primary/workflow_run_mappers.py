@@ -179,7 +179,7 @@ class WorkflowRunMapper:
                 - events: List[event_dict]
                 - stages: List[stage_info_dict]
                 - validation: validation_result_dict
-                - total_event_count: int
+                - total_count: int
                 - offset: int
                 - limit: int
                 - has_next: bool
@@ -248,7 +248,7 @@ class WorkflowRunMapper:
             events=events,
             stages=stages,
             validation=validation,
-            totalEventCount=audit_result.total_event_count,
+            totalEventCount=audit_result.total_count,
             offset=audit_result.offset,
             limit=audit_result.limit,
             hasNext=audit_result.has_next,
