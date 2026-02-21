@@ -287,29 +287,29 @@ class ObservabilityConfig:
         Warnings:
             Logs warning if a signal is enabled but its endpoint is not configured.
         """
-        # Warning: Observability enabled but no signals configured
+        # Error: Observability enabled but no signals configured (invalid state)
         if self.enabled and not self.traces_enabled and not self.metrics_enabled and not self.logs_enabled:
-            logger.warning(
+            raise ValueError(
                 "Observability enabled but no signals (traces/metrics/logs) are enabled. "
                 "Either enable at least one signal or disable observability entirely "
                 "(set OTEL_ENABLED=false)."
             )
 
-        # Validate each enabled signal has an endpoint
+        # Error: Signal enabled without endpoint (will definitely fail at export time)
         if self.traces_enabled and not self.traces_endpoint:
-            logger.warning(
+            raise ValueError(
                 "Traces enabled but traces_endpoint is not configured. "
                 "Check OTEL_EXPORTER_OTLP_TRACES_ENDPOINT or Signoz gRPC configuration."
             )
 
         if self.logs_enabled and not self.logs_endpoint:
-            logger.warning(
+            raise ValueError(
                 "Logs enabled but logs_endpoint is not configured. "
                 "Check OTEL_EXPORTER_OTLP_LOGS_ENDPOINT or Signoz HTTP configuration."
             )
 
         if self.metrics_enabled and not self.metrics_endpoint:
-            logger.warning(
+            raise ValueError(
                 "Metrics enabled but metrics_endpoint is not configured. "
                 "Check OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or Signoz HTTP configuration."
             )
