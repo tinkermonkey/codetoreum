@@ -1499,7 +1499,7 @@ def create_development_app() -> FastAPI:
                     "unexpectedEvents": [],
                     "outOfOrderEvents": [],
                 },
-                total_event_count=1,
+                total_count=1,
                 offset=offset,
                 limit=limit,
                 has_next=False,

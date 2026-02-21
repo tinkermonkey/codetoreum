@@ -311,7 +311,7 @@ class IWorkflowRunQueryPort(ABC):
             - events: List of event dictionaries
             - stages: List of stage info dictionaries
             - validation: Validation result dictionary or None
-            - total_event_count: Total number of events
+            - total_count: Total number of events
             - offset: Pagination offset
             - limit: Pagination limit
             - has_next: Whether more events are available
