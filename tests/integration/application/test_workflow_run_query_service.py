@@ -276,7 +276,7 @@ class TestListWorkflowRuns:
         """Test filtering workflow runs by status."""
         # Act - Filter completed workflows
         result = await query_service.list_workflow_runs(
-            filters=WorkflowRunFilters(status=[WorkflowRunStatus.COMPLETED])
+            filters=WorkflowRunFilters(status=(WorkflowRunStatus.COMPLETED,))
         )
 
         # Assert
@@ -337,7 +337,7 @@ class TestListWorkflowRuns:
         """Test sorting workflow runs by duration."""
         # Act
         result = await query_service.list_workflow_runs(
-            filters=WorkflowRunFilters(status=[WorkflowRunStatus.COMPLETED]),
+            filters=WorkflowRunFilters(status=(WorkflowRunStatus.COMPLETED,)),
             pagination=WorkflowRunPaginationParams(
                 sort_by=WorkflowRunSortField.DURATION,
                 sort_order=SortOrder.ASC,

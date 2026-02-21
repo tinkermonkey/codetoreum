@@ -111,7 +111,7 @@ def create_workflow_runs_router(
             status_list = None
             if status:
                 try:
-                    status_list = [WorkflowRunStatus(s.strip()) for s in status.split(",")]
+                    status_list = tuple(WorkflowRunStatus(s.strip()) for s in status.split(","))
                 except ValueError as e:
                     raise HTTPException(
                         status_code=http_status.HTTP_400_BAD_REQUEST,

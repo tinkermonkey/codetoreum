@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from types import MappingProxyType
-from typing import List, Optional, Mapping
+from typing import List, Optional, Mapping, Tuple
 
 
 class WorkflowRunStatus(Enum):
@@ -38,7 +38,7 @@ class SortOrder(Enum):
 @dataclass(frozen=True)
 class WorkflowRunFilters:
     """Filters for listing workflow runs"""
-    status: Optional[List[WorkflowRunStatus]] = None  # Filter by status (comma-separated)
+    status: Optional[Tuple[WorkflowRunStatus, ...]] = None  # Filter by status (comma-separated)
     project_id: Optional[str] = None  # Filter by project
     work_item_id: Optional[str] = None  # Filter by work item
     workflow_id: Optional[str] = None  # Filter by workflow template

@@ -102,8 +102,11 @@ class LRUCache:
             value: Value to cache
         """
         async with self._lock:
+            # Track whether this is an update or new entry
+            was_update = key in self._cache
+
             # If key exists, remove it (we'll re-add at end)
-            if key in self._cache:
+            if was_update:
                 logger.debug(f"Cache update: key={key}")
                 del self._cache[key]
 
@@ -115,7 +118,7 @@ class LRUCache:
 
             # Add new entry (at end = most recently used)
             self._cache[key] = (value, datetime.now(timezone.utc))
-            if key not in [k for k, _ in list(self._cache.items())[:-1]]:  # New entry, not update
+            if not was_update:
                 logger.debug(f"Cache set: key={key}, cache_size={len(self._cache)}")
 
     async def clear(self) -> None:

@@ -287,9 +287,9 @@ class ObservabilityConfig:
         Warnings:
             Logs warning if a signal is enabled but its endpoint is not configured.
         """
-        # Critical: Observability enabled but no signals configured
+        # Warning: Observability enabled but no signals configured
         if self.enabled and not self.traces_enabled and not self.metrics_enabled and not self.logs_enabled:
-            raise ValueError(
+            logger.warning(
                 "Observability enabled but no signals (traces/metrics/logs) are enabled. "
                 "Either enable at least one signal or disable observability entirely "
                 "(set OTEL_ENABLED=false)."

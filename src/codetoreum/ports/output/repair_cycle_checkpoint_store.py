@@ -24,10 +24,12 @@ class IRepairCycleCheckpointStore(ABC):
     - Supports validation against stale or corrupted checkpoints
 
     Example:
+        from codetoreum.domain.repair_cycle_types import RepairTestType
+
         # Save checkpoint
         checkpoint = RepairCycleCheckpoint(
             workflow_run_id="run-123",
-            test_type="unit",
+            test_type=RepairTestType.UNIT,
             iteration=2,
             total_agent_calls=5,
             ...
@@ -35,7 +37,7 @@ class IRepairCycleCheckpointStore(ABC):
         await store.save_checkpoint(checkpoint)
 
         # Retrieve checkpoint
-        checkpoint = await store.get_checkpoint("run-123", "unit")
+        checkpoint = await store.get_checkpoint("run-123", RepairTestType.UNIT)
         if checkpoint:
             # Resume from checkpoint
             pass

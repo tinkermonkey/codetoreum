@@ -68,9 +68,9 @@ class ValidationResult:
                     f"(missing={len(self.missing_events)}, unexpected={len(self.unexpected_events)}, "
                     f"out_of_order={len(self.out_of_order_events)})"
                 )
-        # If is_valid is False, at least one error list should be non-empty
+        # If is_valid is False, at least one error list or error_message should be present
         else:
-            if not (self.missing_events or self.unexpected_events or self.out_of_order_events):
+            if not (self.missing_events or self.unexpected_events or self.out_of_order_events or self.error_message):
                 raise ValueError(
                     "ValidationResult inconsistency: is_valid=False but no errors present"
                 )

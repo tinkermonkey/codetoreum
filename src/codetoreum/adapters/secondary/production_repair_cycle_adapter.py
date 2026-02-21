@@ -27,7 +27,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from codetoreum.domain.repair_cycle_types import (
@@ -642,8 +642,6 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             return True
 
         try:
-            from datetime import datetime, timezone
-
             # Create checkpoint with current state
             now = datetime.now(timezone.utc)
             expires_at = (now + timedelta(hours=24)).isoformat()
