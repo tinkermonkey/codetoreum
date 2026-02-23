@@ -97,7 +97,7 @@ class TestScenario06SDLCPipelineWithRepair:
         # Execute repair cycle (would be triggered by event handler in full integration)
         repair_context = RepairCycleEventContext(
             stage_name="Testing",
-            pipeline_run_id="work-item-1",
+            workflow_run_id="work-item-1",
             test_configs=(
                 RepairTestRunConfig(test_type=RepairTestType.UNIT),
                 RepairTestRunConfig(test_type=RepairTestType.INTEGRATION),
@@ -169,7 +169,7 @@ class TestScenario06SDLCPipelineWithRepair:
         # Execute repair cycle
         repair_context = RepairCycleEventContext(
             stage_name="Testing",
-            pipeline_run_id="work-item-2",
+            workflow_run_id="work-item-2",
             test_configs=(
                 RepairTestRunConfig(test_type=RepairTestType.UNIT),
                 RepairTestRunConfig(test_type=RepairTestType.INTEGRATION),
@@ -244,7 +244,7 @@ class TestScenario06SDLCPipelineWithRepair:
         # Execute repair cycle with limited agent calls
         repair_context = RepairCycleEventContext(
             stage_name="Testing",
-            pipeline_run_id="work-item-10",
+            workflow_run_id="work-item-10",
             test_configs=(
                 RepairTestRunConfig(test_type=RepairTestType.UNIT),
             ),
@@ -357,7 +357,7 @@ class TestScenario06SDLCPipelineWithRepair:
         # Execute repair cycle
         repair_context = RepairCycleEventContext(
             stage_name="Testing",
-            pipeline_run_id="perf-test",
+            workflow_run_id="perf-test",
             test_configs=(
                 RepairTestRunConfig(test_type=RepairTestType.UNIT),
                 RepairTestRunConfig(test_type=RepairTestType.INTEGRATION),

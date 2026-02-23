@@ -403,7 +403,7 @@ class AgentScheduler:
 class InMemoryTaskQueue(ITaskQueue):
     """In-memory task queue for testing."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.tasks: Dict[str, Task] = {}
         self.queue_by_agent: Dict[str, int] = {}
 
@@ -425,8 +425,8 @@ class MockResourceMonitor(IResourceMonitor):
 
     def __init__(
         self,
-        dev_containers_available: Dict[str, bool] = None,
-        running_agents: Dict[str, int] = None,
+        dev_containers_available: Optional[Dict[str, bool]] = None,
+        running_agents: Optional[Dict[str, int]] = None,
     ):
         self.dev_containers_available = dev_containers_available or {}
         self.running_agents = running_agents or {}
@@ -443,7 +443,7 @@ class MockResourceMonitor(IResourceMonitor):
 class MockRateLimiter(IRateLimiter):
     """Mock rate limiter for testing."""
 
-    def __init__(self, rate_limited_agents: Dict[str, bool] = None):
+    def __init__(self, rate_limited_agents: Optional[Dict[str, bool]] = None):
         self.rate_limited_agents = rate_limited_agents or {}
         self.retry_after_seconds = 60
 
@@ -461,7 +461,7 @@ class MockRateLimiter(IRateLimiter):
 class MockProjectConfiguration(IProjectConfiguration):
     """Mock project configuration for testing."""
 
-    def __init__(self, agents: Dict[str, AgentConfig] = None):
+    def __init__(self, agents: Optional[Dict[str, AgentConfig]] = None):
         self.agents = agents or {}
 
     async def get_agent_config(self, agent_name: str) -> AgentConfig:
@@ -481,10 +481,10 @@ class MockProjectConfiguration(IProjectConfiguration):
 class MockSchedulingEvents(ISchedulingEvents):
     """Mock scheduling events for testing."""
 
-    def __init__(self):
-        self.queued_events = []
-        self.throttled_events = []
-        self.rejected_events = []
+    def __init__(self) -> None:
+        self.queued_events: list = []
+        self.throttled_events: list = []
+        self.rejected_events: list = []
 
     async def emit_task_queued(
         self,

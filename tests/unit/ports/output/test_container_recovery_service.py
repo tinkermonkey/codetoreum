@@ -16,7 +16,7 @@ import pytest
 from codetoreum.domain.types import (
     CONTAINER_LABEL_AGENT,
     CONTAINER_LABEL_EXECUTION_ID,
-    CONTAINER_LABEL_PIPELINE_RUN_ID,
+    CONTAINER_LABEL_WORKFLOW_RUN_ID,
     CONTAINER_LABEL_PROJECT,
     CONTAINER_LABEL_TASK_ID,
     CONTAINER_LABEL_TYPE,
@@ -77,7 +77,7 @@ class TestContainerMetadataImmutability:
             created_at=now,
             labels=labels,
             work_item_id="work-123",
-            pipeline_run_id="run-789",
+            workflow_run_id="run-789",
             execution_id="exec-456",
         )
 
@@ -89,7 +89,7 @@ class TestContainerMetadataImmutability:
         assert metadata.created_at == now
         assert metadata.labels == labels
         assert metadata.work_item_id == "work-123"
-        assert metadata.pipeline_run_id == "run-789"
+        assert metadata.workflow_run_id == "run-789"
         assert metadata.execution_id == "exec-456"
 
 
@@ -187,7 +187,7 @@ class TestContainerLabelConstants:
             CONTAINER_LABEL_AGENT,
             CONTAINER_LABEL_WORK_ITEM_ID,
             CONTAINER_LABEL_TASK_ID,
-            CONTAINER_LABEL_PIPELINE_RUN_ID,
+            CONTAINER_LABEL_WORKFLOW_RUN_ID,
             CONTAINER_LABEL_EXECUTION_ID,
         ]
 
@@ -203,7 +203,7 @@ class TestContainerLabelConstants:
             CONTAINER_LABEL_AGENT,
             CONTAINER_LABEL_WORK_ITEM_ID,
             CONTAINER_LABEL_TASK_ID,
-            CONTAINER_LABEL_PIPELINE_RUN_ID,
+            CONTAINER_LABEL_WORKFLOW_RUN_ID,
             CONTAINER_LABEL_EXECUTION_ID,
         ]
 
@@ -217,7 +217,7 @@ class TestContainerLabelConstants:
         assert CONTAINER_LABEL_AGENT == "org.codetoreum.agent"
         assert CONTAINER_LABEL_WORK_ITEM_ID == "org.codetoreum.work_item_id"
         assert CONTAINER_LABEL_TASK_ID == "org.codetoreum.task_id"
-        assert CONTAINER_LABEL_PIPELINE_RUN_ID == "org.codetoreum.pipeline_run_id"
+        assert CONTAINER_LABEL_WORKFLOW_RUN_ID == "org.codetoreum.workflow_run_id"
         assert CONTAINER_LABEL_EXECUTION_ID == "org.codetoreum.execution_id"
 
 
@@ -653,9 +653,9 @@ class TestContainerMetadataValidation:
                 work_item_id="",  # Empty string not allowed
             )
 
-    def test_pipeline_run_id_must_be_non_empty_if_provided(self):
-        """pipeline_run_id must be non-empty if provided."""
-        with pytest.raises(ValueError, match="pipeline_run_id must be non-empty"):
+    def test_workflow_run_id_must_be_non_empty_if_provided(self):
+        """workflow_run_id must be non-empty if provided."""
+        with pytest.raises(ValueError, match="workflow_run_id must be non-empty"):
             ContainerMetadata(
                 container_id="abc123",
                 container_name="agent-proj-001",
@@ -668,7 +668,7 @@ class TestContainerMetadataValidation:
                 CONTAINER_LABEL_PROJECT: "proj-1",
                 CONTAINER_LABEL_AGENT: "agent-1",
             }),
-                pipeline_run_id="",  # Empty string not allowed
+                workflow_run_id="",  # Empty string not allowed
             )
 
     def test_execution_id_must_be_non_empty_if_provided(self):
@@ -704,12 +704,12 @@ class TestContainerMetadataValidation:
                 CONTAINER_LABEL_AGENT: "agent-1",
             }),
             work_item_id=None,
-            pipeline_run_id=None,
+            workflow_run_id=None,
             execution_id=None,
         )
 
         assert metadata.work_item_id is None
-        assert metadata.pipeline_run_id is None
+        assert metadata.workflow_run_id is None
         assert metadata.execution_id is None
 
     def test_container_id_whitespace_only_rejected(self):
@@ -815,9 +815,9 @@ class TestContainerMetadataValidation:
                 work_item_id="   ",
             )
 
-    def test_pipeline_run_id_whitespace_only_rejected(self):
-        """pipeline_run_id must reject whitespace-only strings."""
-        with pytest.raises(ValueError, match="pipeline_run_id must be non-empty"):
+    def test_workflow_run_id_whitespace_only_rejected(self):
+        """workflow_run_id must reject whitespace-only strings."""
+        with pytest.raises(ValueError, match="workflow_run_id must be non-empty"):
             ContainerMetadata(
                 container_id="abc123",
                 container_name="agent-proj-001",
@@ -830,7 +830,7 @@ class TestContainerMetadataValidation:
                 CONTAINER_LABEL_PROJECT: "proj-1",
                 CONTAINER_LABEL_AGENT: "agent-1",
             }),
-                pipeline_run_id="   ",
+                workflow_run_id="   ",
             )
 
     def test_execution_id_whitespace_only_rejected(self):

@@ -137,11 +137,11 @@ class BoardColumnEventHandler(EventHandler):
         Args:
             event: WorkItemColumnChanged event with column movement details
         """
-        work_item_id = event.payload.get("work_item_id")
-        board_id = event.payload.get("board_id")
-        project_id = event.payload.get("project_id")
-        from_column = event.payload.get("from_column")
-        to_column = event.payload.get("to_column")
+        work_item_id: str = event.payload.get("work_item_id") or ""
+        board_id: str = event.payload.get("board_id") or ""
+        project_id: str = event.payload.get("project_id") or ""
+        from_column: str = event.payload.get("from_column") or ""
+        to_column: str = event.payload.get("to_column") or ""
 
         logger.info(
             f"Processing column change for {work_item_id}: "

@@ -34,14 +34,14 @@ class MockRepairCycleContext:
     def __init__(
         self,
         stage_name: str = "fix_failures",
-        pipeline_run_id: str = "pipeline_123",
+        workflow_run_id: str = "pipeline_123",
         test_configs: tuple = None,
         agent_name: str = "senior_software_engineer",
         max_total_agent_calls: int = 100,
         checkpoint_interval: int = 5,
     ):
         self.stage_name = stage_name
-        self.pipeline_run_id = pipeline_run_id
+        self.workflow_run_id = workflow_run_id
         self.test_configs = test_configs or (
             RepairTestRunConfig(
                 test_type=RepairTestType.UNIT,

@@ -16,6 +16,7 @@ from codetoreum.domain.services.execution_context_builder import (
 from codetoreum.domain.value_objects import ExecutionContext
 from codetoreum.domain.workspace_context import WorkspaceContext, WorkspaceType
 from codetoreum.domain.work_item import WorkItem
+from codetoreum.domain.types import WorkItemId
 from codetoreum.ports.exceptions import ResourceNotFoundError, TicketSystemError
 from codetoreum.ports.output import IStorage, ITicketSystem
 
@@ -156,7 +157,7 @@ class ContextBuilder:
         try:
             logger.info(f"Fetching work item details for {work_item_id}")
 
-            work_item = await self.ticket_system.get_work_item(work_item_id)
+            work_item = await self.ticket_system.get_work_item(WorkItemId(work_item_id))
 
             if work_item:
                 logger.info(

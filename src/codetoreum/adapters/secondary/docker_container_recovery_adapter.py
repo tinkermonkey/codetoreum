@@ -21,7 +21,7 @@ from dateutil import parser as dateparser
 from codetoreum.domain.types import (
     CONTAINER_LABEL_AGENT,
     CONTAINER_LABEL_EXECUTION_ID,
-    CONTAINER_LABEL_PIPELINE_RUN_ID,
+    CONTAINER_LABEL_WORKFLOW_RUN_ID,
     CONTAINER_LABEL_PROJECT,
     CONTAINER_LABEL_TASK_ID,
     CONTAINER_LABEL_TYPE,
@@ -39,6 +39,9 @@ from codetoreum.ports.output.container_recovery import (
     RecoveryAssessment,
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+
+# Additional label for tracking containers with timestamp parse failures
+CONTAINER_LABEL_TIMESTAMP_FALLBACK = "codetoreum.timestamp_fallback"
 
 # Import Docker SDK exceptions for proper error handling
 try:
@@ -393,10 +396,22 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
             # Use current time as fallback if parsing failed
             if created_at is None:
                 created_at = datetime.now(timezone.utc)
+                # Log container for operator visibility and priority cleanup
+                # Note: Docker doesn't support updating labels on running containers,
+                # so operators must manually verify container age if it persists
+                logger.warning(
+                    f"Container {container.short_id} timestamp parse failed - priority cleanup recommended. "
+                    f"Operators should manually verify container age if it persists beyond expected lifetime.",
+                    extra={
+                        "container_id": container.short_id,
+                        "fallback_timestamp_used": True,
+                        "mitigation": "priority_cleanup_recommended"
+                    }
+                )
 
         # Extract optional labels
         work_item_id = labels.get(CONTAINER_LABEL_WORK_ITEM_ID)
-        pipeline_run_id = labels.get(CONTAINER_LABEL_PIPELINE_RUN_ID)
+        workflow_run_id = labels.get(CONTAINER_LABEL_WORKFLOW_RUN_ID)
         execution_id = labels.get(CONTAINER_LABEL_EXECUTION_ID)
 
         return ContainerMetadata(
@@ -408,7 +423,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
             created_at=created_at,
             labels=MappingProxyType(labels),
             work_item_id=work_item_id,
-            pipeline_run_id=pipeline_run_id,
+            workflow_run_id=workflow_run_id,
             execution_id=execution_id,
         )
 
@@ -602,7 +617,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
         # Step 1: Check for completed result in storage
         result_key = (
             f"repair_cycle:result:{metadata.project_id}:"
-            f"{metadata.work_item_id}:{metadata.pipeline_run_id}"
+            f"{metadata.work_item_id}:{metadata.workflow_run_id}"
         )
 
         try:
@@ -612,7 +627,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                 # Repair cycle completed during downtime - will be processed separately
                 logger.info(
                     f"Found completed repair cycle result in storage for "
-                    f"{metadata.project_id}/{metadata.work_item_id}/{metadata.pipeline_run_id}"
+                    f"{metadata.project_id}/{metadata.work_item_id}/{metadata.workflow_run_id}"
                 )
                 return RecoveryAssessment(
                     container_id=metadata.container_id,
@@ -622,11 +637,29 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                     execution_id=None,
                 )
         except StorageError as e:
-            logger.warning(
-                f"Failed to check for completed repair result {result_key}: {e}",
+            # Storage failures during recovery assessment are serious - they could mean:
+            # 1. Completed repair work is invisible and may be lost/redone
+            # 2. Container may be killed when it should be kept
+            # 3. Storage system is degraded/unavailable
+            logger.error(
+                f"STORAGE UNAVAILABLE during repair cycle recovery assessment for {result_key}. "
+                f"This may result in lost repair work or incorrect recovery decisions. "
+                f"Container {metadata.container_id} will be assessed based on age/checkpoint only. "
+                f"Operators should verify storage health and check for orphaned repair results.",
                 exc_info=True,
+                extra={
+                    "error_id": ErrorRegistry.ERR_CONTAINER_ERROR,
+                    "storage_key": result_key,
+                    "container_id": metadata.container_id,
+                    "project_id": metadata.project_id,
+                    "work_item_id": metadata.work_item_id,
+                    "workflow_run_id": metadata.workflow_run_id,
+                    "impact": "potential_data_loss_or_incorrect_recovery",
+                    "mitigation": "verify_storage_health_and_check_orphaned_results"
+                }
             )
-            # Continue with other checks
+            # Continue with age-based and checkpoint-based checks, but log the degraded state
+            # Note: In the future, this should emit a metric or alert for operator visibility
 
         # Step 2: Check container age
         now = datetime.now(timezone.utc)
@@ -636,21 +669,21 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
             # Container is old (>2 hours) - check checkpoint staleness
             checkpoint = None
 
-            if self.checkpoint_store and metadata.pipeline_run_id:
+            if self.checkpoint_store and metadata.workflow_run_id:
                 try:
                     # Try to get checkpoint - use generic "all" test type for repair cycles
                     checkpoint = await self.checkpoint_store.get_checkpoint(
-                        pipeline_run_id=metadata.pipeline_run_id, test_type="all"
+                        workflow_run_id=metadata.workflow_run_id, test_type="all"
                     )
                 except (KeyError, AttributeError, ValueError) as e:
                     logger.warning(
-                        f"Failed to get checkpoint for {metadata.pipeline_run_id}: {e}",
+                        f"Failed to get checkpoint for {metadata.workflow_run_id}: {e}",
                         exc_info=True,
                         extra={"error_id": ErrorRegistry.ERR_CHECKPOINT_ERROR, "error_type": "expected"}
                     )
                 except Exception as e:
                     logger.error(
-                        f"UNEXPECTED error getting checkpoint for {metadata.pipeline_run_id}: {e}",
+                        f"UNEXPECTED error getting checkpoint for {metadata.workflow_run_id}: {e}",
                         exc_info=True,
                         extra={"error_id": ErrorRegistry.ERR_CHECKPOINT_ERROR, "error_type": "unexpected"}
                     )
@@ -662,7 +695,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                     checkpoint_time = dateparser.isoparse(checkpoint.timestamp)
                 except (ValueError, TypeError, AttributeError) as e:
                     logger.error(
-                        f"Failed to parse checkpoint timestamp for repair cycle {metadata.pipeline_run_id}: {e}. "
+                        f"Failed to parse checkpoint timestamp for repair cycle {metadata.workflow_run_id}: {e}. "
                         f"Treating checkpoint as stale and will kill container. "
                         f"Raw timestamp value: {getattr(checkpoint, 'timestamp', 'MISSING')}",
                         exc_info=True,
@@ -670,7 +703,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                             "error_id": ErrorRegistry.ERR_CHECKPOINT_ERROR,
                             "error_type": "expected",
                             "container_id": metadata.container_id,
-                            "pipeline_run_id": metadata.pipeline_run_id,
+                            "workflow_run_id": metadata.workflow_run_id,
                             "raw_checkpoint_timestamp": getattr(checkpoint, "timestamp", "MISSING"),
                             "impact": "checkpoint_treated_as_stale_will_kill_container",
                         }
@@ -681,14 +714,14 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                     )
                 except Exception as e:
                     logger.error(
-                        f"UNEXPECTED error parsing checkpoint timestamp for repair cycle {metadata.pipeline_run_id}: {e}. "
+                        f"UNEXPECTED error parsing checkpoint timestamp for repair cycle {metadata.workflow_run_id}: {e}. "
                         f"Treating checkpoint as stale and will kill container.",
                         exc_info=True,
                         extra={
                             "error_id": ErrorRegistry.ERR_CHECKPOINT_ERROR,
                             "error_type": "unexpected",
                             "container_id": metadata.container_id,
-                            "pipeline_run_id": metadata.pipeline_run_id,
+                            "workflow_run_id": metadata.workflow_run_id,
                             "raw_checkpoint_timestamp": getattr(checkpoint, "timestamp", "MISSING"),
                             "impact": "checkpoint_treated_as_stale_will_kill_container",
                         }
@@ -1072,7 +1105,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                         try:
                             api._session.close()
                         except Exception:
-                            pass
+                            logger.debug("Error closing Docker API session", exc_info=True)
                     # Close adapters (which hold socket connections)
                     if hasattr(api, '_adapters') and api._adapters:
                         try:
@@ -1080,12 +1113,12 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                                 if hasattr(adapter, 'close'):
                                     adapter.close()
                         except Exception:
-                            pass
+                            logger.debug("Error closing Docker API adapters", exc_info=True)
                     if hasattr(api, 'close'):
                         try:
                             api.close()
                         except Exception:
-                            pass
+                            logger.debug("Error closing Docker API", exc_info=True)
             except Exception:
                 logger.debug("Error cleaning up Docker API client", exc_info=True)
 

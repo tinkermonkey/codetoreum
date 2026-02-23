@@ -103,7 +103,7 @@ class WorkItemColumnChangedEvent(CodetoreumEvent):
             board_id=data.get("board_id", ""),
             from_column=data.get("from_column", ""),
             to_column=data.get("to_column", ""),
-            moved_by=data.get("moved_by", "unknown"),  # type: ignore
+            moved_by=data.get("moved_by", "unknown"),
         )
 
 

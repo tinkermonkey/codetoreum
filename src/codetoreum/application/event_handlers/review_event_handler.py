@@ -292,7 +292,7 @@ class ReviewEventHandler(EventHandler):
             self._metrics["escalated_reviews"] / self._metrics["total_reviews"] * 100
         )
 
-    def get_metrics(self) -> Dict[str, any]:
+    def get_metrics(self) -> Dict[str, object]:
         """
         Get review metrics.
 

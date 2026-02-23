@@ -83,7 +83,7 @@ class LockAcquiredEvent(CodetoreumEvent):
             project_id=data.get("project_id", ""),
             board_id=data.get("board_id", ""),
             work_item_id=data.get("work_item_id", ""),
-            acquisition_method=data.get("acquisition_method", "normal"),  # type: ignore
+            acquisition_method=data.get("acquisition_method", "normal"),
         )
 
 
@@ -159,7 +159,7 @@ class LockReleasedEvent(CodetoreumEvent):
             project_id=data.get("project_id", ""),
             board_id=data.get("board_id", ""),
             work_item_id=data.get("work_item_id", ""),
-            reason=data.get("reason", "completed"),  # type: ignore
+            reason=data.get("reason", "completed"),
             next_in_queue=data.get("next_in_queue"),
         )
 

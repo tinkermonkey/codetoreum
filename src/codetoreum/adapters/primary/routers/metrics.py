@@ -659,7 +659,7 @@ def create_metrics_router(
               "project": "codetoreum",
               "issueNumber": 42,
               "status": "running",
-              "startedAt": "2025-11-08T10:00:00Z",
+              "startedAt": "2026-02-20T10:00:00Z",
               "containerName": "claude-code-exec-123"
             }
           ],

@@ -734,7 +734,7 @@ class TestTimestampParsingErrors:
                 CONTAINER_LABEL_AGENT: "agent-1",
             }),
             work_item_id="work-123",
-            pipeline_run_id="run-456",
+            workflow_run_id="run-456",
             execution_id="exec-789",
         )
 
@@ -785,7 +785,7 @@ class TestTimestampParsingErrors:
                 CONTAINER_LABEL_AGENT: "agent-1",
             }),
             work_item_id="work-123",
-            pipeline_run_id="run-456",
+            workflow_run_id="run-456",
             execution_id="exec-789",
         )
 

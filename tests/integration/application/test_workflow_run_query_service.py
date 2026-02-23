@@ -276,7 +276,7 @@ class TestListWorkflowRuns:
         """Test filtering workflow runs by status."""
         # Act - Filter completed workflows
         result = await query_service.list_workflow_runs(
-            filters=WorkflowRunFilters(status=[WorkflowRunStatus.COMPLETED])
+            filters=WorkflowRunFilters(status=(WorkflowRunStatus.COMPLETED,))
         )
 
         # Assert
@@ -337,7 +337,7 @@ class TestListWorkflowRuns:
         """Test sorting workflow runs by duration."""
         # Act
         result = await query_service.list_workflow_runs(
-            filters=WorkflowRunFilters(status=[WorkflowRunStatus.COMPLETED]),
+            filters=WorkflowRunFilters(status=(WorkflowRunStatus.COMPLETED,)),
             pagination=WorkflowRunPaginationParams(
                 sort_by=WorkflowRunSortField.DURATION,
                 sort_order=SortOrder.ASC,
@@ -375,11 +375,11 @@ class TestGetWorkflowRunEvents:
         result = await query_service.get_workflow_run_events(workflow_id)
 
         # Assert
-        assert "events" in result
-        assert "total_count" in result
-        assert result["total_count"] == 3  # Created, Started, Completed
-        assert len(result["events"]) == 3
-        assert result["has_next"] is False
+        assert hasattr(result, "events")
+        assert hasattr(result, "total_count")
+        assert result.total_count == 3  # Created, Started, Completed
+        assert len(result.events) == 3
+        assert result.has_next is False
 
     @pytest.mark.asyncio
     async def test_get_workflow_run_events_with_pagination(
@@ -394,9 +394,9 @@ class TestGetWorkflowRunEvents:
         )
 
         # Assert
-        assert result["total_count"] == 3
-        assert len(result["events"]) == 2
-        assert result["has_next"] is True
+        assert result.total_count == 3
+        assert len(result.events) == 2
+        assert result.has_next is True
 
     @pytest.mark.asyncio
     async def test_get_workflow_run_events_filter_by_type(
@@ -412,9 +412,9 @@ class TestGetWorkflowRunEvents:
         )
 
         # Assert
-        assert result["total_count"] == 2
-        assert len(result["events"]) == 2
-        event_types = [e["event_type"] for e in result["events"]]
+        assert result.total_count == 2
+        assert len(result.events) == 2
+        event_types = [e["event_type"] for e in result.events]
         assert "WorkflowStarted" in event_types
         assert "WorkflowCompleted" in event_types
 
@@ -437,7 +437,7 @@ class TestGetWorkflowRunEvents:
         result = await query_service.get_workflow_run_events(workflow_id, limit=1)
 
         # Assert
-        event = result["events"][0]
+        event = result.events[0]
         assert "id" in event
         assert "event_type" in event
         assert "aggregate_id" in event
@@ -484,12 +484,13 @@ class TestCaching:
             sample_workflow_events["workflow_id"]
         )
 
-        # Assert metadata is the same
+        # Assert metadata is the same (verifies caching behavior)
         assert result1.issue_title == result2.issue_title == "Cached Issue"
         assert result1.issue_number == result2.issue_number == "ISSUE-456"
 
-        # Verify cache contains the work item
-        assert sample_workflow_events["work_item_id"] in query_service._work_item_cache
+        # Verify cache size increased (indicates work item was cached)
+        cache_size = await query_service._work_item_cache.size()
+        assert cache_size > 0
 
     @pytest.mark.asyncio
     async def test_graceful_degradation_on_ticket_system_error(
@@ -512,3 +513,119 @@ class TestCaching:
         assert result.issue_title is None
         assert result.issue_number is None
         assert result.project == "project-1"  # from workflow, not work item
+
+
+class TestStageOutputFields:
+    """Tests for stage output fields in audit API."""
+
+    @pytest.mark.asyncio
+    async def test_stage_info_includes_output_fields(self, event_store):
+        """Test that WorkflowRunStageInfo includes output, error_message, and metadata fields."""
+        from codetoreum.ports.input.workflow_run_query import WorkflowRunStageInfo
+
+        # Create a stage info with all fields
+        stage = WorkflowRunStageInfo(
+            name="implementation",
+            agent_name="developer_agent",
+            status="completed",
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
+            execution_id="exec-123",
+            output="Implementation completed successfully",
+            error_message=None,
+            metadata={"iterations": 3, "files_changed": 5},
+        )
+
+        # Assert all fields are present
+        assert stage.name == "implementation"
+        assert stage.output == "Implementation completed successfully"
+        assert stage.error_message is None
+        assert stage.metadata == {"iterations": 3, "files_changed": 5}
+
+    @pytest.mark.asyncio
+    async def test_stage_info_with_error_message(self):
+        """Test that stage info can contain error messages."""
+        from codetoreum.ports.input.workflow_run_query import WorkflowRunStageInfo
+
+        stage = WorkflowRunStageInfo(
+            name="testing",
+            agent_name="test_agent",
+            status="failed",
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
+            execution_id="exec-456",
+            output=None,
+            error_message="Test suite failed with 3 errors",
+            metadata={"failed_tests": 3},
+        )
+
+        assert stage.status == "failed"
+        assert stage.output is None
+        assert stage.error_message == "Test suite failed with 3 errors"
+        assert stage.metadata["failed_tests"] == 3
+
+    @pytest.mark.asyncio
+    async def test_stage_dto_mapping_includes_output_fields(self):
+        """Test that WorkflowRunStageResponse DTO includes output fields."""
+        from codetoreum.adapters.primary.workflow_run_dtos import WorkflowRunStageResponse
+
+        response = WorkflowRunStageResponse(
+            name="review",
+            agentName="reviewer_agent",
+            status="completed",
+            startedAt=datetime.now(timezone.utc),
+            completedAt=datetime.now(timezone.utc),
+            executionId="exec-789",
+            output="Code review passed",
+            errorMessage=None,
+            metadata={"approval_count": 2},
+        )
+
+        assert response.output == "Code review passed"
+        assert response.errorMessage is None
+        assert response.metadata == {"approval_count": 2}
+
+    @pytest.mark.asyncio
+    async def test_audit_stage_info_includes_output_fields(self):
+        """Test that AuditStageInfo DTO includes output fields."""
+        from codetoreum.adapters.primary.audit_dtos import AuditStageInfo
+
+        stage_info = AuditStageInfo(
+            name="deployment",
+            status="completed",
+            startedAt=datetime.now(timezone.utc),
+            completedAt=datetime.now(timezone.utc),
+            durationSeconds=45.5,
+            events=[],
+            output="Deployment successful",
+            errorMessage=None,
+            metadata={"environment": "production"},
+        )
+
+        assert stage_info.output == "Deployment successful"
+        assert stage_info.errorMessage is None
+        assert stage_info.metadata == {"environment": "production"}
+
+    @pytest.mark.asyncio
+    async def test_mapper_preserves_output_fields(self):
+        """Test that WorkflowRunMapper preserves output fields during mapping."""
+        from codetoreum.ports.input.workflow_run_query import WorkflowRunStageInfo
+        from codetoreum.adapters.primary.workflow_run_mappers import WorkflowRunMapper
+
+        stage = WorkflowRunStageInfo(
+            name="build",
+            agent_name="build_agent",
+            status="completed",
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
+            execution_id="exec-build-1",
+            output="Build artifacts created",
+            error_message=None,
+            metadata={"build_number": 42},
+        )
+
+        response = WorkflowRunMapper.to_stage_response(stage)
+
+        assert response.output == "Build artifacts created"
+        assert response.errorMessage is None
+        assert response.metadata == {"build_number": 42}

@@ -210,7 +210,7 @@ class ObservabilityConfig:
         """
         otel_enabled = os.getenv("OTEL_ENABLED", "true").lower() == "true"
 
-        return cls(
+        config = cls(
             enabled=otel_enabled,
             traces_enabled=(
                 os.getenv("OTEL_TRACES_ENABLED", "true").lower() == "true"
@@ -251,6 +251,11 @@ class ObservabilityConfig:
             log_level=os.getenv("OTEL_LOG_LEVEL", "info"),
         )
 
+        # Validate configuration before returning
+        config.validate()
+
+        return config
+
     @staticmethod
     def _validate_sampler_type(sampler_value: str) -> str:
         """
@@ -273,25 +278,38 @@ class ObservabilityConfig:
 
     def validate(self) -> None:
         """
-        Validate configuration and log warnings for misconfigured signals.
+        Validate configuration and raise errors for critical issues.
+
+        Raises:
+            ValueError: If observability is enabled but no signals are configured,
+                       or if a signal is enabled without a valid endpoint.
 
         Warnings:
             Logs warning if a signal is enabled but its endpoint is not configured.
         """
+        # Error: Observability enabled but no signals configured (invalid state)
+        if self.enabled and not self.traces_enabled and not self.metrics_enabled and not self.logs_enabled:
+            raise ValueError(
+                "Observability enabled but no signals (traces/metrics/logs) are enabled. "
+                "Either enable at least one signal or disable observability entirely "
+                "(set OTEL_ENABLED=false)."
+            )
+
+        # Error: Signal enabled without endpoint (will definitely fail at export time)
         if self.traces_enabled and not self.traces_endpoint:
-            logger.warning(
+            raise ValueError(
                 "Traces enabled but traces_endpoint is not configured. "
                 "Check OTEL_EXPORTER_OTLP_TRACES_ENDPOINT or Signoz gRPC configuration."
             )
 
         if self.logs_enabled and not self.logs_endpoint:
-            logger.warning(
+            raise ValueError(
                 "Logs enabled but logs_endpoint is not configured. "
                 "Check OTEL_EXPORTER_OTLP_LOGS_ENDPOINT or Signoz HTTP configuration."
             )
 
         if self.metrics_enabled and not self.metrics_endpoint:
-            logger.warning(
+            raise ValueError(
                 "Metrics enabled but metrics_endpoint is not configured. "
                 "Check OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or Signoz HTTP configuration."
             )

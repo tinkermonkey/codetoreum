@@ -94,7 +94,7 @@ class AuthenticationService(IAuthenticationPort):
         salt = bcrypt.gensalt()
         hashed = bcrypt.hashpw(password_bytes, salt)
         # Return as string for consistency with existing code
-        return hashed.decode('utf-8')
+        return str(hashed.decode('utf-8'))
 
     def _verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """Verify a password against a hash.
@@ -109,7 +109,7 @@ class AuthenticationService(IAuthenticationPort):
             hashed_bytes = hashed_password.encode('utf-8')
         else:
             hashed_bytes = hashed_password
-        return bcrypt.checkpw(password_bytes, hashed_bytes)
+        return bool(bcrypt.checkpw(password_bytes, hashed_bytes))
 
     def _create_access_token(
         self, data: dict, expires_delta: Optional[timedelta] = None
@@ -124,7 +124,7 @@ class AuthenticationService(IAuthenticationPort):
 
         to_encode.update({"exp": expire, "type": "access"})
 
-        return jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
+        return str(jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm))
 
     def _create_refresh_token(
         self, data: dict, expires_delta: Optional[timedelta] = None
@@ -139,12 +139,12 @@ class AuthenticationService(IAuthenticationPort):
 
         to_encode.update({"exp": expire, "type": "refresh"})
 
-        return jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
+        return str(jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm))
 
     def _decode_token(self, token: str) -> dict:
         """Decode and validate a JWT token."""
         try:
-            payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
+            payload: dict = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
             return payload
         except JWTError as e:
             msg = f"Invalid token: {e}"
@@ -290,7 +290,7 @@ class AuthenticationService(IAuthenticationPort):
 
         # Extract user info
         user_id = UUID(payload.get("sub"))
-        username = payload.get("username")
+        username: str = payload.get("username") or ""
         role_strings = payload.get("roles", [])
 
         # Convert role strings to enum

@@ -56,8 +56,8 @@ class EventBusRegistry:
         )
 
         # Track registered handlers
-        self._handlers = {}
-        self._services = {}
+        self._handlers: dict = {}
+        self._services: dict = {}
 
     def register_services(
         self,
@@ -224,7 +224,7 @@ class EventBusRegistry:
 
         self._handlers.clear()
 
-    def get_handler(self, handler_name: str):
+    def get_handler(self, handler_name: str) -> object:
         """
         Get a registered handler by name.
 
@@ -236,7 +236,7 @@ class EventBusRegistry:
         """
         return self._handlers.get(handler_name)
 
-    def get_statistics(self):
+    def get_statistics(self) -> dict:
         """
         Get event bus statistics.
 

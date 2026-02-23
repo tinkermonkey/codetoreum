@@ -27,7 +27,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from codetoreum.domain.repair_cycle_types import (
@@ -172,7 +172,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 source="production_repair_cycle",
                 stage_name=context.stage_name,
                 test_types=tuple(cfg.test_type for cfg in context.test_configs),
-                pipeline_run_id=context.pipeline_run_id,
+                workflow_run_id=context.workflow_run_id,
             )
         )
 
@@ -186,7 +186,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 logger.warning(
                     "Circuit breaker triggered: max agent calls reached",
                     extra={
-                        "pipeline_run_id": context.pipeline_run_id,
+                        "workflow_run_id": context.workflow_run_id,
                         "test_type": test_config.test_type.value,
                         "agent_calls": self.agent_call_count,
                         "max_calls": context.max_total_agent_calls,
@@ -200,7 +200,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         source="production_repair_cycle",
                         test_type=test_config.test_type,
                         reason="circuit_breaker_triggered",
-                        pipeline_run_id=context.pipeline_run_id,
+                        workflow_run_id=context.workflow_run_id,
                     )
                 )
                 break
@@ -233,7 +233,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     test_results=tuple(test_results),
                     total_agent_calls=self.agent_call_count,
                     duration_seconds=duration_seconds,
-                    pipeline_run_id=context.pipeline_run_id,
+                    workflow_run_id=context.workflow_run_id,
                 )
             )
 
@@ -283,7 +283,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         logger.info(
             "Executing tests",
             extra={
-                "pipeline_run_id": context.pipeline_run_id,
+                "workflow_run_id": context.workflow_run_id,
                 "test_type": config.test_type.value,
                 "command": test_command,
                 "timeout": config.timeout,
@@ -313,7 +313,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 test_type=config.test_type,
                 iteration=1,  # Each run_tests call represents one iteration
                 passed=test_output.get("passed", 0),
-                failed=test_output.get("failed", 0),
+                failed=len(failures),  # Use actual parsed failures count, not raw test output
                 warnings=len(warnings),
                 failures=tuple(failures),
                 warning_list=tuple(warnings),
@@ -335,14 +335,14 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     warnings=result.warnings,
                     has_failures=(result.failed > 0),
                     failures=result.failures,
-                    pipeline_run_id=context.pipeline_run_id,
+                    workflow_run_id=context.workflow_run_id,
                 )
             )
 
             logger.info(
                 "Test execution completed",
                 extra={
-                    "pipeline_run_id": context.pipeline_run_id,
+                    "workflow_run_id": context.workflow_run_id,
                     "test_type": config.test_type.value,
                     "passed": result.passed,
                     "failed": result.failed,
@@ -357,7 +357,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             logger.error(
                 "Test execution failed",
                 extra={
-                    "pipeline_run_id": context.pipeline_run_id,
+                    "workflow_run_id": context.workflow_run_id,
                     "test_type": config.test_type.value,
                     "error": str(e),
                     "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
@@ -396,7 +396,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 logger.warning(
                     "Circuit breaker triggered during file fixes",
                     extra={
-                        "pipeline_run_id": context.pipeline_run_id,
+                        "workflow_run_id": context.workflow_run_id,
                         "file": file_path,
                         "failures": len(failures),
                         "agent_calls": self.agent_call_count,
@@ -417,7 +417,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     test_file=file_path,
                     failure_count=len(failures),
                     test_type=config.test_type,
-                    pipeline_run_id=context.pipeline_run_id,
+                    workflow_run_id=context.workflow_run_id,
                 )
             )
 
@@ -429,7 +429,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 logger.info(
                     "Fixing test failures in file",
                     extra={
-                        "pipeline_run_id": context.pipeline_run_id,
+                        "workflow_run_id": context.workflow_run_id,
                         "file": file_path,
                         "failure_count": len(failures),
                     },
@@ -451,7 +451,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         failure_count=len(failures),
                         test_type=config.test_type,
                         success=True,
-                        pipeline_run_id=context.pipeline_run_id,
+                        workflow_run_id=context.workflow_run_id,
                     )
                 )
 
@@ -460,7 +460,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 logger.info(
                     "File fix completed",
                     extra={
-                        "pipeline_run_id": context.pipeline_run_id,
+                        "workflow_run_id": context.workflow_run_id,
                         "file": file_path,
                     },
                     exc_info=False,
@@ -471,7 +471,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 logger.error(
                     "File fix failed",
                     extra={
-                        "pipeline_run_id": context.pipeline_run_id,
+                        "workflow_run_id": context.workflow_run_id,
                         "file": file_path,
                         "error": str(e),
                     "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
@@ -487,7 +487,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         failure_count=len(failures),
                         test_type=config.test_type,
                         success=False,
-                        pipeline_run_id=context.pipeline_run_id,
+                        workflow_run_id=context.workflow_run_id,
                     )
                 )
 
@@ -527,7 +527,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 logger.warning(
                     "Circuit breaker triggered during warning review",
                     extra={
-                        "pipeline_run_id": context.pipeline_run_id,
+                        "workflow_run_id": context.workflow_run_id,
                         "file": warning.file,
                         "agent_calls": self.agent_call_count,
                     },
@@ -548,7 +548,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     warning_count=1,
                     test_type=config.test_type,
                     warnings=(warning,),
-                    pipeline_run_id=context.pipeline_run_id,
+                    workflow_run_id=context.workflow_run_id,
                 )
             )
 
@@ -560,7 +560,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 logger.info(
                     "Reviewing test warning",
                     extra={
-                        "pipeline_run_id": context.pipeline_run_id,
+                        "workflow_run_id": context.workflow_run_id,
                         "file": warning.file,
                         "warning": warning.message,
                     },
@@ -582,7 +582,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         warning_count=1,
                         test_type=config.test_type,
                         success=True,
-                        pipeline_run_id=context.pipeline_run_id,
+                        workflow_run_id=context.workflow_run_id,
                     )
                 )
 
@@ -591,7 +591,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 logger.info(
                     "Warning review completed",
                     extra={
-                        "pipeline_run_id": context.pipeline_run_id,
+                        "workflow_run_id": context.workflow_run_id,
                         "file": warning.file,
                     },
                     exc_info=False,
@@ -601,7 +601,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 logger.error(
                     "Warning review failed",
                     extra={
-                        "pipeline_run_id": context.pipeline_run_id,
+                        "workflow_run_id": context.workflow_run_id,
                         "file": warning.file,
                         "error": str(e),
                     "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
@@ -633,7 +633,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             logger.debug(
                 "Checkpoint skipped: no checkpoint store configured",
                 extra={
-                    "pipeline_run_id": context.pipeline_run_id,
+                    "workflow_run_id": context.workflow_run_id,
                     "test_type": test_type.value,
                     "iteration": iteration,
                 },
@@ -642,15 +642,13 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             return True
 
         try:
-            from datetime import datetime, timezone
-
             # Create checkpoint with current state
             now = datetime.now(timezone.utc)
             expires_at = (now + timedelta(hours=24)).isoformat()
 
             checkpoint = RepairCycleCheckpoint(
-                pipeline_run_id=context.pipeline_run_id,
-                test_type=test_type.value,
+                workflow_run_id=context.workflow_run_id,
+                test_type=test_type,
                 iteration=iteration,
                 total_agent_calls=self.agent_call_count,
                 files_fixed=0,  # Would be tracked by application layer
@@ -667,7 +665,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             logger.info(
                 "Checkpoint saved successfully",
                 extra={
-                    "pipeline_run_id": context.pipeline_run_id,
+                    "workflow_run_id": context.workflow_run_id,
                     "test_type": test_type.value,
                     "iteration": iteration,
                     "agent_calls": self.agent_call_count,
@@ -681,7 +679,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             logger.error(
                 "Failed to save checkpoint - repair cycle may not be resumable",
                 extra={
-                    "pipeline_run_id": context.pipeline_run_id,
+                    "workflow_run_id": context.workflow_run_id,
                     "test_type": test_type.value,
                     "iteration": iteration,
                     "error": str(e),
@@ -697,7 +695,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         type="repair_cycle.checkpoint_failed",
                         timestamp=datetime.now(timezone.utc).isoformat(),
                         source="production_repair_cycle",
-                        pipeline_run_id=context.pipeline_run_id,
+                        workflow_run_id=context.workflow_run_id,
                         test_type=test_type.value,
                         iteration=iteration,
                         error_type=type(e).__name__,
@@ -822,8 +820,9 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             List of RepairTestFailure objects
         """
         failures = []
+        parse_errors = []
 
-        for failure_data in test_output.get("failures", []):
+        for idx, failure_data in enumerate(test_output.get("failures", [])):
             try:
                 failure = RepairTestFailure(
                     file=failure_data.get("file", "unknown"),
@@ -832,26 +831,58 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 )
                 failures.append(failure)
             except ValueError as e:
-                # Parse error indicates agent returned invalid format or parser bug
+                # Collect parse errors but continue processing other failures
+                parse_errors.append({
+                    "index": idx,
+                    "data": failure_data,
+                    "error": str(e)
+                })
                 logger.error(
-                    "PARSE ERROR: Test failure data is invalid - agent may be malfunctioning",
+                    f"PARSE ERROR: Test failure #{idx} data is invalid - agent may be malfunctioning. "
+                    f"Continuing to process remaining failures.",
                     extra={
                         "test_type": test_type.value,
+                        "failure_index": idx,
                         "failure_data": failure_data,
                         "validation_error": str(e),
-                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
+                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR
+                    },
                     exc_info=True,
                 )
 
-                # Don't create synthetic data - fail loudly
-                raise TestOutputParseError(
-                    f"Invalid test failure data for {test_type.value}. "
-                    f"This indicates either: (1) Test framework output changed, "
-                    f"(2) Agent prompt needs updating, or (3) Agent is malfunctioning. "
-                    f"Validation error: {e}",
-                    test_type=test_type.value,
-                    raw_data=failure_data,
-                ) from e
+        # If we collected any valid failures, log parse errors but return valid data
+        if failures and parse_errors:
+            logger.warning(
+                f"Extracted {len(failures)} valid test failures despite {len(parse_errors)} parse errors. "
+                f"Agent output may be partially corrupt.",
+                extra={
+                    "test_type": test_type.value,
+                    "valid_failures": len(failures),
+                    "parse_errors": len(parse_errors),
+                    "error_indices": [e["index"] for e in parse_errors]
+                }
+            )
+        # If ALL failures failed to parse, raise error with details
+        elif parse_errors and not failures:
+            logger.error(
+                f"ALL test failure entries failed to parse ({len(parse_errors)} errors). "
+                f"This indicates either: (1) Test framework output changed, "
+                f"(2) Agent prompt needs updating, or (3) Agent is malfunctioning.",
+                extra={
+                    "test_type": test_type.value,
+                    "total_failures": len(test_output.get("failures", [])),
+                    "parse_errors": parse_errors,
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR
+                }
+            )
+            raise TestOutputParseError(
+                f"All {len(parse_errors)} test failure entries for {test_type.value} failed to parse. "
+                f"This indicates either: (1) Test framework output changed, "
+                f"(2) Agent prompt needs updating, or (3) Agent is malfunctioning. "
+                f"First error: {parse_errors[0]['error']}",
+                test_type=test_type.value,
+                raw_data=test_output.get("failures", []),
+            )
 
         return failures
 
@@ -878,8 +909,9 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             List of RepairTestWarning objects
         """
         warnings = []
+        parse_errors = []
 
-        for warning_data in test_output.get("warnings", []):
+        for idx, warning_data in enumerate(test_output.get("warnings", [])):
             try:
                 warning = RepairTestWarning(
                     file=warning_data.get("file", "unknown"),
@@ -887,26 +919,58 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 )
                 warnings.append(warning)
             except ValueError as e:
-                # Parse error indicates agent returned invalid format or parser bug
+                # Collect parse errors but continue processing other warnings
+                parse_errors.append({
+                    "index": idx,
+                    "data": warning_data,
+                    "error": str(e)
+                })
                 logger.error(
-                    "PARSE ERROR: Test warning data is invalid - agent may be malfunctioning",
+                    f"PARSE ERROR: Test warning #{idx} data is invalid - agent may be malfunctioning. "
+                    f"Continuing to process remaining warnings.",
                     extra={
                         "test_type": test_type.value,
+                        "warning_index": idx,
                         "warning_data": warning_data,
                         "validation_error": str(e),
-                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
+                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR
+                    },
                     exc_info=True,
                 )
 
-                # Don't create synthetic data - fail loudly
-                raise TestOutputParseError(
-                    f"Invalid test warning data for {test_type.value}. "
-                    f"This indicates either: (1) Test framework output changed, "
-                    f"(2) Agent prompt needs updating, or (3) Agent is malfunctioning. "
-                    f"Validation error: {e}",
-                    test_type=test_type.value,
-                    raw_data=warning_data,
-                ) from e
+        # If we collected any valid warnings, log parse errors but return valid data
+        if warnings and parse_errors:
+            logger.warning(
+                f"Extracted {len(warnings)} valid test warnings despite {len(parse_errors)} parse errors. "
+                f"Agent output may be partially corrupt.",
+                extra={
+                    "test_type": test_type.value,
+                    "valid_warnings": len(warnings),
+                    "parse_errors": len(parse_errors),
+                    "error_indices": [e["index"] for e in parse_errors]
+                }
+            )
+        # If ALL warnings failed to parse, raise error with details
+        elif parse_errors and not warnings:
+            logger.error(
+                f"ALL test warning entries failed to parse ({len(parse_errors)} errors). "
+                f"This indicates either: (1) Test framework output changed, "
+                f"(2) Agent prompt needs updating, or (3) Agent is malfunctioning.",
+                extra={
+                    "test_type": test_type.value,
+                    "total_warnings": len(test_output.get("warnings", [])),
+                    "parse_errors": parse_errors,
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR
+                }
+            )
+            raise TestOutputParseError(
+                f"All {len(parse_errors)} test warning entries for {test_type.value} failed to parse. "
+                f"This indicates either: (1) Test framework output changed, "
+                f"(2) Agent prompt needs updating, or (3) Agent is malfunctioning. "
+                f"First error: {parse_errors[0]['error']}",
+                test_type=test_type.value,
+                raw_data=test_output.get("warnings", []),
+            )
 
         return warnings
 
@@ -1004,7 +1068,7 @@ Return a JSON response with the status of fixes applied."""
                 logger.warning(
                     error,
                     extra={
-                        "pipeline_run_id": context.pipeline_run_id,
+                        "workflow_run_id": context.workflow_run_id,
                         "test_type": config.test_type.value,
                         "iteration": iteration,
                     },
@@ -1064,7 +1128,7 @@ Return a JSON response with the status of fixes applied."""
                     if not success:
                         logger.warning(
                             "Checkpoint save failed, continuing without checkpoint",
-                            extra={"pipeline_run_id": context.pipeline_run_id}
+                            extra={"workflow_run_id": context.workflow_run_id}
                         )
 
             except Exception as e:
@@ -1072,7 +1136,7 @@ Return a JSON response with the status of fixes applied."""
                 logger.error(
                     "Test cycle iteration failed",
                     extra={
-                        "pipeline_run_id": context.pipeline_run_id,
+                        "workflow_run_id": context.workflow_run_id,
                         "test_type": config.test_type.value,
                         "iteration": iteration,
                         "error": error,
@@ -1097,7 +1161,7 @@ Return a JSON response with the status of fixes applied."""
                 warnings_reviewed=warnings_reviewed,
                 error=error,
                 duration_seconds=duration_seconds,
-                pipeline_run_id=context.pipeline_run_id,
+                workflow_run_id=context.workflow_run_id,
             )
         )
 

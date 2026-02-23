@@ -12,23 +12,74 @@ Event Categories (Adapter Events):
 - Work Item Events: Work item creation and updates
 """
 
-# Import old domain events (backward compatibility)
-# These are imported from the base events.py module
-import sys
-from pathlib import Path
-
-# Add the parent events.py to the namespace for backward compatibility
-_events_py = Path(__file__).parent.parent / "events.py"
-if _events_py.exists():
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("_old_events", str(_events_py))
-    _old_events = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(_old_events)
-
-    # Export all old event classes
-    for name in dir(_old_events):
-        if not name.startswith("_") and name[0].isupper():
-            globals()[name] = getattr(_old_events, name)
+# Legacy domain events (static imports for mypy compatibility)
+from .legacy_domain_events import (
+    AgentAssigned,
+    AgentCapabilityAdded,
+    AgentCapabilityRemoved,
+    AgentCapabilityUpdated,
+    AgentConfigUpdated,
+    AgentConstraintsUpdated,
+    AgentCreated,
+    AgentMaxRetriesUpdated,
+    AgentMcpServerAdded,
+    AgentMcpServerRemoved,
+    AgentModelUpdated,
+    AgentTimeoutUpdated,
+    BoardReconciled,
+    CommandMounted,
+    CommandUnmounted,
+    DomainEvent,
+    EnvironmentVariableChanged,
+    ExecutionCancelled,
+    ExecutionCompleted,
+    ExecutionFailed,
+    ExecutionInitialized,
+    ExecutionPaused,
+    ExecutionResumed,
+    ExecutionStarted,
+    ExecutionTimeout,
+    PipelineCompleted,
+    PipelineConfigUpdated,
+    PipelineFailed,
+    PipelineStageCompleted,
+    PipelineStageFailed,
+    PipelineStageStarted,
+    ProjectConfigUpdated,
+    ProjectContextCreated,
+    ProjectDockerConfigUpdated,
+    ProjectTestConfigUpdated,
+    ProjectWorkflowMappingAdded,
+    ReviewCycleApproved,
+    ReviewCycleCreated,
+    ReviewCycleEscalated,
+    ReviewCycleRejected,
+    ReviewFeedbackSubmitted,
+    ReviewIterationStarted,
+    SubAgentMounted,
+    SubAgentUnmounted,
+    WorkflowAttached,
+    WorkflowCancelled,
+    WorkflowCompleted,
+    WorkflowCreated,
+    WorkflowFailed,
+    WorkflowPaused,
+    WorkflowResumed,
+    WorkflowStageAdvanced,
+    WorkflowStageStatusUpdated,
+    WorkflowStarted,
+    WorkItemBlocked,
+    WorkItemColumnChanged,
+    WorkItemCompleted,
+    WorkItemCreated,
+    WorkItemFailed,
+    WorkItemLabelsUpdated,
+    WorkItemPriorityUpdated,
+    WorkItemStageUpdated,
+    WorkItemStarted,
+    WorkItemUnblocked,
+    WorkItemUnderReview,
+)
 
 # Adapter event infrastructure
 from .adapter_events import (

@@ -43,12 +43,12 @@ class TestRepairCycleStartedEvent:
             source="repair_cycle",
             stage_name="fix_failures",
             test_types=(RepairTestType.UNIT, RepairTestType.INTEGRATION),
-            pipeline_run_id="run-123",
+            workflow_run_id="run-123",
         )
 
         assert event.stage_name == "fix_failures"
         assert event.test_types == (RepairTestType.UNIT, RepairTestType.INTEGRATION)
-        assert event.pipeline_run_id == "run-123"
+        assert event.workflow_run_id == "run-123"
 
     def test_missing_stage_name(self):
         """Test that stage_name is required."""
@@ -59,7 +59,7 @@ class TestRepairCycleStartedEvent:
                 source="repair_cycle",
                 stage_name="",
                 test_types=(RepairTestType.UNIT,),
-                pipeline_run_id="run-123",
+                workflow_run_id="run-123",
             )
 
     def test_empty_test_types(self):
@@ -71,19 +71,19 @@ class TestRepairCycleStartedEvent:
                 source="repair_cycle",
                 stage_name="fix_failures",
                 test_types=(),
-                pipeline_run_id="run-123",
+                workflow_run_id="run-123",
             )
 
-    def test_missing_pipeline_run_id(self):
-        """Test that pipeline_run_id is required."""
-        with pytest.raises(ValueError, match="pipeline_run_id"):
+    def test_missing_workflow_run_id(self):
+        """Test that workflow_run_id is required."""
+        with pytest.raises(ValueError, match="workflow_run_id"):
             RepairCycleStartedEvent(
                 type="repair_cycle.started",
                 timestamp=now_iso(),
                 source="repair_cycle",
                 stage_name="fix_failures",
                 test_types=(RepairTestType.UNIT,),
-                pipeline_run_id="",
+                workflow_run_id="",
             )
 
     def test_serialization(self):
@@ -95,13 +95,13 @@ class TestRepairCycleStartedEvent:
             source="repair_cycle",
             stage_name="fix_failures",
             test_types=(RepairTestType.UNIT, RepairTestType.E2E),
-            pipeline_run_id="run-123",
+            workflow_run_id="run-123",
         )
 
         d = event.to_dict()
         assert d["stage_name"] == "fix_failures"
         assert d["test_types"] == ["UNIT", "E2E"]
-        assert d["pipeline_run_id"] == "run-123"
+        assert d["workflow_run_id"] == "run-123"
 
     def test_deserialization(self):
         """Test RepairCycleStartedEvent deserialization."""
@@ -112,13 +112,13 @@ class TestRepairCycleStartedEvent:
             "source": "repair_cycle",
             "stage_name": "fix_failures",
             "test_types": ["UNIT", "INTEGRATION"],
-            "pipeline_run_id": "run-123",
+            "workflow_run_id": "run-123",
         }
 
         event = RepairCycleStartedEvent.from_dict(d)
         assert event.stage_name == "fix_failures"
         assert event.test_types == (RepairTestType.UNIT, RepairTestType.INTEGRATION)
-        assert event.pipeline_run_id == "run-123"
+        assert event.workflow_run_id == "run-123"
 
     def test_immutability(self):
         """Test that RepairCycleStartedEvent is immutable."""
@@ -128,7 +128,7 @@ class TestRepairCycleStartedEvent:
             source="repair_cycle",
             stage_name="fix_failures",
             test_types=(RepairTestType.UNIT,),
-            pipeline_run_id="run-123",
+            workflow_run_id="run-123",
         )
 
         with pytest.raises(FrozenInstanceError):
@@ -150,7 +150,7 @@ class TestRepairCycleTestExecutionStartedEvent:
             test_cycle_iteration=1,
             max_test_cycle_iterations=5,
             timeout=900,
-            pipeline_run_id="run-123",
+            workflow_run_id="run-123",
         )
 
         assert event.test_type == RepairTestType.UNIT
@@ -170,7 +170,7 @@ class TestRepairCycleTestExecutionStartedEvent:
                 test_cycle_iteration=1,
                 max_test_cycle_iterations=5,
                 timeout=900,
-                pipeline_run_id="run-123",
+                workflow_run_id="run-123",
             )
 
     def test_invalid_timeout(self):
@@ -185,7 +185,7 @@ class TestRepairCycleTestExecutionStartedEvent:
                 test_cycle_iteration=1,
                 max_test_cycle_iterations=5,
                 timeout=0,  # Invalid
-                pipeline_run_id="run-123",
+                workflow_run_id="run-123",
             )
 
 
@@ -194,10 +194,15 @@ class TestRepairCycleTestExecutionCompletedEvent:
 
     def test_create_valid_event(self):
         """Test creating a valid test execution completed event."""
-        failure = RepairTestFailure(
+        failure1 = RepairTestFailure(
             file="test_auth.py",
             test="test_login",
             message="AssertionError: expected True",
+        )
+        failure2 = RepairTestFailure(
+            file="test_auth.py",
+            test="test_logout",
+            message="AssertionError: expected False",
         )
         timestamp = now_iso()
         event = RepairCycleTestExecutionCompletedEvent(
@@ -211,14 +216,14 @@ class TestRepairCycleTestExecutionCompletedEvent:
             failed=2,
             warnings=1,
             has_failures=True,
-            failures=(failure,),
-            pipeline_run_id="run-123",
+            failures=(failure1, failure2),
+            workflow_run_id="run-123",
         )
 
         assert event.passed == 5
         assert event.failed == 2
         assert event.has_failures is True
-        assert len(event.failures) == 1
+        assert len(event.failures) == 2
 
     def test_serialization_with_failures(self):
         """Test serialization with failure details."""
@@ -240,7 +245,7 @@ class TestRepairCycleTestExecutionCompletedEvent:
             warnings=0,
             has_failures=True,
             failures=(failure,),
-            pipeline_run_id="run-123",
+            workflow_run_id="run-123",
         )
 
         d = event.to_dict()
@@ -267,14 +272,19 @@ class TestRepairCycleTestExecutionCompletedEvent:
                     "file": "test_auth.py",
                     "test": "test_login",
                     "message": "AssertionError",
+                },
+                {
+                    "file": "test_auth.py",
+                    "test": "test_logout",
+                    "message": "KeyError",
                 }
             ],
-            "pipeline_run_id": "run-123",
+            "workflow_run_id": "run-123",
         }
 
         event = RepairCycleTestExecutionCompletedEvent.from_dict(d)
         assert event.failed == 2
-        assert len(event.failures) == 1
+        assert len(event.failures) == 2
         assert event.failures[0].file == "test_auth.py"
 
 
@@ -293,7 +303,7 @@ class TestRepairCycleFixCycleStartedEvent:
             test_cycle_iteration=1,
             file_count=3,
             total_failures=5,
-            pipeline_run_id="run-123",
+            workflow_run_id="run-123",
         )
 
         assert event.file_count == 3
@@ -311,7 +321,7 @@ class TestRepairCycleFixCycleStartedEvent:
                 test_cycle_iteration=1,
                 file_count=0,  # Invalid
                 total_failures=1,
-                pipeline_run_id="run-123",
+                workflow_run_id="run-123",
             )
 
 
@@ -328,7 +338,7 @@ class TestRepairCycleFileFixStartedEvent:
             test_file="auth.py",
             failure_count=2,
             test_type=RepairTestType.UNIT,
-            pipeline_run_id="run-123",
+            workflow_run_id="run-123",
         )
 
         assert event.test_file == "auth.py"
@@ -344,7 +354,7 @@ class TestRepairCycleFileFixStartedEvent:
                 test_file="",
                 failure_count=1,
                 test_type=RepairTestType.UNIT,
-                pipeline_run_id="run-123",
+                workflow_run_id="run-123",
             )
 
 
@@ -362,7 +372,7 @@ class TestRepairCycleFileFixCompletedEvent:
             failure_count=2,
             test_type=RepairTestType.UNIT,
             success=True,
-            pipeline_run_id="run-123",
+            workflow_run_id="run-123",
         )
 
         assert event.test_file == "auth.py"
@@ -387,7 +397,7 @@ class TestRepairCycleWarningReviewStartedEvent:
             warning_count=1,
             test_type=RepairTestType.UNIT,
             warnings=(warning,),
-            pipeline_run_id="test-run-123",
+            workflow_run_id="test-run-123",
         )
 
         assert event.source_file == "auth.py"
@@ -422,7 +432,7 @@ class TestRepairCycleWarningReviewStartedEvent:
             warning_count=1,
             test_type=RepairTestType.UNIT,
             warnings=(warning,),
-            pipeline_run_id="test-run-123",
+            workflow_run_id="test-run-123",
         )
 
         d = event.to_dict()
@@ -444,7 +454,7 @@ class TestRepairCycleWarningReviewCompletedEvent:
             warning_count=1,
             test_type=RepairTestType.UNIT,
             success=True,
-            pipeline_run_id="test-run-123",
+            workflow_run_id="test-run-123",
         )
 
         assert event.source_file == "auth.py"
@@ -469,7 +479,7 @@ class TestRepairCycleTestCycleCompletedEvent:
             warnings_reviewed=2,
             error=None,
             duration_seconds=45.5,
-            pipeline_run_id="run-123",
+            workflow_run_id="run-123",
         )
 
         assert event.passed is True
@@ -491,7 +501,7 @@ class TestRepairCycleTestCycleCompletedEvent:
             warnings_reviewed=0,
             error="max_iterations_exceeded",
             duration_seconds=120.0,
-            pipeline_run_id="run-123",
+            workflow_run_id="run-123",
         )
 
         assert event.passed is False
@@ -510,7 +520,7 @@ class TestRepairCycleFastFailEvent:
             source="repair_cycle",
             test_type=RepairTestType.UNIT,
             reason="max_agent_calls_exceeded",
-            pipeline_run_id="test-run-123",
+            workflow_run_id="test-run-123",
         )
 
         assert event.test_type == RepairTestType.UNIT
@@ -563,7 +573,7 @@ class TestRepairCycleCompletedEvent:
             test_results=(result,),
             total_agent_calls=5,
             duration_seconds=30.0,
-            pipeline_run_id="run-123",
+            workflow_run_id="run-123",
         )
 
         assert event.overall_success is True
@@ -581,7 +591,7 @@ class TestRepairCycleCompletedEvent:
                 test_results=(),
                 total_agent_calls=0,
                 duration_seconds=0.0,
-                pipeline_run_id="run-123",
+                workflow_run_id="run-123",
             )
 
     def test_serialization_with_test_results(self):
@@ -616,7 +626,7 @@ class TestRepairCycleCompletedEvent:
             test_results=(result,),
             total_agent_calls=3,
             duration_seconds=60.0,
-            pipeline_run_id="run-123",
+            workflow_run_id="run-123",
         )
 
         d = event.to_dict()
@@ -639,7 +649,7 @@ class TestRepairCycleEventsImmutability:
             test_cycle_iteration=1,
             max_test_cycle_iterations=5,
             timeout=900,
-            pipeline_run_id="run-123",
+            workflow_run_id="run-123",
         )
 
         with pytest.raises(FrozenInstanceError):
@@ -654,7 +664,7 @@ class TestRepairCycleEventsImmutability:
             test_file="auth.py",
             failure_count=1,
             test_type=RepairTestType.UNIT,
-            pipeline_run_id="run-123",
+            workflow_run_id="run-123",
         )
 
         with pytest.raises(FrozenInstanceError):
@@ -668,7 +678,7 @@ class TestRepairCycleEventsImmutability:
             source="repair_cycle",
             test_type=RepairTestType.UNIT,
             reason="max_agent_calls_exceeded",
-            pipeline_run_id="test-run-123",
+            workflow_run_id="test-run-123",
         )
 
         with pytest.raises(FrozenInstanceError):
@@ -690,7 +700,7 @@ class TestRepairCycleEventsSerialization:
             test_cycle_iteration=3,
             max_test_cycle_iterations=5,
             timeout=1200,
-            pipeline_run_id="run-456",
+            workflow_run_id="run-456",
         )
 
         d = original.to_dict()
@@ -712,7 +722,7 @@ class TestRepairCycleEventsSerialization:
             failure_count=3,
             test_type=RepairTestType.E2E,
             success=False,
-            pipeline_run_id="run-789",
+            workflow_run_id="run-789",
         )
 
         d = original.to_dict()
@@ -737,7 +747,7 @@ class TestRepairCycleEventsSerialization:
             warnings_reviewed=1,
             error=None,
             duration_seconds=75.5,
-            pipeline_run_id="run-123",
+            workflow_run_id="run-123",
         )
 
         d = original.to_dict()
@@ -747,3 +757,102 @@ class TestRepairCycleEventsSerialization:
         assert restored.passed == original.passed
         assert restored.files_fixed == original.files_fixed
         assert restored.duration_seconds == original.duration_seconds
+
+
+class TestDeprecationWarnings:
+    """Test deprecation warnings for pipeline_run_id -> workflow_run_id migration."""
+
+    def test_repair_cycle_started_deprecation_warning(self):
+        """Test that using pipeline_run_id triggers a deprecation warning."""
+        data = {
+            "type": "repair_cycle.started",
+            "timestamp": now_iso(),
+            "source": "repair_cycle",
+            "stage_name": "fix_failures",
+            "test_types": ["UNIT", "INTEGRATION"],
+            "pipeline_run_id": "run-old-123",  # Old field name
+        }
+
+        with pytest.warns(DeprecationWarning, match="pipeline_run_id.*deprecated.*workflow_run_id"):
+            event = RepairCycleStartedEvent.from_dict(data)
+            assert event.workflow_run_id == "run-old-123"
+
+    def test_workflow_run_id_preferred_over_pipeline_run_id(self):
+        """Test that workflow_run_id takes precedence when both fields are present."""
+        data = {
+            "type": "repair_cycle.started",
+            "timestamp": now_iso(),
+            "source": "repair_cycle",
+            "stage_name": "fix_failures",
+            "test_types": ["UNIT"],
+            "workflow_run_id": "run-new-456",  # New field name (preferred)
+            "pipeline_run_id": "run-old-123",  # Old field name (ignored)
+        }
+
+        # Should NOT warn when workflow_run_id is present
+        import warnings as warnings_module
+        with warnings_module.catch_warnings(record=True) as warning_list:
+            warnings_module.simplefilter("always")
+            event = RepairCycleStartedEvent.from_dict(data)
+            assert event.workflow_run_id == "run-new-456"
+
+        # Filter for DeprecationWarning
+        deprecation_warnings = [w for w in warning_list if issubclass(w.category, DeprecationWarning)]
+        assert len(deprecation_warnings) == 0, "Should not warn when workflow_run_id is present"
+
+    def test_test_execution_started_deprecation_warning(self):
+        """Test deprecation warning for RepairCycleTestExecutionStartedEvent."""
+        data = {
+            "type": "repair_cycle.test_execution_started",
+            "timestamp": now_iso(),
+            "source": "repair_cycle",
+            "test_type": "UNIT",
+            "test_type_index": 1,
+            "test_cycle_iteration": 1,
+            "max_test_cycle_iterations": 3,
+            "timeout": 600,
+            "pipeline_run_id": "run-789",
+        }
+
+        with pytest.warns(DeprecationWarning, match="pipeline_run_id.*deprecated"):
+            event = RepairCycleTestExecutionStartedEvent.from_dict(data)
+            assert event.workflow_run_id == "run-789"
+
+    def test_completed_event_deprecation_warning(self):
+        """Test deprecation warning for RepairCycleCompletedEvent."""
+        timestamp = now_iso()
+        data = {
+            "type": "repair_cycle.completed",
+            "timestamp": timestamp,
+            "source": "repair_cycle",
+            "overall_success": True,
+            "test_results": [
+                {
+                    "test_type": "UNIT",
+                    "passed": True,
+                    "iterations": 2,
+                    "final_result": {
+                        "test_type": "UNIT",
+                        "iteration": 2,
+                        "passed": 10,
+                        "failed": 0,
+                        "warnings": 0,
+                        "failures": [],
+                        "warning_list": [],
+                        "raw_output": "All tests passed",
+                        "timestamp": timestamp,
+                    },
+                    "files_fixed": 5,
+                    "warnings_reviewed": 1,
+                    "duration_seconds": 150.5,
+                    "error": None,
+                }
+            ],
+            "total_agent_calls": 10,
+            "duration_seconds": 150.5,
+            "pipeline_run_id": "run-completed",
+        }
+
+        with pytest.warns(DeprecationWarning, match="pipeline_run_id.*deprecated"):
+            event = RepairCycleCompletedEvent.from_dict(data)
+            assert event.workflow_run_id == "run-completed"

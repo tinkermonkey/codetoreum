@@ -95,7 +95,7 @@ class ReviewCycleRequest:
         auto_advance_on_approval: Whether to auto-advance on approval
         escalate_on_blocked: Whether to escalate when blocked findings appear
         previous_stage_output: Output from previous pipeline stage
-        pipeline_run_id: Optional pipeline execution ID
+        workflow_run_id: Optional pipeline execution ID
     """
 
     work_item_id: str
@@ -107,7 +107,7 @@ class ReviewCycleRequest:
     auto_advance_on_approval: bool
     escalate_on_blocked: bool
     previous_stage_output: str
-    pipeline_run_id: Optional[str] = None
+    workflow_run_id: Optional[str] = None
 
     def __post_init__(self) -> None:
         """Validate request data."""
@@ -126,7 +126,7 @@ class ReviewCycleState:
         maker_agent: Name of the maker agent
         reviewer_agent: Name of the reviewer agent
         max_iterations: Maximum iterations configured
-        pipeline_run_id: Associated pipeline run ID
+        workflow_run_id: Associated pipeline run ID
         current_iteration: Current iteration number
         maker_outputs: List of outputs from maker agent
         review_outputs: List of outputs from reviewer agent
@@ -144,7 +144,7 @@ class ReviewCycleState:
     maker_agent: str
     reviewer_agent: str
     max_iterations: int
-    pipeline_run_id: Optional[str]
+    workflow_run_id: Optional[str]
     current_iteration: int
     maker_outputs: List[IterationOutput]
     review_outputs: List[IterationOutput]

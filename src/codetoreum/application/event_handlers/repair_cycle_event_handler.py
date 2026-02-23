@@ -30,7 +30,7 @@ class RepairCycleEventContext:
     """Context for repair cycle execution from column change event."""
 
     stage_name: str
-    pipeline_run_id: str
+    workflow_run_id: str
     test_configs: Tuple[RepairTestRunConfig, ...]
     agent_name: str
     max_total_agent_calls: int
@@ -160,10 +160,10 @@ class RepairCycleEventHandler(EventHandler):
         Args:
             event: WorkItemColumnChanged event with column movement details
         """
-        work_item_id = event.payload.get("work_item_id")
-        board_id = event.payload.get("board_id")
-        project_id = event.payload.get("project_id")
-        to_column = event.payload.get("to_column")
+        work_item_id: str = event.payload.get("work_item_id") or ""
+        board_id: str = event.payload.get("board_id") or ""
+        project_id: str = event.payload.get("project_id") or ""
+        to_column: str = event.payload.get("to_column") or ""
 
         # Only process if work item is entering the configured repair cycle stage
         if to_column != "Testing":
@@ -175,7 +175,7 @@ class RepairCycleEventHandler(EventHandler):
             # Create repair cycle context
             context = RepairCycleEventContext(
                 stage_name="Testing",
-                pipeline_run_id=work_item_id,
+                workflow_run_id=work_item_id,
                 test_configs=(
                     RepairTestRunConfig(test_type=RepairTestType.UNIT),
                     RepairTestRunConfig(test_type=RepairTestType.INTEGRATION),

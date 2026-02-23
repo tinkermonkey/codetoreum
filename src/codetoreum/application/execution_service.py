@@ -5,7 +5,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Tuple
+from typing import Any, AsyncIterator, Awaitable, Callable, Dict, List, Optional, Tuple, cast
 
 from codetoreum.domain.agent import Agent
 from codetoreum.domain.agent_execution import AgentExecution, ExecutionStatus
@@ -14,7 +14,7 @@ from codetoreum.domain.project_context import ProjectContext
 from codetoreum.domain.types import (
     CONTAINER_LABEL_AGENT,
     CONTAINER_LABEL_EXECUTION_ID,
-    CONTAINER_LABEL_PIPELINE_RUN_ID,
+    CONTAINER_LABEL_WORKFLOW_RUN_ID,
     CONTAINER_LABEL_PROJECT,
     CONTAINER_LABEL_TASK_ID,
     CONTAINER_LABEL_TYPE,
@@ -39,6 +39,7 @@ from codetoreum.ports.exceptions import (
     StorageError,
 )
 from codetoreum.ports.output import IContainer, IEventStore, ILLMProvider, IStorage
+from codetoreum.ports.output.llm_provider import ExecutionContext as LLMExecutionContext
 
 logger = logging.getLogger(__name__)
 
@@ -172,7 +173,7 @@ class ExecutionService:
             # Persist events
             events = execution.get_pending_events()
             for event in events:
-                await self.event_store.append(event)
+                await self.event_store.append(event.aggregate_id, [event])
             execution.clear_events()
 
             logger.info(
@@ -242,7 +243,7 @@ class ExecutionService:
             # Persist events
             events = execution.get_pending_events()
             for event in events:
-                await self.event_store.append(event)
+                await self.event_store.append(event.aggregate_id, [event])
             execution.clear_events()
 
             logger.info(
@@ -303,7 +304,7 @@ class ExecutionService:
             ExecutionServiceResult with outcome
         """
         retry_count = 0
-        last_error = None
+        last_error: Optional[Exception] = None
 
         while retry_count <= self.max_retries:
             try:
@@ -332,7 +333,7 @@ class ExecutionService:
                 # Persist events
                 events = execution.get_pending_events()
                 for event in events:
-                    await self.event_store.append(event)
+                    await self.event_store.append(event.aggregate_id, [event])
                 execution.clear_events()
 
                 # Clean up tracking
@@ -397,7 +398,7 @@ class ExecutionService:
         # Persist failure events
         events = execution.get_pending_events()
         for event in events:
-            await self.event_store.append(event)
+            await self.event_store.append(event.aggregate_id, [event])
         execution.clear_events()
 
         # Clean up tracking
@@ -444,7 +445,7 @@ class ExecutionService:
             # Phase 2 recovery service uses these for container identification and tracking.
             # Future phases may introduce separate task IDs from an external scheduler.
             CONTAINER_LABEL_TASK_ID: execution.id,
-            CONTAINER_LABEL_PIPELINE_RUN_ID: execution.workflow_id,
+            CONTAINER_LABEL_WORKFLOW_RUN_ID: execution.workflow_id,
             CONTAINER_LABEL_EXECUTION_ID: execution.id,
         }
         return labels
@@ -483,7 +484,7 @@ class ExecutionService:
                 image=container_config.image,
                 name=execution.container_name,
                 command=container_config.command,
-                volumes=container_config.volumes,
+                volumes=cast(Optional[Dict[str, str]], container_config.volumes),
                 environment=container_config.environment or {},
                 working_dir=container_config.working_dir,
                 user=container_config.user,
@@ -528,7 +529,7 @@ class ExecutionService:
                 # Persist events
                 events = execution.get_pending_events()
                 for event in events:
-                    await self.event_store.append(event)
+                    await self.event_store.append(event.aggregate_id, [event])
                 execution.clear_events()
 
                 logger.info(f"Container execution {execution.id} completed successfully")
@@ -546,7 +547,7 @@ class ExecutionService:
                 # Persist events
                 events = execution.get_pending_events()
                 for event in events:
-                    await self.event_store.append(event)
+                    await self.event_store.append(event.aggregate_id, [event])
                 execution.clear_events()
 
                 logger.error(
@@ -572,7 +573,7 @@ class ExecutionService:
             # Persist events
             events = execution.get_pending_events()
             for event in events:
-                await self.event_store.append(event)
+                await self.event_store.append(event.aggregate_id, [event])
             execution.clear_events()
 
             return ExecutionServiceResult(
@@ -595,7 +596,7 @@ class ExecutionService:
             # Persist events
             events = execution.get_pending_events()
             for event in events:
-                await self.event_store.append(event)
+                await self.event_store.append(event.aggregate_id, [event])
             execution.clear_events()
 
             return ExecutionServiceResult(
@@ -671,7 +672,7 @@ class ExecutionService:
                 # Persist events
                 events = execution.get_pending_events()
                 for event in events:
-                    await self.event_store.append(event)
+                    await self.event_store.append(event.aggregate_id, [event])
                 execution.clear_events()
 
                 # Clean up tracking
@@ -834,7 +835,7 @@ class ExecutionService:
 
     def _build_llm_context(
         self, context: ExecutionContext
-    ) -> "ILLMProvider.ExecutionContext":
+    ) -> LLMExecutionContext:
         """
         Build LLM execution context from domain context.
 
@@ -844,10 +845,6 @@ class ExecutionService:
         Returns:
             LLM provider execution context
         """
-        from codetoreum.ports.output.llm_provider import (
-            ExecutionContext as LLMExecutionContext,
-        )
-
         return LLMExecutionContext(
             model=context.model,
             timeout_seconds=context.timeout_seconds,
@@ -859,7 +856,7 @@ class ExecutionService:
 
     def _create_stream_callback(
         self, execution_id: str, user_callback: Optional[Callable[[str], None]]
-    ) -> Callable[[Any], None]:
+    ) -> Callable[[Any], Awaitable[None]]:
         """
         Create streaming callback that notifies subscribers and user callback.
 

@@ -36,7 +36,7 @@ All decision events follow this standardized structure:
     'agent': str,                  # Agent involved
     'task_id': str,                # Task identifier
     'project': str,                # Project name
-    'pipeline_run_id': str,        # Pipeline run ID
+    'workflow_run_id': str,        # Pipeline run ID
     'data': {
         # Standard decision fields
         'decision_category': str,  # Category (routing, feedback, etc.)

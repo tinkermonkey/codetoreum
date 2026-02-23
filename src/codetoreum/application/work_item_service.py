@@ -6,7 +6,7 @@ and reconstructing work items from their event streams.
 """
 
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
@@ -415,7 +415,7 @@ class WorkItemService(IWorkItemCommandPort, IWorkItemQueryPort):
         else:
             return work_items
 
-    def _event_to_dict(self, event) -> dict:
+    def _event_to_dict(self, event: Any) -> dict:
         """Convert a domain event to a dictionary."""
         return {
             "event_type": event.__class__.__name__,

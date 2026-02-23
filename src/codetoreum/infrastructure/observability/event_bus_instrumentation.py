@@ -24,6 +24,7 @@ except ImportError:
     otel_context = None
 
 from codetoreum.domain.events import DomainEvent
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.observability.trace_context_propagation import (
     TraceContextPropagator,
     inject_current_trace_context_into_event,
@@ -357,10 +358,18 @@ class InstrumentedEventHandler:
             try:
                 await self._handler.handle(event)
             except Exception as e:
-                # Record exception in span
+                # Record exception in span for distributed tracing
                 span.set_attribute("exception.type", type(e).__name__)
                 span.set_attribute("exception.message", str(e))
                 span.record_exception(e)
+
+                # Log to application logger for operator visibility
+                logger.error(
+                    f"Event handler {self._handler.__class__.__name__} failed "
+                    f"processing {event.event_type}: {e}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_HANDLER_EXECUTION}
+                )
                 raise
 
     def get_event_types(self) -> List[str]:

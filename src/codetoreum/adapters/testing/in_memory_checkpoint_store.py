@@ -37,7 +37,7 @@ class InMemoryCheckpointStore(IRepairCycleCheckpointStore):
         """Initialize in-memory checkpoint store."""
         self._checkpoints: Dict[
             Tuple[str, str], Tuple[RepairCycleCheckpoint, datetime]
-        ] = {}  # Key: (pipeline_run_id, test_type), Value: (checkpoint, saved_time)
+        ] = {}  # Key: (workflow_run_id, test_type), Value: (checkpoint, saved_time)
         self._lock = threading.RLock()
 
     async def save_checkpoint(self, checkpoint: RepairCycleCheckpoint) -> None:
@@ -46,18 +46,20 @@ class InMemoryCheckpointStore(IRepairCycleCheckpointStore):
             raise ValueError("checkpoint cannot be None")
 
         with self._lock:
-            key = (checkpoint.pipeline_run_id, checkpoint.test_type)
+            # Convert enum to string for key
+            test_type_str = checkpoint.test_type.value if hasattr(checkpoint.test_type, 'value') else str(checkpoint.test_type)
+            key = (checkpoint.workflow_run_id, test_type_str)
             saved_time = datetime.now(timezone.utc)
             self._checkpoints[key] = (checkpoint, saved_time)
 
     async def get_checkpoint(
         self,
-        pipeline_run_id: str,
+        workflow_run_id: str,
         test_type: str,
     ) -> Optional[RepairCycleCheckpoint]:
         """Retrieve checkpoint if it exists and hasn't expired."""
         with self._lock:
-            key = (pipeline_run_id, test_type)
+            key = (workflow_run_id, test_type)
 
             if key not in self._checkpoints:
                 return None
@@ -75,32 +77,32 @@ class InMemoryCheckpointStore(IRepairCycleCheckpointStore):
 
     async def delete_checkpoint(
         self,
-        pipeline_run_id: str,
+        workflow_run_id: str,
         test_type: Optional[str] = None,
     ) -> None:
         """Delete checkpoint(s) for a pipeline run."""
         with self._lock:
             if test_type is not None:
                 # Delete specific test type
-                key = (pipeline_run_id, test_type)
+                key = (workflow_run_id, test_type)
                 self._checkpoints.pop(key, None)
             else:
                 # Delete all for pipeline run
                 keys_to_delete = [
                     key
                     for key in self._checkpoints.keys()
-                    if key[0] == pipeline_run_id
+                    if key[0] == workflow_run_id
                 ]
                 for key in keys_to_delete:
                     del self._checkpoints[key]
 
     async def checkpoint_exists(
         self,
-        pipeline_run_id: str,
+        workflow_run_id: str,
         test_type: str,
     ) -> bool:
         """Check if checkpoint exists and hasn't expired."""
-        checkpoint = await self.get_checkpoint(pipeline_run_id, test_type)
+        checkpoint = await self.get_checkpoint(workflow_run_id, test_type)
         return checkpoint is not None
 
     # ==================== Test/Inspection Methods ====================

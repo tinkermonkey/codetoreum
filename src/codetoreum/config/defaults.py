@@ -24,6 +24,7 @@ SCHEDULER_DEFAULT_PAGE_SIZE = 50  # Scheduler endpoints handle more items
 SCHEDULER_MAX_PAGE_SIZE = 100  # Scheduler max page size
 EVENTS_DEFAULT_PAGE_SIZE = 50  # Event endpoints handle more items
 EVENTS_MAX_PAGE_SIZE = 1000  # Event endpoints can return more historical data
+AUDIT_EVENTS_MAX_PAGE_SIZE = 200  # Audit events limited to 200 for performance (see Risk Considerations)
 WORKSPACE_DEFAULT_PAGE_SIZE = 50  # Workspace endpoints handle more items
 WORKSPACE_MAX_PAGE_SIZE = 100
 

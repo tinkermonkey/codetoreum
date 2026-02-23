@@ -17,6 +17,8 @@ from codetoreum.ports.input.workflow_run_query import (
     WorkflowRunListResult,
     WorkflowRunFilters,
     WorkflowRunPaginationParams,
+    WorkflowRunEventsResult,
+    WorkflowRunAuditResult,
 )
 
 
@@ -107,10 +109,10 @@ class MockWorkflowRunQueryAdapter(IWorkflowRunQueryPort):
         limit: int = 50,
         event_types: Optional[List[str]] = None,
         since: Optional[datetime] = None,
-    ) -> Dict:
+    ) -> WorkflowRunEventsResult:
         """Get events for a workflow run."""
-        return {
-            "events": [
+        return WorkflowRunEventsResult(
+            events=[
                 {
                     "id": "evt-mock-123",
                     "event_type": "WorkflowStarted",
@@ -125,11 +127,122 @@ class MockWorkflowRunQueryAdapter(IWorkflowRunQueryPort):
                     },
                 }
             ],
-            "totalCount": 1,
-            "offset": offset,
-            "limit": limit,
-            "hasNext": False,
-        }
+            total_count=1,
+            offset=offset,
+            limit=limit,
+            has_next=False,
+        )
+
+    async def get_workflow_run_audit(
+        self,
+        workflow_run_id: str,
+        offset: int = 0,
+        limit: int = 100,
+        include_validation: bool = True,
+    ) -> WorkflowRunAuditResult:
+        """Get comprehensive audit information for a workflow run."""
+        # Mock workflow run summary
+        workflow_run = WorkflowRunSummary(
+            id=workflow_run_id,
+            work_item_id="wi-mock-123",
+            workflow_id="wf-mock-123",
+            project_id="proj-123",
+            status=WorkflowRunStatus.COMPLETED,
+            current_stage_index=2,
+            current_stage_name="merge",
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
+            duration=300,
+            issue_title="Fix authentication bug",
+            issue_number=42,
+            project="codetoreum",
+            triggered_by="github_webhook",
+            priority="high",
+        )
+
+        # Mock events
+        mock_events = [
+            {
+                "id": "evt-1",
+                "event_type": "WorkflowCreated",
+                "aggregate_id": workflow_run_id,
+                "aggregate_type": "Workflow",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "data": {"work_item_id": "wi-mock-123"},
+                "correlation_id": None,
+                "causation_id": None,
+                "user_id": None,
+                "metadata": {},
+            },
+            {
+                "id": "evt-2",
+                "event_type": "WorkflowStarted",
+                "aggregate_id": workflow_run_id,
+                "aggregate_type": "Workflow",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "data": {"first_stage": "implementation"},
+                "correlation_id": None,
+                "causation_id": None,
+                "user_id": None,
+                "metadata": {},
+            },
+            {
+                "id": "evt-3",
+                "event_type": "WorkflowCompleted",
+                "aggregate_id": workflow_run_id,
+                "aggregate_type": "Workflow",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "data": {"duration_seconds": 300},
+                "correlation_id": None,
+                "causation_id": None,
+                "user_id": None,
+                "metadata": {},
+            },
+        ]
+
+        # Apply pagination
+        paginated_events = mock_events[offset : offset + limit]
+
+        # Mock stages
+        stages = [
+            {
+                "name": "implementation",
+                "status": "completed",
+                "startedAt": datetime.now(timezone.utc).isoformat(),
+                "completedAt": datetime.now(timezone.utc).isoformat(),
+                "durationSeconds": 150.0,
+                "events": [mock_events[1]],
+            },
+            {
+                "name": "review",
+                "status": "completed",
+                "startedAt": datetime.now(timezone.utc).isoformat(),
+                "completedAt": datetime.now(timezone.utc).isoformat(),
+                "durationSeconds": 100.0,
+                "events": [],
+            },
+        ]
+
+        # Mock validation
+        validation = {
+            "sequenceValid": True,
+            "expectedSequence": ["WorkflowCreated", "WorkflowStarted", "WorkflowCompleted"],
+            "actualSequence": ["WorkflowCreated", "WorkflowStarted", "WorkflowCompleted"],
+            "missingEvents": [],
+            "unexpectedEvents": [],
+            "outOfOrderEvents": [],
+        } if include_validation else None
+
+        return WorkflowRunAuditResult(
+            workflow_run=workflow_run,
+            events=paginated_events,
+            stages=stages,
+            validation=validation,
+            total_count=len(mock_events),
+            offset=offset,
+            limit=limit,
+            has_next=(offset + limit) < len(mock_events),
+        )
 
     def clear(self):
         """Clear all data (useful for testing)."""

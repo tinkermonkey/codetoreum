@@ -42,7 +42,7 @@ pipeline_started
     'agent': None,  # No specific agent yet
     'task_id': 'task_123',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_123_1729945200',
+    'workflow_run_id': 'pipeline_context-studio_123_1729945200',
     'data': {
         'issue_number': 123,
         'board': 'Development',
@@ -93,7 +93,7 @@ pipeline_started
     'agent': 'business_analyst',
     'task_id': 'task_123',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_123_1729945200',
+    'workflow_run_id': 'pipeline_context-studio_123_1729945200',
     'data': {
         'issue_number': 123,
         'board': 'Development',
@@ -139,7 +139,7 @@ pipeline_started
     'agent': 'business_analyst',
     'task_id': 'task_123',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_123_1729945200',
+    'workflow_run_id': 'pipeline_context-studio_123_1729945200',
     'data': {
         'issue_number': 123,
         'board': 'Development',
@@ -185,7 +185,7 @@ pipeline_started
     'agent': 'business_analyst',
     'task_id': 'task_123',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_123_1729945200',
+    'workflow_run_id': 'pipeline_context-studio_123_1729945200',
     'data': {
         'issue_number': 123,
         'board': 'Development',
@@ -232,7 +232,7 @@ pipeline_started
     'agent': None,
     'task_id': 'task_123',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_123_1729945200',
+    'workflow_run_id': 'pipeline_context-studio_123_1729945200',
     'data': {
         'issue_number': 123,
         'checkpoint_id': 'checkpoint_123_1729945200_stage0',
@@ -274,7 +274,7 @@ pipeline_started
     'agent': None,
     'task_id': 'task_123',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_123_1729945200',
+    'workflow_run_id': 'pipeline_context-studio_123_1729945200',
     'data': {
         'issue_number': 123,
         'checkpoint_id': 'checkpoint_123_1729945200_stage0',
@@ -315,7 +315,7 @@ pipeline_started
     'agent': None,
     'task_id': 'task_123',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_123_1729945200',
+    'workflow_run_id': 'pipeline_context-studio_123_1729945200',
     'data': {
         'issue_number': 123,
         'board': 'Development',
@@ -360,24 +360,24 @@ Repair cycle events track test-driven repair cycles where an agent iteratively f
 ### Event Flow
 
 ```
-repair_cycle_started
-├── repair_cycle_container_started
-├── repair_cycle_iteration (iteration 1)
-│   ├── repair_cycle_test_execution_completed (failed)
-│   ├── repair_cycle_file_fix_started (file 1)
-│   ├── repair_cycle_file_fix_completed
-│   ├── repair_cycle_file_fix_started (file 2)
-│   └── repair_cycle_file_fix_completed
-├── repair_cycle_container_checkpoint_updated
-├── repair_cycle_iteration (iteration 2)
-│   ├── repair_cycle_test_execution_completed (passed)
-│   └── repair_cycle_warning_review_started (if configured)
-└── repair_cycle_completed
+repair_cycle.started
+├── repair_cycle.container_started
+├── [iteration 1]
+│   ├── repair_cycle.test_execution_completed (failed)
+│   ├── repair_cycle.file_fix_started (file 1)
+│   ├── repair_cycle.file_fix_completed
+│   ├── repair_cycle.file_fix_started (file 2)
+│   └── repair_cycle.file_fix_completed
+├── repair_cycle.container_checkpoint_updated
+├── [iteration 2]
+│   ├── repair_cycle.test_execution_completed (passed)
+│   └── repair_cycle.warning_review_started (if configured)
+└── repair_cycle.completed
 ```
 
 ---
 
-### repair_cycle_started
+### repair_cycle.started
 
 **Purpose**: Signals that a repair cycle has been initiated.
 
@@ -390,11 +390,11 @@ repair_cycle_started
 {
     'timestamp': '2025-10-26T12:00:00.000Z',
     'event_id': 'uuid-2345-6789',
-    'event_type': 'repair_cycle_started',
+    'event_type': 'repair_cycle.started',
     'agent': 'senior_software_engineer',
     'task_id': 'task_456',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_124_1729948800',
+    'workflow_run_id': 'pipeline_context-studio_124_1729948800',
     'data': {
         'issue_number': 124,
         'board': 'Development',
@@ -434,7 +434,7 @@ repair_cycle_started
 
 ---
 
-### repair_cycle_container_started
+### repair_cycle.container_started
 
 **Purpose**: Records that a dedicated repair cycle container was created.
 
@@ -447,11 +447,11 @@ repair_cycle_started
 {
     'timestamp': '2025-10-26T12:00:15.000Z',
     'event_id': 'uuid-2345-6790',
-    'event_type': 'repair_cycle_container_started',
+    'event_type': 'repair_cycle.container_started',
     'agent': 'senior_software_engineer',
     'task_id': 'task_456',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_124_1729948800',
+    'workflow_run_id': 'pipeline_context-studio_124_1729948800',
     'data': {
         'issue_number': 124,
         'container_name': 'repair-context-studio-124',
@@ -493,7 +493,7 @@ repair_cycle_started
     'agent': 'senior_software_engineer',
     'task_id': 'task_456',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_124_1729948800',
+    'workflow_run_id': 'pipeline_context-studio_124_1729948800',
     'data': {
         'issue_number': 124,
         'iteration': 1,
@@ -520,7 +520,7 @@ repair_cycle_started
 
 ---
 
-### repair_cycle_test_execution_completed
+### repair_cycle.test_execution_completed
 
 **Purpose**: Records the result of a test execution within a repair cycle.
 
@@ -533,11 +533,11 @@ repair_cycle_started
 {
     'timestamp': '2025-10-26T12:03:00.000Z',
     'event_id': 'uuid-2345-6792',
-    'event_type': 'repair_cycle_test_execution_completed',
+    'event_type': 'repair_cycle.test_execution_completed',
     'agent': 'senior_software_engineer',
     'task_id': 'task_456',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_124_1729948800',
+    'workflow_run_id': 'pipeline_context-studio_124_1729948800',
     'data': {
         'issue_number': 124,
         'test_type': 'unit',
@@ -575,7 +575,7 @@ repair_cycle_started
 
 ---
 
-### repair_cycle_file_fix_started
+### repair_cycle.file_fix_started
 
 **Purpose**: Signals that agent is starting to fix failures in a specific file.
 
@@ -588,11 +588,11 @@ repair_cycle_started
 {
     'timestamp': '2025-10-26T12:04:00.000Z',
     'event_id': 'uuid-2345-6793',
-    'event_type': 'repair_cycle_file_fix_started',
+    'event_type': 'repair_cycle.file_fix_started',
     'agent': 'senior_software_engineer',
     'task_id': 'task_456',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_124_1729948800',
+    'workflow_run_id': 'pipeline_context-studio_124_1729948800',
     'data': {
         'issue_number': 124,
         'file': 'tests/unit/test_service.py',
@@ -622,7 +622,7 @@ repair_cycle_started
 
 ---
 
-### repair_cycle_file_fix_completed
+### repair_cycle.file_fix_completed
 
 **Purpose**: Records the result of an agent's attempt to fix a file.
 
@@ -635,11 +635,11 @@ repair_cycle_started
 {
     'timestamp': '2025-10-26T12:08:00.000Z',
     'event_id': 'uuid-2345-6794',
-    'event_type': 'repair_cycle_file_fix_completed',
+    'event_type': 'repair_cycle.file_fix_completed',
     'agent': 'senior_software_engineer',
     'task_id': 'task_456',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_124_1729948800',
+    'workflow_run_id': 'pipeline_context-studio_124_1729948800',
     'data': {
         'issue_number': 124,
         'file': 'tests/unit/test_service.py',
@@ -666,7 +666,7 @@ repair_cycle_started
 
 ---
 
-### repair_cycle_container_checkpoint_updated
+### repair_cycle.container_checkpoint_updated
 
 **Purpose**: Records that repair cycle state was checkpointed to Redis.
 
@@ -679,11 +679,11 @@ repair_cycle_started
 {
     'timestamp': '2025-10-26T12:10:00.000Z',
     'event_id': 'uuid-2345-6795',
-    'event_type': 'repair_cycle_container_checkpoint_updated',
+    'event_type': 'repair_cycle.container_checkpoint_updated',
     'agent': 'senior_software_engineer',
     'task_id': 'task_456',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_124_1729948800',
+    'workflow_run_id': 'pipeline_context-studio_124_1729948800',
     'data': {
         'issue_number': 124,
         'container_name': 'repair-context-studio-124',
@@ -711,7 +711,7 @@ repair_cycle_started
 
 ---
 
-### repair_cycle_completed
+### repair_cycle.completed
 
 **Purpose**: Signals that repair cycle finished (tests passed or max iterations reached).
 
@@ -724,11 +724,11 @@ repair_cycle_started
 {
     'timestamp': '2025-10-26T12:30:00.000Z',
     'event_id': 'uuid-2345-6796',
-    'event_type': 'repair_cycle_completed',
+    'event_type': 'repair_cycle.completed',
     'agent': 'senior_software_engineer',
     'task_id': 'task_456',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_124_1729948800',
+    'workflow_run_id': 'pipeline_context-studio_124_1729948800',
     'data': {
         'issue_number': 124,
         'success': True,
@@ -768,11 +768,11 @@ repair_cycle_started
 ## Event Relationships
 
 ### Pipeline Run Tracing
-All events within a pipeline run share the same `pipeline_run_id`, enabling complete trace reconstruction:
+All events within a pipeline run share the same `workflow_run_id`, enabling complete trace reconstruction:
 
 ```sql
 SELECT * FROM events
-WHERE pipeline_run_id = 'pipeline_context-studio_123_1729945200'
+WHERE workflow_run_id = 'pipeline_context-studio_123_1729945200'
 ORDER BY timestamp ASC;
 ```
 
@@ -823,6 +823,6 @@ Pipeline and repair cycle events provide comprehensive visibility into complex, 
 - **Pipeline events**: Track end-to-end workflow execution
 - **Repair cycle events**: Track test-driven iterative fixing
 - **Checkpointing**: Enable recovery after failures
-- **Traceability**: Complete audit trail via pipeline_run_id
+- **Traceability**: Complete audit trail via workflow_run_id
 
 These events enable monitoring, debugging, recovery, and analytics for the most complex operations in Codetoreum.

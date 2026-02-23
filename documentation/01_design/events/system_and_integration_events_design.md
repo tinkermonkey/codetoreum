@@ -597,7 +597,7 @@ Real-time events from Claude Code execution.
     'agent': 'business_analyst',
     'task_id': 'task_123',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_123_1729945800',
+    'workflow_run_id': 'pipeline_context-studio_123_1729945800',
     'data': {
         'agent_execution_id': 'exec-uuid-9876-5432',
         'text': 'Based on the requirements provided, I will analyze...',
@@ -631,7 +631,7 @@ Real-time events from Claude Code execution.
     'agent': 'business_analyst',
     'task_id': 'task_123',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_123_1729945800',
+    'workflow_run_id': 'pipeline_context-studio_123_1729945800',
     'data': {
         'agent_execution_id': 'exec-uuid-9876-5432',
         'tool_name': 'Read',
@@ -667,7 +667,7 @@ Real-time events from Claude Code execution.
     'agent': 'business_analyst',
     'task_id': 'task_123',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_123_1729945800',
+    'workflow_run_id': 'pipeline_context-studio_123_1729945800',
     'data': {
         'agent_execution_id': 'exec-uuid-9876-5432',
         'error_type': 'RateLimitError',
@@ -702,7 +702,7 @@ Real-time events from Claude Code execution.
     'agent': 'business_analyst',
     'task_id': 'task_124',
     'project': 'context-studio',
-    'pipeline_run_id': 'pipeline_context-studio_123_1729948800',
+    'workflow_run_id': 'pipeline_context-studio_123_1729948800',
     'data': {
         'agent_execution_id': 'exec-uuid-1234-5678',
         'session_id': 'session_abc123',

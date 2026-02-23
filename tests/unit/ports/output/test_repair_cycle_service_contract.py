@@ -40,14 +40,14 @@ class MockRepairCycleContext:
     def __init__(
         self,
         stage_name: str = "fix_failures",
-        pipeline_run_id: str = "pipeline-123",
+        workflow_run_id: str = "pipeline-123",
         test_configs: Tuple[RepairTestRunConfig, ...] = (),
         agent_name: str = "repair-agent",
         max_total_agent_calls: int = 100,
         checkpoint_interval: int = 5,
     ):
         self.stage_name = stage_name
-        self.pipeline_run_id = pipeline_run_id
+        self.workflow_run_id = workflow_run_id
         self.test_configs = test_configs
         self.agent_name = agent_name
         self.max_total_agent_calls = max_total_agent_calls
@@ -73,7 +73,7 @@ class TestRepairCycleDomainTypesContract(ABC):
     def create_context(
         self,
         stage_name: str = "fix_failures",
-        pipeline_run_id: str = "pipeline-123",
+        workflow_run_id: str = "pipeline-123",
         max_total_agent_calls: int = 100,
     ) -> RepairCycleContext:
         """Create a test context with given configuration."""
@@ -160,7 +160,7 @@ class TestRepairCycleDomainTypesContract(ABC):
 
         # Verify context structure supports idempotent checkpoint operations
         assert context.checkpoint_interval > 0
-        assert context.pipeline_run_id == "pipeline-123"
+        assert context.workflow_run_id == "pipeline-123"
 
     @pytest.mark.asyncio
     async def test_fix_failures_idempotent_same_input(self) -> None:
@@ -382,11 +382,11 @@ class TestRepairCycleDomainTypesContract(ABC):
         Thread safety contract: Multiple independent contexts can be created
         and maintain separate state without interference.
         """
-        context1 = self.create_context(pipeline_run_id="run-1")
-        context2 = self.create_context(pipeline_run_id="run-2")
+        context1 = self.create_context(workflow_run_id="run-1")
+        context2 = self.create_context(workflow_run_id="run-2")
 
         # Verify contexts are independent and don't share state
-        assert context1.pipeline_run_id != context2.pipeline_run_id
+        assert context1.workflow_run_id != context2.workflow_run_id
         assert context1.stage_name == context2.stage_name  # Same config
         assert context1.max_total_agent_calls == context2.max_total_agent_calls
 
@@ -534,13 +534,13 @@ class TestMockRepairCycleAdapterContract(TestRepairCycleDomainTypesContract):
     def create_context(
         self,
         stage_name: str = "fix_failures",
-        pipeline_run_id: str = "pipeline-123",
+        workflow_run_id: str = "pipeline-123",
         max_total_agent_calls: int = 100,
     ) -> RepairCycleContext:
         """Create test context with given parameters."""
         return MockRepairCycleContext(
             stage_name=stage_name,
-            pipeline_run_id=pipeline_run_id,
+            workflow_run_id=workflow_run_id,
             max_total_agent_calls=max_total_agent_calls,
         )
 
@@ -582,7 +582,7 @@ class TestRepairCycleAdapterMethodContract:
             max_iterations=1,
         )
         context = MockRepairCycleContext(
-            pipeline_run_id="test-run",
+            workflow_run_id="test-run",
             test_configs=(config,),
         )
 
@@ -618,7 +618,7 @@ class TestRepairCycleAdapterMethodContract:
             max_iterations=1,
         )
         context = MockRepairCycleContext(
-            pipeline_run_id="test-run",
+            workflow_run_id="test-run",
             test_configs=(config,),
         )
 
@@ -659,7 +659,7 @@ class TestRepairCycleAdapterMethodContract:
             review_warnings=True,
         )
         context = MockRepairCycleContext(
-            pipeline_run_id="test-run",
+            workflow_run_id="test-run",
             test_configs=(config,),
         )
 
@@ -684,7 +684,7 @@ class TestRepairCycleAdapterMethodContract:
             max_iterations=5,
         )
         context = MockRepairCycleContext(
-            pipeline_run_id="test-checkpoint",
+            workflow_run_id="test-checkpoint",
             test_configs=(config,),
             checkpoint_interval=1,
         )
@@ -718,7 +718,7 @@ class TestRepairCycleAdapterMethodContract:
             max_iterations=1,
         )
         context = MockRepairCycleContext(
-            pipeline_run_id="test-run",
+            workflow_run_id="test-run",
             test_configs=(config,),
         )
 

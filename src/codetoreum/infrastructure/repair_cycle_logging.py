@@ -2,7 +2,7 @@
 
 Provides structured logging for repair cycle stages with:
 - Correlation IDs for request tracing
-- Structured fields for log aggregation (pipeline_run_id, test_type, agent_name, etc.)
+- Structured fields for log aggregation (workflow_run_id, test_type, agent_name, etc.)
 - Performance timing for each stage
 - Detailed error logging with context
 - Log levels appropriate to severity
@@ -43,7 +43,7 @@ class RepairCycleLogLevel(str, Enum):
 class RepairCycleLogContext:
     """Structured context for repair cycle logging."""
 
-    pipeline_run_id: str
+    workflow_run_id: str
     stage_name: str
     agent_name: str
     test_type: Optional[str] = None
@@ -101,12 +101,12 @@ class RepairCycleLogger:
         """Log warning message."""
         self.logger.warning(self._format_message(message, data))
 
-    def error(self, message: str, data: Optional[Dict[str, Any]] = None, exc_info: bool = False) -> None:
-        """Log error message."""
+    def error(self, message: str, data: Optional[Dict[str, Any]] = None, exc_info: bool = True) -> None:
+        """Log error message with full exception info by default (per project requirements)."""
         self.logger.error(self._format_message(message, data), exc_info=exc_info, extra={"error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR})
 
-    def critical(self, message: str, data: Optional[Dict[str, Any]] = None, exc_info: bool = False) -> None:
-        """Log critical message."""
+    def critical(self, message: str, data: Optional[Dict[str, Any]] = None, exc_info: bool = True) -> None:
+        """Log critical message with full exception info by default (per project requirements)."""
         self.logger.critical(self._format_message(message, data), exc_info=exc_info)
 
     @contextmanager

@@ -20,14 +20,16 @@ class IRepairCycleCheckpointStore(ABC):
     Key features:
     - Atomic save and retrieve operations
     - Automatic TTL (24 hours) for cleanup
-    - Key format: repair_cycle:{pipeline_run_id}:{test_type}
+    - Key format: repair_cycle:{workflow_run_id}:{test_type}
     - Supports validation against stale or corrupted checkpoints
 
     Example:
+        from codetoreum.domain.repair_cycle_types import RepairTestType
+
         # Save checkpoint
         checkpoint = RepairCycleCheckpoint(
-            pipeline_run_id="run-123",
-            test_type="unit",
+            workflow_run_id="run-123",
+            test_type=RepairTestType.UNIT,
             iteration=2,
             total_agent_calls=5,
             ...
@@ -35,7 +37,7 @@ class IRepairCycleCheckpointStore(ABC):
         await store.save_checkpoint(checkpoint)
 
         # Retrieve checkpoint
-        checkpoint = await store.get_checkpoint("run-123", "unit")
+        checkpoint = await store.get_checkpoint("run-123", RepairTestType.UNIT)
         if checkpoint:
             # Resume from checkpoint
             pass
@@ -70,7 +72,7 @@ class IRepairCycleCheckpointStore(ABC):
     @abstractmethod
     async def get_checkpoint(
         self,
-        pipeline_run_id: str,
+        workflow_run_id: str,
         test_type: str,
     ) -> Optional[RepairCycleCheckpoint]:
         """Retrieve a repair cycle checkpoint.
@@ -80,7 +82,7 @@ class IRepairCycleCheckpointStore(ABC):
         has expired.
 
         Args:
-            pipeline_run_id: Pipeline run identifier
+            workflow_run_id: Pipeline run identifier
             test_type: Test type (unit, integration, e2e)
 
         Returns:
@@ -100,7 +102,7 @@ class IRepairCycleCheckpointStore(ABC):
     @abstractmethod
     async def delete_checkpoint(
         self,
-        pipeline_run_id: str,
+        workflow_run_id: str,
         test_type: Optional[str] = None,
     ) -> None:
         """Delete checkpoint(s) for a pipeline run.
@@ -109,7 +111,7 @@ class IRepairCycleCheckpointStore(ABC):
         If test_type is None, deletes all checkpoints for the pipeline run.
 
         Args:
-            pipeline_run_id: Pipeline run identifier
+            workflow_run_id: Pipeline run identifier
             test_type: Optional specific test type, or None for all
 
         Returns:
@@ -128,7 +130,7 @@ class IRepairCycleCheckpointStore(ABC):
     @abstractmethod
     async def checkpoint_exists(
         self,
-        pipeline_run_id: str,
+        workflow_run_id: str,
         test_type: str,
     ) -> bool:
         """Check if a non-expired checkpoint exists.
@@ -136,7 +138,7 @@ class IRepairCycleCheckpointStore(ABC):
         Quick check for checkpoint existence without retrieving full data.
 
         Args:
-            pipeline_run_id: Pipeline run identifier
+            workflow_run_id: Pipeline run identifier
             test_type: Test type (unit, integration, e2e)
 
         Returns:

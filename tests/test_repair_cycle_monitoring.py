@@ -256,29 +256,29 @@ class TestRepairCycleLogging:
     def test_log_context_creation(self):
         """Test log context creation."""
         context = RepairCycleLogContext(
-            pipeline_run_id="run-123",
+            workflow_run_id="run-123",
             stage_name="repair",
             agent_name="test_agent",
         )
-        assert context.pipeline_run_id == "run-123"
+        assert context.workflow_run_id == "run-123"
         assert context.stage_name == "repair"
 
     def test_log_context_to_dict(self):
         """Test log context to_dict conversion."""
         context = RepairCycleLogContext(
-            pipeline_run_id="run-123",
+            workflow_run_id="run-123",
             stage_name="repair",
             agent_name="test_agent",
             test_type="unit",
         )
         data = context.to_dict()
-        assert data["pipeline_run_id"] == "run-123"
+        assert data["workflow_run_id"] == "run-123"
         assert data["test_type"] == "unit"
 
     def test_repair_cycle_logger(self, caplog):
         """Test repair cycle logger."""
         context = RepairCycleLogContext(
-            pipeline_run_id="run-123",
+            workflow_run_id="run-123",
             stage_name="repair",
             agent_name="test_agent",
         )
@@ -293,7 +293,7 @@ class TestRepairCycleLogging:
     def test_performance_logger(self):
         """Test performance logger."""
         context = RepairCycleLogContext(
-            pipeline_run_id="run-123",
+            workflow_run_id="run-123",
             stage_name="repair",
             agent_name="test_agent",
         )
@@ -309,7 +309,7 @@ class TestRepairCycleLogging:
     def test_error_logger(self):
         """Test error logger."""
         context = RepairCycleLogContext(
-            pipeline_run_id="run-123",
+            workflow_run_id="run-123",
             stage_name="repair",
             agent_name="test_agent",
         )
@@ -327,7 +327,7 @@ class TestRepairCycleLogging:
     def test_logging_context_manager(self, caplog):
         """Test logging context manager."""
         context = RepairCycleLogContext(
-            pipeline_run_id="run-123",
+            workflow_run_id="run-123",
             stage_name="repair",
             agent_name="test_agent",
         )

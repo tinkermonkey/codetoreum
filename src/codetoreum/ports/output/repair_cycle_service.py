@@ -39,7 +39,7 @@ class RepairCycleContext(Protocol):
 
     Attributes:
         stage_name: Name of the workflow stage (e.g., "fix_failures")
-        pipeline_run_id: Unique identifier for the pipeline run
+        workflow_run_id: Unique identifier for the workflow run
         test_configs: Tuple of RepairTestRunConfig for each test type
         agent_name: Name of agent executing repairs
         max_total_agent_calls: Maximum total agent calls allowed (circuit breaker)
@@ -47,7 +47,7 @@ class RepairCycleContext(Protocol):
     """
 
     stage_name: str
-    pipeline_run_id: str
+    workflow_run_id: str
     test_configs: Tuple[RepairTestRunConfig, ...]
     agent_name: str
     max_total_agent_calls: int

@@ -34,14 +34,14 @@ class MockRepairCycleContext:
     def __init__(
         self,
         stage_name: str = "fix_failures",
-        pipeline_run_id: str = "pipeline-123",
+        workflow_run_id: str = "pipeline-123",
         test_configs: Tuple[RepairTestRunConfig, ...] = (),
         agent_name: str = "repair-agent",
         max_total_agent_calls: int = 100,
         checkpoint_interval: int = 5,
     ):
         self.stage_name = stage_name
-        self.pipeline_run_id = pipeline_run_id
+        self.workflow_run_id = workflow_run_id
         self.test_configs = test_configs
         self.agent_name = agent_name
         self.max_total_agent_calls = max_total_agent_calls
@@ -57,7 +57,7 @@ class TestRepairCycleContextProtocol:
 
         # All attributes should be accessible
         assert ctx.stage_name == "fix_failures"
-        assert ctx.pipeline_run_id == "pipeline-123"
+        assert ctx.workflow_run_id == "pipeline-123"
         assert ctx.test_configs == ()
         assert ctx.agent_name == "repair-agent"
         assert ctx.max_total_agent_calls == 100
@@ -329,7 +329,7 @@ class TestProtocolIntegration:
         cycle_impl: IRepairCycle = MockRepairCycle()
         context = MockRepairCycleContext(
             stage_name="test_phase",
-            pipeline_run_id="pipeline-abc",
+            workflow_run_id="pipeline-abc",
             agent_name="test-agent",
             max_total_agent_calls=50,
             checkpoint_interval=3,
@@ -360,7 +360,7 @@ class TestProtocolIntegration:
         )
         context = MockRepairCycleContext(
             stage_name="validation",
-            pipeline_run_id="pipeline-xyz",
+            workflow_run_id="pipeline-xyz",
             test_configs=configs,
             agent_name="validator",
             max_total_agent_calls=200,
@@ -369,7 +369,7 @@ class TestProtocolIntegration:
 
         # All attributes should be accessible
         assert context.stage_name == "validation"
-        assert context.pipeline_run_id == "pipeline-xyz"
+        assert context.workflow_run_id == "pipeline-xyz"
         assert len(context.test_configs) == 2
         assert context.agent_name == "validator"
         assert context.max_total_agent_calls == 200

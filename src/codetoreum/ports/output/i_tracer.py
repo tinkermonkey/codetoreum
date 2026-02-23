@@ -58,7 +58,7 @@ class SpanEvent:
     timestamp: datetime
     attributes: Mapping[str, Any] = field(default_factory=dict)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Convert attributes to immutable MappingProxyType."""
         if not isinstance(self.attributes, MappingProxyType):
             object.__setattr__(self, 'attributes', MappingProxyType(self.attributes))

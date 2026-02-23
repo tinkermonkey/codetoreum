@@ -17,7 +17,7 @@ from codetoreum.domain.exceptions import DomainError
 class ProjectContextCreated(DomainEvent):
     """Emitted when project context is created."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
         """
         Initialize ProjectContextCreated event.
 
@@ -37,7 +37,7 @@ class ProjectContextCreated(DomainEvent):
 class ProjectTestConfigUpdated(DomainEvent):
     """Emitted when test configuration is updated."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
         """
         Initialize ProjectTestConfigUpdated event.
 
@@ -56,7 +56,7 @@ class ProjectTestConfigUpdated(DomainEvent):
 class ProjectDockerConfigUpdated(DomainEvent):
     """Emitted when Docker configuration is updated."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
         """
         Initialize ProjectDockerConfigUpdated event.
 
@@ -76,7 +76,7 @@ class ProjectDockerConfigUpdated(DomainEvent):
 class ProjectWorkflowMappingAdded(DomainEvent):
     """Emitted when custom workflow mapping is added."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
         """
         Initialize ProjectWorkflowMappingAdded event.
 
@@ -153,7 +153,7 @@ class ProjectContext:
     _events: List[DomainEvent] = field(default_factory=list, init=False, repr=False)
     _version: int = field(default=0, init=False, repr=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate invariants after initialization."""
         self._validate_invariants()
 

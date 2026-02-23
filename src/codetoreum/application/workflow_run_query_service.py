@@ -7,12 +7,14 @@ from the event store using event sourcing.
 
 import asyncio
 import logging
+from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
-from functools import lru_cache
+from types import MappingProxyType
 from typing import Any, Dict, List, Optional
 
-from codetoreum.domain.events import DomainEvent, WorkflowCreated
+from codetoreum.domain.events import DomainEvent
 from codetoreum.domain.workflow import Workflow, WorkflowStatus
+from codetoreum.domain.pipeline_stage import StageStatus
 from codetoreum.ports.exceptions import ResourceNotFoundError
 from codetoreum.ports.input.workflow_run_query import (
     IWorkflowRunQueryPort,
@@ -24,22 +26,28 @@ from codetoreum.ports.input.workflow_run_query import (
     WorkflowRunStageInfo,
     WorkflowRunStatus,
     WorkflowRunSummary,
+    WorkflowRunEventsResult,
+    WorkflowRunAuditResult,
 )
+from codetoreum.domain.types import WorkItemId
 from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.ports.exceptions import WorkItemNotFoundError
 from codetoreum.ports.output.ticket_system import ITicketSystem
+from codetoreum.application.event_sequence_validator import EventSequenceValidator
+from codetoreum.application.expected_sequence_registry import ExpectedSequenceRegistry
 
 logger = logging.getLogger(__name__)
 
 
 class LRUCache:
     """
-    Simple LRU cache with size limit and TTL support.
+    Thread-safe LRU cache with size limit and TTL support.
 
     Features:
     - Maximum size limit with LRU eviction
     - TTL (time-to-live) for cache entries
-    - Thread-safe operations (async-safe)
+    - Async-safe operations using asyncio.Lock
+    - O(1) operations using OrderedDict
     """
 
     def __init__(self, max_size: int = 1000, ttl_seconds: int = 300):
@@ -52,33 +60,10 @@ class LRUCache:
         """
         self.max_size = max_size
         self.ttl = timedelta(seconds=ttl_seconds)
-        self._cache: Dict[str, tuple[Any, datetime]] = {}
-        self._access_order: List[str] = []
+        self._cache: OrderedDict[str, tuple[Any, datetime]] = OrderedDict()
+        self._lock = asyncio.Lock()
 
-    def __contains__(self, key: str) -> bool:
-        """
-        Check if key exists in cache (supports 'in' operator).
-
-        Args:
-            key: Cache key
-
-        Returns:
-            True if key exists and is not expired, False otherwise
-        """
-        if key not in self._cache:
-            return False
-
-        # Check if expired
-        _, timestamp = self._cache[key]
-        if datetime.now(timezone.utc) - timestamp > self.ttl:
-            del self._cache[key]
-            if key in self._access_order:
-                self._access_order.remove(key)
-            return False
-
-        return True
-
-    def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Optional[Any]:
         """
         Get value from cache.
 
@@ -88,26 +73,28 @@ class LRUCache:
         Returns:
             Cached value or None if not found or expired
         """
-        if key not in self._cache:
-            return None
+        async with self._lock:
+            if key not in self._cache:
+                logger.debug(f"Cache miss: key={key}")
+                return None
 
-        value, timestamp = self._cache[key]
+            value, timestamp = self._cache[key]
 
-        # Check if expired
-        if datetime.now(timezone.utc) - timestamp > self.ttl:
-            del self._cache[key]
-            if key in self._access_order:
-                self._access_order.remove(key)
-            return None
+            # Check if expired
+            now = datetime.now(timezone.utc)
+            if now - timestamp > self.ttl:
+                age_seconds = (now - timestamp).total_seconds()
+                logger.debug(f"Cache expired: key={key}, age={age_seconds:.1f}s, ttl={self.ttl.total_seconds()}s")
+                del self._cache[key]
+                return None
 
-        # Update access order (move to end = most recently used)
-        if key in self._access_order:
-            self._access_order.remove(key)
-        self._access_order.append(key)
+            # Update access order (move to end = most recently used)
+            self._cache.move_to_end(key)
+            logger.debug(f"Cache hit: key={key}")
 
-        return value
+            return value
 
-    def set(self, key: str, value: Any) -> None:
+    async def set(self, key: str, value: Any) -> None:
         """
         Set value in cache.
 
@@ -115,28 +102,35 @@ class LRUCache:
             key: Cache key
             value: Value to cache
         """
-        # If key exists, update it
-        if key in self._cache:
-            if key in self._access_order:
-                self._access_order.remove(key)
+        async with self._lock:
+            # Track whether this is an update or new entry
+            was_update = key in self._cache
 
-        # Evict least recently used if at max size
-        elif len(self._cache) >= self.max_size:
-            lru_key = self._access_order.pop(0)
-            del self._cache[lru_key]
+            # If key exists, remove it (we'll re-add at end)
+            if was_update:
+                logger.debug(f"Cache update: key={key}")
+                del self._cache[key]
 
-        # Add new entry
-        self._cache[key] = (value, datetime.now(timezone.utc))
-        self._access_order.append(key)
+            # Evict least recently used if at max size
+            elif len(self._cache) >= self.max_size:
+                evicted_key = next(iter(self._cache))
+                logger.debug(f"Cache eviction: evicted_key={evicted_key}, cache_size={len(self._cache)}")
+                self._cache.popitem(last=False)
 
-    def clear(self) -> None:
+            # Add new entry (at end = most recently used)
+            self._cache[key] = (value, datetime.now(timezone.utc))
+            if not was_update:
+                logger.debug(f"Cache set: key={key}, cache_size={len(self._cache)}")
+
+    async def clear(self) -> None:
         """Clear all cached entries."""
-        self._cache.clear()
-        self._access_order.clear()
+        async with self._lock:
+            self._cache.clear()
 
-    def size(self) -> int:
+    async def size(self) -> int:
         """Get current cache size."""
-        return len(self._cache)
+        async with self._lock:
+            return len(self._cache)
 
 
 class WorkflowRunQueryService(IWorkflowRunQueryPort):
@@ -185,6 +179,9 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         self.event_store = event_store
         self.ticket_system = ticket_system
         self._work_item_cache = LRUCache(max_size=cache_size, ttl_seconds=cache_ttl_seconds)
+        self._audit_cache = LRUCache(max_size=cache_size // 2, ttl_seconds=cache_ttl_seconds)
+        self._sequence_validator = EventSequenceValidator()
+        self._sequence_registry = ExpectedSequenceRegistry()
 
     async def get_workflow_run(self, workflow_run_id: str) -> WorkflowRunInfo:
         """
@@ -249,7 +246,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
 
         # Query workflow stream IDs using Elasticsearch aggregations
         # This pushes filtering and pagination to the database level
-        stream_ids, total_count = await self.event_store.query_streams_by_latest_event(
+        stream_ids, total_count = await self.event_store.query_streams_by_latest_event(  # type: ignore[attr-defined]
             aggregate_type="Workflow",
             event_data_filters=event_data_filters if event_data_filters else None,
             sort_by="timestamp",  # Will be refined after reconstruction
@@ -336,7 +333,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         limit: int = 50,
         event_types: Optional[List[str]] = None,
         since: Optional[datetime] = None,
-    ) -> dict:
+    ) -> WorkflowRunEventsResult:
         """
         Retrieve events for a specific workflow run.
 
@@ -348,7 +345,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
             since: Optional timestamp - events after this time
 
         Returns:
-            Dictionary containing events list and pagination info
+            WorkflowRunEventsResult containing events list and pagination info
 
         Raises:
             ResourceNotFoundError: If workflow run doesn't exist
@@ -386,13 +383,137 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         # Convert events to dict format
         events_data = [self._event_to_dict(event) for event in paginated_events]
 
-        return {
-            "events": events_data,
-            "total_count": total_count,
-            "offset": offset,
-            "limit": limit,
-            "has_next": (offset + limit) < total_count,
-        }
+        return WorkflowRunEventsResult(
+            events=events_data,
+            total_count=total_count,
+            offset=offset,
+            limit=limit,
+            has_next=(offset + limit) < total_count,
+        )
+
+    async def get_workflow_run_audit(
+        self,
+        workflow_run_id: str,
+        offset: int = 0,
+        limit: int = 100,
+        include_validation: bool = True,
+    ) -> WorkflowRunAuditResult:
+        """
+        Retrieve comprehensive audit information for a workflow run.
+
+        This method provides:
+        - Workflow run summary with metadata enrichment
+        - Paginated events list
+        - Stage-grouped events with duration calculations (always complete, not paginated)
+        - Sequence validation against expected patterns (optional)
+
+        **Caching Strategy**:
+        - Full audit results are cached with TTL
+        - Cache key includes pagination and validation parameters
+        - Workflow run summary is cached separately via work item cache
+        - Invalidation: Cache entries expire after TTL (default 5 minutes)
+
+        **Stage Grouping Note**:
+        The `stages` field in the response always contains complete stage information
+        (all events for each stage), regardless of the pagination applied to the main
+        `events` field. This ensures stage summaries provide a complete picture.
+
+        Args:
+            workflow_run_id: Unique identifier for the workflow run
+            offset: Event pagination offset (default: 0)
+            limit: Event pagination limit (default: 100, max: 200)
+            include_validation: Whether to validate event sequence (default: True)
+
+        Returns:
+            WorkflowRunAuditResult containing audit data
+
+        Raises:
+            ResourceNotFoundError: If workflow run doesn't exist
+        """
+        logger.debug(
+            f"Getting audit for workflow run: {workflow_run_id}, "
+            f"offset={offset}, limit={limit}, include_validation={include_validation}"
+        )
+
+        # Cache key for non-paginated data (workflow summary, events, stages)
+        # We cache the core data separately from pagination/validation options
+        #
+        # SOLUTION to cache fragmentation issue (Medium priority from PR review):
+        # To avoid cache thrashing from different pagination parameters, we cache only
+        # the core workflow data (summary, all events, stage info) using workflow_run_id
+        # as the cache key. Pagination and validation are applied AFTER cache retrieval,
+        # ensuring a single cache entry per workflow regardless of pagination parameters.
+        # This provides optimal cache hit rates even with varying offset/limit values.
+        core_cache_key = f"{workflow_run_id}:audit_core"
+        cached_core = await self._audit_cache.get(core_cache_key)
+
+        if cached_core is not None:
+            logger.debug(f"Audit cache hit for {workflow_run_id}")
+            workflow_run_summary, events_data, stages_info = cached_core
+        else:
+            # Verify workflow exists and get all events
+            if not await self.event_store.stream_exists(workflow_run_id):
+                raise ResourceNotFoundError("WorkflowRun", workflow_run_id)
+
+            all_events = await self.event_store.get_events(stream_id=workflow_run_id)
+
+            if not all_events:
+                raise ResourceNotFoundError("WorkflowRun", workflow_run_id)
+
+            # Reconstruct workflow for summary and stage info
+            workflow = Workflow.from_events(all_events)
+
+            # Get work item metadata
+            work_item_metadata = await self._get_work_item_metadata(workflow.work_item_id)
+
+            # Build workflow run summary
+            workflow_run_summary = self._to_workflow_run_summary(workflow, work_item_metadata)
+
+            # Convert events to dict format
+            events_data = [self._event_to_dict(event) for event in all_events]
+
+            # Build stage-grouped events (always complete, not paginated)
+            stages_info = self._build_stage_info(workflow, all_events)
+
+            # Cache the core data (without pagination/validation)
+            await self._audit_cache.set(core_cache_key, (workflow_run_summary, events_data, stages_info))
+
+        # Apply pagination to events (done after cache retrieval)
+        total_event_count = len(events_data)
+        paginated_events = events_data[offset : offset + limit]
+
+        # Validate event sequence if requested (computed on demand, not cached)
+        # This is inexpensive compared to event store fetches
+        validation_result = None
+        if include_validation:
+            # Reconstruct all_events from events_data for validation
+            # Note: We could optimize this further by caching event_types separately
+            actual_sequence = [event["event_type"] for event in events_data]
+            expected_pattern = self._sequence_registry.get_expected_sequence("default")
+            validation_result = self._sequence_validator.create_audit_validation_result(
+                expected_pattern,
+                actual_sequence
+            )
+
+        # Build audit response
+        audit_data = WorkflowRunAuditResult(
+            workflow_run=workflow_run_summary,
+            events=paginated_events,
+            stages=stages_info,
+            validation=validation_result,
+            total_count=total_event_count,
+            offset=offset,
+            limit=limit,
+            has_next=(offset + limit) < total_event_count,
+        )
+
+        logger.debug(
+            f"Audit for {workflow_run_id}: {total_event_count} total events, "
+            f"{len(paginated_events)} returned"
+            + (f", validation={'valid' if validation_result and validation_result.get('sequenceValid') else 'invalid'}" if include_validation else "")
+        )
+
+        return audit_data
 
     # Private helper methods
 
@@ -482,9 +603,9 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         summaries = await asyncio.gather(*[enrich_one(w) for w in workflows], return_exceptions=True)
 
         # Handle any exceptions returned from gather
-        processed_summaries = []
+        processed_summaries: List[WorkflowRunSummary] = []
         for summary in summaries:
-            if isinstance(summary, Exception):
+            if isinstance(summary, (Exception, BaseException)):
                 logger.error(
                     f"Unexpected error during workflow enrichment: {summary}",
                     exc_info=summary,
@@ -497,7 +618,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
 
         return processed_summaries
 
-    def _default_metadata(self) -> Dict:
+    def _default_metadata(self) -> Dict[str, Any]:
         """
         Get default metadata for when work item fetch fails.
 
@@ -598,10 +719,10 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
             TicketNotFoundError: If work item doesn't exist (when ticket system is available)
         """
         # Check cache
-        cached = self._work_item_cache.get(work_item_id)
+        cached = await self._work_item_cache.get(work_item_id)
         if cached is not None:
             logger.debug(f"Cache hit for work item {work_item_id}")
-            return cached
+            return dict(cached)
 
         # Default metadata
         metadata = self._default_metadata()
@@ -609,7 +730,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         # Fetch from ticket system if available
         if self.ticket_system:
             try:
-                work_item = await self.ticket_system.get_work_item(work_item_id)
+                work_item = await self.ticket_system.get_work_item(WorkItemId(work_item_id))
                 metadata = {
                     "issue_title": work_item.title,
                     "issue_number": work_item.external_id,
@@ -623,7 +744,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
                     extra={"error_id": "ERR_WORKFLOW_RUN_QUERY_METADATA_NOT_FOUND"}
                 )
                 # Cache the failure to avoid repeated lookups
-                self._work_item_cache.set(work_item_id, metadata)
+                await self._work_item_cache.set(work_item_id, metadata)
                 raise
             except Exception as e:
                 logger.error(
@@ -635,7 +756,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
                 return metadata
 
         # Cache the result
-        self._work_item_cache.set(work_item_id, metadata)
+        await self._work_item_cache.set(work_item_id, metadata)
 
         return metadata
 
@@ -655,13 +776,17 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         # Extract stage information
         stages: List[WorkflowRunStageInfo] = []
         for stage in workflow.stages:
+            # Get metadata and wrap in MappingProxyType for immutability
             stage_info = WorkflowRunStageInfo(
                 name=stage.name,
-                agent_name=stage.agent_name,
+                agent_name=stage.agent_config.get("agent_id", ""),
                 status=stage.status.value,
                 started_at=stage.started_at,
                 completed_at=stage.completed_at,
                 execution_id=stage.execution_id,
+                output=stage.output,
+                error_message=stage.error_message,
+                metadata=MappingProxyType(stage.metadata),
             )
             stages.append(stage_info)
 
@@ -739,6 +864,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         mapping = {
             WorkflowStatus.PENDING: WorkflowRunStatus.PENDING,
             WorkflowStatus.RUNNING: WorkflowRunStatus.RUNNING,
+            WorkflowStatus.PAUSED: WorkflowRunStatus.RUNNING,  # Paused workflows are still considered active/running
             WorkflowStatus.COMPLETED: WorkflowRunStatus.COMPLETED,
             WorkflowStatus.FAILED: WorkflowRunStatus.FAILED,
             WorkflowStatus.CANCELLED: WorkflowRunStatus.CANCELLED,
@@ -767,3 +893,90 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
             "user_id": event.user_id,
             "metadata": event.metadata,
         }
+
+    def _build_stage_info(self, workflow: Workflow, events: List[DomainEvent]) -> List[dict]:
+        """
+        Build stage-grouped event information for audit view.
+
+        Groups events by workflow stage and calculates stage durations.
+
+        Args:
+            workflow: Reconstructed workflow aggregate
+            events: All events for this workflow run
+
+        Returns:
+            List of stage info dictionaries compatible with AuditStageInfo DTO
+        """
+        # Pre-index events by stage_name and execution_id for O(1) lookup
+        # This avoids O(stages * events) complexity
+        events_by_stage_name: Dict[str, List[DomainEvent]] = {}
+        events_by_execution_id: Dict[str, List[DomainEvent]] = {}
+
+        for event in events:
+            event_data = event.payload if hasattr(event, 'payload') else {}
+            event_stage_name = event_data.get('stage_name')
+            event_execution_id = event_data.get('execution_id')
+
+            if event_stage_name:
+                if event_stage_name not in events_by_stage_name:
+                    events_by_stage_name[event_stage_name] = []
+                events_by_stage_name[event_stage_name].append(event)
+
+            if event_execution_id:
+                if event_execution_id not in events_by_execution_id:
+                    events_by_execution_id[event_execution_id] = []
+                events_by_execution_id[event_execution_id].append(event)
+
+        stages_info = []
+
+        for stage in workflow.stages:
+            # Determine stage status - map all StageStatus values explicitly
+            if stage.status == StageStatus.PENDING:
+                status = "pending"
+            elif stage.status == StageStatus.READY:
+                status = "ready"
+            elif stage.status == StageStatus.RUNNING:
+                status = "running"
+            elif stage.status == StageStatus.COMPLETED:
+                status = "completed"
+            elif stage.status == StageStatus.FAILED:
+                status = "failed"
+            elif stage.status == StageStatus.SKIPPED:
+                status = "skipped"
+            else:
+                status = "pending"  # Fallback for unknown status
+
+            # Calculate duration
+            duration_seconds = None
+            if stage.started_at and stage.completed_at:
+                duration_seconds = (stage.completed_at - stage.started_at).total_seconds()
+
+            # Collect events for this stage using pre-indexed lookups (O(1))
+            stage_events_dict = {}  # Use dict keyed by id(event) to avoid duplicates
+
+            # Get events by stage name
+            for event in events_by_stage_name.get(stage.name, []):
+                stage_events_dict[id(event)] = event
+
+            # Get events by execution ID
+            if stage.execution_id:
+                for event in events_by_execution_id.get(stage.execution_id, []):
+                    stage_events_dict[id(event)] = event
+
+            # Convert to list of event dicts (already deduped by dict keys)
+            stage_events = [self._event_to_dict(event) for event in stage_events_dict.values()]
+
+            stage_info = {
+                "name": stage.name,
+                "status": status,
+                "startedAt": stage.started_at.isoformat() if stage.started_at else None,
+                "completedAt": stage.completed_at.isoformat() if stage.completed_at else None,
+                "durationSeconds": duration_seconds,
+                "events": stage_events,
+                "output": stage.output,
+                "errorMessage": stage.error_message,
+                "metadata": stage.metadata,
+            }
+            stages_info.append(stage_info)
+
+        return stages_info

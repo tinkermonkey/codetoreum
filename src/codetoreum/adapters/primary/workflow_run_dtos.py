@@ -27,6 +27,9 @@ class WorkflowRunStageResponse(BaseModel):
     startedAt: Optional[datetime] = Field(None, description="Stage start time", serialization_alias="startedAt")
     completedAt: Optional[datetime] = Field(None, description="Stage completion time", serialization_alias="completedAt")
     executionId: Optional[str] = Field(None, description="Execution ID for this stage", serialization_alias="executionId")
+    output: Optional[str] = Field(None, description="Stage output content")
+    errorMessage: Optional[str] = Field(None, description="Error message if stage failed", serialization_alias="errorMessage")
+    metadata: dict = Field(default_factory=dict, description="Additional stage metadata")
 
     model_config = ConfigDict(
         populate_by_name=True,
@@ -35,9 +38,12 @@ class WorkflowRunStageResponse(BaseModel):
                 "name": "implementation",
                 "agentName": "developer_agent",
                 "status": "completed",
-                "startedAt": "2025-11-08T10:00:00Z",
-                "completedAt": "2025-11-08T10:15:00Z",
-                "executionId": "exec-111"
+                "startedAt": "2026-02-20T10:00:00Z",
+                "completedAt": "2026-02-20T10:15:00Z",
+                "executionId": "exec-111",
+                "output": "Implementation completed successfully",
+                "errorMessage": None,
+                "metadata": {}
             }
         }
     )
@@ -73,7 +79,7 @@ class WorkflowRunSummaryResponse(BaseModel):
                 "status": "running",
                 "currentStageIndex": 2,
                 "currentStageName": "review",
-                "startedAt": "2025-11-08T10:00:00Z",
+                "startedAt": "2026-02-20T10:00:00Z",
                 "completedAt": None,
                 "duration": None,
                 "issueTitle": "Fix authentication bug",
@@ -111,15 +117,15 @@ class WorkflowRunResponse(BaseModel):
                         "name": "implementation",
                         "agentName": "developer_agent",
                         "status": "completed",
-                        "startedAt": "2025-11-08T10:00:00Z",
-                        "completedAt": "2025-11-08T10:15:00Z",
+                        "startedAt": "2026-02-20T10:00:00Z",
+                        "completedAt": "2026-02-20T10:15:00Z",
                         "executionId": "exec-111"
                     },
                     {
                         "name": "review",
                         "agentName": "reviewer_agent",
                         "status": "running",
-                        "startedAt": "2025-11-08T10:15:00Z",
+                        "startedAt": "2026-02-20T10:15:00Z",
                         "completedAt": None,
                         "executionId": "exec-222"
                     }
@@ -162,7 +168,7 @@ class WorkflowEventResponse(BaseModel):
                 "id": "evt-123",
                 "eventType": "WorkflowStarted",
                 "workflowRunId": "wfrun-123",
-                "timestamp": "2025-11-08T10:00:00Z",
+                "timestamp": "2026-02-20T10:00:00Z",
                 "agentName": None,
                 "stageName": "implementation",
                 "status": None,

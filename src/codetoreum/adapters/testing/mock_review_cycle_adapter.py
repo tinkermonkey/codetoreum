@@ -550,7 +550,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
             maker_agent=request.maker_agent,
             reviewer_agent=request.reviewer_agent,
             max_iterations=request.max_iterations,
-            pipeline_run_id=request.pipeline_run_id,
+            workflow_run_id=request.workflow_run_id,
             current_iteration=iteration,
             maker_outputs=[
                 IterationOutput(

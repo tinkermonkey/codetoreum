@@ -26,7 +26,7 @@ class BotIdentityConfig:
     """
 
     bot_usernames: List[str]
-    bot_patterns: List[Pattern]  # type: ignore
+    bot_patterns: List[Pattern]
 
 
 class IIdentityService(ABC):

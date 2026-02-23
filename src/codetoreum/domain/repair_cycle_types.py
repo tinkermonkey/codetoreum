@@ -317,8 +317,8 @@ class RepairCycleCheckpoint:
     All fields are immutable for audit integrity.
 
     Attributes:
-        pipeline_run_id: Unique identifier for this pipeline run
-        test_type: Current test type being executed
+        workflow_run_id: Unique identifier for this workflow run
+        test_type: Current test type being executed (RepairTestType enum for type safety)
         iteration: Current iteration number (1-indexed)
         total_agent_calls: Number of agent calls so far
         files_fixed: Number of files fixed so far
@@ -329,8 +329,8 @@ class RepairCycleCheckpoint:
         expires_at: ISO 8601 timestamp when checkpoint should expire (24 hours)
     """
 
-    pipeline_run_id: str
-    test_type: str
+    workflow_run_id: str
+    test_type: RepairTestType
     iteration: int
     total_agent_calls: int
     files_fixed: int
@@ -342,10 +342,10 @@ class RepairCycleCheckpoint:
 
     def __post_init__(self) -> None:
         """Validate checkpoint fields."""
-        if not self.pipeline_run_id or not self.pipeline_run_id.strip():
-            raise ValueError("pipeline_run_id cannot be empty")
-        if not self.test_type or not self.test_type.strip():
-            raise ValueError("test_type cannot be empty")
+        if not self.workflow_run_id or not self.workflow_run_id.strip():
+            raise ValueError("workflow_run_id cannot be empty")
+        if not isinstance(self.test_type, RepairTestType):
+            raise ValueError("test_type must be a RepairTestType enum")
         if self.iteration < 1:
             raise ValueError("iteration must be >= 1 (1-indexed)")
         if self.total_agent_calls < 0:

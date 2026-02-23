@@ -4,6 +4,7 @@ Workflow Runs REST API Router
 Provides RESTful endpoints for querying workflow execution runs.
 """
 
+import logging
 from datetime import datetime
 from typing import Optional
 
@@ -16,7 +17,9 @@ from codetoreum.adapters.primary.workflow_run_dtos import (
     WorkflowRunListResponse,
     WorkflowEventsListResponse,
 )
+from codetoreum.adapters.primary.audit_dtos import WorkflowRunAuditResponse
 from codetoreum.adapters.primary.workflow_run_mappers import WorkflowRunMapper
+from codetoreum.config.defaults import AUDIT_EVENTS_MAX_PAGE_SIZE
 from codetoreum.ports.input.workflow_run_query import (
     IWorkflowRunQueryPort,
     WorkflowRunFilters,
@@ -25,11 +28,15 @@ from codetoreum.ports.input.workflow_run_query import (
     WorkflowRunStatus,
     SortOrder,
 )
+from codetoreum.ports.exceptions import ResourceNotFoundError
 from codetoreum.config import (
     DEFAULT_PAGE_SIZE,
     MAX_PAGE_SIZE,
     DEFAULT_OFFSET,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 def create_workflow_runs_router(
@@ -104,7 +111,7 @@ def create_workflow_runs_router(
             status_list = None
             if status:
                 try:
-                    status_list = [WorkflowRunStatus(s.strip()) for s in status.split(",")]
+                    status_list = tuple(WorkflowRunStatus(s.strip()) for s in status.split(","))
                 except ValueError as e:
                     raise HTTPException(
                         status_code=http_status.HTTP_400_BAD_REQUEST,
@@ -154,9 +161,14 @@ def create_workflow_runs_router(
         except HTTPException:
             raise
         except Exception as e:
+            logger.error(
+                "Unexpected error listing workflow runs",
+                exc_info=True,
+                extra={"error": str(e)},
+            )
             raise HTTPException(
-                status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=str(e),
+                status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Internal server error while listing workflow runs",
             )
 
     # ========================================================================
@@ -195,16 +207,22 @@ def create_workflow_runs_router(
             # Convert to response DTO
             return WorkflowRunMapper.to_response(run_info)
 
-        except Exception as e:
-            error_msg = str(e).lower()
-            if "not found" in error_msg:
-                raise HTTPException(
-                    status_code=http_status.HTTP_404_NOT_FOUND,
-                    detail=f"Workflow run not found: {workflow_run_id}",
-                )
+        except ResourceNotFoundError as e:
             raise HTTPException(
-                status_code=http_status.HTTP_400_BAD_REQUEST,
+                status_code=http_status.HTTP_404_NOT_FOUND,
                 detail=str(e),
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(
+                "Unexpected error retrieving workflow run",
+                exc_info=True,
+                extra={"workflow_run_id": workflow_run_id, "error": str(e)},
+            )
+            raise HTTPException(
+                status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Internal server error while retrieving workflow run",
             )
 
     # ========================================================================
@@ -220,7 +238,7 @@ def create_workflow_runs_router(
     async def get_workflow_run_events(
         workflow_run_id: str,
         offset: int = Query(0, ge=0, description="Pagination offset"),
-        limit: int = Query(50, ge=1, le=200, description="Pagination limit (default 50, max 200)"),
+        limit: int = Query(50, ge=1, le=AUDIT_EVENTS_MAX_PAGE_SIZE, description=f"Pagination limit (default 50, max {AUDIT_EVENTS_MAX_PAGE_SIZE})"),
         eventTypes: Optional[str] = Query(None, description="Filter by event types (comma-separated)", alias="eventTypes"),
         since: Optional[datetime] = Query(None, description="ISO timestamp - events after this time"),
     ) -> WorkflowEventsListResponse:
@@ -263,23 +281,108 @@ def create_workflow_runs_router(
 
             # Convert to response DTO
             return WorkflowRunMapper.to_events_list_response(
-                events=result.get("events", []),
-                total_count=result.get("total_count", 0),
-                offset=result.get("offset", offset),
-                limit=result.get("limit", limit),
-                has_next=result.get("has_next", False),
+                events=result.events,
+                total_count=result.total_count,
+                offset=result.offset,
+                limit=result.limit,
+                has_next=result.has_next,
             )
 
-        except Exception as e:
-            error_msg = str(e).lower()
-            if "not found" in error_msg:
-                raise HTTPException(
-                    status_code=http_status.HTTP_404_NOT_FOUND,
-                    detail=f"Workflow run not found: {workflow_run_id}",
-                )
+        except ResourceNotFoundError as e:
             raise HTTPException(
-                status_code=http_status.HTTP_400_BAD_REQUEST,
+                status_code=http_status.HTTP_404_NOT_FOUND,
                 detail=str(e),
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(
+                "Unexpected error retrieving workflow run events",
+                exc_info=True,
+                extra={"workflow_run_id": workflow_run_id, "error": str(e)},
+            )
+            raise HTTPException(
+                status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Internal server error while retrieving workflow run events",
+            )
+
+    # ========================================================================
+    # Get Workflow Run Audit
+    # ========================================================================
+
+    @router.get(
+        "/{workflow_run_id}/audit",
+        response_model=WorkflowRunAuditResponse,
+        summary="Get comprehensive workflow run audit",
+        response_description="Complete audit information including events, stages, and validation",
+    )
+    async def get_workflow_run_audit(
+        workflow_run_id: str,
+        offset: int = Query(0, ge=0, description="Event pagination offset"),
+        limit: int = Query(100, ge=1, le=AUDIT_EVENTS_MAX_PAGE_SIZE, description=f"Event pagination limit (default 100, max {AUDIT_EVENTS_MAX_PAGE_SIZE})"),
+        include_validation: bool = Query(True, description="Whether to validate event sequence (default True)"),
+    ) -> WorkflowRunAuditResponse:
+        """
+        Get comprehensive audit information for a specific workflow run.
+
+        **Parameters:**
+        - workflow_run_id: Workflow run ID
+
+        **Query Parameters:**
+        - offset: Event pagination offset (default: 0)
+        - limit: Event pagination limit (default: 100, max: 200)
+        - include_validation: Whether to validate event sequence (default: True)
+
+        **Returns:**
+        - 200 OK: Complete audit information
+        - 401 Unauthorized: Authentication required
+        - 404 Not Found: Workflow run not found
+
+        **Response includes:**
+        - Workflow run summary with metadata
+        - Paginated events list
+        - Stage-grouped events with durations (always complete, not paginated)
+        - Event sequence validation results (optional, expected vs actual)
+        - Total event count and pagination metadata
+
+        **Caching:**
+        - Core audit data is cached for 5 minutes (default TTL)
+        - Pagination and validation parameters are applied after retrieval
+        - Cache key is based on workflow_run_id only
+
+        **Performance:**
+        - Optimized for workflows with 100-1000+ events
+        - Pagination prevents memory issues on large workflows
+        - Stage grouping and validation computed once and cached
+        """
+        try:
+            # Get audit data via port
+            audit_data = await query_port.get_workflow_run_audit(
+                workflow_run_id=workflow_run_id,
+                offset=offset,
+                limit=limit,
+                include_validation=include_validation,
+            )
+
+            # Convert to response DTO
+            return WorkflowRunMapper.to_audit_response(audit_data)
+
+        except ResourceNotFoundError as e:
+            raise HTTPException(
+                status_code=http_status.HTTP_404_NOT_FOUND,
+                detail=str(e),
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(
+                "Unexpected error retrieving workflow run audit",
+                exc_info=True,
+                extra={"workflow_run_id": workflow_run_id, "error": str(e)},
+            )
+            raise HTTPException(
+                status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Internal server error while retrieving workflow run audit",
             )
 
     return router

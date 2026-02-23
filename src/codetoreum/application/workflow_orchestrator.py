@@ -977,12 +977,12 @@ class WorkflowOrchestrator:
             event: workitem.column_changed event
         """
         # Validate event structure upfront - let KeyError/AttributeError propagate if malformed
-        work_item_id = event.payload.get("work_item_id")
-        project_id = event.payload.get("project_id")
-        board_id = event.payload.get("board_id")
-        to_column = event.payload.get("to_column")
-        from_column = event.payload.get("from_column")
-        moved_by = event.payload.get("moved_by", "unknown")
+        work_item_id: str = event.payload.get("work_item_id") or ""
+        project_id: str = event.payload.get("project_id") or ""
+        board_id: str = event.payload.get("board_id") or ""
+        to_column: str = event.payload.get("to_column") or ""
+        from_column: str = event.payload.get("from_column") or ""
+        moved_by: str = event.payload.get("moved_by") or "unknown"
 
         if not all([work_item_id, project_id, board_id, to_column]):
             logger.warning(
@@ -1119,10 +1119,10 @@ class WorkflowOrchestrator:
             event: comment.needs_response event
         """
         # Validate event structure upfront - let KeyError propagate if malformed
-        work_item_id = event.payload.get("work_item_id")
-        project_id = event.payload.get("project_id")
-        agent_name = event.payload.get("agent_assignment")
-        comment_text = event.payload.get("comment")
+        work_item_id: str = event.payload.get("work_item_id") or ""
+        project_id: str = event.payload.get("project_id") or ""
+        agent_name: str = event.payload.get("agent_assignment") or ""
+        comment_text: str = event.payload.get("comment") or ""
 
         if not all([work_item_id, project_id, agent_name]):
             logger.warning(
@@ -1200,9 +1200,9 @@ class WorkflowOrchestrator:
             event: lock.released event with project_id, board_id, next_in_queue
         """
         # Validate event structure upfront - let KeyError propagate if malformed
-        project_id = event.payload.get("project_id")
-        board_id = event.payload.get("board_id")
-        next_in_queue = event.payload.get("next_in_queue")
+        project_id: str = event.payload.get("project_id") or ""
+        board_id: str = event.payload.get("board_id") or ""
+        next_in_queue: str = event.payload.get("next_in_queue") or ""
 
         if not all([project_id, board_id]):
             logger.warning(
@@ -1328,10 +1328,10 @@ class WorkflowOrchestrator:
         Args:
             event: review.status_changed event
         """
-        work_item_id = event.payload.get("work_item_id")
-        project_id = event.payload.get("project_id")
-        new_status = event.payload.get("new_status")
-        previous_status = event.payload.get("previous_status")
+        work_item_id: str = event.payload.get("work_item_id") or ""
+        project_id: str = event.payload.get("project_id") or ""
+        new_status: str = event.payload.get("new_status") or ""
+        previous_status: str = event.payload.get("previous_status") or ""
 
         if not all([work_item_id, project_id, new_status]):
             logger.warning(
@@ -1350,9 +1350,9 @@ class WorkflowOrchestrator:
             if self.projects_api:
                 try:
                     # Get workflow to find next column
-                    board_id = event.payload.get("board_id", "default")
+                    board_id_local: str = event.payload.get("board_id") or "default"
                     workflow_config = await self.config.get_workflow_config(
-                        project_id, board_id
+                        project_id, board_id_local
                     )
 
                     # Find current column
@@ -1364,7 +1364,7 @@ class WorkflowOrchestrator:
                         )
                         return
 
-                    current_column_name = item_position.get("column")
+                    current_column_name: str = item_position.get("column") or ""
                     current_column = self._find_column_config(workflow_config, current_column_name)
                     if not current_column:
                         logger.warning(
@@ -1380,7 +1380,7 @@ class WorkflowOrchestrator:
                             f"Moving approved item {work_item_id} from {current_column.name} to {next_column.name}"
                         )
                         await self.projects_api.move_card_to_column(
-                            project_id, work_item_id, next_column.name
+                            project_id, int(work_item_id), next_column.name
                         )
                     else:
                         logger.info(
@@ -1394,7 +1394,7 @@ class WorkflowOrchestrator:
                             "error_id": "ERR_ORCHESTRATOR_APPROVED_ITEM_MOVE_FAILURE",
                             "work_item_id": work_item_id,
                             "project_id": project_id,
-                            "board_id": board_id,
+                            "board_id": board_id_local,
                             "error_type": type(e).__name__,
                         }
                     )
@@ -1404,9 +1404,9 @@ class WorkflowOrchestrator:
             # Move back to development column
             if self.projects_api:
                 try:
-                    board_id = event.payload.get("board_id", "default")
+                    board_id_local2: str = event.payload.get("board_id") or "default"
                     workflow_config = await self.config.get_workflow_config(
-                        project_id, board_id
+                        project_id, board_id_local2
                     )
 
                     # Find development column (typically first column or has "dev" in name)
@@ -1421,7 +1421,7 @@ class WorkflowOrchestrator:
                             f"Moving item {work_item_id} back to development column {dev_column.name}"
                         )
                         await self.projects_api.move_card_to_column(
-                            project_id, work_item_id, dev_column.name
+                            project_id, int(work_item_id), dev_column.name
                         )
                     else:
                         logger.warning(
@@ -1436,7 +1436,7 @@ class WorkflowOrchestrator:
                             "error_id": "ERR_ORCHESTRATOR_CHANGES_REQUESTED_MOVE_FAILURE",
                             "work_item_id": work_item_id,
                             "project_id": project_id,
-                            "board_id": board_id,
+                            "board_id": board_id_local2,
                             "error_type": type(e).__name__,
                         }
                     )

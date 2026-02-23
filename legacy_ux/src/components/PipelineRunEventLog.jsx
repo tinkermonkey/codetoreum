@@ -401,8 +401,8 @@ export default function PipelineRunEventLog({ pipelineRun, events: initialEvents
     if (!isActive || !pipelineRun) return
     
     // Filter socket events for this pipeline run
-    const newEvents = socketEvents.filter(e => 
-      e.pipeline_run_id === pipelineRun.id &&
+    const newEvents = socketEvents.filter(e =>
+      e.workflow_run_id === pipelineRun.id &&
       !events.find(existing => existing.event_id === e.event_id)
     )
     

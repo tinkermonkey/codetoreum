@@ -2,6 +2,11 @@
 
 This module defines type aliases used throughout the domain layer to provide
 better type safety and expressiveness.
+
+Note: These NewType aliases provide static type checking only and do not perform
+runtime validation. For critical identifiers that require runtime validation
+(e.g., format validation, existence checks), consider implementing validated
+value objects as a future enhancement.
 """
 
 from typing import NewType
@@ -54,7 +59,7 @@ CONTAINER_LABEL_PROJECT = "org.codetoreum.project"
 CONTAINER_LABEL_AGENT = "org.codetoreum.agent"
 CONTAINER_LABEL_WORK_ITEM_ID = "org.codetoreum.work_item_id"
 CONTAINER_LABEL_TASK_ID = "org.codetoreum.task_id"
-CONTAINER_LABEL_PIPELINE_RUN_ID = "org.codetoreum.pipeline_run_id"
+CONTAINER_LABEL_WORKFLOW_RUN_ID = "org.codetoreum.workflow_run_id"
 CONTAINER_LABEL_EXECUTION_ID = "org.codetoreum.execution_id"
 
 # Valid container type values for org.codetoreum.type label

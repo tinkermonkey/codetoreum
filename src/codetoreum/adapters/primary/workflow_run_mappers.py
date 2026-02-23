@@ -14,11 +14,17 @@ from codetoreum.adapters.primary.workflow_run_dtos import (
     WorkflowEventResponse,
     WorkflowEventsListResponse,
 )
+from codetoreum.adapters.primary.audit_dtos import (
+    WorkflowRunAuditResponse,
+    AuditValidationResult,
+    AuditStageInfo,
+)
 from codetoreum.ports.input.workflow_run_query import (
     WorkflowRunInfo,
     WorkflowRunSummary,
     WorkflowRunListResult,
     WorkflowRunStageInfo,
+    WorkflowRunAuditResult,
 )
 
 
@@ -43,6 +49,9 @@ class WorkflowRunMapper:
             startedAt=stage.started_at,
             completedAt=stage.completed_at,
             executionId=stage.execution_id,
+            output=stage.output,
+            errorMessage=stage.error_message,
+            metadata=stage.metadata,
         )
 
     @staticmethod
@@ -128,7 +137,7 @@ class WorkflowRunMapper:
         return WorkflowEventResponse(
             id=event.get("id") or event.get("event_id", ""),
             eventType=event.get("eventType") or event.get("event_type", ""),
-            workflowRunId=event.get("workflowRunId") or event.get("workflow_run_id", ""),
+            workflowRunId=event.get("workflowRunId") or event.get("workflow_run_id") or event.get("aggregate_id", ""),
             timestamp=event.get("timestamp") or event.get("occurred_at"),
             agentName=event.get("agentName") or event.get("agent_name"),
             stageName=event.get("stageName") or event.get("stage_name"),
@@ -157,4 +166,90 @@ class WorkflowRunMapper:
             page=(offset // limit) + 1 if limit > 0 else 1,
             page_size=limit,
             has_next=has_next,
+        )
+
+    @staticmethod
+    def to_audit_response(audit_result: WorkflowRunAuditResult) -> WorkflowRunAuditResponse:
+        """
+        Convert audit result to WorkflowRunAuditResponse DTO.
+
+        Args:
+            audit_result: WorkflowRunAuditResult containing:
+                - workflow_run: WorkflowRunSummary
+                - events: List[event_dict]
+                - stages: List[stage_info_dict]
+                - validation: validation_result_dict
+                - total_count: int
+                - offset: int
+                - limit: int
+                - has_next: bool
+
+        Returns:
+            WorkflowRunAuditResponse DTO
+        """
+        # Convert workflow run summary
+        workflow_run_summary = WorkflowRunMapper.to_summary_response(
+            audit_result.workflow_run
+        )
+
+        # Convert events
+        events = [
+            WorkflowRunMapper.to_event_response(event)
+            for event in audit_result.events
+        ]
+
+        # Convert stage info (including nested events)
+        stages = []
+        for stage_dict in audit_result.stages:
+            # Validate required fields with meaningful error messages
+            if "name" not in stage_dict:
+                raise KeyError(
+                    f"Stage dictionary missing required 'name' field. "
+                    f"Available keys: {list(stage_dict.keys())}"
+                )
+            if "status" not in stage_dict:
+                raise KeyError(
+                    f"Stage dictionary missing required 'status' field for stage '{stage_dict.get('name', 'unknown')}'. "
+                    f"Available keys: {list(stage_dict.keys())}"
+                )
+
+            # Map events within each stage
+            stage_events = [
+                WorkflowRunMapper.to_event_response(event)
+                for event in stage_dict.get("events", [])
+            ]
+            # Create stage with mapped events
+            stages.append(AuditStageInfo(
+                name=stage_dict["name"],
+                status=stage_dict["status"],
+                startedAt=stage_dict.get("startedAt") or stage_dict.get("started_at"),
+                completedAt=stage_dict.get("completedAt") or stage_dict.get("completed_at"),
+                durationSeconds=stage_dict.get("durationSeconds") or stage_dict.get("duration_seconds"),
+                events=stage_events,
+                output=stage_dict.get("output"),
+                errorMessage=stage_dict.get("errorMessage") or stage_dict.get("error_message"),
+                metadata=stage_dict.get("metadata", {}),
+            ))
+
+        # Convert validation result (if present)
+        validation = None
+        if audit_result.validation is not None:
+            try:
+                validation = AuditValidationResult(**audit_result.validation)
+            except (TypeError, ValueError) as e:
+                raise ValueError(
+                    f"Failed to construct AuditValidationResult from validation data. "
+                    f"Error: {e}. "
+                    f"Validation data keys: {list(audit_result.validation.keys()) if isinstance(audit_result.validation, dict) else type(audit_result.validation).__name__}"
+                ) from e
+
+        return WorkflowRunAuditResponse(
+            workflowRun=workflow_run_summary,
+            events=events,
+            stages=stages,
+            validation=validation,
+            totalEventCount=audit_result.total_count,
+            offset=audit_result.offset,
+            limit=audit_result.limit,
+            hasNext=audit_result.has_next,
         )

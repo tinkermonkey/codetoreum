@@ -318,8 +318,8 @@ class TestObservabilityConfigValidation:
             config.validate()
             mock_logger.warning.assert_not_called()
 
-    def test_validate_logs_warning_when_traces_enabled_without_endpoint(self):
-        """Test warning is logged when traces enabled but endpoint not configured."""
+    def test_validate_raises_error_when_traces_enabled_without_endpoint(self):
+        """Test ValueError is raised when traces enabled but endpoint not configured."""
         # Create a mock SignozConfig with empty grpc_endpoint
         signoz_config = mock.MagicMock(spec=SignozConfig)
         signoz_config.grpc_endpoint = ""
@@ -343,15 +343,12 @@ class TestObservabilityConfigValidation:
             log_level="info",
         )
 
-        with mock.patch(
-            "codetoreum.infrastructure.observability.config.logger"
-        ) as mock_logger:
+        with pytest.raises(ValueError) as exc_info:
             config.validate()
-            mock_logger.warning.assert_called_once()
-            assert "Traces enabled" in mock_logger.warning.call_args[0][0]
+        assert "Traces enabled but traces_endpoint is not configured" in str(exc_info.value)
 
-    def test_validate_logs_warning_when_logs_enabled_without_endpoint(self):
-        """Test warning is logged when logs enabled but endpoint not configured."""
+    def test_validate_raises_error_when_logs_enabled_without_endpoint(self):
+        """Test ValueError is raised when logs enabled but endpoint not configured."""
         signoz_config = mock.MagicMock(spec=SignozConfig)
         signoz_config.grpc_endpoint = "localhost:4317"
         signoz_config.logs_endpoint = ""
@@ -374,15 +371,12 @@ class TestObservabilityConfigValidation:
             log_level="info",
         )
 
-        with mock.patch(
-            "codetoreum.infrastructure.observability.config.logger"
-        ) as mock_logger:
+        with pytest.raises(ValueError) as exc_info:
             config.validate()
-            mock_logger.warning.assert_called_once()
-            assert "Logs enabled" in mock_logger.warning.call_args[0][0]
+        assert "Logs enabled but logs_endpoint is not configured" in str(exc_info.value)
 
-    def test_validate_logs_warnings_for_both_signals(self):
-        """Test warnings for both traces and logs when endpoints not configured."""
+    def test_validate_raises_error_for_traces_when_both_missing(self):
+        """Test ValueError is raised for traces when both traces and logs endpoints not configured."""
         signoz_config = mock.MagicMock(spec=SignozConfig)
         signoz_config.grpc_endpoint = ""
         signoz_config.logs_endpoint = ""
@@ -405,11 +399,10 @@ class TestObservabilityConfigValidation:
             log_level="info",
         )
 
-        with mock.patch(
-            "codetoreum.infrastructure.observability.config.logger"
-        ) as mock_logger:
+        # Validation should raise error for the first missing endpoint (traces)
+        with pytest.raises(ValueError) as exc_info:
             config.validate()
-            assert mock_logger.warning.call_count == 2
+        assert "Traces enabled but traces_endpoint is not configured" in str(exc_info.value)
 
 
 class TestObservabilityConfigFromEnv:
