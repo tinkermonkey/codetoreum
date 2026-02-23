@@ -29,6 +29,7 @@ from codetoreum.ports.input.workflow_run_query import (
     WorkflowRunEventsResult,
     WorkflowRunAuditResult,
 )
+from codetoreum.domain.types import WorkItemId
 from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.ports.exceptions import WorkItemNotFoundError
 from codetoreum.ports.output.ticket_system import ITicketSystem
@@ -245,7 +246,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
 
         # Query workflow stream IDs using Elasticsearch aggregations
         # This pushes filtering and pagination to the database level
-        stream_ids, total_count = await self.event_store.query_streams_by_latest_event(
+        stream_ids, total_count = await self.event_store.query_streams_by_latest_event(  # type: ignore[attr-defined]
             aggregate_type="Workflow",
             event_data_filters=event_data_filters if event_data_filters else None,
             sort_by="timestamp",  # Will be refined after reconstruction
@@ -602,9 +603,9 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         summaries = await asyncio.gather(*[enrich_one(w) for w in workflows], return_exceptions=True)
 
         # Handle any exceptions returned from gather
-        processed_summaries = []
+        processed_summaries: List[WorkflowRunSummary] = []
         for summary in summaries:
-            if isinstance(summary, Exception):
+            if isinstance(summary, (Exception, BaseException)):
                 logger.error(
                     f"Unexpected error during workflow enrichment: {summary}",
                     exc_info=summary,
@@ -617,7 +618,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
 
         return processed_summaries
 
-    def _default_metadata(self) -> Dict:
+    def _default_metadata(self) -> Dict[str, Any]:
         """
         Get default metadata for when work item fetch fails.
 
@@ -721,7 +722,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         cached = await self._work_item_cache.get(work_item_id)
         if cached is not None:
             logger.debug(f"Cache hit for work item {work_item_id}")
-            return cached
+            return dict(cached)
 
         # Default metadata
         metadata = self._default_metadata()
@@ -729,7 +730,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         # Fetch from ticket system if available
         if self.ticket_system:
             try:
-                work_item = await self.ticket_system.get_work_item(work_item_id)
+                work_item = await self.ticket_system.get_work_item(WorkItemId(work_item_id))
                 metadata = {
                     "issue_title": work_item.title,
                     "issue_number": work_item.external_id,
@@ -778,7 +779,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
             # Get metadata and wrap in MappingProxyType for immutability
             stage_info = WorkflowRunStageInfo(
                 name=stage.name,
-                agent_name=stage.agent_name,
+                agent_name=stage.agent_config.get("agent_id", ""),
                 status=stage.status.value,
                 started_at=stage.started_at,
                 completed_at=stage.completed_at,

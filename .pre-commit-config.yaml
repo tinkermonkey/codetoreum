@@ -1,5 +1,9 @@
 # Pre-commit hooks configuration
 # See https://pre-commit.com for more information
+
+# Exclude virtual environment directories tracked in git
+exclude: ^venv_test/
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
@@ -38,9 +42,10 @@ repos:
         additional_dependencies:
           - types-PyYAML
           - types-redis
+          - types-python-dateutil
           - pydantic
         args: [--ignore-missing-imports]
-        exclude: ^tests/
+        files: ^src/
 
   - repo: local
     hooks:

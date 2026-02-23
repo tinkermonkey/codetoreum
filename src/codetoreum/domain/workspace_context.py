@@ -41,7 +41,7 @@ class WorkspaceContext:
     create_commits: bool
     post_comments: bool
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate invariants after initialization."""
         # Validate workspace type specific requirements
         if self.workspace_type in [WorkspaceType.ISSUE, WorkspaceType.HYBRID]:

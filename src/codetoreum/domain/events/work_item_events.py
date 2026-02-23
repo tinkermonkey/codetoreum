@@ -121,7 +121,7 @@ class WorkItemUpdatedEvent(CodetoreumEvent):
 
     work_item_id: str = ""
     project_id: str = ""
-    changes: Dict[str, Any] = field(default_factory=dict)  # type: ignore
+    changes: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""

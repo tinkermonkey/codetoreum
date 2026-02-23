@@ -39,7 +39,7 @@ class PatternElement:
     min_occurrences: int  # Minimum required occurrences
     max_occurrences: Optional[int]  # Maximum allowed occurrences (None = unlimited)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate pattern element after initialization."""
         if not self.event_types:
             raise ValueError("event_types must be a non-empty tuple")
@@ -58,7 +58,7 @@ class ValidationResult:
     out_of_order_events: Tuple[Tuple[str, int, int], ...]  # NOT IMPLEMENTED - always empty tuple
     error_message: Optional[str] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate consistency of is_valid flag with error lists."""
         # If is_valid is True, all error lists should be empty
         if self.is_valid:
@@ -95,7 +95,7 @@ class EventSequenceValidator:
     - "EventA|EventB+" means one or more of either EventA or EventB
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize validator."""
         self._pattern_cache: Dict[str, PatternElement] = {}
 
@@ -297,7 +297,7 @@ class EventSequenceValidator:
         """
         return event_type in pattern_elem.event_types
 
-    def clear_cache(self):
+    def clear_cache(self) -> None:
         """Clear the pattern parsing cache."""
         self._pattern_cache.clear()
 

@@ -14,7 +14,7 @@ The service coordinates with:
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Tuple, cast
 
 from codetoreum.domain.events.container_recovery_events import (
     ContainerKilledEvent,
@@ -31,6 +31,7 @@ from codetoreum.infrastructure.observability.instrumentation import (
 )
 from codetoreum.ports.exceptions import ContainerError, StorageError
 from codetoreum.ports.output.container_recovery import (
+    IAgentContainerRecoveryService,
     ContainerMetadata,
     RecoveryAssessment,
     RecoveryResult,
@@ -66,7 +67,7 @@ class ContainerRecoveryService:
 
     def __init__(
         self,
-        recovery_adapter,  # IAgentContainerRecoveryService implementation
+        recovery_adapter: IAgentContainerRecoveryService,
         event_emitter: IEventEmitter,
         container_timeout_hours: int = 2,
     ):
@@ -152,7 +153,7 @@ class ContainerRecoveryService:
             # Step 4: Assess and execute recovery with bounded parallelism
             semaphore = asyncio.Semaphore(self.BATCH_SIZE)
 
-            async def process_container(metadata: ContainerMetadata):
+            async def process_container(metadata: ContainerMetadata) -> Tuple[str, bool]:
                 """Process a single container with semaphore-bounded parallelism."""
                 async with semaphore:
                     try:
@@ -216,7 +217,7 @@ class ContainerRecoveryService:
                                 # (true if work_item_id is present). The actual mark_execution_failed() call
                                 # happens in execute_recovery_action if the tracker supports it.
                                 execution_marked_failed = bool(metadata.work_item_id)
-                                event = ContainerKilledEvent(
+                                killed_event = ContainerKilledEvent(
                                     type="container_recovery.killed",
                                     timestamp=datetime.now(timezone.utc).isoformat(),
                                     source="container_recovery_service",
@@ -225,14 +226,14 @@ class ContainerRecoveryService:
                                     project_id=metadata.project_id,
                                     agent_id=metadata.agent_id,
                                     work_item_id=metadata.work_item_id,
-                                    kill_reason=assessment.reason,
+                                    kill_reason=assessment.reason,  # type: ignore[arg-type]
                                     uptime_seconds=self._calculate_uptime_seconds(
                                         metadata.created_at
                                     ),
                                     execution_marked_failed=execution_marked_failed,
                                 )
                                 try:
-                                    self.event_emitter.emit(event)
+                                    self.event_emitter.emit(killed_event)
                                 except Exception as e:
                                     logger.error(
                                         f"Failed to emit ContainerKilledEvent for {metadata.container_id}: {e}",
@@ -267,28 +268,26 @@ class ContainerRecoveryService:
                         return ("error", False)
 
             # Process all containers with bounded parallelism
-            results = await asyncio.gather(
+            gather_results = await asyncio.gather(
                 *[process_container(c) for c in all_containers],
                 return_exceptions=True,
             )
 
             # Handle any exceptions returned from gather
-            processed_results = []
-            for result in results:
-                if isinstance(result, Exception):
+            processed_results: List[Tuple[str, bool]] = []
+            for result in gather_results:
+                if isinstance(result, (Exception, BaseException)):
                     logger.error(
                         f"Unexpected error in container recovery: {result}",
                         exc_info=result,
                         extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR}
                     )
                     processed_results.append(("error", False))
-                else:
+                elif result is not None:
                     processed_results.append(result)
 
-            results = processed_results
-
             # Count results
-            for action, success in results:
+            for action, success in processed_results:
                 if action == "reconnect" and success:
                     recovered_count += 1
                 elif action == "kill" and success:

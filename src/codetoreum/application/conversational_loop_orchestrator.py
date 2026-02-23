@@ -491,7 +491,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 agent_name=session_state.agent_assignment,
                 conversation_id=execution_result.conversation_id,
             )
-            await self.event_store.append(work_item_id, [response_event])
+            await self.event_store.append(work_item_id, [response_event])  # type: ignore[list-item]
 
             logger.info(
                 "Posted agent response to work item %s, responding to comment %s",

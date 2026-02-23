@@ -3,8 +3,11 @@
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from uuid import uuid4
+
+if TYPE_CHECKING:
+    from codetoreum.domain.workflow_template import WorkflowTemplate
 
 from codetoreum.domain.events import (
     DomainEvent,
@@ -76,7 +79,7 @@ class Workflow:
     _version: int = field(default=0, init=False, repr=False)
     _skip_validation: bool = field(default=False, init=False, repr=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate invariants after initialization."""
         if not self._skip_validation:
             self._validate_invariants()
@@ -273,7 +276,7 @@ class Workflow:
             payload={
                 "completed_at": self.completed_at.isoformat(),
                 "work_item_id": self.work_item_id,
-                "duration_seconds": (self.completed_at - self.started_at).total_seconds(),
+                "duration_seconds": (self.completed_at - self.started_at).total_seconds() if self.started_at else 0.0,
             },
         )
         self._add_event(event)

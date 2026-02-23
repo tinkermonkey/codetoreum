@@ -39,7 +39,7 @@ class ColumnTemplate:
     position: int
     auto_progress_on_completion: bool
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate column template invariants."""
         # Validate name
         if not self.name or not self.name.strip():
@@ -181,7 +181,7 @@ class BoardReconciliationConfig:
     board_id: str
     project_id: str
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate reconciliation config."""
         if not self.workflow_template_id or not self.workflow_template_id.strip():
             raise ValueError("workflow_template_id cannot be empty")

@@ -130,7 +130,7 @@ class ConfigurationService:
                 raise ValidationError("; ".join(validation.errors or []))
 
             # Store old values for computing changes
-            old_config = {
+            old_config: Dict[str, Any] = {
                 "tech_stacks": config.tech_stacks.copy(),
                 "pipelines": [p.copy() for p in config.pipelines],
                 "testing": config.testing.copy(),
@@ -1007,11 +1007,11 @@ class ConfigurationValidator:
                     errors.append("Pipeline stage names must be unique")
 
                 # Check for circular dependencies
-                stage_map = {s.get("name"): s for s in updates["stages"] if isinstance(s, dict)}
+                stage_map: Dict[str, Any] = {s.get("name") or "": s for s in updates["stages"] if isinstance(s, dict)}
                 for stage in updates["stages"]:
                     if isinstance(stage, dict) and "transitions" in stage:
                         if self._has_circular_dependency(
-                            stage.get("name"),
+                            stage.get("name") or "",
                             stage.get("transitions", []),
                             stage_map,
                         ):

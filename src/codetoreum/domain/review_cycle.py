@@ -18,7 +18,7 @@ from codetoreum.domain.exceptions import DomainError
 class ReviewCycleCreated(DomainEvent):
     """Emitted when review cycle is created."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
         """
         Initialize ReviewCycleCreated event.
 
@@ -40,7 +40,7 @@ class ReviewCycleCreated(DomainEvent):
 class ReviewIterationStarted(DomainEvent):
     """Emitted when new iteration begins."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
         """
         Initialize ReviewIterationStarted event.
 
@@ -59,7 +59,7 @@ class ReviewIterationStarted(DomainEvent):
 class ReviewFeedbackSubmitted(DomainEvent):
     """Emitted when reviewer provides feedback."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
         """
         Initialize ReviewFeedbackSubmitted event.
 
@@ -80,7 +80,7 @@ class ReviewFeedbackSubmitted(DomainEvent):
 class ReviewCycleApproved(DomainEvent):
     """Emitted when review cycle is approved."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
         """
         Initialize ReviewCycleApproved event.
 
@@ -99,7 +99,7 @@ class ReviewCycleApproved(DomainEvent):
 class ReviewCycleEscalated(DomainEvent):
     """Emitted when review cycle is escalated to human."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs):
+    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
         """
         Initialize ReviewCycleEscalated event.
 
@@ -209,7 +209,7 @@ class ReviewCycle:
     _events: List[DomainEvent] = field(default_factory=list, init=False, repr=False)
     _version: int = field(default=0, init=False, repr=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate invariants after initialization."""
         self._validate_invariants()
 

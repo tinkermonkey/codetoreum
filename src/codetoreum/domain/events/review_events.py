@@ -55,8 +55,8 @@ class ReviewStatusChangedEvent(CodetoreumEvent):
     review_id: str = ""
     work_item_id: Optional[str] = None
     project_id: str = ""
-    previous_status: CodeReviewStatus = "open"  # type: ignore
-    new_status: CodeReviewStatus = "open"  # type: ignore
+    previous_status: CodeReviewStatus = "open"
+    new_status: CodeReviewStatus = "open"
     reviewer: Optional[str] = None
 
     def __post_init__(self) -> None:
@@ -98,8 +98,8 @@ class ReviewStatusChangedEvent(CodetoreumEvent):
             review_id=data.get("review_id", ""),
             work_item_id=data.get("work_item_id"),
             project_id=data.get("project_id", ""),
-            previous_status=data.get("previous_status", "open"),  # type: ignore
-            new_status=data.get("new_status", "open"),  # type: ignore
+            previous_status=data.get("previous_status", "open"),
+            new_status=data.get("new_status", "open"),
             reviewer=data.get("reviewer"),
         )
 

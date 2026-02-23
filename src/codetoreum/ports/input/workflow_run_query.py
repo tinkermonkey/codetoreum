@@ -43,7 +43,7 @@ class WorkflowRunFilters:
     work_item_id: Optional[str] = None  # Filter by work item
     workflow_id: Optional[str] = None  # Filter by workflow template
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate filter fields."""
         # Validate non-empty string IDs
         if self.project_id is not None and not self.project_id.strip():
@@ -65,7 +65,7 @@ class WorkflowRunPaginationParams:
     sort_by: WorkflowRunSortField = WorkflowRunSortField.STARTED_AT
     sort_order: SortOrder = SortOrder.DESC
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate pagination parameters."""
         if self.offset < 0:
             raise ValueError(f"offset must be >= 0, got {self.offset}")
@@ -86,9 +86,9 @@ class WorkflowRunStageInfo:
     execution_id: Optional[str]
     output: Optional[str] = None
     error_message: Optional[str] = None
-    metadata: Mapping = None
+    metadata: Optional[Mapping] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Initialize metadata and validate fields."""
         # Validate name is non-empty
         if not self.name or not self.name.strip():
@@ -169,7 +169,7 @@ class WorkflowRunEventsResult:
     limit: int
     has_next: bool
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate pagination parameters."""
         if self.offset < 0:
             raise ValueError(f"offset must be non-negative, got {self.offset}")
@@ -191,7 +191,7 @@ class WorkflowRunAuditResult:
     limit: int
     has_next: bool
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate pagination parameters."""
         if self.offset < 0:
             raise ValueError(f"offset must be non-negative, got {self.offset}")

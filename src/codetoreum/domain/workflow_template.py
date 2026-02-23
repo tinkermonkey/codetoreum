@@ -2,8 +2,11 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from uuid import uuid4
+
+if TYPE_CHECKING:
+    from codetoreum.domain.workflow import Workflow
 
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.pipeline_stage import PipelineStage, StageType

@@ -46,7 +46,7 @@ class AgentCapability:
     proficiency: float  # 0.0 to 1.0
     description: Optional[str] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate proficiency range."""
         if not 0.0 <= self.proficiency <= 1.0:
             raise DomainError("Proficiency must be between 0.0 and 1.0")
@@ -95,7 +95,7 @@ class Agent:
     _events: List[DomainEvent] = field(default_factory=list, init=False, repr=False)
     _version: int = field(default=0, init=False, repr=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate invariants after initialization."""
         self._validate_invariants()
 

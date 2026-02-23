@@ -116,7 +116,7 @@ class ReviewService:
             # Persist events
             events = review_cycle.get_pending_events()
             for event in events:
-                await self.event_store.append(event)
+                await self.event_store.append(event.aggregate_id, [event])
             review_cycle.clear_events()
 
             logger.info(
@@ -179,7 +179,7 @@ class ReviewService:
             # Persist events
             events = review_cycle.get_pending_events()
             for event in events:
-                await self.event_store.append(event)
+                await self.event_store.append(event.aggregate_id, [event])
             review_cycle.clear_events()
 
             logger.info(
@@ -249,7 +249,7 @@ class ReviewService:
             # Persist events
             events = review_cycle.get_pending_events()
             for event in events:
-                await self.event_store.append(event)
+                await self.event_store.append(event.aggregate_id, [event])
             review_cycle.clear_events()
 
             logger.info(
@@ -344,7 +344,7 @@ class ReviewService:
                     # Persist events
                     events = review_cycle.get_pending_events()
                     for event in events:
-                        await self.event_store.append(event)
+                        await self.event_store.append(event.aggregate_id, [event])
                     review_cycle.clear_events()
 
                 logger.info(
@@ -376,7 +376,7 @@ class ReviewService:
                         # Persist events
                         events = review_cycle.get_pending_events()
                         for event in events:
-                            await self.event_store.append(event)
+                            await self.event_store.append(event.aggregate_id, [event])
                         review_cycle.clear_events()
 
                         logger.warning(

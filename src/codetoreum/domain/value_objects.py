@@ -2,8 +2,11 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, TypeVar, Generic
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, TypeVar, Generic
 from uuid import uuid4
+
+if TYPE_CHECKING:
+    from codetoreum.domain.agent import AgentCapability
 
 from codetoreum.domain.exceptions import DomainError
 
@@ -46,7 +49,7 @@ class ProjectConfig:
     enabled: bool
     org: str
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate project configuration."""
         if not self.repo_url or not self.repo_url.strip():
             raise DomainError("ProjectConfig.repo_url cannot be empty")
@@ -70,7 +73,7 @@ class TypeSafeId(Generic[T]):
     value: str
     _type_name: str = field(default="", init=False, repr=False, compare=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate identifier."""
         if not self.value:
             object.__setattr__(self, "_type_name", self.__class__.__name__)
@@ -132,7 +135,7 @@ class Requirement:
     min_proficiency: float
     is_required: bool = True
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate proficiency range."""
         if not 0.0 <= self.min_proficiency <= 1.0:
             raise DomainError("Min proficiency must be between 0.0 and 1.0")
@@ -195,7 +198,7 @@ class ExecutionResult:
     # Timestamp
     timestamp: datetime
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate execution result."""
         if self.input_tokens < 0:
             raise DomainError("Input tokens cannot be negative")
@@ -319,7 +322,7 @@ class ContainerConfig:
     stdin_open: bool = False  # -i flag
     tty: bool = False  # -t flag
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate container configuration."""
         if not self.image:
             raise DomainError("Container image cannot be empty")
@@ -393,7 +396,7 @@ class ExecutionContext:
     # Metadata
     metadata: Dict[str, Any]
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate execution context."""
         if self.timeout_seconds <= 0:
             raise DomainError("Timeout must be positive")
@@ -440,7 +443,7 @@ class TimeRange:
     start: datetime
     end: datetime
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate time range."""
         if self.end < self.start:
             raise DomainError("End time must be after start time")
@@ -470,7 +473,7 @@ class TokenUsage:
     input_tokens: int
     output_tokens: int
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate token counts."""
         if self.input_tokens < 0 or self.output_tokens < 0:
             raise DomainError("Token counts cannot be negative")

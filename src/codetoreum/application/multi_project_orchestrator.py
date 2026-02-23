@@ -15,7 +15,7 @@ from codetoreum.domain.events.project_events import (
     OrchestrationCycleCompletedEvent,
 )
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
-from codetoreum.ports.output.board_service import IBoardService
+from codetoreum.ports.output.board_service import IBoardService, BoardConfig
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.multi_project_orchestrator import (
     IMultiProjectOrchestrator,
@@ -577,7 +577,9 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
             f"Reconciling boards for project {project_name}",
             extra={"project_name": project_name},
         )
-        await self._board_service.reconcile_board(project_name)
+        await self._board_service.reconcile_board(
+            project_name, BoardConfig(board_id=project_name, expected_columns=[])
+        )
 
     @staticmethod
     def _get_iso_timestamp() -> str:

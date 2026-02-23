@@ -70,7 +70,7 @@ class FeedbackProcessingResult:
 
     success: bool
     parsed_feedback: Optional[ParsedFeedback] = None
-    actionable_items: List[ActionableItem] = None
+    actionable_items: Optional[List[ActionableItem]] = None
     should_create_work_items: bool = False
     error: Optional[str] = None
 

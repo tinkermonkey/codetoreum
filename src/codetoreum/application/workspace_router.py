@@ -4,6 +4,7 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional
+from codetoreum.domain.types import BranchName
 
 from codetoreum.domain.agent import Agent
 from codetoreum.domain.project_context import ProjectContext
@@ -127,7 +128,7 @@ class WorkspaceRouter:
             event: Event to emit
         """
         try:
-            await self.event_store.append(event)
+            await self.event_store.append(event.aggregate_id, [event])
         except Exception as e:
             self._logger.error(
                 f"Failed to emit event {type(event).__name__}: {e}",
@@ -192,7 +193,7 @@ class WorkspaceRouter:
             return WorkspaceContext.for_discussion(
                 project_id=project.id,
                 work_item_id=work_item.id,
-                discussion_id=work_item.external_id,
+                discussion_id=work_item.external_id or "",
             )
         else:
             # Issue workspace with feature branch
@@ -276,7 +277,7 @@ class WorkspaceRouter:
             f"project={project.id}, work_item={work_item.id}"
         )
 
-        metadata = {}
+        metadata: Dict[str, Any] = {}
 
         try:
             if context.should_create_branch():
@@ -295,7 +296,7 @@ class WorkspaceRouter:
                         f"Checking out existing branch: {context.branch_name}"
                     )
                     await self.repository.checkout(
-                        repo_path, context.branch_name, create=False
+                        repo_path, BranchName(context.branch_name or ""), create=False
                     )
                     metadata["branch_action"] = "checkout_existing"
                 else:
@@ -305,11 +306,11 @@ class WorkspaceRouter:
                     )
                     await self.repository.create_branch(
                         repo_path,
-                        context.branch_name,
-                        from_branch=project.default_branch,
+                        BranchName(context.branch_name or ""),
+                        from_branch=BranchName(project.default_branch),
                     )
                     await self.repository.checkout(
-                        repo_path, context.branch_name, create=False
+                        repo_path, BranchName(context.branch_name or ""), create=False
                     )
                     metadata["branch_action"] = "create_new"
 
@@ -389,7 +390,7 @@ class WorkspaceRouter:
             f"project={project.id}"
         )
 
-        metadata = {}
+        metadata: Dict[str, Any] = {}
         commit_sha = None
         pr_url = None
 

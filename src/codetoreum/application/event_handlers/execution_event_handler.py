@@ -252,7 +252,7 @@ class ExecutionEventHandler(EventHandler):
             * 100
         )
 
-    def get_metrics(self) -> Dict[str, int]:
+    def get_metrics(self) -> Dict[str, float]:
         """
         Get execution metrics.
 

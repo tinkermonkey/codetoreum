@@ -4,7 +4,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from codetoreum.domain.events import (
     PipelineStageStarted,
@@ -497,7 +497,7 @@ class PipelineManager:
 
         if self.checkpoint_store:
             try:
-                checkpoint = await self.checkpoint_store.load_checkpoint(pipeline_id)
+                checkpoint = cast(Optional[PipelineCheckpoint], await self.checkpoint_store.load_checkpoint(pipeline_id))
                 if checkpoint:
                     self._logger.info(
                         f"Recovered checkpoint: completed={len(checkpoint.completed_stages)}"

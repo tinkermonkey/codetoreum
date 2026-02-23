@@ -58,7 +58,7 @@ class TestOutputParseError(DomainError):
     - Agent is malfunctioning
     """
 
-    def __init__(self, message: str, test_type: str, raw_data: any):
+    def __init__(self, message: str, test_type: str, raw_data: object):
         super().__init__(message)
         self.test_type = test_type
         self.raw_data = raw_data
