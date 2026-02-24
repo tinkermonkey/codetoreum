@@ -13,6 +13,12 @@ from typing import Dict, List
 
 import pytest
 
+# Import FrozenInstanceError with fallback for older Python versions
+try:
+    from dataclasses import FrozenInstanceError
+except ImportError:
+    FrozenInstanceError = AttributeError  # type: ignore
+
 from codetoreum.domain.types import (
     CONTAINER_LABEL_AGENT,
     CONTAINER_LABEL_EXECUTION_ID,
@@ -53,10 +59,10 @@ class TestContainerMetadataImmutability:
         )
 
         # Attempting to modify any field should raise FrozenInstanceError
-        with pytest.raises(Exception):  # FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
             metadata.container_id = "xyz789"
 
-        with pytest.raises(Exception):  # FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
             metadata.project_id = "proj-2"
 
     def test_container_metadata_preserves_all_fields(self):
@@ -107,10 +113,10 @@ class TestRecoveryAssessmentImmutability:
         )
 
         # Attempting to modify any field should raise FrozenInstanceError
-        with pytest.raises(Exception):  # FrozenInstanceError
-            assessment.action = "kill"
+        with pytest.raises(FrozenInstanceError):
+            assessment.action = "kill"  # type: ignore
 
-        with pytest.raises(Exception):  # FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
             assessment.reason = "Container timeout"
 
     def test_recovery_assessment_kill_action(self):
@@ -154,11 +160,11 @@ class TestRecoveryResultImmutability:
         )
 
         # Attempting to modify any field should raise FrozenInstanceError
-        with pytest.raises(Exception):  # FrozenInstanceError
-            result.recovered = 10
+        with pytest.raises(FrozenInstanceError):
+            result.recovered = 10  # type: ignore
 
-        with pytest.raises(Exception):  # FrozenInstanceError
-            result.errors = 5
+        with pytest.raises(FrozenInstanceError):
+            result.errors = 5  # type: ignore
 
     def test_recovery_result_preserves_counts(self):
         """RecoveryResult should preserve counts accurately."""
@@ -614,7 +620,7 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at="2026-01-27T23:34:55.217234+00:00",
+                created_at="2026-01-27T23:34:55.217234+00:00",  # type: ignore
                 labels=MappingProxyType({
                 CONTAINER_LABEL_TYPE: "agent",
                 CONTAINER_LABEL_PROJECT: "proj-1",
@@ -632,7 +638,7 @@ class TestContainerMetadataValidation:
                 agent_id="agent-1",
                 task_id="task-1",
                 created_at=datetime.now(timezone.utc),
-                labels={"key": "value"},
+                labels={"key": "value"},  # type: ignore
             )
 
     def test_work_item_id_must_be_non_empty_if_provided(self):
@@ -970,7 +976,7 @@ class TestRecoveryAssessmentValidation:
         with pytest.raises(ValueError, match='action must be one of'):
             RecoveryAssessment(
                 container_id="abc123",
-                action="invalid",
+                action="invalid",  # type: ignore
                 reason="Test reason",
                 with_monitoring=True,
                 execution_id="exec-456",
@@ -1005,7 +1011,7 @@ class TestRecoveryAssessmentValidation:
                 container_id="abc123",
                 action="reconnect",
                 reason="Test reason",
-                with_monitoring="true",
+                with_monitoring="true",  # type: ignore
                 execution_id="exec-456",
             )
 
