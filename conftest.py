@@ -1,17 +1,6 @@
 """Root conftest.py for pytest configuration and shared fixtures."""
 
-from typing import AsyncGenerator
-
 import pytest
-
-
-@pytest.fixture
-async def async_client() -> AsyncGenerator[None, None]:
-    """Placeholder fixture for async HTTP client.
-
-    This will be implemented when FastAPI app is added.
-    """
-    yield None
 
 
 # Add custom pytest configuration hooks

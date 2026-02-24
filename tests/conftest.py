@@ -2,7 +2,7 @@
 
 import asyncio
 import time
-from typing import Awaitable, Callable, Generator
+from collections.abc import Awaitable, Callable, Generator
 
 import docker
 import pytest
