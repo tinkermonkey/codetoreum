@@ -1,14 +1,14 @@
 """
 Orchestrator resource client
 """
-from typing import Optional
+from typing import Any, Optional
 from ..models import WorkflowRun
 
 
 class OrchestratorResource:
     """Client for orchestrator endpoints."""
 
-    def __init__(self, client):
+    def __init__(self, client: Any) -> None:
         self.client = client
 
     def start_workflow(
@@ -90,7 +90,7 @@ class OrchestratorResource:
         self,
         work_item_id: str,
         stage_name: str,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Check if entry conditions are met for a stage.
 
