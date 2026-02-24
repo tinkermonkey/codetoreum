@@ -5,9 +5,9 @@ This example demonstrates how to create a new agent with capabilities
 and MCP server configuration.
 """
 import logging
-from typing import TYPE_CHECKING
+from typing import Any, cast
 
-import requests
+import requests  # type: ignore[import-untyped]
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +22,9 @@ def create_agent(
     description: str,
     agent_type: str = "claude_code",
     capabilities: list[str] | None = None,
-    mcp_servers: list[dict] | None = None,
-    configuration: dict | None = None,
-) -> dict:
+    mcp_servers: list[dict[str, Any]] | None = None,
+    configuration: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     Create a new agent.
 
@@ -65,7 +65,7 @@ def create_agent(
     response = requests.post(url, json=payload, headers=headers, timeout=30)
     response.raise_for_status()
 
-    agent_data = response.json()
+    agent_data: dict[str, Any] = cast(dict[str, Any], response.json())
     logger.info(f"✓ Created agent: {agent_data['id']}")
 
     # Add MCP servers if provided
@@ -76,7 +76,7 @@ def create_agent(
     return agent_data
 
 
-def add_mcp_server(agent_id: str, mcp_config: dict) -> dict:
+def add_mcp_server(agent_id: str, mcp_config: dict[str, Any]) -> dict[str, Any]:
     """
     Add MCP server to an agent.
 
@@ -99,7 +99,7 @@ def add_mcp_server(agent_id: str, mcp_config: dict) -> dict:
     )
     response.raise_for_status()
 
-    result = response.json()
+    result: dict[str, Any] = cast(dict[str, Any], response.json())
     logger.info(f"✓ Added MCP server: {mcp_config['name']}")
     return result
 

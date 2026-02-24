@@ -4,7 +4,7 @@ Exception classes for Codetoreum SDK
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    import requests
+    import requests  # type: ignore[import-untyped]
 
 
 class CodetoreumError(Exception):
