@@ -38,6 +38,7 @@ from codetoreum.ports.output.container_recovery import (
     IAgentContainerRecoveryService,
     RecoveryAssessment,
 )
+from codetoreum.ports.output.repair_cycle_checkpoint_store import IRepairCycleCheckpointStore
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 # Additional label for tracking containers with timestamp parse failures
@@ -101,14 +102,6 @@ class IDockerRunner(Protocol):
         task_id: str,
     ) -> None:
         """Reconnect to a running container and restart monitoring."""
-        ...
-
-
-class IRepairCycleCheckpointStore(Protocol):
-    """Protocol for repair cycle checkpoint storage."""
-
-    async def get_checkpoint(self, container_id: str) -> Optional[Dict[str, Any]]:
-        """Get the checkpoint for a repair cycle container."""
         ...
 
 

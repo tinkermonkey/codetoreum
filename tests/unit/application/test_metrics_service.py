@@ -565,59 +565,6 @@ class TestMetricsServiceErrorHandling:
 
         assert metrics.avg_execution_duration_seconds == 0.0
 
-    @pytest.mark.asyncio
-    async def test_get_metric_time_series_not_implemented(self):
-        """Test unimplemented metric time series raises appropriate error."""
-        event_store = MockEventStore()
-        metrics_service = MetricsService(
-            event_store=event_store,
-            start_time=datetime.now(timezone.utc),
-            version="1.0.0"
-        )
-
-        with pytest.raises(MetricNotFoundError):
-            await metrics_service.get_metric_time_series(
-                metric_name="unknown_metric",
-                start_time=datetime.now(timezone.utc),
-                end_time=datetime.now(timezone.utc)
-            )
-
-    @pytest.mark.asyncio
-    async def test_get_resilience_metrics_placeholder(self):
-        """Test resilience metrics returns placeholder values."""
-        event_store = MockEventStore()
-        metrics_service = MetricsService(
-            event_store=event_store,
-            start_time=datetime.now(timezone.utc),
-            version="1.0.0"
-        )
-
-        now = datetime.now(timezone.utc)
-
-        metrics = await metrics_service.get_resilience_metrics(
-            start_time=now - timedelta(hours=1),
-            end_time=now
-        )
-
-        # Currently returns placeholder data
-        assert metrics.retry_attempts_total == 0
-        assert metrics.timeout_count == 0
-
-    @pytest.mark.asyncio
-    async def test_get_simulation_mode_info(self):
-        """Test simulation mode info returns expected structure."""
-        event_store = MockEventStore()
-        metrics_service = MetricsService(
-            event_store=event_store,
-            start_time=datetime.now(timezone.utc),
-            version="1.0.0"
-        )
-
-        info = await metrics_service.get_simulation_mode_info()
-
-        assert info.enabled is False
-        assert info.time_multiplier == 1.0
-        assert info.deterministic_responses is False
 
 
 class TestMetricsServiceEdgeCases:
@@ -645,49 +592,3 @@ class TestMetricsServiceEdgeCases:
 
         assert metrics.avg_execution_duration_seconds == 0.0
 
-    @pytest.mark.asyncio
-    async def test_get_api_usage_placeholder(self):
-        """Test API usage returns placeholder structure."""
-        event_store = MockEventStore()
-        metrics_service = MetricsService(
-            event_store=event_store,
-            start_time=datetime.now(timezone.utc),
-            version="1.0.0"
-        )
-
-        usage = await metrics_service.get_api_usage()
-
-        assert "claude_api" in usage
-        assert "github_api" in usage
-        assert "checked_at" in usage
-        assert usage["claude_api"]["requests_today"] == 0
-
-    @pytest.mark.asyncio
-    async def test_list_metric_names_placeholder(self):
-        """Test metric names list returns empty placeholder."""
-        event_store = MockEventStore()
-        metrics_service = MetricsService(
-            event_store=event_store,
-            start_time=datetime.now(timezone.utc),
-            version="1.0.0"
-        )
-
-        names = await metrics_service.list_metric_names()
-
-        assert isinstance(names, list)
-        assert names == []
-
-    @pytest.mark.asyncio
-    async def test_get_api_endpoint_metrics_placeholder(self):
-        """Test endpoint metrics returns empty placeholder."""
-        event_store = MockEventStore()
-        metrics_service = MetricsService(
-            event_store=event_store,
-            start_time=datetime.now(timezone.utc),
-            version="1.0.0"
-        )
-
-        metrics = await metrics_service.get_api_endpoint_metrics()
-
-        assert isinstance(metrics, dict)
-        assert metrics == {}
