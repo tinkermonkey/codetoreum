@@ -286,8 +286,9 @@ class TestPipelineQueueServiceContract(ABC):
 
         result = await service.get_next_waiting_item("proj-1", "board-1")
         assert result is not None
-        assert result.work_item_id == "item-123"
-        assert result.status == QueueStatus.WAITING
+        if result:
+            assert result.work_item_id == "item-123"
+            assert result.status == QueueStatus.WAITING
 
     @pytest.mark.asyncio
     async def test_get_next_waiting_item_returns_highest_priority(self):
@@ -307,7 +308,9 @@ class TestPipelineQueueServiceContract(ABC):
         )
 
         result = await service.get_next_waiting_item("proj-1", "board-1")
-        assert result.work_item_id == "item-1"
+        assert result is not None
+        if result:
+            assert result.work_item_id == "item-1"
 
     @pytest.mark.asyncio
     async def test_get_next_waiting_item_skips_active_items(self):
@@ -325,7 +328,9 @@ class TestPipelineQueueServiceContract(ABC):
         await service.mark_item_active("item-1")
 
         result = await service.get_next_waiting_item("proj-1", "board-1")
-        assert result.work_item_id == "item-2"
+        assert result is not None
+        if result:
+            assert result.work_item_id == "item-2"
 
     @pytest.mark.asyncio
     async def test_get_next_waiting_item_validates_project_id(self):
@@ -464,8 +469,8 @@ class TestPipelineQueueServiceContract(ABC):
         entry = entries[0]
 
         # Attempt to modify should fail
-        with pytest.raises(Exception):  # FrozenInstanceError or similar
-            entry.status = "active"
+        with pytest.raises((AttributeError, Exception)):  # FrozenInstanceError or similar
+            entry.status = QueueStatus.ACTIVE
 
     # ===== Multi-Queue Tests =====
 

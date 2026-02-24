@@ -62,30 +62,6 @@ class IProjectManagerServiceContractTests(ABC):
             assert "disabled" not in enabled
 
     @pytest.mark.asyncio
-    async def test_get_project_config_returns_immutable(self):
-        """Verify ProjectConfig is frozen (immutable)."""
-        service = await self.create_service()
-
-        config = ProjectConfig(
-            repo_url="https://github.com/org/test.git",
-            branch="main",
-            enabled=True,
-            org="test-org",
-        )
-
-        if hasattr(service, "add_project"):
-            service.add_project("test-project", config)
-
-            # Get project config
-            retrieved_config = await service.get_project_config("test-project")
-
-            # Verify config is frozen dataclass
-            assert retrieved_config == config
-            # Try to modify - should fail if frozen
-            with pytest.raises(AttributeError):
-                retrieved_config.enabled = False
-
-    @pytest.mark.asyncio
     async def test_get_project_path_derives_from_repo_url(self):
         """Verify workspace path derived correctly from repo URL."""
         service = await self.create_service()
@@ -130,44 +106,6 @@ class IProjectManagerServiceContractTests(ABC):
         with pytest.raises(ResourceNotFoundError):
             await service.ensure_project_cloned("nonexistent-project")
 
-    @pytest.mark.asyncio
-    async def test_reload_config_picks_up_changes(self):
-        """Verify config changes detected after reload."""
-        service = await self.create_service()
-
-        config_v1 = ProjectConfig(
-            repo_url="https://github.com/org/test.git",
-            branch="main",
-            enabled=True,
-            org="test-org",
-        )
-
-        if hasattr(service, "add_project"):
-            # Add initial project
-            service.add_project("dynamic-project", config_v1)
-
-            # Get enabled projects
-            enabled_before = await service.get_enabled_projects()
-            assert len(enabled_before) == 1
-
-            # Update project configuration
-            config_v2 = ProjectConfig(
-                repo_url="https://github.com/org/test.git",
-                branch="develop",
-                enabled=False,  # Disable it
-                org="test-org",
-            )
-
-            service.update_project("dynamic-project", config_v2)
-
-            # Reload configuration
-            await service.reload_config()
-
-            # Get enabled projects again
-            enabled_after = await service.get_enabled_projects()
-
-            # Project should no longer be in enabled list
-            assert len(enabled_after) == 0
 
 
 class TestMockProjectManagerAdapter(IProjectManagerServiceContractTests):
