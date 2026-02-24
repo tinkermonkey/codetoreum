@@ -14,7 +14,7 @@ class ExecutionsResource:
     def __init__(self, client: "CodetoreumClient") -> None:
         self.client = client
 
-    def list(
+    def list(  # noqa: A003
         self,
         status: Optional[str] = None,
         work_item_id: Optional[str] = None,
@@ -62,7 +62,7 @@ class ExecutionsResource:
         if workflow_run_id:
             params["workflow_run_id"] = workflow_run_id
 
-        data = self.client.get("/api/v2/executions/", params=params)
+        data: dict[str, Any] = self.client.get("/api/v2/executions/", params=params)
         return PaginatedResponse.from_dict(data, Execution)
 
     def get(self, execution_id: str) -> Execution:
@@ -79,7 +79,7 @@ class ExecutionsResource:
             >>> execution = client.executions.get("exec_abc123")
             >>> print(f"Status: {execution.status}")
         """
-        data = self.client.get(f"/api/v2/executions/{execution_id}")
+        data: dict[str, Any] = self.client.get(f"/api/v2/executions/{execution_id}")
         return Execution.from_dict(data)
 
     def get_logs(
@@ -102,11 +102,11 @@ class ExecutionsResource:
             >>> for log in logs:
             ...     print(log)
         """
-        params = {}
+        params: dict[str, int] = {}
         if tail is not None:
             params["tail"] = tail
 
-        data = self.client.get(f"/api/v2/executions/{execution_id}/logs", params=params)
+        data: dict[str, Any] = self.client.get(f"/api/v2/executions/{execution_id}/logs", params=params)
         return cast(List[str], data.get("logs", []))
 
     def get_history(self, execution_id: str) -> List[dict[str, Any]]:
@@ -122,7 +122,7 @@ class ExecutionsResource:
         Example:
             >>> history = client.executions.get_history("exec_abc123")
         """
-        data = self.client.get(f"/api/v2/executions/{execution_id}/history")
+        data: dict[str, Any] = self.client.get(f"/api/v2/executions/{execution_id}/history")
         return cast(List[dict[str, Any]], data.get("events", []))
 
     def terminate(self, execution_id: str) -> Execution:
@@ -138,7 +138,7 @@ class ExecutionsResource:
         Example:
             >>> execution = client.executions.terminate("exec_abc123")
         """
-        data = self.client.post(f"/api/v2/executions/{execution_id}/terminate")
+        data: dict[str, Any] = self.client.post(f"/api/v2/executions/{execution_id}/terminate")
         return Execution.from_dict(data)
 
     def pause(self, execution_id: str) -> Execution:
@@ -154,7 +154,7 @@ class ExecutionsResource:
         Example:
             >>> execution = client.executions.pause("exec_abc123")
         """
-        data = self.client.post(f"/api/v2/executions/{execution_id}/pause")
+        data: dict[str, Any] = self.client.post(f"/api/v2/executions/{execution_id}/pause")
         return Execution.from_dict(data)
 
     def resume(self, execution_id: str) -> Execution:
@@ -170,7 +170,7 @@ class ExecutionsResource:
         Example:
             >>> execution = client.executions.resume("exec_abc123")
         """
-        data = self.client.post(f"/api/v2/executions/{execution_id}/resume")
+        data: dict[str, Any] = self.client.post(f"/api/v2/executions/{execution_id}/resume")
         return Execution.from_dict(data)
 
     def wait_for_completion(
@@ -207,7 +207,7 @@ class ExecutionsResource:
         """
         import time
 
-        start_time = time.time()
+        start_time: float = time.time()
 
         while True:
             if time.time() - start_time > timeout:
@@ -215,7 +215,7 @@ class ExecutionsResource:
                     f"Execution {execution_id} did not complete within {timeout}s"
                 )
 
-            execution = self.get(execution_id)
+            execution: Execution = self.get(execution_id)
 
             if callback:
                 callback(execution)

@@ -117,7 +117,8 @@ class OrchestratorResource:
             "stage_name": stage_name,
         }
 
-        return self.client.post(
+        result: dict[str, Any] = self.client.post(
             "/api/v2/orchestrator/check-entry-conditions",
             json=payload
         )
+        return result
