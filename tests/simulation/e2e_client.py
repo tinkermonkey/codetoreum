@@ -20,7 +20,7 @@ import asyncio
 import json
 import logging
 from datetime import timedelta
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Set
 from uuid import uuid4
 
 from fastapi import FastAPI
@@ -102,7 +102,7 @@ class WebSocketEventCollector:
         self,
         event_type: str,
         timeout: float = 10.0,
-        filter_fn: Optional[callable] = None,
+        filter_fn: Optional[Callable] = None,
     ) -> Dict[str, Any]:
         """
         Wait for specific event type with optional filtering.
@@ -142,7 +142,7 @@ class WebSocketEventCollector:
     def assert_event_received(
         self,
         event_type: str,
-        filter_fn: Optional[callable] = None,
+        filter_fn: Optional[Callable] = None,
     ) -> Dict[str, Any]:
         """
         Assert that an event was received.
@@ -170,7 +170,7 @@ class WebSocketEventCollector:
         self,
         event: Dict[str, Any],
         event_type: str,
-        filter_fn: Optional[callable] = None,
+        filter_fn: Optional[Callable] = None,
     ) -> bool:
         """Check if event matches criteria."""
         if not isinstance(event, dict):

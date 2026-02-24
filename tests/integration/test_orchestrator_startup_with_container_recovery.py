@@ -240,6 +240,7 @@ class TestOrchestratorStartupWithContainerRecovery:
             MockOrchestrationCommandAdapter,
             MockExecutionCommandAdapter,
             MockConfigQueryAdapter,
+            MockConfigCommandAdapter,
             MockMetricsQueryAdapter,
             MockWorkspaceQueryAdapter,
             MockWorkflowCommandAdapter,
@@ -273,7 +274,7 @@ class TestOrchestratorStartupWithContainerRecovery:
         workflow_run_query = MockWorkflowRunQueryAdapter()
         agent_cmd = MockAgentCommandAdapter()
         agent_query = MockAgentQueryAdapter()
-        config_cmd = Mock()
+        config_cmd = MockConfigCommandAdapter()
         task_query = MockTaskQueryAdapter()
         workflow_def_cmd = MockWorkflowDefinitionCommandAdapter()
 
