@@ -77,13 +77,13 @@ class TestRepairTestFailure:
             message="Failed",
         )
         with pytest.raises(FrozenInstanceError):
-            failure.file = "test_other.py"
+            failure.file = "test_other.py"  # pyright: ignore[reportReadonlyVariableMutation]
 
         with pytest.raises(FrozenInstanceError):
-            failure.test = "test_other"
+            failure.test = "test_other"  # pyright: ignore[reportReadonlyVariableMutation]
 
         with pytest.raises(FrozenInstanceError):
-            failure.message = "Different message"
+            failure.message = "Different message"  # pyright: ignore[reportReadonlyVariableMutation]
 
     def test_empty_file_raises_error(self):
         """Test that empty file raises ValueError."""
@@ -165,10 +165,10 @@ class TestRepairTestWarning:
             message="DeprecationWarning",
         )
         with pytest.raises(FrozenInstanceError):
-            warning.file = "other.py"
+            warning.file = "other.py"  # pyright: ignore[reportReadonlyVariableMutation]
 
         with pytest.raises(FrozenInstanceError):
-            warning.message = "Different warning"
+            warning.message = "Different warning"  # pyright: ignore[reportReadonlyVariableMutation]
 
     def test_empty_file_raises_error(self):
         """Test that empty file raises ValueError."""
@@ -264,7 +264,7 @@ class TestRepairTestResult:
             timestamp="2025-01-22T10:00:00Z",
         )
         with pytest.raises((TypeError, AttributeError)):
-            result.failures.append(None)  # type: ignore
+            result.failures.append(None)  # pyright: ignore[reportGeneralTypeIssues]
 
     def test_result_immutability_raises_frozen_error(self):
         """Test that frozen dataclass prevents modification."""
@@ -280,10 +280,10 @@ class TestRepairTestResult:
             timestamp="2025-01-22T10:00:00Z",
         )
         with pytest.raises(FrozenInstanceError):
-            result.passed = 11
+            result.passed = 11  # pyright: ignore[reportReadonlyVariableMutation]
 
         with pytest.raises(FrozenInstanceError):
-            result.iteration = 2
+            result.iteration = 2  # pyright: ignore[reportReadonlyVariableMutation]
 
     def test_invalid_iteration_raises_error(self):
         """Test that iteration < 1 raises ValueError."""
@@ -480,10 +480,10 @@ class TestCycleResult:
             duration_seconds=5.5,
         )
         with pytest.raises(FrozenInstanceError):
-            cycle.passed = False
+            cycle.passed = False  # pyright: ignore[reportReadonlyVariableMutation]
 
         with pytest.raises(FrozenInstanceError):
-            cycle.iterations = 2
+            cycle.iterations = 2  # pyright: ignore[reportReadonlyVariableMutation]
 
     def test_negative_iterations_raises_error(self):
         """Test that negative iterations raises ValueError."""
@@ -658,7 +658,7 @@ class TestRepairCycleResult:
             timestamp="2025-01-22T10:00:00Z",
         )
         with pytest.raises((TypeError, AttributeError)):
-            result.test_results.append(None)  # type: ignore
+            result.test_results.append(None)  # pyright: ignore[reportGeneralTypeIssues]
 
     def test_cycle_result_immutability_raises_frozen_error(self):
         """Test that frozen dataclass prevents modification."""
@@ -671,10 +671,10 @@ class TestRepairCycleResult:
             timestamp="2025-01-22T10:00:00Z",
         )
         with pytest.raises(FrozenInstanceError):
-            result.overall_success = False
+            result.overall_success = False  # pyright: ignore[reportReadonlyVariableMutation]
 
         with pytest.raises(FrozenInstanceError):
-            result.total_agent_calls = 10
+            result.total_agent_calls = 10  # pyright: ignore[reportReadonlyVariableMutation]
 
     def test_empty_stage_raises_error(self):
         """Test that empty stage raises ValueError."""
@@ -858,10 +858,10 @@ class TestRepairTestRunConfig:
         """Test that frozen dataclass prevents modification."""
         config = RepairTestRunConfig(test_type=RepairTestType.UNIT)
         with pytest.raises(FrozenInstanceError):
-            config.timeout = 1800
+            config.timeout = 1800  # pyright: ignore[reportReadonlyVariableMutation]
 
         with pytest.raises(FrozenInstanceError):
-            config.max_iterations = 10
+            config.max_iterations = 10  # pyright: ignore[reportReadonlyVariableMutation]
 
     def test_invalid_timeout_raises_error(self):
         """Test that invalid timeout raises ValueError."""
@@ -964,7 +964,7 @@ class TestRepairCycleStageConfig:
             test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
         )
         with pytest.raises((TypeError, AttributeError)):
-            config.test_configs.append(None)  # type: ignore
+            config.test_configs.append(None)  # pyright: ignore[reportGeneralTypeIssues]
 
     def test_config_immutability_raises_frozen_error(self):
         """Test that frozen dataclass prevents modification."""
@@ -973,10 +973,10 @@ class TestRepairCycleStageConfig:
             test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
         )
         with pytest.raises(FrozenInstanceError):
-            config.name = "fix_warnings"
+            config.name = "fix_warnings"  # pyright: ignore[reportReadonlyVariableMutation]
 
         with pytest.raises(FrozenInstanceError):
-            config.max_total_agent_calls = 50
+            config.max_total_agent_calls = 50  # pyright: ignore[reportReadonlyVariableMutation]
 
     def test_empty_name_raises_error(self):
         """Test that empty name raises ValueError."""
