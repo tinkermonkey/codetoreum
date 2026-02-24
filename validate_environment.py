@@ -8,18 +8,18 @@ required tools and dependencies installed correctly.
 
 import subprocess
 import sys
-from typing import Union, List
+from collections.abc import Sequence
 
 
-def run_command(cmd: Union[List[str], str], description: str) -> bool:
+def run_command(cmd: Sequence[str] | str, description: str) -> bool:
     """Run a command in the Docker container and check the result."""
     print(f"Testing: {description}...", end=" ")
     try:
         # Build command as list, handling shell commands properly
-        if isinstance(cmd, list):
-            docker_cmd = ["docker", "run", "--rm", "codetoreum-agent:latest"] + cmd
-        else:
+        if isinstance(cmd, str):
             docker_cmd = ["docker", "run", "--rm", "codetoreum-agent:latest", "sh", "-c", cmd]
+        else:
+            docker_cmd = ["docker", "run", "--rm", "codetoreum-agent:latest"] + list(cmd)
 
         result = subprocess.run(
             docker_cmd,
