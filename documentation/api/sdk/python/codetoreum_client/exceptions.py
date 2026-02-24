@@ -1,8 +1,10 @@
 """
 Exception classes for Codetoreum SDK
 """
-from typing import Optional
-import requests
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    import requests  # type: ignore[import-untyped]
 
 
 class CodetoreumError(Exception):
@@ -12,7 +14,7 @@ class CodetoreumError(Exception):
         self,
         message: str,
         status_code: Optional[int] = None,
-        response: Optional[requests.Response] = None,
+        response: Optional["requests.Response"] = None,
     ):
         super().__init__(message)
         self.message = message

@@ -2,8 +2,10 @@
 Data models for Codetoreum API resources
 """
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Type, TypeVar, cast
 from datetime import datetime
+
+T = TypeVar("T")
 
 
 @dataclass
@@ -132,10 +134,10 @@ class PaginatedResponse:
     limit: int
 
     @classmethod
-    def from_dict(cls, data: dict, item_class: type) -> "PaginatedResponse":
+    def from_dict(cls, data: dict, item_class: Type[T]) -> "PaginatedResponse":
         """Create PaginatedResponse from API response dict."""
         return cls(
-            items=[item_class.from_dict(item) for item in data.get("items", [])],
+            items=[cast(Any, item_class).from_dict(item) for item in data.get("items", [])],
             total=data.get("total", 0),
             offset=data.get("offset", 0),
             limit=data.get("limit", 50),
