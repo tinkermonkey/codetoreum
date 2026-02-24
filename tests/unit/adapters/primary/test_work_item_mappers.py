@@ -1,8 +1,6 @@
 """Unit tests for Work Item DTO mappers."""
 
-from datetime import datetime, timezone
-
-import pytest
+from datetime import UTC, datetime
 
 from codetoreum.adapters.primary.work_item_dtos import (
     CreateWorkItemRequest,
@@ -106,7 +104,7 @@ class TestWorkItemMapper:
     def test_to_response(self):
         """Test converting WorkItem domain model to WorkItemResponse DTO."""
         # Arrange
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         work_item = WorkItem(
             id="wi-123",
             project_id="proj-123",
@@ -150,7 +148,7 @@ class TestWorkItemMapper:
     def test_to_response_does_not_mutate_labels(self):
         """Test that to_response copies labels to prevent mutation."""
         # Arrange
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         work_item = WorkItem(
             id="wi-123",
             project_id="proj-123",
@@ -181,7 +179,7 @@ class TestWorkItemMapper:
     def test_to_detail_response(self):
         """Test converting WorkItem and history to WorkItemDetailResponse."""
         # Arrange
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         work_item = WorkItem(
             id="wi-123",
             project_id="proj-123",
@@ -224,7 +222,7 @@ class TestWorkItemMapper:
     def test_to_detail_response_limits_recent_events(self):
         """Test that to_detail_response limits recent events to 10."""
         # Arrange
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         work_item = WorkItem(
             id="wi-123",
             project_id="proj-123",
@@ -266,7 +264,7 @@ class TestWorkItemMapper:
     def test_to_list_response(self):
         """Test converting WorkItemListResult to WorkItemListResponse."""
         # Arrange
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         work_items = [
             WorkItem(
                 id="wi-1",

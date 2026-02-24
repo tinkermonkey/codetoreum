@@ -42,7 +42,7 @@ class AgentConfig:
     makes_code_changes: bool
     mcp_servers: List[str] = field(default_factory=list)
     capabilities: List[str] = field(default_factory=list)
-    constraints: Dict[str, bool] = field(default_factory=dict)
+    constraints: Dict[str, Any] = field(default_factory=dict)
     version: int = 1
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
