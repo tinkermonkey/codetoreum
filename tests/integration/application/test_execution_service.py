@@ -2,7 +2,7 @@
 
 import asyncio
 from datetime import datetime, timezone
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Callable, Dict, Iterator, List, Optional
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -36,7 +36,9 @@ from codetoreum.ports.output.container import ContainerResult, ContainerStatus
 from codetoreum.ports.output.llm_provider import (
     ExecutionContext as LLMExecutionContext,
     ExecutionResult as LLMExecutionResult,
+    ModelInfo,
     StreamChunk,
+    UsageStats,
 )
 
 
@@ -74,7 +76,7 @@ class MockLLMProvider:
         self,
         prompt: str,
         context: Optional[LLMExecutionContext] = None,
-        stream_callback=None,
+        stream_callback: Optional[Callable] = None,
     ) -> LLMExecutionResult:
         """Execute prompt."""
         self.execution_count += 1
@@ -109,7 +111,7 @@ class MockLLMProvider:
             metadata={"session_id": "test-session-123"},
         )
 
-    async def execute_with_tools(self, prompt, tools, context=None, stream_callback=None):
+    async def execute_with_tools(self, prompt: str, tools: Any, context: Optional[LLMExecutionContext] = None, stream_callback: Optional[Callable] = None) -> LLMExecutionResult:
         """Execute with tools."""
         return await self.execute(prompt, context, stream_callback)
 
@@ -120,20 +122,18 @@ class MockLLMProvider:
         for i, chunk in enumerate(["Hello", " ", "World", "!"]):
             yield StreamChunk(content=chunk, chunk_index=i, is_final=(i == 3))
 
-    async def create_conversation(self, system_prompt=None, parameters=None):
+    async def create_conversation(self, system_prompt: Optional[str] = None, parameters: Optional[Dict[str, Any]] = None) -> str:
         """Create conversation."""
         return "conv-123"
 
     async def continue_conversation(
-        self, conversation_id: str, message: str, stream_callback=None
-    ):
+        self, conversation_id: str, message: str, stream_callback: Optional[Callable] = None
+    ) -> LLMExecutionResult:
         """Continue conversation."""
         return await self.execute(message, stream_callback=stream_callback)
 
-    async def get_model_info(self):
+    async def get_model_info(self) -> ModelInfo:
         """Get model info."""
-        from codetoreum.ports.output.llm_provider import ModelInfo
-
         return ModelInfo(
             model_id="claude-3-5-sonnet-20250219",
             provider="anthropic",
@@ -144,18 +144,16 @@ class MockLLMProvider:
             supports_streaming=True,
         )
 
-    async def list_available_models(self):
+    async def list_available_models(self) -> List[ModelInfo]:
         """List available models."""
         return [await self.get_model_info()]
 
-    async def count_tokens(self, text: str, model: Optional[str] = None):
+    async def count_tokens(self, text: str, model: Optional[str] = None) -> int:
         """Count tokens."""
         return len(text.split())
 
-    async def get_usage_stats(self, since: Optional[datetime] = None):
+    async def get_usage_stats(self, since: Optional[datetime] = None) -> UsageStats:
         """Get usage stats."""
-        from codetoreum.ports.output.llm_provider import UsageStats
-
         return UsageStats(
             total_requests=self.execution_count,
             total_tokens=30 * self.execution_count,
@@ -238,7 +236,7 @@ class MockContainer:
         """Get container logs."""
         if stream:
 
-            async def log_generator():
+            async def log_generator() -> AsyncIterator[str]:
                 for line in self.log_output.split("\n"):
                     yield line
 
@@ -274,11 +272,11 @@ class MockContainer:
             container_id=container_id,
         )
 
-    async def list_containers(self, all: bool = False, filters: Optional[Dict] = None):
+    async def list_containers(self, all: bool = False, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """List containers."""
         return []
 
-    async def pull_image(self, image: str, tag: str = "latest", stream_callback=None):
+    async def pull_image(self, image: str, tag: str = "latest", stream_callback: Optional[Callable] = None) -> None:
         """Pull image."""
         pass
 
@@ -292,17 +290,17 @@ class MockContainer:
 
     async def copy_to_container(
         self, container_id: str, source: str, destination: str
-    ):
+    ) -> None:
         """Copy to container."""
         pass
 
     async def copy_from_container(
         self, container_id: str, source: str, destination: str
-    ):
+    ) -> None:
         """Copy from container."""
         pass
 
-    async def kill(self, container_id: str, signal: str = "SIGKILL"):
+    async def kill(self, container_id: str, signal: str = "SIGKILL") -> None:
         """Kill container."""
         if container_id in self.containers:
             self.containers[container_id]["status"] = "killed"
@@ -314,7 +312,7 @@ class MockContainer:
         volumes: Dict[str, str],
         environment: Dict[str, str],
         timeout: int = 300,
-        stream_callback=None,
+        stream_callback: Optional[Callable] = None,
     ) -> ContainerResult:
         """Run container."""
         return ContainerResult(
@@ -361,7 +359,7 @@ class MockStorage:
 
 
 @pytest.fixture
-def mock_event_store():
+def mock_event_store() -> Iterator[MockEventStore]:
     """Create mock event store."""
     store = MockEventStore()
     yield store
@@ -369,7 +367,7 @@ def mock_event_store():
 
 
 @pytest.fixture
-def mock_llm_provider():
+def mock_llm_provider() -> Iterator[MockLLMProvider]:
     """Create mock LLM provider."""
     provider = MockLLMProvider()
     yield provider
@@ -379,7 +377,7 @@ def mock_llm_provider():
 
 
 @pytest.fixture
-def mock_container():
+def mock_container() -> Iterator[MockContainer]:
     """Create mock container adapter."""
     container = MockContainer()
     yield container
@@ -387,7 +385,7 @@ def mock_container():
 
 
 @pytest.fixture
-def mock_storage():
+def mock_storage() -> Iterator[MockStorage]:
     """Create mock storage adapter."""
     storage = MockStorage()
     yield storage
@@ -396,8 +394,8 @@ def mock_storage():
 
 @pytest.fixture
 def execution_service(
-    mock_llm_provider, mock_container, mock_event_store, mock_storage
-):
+    mock_llm_provider: MockLLMProvider, mock_container: MockContainer, mock_event_store: MockEventStore, mock_storage: MockStorage
+) -> ExecutionService:
     """Create execution service with mock adapters."""
     return ExecutionService(
         llm_provider=mock_llm_provider,
@@ -410,7 +408,7 @@ def execution_service(
 
 
 @pytest.fixture
-def sample_agent():
+def sample_agent() -> Agent:
     """Create sample agent."""
     return Agent.create(
         name="test-agent",
@@ -430,7 +428,7 @@ def sample_agent():
 
 
 @pytest.fixture
-def sample_work_item():
+def sample_work_item() -> WorkItem:
     """Create sample work item."""
     return WorkItem.create(
         title="Test Issue",
@@ -441,7 +439,7 @@ def sample_work_item():
 
 
 @pytest.fixture
-def sample_execution_context():
+def sample_execution_context() -> ExecutionContext:
     """Create sample execution context."""
     return ExecutionContext(
         work_item_id="issue-123",
@@ -769,7 +767,7 @@ async def test_log_subscription(
     mock_llm_provider.stream_enabled = True
     received_logs: List[LogEntry] = []
 
-    def log_callback(entry: LogEntry):
+    def log_callback(entry: LogEntry) -> None:
         received_logs.append(entry)
 
     execution = await execution_service.create_execution(

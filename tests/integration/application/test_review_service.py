@@ -8,31 +8,13 @@ from codetoreum.application.review_service import (
     ReviewCycleResult,
     ReviewCompletionResult,
 )
+from codetoreum.adapters.testing import InMemoryEventStore
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
 from codetoreum.domain.agent_execution import AgentExecution
 from codetoreum.domain.events import DomainEvent
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.review_cycle import ReviewDecision, ReviewStatus
-
-
-# Mock Event Store
-
-
-class MockEventStore:
-    """Mock event store for testing."""
-
-    def __init__(self):
-        self.events: List[DomainEvent] = []
-
-    async def append(self, event: DomainEvent) -> None:
-        """Append event to store."""
-        self.events.append(event)
-
-    async def get_events(
-        self, aggregate_id: str, from_version: int = 0
-    ) -> List[DomainEvent]:
-        """Get events for aggregate."""
-        return [e for e in self.events if e.aggregate_id == aggregate_id]
+from codetoreum.ports.exceptions import EventStoreError
 
 
 # Fixtures
@@ -40,10 +22,8 @@ class MockEventStore:
 
 @pytest.fixture
 def event_store():
-    """Create mock event store."""
-    store = MockEventStore()
-    yield store
-    store.events.clear()
+    """Create event store."""
+    return InMemoryEventStore()
 
 
 @pytest.fixture
@@ -148,8 +128,8 @@ async def test_create_review_cycle(
     assert result.review_cycle.current_iteration == 0
 
     # Verify events were persisted
-    assert len(event_store.events) == 1
-    assert event_store.events[0].aggregate_type == "ReviewCycle"
+    assert event_store.get_total_event_count() == 1
+    assert event_store.get_all_events_list()[0].aggregate_type == "ReviewCycle"
 
 
 @pytest.mark.asyncio
@@ -201,7 +181,7 @@ async def test_start_iteration(
     assert iteration.reviewer_feedback is None
 
     # Verify events (1 create + 1 start iteration)
-    assert len(event_store.events) == 2
+    assert event_store.get_total_event_count() == 2
 
 
 @pytest.mark.asyncio
@@ -249,7 +229,7 @@ async def test_submit_review_approve(
     assert feedback.comment == "Looks good!"
 
     # Verify events (create + start + submit + approve)
-    assert len(event_store.events) == 4
+    assert event_store.get_total_event_count() == 4
 
 
 @pytest.mark.asyncio
@@ -559,8 +539,8 @@ async def test_get_review_status(
 # Error Handling Tests
 
 
-class FailingEventStore:
-    """Mock event store that fails on append."""
+class FailingEventStore(InMemoryEventStore):
+    """Event store that fails on append after a specified number of calls."""
 
     def __init__(self, fail_on_call: int = 1):
         """
@@ -569,24 +549,18 @@ class FailingEventStore:
         Args:
             fail_on_call: Which call number to fail on (1-indexed)
         """
-        self.events: List[DomainEvent] = []
+        super().__init__()
         self.call_count = 0
         self.fail_on_call = fail_on_call
 
-    async def append(self, event: DomainEvent) -> None:
+    async def append(
+        self, stream_id: str, events: List[DomainEvent], expected_version=None
+    ) -> None:
         """Append event to store, failing on specified call."""
         self.call_count += 1
         if self.call_count == self.fail_on_call:
-            from codetoreum.ports.exceptions import EventStoreError
-
             raise EventStoreError("Event store connection failed")
-        self.events.append(event)
-
-    async def get_events(
-        self, aggregate_id: str, from_version: int = 0
-    ) -> List[DomainEvent]:
-        """Get events for aggregate."""
-        return [e for e in self.events if e.aggregate_id == aggregate_id]
+        await super().append(stream_id, events, expected_version)
 
 
 @pytest.mark.asyncio
@@ -607,7 +581,7 @@ async def test_create_review_cycle_event_store_error(maker_agent, reviewer_agent
         )
 
     # Verify no events were persisted
-    assert len(failing_store.events) == 0
+    assert failing_store.get_total_event_count() == 0
 
 
 @pytest.mark.asyncio
@@ -616,7 +590,7 @@ async def test_start_iteration_event_store_error(
 ):
     """Test error handling when event store fails during iteration start."""
     # Create with working store
-    working_store = MockEventStore()
+    working_store = InMemoryEventStore()
     review_service_1 = ReviewService(event_store=working_store)
 
     result = await review_service_1.create_review_cycle(
@@ -641,7 +615,7 @@ async def test_start_iteration_event_store_error(
         )
 
     # Verify no events were persisted
-    assert len(failing_store.events) == 0
+    assert failing_store.get_total_event_count() == 0
 
 
 @pytest.mark.asyncio
@@ -650,7 +624,7 @@ async def test_submit_review_event_store_error(
 ):
     """Test error handling when event store fails during review submission."""
     # Create and start with working store
-    working_store = MockEventStore()
+    working_store = InMemoryEventStore()
     review_service_1 = ReviewService(event_store=working_store)
 
     result = await review_service_1.create_review_cycle(
@@ -682,7 +656,7 @@ async def test_submit_review_event_store_error(
         )
 
     # Verify no events were persisted
-    assert len(failing_store.events) == 0
+    assert failing_store.get_total_event_count() == 0
 
 
 @pytest.mark.asyncio
@@ -691,7 +665,7 @@ async def test_complete_cycle_event_store_error(
 ):
     """Test error handling when event store fails during cycle completion."""
     # Create review cycle
-    working_store = MockEventStore()
+    working_store = InMemoryEventStore()
     review_service_1 = ReviewService(event_store=working_store)
 
     result = await review_service_1.create_review_cycle(
@@ -732,7 +706,7 @@ async def test_complete_cycle_event_store_error(
         await review_service_2.complete_cycle(review_cycle=review_cycle, approved=True)
 
     # Verify no events were persisted
-    assert len(failing_store.events) == 0
+    assert failing_store.get_total_event_count() == 0
 
 
 @pytest.mark.asyncio
