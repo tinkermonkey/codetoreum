@@ -10,6 +10,7 @@ Tests verify that:
 import pytest
 import re
 from datetime import datetime
+from typing import Any
 
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
 from codetoreum.adapters.secondary.mock_discussion_adapter import MockDiscussionAdapter
@@ -74,7 +75,7 @@ class TestMockBoardAdapter:
         from codetoreum.ports.output.board_service import MovedByType
 
         adapter.add_item_to_column("board-1", "Backlog", "item-1")
-        events = []
+        events: list[Any] = []
         adapter.on("workitem.column_changed", events.append)
 
         await adapter.move_item_to_column("item-1", "In Progress", MovedByType.HUMAN)
@@ -93,7 +94,7 @@ class TestMockBoardAdapter:
         from codetoreum.ports.output.board_service import MovedByType
 
         adapter.add_item_to_column("board-1", "Backlog", "item-1")
-        events = []
+        events: list[Any] = []
         adapter.on("workitem.column_changed", events.append)
 
         await adapter.move_item_to_column("item-1", "In Progress", MovedByType.ORCHESTRATOR)
@@ -106,7 +107,7 @@ class TestMockBoardAdapter:
         from codetoreum.ports.output.board_service import MovedByType
 
         adapter.add_item_to_column("board-1", "Backlog", "item-1")
-        events = []
+        events: list[Any] = []
         adapter.on("workitem.column_changed", events.append)
 
         await adapter.move_item_to_column("item-1", "In Progress", MovedByType.ORCHESTRATOR)
@@ -116,7 +117,7 @@ class TestMockBoardAdapter:
 
     async def test_reconcile_board_emits_event(self, adapter):
         """Test reconcile_board emits event."""
-        events = []
+        events: list[Any] = []
         adapter.on("board.reconciled", events.append)
 
         config = BoardConfig(
@@ -136,7 +137,7 @@ class TestMockBoardAdapter:
         from codetoreum.ports.output.board_service import MovedByType
 
         adapter.add_item_to_column("board-1", "Backlog", "item-1")
-        events = []
+        events: list[Any] = []
         adapter.on("workitem.column_changed", events.append)
 
         await adapter.move_item_to_column("item-1", "Done", MovedByType.HUMAN)
@@ -193,7 +194,7 @@ class TestMockDiscussionAdapter:
         )
         adapter.start_monitoring("item-1", config)
 
-        events = []
+        events: list[Any] = []
         adapter.on("comment.needs_response", events.append)
 
         adapter.simulate_comment("item-1", "alice", "Please review this")
@@ -212,7 +213,7 @@ class TestMockDiscussionAdapter:
         )
         adapter.start_monitoring("item-1", config)
 
-        events = []
+        events: list[Any] = []
         adapter.on("comment.needs_response", events.append)
 
         # Register bot username
@@ -267,7 +268,7 @@ class TestMockDiscussionAdapter:
         )
         adapter.start_monitoring("item-1", config)
 
-        events = []
+        events: list[Any] = []
         adapter.on("comment.posted", events.append)
 
         comment = adapter.simulate_bot_comment("item-1", "Processing...")
@@ -430,7 +431,7 @@ class TestMockDiscussionAdapter:
         )
         adapter.start_monitoring("item-1", config)
 
-        events = []
+        events: list[Any] = []
         adapter.on("workitem.column_changed", events.append)
 
         adapter.simulate_column_change("item-1", "Backlog", "In Review")
@@ -577,7 +578,7 @@ class TestMockCodeReviewAdapter:
 
     async def test_simulate_approval_emits_event(self, adapter):
         """Test simulate_approval emits status change event."""
-        events = []
+        events: list[Any] = []
         adapter.on("review.status_changed", events.append)
 
         adapter.simulate_approval("pr-1", "reviewer-1")
@@ -592,7 +593,7 @@ class TestMockCodeReviewAdapter:
 
     async def test_simulate_changes_requested_emits_event(self, adapter):
         """Test simulate_changes_requested emits status change event."""
-        events = []
+        events: list[Any] = []
         adapter.on("review.status_changed", events.append)
 
         adapter.simulate_changes_requested("pr-1", "reviewer-1")
@@ -602,7 +603,7 @@ class TestMockCodeReviewAdapter:
 
     async def test_approve_method_emits_event(self, adapter):
         """Test approve method emits event."""
-        events = []
+        events: list[Any] = []
         adapter.on("review.status_changed", events.append)
 
         await adapter.approve("pr-1")
@@ -633,7 +634,7 @@ class TestInMemoryPipelineLockService:
 
     async def test_try_acquire_lock_success(self, service):
         """Test successful lock acquisition."""
-        events = []
+        events: list[Any] = []
         service.on("lock.acquired", events.append)
 
         success, reason = await service.try_acquire_lock("proj-1", "board-1", "item-1")
@@ -653,7 +654,7 @@ class TestInMemoryPipelineLockService:
 
     async def test_lock_acquired_event_emitted(self, service):
         """Test that lock acquired events are correct."""
-        events = []
+        events: list[Any] = []
         service.on("lock.acquired", events.append)
 
         await service.try_acquire_lock("proj-1", "board-1", "item-1")
@@ -669,7 +670,7 @@ class TestInMemoryPipelineLockService:
         """Test lock release emits event."""
         await service.try_acquire_lock("proj-1", "board-1", "item-1")
 
-        events = []
+        events: list[Any] = []
         service.on("lock.released", events.append)
 
         success = await service.release_lock("proj-1", "board-1", "item-1")
@@ -699,7 +700,7 @@ class TestInMemoryPipelineLockService:
 
     async def test_simulate_lock_acquired(self, service):
         """Test direct lock acquired event simulation."""
-        events = []
+        events: list[Any] = []
         service.on("lock.acquired", events.append)
 
         service.simulate_lock_acquired("proj-1", "board-1", "item-1", "stale_recovery")
@@ -709,7 +710,7 @@ class TestInMemoryPipelineLockService:
 
     async def test_simulate_lock_released(self, service):
         """Test direct lock released event simulation."""
-        events = []
+        events: list[Any] = []
         service.on("lock.released", events.append)
 
         service.simulate_lock_released(

@@ -14,6 +14,7 @@ Tests verify that:
 import pytest
 import asyncio
 from datetime import datetime
+from typing import Any
 
 from codetoreum.adapters.testing.mock_board_adapter import (
     MockBoardAdapter,
@@ -187,7 +188,7 @@ class TestSimulateHumanMove:
     async def test_simulate_human_move_emits_event_with_human_moved_by(self, adapter_with_item):
         """Test simulate_human_move_async() emits event with MovedByType.HUMAN."""
         adapter = adapter_with_item
-        events = []
+        events: list[Any] = []
         adapter.on("workitem.column_changed", events.append)
 
         await adapter.simulate_human_move_async("item-1", "In Progress")
