@@ -4,8 +4,9 @@ Example: Create a new agent in Codetoreum
 This example demonstrates how to create a new agent with capabilities
 and MCP server configuration.
 """
+from typing import Any, Dict
+
 import requests
-from typing import Dict, Any
 
 
 # Configuration
