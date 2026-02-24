@@ -17,8 +17,6 @@ from datetime import datetime, timedelta, timezone
 from types import MappingProxyType
 from typing import List, Literal, Optional
 
-from dateutil import parser as date_parser
-
 from codetoreum.domain.types import (
     CONTAINER_LABEL_AGENT,
     CONTAINER_LABEL_PROJECT,
@@ -211,7 +209,7 @@ class RecoveryResult:
             raise ValueError("timestamp is required and must be non-empty")
         # Validate ISO 8601 timestamp format and reasonable bounds
         try:
-            parsed_dt = date_parser.isoparse(self.timestamp)
+            parsed_dt = datetime.fromisoformat(self.timestamp)
         except (ValueError, TypeError) as e:
             raise ValueError(
                 f"timestamp must be a valid ISO 8601 datetime string, got: {self.timestamp}"
