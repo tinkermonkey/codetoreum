@@ -701,8 +701,8 @@ class SimulationApplicationBootstrap:
         Returns:
             SimulationPorts with all port implementations
         """
-        if not self.services:
-            raise RuntimeError("Services must be created first")
+        if not self.adapters or not self.services:
+            raise RuntimeError("Adapters and services must be created first")
 
         # Create mock port adapters, injecting Phase 1 backing stores where available
         # so query adapters read directly from the canonical data source.
@@ -780,8 +780,8 @@ class SimulationApplicationBootstrap:
         Raises:
             RuntimeError: If ports, infrastructure, or services not created first
         """
-        if not self.ports or not self.infrastructure or not self.services:
-            raise RuntimeError("Ports and infrastructure must be created first")
+        if not self.adapters or not self.ports or not self.infrastructure or not self.services:
+            raise RuntimeError("Adapters, ports, infrastructure, and services must be created first")
 
         # Create adapter for config service (wraps application service for FastAPI interface)
         config_service_interface = MockConfigServiceAdapter(self.services.configuration_service)
