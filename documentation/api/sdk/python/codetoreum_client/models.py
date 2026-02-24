@@ -27,7 +27,7 @@ class WorkItem:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_dict(cls, data: dict) -> "WorkItem":
+    def from_dict(cls, data: dict[str, Any]) -> "WorkItem":
         """Create WorkItem from API response dict."""
         return cls(**{k: v for k, v in data.items() if k in cls.__annotations__})
 
@@ -47,7 +47,7 @@ class Agent:
     updated_at: Optional[str] = None
 
     @classmethod
-    def from_dict(cls, data: dict) -> "Agent":
+    def from_dict(cls, data: dict[str, Any]) -> "Agent":
         """Create Agent from API response dict."""
         return cls(**{k: v for k, v in data.items() if k in cls.__annotations__})
 
@@ -70,7 +70,7 @@ class Execution:
     error_message: Optional[str] = None
 
     @classmethod
-    def from_dict(cls, data: dict) -> "Execution":
+    def from_dict(cls, data: dict[str, Any]) -> "Execution":
         """Create Execution from API response dict."""
         return cls(**{k: v for k, v in data.items() if k in cls.__annotations__})
 
@@ -100,7 +100,7 @@ class Workflow:
     updated_at: Optional[str] = None
 
     @classmethod
-    def from_dict(cls, data: dict) -> "Workflow":
+    def from_dict(cls, data: dict[str, Any]) -> "Workflow":
         """Create Workflow from API response dict."""
         return cls(**{k: v for k, v in data.items() if k in cls.__annotations__})
 
@@ -119,7 +119,7 @@ class WorkflowRun:
     completed_at: Optional[str] = None
 
     @classmethod
-    def from_dict(cls, data: dict) -> "WorkflowRun":
+    def from_dict(cls, data: dict[str, Any]) -> "WorkflowRun":
         """Create WorkflowRun from API response dict."""
         return cls(**{k: v for k, v in data.items() if k in cls.__annotations__})
 
@@ -134,7 +134,7 @@ class PaginatedResponse:
     limit: int
 
     @classmethod
-    def from_dict(cls, data: dict, item_class: Type[T]) -> "PaginatedResponse":
+    def from_dict(cls, data: dict[str, Any], item_class: Type[T]) -> "PaginatedResponse":
         """Create PaginatedResponse from API response dict."""
         return cls(
             items=[cast(Any, item_class).from_dict(item) for item in data.get("items", [])],

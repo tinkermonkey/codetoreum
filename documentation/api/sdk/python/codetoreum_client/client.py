@@ -78,8 +78,8 @@ class CodetoreumClient:
         self,
         method: str,
         path: str,
-        params: Optional[dict] = None,
-        json: Optional[dict] = None,
+        params: Optional[dict[str, Any]] = None,
+        json: Optional[dict[str, Any]] = None,
         timeout: Optional[int] = None,
     ) -> requests.Response:
         """
