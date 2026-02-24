@@ -123,9 +123,9 @@ class TestScenarioC_ReviewRejectionLoop:
         template = BoardWorkflowTemplate(
             id="workflow-1",
             name="SDLC Execution",
-            pipeline_trigger_columns=["Development"],
-            exit_columns=["Staged"],
-            columns=[
+            pipeline_trigger_columns=("Development",),
+            exit_columns=("Staged",),
+            columns=(
                 ColumnTemplate(
                     name="Backlog",
                     type=ColumnType.MANUAL,
@@ -180,7 +180,7 @@ class TestScenarioC_ReviewRejectionLoop:
                     position=5,
                     auto_progress_on_completion=False,
                 ),
-            ],
+            ),
         )
 
         # Register workflow template

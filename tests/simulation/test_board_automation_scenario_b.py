@@ -120,9 +120,9 @@ class TestScenarioB_LockContention:
         template = BoardWorkflowTemplate(
             id="workflow-1",
             name="Lock Contention",
-            pipeline_trigger_columns=["Development"],
-            exit_columns=["Code Review"],
-            columns=[
+            pipeline_trigger_columns=("Development",),
+            exit_columns=("Code Review",),
+            columns=(
                 ColumnTemplate(
                     name="Backlog",
                     type=ColumnType.MANUAL,
@@ -150,7 +150,7 @@ class TestScenarioB_LockContention:
                     position=2,
                     auto_progress_on_completion=False,
                 ),
-            ],
+            ),
         )
 
         # Register workflow template

@@ -159,9 +159,9 @@ class TestScenarioD_HumanIntervention:
         template = BoardWorkflowTemplate(
             id="workflow-1",
             name="SDLC Execution",
-            pipeline_trigger_columns=["Development"],
-            exit_columns=["Staged"],
-            columns=[
+            pipeline_trigger_columns=("Development",),
+            exit_columns=("Staged",),
+            columns=(
                 ColumnTemplate(
                     name="Development",
                     type=ColumnType.AUTOMATED,
@@ -207,7 +207,7 @@ class TestScenarioD_HumanIntervention:
                     position=4,
                     auto_progress_on_completion=False,
                 ),
-            ],
+            ),
         )
 
         # Register workflow template
