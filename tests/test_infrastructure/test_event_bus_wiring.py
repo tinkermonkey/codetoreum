@@ -2,16 +2,10 @@
 
 import pytest
 import asyncio
-from unittest.mock import Mock, AsyncMock, MagicMock, call
+from unittest.mock import Mock, AsyncMock
 
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.event_bus_wiring import EventBusWiring, wire_adapters_to_event_bus
-from codetoreum.infrastructure.event_bus_protocols import (
-    IBoardService,
-    IDiscussionAdapter,
-    IPipelineLockService,
-    ICodeReviewService,
-)
 
 
 # ====================================================================================
@@ -19,7 +13,7 @@ from codetoreum.infrastructure.event_bus_protocols import (
 # ====================================================================================
 
 
-class MockBoardService(IBoardService):
+class MockBoardService:
     """Mock board service for testing."""
 
     def __init__(self):
@@ -36,7 +30,7 @@ class MockBoardService(IBoardService):
             self.event_handlers[event_type](event)
 
 
-class MockDiscussionAdapter(IDiscussionAdapter):
+class MockDiscussionAdapter:
     """Mock discussion adapter for testing."""
 
     def __init__(self):
@@ -53,7 +47,7 @@ class MockDiscussionAdapter(IDiscussionAdapter):
             self.event_handlers[event_type](event)
 
 
-class MockLockService(IPipelineLockService):
+class MockLockService:
     """Mock lock service for testing."""
 
     def __init__(self):
@@ -70,7 +64,7 @@ class MockLockService(IPipelineLockService):
             self.event_handlers[event_type](event)
 
 
-class MockCodeReviewService(ICodeReviewService):
+class MockCodeReviewService:
     """Mock code review service for testing."""
 
     def __init__(self):

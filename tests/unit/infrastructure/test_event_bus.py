@@ -253,7 +253,7 @@ class TestEventBus:
         handler = _TestWorkItemCreatedHandler()
         bus.register_handler(handler)
 
-        events = [
+        events: list[DomainEvent] = [
             WorkItemCreated(
                 aggregate_id=f"work-item-{i}",
                 payload={"title": f"Test {i}"},
