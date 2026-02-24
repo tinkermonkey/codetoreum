@@ -1,7 +1,7 @@
 """
 Executions resource client
 """
-from typing import Optional, List
+from typing import Any, Callable, List, Optional
 from ..models import Execution, PaginatedResponse
 
 
@@ -106,7 +106,7 @@ class ExecutionsResource:
         data = self.client.get(f"/api/v2/executions/{execution_id}/logs", params=params)
         return data.get("logs", [])
 
-    def get_history(self, execution_id: str) -> List[dict]:
+    def get_history(self, execution_id: str) -> list[dict[str, Any]]:
         """
         Get execution event history.
 
@@ -175,7 +175,7 @@ class ExecutionsResource:
         execution_id: str,
         check_interval: int = 5,
         timeout: int = 3600,
-        callback: Optional[callable] = None,
+        callback: Optional[Callable[[Execution], None]] = None,
     ) -> Execution:
         """
         Wait for an execution to complete.
