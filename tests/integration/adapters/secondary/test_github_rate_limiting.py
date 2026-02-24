@@ -112,7 +112,7 @@ class TestGitHubRateLimiting:
         assert retry_after == 120
 
         # Verify default if missing
-        headers_no_retry = {}
+        headers_no_retry: dict[str, str] = {}
         retry_after_default = int(headers_no_retry.get("Retry-After", "60"))
         assert retry_after_default == 60
 

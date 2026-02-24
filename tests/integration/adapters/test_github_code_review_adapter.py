@@ -44,20 +44,21 @@ class MockGraphQLClient:
         self.responses: Dict[str, Any] = {}
         self.call_count: Dict[str, int] = {}  # Track call counts per query type
 
-    async def execute(self, query: str, variables: Optional[Dict] = None) -> Dict[str, Any]:
+    async def execute(self, query: str, variables: Optional[Dict] = None) -> dict[str, Any]:
         """Record query and return mock response."""
         self.queries.append((query, variables))
 
         # Return mock responses based on query type
         # Check for GetPullRequestComments FIRST since it contains "GetPullRequest"
         if "GetPullRequestComments" in query:
-            return self.responses.get("GetPullRequestComments", {
+            result: dict[str, Any] = self.responses.get("GetPullRequestComments", {
                 "node": {
                     "id": "PR123",
                     "reviews": {"nodes": []},
                     "comments": {"nodes": []},
                 }
             })
+            return result
 
         if "GetPullRequest" in query and "prId" in str(variables):
             # Track call count to simulate status changes after mutations
@@ -68,10 +69,11 @@ class MockGraphQLClient:
             if f"{query_type}_responses" in self.responses:
                 responses_list = self.responses[f"{query_type}_responses"]
                 call_idx = min(self.call_count[query_type] - 1, len(responses_list) - 1)
-                return responses_list[call_idx]
+                result_seq: dict[str, Any] = responses_list[call_idx]
+                return result_seq
 
             # Otherwise use default or single response
-            return self.responses.get("GetPullRequest", {
+            result_default: dict[str, Any] = self.responses.get("GetPullRequest", {
                 "node": {
                     "id": "PR123",
                     "state": "OPEN",
@@ -88,21 +90,24 @@ class MockGraphQLClient:
                     },
                 }
             })
+            return result_default
 
         if "SearchPullRequests" in query:
-            return self.responses.get("SearchPullRequests", {
+            result_search: dict[str, Any] = self.responses.get("SearchPullRequests", {
                 "search": {"nodes": []}
             })
+            return result_search
 
         if "GetOpenPRs" in query:
-            return self.responses.get("GetOpenPRs", {
+            result_prs: dict[str, Any] = self.responses.get("GetOpenPRs", {
                 "repository": {
                     "pullRequests": {"nodes": []}
                 }
             })
+            return result_prs
 
         if "SubmitReview" in query:
-            return self.responses.get("SubmitReview", {
+            result_review: dict[str, Any] = self.responses.get("SubmitReview", {
                 "submitPullRequestReview": {
                     "pullRequestReview": {
                         "id": "REVIEW_NEW",
@@ -112,6 +117,7 @@ class MockGraphQLClient:
                     }
                 }
             })
+            return result_review
 
         return {}
 
@@ -691,7 +697,7 @@ class TestCommandOperations:
             }
         }
 
-        events = []
+        events: list[ReviewStatusChangedEvent] = []
         adapter.on("review.status_changed", events.append)
 
         await adapter.request_changes("PR123", "Please fix X")
@@ -742,7 +748,7 @@ class TestCommandOperations:
             }
         }
 
-        events = []
+        events: list[ReviewCommentAddedEvent] = []
         adapter.on("review.comment_added", events.append)
 
         await adapter.request_changes("PR123", "Please fix X")
@@ -813,7 +819,7 @@ class TestCommandOperations:
             }
         }
 
-        events = []
+        events: list[ReviewStatusChangedEvent] = []
         adapter.on("review.status_changed", events.append)
 
         await adapter.approve("PR123")
@@ -851,7 +857,7 @@ class TestWebhookHandling:
             },
         }
 
-        events = []
+        events: list[ReviewStatusChangedEvent] = []
         adapter.on("review.status_changed", events.append)
 
         await adapter.handle_webhook(payload)
@@ -881,7 +887,7 @@ class TestWebhookHandling:
         # Set initial status so we can detect change
         adapter._last_known_status["456"] = "open"
 
-        events = []
+        events: list[ReviewStatusChangedEvent] = []
         adapter.on("review.status_changed", events.append)
 
         await adapter.handle_webhook(payload)
@@ -912,7 +918,7 @@ class TestWebhookHandling:
 
         adapter._last_known_status["456"] = "open"
 
-        events = []
+        events: list[ReviewStatusChangedEvent] = []
         adapter.on("review.status_changed", events.append)
 
         await adapter.handle_webhook(payload)
