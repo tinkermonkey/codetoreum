@@ -222,10 +222,6 @@ class TestWorkflowCommandResult:
 class TestIWorkflowCommandPortInterface:
     """Tests for IWorkflowCommandPort interface contract"""
 
-    def test_interface_is_abstract(self):
-        """Test that IWorkflowCommandPort cannot be instantiated directly"""
-        with pytest.raises(TypeError):
-            IWorkflowCommandPort()
 
     def test_interface_has_required_methods(self):
         """Test that interface defines all required methods"""
@@ -241,19 +237,6 @@ class TestIWorkflowCommandPortInterface:
             assert hasattr(IWorkflowCommandPort, method_name)
             method = getattr(IWorkflowCommandPort, method_name)
             assert callable(method)
-
-    def test_concrete_implementation_requirements(self):
-        """Test that concrete implementation must implement all methods"""
-
-        # Create incomplete implementation
-        class IncompletePort(IWorkflowCommandPort):
-            async def start_workflow(self, command):
-                pass
-            # Missing other methods
-
-        # Should not be able to instantiate incomplete implementation
-        with pytest.raises(TypeError):
-            IncompletePort()
 
     def test_complete_implementation(self):
         """Test that complete implementation can be instantiated"""

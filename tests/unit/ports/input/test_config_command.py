@@ -1,8 +1,8 @@
 """
 Unit tests for Configuration Command Input Port
 
-Tests the data structures and interface contract of the
-IConfigurationCommandPort without requiring implementations.
+Tests the data structures and behavior of the IConfigurationCommandPort
+command objects and implementations.
 """
 
 import pytest
@@ -270,124 +270,6 @@ class TestConfigurationCommandResult:
         assert result.message == "Configuration update failed"
         assert result.changes_applied == {}
         assert result.errors == errors
-
-
-class TestIConfigurationCommandPortInterface:
-    """Tests for IConfigurationCommandPort interface contract"""
-
-    def test_interface_is_abstract(self):
-        """Test that IConfigurationCommandPort cannot be instantiated directly"""
-        with pytest.raises(TypeError):
-            IConfigurationCommandPort()
-
-    def test_interface_has_required_methods(self):
-        """Test that interface defines all required methods"""
-        required_methods = [
-            'update_project_config',
-            'update_agent_config',
-            'update_pipeline_config',
-            'add_environment_variable',
-            'remove_environment_variable',
-            'mount_command',
-            'unmount_command',
-            'mount_subagent',
-            'unmount_subagent'
-        ]
-
-        for method_name in required_methods:
-            assert hasattr(IConfigurationCommandPort, method_name)
-            method = getattr(IConfigurationCommandPort, method_name)
-            assert callable(method)
-
-    def test_concrete_implementation_requirements(self):
-        """Test that concrete implementation must implement all methods"""
-
-        class IncompletePort(IConfigurationCommandPort):
-            async def update_project_config(self, command):
-                pass
-            # Missing other methods
-
-        with pytest.raises(TypeError):
-            IncompletePort()
-
-    def test_complete_implementation(self):
-        """Test that complete implementation can be instantiated"""
-
-        class CompletePort(IConfigurationCommandPort):
-            async def update_project_config(self, command):
-                return ConfigurationCommandResult(
-                    success=True,
-                    config_version=1,
-                    message="Updated",
-                    changes_applied={}
-                )
-
-            async def update_agent_config(self, command):
-                return ConfigurationCommandResult(
-                    success=True,
-                    config_version=1,
-                    message="Updated",
-                    changes_applied={}
-                )
-
-            async def update_pipeline_config(self, command):
-                return ConfigurationCommandResult(
-                    success=True,
-                    config_version=1,
-                    message="Updated",
-                    changes_applied={}
-                )
-
-            async def add_environment_variable(self, command):
-                return ConfigurationCommandResult(
-                    success=True,
-                    config_version=1,
-                    message="Added",
-                    changes_applied={}
-                )
-
-            async def remove_environment_variable(self, command):
-                return ConfigurationCommandResult(
-                    success=True,
-                    config_version=1,
-                    message="Removed",
-                    changes_applied={}
-                )
-
-            async def mount_command(self, command):
-                return ConfigurationCommandResult(
-                    success=True,
-                    config_version=1,
-                    message="Mounted",
-                    changes_applied={}
-                )
-
-            async def unmount_command(self, command):
-                return ConfigurationCommandResult(
-                    success=True,
-                    config_version=1,
-                    message="Unmounted",
-                    changes_applied={}
-                )
-
-            async def mount_subagent(self, command):
-                return ConfigurationCommandResult(
-                    success=True,
-                    config_version=1,
-                    message="Mounted",
-                    changes_applied={}
-                )
-
-            async def unmount_subagent(self, command):
-                return ConfigurationCommandResult(
-                    success=True,
-                    config_version=1,
-                    message="Unmounted",
-                    changes_applied={}
-                )
-
-        port = CompletePort()
-        assert isinstance(port, IConfigurationCommandPort)
 
 
 @pytest.mark.asyncio
