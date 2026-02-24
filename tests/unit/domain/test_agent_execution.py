@@ -343,7 +343,7 @@ class TestAgentExecutionQueryMethods:
         execution.start()
         execution.complete(output="Done", input_tokens=100, output_tokens=200)
 
-        assert execution.is_completed() is True
+        assert execution.is_completed()
 
     def test_is_completed_when_not_completed(self):
         """Test is_completed returns False when not completed."""
@@ -356,7 +356,7 @@ class TestAgentExecutionQueryMethods:
             model="claude-sonnet-4-5",
         )
 
-        assert execution.is_completed() is False
+        assert not execution.is_completed()
 
     def test_is_failed_when_failed(self):
         """Test is_failed returns True when failed."""
@@ -371,7 +371,7 @@ class TestAgentExecutionQueryMethods:
         execution.start()
         execution.fail("Error")
 
-        assert execution.is_failed() is True
+        assert execution.is_failed()
 
     def test_is_failed_when_timeout(self):
         """Test is_failed returns True when timed out."""
@@ -386,7 +386,7 @@ class TestAgentExecutionQueryMethods:
         execution.start()
         execution.timeout()
 
-        assert execution.is_failed() is True
+        assert execution.is_failed()
 
     def test_is_failed_when_not_failed(self):
         """Test is_failed returns False when not failed."""
@@ -399,7 +399,7 @@ class TestAgentExecutionQueryMethods:
             model="claude-sonnet-4-5",
         )
 
-        assert execution.is_failed() is False
+        assert not execution.is_failed()
 
     def test_is_terminal_when_completed(self):
         """Test is_terminal returns True when completed."""
@@ -414,7 +414,7 @@ class TestAgentExecutionQueryMethods:
         execution.start()
         execution.complete(output="Done", input_tokens=100, output_tokens=200)
 
-        assert execution.is_terminal() is True
+        assert execution.is_terminal()
 
     def test_is_terminal_when_failed(self):
         """Test is_terminal returns True when failed."""
@@ -429,7 +429,7 @@ class TestAgentExecutionQueryMethods:
         execution.start()
         execution.fail("Error")
 
-        assert execution.is_terminal() is True
+        assert execution.is_terminal()
 
     def test_is_terminal_when_timeout(self):
         """Test is_terminal returns True when timed out."""
@@ -444,7 +444,7 @@ class TestAgentExecutionQueryMethods:
         execution.start()
         execution.timeout()
 
-        assert execution.is_terminal() is True
+        assert execution.is_terminal()
 
     def test_is_terminal_when_running(self):
         """Test is_terminal returns False when running."""
@@ -458,7 +458,7 @@ class TestAgentExecutionQueryMethods:
         )
         execution.start()
 
-        assert execution.is_terminal() is False
+        assert not execution.is_terminal()
 
     def test_get_total_tokens(self):
         """Test get_total_tokens returns sum of input and output tokens."""

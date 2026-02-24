@@ -14,6 +14,8 @@ Tests verify that:
 """
 
 import asyncio
+from typing import Any, Dict, List, Set
+
 import pytest
 
 from codetoreum.domain.events import DomainEvent, WorkItemCreated, WorkItemCompleted
@@ -52,7 +54,7 @@ class _StatefulHandler(EventHandler):
 
     def __init__(self, handler_id: str):
         self.handler_id = handler_id
-        self.state = {"count": 0, "events": [], "event_ids": set()}
+        self.state: Dict[str, Any] = {"count": 0, "events": [], "event_ids": set()}
 
     async def handle(self, event: DomainEvent) -> None:
         """Handle event with state."""
@@ -69,7 +71,7 @@ class _StatefulExceptionHandler(EventHandler):
 
     def __init__(self, handler_id: str):
         self.handler_id = handler_id
-        self.state = {"processed": 0, "failed": 0}
+        self.state: Dict[str, int] = {"processed": 0, "failed": 0}
 
     async def handle(self, event: DomainEvent) -> None:
         """Handle event with state tracking, but fail."""
@@ -86,7 +88,7 @@ class _MultiEventStatefulHandler(EventHandler):
 
     def __init__(self, handler_id: str):
         self.handler_id = handler_id
-        self.state = {
+        self.state: Dict[str, Any] = {
             "created_count": 0,
             "completed_count": 0,
             "all_events": []
@@ -108,7 +110,7 @@ class _StatefulWildcardHandler(EventHandler):
 
     def __init__(self, handler_id: str):
         self.handler_id = handler_id
-        self.state = {"event_types": [], "count": 0}
+        self.state: Dict[str, Any] = {"event_types": [], "count": 0}
 
     async def handle(self, event: DomainEvent) -> None:
         """Handle all events with state."""
