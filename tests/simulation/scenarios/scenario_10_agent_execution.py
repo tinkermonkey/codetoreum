@@ -27,7 +27,7 @@ import pytest
 
 from codetoreum.domain.agent_execution import AgentExecution, ExecutionStatus
 from codetoreum.domain.value_objects import ExecutionContext, ContainerConfig
-from codetoreum.domain.workspace_context import WorkspaceContext
+from codetoreum.domain.workspace_context import WorkspaceContext, WorkspaceType
 from codetoreum.domain.agent import Agent, AgentType
 from codetoreum.infrastructure.simulation import (
     SimulationConfig,
@@ -330,7 +330,7 @@ async def scenario_execution_with_container_provisioning(runner: SimulationRunne
         agent_id="developer",
         model="claude-sonnet-4-5",
         timeout_seconds=900,
-        workspace_type=workspace_ctx.workspace_type,
+        workspace_type=workspace_ctx.workspace_type.value,
         branch_name=workspace_ctx.branch_name,
         discussion_id=None,
         project_id="proj-123",
@@ -406,7 +406,8 @@ async def scenario_execution_with_container_provisioning(runner: SimulationRunne
         "Container should have AGENT_ID environment variable"
     )
     runner.assert_true(
-        "/workspace" in container_config.volumes.values().__str__(),
+        container_config.volumes is not None
+        and any("/workspace" in str(v.get("bind", "")) for v in container_config.volumes.values()),
         "container_workspace_volume",
         "Container should have workspace volume mounted"
     )
@@ -453,7 +454,8 @@ async def scenario_agent_failure_scenarios(runner: SimulationRunner):
         "Exit code should reflect rate limit error"
     )
     runner.assert_true(
-        "rate limit" in execution1.error_message.lower(),
+        execution1.error_message is not None
+        and "rate limit" in execution1.error_message.lower(),
         "failure_error_message",
         "Error message should be captured"
     )
@@ -528,7 +530,8 @@ async def scenario_execution_timeout_scenario(runner: SimulationRunner):
         "Timeout should have exit code -1"
     )
     runner.assert_true(
-        "timeout" in execution.error_message.lower(),
+        execution.error_message is not None
+        and "timeout" in execution.error_message.lower(),
         "timeout_error_message",
         "Error message should indicate timeout"
     )

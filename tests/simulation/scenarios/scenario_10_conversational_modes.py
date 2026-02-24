@@ -226,10 +226,12 @@ async def scenario_a_normal_event_flow(runner: SimulationRunner):
     )
 
     # Bot responds to threaded comment
+    parent_comment = captured_events[-1].comment
+    assert parent_comment is not None, "Expected comment in last event"
     response2 = await discussion_adapter.add_comment(
         work_item_id,
         "Great question about edge cases. We should handle: ...",
-        parent_id=captured_events[-1].comment.id
+        parent_id=parent_comment.id
     )
 
     runner.assert_true(
@@ -423,7 +425,10 @@ async def edge_case_d_bot_comment_filtering(runner: SimulationRunner):
     )
 
     # Verify bot comment was not included in events
-    event_authors = [e.comment.author for e in captured_events]
+    event_authors = [
+        e.comment.author for e in captured_events
+        if e.comment is not None
+    ]
     runner.assert_true(
         "bot-reviewer" not in event_authors,
         "edge_case_d_bot_filtered",
@@ -486,8 +491,10 @@ async def edge_case_e_threaded_context(runner: SimulationRunner):
 
     # Verify threaded relationship
     child_event = captured_events[1]
+    child_comment = child_event.comment
+    assert child_comment is not None, "Expected comment in child event"
     runner.assert_equal(
-        child_event.comment.parent_id,
+        child_comment.parent_id,
         parent_comment_id,
         "edge_case_e_parent_id_preserved",
         "Child parent_id should be preserved"
