@@ -16,7 +16,7 @@ class TestWorkflowRunFilters:
     def test_valid_filters(self):
         """Test creating valid filters."""
         filters = WorkflowRunFilters(
-            status=[WorkflowRunStatus.RUNNING],
+            status=(WorkflowRunStatus.RUNNING,),
             project_id="project-123",
             work_item_id="work-456",
             workflow_id="workflow-789",
@@ -24,6 +24,7 @@ class TestWorkflowRunFilters:
         assert filters.project_id == "project-123"
         assert filters.work_item_id == "work-456"
         assert filters.workflow_id == "workflow-789"
+        assert filters.status == (WorkflowRunStatus.RUNNING,)
 
     def test_empty_project_id_raises_error(self):
         """Test that empty project_id raises ValueError."""
@@ -57,10 +58,11 @@ class TestWorkflowRunFilters:
 
     def test_filters_are_immutable(self):
         """Test that WorkflowRunFilters is immutable (frozen)."""
+        from dataclasses import FrozenInstanceError
         filters = WorkflowRunFilters(project_id="project-123")
 
         # Attempt to modify should raise FrozenInstanceError
-        with pytest.raises(Exception):  # dataclasses.FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
             filters.project_id = "new-value"
 
 

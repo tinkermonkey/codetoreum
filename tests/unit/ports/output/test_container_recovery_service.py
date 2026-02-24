@@ -158,7 +158,7 @@ class TestRecoveryResultImmutability:
             result.recovered = 10
 
         with pytest.raises(Exception):  # FrozenInstanceError
-            result.killed = 5
+            result.errors = 5
 
     def test_recovery_result_preserves_counts(self):
         """RecoveryResult should preserve counts accurately."""
@@ -614,7 +614,7 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at="2026-01-27T23:34:55.217234+00:00",  # type: ignore
+                created_at="2026-01-27T23:34:55.217234+00:00",
                 labels=MappingProxyType({
                 CONTAINER_LABEL_TYPE: "agent",
                 CONTAINER_LABEL_PROJECT: "proj-1",
@@ -632,7 +632,7 @@ class TestContainerMetadataValidation:
                 agent_id="agent-1",
                 task_id="task-1",
                 created_at=datetime.now(timezone.utc),
-                labels={"key": "value"},  # type: ignore - Plain dict instead
+                labels={"key": "value"},
             )
 
     def test_work_item_id_must_be_non_empty_if_provided(self):
@@ -970,7 +970,7 @@ class TestRecoveryAssessmentValidation:
         with pytest.raises(ValueError, match='action must be one of'):
             RecoveryAssessment(
                 container_id="abc123",
-                action="invalid",  # type: ignore
+                action="invalid",
                 reason="Test reason",
                 with_monitoring=True,
                 execution_id="exec-456",
@@ -1005,7 +1005,7 @@ class TestRecoveryAssessmentValidation:
                 container_id="abc123",
                 action="reconnect",
                 reason="Test reason",
-                with_monitoring="true",  # type: ignore
+                with_monitoring="true",
                 execution_id="exec-456",
             )
 
