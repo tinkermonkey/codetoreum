@@ -158,7 +158,7 @@ agents:
     capabilities:
       - "code_generation"
       - "code_review"
-    llm_model: "claude-sonnet-4-6"
+    llm_model: "claude-sonnet-4-5-20250929"
     temperature: 0.7
     max_tokens: 4096
     system_prompt: ""

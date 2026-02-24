@@ -85,7 +85,7 @@ agents:
     description: "Parses and structures requirements from issue descriptions"
     capabilities:
       - "code_review"
-    llm_model: "claude-sonnet-4-6"
+    llm_model: "claude-sonnet-4-5-20250929"
     temperature: 0.5
     max_tokens: 4096
     enabled: true
@@ -96,7 +96,7 @@ agents:
     capabilities:
       - "code_generation"
       - "code_review"
-    llm_model: "claude-sonnet-4-6"
+    llm_model: "claude-sonnet-4-5-20250929"
     temperature: 0.7
     max_tokens: 8192
     enabled: true
@@ -106,7 +106,7 @@ agents:
     description: "Implements features based on design documents"
     capabilities:
       - "code_generation"
-    llm_model: "claude-sonnet-4-6"
+    llm_model: "claude-sonnet-4-5-20250929"
     temperature: 0.7
     max_tokens: 8192
     enabled: true
@@ -116,7 +116,7 @@ agents:
     description: "Reviews code quality, correctness, and adherence to design"
     capabilities:
       - "code_review"
-    llm_model: "claude-sonnet-4-6"
+    llm_model: "claude-sonnet-4-5-20250929"
     temperature: 0.5
     max_tokens: 4096
     enabled: true
@@ -127,7 +127,7 @@ agents:
     capabilities:
       - "testing"
       - "code_generation"
-    llm_model: "claude-sonnet-4-6"
+    llm_model: "claude-sonnet-4-5-20250929"
     temperature: 0.6
     max_tokens: 6144
     enabled: true
@@ -137,7 +137,7 @@ agents:
     description: "Merges branches and manages CI/CD pipeline"
     capabilities:
       - "code_generation"
-    llm_model: "claude-sonnet-4-6"
+    llm_model: "claude-sonnet-4-5-20250929"
     temperature: 0.4
     max_tokens: 4096
     enabled: true
@@ -147,7 +147,7 @@ agents:
     description: "Prepares release notes and coordinates deployment"
     capabilities:
       - "code_review"
-    llm_model: "claude-sonnet-4-6"
+    llm_model: "claude-sonnet-4-5-20250929"
     temperature: 0.5
     max_tokens: 2048
     enabled: true
