@@ -313,7 +313,7 @@ Legacy v1 API still available for backward compatibility.
     return spec
 
 
-def main():
+def main() -> None:
     """Generate enhanced OpenAPI specification."""
     # Create app with minimal config (no external dependencies)
     print("Creating FastAPI application...")
