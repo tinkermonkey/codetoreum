@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import builtins
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from ..models import Agent, PaginatedResponse
+
+if TYPE_CHECKING:
+    from ..client import CodetoreumClient
 
 
 class AgentsResource:
     """Client for agents endpoints."""
 
-    def __init__(self, client: Any) -> None:
+    def __init__(self, client: CodetoreumClient) -> None:
         self.client = client
 
     def _validate_agent_params(self, name: str, description: str, agent_type: str) -> None:

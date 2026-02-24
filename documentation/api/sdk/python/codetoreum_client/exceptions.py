@@ -15,7 +15,7 @@ class CodetoreumError(Exception):
         message: str,
         status_code: Optional[int] = None,
         response: Optional["requests.Response"] = None,
-    ):
+    ) -> None:
         super().__init__(message)
         self.message = message
         self.status_code = status_code
@@ -25,21 +25,21 @@ class CodetoreumError(Exception):
 class AuthenticationError(CodetoreumError):
     """Raised when authentication fails (401)."""
 
-    def __init__(self, message: str = "Authentication failed"):
+    def __init__(self, message: str = "Authentication failed") -> None:
         super().__init__(message, status_code=401)
 
 
 class NotFoundError(CodetoreumError):
     """Raised when a resource is not found (404)."""
 
-    def __init__(self, message: str = "Resource not found"):
+    def __init__(self, message: str = "Resource not found") -> None:
         super().__init__(message, status_code=404)
 
 
 class ValidationError(CodetoreumError):
     """Raised when request validation fails (422)."""
 
-    def __init__(self, message: str = "Validation error", errors: Optional[list] = None):
+    def __init__(self, message: str = "Validation error", errors: Optional[list[str]] = None) -> None:
         super().__init__(message, status_code=422)
         self.errors = errors or []
 
@@ -47,12 +47,12 @@ class ValidationError(CodetoreumError):
 class RateLimitError(CodetoreumError):
     """Raised when rate limit is exceeded (429)."""
 
-    def __init__(self, message: str = "Rate limit exceeded"):
+    def __init__(self, message: str = "Rate limit exceeded") -> None:
         super().__init__(message, status_code=429)
 
 
 class ServerError(CodetoreumError):
     """Raised when server returns 5xx error."""
 
-    def __init__(self, message: str = "Internal server error", status_code: int = 500):
+    def __init__(self, message: str = "Internal server error", status_code: int = 500) -> None:
         super().__init__(message, status_code=status_code)

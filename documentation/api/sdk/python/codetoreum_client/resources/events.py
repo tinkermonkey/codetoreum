@@ -56,7 +56,7 @@ class EventsResource:
         ws_url = self.client.base_url.replace("http://", "ws://").replace("https://", "wss://")
         ws_url = f"{ws_url}/api/v2/events/stream?token={self.client.api_token}"
 
-        async def _stream() -> AsyncIterator[dict]:
+        async def _stream() -> AsyncIterator[dict[str, Any]]:
             async with websockets.connect(ws_url) as websocket:
                 async for message in websocket:
                     yield json.loads(message)
