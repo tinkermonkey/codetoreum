@@ -18,8 +18,6 @@ const CycleBoundingNode = ({ data }) => {
     width,
     height,
     cyclePadding = 40,
-    startTime,
-    endTime,
   } = data
 
   // Get cycle type styling
