@@ -29,9 +29,9 @@ from codetoreum.domain.events.discussion_events import (
     CommentContext,
     CommentNeedsResponseEvent,
 )
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.domain.events import DomainEvent
 from codetoreum.ports.output.discussion_adapter import DiscussionMonitoringConfig, DiscussionThread
 from codetoreum.ports.output.identity_service import IIdentityService, BotIdentityConfig
 
@@ -85,9 +85,9 @@ class MockDiscussionAdapter:
             self._event_handlers[event_type] = []
         self._event_handlers[event_type].append(handler)
 
-    def _emit_event(self, event: DomainEvent) -> None:
+    def _emit_event(self, event: CodetoreumEvent) -> None:
         """Emit event to all registered handlers."""
-        event_type = event.event_type if hasattr(event, 'event_type') else event.type
+        event_type = event.type
         handlers = self._event_handlers.get(event_type, [])
         for handler in handlers:
             if asyncio.iscoroutinefunction(handler):
