@@ -1,7 +1,9 @@
 """Unit tests for ReviewCycle aggregate root."""
 
-import pytest
+from dataclasses import FrozenInstanceError
 from datetime import datetime, timezone
+
+import pytest
 
 from codetoreum.domain.review_cycle import (
     ReviewCycle,
@@ -392,14 +394,16 @@ class TestEscalationFlow:
         cycle.start_iteration("output1", "exec-1")
         cycle.submit_review(ReviewDecision.REQUEST_CHANGES, "Fix this", "exec-2")
 
-        assert cycle.status == ReviewStatus.CHANGES_REQUESTED
+        status_after_iter1 = cycle.status
+        assert status_after_iter1 == ReviewStatus.CHANGES_REQUESTED
 
         # Iteration 2
         cycle.start_iteration("output2", "exec-3")
         cycle.submit_review(ReviewDecision.REQUEST_CHANGES, "Still issues", "exec-4")
 
         # Should escalate automatically
-        assert cycle.status == ReviewStatus.ESCALATED
+        status_after_iter2 = cycle.status
+        assert status_after_iter2 == ReviewStatus.ESCALATED
         assert cycle.escalation_reason == "Max iterations reached"
         assert cycle.current_iteration == 2
 
@@ -603,8 +607,8 @@ class TestReviewFeedbackValueObject:
             timestamp=datetime.now(timezone.utc)
         )
 
-        with pytest.raises(Exception):  # dataclasses.FrozenInstanceError
-            feedback.comment = "Changed"
+        with pytest.raises(FrozenInstanceError):
+            feedback.comment = "Changed"  # type: ignore[misc]
 
-        with pytest.raises(Exception):
-            feedback.decision = ReviewDecision.REQUEST_CHANGES
+        with pytest.raises(FrozenInstanceError):
+            feedback.decision = ReviewDecision.REQUEST_CHANGES  # type: ignore[misc]
