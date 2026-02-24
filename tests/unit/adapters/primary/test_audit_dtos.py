@@ -215,7 +215,6 @@ class TestAuditStageInfo:
             timestamp=datetime(2025, 11, 8, 10, 0, 0, tzinfo=timezone.utc),
             agentName="developer_agent",
             stageName="implementation",
-            status=None,
             data={}
         )
 
@@ -320,9 +319,6 @@ class TestWorkflowRunAuditResponse:
             eventType="WorkflowStarted",
             workflowRunId="wfrun-123",
             timestamp=datetime(2025, 11, 8, 10, 0, 0, tzinfo=timezone.utc),
-            agentName=None,
-            stageName=None,
-            status=None,
             data={}
         )
 
@@ -358,7 +354,7 @@ class TestWorkflowRunAuditResponse:
         assert response.workflowRun.id == "wfrun-123"
         assert len(response.events) == 1
         assert len(response.stages) == 1
-        assert response.validation.sequenceValid is True
+        assert response.validation is not None and response.validation.sequenceValid is True
         assert response.totalEventCount == 15
         assert response.hasNext is False
 
@@ -479,3 +475,4 @@ class TestWorkflowRunAuditResponse:
         # Verify types are correct
         assert isinstance(response.workflowRun, WorkflowRunSummaryResponse)
         assert isinstance(response.events[0], WorkflowEventResponse)
+        assert isinstance(response.validation, AuditValidationResult)

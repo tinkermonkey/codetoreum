@@ -9,6 +9,7 @@ from codetoreum.ports.output.config_store import (
     PipelineConfig,
     WorkflowTemplate,
     ConfigVersion,
+    ConfigNotFoundError,
 )
 
 # Set default timeout for all integration tests to prevent hanging
@@ -40,7 +41,7 @@ class MockConfigService(IConfigStore):
         pass
 
     async def get_workflow_template(self, template_name: str) -> WorkflowTemplate:
-        return None
+        raise ConfigNotFoundError(f"Workflow template '{template_name}' not found")
 
     async def save_workflow_template(self, template: WorkflowTemplate) -> None:
         pass
