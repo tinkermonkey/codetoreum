@@ -212,10 +212,10 @@ class TestErrorMiddlewareLogging:
         request.url.path = "/api/test"
         request.headers.get = MagicMock(return_value=None)
 
-        # Use Pydantic V2 error type format: "missing" instead of "value_error.missing"
+        # Use Pydantic V2 error type format with InitErrorDetails required keys
         validation_error = PydanticValidationError.from_exception_data(
             "ValidationError",
-            [{"loc": ("body", "field"), "msg": "field required", "type": "missing"}]
+            [{"loc": ("body", "field"), "type": "missing", "input": {}, "ctx": {}}]
         )
 
         async def call_next(req):

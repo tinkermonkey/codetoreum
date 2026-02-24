@@ -98,7 +98,7 @@ class TestExponentialBackoffRetry:
             jitter=False  # Disable jitter for predictable testing
         )
 
-        delays = []
+        delays: list[float] = []
         last_time = None
 
         async def failing_operation():
