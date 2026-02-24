@@ -1,7 +1,7 @@
 """
 Main Codetoreum client class
 """
-import requests
+import requests  # type: ignore[import-untyped]
 from typing import Any, Optional, cast
 from urllib.parse import urljoin
 

@@ -55,17 +55,13 @@ class TestDevelopmentMockReturnTypes:
         assert "return WorkflowRunAuditResult(" in content, \
             "get_workflow_run_audit should return WorkflowRunAuditResult dataclass"
 
-        # Verify validation dict uses snake_case keys
-        assert '"sequence_valid": True' in content, \
-            "Validation dict should use snake_case sequence_valid"
-        assert '"expected_sequence": []' in content, \
-            "Validation dict should use snake_case expected_sequence"
-        assert '"actual_sequence": []' in content, \
-            "Validation dict should use snake_case actual_sequence"
-
-        # Verify old broken code is gone
-        assert '"sequenceValid": True' not in content, \
-            "Old dict with camelCase sequenceValid should be removed"
+        # Verify validation dict uses camelCase keys (per AuditValidationResult Pydantic model)
+        assert '"sequenceValid": True' in content, \
+            "Validation dict should use camelCase sequenceValid"
+        assert '"expectedSequence": []' in content, \
+            "Validation dict should use camelCase expectedSequence"
+        assert '"actualSequence": []' in content, \
+            "Validation dict should use camelCase actualSequence"
 
 
 class TestAuditStageInfoLiteralType:
