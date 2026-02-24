@@ -15,7 +15,7 @@ import {
   Position,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { useSocket } from '../contexts/SocketContext'
+import { useSocket } from '../hooks'
 import { formatDuration } from '../utils/stateHelpers'
 import {
   identifyCycles,

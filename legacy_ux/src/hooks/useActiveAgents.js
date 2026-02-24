@@ -2,7 +2,7 @@
  * Selector hook for active agent data
  */
 import { useMemo } from 'react'
-import { useAgentState } from '../contexts/AgentStateContext'
+import { useAgentState } from './useAgentState'
 
 export function useActiveAgents() {
   const { activeAgents, activeAgentCount } = useAgentState()

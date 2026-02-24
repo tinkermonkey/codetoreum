@@ -4,7 +4,7 @@ import Header from '../components/Header'
 import NavigationTabs from '../components/NavigationTabs'
 import PipelineRunEventLog from '../components/PipelineRunEventLog'
 import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, memo } from 'react'
-import { useSocket } from '../contexts/SocketContext'
+import { useSocket } from '../hooks'
 import { formatDuration } from '../utils/stateHelpers'
 import { mergePipelineRunEvents, mergeArrayByIdStable } from '../utils/eventMerging'
 

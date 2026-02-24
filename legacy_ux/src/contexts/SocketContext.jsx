@@ -1,7 +1,6 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { io } from 'socket.io-client'
-
-const SocketContext = createContext()
+import { SocketContext } from './SocketContextValue'
 
 export function SocketProvider({ children }) {
   const [socket, setSocket] = useState(null)
@@ -169,12 +168,4 @@ export function SocketProvider({ children }) {
       {children}
     </SocketContext.Provider>
   )
-}
-
-export function useSocket() {
-  const context = useContext(SocketContext)
-  if (!context) {
-    throw new Error('useSocket must be used within SocketProvider')
-  }
-  return context
 }
