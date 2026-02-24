@@ -7,6 +7,11 @@ from codetoreum.domain.workspace_context import (
     WorkspaceType,
 )
 
+try:
+    from dataclasses import FrozenInstanceError
+except ImportError:
+    FrozenInstanceError = AttributeError  # type: ignore
+
 
 class TestIssueWorkspace:
     """Tests for issue-based workspace context."""
@@ -222,14 +227,14 @@ class TestImmutability:
         )
 
         # Attempting to modify should raise FrozenInstanceError
-        with pytest.raises(Exception):  # dataclasses.FrozenInstanceError
-            context.branch_name = "new-branch"
+        with pytest.raises(FrozenInstanceError):
+            context.branch_name = "new-branch"  # type: ignore
 
-        with pytest.raises(Exception):
-            context.create_pr = False
+        with pytest.raises(FrozenInstanceError):
+            context.create_pr = False  # type: ignore
 
-        with pytest.raises(Exception):
-            context.workspace_type = WorkspaceType.ISSUE
+        with pytest.raises(FrozenInstanceError):
+            context.workspace_type = WorkspaceType.ISSUE  # type: ignore
 
 
 class TestEquality:

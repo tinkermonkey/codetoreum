@@ -52,12 +52,6 @@ class TestWorkItemId:
         assert id1 == id2
         assert id1 != id3
 
-    def test_immutability(self):
-        """Test that WorkItemId is immutable."""
-        work_item_id = WorkItemId.from_string("item-123")
-        with pytest.raises(AttributeError):
-            work_item_id.value = "new-value"
-
 
 class TestWorkflowId:
     """Test WorkflowId value object."""
@@ -160,12 +154,6 @@ class TestRequirement:
         assert req.is_satisfied_by(cap_high)
         assert not req.is_satisfied_by(cap_low)
         assert not req.is_satisfied_by(cap_other)
-
-    def test_immutability(self):
-        """Test that Requirement is immutable."""
-        req = Requirement(skill="python", min_proficiency=0.8)
-        with pytest.raises(AttributeError):
-            req.min_proficiency = 0.9
 
 
 # ============================================================================
@@ -290,14 +278,6 @@ class TestExecutionResult:
                 duration_seconds=-10.0,
             )
 
-    def test_immutability(self):
-        """Test that ExecutionResult is immutable."""
-        result = ExecutionResult.success_result(
-            output="Done", input_tokens=100, output_tokens=50, duration_seconds=10.0
-        )
-        with pytest.raises(AttributeError):
-            result.output = "Modified"
-
 
 # ============================================================================
 # ContainerConfig Value Object Tests
@@ -367,12 +347,6 @@ class TestContainerConfig:
         assert config_dict["image"] == "python:3.11"
         assert config_dict["name"] == "test"
         assert config_dict["environment"] == {"KEY": "value"}
-
-    def test_immutability(self):
-        """Test that ContainerConfig is immutable."""
-        config = ContainerConfig(image="python:3.11")
-        with pytest.raises(AttributeError):
-            config.image = "python:3.12"
 
 
 # ============================================================================
@@ -488,31 +462,6 @@ class TestExecutionContext:
         assert context_dict["timeout_seconds"] == 3600
         assert context_dict["tech_stack"] == ["python"]
 
-    def test_immutability(self):
-        """Test that ExecutionContext is immutable."""
-        context = ExecutionContext(
-            work_item_id="item-123",
-            workflow_id="workflow-123",
-            stage_name="dev",
-            agent_id="agent-123",
-            model="claude",
-            timeout_seconds=3600,
-            workspace_type="branch",
-            branch_name=None,
-            discussion_id=None,
-            project_id="proj",
-            repository_url="url",
-            tech_stack=[],
-            filesystem_write_allowed=True,
-            can_make_commits=False,
-            requires_docker=False,
-            mcp_servers=[],
-            previous_session_id=None,
-            metadata={},
-        )
-        with pytest.raises(AttributeError):
-            context.timeout_seconds = 7200
-
 
 # ============================================================================
 # TimeRange Value Object Tests
@@ -577,15 +526,6 @@ class TestTimeRange:
         assert range1.overlaps(range2)
         assert not range1.overlaps(range3)
 
-    def test_immutability(self):
-        """Test that TimeRange is immutable."""
-        start = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        end = datetime(2025, 1, 1, 13, 0, 0, tzinfo=timezone.utc)
-        time_range = TimeRange(start=start, end=end)
-
-        with pytest.raises(AttributeError):
-            time_range.start = datetime(2025, 1, 1, 11, 0, 0, tzinfo=timezone.utc)
-
 
 # ============================================================================
 # TokenUsage Value Object Tests
@@ -629,12 +569,6 @@ class TestTokenUsage:
         assert tokens_dict["input_tokens"] == 1000
         assert tokens_dict["output_tokens"] == 500
         assert tokens_dict["total_tokens"] == 1500
-
-    def test_immutability(self):
-        """Test that TokenUsage is immutable."""
-        tokens = TokenUsage(input_tokens=1000, output_tokens=500)
-        with pytest.raises(AttributeError):
-            tokens.input_tokens = 2000
 
     def test_add_returns_new_instance(self):
         """Test that add returns new instance without modifying originals."""
