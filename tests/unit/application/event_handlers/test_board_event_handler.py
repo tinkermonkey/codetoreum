@@ -91,9 +91,9 @@ def sample_workflow_config():
     return BoardWorkflowTemplate(
         id="workflow-1",
         name="SDLC Workflow",
-        pipeline_trigger_columns=["In Development"],
-        exit_columns=["Done"],
-        columns=[
+        pipeline_trigger_columns=("In Development",),
+        exit_columns=("Done",),
+        columns=(
             ColumnTemplate(
                 name="Backlog",
                 type=ColumnType.MANUAL,
@@ -130,7 +130,7 @@ def sample_workflow_config():
                 position=3,
                 auto_progress_on_completion=False,
             ),
-        ],
+        ),
     )
 
 

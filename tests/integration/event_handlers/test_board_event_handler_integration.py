@@ -89,9 +89,9 @@ def sdlc_workflow():
     return BoardWorkflowTemplate(
         id="workflow-1",
         name="SDLC Workflow",
-        pipeline_trigger_columns=["Development"],
-        exit_columns=["Done"],
-        columns=[
+        pipeline_trigger_columns=("Development",),
+        exit_columns=("Done",),
+        columns=(
             ColumnTemplate(
                 name="Backlog",
                 type=ColumnType.MANUAL,
@@ -137,7 +137,7 @@ def sdlc_workflow():
                 position=4,
                 auto_progress_on_completion=False,
             ),
-        ],
+        ),
     )
 
 
@@ -470,9 +470,9 @@ class TestMultipleBoardsAndProjects:
         simple_workflow = BoardWorkflowTemplate(
             id="workflow-2",
             name="Simple Workflow",
-            pipeline_trigger_columns=[],
-            exit_columns=[],
-            columns=[
+            pipeline_trigger_columns=(),
+            exit_columns=(),
+            columns=(
                 ColumnTemplate(
                     name="Todo",
                     type=ColumnType.MANUAL,
@@ -491,7 +491,7 @@ class TestMultipleBoardsAndProjects:
                     position=1,
                     auto_progress_on_completion=False,
                 ),
-            ],
+            ),
         )
 
         # Configure board-specific workflows
