@@ -21,6 +21,7 @@ import logging
 import threading
 from datetime import datetime, timezone
 from typing import Callable, Dict, List, Optional, Tuple
+from uuid import uuid4
 
 from codetoreum.ports.output.pipeline_queue_service import (
     IPipelineQueueService,
@@ -32,6 +33,13 @@ from codetoreum.ports.output.pipeline_queue_service import (
     QueueValidationError,
 )
 from codetoreum.ports.output.board_service import IBoardService
+from codetoreum.ports.output.event_emitter import IEventEmitter
+from codetoreum.domain.events.queue_events import (
+    QueueItemAddedEvent,
+    QueueItemRemovedEvent,
+    QueuePositionChangedEvent,
+)
+from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
@@ -64,6 +72,7 @@ class InMemoryQueueService(IPipelineQueueService):
         self,
         board_service: Optional[IBoardService] = None,
         time_source: Optional[Callable[[], datetime]] = None,
+        event_emitter: Optional[IEventEmitter] = None,
     ) -> None:
         """Initialize empty queue service.
 
@@ -71,6 +80,7 @@ class InMemoryQueueService(IPipelineQueueService):
             board_service: Optional IBoardService for queue synchronization with board state
             time_source: Optional callable returning datetime.datetime for deterministic time
                         manipulation in simulation testing. Defaults to datetime.now(timezone.utc)
+            event_emitter: Optional IEventEmitter for emitting domain events. Defaults to MockEventEmitter
         """
         self._queues: Dict[str, List[PipelineQueueEntry]] = {}
         self._board_positions: Dict[str, List[str]] = {}  # For set_board_order test helper
@@ -78,6 +88,7 @@ class InMemoryQueueService(IPipelineQueueService):
         self._lock = threading.Lock()
         self._board_service = board_service
         self._time_source = time_source or (lambda: datetime.now(timezone.utc))
+        self._event_emitter = event_emitter or MockEventEmitter()
 
     async def is_item_in_queue(self, work_item_id: str) -> bool:
         """Check if a work item is currently in any queue.
@@ -201,6 +212,19 @@ class InMemoryQueueService(IPipelineQueueService):
                 }
             )
 
+            # Emit domain event
+            self._event_emitter.emit(
+                QueueItemAddedEvent(
+                    type="queue.item_added",
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    source="mock",
+                    queue_name=queue_key,
+                    item_id=work_item_id,
+                    position=position_in_column,
+                    project_id=project_id,
+                )
+            )
+
     async def mark_item_active(self, work_item_id: str) -> None:
         """Mark a queued item as active (holding the lock).
 
@@ -287,6 +311,18 @@ class InMemoryQueueService(IPipelineQueueService):
                                 "project_id": entry.project_id,
                                 "board_id": entry.board_id,
                             }
+                        )
+
+                        # Emit domain event
+                        self._event_emitter.emit(
+                            QueueItemRemovedEvent(
+                                type="queue.item_removed",
+                                timestamp=datetime.now(timezone.utc).isoformat(),
+                                source="mock",
+                                queue_name=queue_key,
+                                item_id=work_item_id,
+                                project_id=entry.project_id,
+                            )
                         )
                         return True
             return False
@@ -461,6 +497,21 @@ class InMemoryQueueService(IPipelineQueueService):
                                 last_position_check=now,
                             )
                             updated_queue.append(updated_entry)
+
+                            # Emit position change event if position changed
+                            if entry.position_in_column != position:
+                                self._event_emitter.emit(
+                                    QueuePositionChangedEvent(
+                                        type="queue.position_changed",
+                                        timestamp=datetime.now(timezone.utc).isoformat(),
+                                        source="mock",
+                                        queue_name=queue_key,
+                                        item_id=work_item_id,
+                                        old_position=entry.position_in_column,
+                                        new_position=position,
+                                        project_id=project_id,
+                                    )
+                                )
                             break
 
                 # Re-sort by position

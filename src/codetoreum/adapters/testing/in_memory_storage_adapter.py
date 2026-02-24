@@ -1,12 +1,20 @@
 """In-memory storage adapter for testing."""
 
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from uuid import uuid4
 
 from codetoreum.domain.types import BucketName, StorageKey
 from codetoreum.ports.exceptions import ResourceNotFoundError, UnsupportedFeatureError
 from codetoreum.ports.output.storage import IStorage, StorageObject
+from codetoreum.ports.output.event_emitter import IEventEmitter
+from codetoreum.domain.events.storage_events import (
+    ArtifactUploadedEvent,
+    ArtifactDeletedEvent,
+)
+from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 
 
 class InMemoryStorageAdapter(IStorage):
@@ -16,10 +24,17 @@ class InMemoryStorageAdapter(IStorage):
     Stores all objects in memory dictionaries.
     """
 
-    def __init__(self):
-        """Initialize in-memory storage."""
+    def __init__(self, event_emitter: Optional[IEventEmitter] = None):
+        """Initialize in-memory storage.
+
+        Args:
+            event_emitter: Optional IEventEmitter for emitting domain events.
+                          Defaults to MockEventEmitter.
+        """
         self._objects: Dict[str, bytes] = {}
         self._metadata: Dict[str, Dict[str, any]] = {}
+        self._lock = threading.Lock()
+        self._event_emitter = event_emitter or MockEventEmitter()
 
     async def upload(
         self,
@@ -29,13 +44,29 @@ class InMemoryStorageAdapter(IStorage):
         metadata: Optional[Dict[str, str]] = None,
     ) -> None:
         """Upload object to memory."""
-        self._objects[key] = content
-        self._metadata[key] = {
-            "size": len(content),
-            "content_type": content_type or "application/octet-stream",
-            "metadata": metadata or {},
-            "last_modified": datetime.now(timezone.utc),
-        }
+        with self._lock:
+            self._objects[key] = content
+            content_type_value = content_type or "application/octet-stream"
+            size_bytes = len(content)
+            self._metadata[key] = {
+                "size": size_bytes,
+                "content_type": content_type_value,
+                "metadata": metadata or {},
+                "last_modified": datetime.now(timezone.utc),
+            }
+
+            # Emit domain event
+            self._event_emitter.emit(
+                ArtifactUploadedEvent(
+                    type="storage.artifact_uploaded",
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    source="mock",
+                    key=key,
+                    size_bytes=size_bytes,
+                    content_type=content_type_value,
+                    project_id=None,
+                )
+            )
 
     async def upload_from_file(
         self,
@@ -52,9 +83,10 @@ class InMemoryStorageAdapter(IStorage):
 
     async def download(self, key: str) -> bytes:
         """Download object from memory."""
-        if key not in self._objects:
-            raise ResourceNotFoundError(f"Object not found: {key}")
-        return self._objects[key]
+        with self._lock:
+            if key not in self._objects:
+                raise ResourceNotFoundError(f"Object not found: {key}")
+            return self._objects[key]
 
     async def download_to_file(self, key: str, file_path: Path) -> None:
         """Download to file."""
@@ -63,16 +95,40 @@ class InMemoryStorageAdapter(IStorage):
 
     async def delete(self, key: str) -> None:
         """Delete object from memory."""
-        if key not in self._objects:
-            raise ResourceNotFoundError(f"Object not found: {key}")
-        self._objects.pop(key)
-        self._metadata.pop(key)
+        with self._lock:
+            if key not in self._objects:
+                raise ResourceNotFoundError(f"Object not found: {key}")
+            self._objects.pop(key)
+            self._metadata.pop(key)
+
+            # Emit domain event
+            self._event_emitter.emit(
+                ArtifactDeletedEvent(
+                    type="storage.artifact_deleted",
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    source="mock",
+                    key=key,
+                    project_id=None,
+                )
+            )
 
     async def delete_many(self, keys: List[str]) -> None:
         """Delete multiple files."""
-        for key in keys:
-            self._objects.pop(key, None)
-            self._metadata.pop(key, None)
+        with self._lock:
+            for key in keys:
+                self._objects.pop(key, None)
+                self._metadata.pop(key, None)
+
+                # Emit domain event for each deleted artifact
+                self._event_emitter.emit(
+                    ArtifactDeletedEvent(
+                        type="storage.artifact_deleted",
+                        timestamp=datetime.now(timezone.utc).isoformat(),
+                        source="mock",
+                        key=key,
+                        project_id=None,
+                    )
+                )
 
     async def list_files(
         self,
@@ -81,34 +137,37 @@ class InMemoryStorageAdapter(IStorage):
         offset: int = 0,
     ) -> List[StorageObject]:
         """List objects in memory."""
-        objects = []
-        matching_keys = [
-            k for k in self._metadata.keys()
-            if prefix is None or k.startswith(prefix)
-        ]
+        with self._lock:
+            objects = []
+            matching_keys = [
+                k for k in self._metadata.keys()
+                if prefix is None or k.startswith(prefix)
+            ]
 
-        for key in sorted(matching_keys)[offset:offset + limit]:
-            meta = self._metadata[key]
-            objects.append(
-                StorageObject(
-                    key=key,
-                    size=meta["size"],
-                    last_modified=meta["last_modified"],
-                    content_type=meta["content_type"],
-                    metadata=meta["metadata"],
+            for key in sorted(matching_keys)[offset:offset + limit]:
+                meta = self._metadata[key]
+                objects.append(
+                    StorageObject(
+                        key=key,
+                        size=meta["size"],
+                        last_modified=meta["last_modified"],
+                        content_type=meta["content_type"],
+                        metadata=meta["metadata"],
+                    )
                 )
-            )
-        return objects
+            return objects
 
     async def exists(self, key: str) -> bool:
         """Check if object exists in memory."""
-        return key in self._objects
+        with self._lock:
+            return key in self._objects
 
     async def get_metadata(self, key: str) -> Dict[str, Any]:
         """Get object metadata."""
-        if key not in self._metadata:
-            raise ResourceNotFoundError(f"Object not found: {key}")
-        return dict(self._metadata[key])
+        with self._lock:
+            if key not in self._metadata:
+                raise ResourceNotFoundError(f"Object not found: {key}")
+            return dict(self._metadata[key])
 
     async def update_metadata(
         self,
@@ -116,9 +175,10 @@ class InMemoryStorageAdapter(IStorage):
         metadata: Dict[str, str],
     ) -> None:
         """Update file metadata."""
-        if key not in self._metadata:
-            raise ResourceNotFoundError(f"Object not found: {key}")
-        self._metadata[key]["metadata"] = metadata
+        with self._lock:
+            if key not in self._metadata:
+                raise ResourceNotFoundError(f"Object not found: {key}")
+            self._metadata[key]["metadata"] = metadata
 
     async def copy(
         self,
@@ -126,11 +186,25 @@ class InMemoryStorageAdapter(IStorage):
         destination_key: str,
     ) -> None:
         """Copy a file."""
-        if source_key not in self._objects:
-            raise ResourceNotFoundError(f"Source not found: {source_key}")
-        self._objects[destination_key] = self._objects[source_key]
-        self._metadata[destination_key] = dict(self._metadata[source_key])
-        self._metadata[destination_key]["last_modified"] = datetime.now(timezone.utc)
+        with self._lock:
+            if source_key not in self._objects:
+                raise ResourceNotFoundError(f"Source not found: {source_key}")
+            self._objects[destination_key] = self._objects[source_key]
+            self._metadata[destination_key] = dict(self._metadata[source_key])
+            self._metadata[destination_key]["last_modified"] = datetime.now(timezone.utc)
+
+            # Emit ArtifactUploadedEvent for the copied artifact
+            self._event_emitter.emit(
+                ArtifactUploadedEvent(
+                    type="storage.artifact_uploaded",
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    source="mock",
+                    key=destination_key,
+                    size_bytes=self._metadata[destination_key]["size"],
+                    content_type=self._metadata[destination_key]["content_type"],
+                    project_id=None,
+                )
+            )
 
     async def move(
         self,
@@ -148,22 +222,25 @@ class InMemoryStorageAdapter(IStorage):
         method: str = "GET",
     ) -> str:
         """Generate temporary access URL (not supported in memory)."""
-        if key not in self._objects:
-            raise ResourceNotFoundError(f"Object not found: {key}")
-        # Return fake URL for testing
-        return f"memory://localhost/{key}?expires={expires_in}&method={method}"
+        with self._lock:
+            if key not in self._objects:
+                raise ResourceNotFoundError(f"Object not found: {key}")
+            # Return fake URL for testing
+            return f"memory://localhost/{key}?expires={expires_in}&method={method}"
 
     async def get_size(self, key: str) -> int:
         """Get file size."""
-        if key not in self._metadata:
-            raise ResourceNotFoundError(f"Object not found: {key}")
-        return self._metadata[key]["size"]
+        with self._lock:
+            if key not in self._metadata:
+                raise ResourceNotFoundError(f"Object not found: {key}")
+            return self._metadata[key]["size"]
 
     async def get_content_type(self, key: str) -> str:
         """Get file content type."""
-        if key not in self._metadata:
-            raise ResourceNotFoundError(f"Object not found: {key}")
-        return self._metadata[key]["content_type"]
+        with self._lock:
+            if key not in self._metadata:
+                raise ResourceNotFoundError(f"Object not found: {key}")
+            return self._metadata[key]["content_type"]
 
     async def list_prefixes(
         self,
@@ -171,31 +248,34 @@ class InMemoryStorageAdapter(IStorage):
         delimiter: str = "/",
     ) -> List[str]:
         """List common prefixes (like directories)."""
-        prefixes = set()
-        for key in self._objects.keys():
-            if prefix and not key.startswith(prefix):
-                continue
+        with self._lock:
+            prefixes = set()
+            for key in self._objects.keys():
+                if prefix and not key.startswith(prefix):
+                    continue
 
-            # Find delimiter after prefix
-            search_from = len(prefix) if prefix else 0
-            delimiter_pos = key.find(delimiter, search_from)
+                # Find delimiter after prefix
+                search_from = len(prefix) if prefix else 0
+                delimiter_pos = key.find(delimiter, search_from)
 
-            if delimiter_pos > 0:
-                # Found a prefix
-                prefixes.add(key[:delimiter_pos + 1])
+                if delimiter_pos > 0:
+                    # Found a prefix
+                    prefixes.add(key[:delimiter_pos + 1])
 
-        return sorted(list(prefixes))
+            return sorted(list(prefixes))
 
     async def get_storage_info(self) -> Dict[str, Any]:
         """Get storage system information."""
-        total_size = sum(len(content) for content in self._objects.values())
-        return {
-            "provider": "in-memory",
-            "object_count": len(self._objects),
-            "total_size_bytes": total_size,
-        }
+        with self._lock:
+            total_size = sum(len(content) for content in self._objects.values())
+            return {
+                "provider": "in-memory",
+                "object_count": len(self._objects),
+                "total_size_bytes": total_size,
+            }
 
     def clear(self) -> None:
         """Clear all objects (for testing)."""
-        self._objects.clear()
-        self._metadata.clear()
+        with self._lock:
+            self._objects.clear()
+            self._metadata.clear()

@@ -35,6 +35,7 @@ from codetoreum.adapters.testing import (
     SimpleEncryptionAdapter,
     MockBoardAdapter,
 )
+from codetoreum.adapters.testing.capturing_mock_event_emitter import CapturingMockEventEmitter
 # Mock tracer for trace propagation testing
 from codetoreum.infrastructure.simulation.mock_tracer import MockTracer
 # Lazy import to avoid circular dependency
@@ -53,6 +54,7 @@ from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
 )
 from codetoreum.adapters.testing.in_memory_config_store import InMemoryConfigStore
 from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
+from codetoreum.adapters.testing.in_memory_queue_service import InMemoryQueueService
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 
 # Application Services
@@ -147,6 +149,8 @@ class SimulationAdapters:
     lock_service: InMemoryLockService
     workflow_config: InMemoryWorkflowConfigService
     agent_executor: MockAgentExecutor
+    queue_service: InMemoryQueueService  # Pipeline queue service for board automation
+    event_emitter: CapturingMockEventEmitter  # For domain event capture
 
 
 @dataclass
@@ -386,18 +390,24 @@ class SimulationApplicationBootstrap:
         )
         self._adapter_factory = AdapterFactory(factory_config)
 
+        # Create event emitter for domain event capture
+        event_emitter = CapturingMockEventEmitter()
+
         # Create adapters using factory
         ticket_system = self._adapter_factory.create_ticket_system(adapter_name="in_memory")
         llm_provider = self._adapter_factory.create_llm_provider(adapter_name="mock")
         container = self._adapter_factory.create_container(adapter_name="fake")
-        repository = self._adapter_factory.create_repository(adapter_name="in_memory")
+        repository = InMemoryRepositoryAdapter(event_emitter=event_emitter)
         event_store = self._adapter_factory.create_event_store(adapter_name="in_memory")
 
         # Adapters not in factory yet - create directly
         metrics = InMemoryMetricsAdapter()
-        storage = InMemoryStorageAdapter()
+        storage = InMemoryStorageAdapter(event_emitter=event_emitter)
         config_store = InMemoryConfigStore()
         notifier = MockNotifierAdapter()
+
+        # Create queue service with event emitter for domain event capture
+        queue_service = InMemoryQueueService(event_emitter=event_emitter)
 
         # Note: SimpleEncryptionAdapter is created directly (not via AdapterFactory)
         # because it's a simple utility service, not a main output port adapter.
@@ -431,7 +441,7 @@ class SimulationApplicationBootstrap:
             ),
         )
 
-        logger.info("Created 16 simulation adapters")
+        logger.info("Created 16 simulation adapters with domain event emission")
 
         return SimulationAdapters(
             ticket_system=ticket_system,
@@ -450,6 +460,8 @@ class SimulationApplicationBootstrap:
             lock_service=lock_service,
             workflow_config=workflow_config,
             agent_executor=agent_executor,
+            queue_service=queue_service,
+            event_emitter=event_emitter,
         )
 
     # =========================================================================

@@ -17,6 +17,13 @@ from codetoreum.ports.output.repository import (
     MergeResult,
     RepositoryStatus,
 )
+from codetoreum.ports.output.event_emitter import IEventEmitter
+from codetoreum.domain.events.repository_events import (
+    CommitCreatedEvent,
+    BranchCreatedEvent,
+    FilesStagedEvent,
+)
+from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 
 
 class InMemoryRepositoryAdapter(IRepository):
@@ -30,8 +37,13 @@ class InMemoryRepositoryAdapter(IRepository):
     dictionary and list modifications are protected by a lock.
     """
 
-    def __init__(self):
-        """Initialize the in-memory repository adapter with thread-safe storage."""
+    def __init__(self, event_emitter: Optional[IEventEmitter] = None):
+        """Initialize the in-memory repository adapter with thread-safe storage.
+
+        Args:
+            event_emitter: Optional IEventEmitter for emitting domain events.
+                          Defaults to MockEventEmitter.
+        """
         # Repository storage: repo_id -> repo_data
         self._repositories: Dict[str, Dict] = {}
 
@@ -49,6 +61,9 @@ class InMemoryRepositoryAdapter(IRepository):
 
         # Thread safety for concurrent test execution
         self._lock = threading.Lock()
+
+        # Event emission
+        self._event_emitter = event_emitter or MockEventEmitter()
 
     async def clone(
         self,
@@ -182,6 +197,19 @@ class InMemoryRepositoryAdapter(IRepository):
             source_commit = self._branches[(repo_id, source_branch)]
             self._branches[(repo_id, branch_name)] = source_commit
 
+            # Emit domain event
+            self._event_emitter.emit(
+                BranchCreatedEvent(
+                    type="repository.branch_created",
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    source="mock",
+                    repository_id=repo_id,
+                    branch_name=str(branch_name),
+                    base_commit=str(source_commit),
+                    project_id=None,
+                )
+            )
+
     async def commit(
         self,
         repo_path: Path,
@@ -224,6 +252,7 @@ class InMemoryRepositoryAdapter(IRepository):
 
             # Create new commit
             commit_sha = CommitHash(str(uuid4()))
+            changed_files = files or []
 
             self._commits[(repo_id, commit_sha)] = {
                 "sha": commit_sha,
@@ -232,11 +261,39 @@ class InMemoryRepositoryAdapter(IRepository):
                 "author_email": author_email,
                 "timestamp": datetime.now(timezone.utc),
                 "parent": parent_commit,
-                "files": files or [],
+                "files": changed_files,
             }
 
             # Update branch pointer
             self._branches[(repo_id, current_branch)] = commit_sha
+
+            # Emit FilesStagedEvent if files were provided
+            if changed_files:
+                self._event_emitter.emit(
+                    FilesStagedEvent(
+                        type="repository.files_staged",
+                        timestamp=datetime.now(timezone.utc).isoformat(),
+                        source="mock",
+                        repository_id=repo_id,
+                        file_paths=tuple(changed_files),
+                        project_id=None,
+                    )
+                )
+
+            # Emit CommitCreatedEvent
+            self._event_emitter.emit(
+                CommitCreatedEvent(
+                    type="repository.commit_created",
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    source="mock",
+                    repository_id=repo_id,
+                    commit_sha=str(commit_sha),
+                    message=message,
+                    author=f"{author_name} <{author_email}>",
+                    changed_files=tuple(changed_files),
+                    project_id=None,
+                )
+            )
 
             return commit_sha
 
