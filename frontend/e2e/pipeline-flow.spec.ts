@@ -199,7 +199,7 @@ test.describe('Pipeline Flow Visualization', () => {
     // Wait for initial load
     await page.waitForTimeout(2000)
 
-    // Look for refresh button
+    // Look for refresh button and click it
     const refreshButton = page.locator(
       'button:has-text("Refresh"), button[title*="Refresh"], button[aria-label*="refresh"]'
     )
@@ -207,10 +207,7 @@ test.describe('Pipeline Flow Visualization', () => {
     if (await refreshButton.count() > 0) {
       // Click refresh button
       await refreshButton.first().click()
-
-      // Should show loading indicator briefly
-      const loadingIndicator = page.locator('[class*="animate-spin"]')
-      // Note: Loading might be very brief, so this might not always catch it
+      // Refresh button should be clickable and trigger a refetch
     }
   })
 

@@ -46,7 +46,7 @@ def create_agent(
 
     headers = {
         "Authorization": f"Bearer {API_TOKEN}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
     }
 
     payload = {
@@ -57,21 +57,21 @@ def create_agent(
         "configuration": configuration or {
             "model": "claude-sonnet-4",
             "temperature": 0.7,
-            "max_tokens": 4000
+            "max_tokens": 4000,
         },
-        "active": True
+        "active": True,
     }
 
     response = requests.post(url, json=payload, headers=headers, timeout=30)
     response.raise_for_status()
 
-    agent_data: dict[str, Any] = cast(dict[str, Any], response.json())
-    logger.info(f"✓ Created agent: {agent_data['id']}")
+    agent_data: dict[str, Any] = cast("dict[str, Any]", response.json())
+    logger.info("✓ Created agent: %s", agent_data["id"])
 
     # Add MCP servers if provided
     if mcp_servers:
         for mcp_server in mcp_servers:
-            add_mcp_server(agent_data['id'], mcp_server)
+            add_mcp_server(agent_data["id"], mcp_server)
 
     return agent_data
 
@@ -91,7 +91,7 @@ def add_mcp_server(agent_id: str, mcp_config: dict[str, Any]) -> dict[str, Any]:
 
     headers = {
         "Authorization": f"Bearer {API_TOKEN}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
     }
 
     response = requests.post(
@@ -99,8 +99,8 @@ def add_mcp_server(agent_id: str, mcp_config: dict[str, Any]) -> dict[str, Any]:
     )
     response.raise_for_status()
 
-    result: dict[str, Any] = cast(dict[str, Any], response.json())
-    logger.info(f"✓ Added MCP server: {mcp_config['name']}")
+    result: dict[str, Any] = cast("dict[str, Any]", response.json())
+    logger.info("✓ Added MCP server: %s", mcp_config["name"])
     return result
 
 
@@ -146,33 +146,33 @@ def main() -> None:
             ],
         )
 
-        logger.info(f"Agent ID: {backend_agent['id']}")
-        logger.info(f"Name: {backend_agent['name']}")
+        logger.info("Agent ID: %s", backend_agent["id"])
+        logger.info("Name: %s", backend_agent["name"])
         logger.info(
-            f"Capabilities: {', '.join(backend_agent['capabilities'])}"
+            "Capabilities: %s", ", ".join(backend_agent["capabilities"])
         )
 
         logger.info("✓ Created agent successfully")
 
     except requests.exceptions.HTTPError as e:
-        logger.error(f"API Error: {e.response.status_code}")
+        logger.error("API Error: %s", e.response.status_code)
         try:
             error_detail = e.response.json()
             logger.error(
-                f"Detail: {error_detail.get('detail', 'No details provided')}"
+                "Detail: %s", error_detail.get("detail", "No details provided")
             )
         except ValueError:
-            logger.error(f"Detail: {e.response.text}")
-    except requests.exceptions.ConnectionError as e:
-        logger.error(f"Connection Error: Unable to connect to {BASE_URL}")
+            logger.error("Detail: %s", e.response.text)
+    except requests.exceptions.ConnectionError:
+        logger.error("Connection Error: Unable to connect to %s", BASE_URL)
         logger.error("Ensure the API server is running")
-    except requests.exceptions.Timeout as e:
+    except requests.exceptions.Timeout:
         logger.error("Timeout Error: Request took too long")
     except requests.exceptions.RequestException as e:
-        logger.error(f"Request Error: {str(e)}")
+        logger.error("Request Error: %s", str(e))
     except Exception as e:
         logger.error(
-            f"Unexpected Error: {type(e).__name__}: {str(e)}"
+            "Unexpected Error: %s: %s", type(e).__name__, str(e)
         )
 
 
