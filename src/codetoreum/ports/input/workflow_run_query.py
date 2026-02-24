@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from types import MappingProxyType
-from typing import List, Optional, Mapping, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 
 class WorkflowRunStatus(Enum):
@@ -86,7 +86,7 @@ class WorkflowRunStageInfo:
     execution_id: Optional[str]
     output: Optional[str] = None
     error_message: Optional[str] = None
-    metadata: Optional[Mapping] = None
+    metadata: Optional[Mapping[str, Any]] = None
 
     def __post_init__(self) -> None:
         """Initialize metadata and validate fields."""
@@ -127,7 +127,7 @@ class WorkflowRunInfo:
     project: Optional[str]
     triggered_by: Optional[str]
     priority: Optional[str]
-    metadata: dict
+    metadata: Dict[str, Any]
 
 
 @dataclass
@@ -163,7 +163,7 @@ class WorkflowRunListResult:
 @dataclass
 class WorkflowRunEventsResult:
     """Result of querying workflow run events"""
-    events: List[dict]  # List of event dictionaries
+    events: List[Dict[str, Any]]  # List of event dictionaries
     total_count: int
     offset: int
     limit: int
@@ -183,9 +183,9 @@ class WorkflowRunEventsResult:
 class WorkflowRunAuditResult:
     """Result of querying workflow run audit information"""
     workflow_run: WorkflowRunSummary
-    events: List[dict]  # List of event dictionaries
-    stages: List[dict]  # List of stage information dictionaries
-    validation: Optional[dict]  # Validation result dictionary (None if not requested)
+    events: List[Dict[str, Any]]  # List of event dictionaries
+    stages: List[Dict[str, Any]]  # List of stage information dictionaries
+    validation: Optional[Dict[str, Any]]  # Validation result dictionary (None if not requested)
     total_count: int
     offset: int
     limit: int

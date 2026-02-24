@@ -2,6 +2,7 @@
 
 import pytest
 from datetime import datetime, timezone
+from typing import Dict, Any
 from unittest.mock import AsyncMock
 
 from codetoreum.application.pipeline_manager import (
@@ -163,7 +164,7 @@ async def test_execute_simple_pipeline(pipeline_manager, simple_workflow, mock_e
 @pytest.mark.asyncio
 async def test_execute_pipeline_with_dependencies(pipeline_manager, simple_workflow):
     """Test that stages execute in correct order based on dependencies."""
-    context = {}
+    context: Dict[str, Any] = {}
 
     result = await pipeline_manager.execute_pipeline(
         workflow=simple_workflow,
@@ -232,7 +233,7 @@ async def test_execute_stage_marks_ready(pipeline_manager, simple_workflow):
 @pytest.mark.asyncio
 async def test_checkpoint_after_each_stage(pipeline_manager, simple_workflow, mock_checkpoint_store):
     """Test that pipeline checkpoints after each stage."""
-    context = {}
+    context: Dict[str, Any] = {}
 
     await pipeline_manager.execute_pipeline(
         workflow=simple_workflow,
@@ -310,7 +311,7 @@ async def test_checkpoint_save_and_recover(pipeline_manager, mock_checkpoint_sto
 @pytest.mark.asyncio
 async def test_parallel_stages_after_dependency(pipeline_manager, parallel_workflow):
     """Test that parallel stages can execute after their dependency."""
-    context = {}
+    context: Dict[str, Any] = {}
 
     result = await pipeline_manager.execute_pipeline(
         workflow=parallel_workflow,
