@@ -84,6 +84,7 @@ async def test_scenario_09_queue_position_ordering():
 
     # Verify next waiting item is the highest priority
     next_item = await queue_service.get_next_waiting_item("proj-1", "board-1")
+    assert next_item is not None
     assert next_item.work_item_id == "item-1"
     assert next_item.position_in_column == 0
 
@@ -94,6 +95,7 @@ async def test_scenario_09_queue_position_ordering():
 
     # Next waiting item should now be item-2
     next_waiting = await queue_service.get_next_waiting_item("proj-1", "board-1")
+    assert next_waiting is not None
     assert next_waiting.work_item_id == "item-2"
 
     # Simulate human reordering: drag item-3 to top
@@ -129,6 +131,7 @@ async def test_scenario_09_queue_position_ordering():
     next_item_after_removal = await queue_service.get_next_waiting_item(
         "proj-1", "board-1"
     )
+    assert next_item_after_removal is not None
     assert next_item_after_removal.work_item_id == "item-2"
 
 
@@ -167,6 +170,8 @@ async def test_scenario_09_parallel_queues():
     next1 = await queue_service.get_next_waiting_item("proj-1", "board-1")
     next2 = await queue_service.get_next_waiting_item("proj-1", "board-2")
 
+    assert next1 is not None
+    assert next2 is not None
     assert next1.work_item_id == "item-1"
     assert next2.work_item_id == "item-3"
 
@@ -175,9 +180,11 @@ async def test_scenario_09_parallel_queues():
 
     # Verify other queue unaffected
     next1_after = await queue_service.get_next_waiting_item("proj-1", "board-1")
+    assert next1_after is not None
     assert next1_after.work_item_id == "item-2"
 
     next2_after = await queue_service.get_next_waiting_item("proj-1", "board-2")
+    assert next2_after is not None
     assert next2_after.work_item_id == "item-3"  # Still waiting, unchanged
 
 
@@ -209,6 +216,7 @@ async def test_scenario_09_position_changes_affect_priority():
 
     # Verify item-c is now at top
     next_item = await queue_service.get_next_waiting_item("proj-1", "board-1")
+    assert next_item is not None
     assert next_item.work_item_id == "item-c"
 
     # Mark item-c as active
@@ -216,6 +224,7 @@ async def test_scenario_09_position_changes_affect_priority():
 
     # Item-b should be next waiting
     next_item = await queue_service.get_next_waiting_item("proj-1", "board-1")
+    assert next_item is not None
     assert next_item.work_item_id == "item-b"
 
 
