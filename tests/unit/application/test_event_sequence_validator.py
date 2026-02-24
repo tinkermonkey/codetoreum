@@ -3,6 +3,8 @@ Tests for Event Sequence Validator
 """
 
 import pytest
+from dataclasses import FrozenInstanceError
+
 from codetoreum.application.event_sequence_validator import (
     EventSequenceValidator,
     PatternElement,
@@ -606,7 +608,7 @@ class TestPatternElementValidation:
             min_occurrences=1,
             max_occurrences=1
         )
-        with pytest.raises(Exception):  # FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
             elem.min_occurrences = 5
 
 
@@ -654,5 +656,5 @@ class TestValidationResultValidation:
             unexpected_events=(),
             out_of_order_events=()
         )
-        with pytest.raises(Exception):  # FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
             result.is_valid = False

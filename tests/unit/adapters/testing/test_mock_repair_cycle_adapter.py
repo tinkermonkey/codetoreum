@@ -11,7 +11,7 @@ Comprehensive tests for the mock repair cycle adapter, verifying:
 
 import pytest
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
     MockRepairCycleAdapter,
@@ -36,7 +36,7 @@ class MockRepairCycleContext:
         self,
         stage_name: str = "fix_failures",
         workflow_run_id: str = "pipeline_123",
-        test_configs: tuple = None,
+        test_configs: Optional[tuple] = None,
         agent_name: str = "senior_software_engineer",
         max_total_agent_calls: int = 100,
         checkpoint_interval: int = 5,
