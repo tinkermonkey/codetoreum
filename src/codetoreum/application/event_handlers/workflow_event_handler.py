@@ -107,7 +107,7 @@ class WorkflowEventHandler(EventHandler):
             event: ExecutionCompleted event
         """
         logger.info(
-            f"Execution completed for work item: {event.payload.get("work_item_id", "")}, "
+            f"Execution completed for work item: {event.payload.get('work_item_id', '')}, "
             f"triggering workflow progression"
         )
 
@@ -137,8 +137,8 @@ class WorkflowEventHandler(EventHandler):
             event: ExecutionFailed event
         """
         logger.warning(
-            f"Execution failed for work item: {event.payload.get("work_item_id", "")}, "
-            f"error: {event.payload.get("error_message", "")}"
+            f"Execution failed for work item: {event.payload.get('work_item_id', '')}, "
+            f"error: {event.payload.get('error_message', '')}"
         )
 
         # Note: In a full implementation, this would:
@@ -164,7 +164,7 @@ class WorkflowEventHandler(EventHandler):
         """
         logger.info(
             f"Review cycle approved: {event.aggregate_id}, "
-            f"after {event.payload.get("total_iterations", 0)} iteration(s)"
+            f"after {event.payload.get('total_iterations', 0)} iteration(s)"
         )
 
         # Note: In a full implementation, this would:
@@ -193,7 +193,7 @@ class WorkflowEventHandler(EventHandler):
         """
         logger.info(
             f"Review cycle rejected: {event.aggregate_id}, "
-            f"iteration {event.payload.get("current_iteration", 0)}/{event.payload.get("max_iterations", 0)}"
+            f"iteration {event.payload.get('current_iteration', 0)}/{event.payload.get('max_iterations', 0)}"
         )
 
         # Note: In a full implementation, this would:
@@ -224,7 +224,7 @@ class WorkflowEventHandler(EventHandler):
         """
         logger.warning(
             f"Review cycle escalated to human: {event.aggregate_id}, "
-            f"reason: {event.payload.get("reason", "")}"
+            f"reason: {event.payload.get('reason', '')}"
         )
 
         # Note: In a full implementation, this would:
