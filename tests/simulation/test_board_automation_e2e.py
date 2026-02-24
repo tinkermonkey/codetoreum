@@ -10,11 +10,13 @@ and SimulationDataSeeder to prove the wiring actually works end-to-end.
 """
 
 import asyncio
+from typing import cast
 
 import pytest
 
 from codetoreum.infrastructure.simulation.bootstrap import (
     SimulationApplicationBootstrap,
+    SimulationAdapters,
 )
 from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
@@ -50,7 +52,8 @@ async def e2e_env():
     config = SimulationConfig.create_fast_config("e2e_cascade")
     bootstrap = SimulationApplicationBootstrap(config)
     await bootstrap.setup()
-    bootstrap.adapters.agent_executor._execution_delay = 0.1
+    adapters = cast(SimulationAdapters, bootstrap.adapters)
+    adapters.agent_executor._execution_delay = 0.1
     seeder = SimulationDataSeeder(bootstrap)
     await seeder.seed_default_scenario()
     yield bootstrap, seeder
@@ -70,7 +73,8 @@ async def test_item_cascades_from_trigger_to_exit(e2e_env):
     Ready (architect) → In Progress (coder) → Review (tester) → Done (exit)
     """
     bootstrap, seeder = e2e_env
-    board = bootstrap.adapters.board
+    adapters = cast(SimulationAdapters, bootstrap.adapters)
+    board = adapters.board
     work_item_id = seeder.created_items.work_items[0]
 
     # Human moves item from Backlog → Ready (pipeline trigger)
@@ -84,7 +88,7 @@ async def test_item_cascades_from_trigger_to_exit(e2e_env):
     )
 
     # Verify all 3 agents were triggered in order
-    executions = bootstrap.adapters.agent_executor.executions
+    executions = adapters.agent_executor.executions
     item_executions = [e for e in executions if e["work_item_id"] == work_item_id]
     agent_order = [e["agent_id"] for e in item_executions]
     assert agent_order == ["architect", "coder", "tester"], (
@@ -115,8 +119,9 @@ async def test_item_cascades_from_trigger_to_exit(e2e_env):
 async def test_lock_released_after_cascade(e2e_env):
     """After cascade completes, verify the pipeline lock is released."""
     bootstrap, seeder = e2e_env
-    board = bootstrap.adapters.board
-    lock_service = bootstrap.adapters.lock_service
+    adapters = cast(SimulationAdapters, bootstrap.adapters)
+    board = adapters.board
+    lock_service = adapters.lock_service
     work_item_id = seeder.created_items.work_items[0]
 
     # Determine the project_id the seeder used
@@ -150,8 +155,9 @@ async def test_cascade_stops_on_agent_failure(e2e_env):
     without auto-progressing. Item stays in In Progress.
     """
     bootstrap, seeder = e2e_env
-    board = bootstrap.adapters.board
-    executor = bootstrap.adapters.agent_executor
+    adapters = cast(SimulationAdapters, bootstrap.adapters)
+    board = adapters.board
+    executor = adapters.agent_executor
     work_item_id = seeder.created_items.work_items[0]
 
     # Track call count and make the second execution raise

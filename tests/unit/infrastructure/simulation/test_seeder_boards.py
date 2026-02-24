@@ -1,5 +1,7 @@
 """Unit tests for simulation data seeder board operations."""
 
+from typing import AsyncGenerator
+
 import pytest
 
 from codetoreum.infrastructure.simulation import (
@@ -14,7 +16,7 @@ class TestSeederBoardOperations:
     """Test cases for board creation and item placement in SimulationDataSeeder."""
 
     @pytest.fixture
-    async def bootstrap(self):
+    async def bootstrap(self) -> AsyncGenerator[SimulationApplicationBootstrap, None]:
         """Create and setup bootstrap."""
         config = SimulationConfig.create_fast_config("test")
         bootstrap = SimulationApplicationBootstrap(config)
@@ -23,11 +25,13 @@ class TestSeederBoardOperations:
         await bootstrap.teardown()
 
     @pytest.fixture
-    async def seeder(self, bootstrap):
+    async def seeder(
+        self, bootstrap: SimulationApplicationBootstrap
+    ) -> AsyncGenerator[SimulationDataSeeder, None]:
         """Create seeder instance with a project."""
         seeder = SimulationDataSeeder(bootstrap)
         await seeder.create_project(name="test-project", description="Test")
-        return seeder
+        yield seeder
 
     # =========================================================================
     # Board Creation Tests
@@ -74,9 +78,7 @@ class TestSeederBoardOperations:
             board_name="Test Board",
             column_names=["Backlog", "Ready", "In Progress", "Done"],
         )
-        board = await seeder._board_adapter.get_board(
-            seeder._current_project_id, "board-1"
-        )
+        board = await seeder._board_adapter.get_board(seeder._current_project_id, "board-1")
         assert len(board.columns) == 4
         assert board.columns[0].name == "Backlog"
         assert board.columns[3].name == "Done"
@@ -121,9 +123,7 @@ class TestSeederBoardOperations:
         await seeder.seed_default_scenario()
 
         assert "board-1" in seeder.created_items.boards
-        board = await seeder._board_adapter.get_board(
-            seeder._current_project_id, "board-1"
-        )
+        board = await seeder._board_adapter.get_board(seeder._current_project_id, "board-1")
         assert len(board.columns) == 5
 
     @pytest.mark.asyncio
