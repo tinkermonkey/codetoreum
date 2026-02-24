@@ -19,7 +19,7 @@ from codetoreum.domain.types import BranchName, ProjectId, UserId, WorkItemId
 from codetoreum.domain.work_item import WorkItemPriority
 
 
-async def example_ticket_adapter():
+async def example_ticket_adapter() -> None:
     """Demonstrate InMemoryTicketAdapter usage."""
     print("\n=== InMemoryTicketAdapter Example ===")
 
@@ -52,7 +52,7 @@ async def example_ticket_adapter():
     print("Adapter cleared")
 
 
-async def example_mock_llm_adapter():
+async def example_mock_llm_adapter() -> None:
     """Demonstrate MockLLMAdapter usage."""
     print("\n=== MockLLMAdapter Example ===")
 
@@ -82,7 +82,7 @@ async def example_mock_llm_adapter():
     print(f"Total tokens: {stats.total_tokens}")
 
 
-async def example_fake_container_adapter():
+async def example_fake_container_adapter() -> None:
     """Demonstrate FakeContainerAdapter usage."""
     print("\n=== FakeContainerAdapter Example ===")
 
@@ -124,7 +124,7 @@ async def example_fake_container_adapter():
     print(f"Total executions: {len(history)}")
 
 
-async def example_repository_adapter():
+async def example_repository_adapter() -> None:
     """Demonstrate InMemoryRepositoryAdapter usage."""
     print("\n=== InMemoryRepositoryAdapter Example ===")
 
@@ -170,7 +170,7 @@ async def example_repository_adapter():
     print(f"Branches: {', '.join(branches)}")
 
 
-async def example_event_store():
+async def example_event_store() -> None:
     """Demonstrate InMemoryEventStore usage."""
     print("\n=== InMemoryEventStore Example ===")
 
@@ -209,7 +209,7 @@ async def example_event_store():
         print(f"  Event: {event.event_type}")
 
 
-async def main():
+async def main() -> None:
     """Run all examples."""
     print("=== Testing Adapters Examples ===")
 
