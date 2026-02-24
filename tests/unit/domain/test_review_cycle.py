@@ -241,6 +241,7 @@ class TestReviewSubmission:
         )
 
         iteration = cycle.iterations[0]
+        assert iteration.reviewer_feedback is not None
         assert iteration.reviewer_feedback.decision == ReviewDecision.REQUEST_CHANGES
         assert len(iteration.reviewer_feedback.issues) == 2
         assert "Missing error handling" in iteration.reviewer_feedback.issues
@@ -296,6 +297,7 @@ class TestReviewSubmission:
         )
 
         feedback = cycle.get_latest_feedback()
+        assert feedback is not None
         assert feedback.issues == []
         assert feedback.suggestions == []
 

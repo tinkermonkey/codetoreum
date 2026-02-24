@@ -455,6 +455,7 @@ class TestStageManagement:
         workflow.update_stage_status("stage1", "ready")
 
         stage = workflow.get_stage_by_name("stage1")
+        assert stage is not None
         assert stage.status == StageStatus.READY
 
         events = workflow.get_pending_events()
