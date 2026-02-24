@@ -1,5 +1,5 @@
 """Configuration resource client"""
-from typing import Dict, List, Optional
+from typing import Any, Optional
 from ..exceptions import CodetoreumError
 
 
@@ -9,7 +9,7 @@ class ConfigurationResource:
     def __init__(self, client):
         self.client = client
 
-    def get_project(self, project_id: str) -> dict:
+    def get_project(self, project_id: str) -> dict[str, Any]:
         """
         Get project configuration by ID.
 
@@ -32,7 +32,7 @@ class ConfigurationResource:
 
         return self.client.get(f"/api/v2/config/projects/{project_id}")
 
-    def list_projects(self, limit: int = 100, offset: int = 0) -> dict:
+    def list_projects(self, limit: int = 100, offset: int = 0) -> dict[str, Any]:
         """
         List all project configurations.
 
@@ -58,8 +58,8 @@ class ConfigurationResource:
         name: str,
         repository_url: str,
         branch: str = "main",
-        **config
-    ) -> dict:
+        **config: Any
+    ) -> dict[str, Any]:
         """
         Create a new project configuration.
 
@@ -109,8 +109,8 @@ class ConfigurationResource:
         name: Optional[str] = None,
         repository_url: Optional[str] = None,
         branch: Optional[str] = None,
-        **updates
-    ) -> dict:
+        **updates: Any
+    ) -> dict[str, Any]:
         """
         Update project configuration.
 
@@ -162,7 +162,7 @@ class ConfigurationResource:
 
         return self.client.patch(f"/api/v2/config/projects/{project_id}", json=payload)
 
-    def delete_project(self, project_id: str) -> dict:
+    def delete_project(self, project_id: str) -> dict[str, Any]:
         """
         Delete a project configuration.
 
@@ -185,7 +185,7 @@ class ConfigurationResource:
 
         return self.client.delete(f"/api/v2/config/projects/{project_id}")
 
-    def get_env_vars(self, project_id: str) -> List[dict]:
+    def get_env_vars(self, project_id: str) -> list[dict[str, Any]]:
         """
         Get environment variables for a project.
 
@@ -216,7 +216,7 @@ class ConfigurationResource:
         name: str,
         value: str,
         is_secret: bool = False
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Set an environment variable for a project.
 
@@ -259,7 +259,7 @@ class ConfigurationResource:
             json=payload
         )
 
-    def delete_env_var(self, project_id: str, name: str) -> dict:
+    def delete_env_var(self, project_id: str, name: str) -> dict[str, Any]:
         """
         Delete an environment variable from a project.
 
