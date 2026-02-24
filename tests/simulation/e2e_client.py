@@ -20,7 +20,7 @@ import asyncio
 import json
 import logging
 from datetime import timedelta
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Set, cast
 from uuid import uuid4
 
 from fastapi import FastAPI
@@ -63,7 +63,7 @@ class WebSocketEventCollector:
         """
         try:
             # TestClient WebSocket is synchronous
-            data = self.websocket.receive_json()
+            data = cast(Dict[str, Any], self.websocket.receive_json())
             self.received_events.append(data)
 
             # Track event type if it's an event message
@@ -120,15 +120,15 @@ class WebSocketEventCollector:
             ConnectionError: If WebSocket disconnects
         """
         # First check already received events
-        for event in self.received_events:
-            if self._matches_event(event, event_type, filter_fn):
-                return event
+        for existing_event in self.received_events:
+            if self._matches_event(existing_event, event_type, filter_fn):
+                return existing_event
 
         # Receive new events until match or timeout
         import time
         start = time.time()
         while (time.time() - start) < timeout:
-            event = self.collect_event(timeout=0.1)
+            event: Optional[Dict[str, Any]] = self.collect_event(timeout=0.1)
             if event and self._matches_event(event, event_type, filter_fn):
                 return event
 
@@ -267,7 +267,7 @@ class SimulationE2EClient:
             },
         )
         response.raise_for_status()
-        return response.json()
+        return cast(Dict[str, Any], response.json())
 
     def get_work_item(self, work_item_id: str) -> Dict[str, Any]:
         """
@@ -281,7 +281,7 @@ class SimulationE2EClient:
         """
         response = self.client.get(f"/api/v2/work-items/{work_item_id}")
         response.raise_for_status()
-        return response.json()
+        return cast(Dict[str, Any], response.json())
 
     def get_work_item_status(self, work_item_id: str) -> str:
         """
@@ -294,7 +294,7 @@ class SimulationE2EClient:
             Status string
         """
         work_item = self.get_work_item(work_item_id)
-        return work_item["status"]
+        return cast(str, work_item["status"])
 
     def list_work_items(
         self,
@@ -313,7 +313,7 @@ class SimulationE2EClient:
         Returns:
             List of work items
         """
-        params = {"limit": limit}
+        params: Dict[str, Any] = {"limit": limit}
         if project_id:
             params["project_id"] = project_id
         if status:
@@ -321,8 +321,8 @@ class SimulationE2EClient:
 
         response = self.client.get("/api/v2/work-items", params=params)
         response.raise_for_status()
-        data = response.json()
-        return data.get("items", [])
+        data = cast(Dict[str, Any], response.json())
+        return cast(List[Dict[str, Any]], data.get("items", []))
 
     def trigger_workflow(
         self,
@@ -350,7 +350,7 @@ class SimulationE2EClient:
             },
         )
         response.raise_for_status()
-        return response.json()
+        return cast(Dict[str, Any], response.json())
 
     def get_executions(
         self,
@@ -369,7 +369,7 @@ class SimulationE2EClient:
         Returns:
             List of executions
         """
-        params = {}
+        params: Dict[str, Any] = {}
         if work_item_id:
             params["work_item_id"] = work_item_id
         if workflow_id:
@@ -379,8 +379,8 @@ class SimulationE2EClient:
 
         response = self.client.get("/api/v2/executions", params=params)
         response.raise_for_status()
-        data = response.json()
-        return data.get("items", [])
+        data = cast(Dict[str, Any], response.json())
+        return cast(List[Dict[str, Any]], data.get("items", []))
 
     def get_metrics(
         self,
@@ -397,7 +397,7 @@ class SimulationE2EClient:
         Returns:
             List of metric data points
         """
-        params = {}
+        params: Dict[str, Any] = {}
         if metric_name:
             params["metric_name"] = metric_name
         if labels:
@@ -406,7 +406,7 @@ class SimulationE2EClient:
 
         response = self.client.get("/api/v2/metrics", params=params)
         response.raise_for_status()
-        return response.json()
+        return cast(List[Dict[str, Any]], response.json())
 
     def get_events(
         self,
@@ -425,7 +425,7 @@ class SimulationE2EClient:
         Returns:
             List of events
         """
-        params = {"limit": limit}
+        params: Dict[str, Any] = {"limit": limit}
         if aggregate_id:
             params["aggregate_id"] = aggregate_id
         if event_type:
@@ -433,8 +433,8 @@ class SimulationE2EClient:
 
         response = self.client.get("/api/v2/events", params=params)
         response.raise_for_status()
-        data = response.json()
-        return data.get("events", [])
+        data = cast(Dict[str, Any], response.json())
+        return cast(List[Dict[str, Any]], data.get("events", []))
 
     # ========================================================================
     # WebSocket Methods

@@ -22,6 +22,7 @@ Coverage:
 import asyncio
 import logging
 import pytest
+from typing import cast
 from fastapi.testclient import TestClient
 
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
@@ -29,6 +30,7 @@ from codetoreum.infrastructure.simulation.simulation_config import SimulationCon
 from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
 from codetoreum.ports.output.board_service import MovedByType
 from codetoreum.ports.input.workflow_run_query import (
+    IWorkflowRunQueryPort,
     WorkflowRunFilters,
     WorkflowRunPaginationParams,
     WorkflowRunSortField,
@@ -144,7 +146,9 @@ async def _move_to_ready(board, work_item_id: str):
     await board.move_item_to_column(work_item_id, "Ready", MovedByType.HUMAN)
 
 
-async def _get_workflow_run_id(query_service, work_item_id: str) -> str:
+async def _get_workflow_run_id(
+    query_service: IWorkflowRunQueryPort, work_item_id: str
+) -> str:
     """Get the workflow run ID for a work item."""
     filters = WorkflowRunFilters(work_item_id=work_item_id)
     pagination = WorkflowRunPaginationParams(
@@ -155,7 +159,7 @@ async def _get_workflow_run_id(query_service, work_item_id: str) -> str:
     )
     result = await query_service.list_workflow_runs(filters, pagination)
     assert result.total_count > 0, "No workflow runs found for work item"
-    return result.runs[0].id
+    return result.runs[0].id  # type: ignore[no-any-return]
 
 
 # ============================================================================
@@ -177,7 +181,7 @@ async def test_audit_endpoint_basic_smoke(e2e_client, simulation_env):
     """
     seeder = simulation_env["seeder"]
     board = simulation_env["bootstrap"].adapters.board
-    query_service = simulation_env["bootstrap"].ports.workflow_run_query
+    query_service = cast(IWorkflowRunQueryPort, simulation_env["bootstrap"].ports.workflow_run_query)
 
     # Get first work item from seeded data
     work_item_id = seeder.created_items.work_items[0]
@@ -250,7 +254,7 @@ async def test_audit_endpoint_pagination(e2e_client, simulation_env):
     """
     seeder = simulation_env["seeder"]
     board = simulation_env["bootstrap"].adapters.board
-    query_service = simulation_env["bootstrap"].ports.workflow_run_query
+    query_service = cast(IWorkflowRunQueryPort, simulation_env["bootstrap"].ports.workflow_run_query)
 
     # Get first work item
     work_item_id = seeder.created_items.work_items[0]
@@ -317,7 +321,7 @@ async def test_audit_endpoint_validation_structure(e2e_client, simulation_env):
     """
     seeder = simulation_env["seeder"]
     board = simulation_env["bootstrap"].adapters.board
-    query_service = simulation_env["bootstrap"].ports.workflow_run_query
+    query_service = cast(IWorkflowRunQueryPort, simulation_env["bootstrap"].ports.workflow_run_query)
 
     # Get first work item
     work_item_id = seeder.created_items.work_items[0]
@@ -372,7 +376,7 @@ async def test_audit_endpoint_stage_grouping(e2e_client, simulation_env):
     """
     seeder = simulation_env["seeder"]
     board = simulation_env["bootstrap"].adapters.board
-    query_service = simulation_env["bootstrap"].ports.workflow_run_query
+    query_service = cast(IWorkflowRunQueryPort, simulation_env["bootstrap"].ports.workflow_run_query)
 
     # Get first work item
     work_item_id = seeder.created_items.work_items[0]
@@ -421,7 +425,7 @@ async def test_audit_endpoint_detects_failed_workflow(e2e_client, simulation_env
     """
     seeder = simulation_env["seeder"]
     board = simulation_env["bootstrap"].adapters.board
-    query_service = simulation_env["bootstrap"].ports.workflow_run_query
+    query_service = cast(IWorkflowRunQueryPort, simulation_env["bootstrap"].ports.workflow_run_query)
     agent_executor = simulation_env["bootstrap"].adapters.agent_executor
 
     # Get first work item
@@ -498,7 +502,7 @@ async def test_audit_endpoint_validation_disabled(e2e_client, simulation_env):
     """
     seeder = simulation_env["seeder"]
     board = simulation_env["bootstrap"].adapters.board
-    query_service = simulation_env["bootstrap"].ports.workflow_run_query
+    query_service = cast(IWorkflowRunQueryPort, simulation_env["bootstrap"].ports.workflow_run_query)
 
     # Get first work item
     work_item_id = seeder.created_items.work_items[0]
