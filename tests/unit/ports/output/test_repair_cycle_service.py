@@ -170,7 +170,7 @@ class MockRepairCycle:
         context: RepairCycleContext,
     ) -> None:
         """Save repair cycle state for resume after failures."""
-        pass
+        return None
 
 
 class TestIRepairCycleProtocol:
@@ -257,7 +257,7 @@ class TestIRepairCycleProtocol:
             test_type=RepairTestType.UNIT,
             timeout=900,
         )
-        failures = {
+        failures: Dict[str, Tuple[RepairTestFailure, ...]] = {
             "test_auth.py": (
                 RepairTestFailure(
                     file="test_auth.py",

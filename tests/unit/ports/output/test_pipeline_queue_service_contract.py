@@ -12,6 +12,7 @@ import pytest
 
 from codetoreum.ports.output.pipeline_queue_service import (
     IPipelineQueueService,
+    QueueStatus,
     QueueValidationError,
 )
 
@@ -95,7 +96,7 @@ class TestPipelineQueueServiceContract(ABC):
         entries = await service.get_queue_entries("proj-1", "board-1")
         assert len(entries) == 1
         assert entries[0].work_item_id == "item-123"
-        assert entries[0].status == "waiting"
+        assert entries[0].status == QueueStatus.WAITING
         assert entries[0].position_in_column == 0
 
     @pytest.mark.asyncio
@@ -184,7 +185,7 @@ class TestPipelineQueueServiceContract(ABC):
         await service.mark_item_active("item-123")
 
         entries = await service.get_queue_entries("proj-1", "board-1")
-        assert entries[0].status == "active"
+        assert entries[0].status == QueueStatus.ACTIVE
 
     @pytest.mark.asyncio
     async def test_mark_item_active_not_found_raises_error(self):
@@ -286,7 +287,7 @@ class TestPipelineQueueServiceContract(ABC):
         result = await service.get_next_waiting_item("proj-1", "board-1")
         assert result is not None
         assert result.work_item_id == "item-123"
-        assert result.status == "waiting"
+        assert result.status == QueueStatus.WAITING
 
     @pytest.mark.asyncio
     async def test_get_next_waiting_item_returns_highest_priority(self):
@@ -403,7 +404,7 @@ class TestPipelineQueueServiceContract(ABC):
 
         result = await service.get_queue_entries("proj-1", "board-1")
         assert len(result) == 1
-        assert result[0].status == "active"
+        assert result[0].status == QueueStatus.ACTIVE
 
     @pytest.mark.asyncio
     async def test_get_queue_entries_validates_project_id(self):

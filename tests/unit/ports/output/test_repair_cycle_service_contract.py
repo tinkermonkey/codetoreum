@@ -602,7 +602,7 @@ class TestRepairCycleAdapterMethodContract:
         adapter = MockRepairCycleAdapter(clock=clock)
         adapter.current_project = "test-proj"
 
-        failures_by_file = {
+        failures_by_file: Dict[str, Tuple[RepairTestFailure, ...]] = {
             "test_auth.py": (
                 RepairTestFailure(
                     file="test_auth.py",

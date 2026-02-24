@@ -11,6 +11,7 @@ Comprehensive tests for the mock repair cycle adapter, verifying:
 
 import pytest
 from datetime import datetime, timedelta, timezone
+from typing import Dict, Tuple
 
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
     MockRepairCycleAdapter,
@@ -107,7 +108,7 @@ class TestSimulationClockIntegration:
         adapter.current_project = "proj-1"
 
         context = MockRepairCycleContext()
-        failures = {
+        failures: Dict[str, Tuple[RepairTestFailure, ...]] = {
             "test_file.py": (
                 RepairTestFailure(file="test_file.py", test="test_1", message="Failed"),
             )
