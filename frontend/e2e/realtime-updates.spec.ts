@@ -15,7 +15,6 @@ import {
   mockActiveExecutions,
   mockWorkflowRuns,
   createDynamicHealthMock,
-  createDynamicAgentsMock,
 } from './utils/api-mocks'
 import {
   mockWebSocket,

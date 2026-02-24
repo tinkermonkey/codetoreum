@@ -15,9 +15,6 @@ import {
   healthySystemHealth,
   degradedSystemHealth,
   systemHealthWithBreakers,
-  healthyApiUsage,
-  highApiUsage,
-  sampleCircuitBreakers,
 } from './fixtures/health'
 import { sampleExecutionsResponse } from './fixtures/agents'
 
