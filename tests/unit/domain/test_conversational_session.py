@@ -53,7 +53,8 @@ class TestConversationalSessionState:
 
     def test_all_status_values(self):
         """Test all valid status values."""
-        for status in ["active", "suspended", "terminated"]:
+        valid_statuses: list[str] = ["active", "suspended", "terminated"]
+        for status in valid_statuses:
             state = ConversationalSessionState(
                 session_id=f"sess-{status}",
                 work_item_id="issue-1",
@@ -63,7 +64,7 @@ class TestConversationalSessionState:
                 llm_conversation_id=None,
                 last_processed_comment_id="comment-1",
                 last_interaction_timestamp="2025-01-14T10:00:00+00:00",
-                status=status
+                status=status  # type: ignore
             )
             assert state.status == status
 
