@@ -77,6 +77,8 @@ class TestTraceContextData:
         """Test that parse -> serialize -> parse is idempotent."""
         original = "00-0af7651916cd43dd8448eb211c80319c-b9c7c989f97918e1-01"
         trace_data = TraceContextData.from_traceparent(original)
+        assert trace_data is not None
+
         serialized = trace_data.to_traceparent()
         reparsed = TraceContextData.from_traceparent(serialized)
 
