@@ -220,6 +220,9 @@ async def test_github_webhook_complete_trace_chain(
         None,
     )
 
+    # Verify span was created
+    assert process_span is not None
+
     # Verify core attributes present
     expected_attributes = [
         "service",
