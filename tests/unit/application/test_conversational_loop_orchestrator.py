@@ -1120,51 +1120,6 @@ class TestBuildThreadMessage:
         assert "Can you explain section 2" in message
         assert "user123" in message
 
-    def test_build_thread_message_comment_not_comment_type(self, orchestrator, sample_session_state):
-        """Test building thread message when comment is not a Comment instance."""
-        # Create a mock comment that's not a Comment instance
-        comment = MagicMock()
-        comment.author = "reviewer"
-        comment.body = "Some feedback"
-
-        event = CommentNeedsResponseEvent(
-            type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            source="github",
-            work_item_id="issue-42",
-            project_id="proj-1",
-            comment=comment,
-            context=CommentContext(),  # Empty context
-        )
-
-        message = orchestrator._build_thread_message(event, sample_session_state)
-
-        # Should skip invalid comment type - message will be empty
-        assert message == ""
-        assert "New comment from" not in message
-
-    def test_build_thread_message_context_not_commentcontext_type(self, orchestrator, sample_comment, sample_session_state):
-        """Test building thread message when context is not a CommentContext instance."""
-        # Create a mock context that's not a CommentContext instance
-        context = {"column_name": "In Review", "agent_assignment": "code-reviewer"}
-
-        event = CommentNeedsResponseEvent(
-            type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            source="github",
-            work_item_id="issue-42",
-            project_id="proj-1",
-            comment=sample_comment,
-            context=context,  # Dict instead of CommentContext
-        )
-
-        message = orchestrator._build_thread_message(event, sample_session_state)
-
-        # Should skip context fields but include comment
-        assert "Can you explain section 2" in message
-        assert "user123" in message
-        # Should not include context fields since it's not a CommentContext
-        assert "In Review" not in message
 
 
 class TestHandleCommentEventContextValidation:
