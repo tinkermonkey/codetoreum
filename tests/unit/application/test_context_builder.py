@@ -39,7 +39,7 @@ class MockTicketSystem:
 
     async def update_work_item(
         self, work_item_id: str, updates: Dict[str, Any]
-    ) -> WorkItem:
+    ) -> Optional[WorkItem]:
         """Update work item."""
         work_item = self.work_items.get(work_item_id)
         if work_item:
@@ -55,7 +55,7 @@ class MockTicketSystem:
         """Create comment on work item."""
         return f"comment-{work_item_id}"
 
-    async def list_work_items(self, filters: Optional[Dict[str, Any]] = None):
+    async def list_work_items(self, filters: Optional[Dict[str, Any]] = None) -> List[WorkItem]:
         """List work items."""
         return list(self.work_items.values())
 
