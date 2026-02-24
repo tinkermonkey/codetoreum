@@ -61,7 +61,7 @@ class WorkflowRunSummaryResponse(BaseModel):
     currentStageName: Optional[str] = Field(None, description="Current stage name", serialization_alias="currentStageName")
     startedAt: Optional[datetime] = Field(None, description="Run start time", serialization_alias="startedAt")
     completedAt: Optional[datetime] = Field(None, description="Run completion time", serialization_alias="completedAt")
-    duration: Optional[int] = Field(None, description="Duration in seconds")
+    duration: Optional[float] = Field(None, description="Duration in seconds")
     issueTitle: Optional[str] = Field(None, description="Associated issue title", serialization_alias="issueTitle")
     issueNumber: Optional[int] = Field(None, description="Associated issue number", serialization_alias="issueNumber")
     project: Optional[str] = Field(None, description="Project name")

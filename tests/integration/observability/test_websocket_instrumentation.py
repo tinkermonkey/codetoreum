@@ -67,18 +67,6 @@ def session_tracer():
     return WebSocketSessionTracer()
 
 
-@pytest.fixture
-def message_tracer(session_tracer):
-    """Create message tracer for testing."""
-    # Start a session span first
-    session_span = session_tracer.start_session(
-        connection_id="test-conn-1",
-        client_ip="127.0.0.1",
-        token_present=True,
-    )
-    return WebSocketMessageTracer(session_span), session_span
-
-
 # ============================================================================
 # Session Span Tests
 # ============================================================================

@@ -502,7 +502,7 @@ class Workflow:
             return 0.0
         return (len(self.completed_stages) / len(self.stages)) * 100
 
-    def get_duration_seconds(self) -> Optional[int]:
+    def get_duration_seconds(self) -> Optional[float]:
         """
         Get workflow duration in seconds.
 
@@ -513,7 +513,7 @@ class Workflow:
             return None
 
         end_time = self.completed_at or datetime.now(timezone.utc)
-        return int((end_time - self.started_at).total_seconds())
+        return (end_time - self.started_at).total_seconds()
 
     # Validation helpers
     def _count_parallel_stages(self) -> int:

@@ -121,7 +121,7 @@ class WorkflowRunInfo:
     stages: List[WorkflowRunStageInfo]
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
-    duration: Optional[int]  # Duration in seconds
+    duration: Optional[float]  # Duration in seconds
     issue_title: Optional[str]
     issue_number: Optional[int]
     project: Optional[str]
@@ -142,7 +142,7 @@ class WorkflowRunSummary:
     current_stage_name: Optional[str]
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
-    duration: Optional[int]
+    duration: Optional[float]
     issue_title: Optional[str]
     issue_number: Optional[int]
     project: Optional[str]
