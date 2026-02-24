@@ -639,7 +639,7 @@ export function identifyCycles(events, agentExecutions, workflowConfig = null) {
   if (boundaries.length > 0) {
     const cycles = new Map()
     
-    boundaries.forEach((boundary, index) => {
+    boundaries.forEach((boundary) => {
       const cycleId = boundary.id // Use the ID from detectCycleBoundaries
       
       // Find all agent executions within this time range

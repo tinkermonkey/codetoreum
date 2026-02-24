@@ -58,6 +58,7 @@ const PipelineEventNode = ({ data }) => {
           color: '#fff',
         }
       case 'decision_event':
+      {
         // Color-code by decision category for better visual distinction
         const getDecisionColors = (category) => {
           switch (category) {
@@ -81,7 +82,7 @@ const PipelineEventNode = ({ data }) => {
               return { bg: '#f59e0b', border: '#d97706' }  // Default orange
           }
         }
-        
+
         const colors = getDecisionColors(metadata?.decision_category)
         return {
           ...baseStyle,
@@ -89,6 +90,7 @@ const PipelineEventNode = ({ data }) => {
           borderColor: colors.border,
           color: '#fff',
         }
+      }
       case 'agent_execution':
         if (status === 'running' || isActive) {
           return {
