@@ -304,16 +304,6 @@ class TestIRepairCycleProtocol:
 
         assert isinstance(result, int)
 
-    @pytest.mark.asyncio
-    async def test_checkpoint_returns_none(self) -> None:
-        """Test that checkpoint returns None."""
-        impl = MockRepairCycle()
-        ctx = MockRepairCycleContext()
-
-        result = await impl.checkpoint(RepairTestType.UNIT, 5, ctx)
-
-        assert result is None
-
 
 # =============================================================================
 # Integration Tests

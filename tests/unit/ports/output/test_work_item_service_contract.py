@@ -6,12 +6,13 @@ and monitoring lifecycle support.
 """
 
 from abc import ABC, abstractmethod
+from datetime import datetime
 from typing import List
 
 import pytest
 
-from codetoreum.domain.types import ProjectId
-from codetoreum.domain.work_item import WorkItem, WorkItemPriority
+from codetoreum.domain.types import ProjectId, WorkItemId
+from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
 from codetoreum.ports.output.monitoring import MonitoringConfig
 from codetoreum.ports.output.work_item_service import IWorkItemService
 
@@ -43,7 +44,7 @@ class TestWorkItemServiceContract(ABC):
         )
 
         # Retrieve it
-        retrieved = await service.get_work_item(item.id)
+        retrieved = await service.get_work_item(WorkItemId(item.id))
 
         assert isinstance(retrieved, WorkItem)
         assert retrieved.id == item.id
@@ -109,7 +110,7 @@ class TestWorkItemServiceContract(ABC):
 
         # Update it
         updated = await service.update_work_item(
-            item.id,
+            WorkItemId(item.id),
             {"title": "Updated Title"}
         )
 
@@ -158,9 +159,9 @@ class TestWorkItemServiceContract(ABC):
         assert isinstance(item.id, str)
         assert isinstance(item.title, str)
         assert isinstance(item.description, str)
-        assert isinstance(item.status, str)
-        assert isinstance(item.created_at, str)
-        assert isinstance(item.updated_at, str)
+        assert isinstance(item.status, WorkItemStatus)
+        assert isinstance(item.created_at, datetime)
+        assert isinstance(item.updated_at, datetime)
 
     @pytest.mark.asyncio
     async def test_multiple_projects_independent(self):
@@ -200,7 +201,7 @@ class TestWorkItemServiceContract(ABC):
         )
 
         updated = await service.update_work_item(
-            item.id,
+            WorkItemId(item.id),
             {
                 "title": "Updated Title",
                 "status": "in_progress"
@@ -208,7 +209,7 @@ class TestWorkItemServiceContract(ABC):
         )
 
         assert updated.title == "Updated Title"
-        assert updated.status == "in_progress"
+        assert updated.status == WorkItemStatus.IN_PROGRESS
         assert updated.id == item.id  # Same item
 
     # Negative Test Cases
@@ -251,7 +252,7 @@ class TestWorkItemServiceContract(ABC):
 
         # Attempt to get with malicious ID
         with pytest.raises((ValueError, KeyError)):
-            await service.get_work_item("'; DROP TABLE items; --")
+            await service.get_work_item(WorkItemId("'; DROP TABLE items; --"))
 
     @pytest.mark.asyncio
     async def test_xss_pattern_in_title(self):
@@ -310,7 +311,7 @@ class TestWorkItemServiceContract(ABC):
         service = await self.create_service()
 
         with pytest.raises((ValueError, KeyError)):
-            await service.get_work_item("nonexistent-id-12345")
+            await service.get_work_item(WorkItemId("nonexistent-id-12345"))
 
     # Boundary Value Tests
 
@@ -326,7 +327,7 @@ class TestWorkItemServiceContract(ABC):
         )
 
         # Update to minimum valid priority (1 = LOW)
-        updated = await service.update_work_item(item.id, {"priority": 1})
+        updated = await service.update_work_item(WorkItemId(item.id), {"priority": 1})
         assert updated.priority == WorkItemPriority.LOW
 
     @pytest.mark.asyncio
@@ -341,7 +342,7 @@ class TestWorkItemServiceContract(ABC):
         )
 
         # Update to maximum valid priority (4 = CRITICAL)
-        updated = await service.update_work_item(item.id, {"priority": 4})
+        updated = await service.update_work_item(WorkItemId(item.id), {"priority": 4})
         assert updated.priority == WorkItemPriority.CRITICAL
 
     @pytest.mark.asyncio
@@ -357,7 +358,7 @@ class TestWorkItemServiceContract(ABC):
 
         # Zero priority should fail
         with pytest.raises((ValueError, KeyError)):
-            await service.update_work_item(item.id, {"priority": 0})
+            await service.update_work_item(WorkItemId(item.id), {"priority": 0})
 
     @pytest.mark.asyncio
     async def test_priority_negative_rejected(self):
@@ -372,7 +373,7 @@ class TestWorkItemServiceContract(ABC):
 
         # Negative priority should fail
         with pytest.raises((ValueError, KeyError)):
-            await service.update_work_item(item.id, {"priority": -1})
+            await service.update_work_item(WorkItemId(item.id), {"priority": -1})
 
     @pytest.mark.asyncio
     async def test_priority_excessive_rejected(self):
@@ -387,7 +388,7 @@ class TestWorkItemServiceContract(ABC):
 
         # Priority > 4 should fail
         with pytest.raises((ValueError, KeyError)):
-            await service.update_work_item(item.id, {"priority": 5})
+            await service.update_work_item(WorkItemId(item.id), {"priority": 5})
 
     @pytest.mark.asyncio
     async def test_title_at_maximum_length(self):
