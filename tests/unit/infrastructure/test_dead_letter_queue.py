@@ -219,6 +219,7 @@ class TestDeadLetterQueue:
 
         # Manually exhaust retries
         event = dlq.get_event(event_id)
+        assert event is not None
         event.retry_count = 2  # At max
 
         success = await dlq.retry_event(event_id)
@@ -262,6 +263,7 @@ class TestDeadLetterQueue:
             error_message="Error 3"
         )
         event = dlq.get_event(event_id)
+        assert event is not None
         event.retry_count = 3  # Exhausted
 
         stats = dlq.get_stats()
@@ -327,6 +329,7 @@ class TestDeadLetterQueue:
             error_message="Exhausted"
         )
         event = dlq.get_event(event_id)
+        assert event is not None
         event.retry_count = 2  # Exhausted
 
         # Filter for retryable
@@ -401,6 +404,7 @@ class TestDeadLetterQueue:
                 error_message=f"Exhausted {i}"
             )
             event = dlq.get_event(event_id)
+            assert event is not None
             event.retry_count = 2  # Exhausted
 
         count = dlq.purge_exhausted_events()
@@ -423,6 +427,7 @@ class TestDeadLetterQueue:
             error_message="Old event"
         )
         old_event = dlq.get_event(old_event_id)
+        assert old_event is not None
         old_event.failed_at = datetime.now(timezone.utc) - timedelta(days=10)
 
         # Add recent event
@@ -480,6 +485,7 @@ class TestDeadLetterQueue:
 
         # Set next retry to now (past)
         event = dlq.get_event(event_id)
+        assert event is not None
         event.next_retry_at = datetime.now(timezone.utc) - timedelta(seconds=1)
 
         # Wait for retry processor to process it

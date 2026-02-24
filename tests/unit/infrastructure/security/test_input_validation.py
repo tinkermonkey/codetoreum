@@ -9,7 +9,7 @@ import pytest
 from pathlib import Path
 from fastapi import HTTPException, UploadFile
 from io import BytesIO
-from typing import AsyncGenerator
+from typing import AsyncGenerator, cast
 
 from codetoreum.infrastructure.security.input_validation import (
     PathTraversalError,
@@ -108,7 +108,7 @@ class TestValidateUpload:
         )
 
         # Should not raise
-        await validate_upload(file)
+        await validate_upload(cast(UploadFile, file))
 
     @pytest.mark.asyncio
     async def test_validate_upload_valid_yaml(self):
@@ -120,7 +120,7 @@ class TestValidateUpload:
         )
 
         # Should not raise
-        await validate_upload(file)
+        await validate_upload(cast(UploadFile, file))
 
     @pytest.mark.asyncio
     async def test_validate_upload_invalid_content_type(self):
@@ -132,7 +132,7 @@ class TestValidateUpload:
         )
 
         with pytest.raises(HTTPException, match="Invalid file type"):
-            await validate_upload(file)
+            await validate_upload(cast(UploadFile, file))
 
     @pytest.mark.asyncio
     async def test_validate_upload_path_traversal_in_filename(self):
@@ -144,7 +144,7 @@ class TestValidateUpload:
         )
 
         with pytest.raises(HTTPException, match="path separators not allowed"):
-            await validate_upload(file)
+            await validate_upload(cast(UploadFile, file))
 
     @pytest.mark.asyncio
     async def test_validate_upload_invalid_filename_chars(self):
@@ -156,7 +156,7 @@ class TestValidateUpload:
         )
 
         with pytest.raises(HTTPException, match="only alphanumeric"):
-            await validate_upload(file)
+            await validate_upload(cast(UploadFile, file))
 
     @pytest.mark.asyncio
     async def test_validate_upload_file_too_large(self):
@@ -169,7 +169,7 @@ class TestValidateUpload:
         )
 
         with pytest.raises(HTTPException, match="File too large"):
-            await validate_upload(file)
+            await validate_upload(cast(UploadFile, file))
 
     @pytest.mark.asyncio
     async def test_validate_upload_empty_file(self):
@@ -181,7 +181,7 @@ class TestValidateUpload:
         )
 
         with pytest.raises(HTTPException, match="File is empty"):
-            await validate_upload(file)
+            await validate_upload(cast(UploadFile, file))
 
 
 # ============================================================================
