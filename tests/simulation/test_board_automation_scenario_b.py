@@ -150,7 +150,7 @@ class TestScenarioB_LockContention:
                     position=2,
                     auto_progress_on_completion=False,
                 ),
-            ),
+            )
         )
 
         # Register workflow template
