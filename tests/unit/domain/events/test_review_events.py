@@ -108,7 +108,7 @@ class TestReviewStatusChangedEvent:
                 source="github",
                 review_id="pr-123",
                 project_id="proj-1",
-                previous_status="invalid",  # Invalid status
+                previous_status=cast("CodeReviewStatus", "invalid"),  # Invalid status
                 new_status="approved",
             )
 
@@ -204,6 +204,7 @@ class TestReviewCommentAddedEvent:
         )
 
         assert event.review_id == "pr-123"
+        assert event.comment is not None
         assert event.comment.author == "alice"
 
     def test_review_comment_with_work_item(self):
@@ -296,6 +297,7 @@ class TestReviewCommentAddedEvent:
         restored = ReviewCommentAddedEvent.from_dict(d)
 
         assert restored.review_id == original.review_id
+        assert restored.comment is not None
         assert restored.comment.author == original.comment.author
         assert restored.work_item_id == original.work_item_id
 
@@ -324,13 +326,13 @@ class TestReviewStatusChangedEventImmutability:
         # ReviewStatusChangedEvent is a frozen dataclass, so attempting to modify
         # any attribute should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            event.review_id = "pr-456"
+            object.__setattr__(event, "review_id", "pr-456")
 
         with pytest.raises(FrozenInstanceError):
-            event.previous_status = "closed"
+            object.__setattr__(event, "previous_status", "closed")
 
         with pytest.raises(FrozenInstanceError):
-            event.new_status = "rejected"
+            object.__setattr__(event, "new_status", "rejected")
 
 
 class TestReviewCommentAddedEventImmutability:
@@ -356,15 +358,16 @@ class TestReviewCommentAddedEventImmutability:
 
         # Verify the event is properly created
         assert event.review_id == "pr-123"
+        assert event.comment is not None
         assert event.comment.author == "alice"
 
         # ReviewCommentAddedEvent is a frozen dataclass, so attempting to modify
         # any attribute should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            event.review_id = "pr-456"
+            object.__setattr__(event, "review_id", "pr-456")
 
         with pytest.raises(FrozenInstanceError):
-            event.comment = Comment("rc-2", "bob", "Different comment", now_iso())
+            object.__setattr__(event, "comment", Comment("rc-2", "bob", "Different comment", now_iso()))
 
     def test_review_comment_added_nested_comment_immutability(self):
         """Test that nested Comment object in ReviewCommentAddedEvent is immutable."""
@@ -394,7 +397,7 @@ class TestReviewCommentAddedEventImmutability:
         # Comment is a frozen dataclass, so attempting to modify
         # its attributes should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            event.comment.author = "bob"
+            object.__setattr__(event.comment, "author", "bob")
 
         with pytest.raises(FrozenInstanceError):
-            event.comment.body = "Different feedback"
+            object.__setattr__(event.comment, "body", "Different feedback")

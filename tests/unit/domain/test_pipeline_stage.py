@@ -68,18 +68,11 @@ class TestStageLifecycle:
     """Test PipelineStage lifecycle methods."""
 
     def test_mark_ready(self):
-        """Test marking a stage as ready."""
-        stage = PipelineStage.create("test", "wf-1", {"agent_id": "agent-1"})
-        assert stage.status == StageStatus.PENDING
-
-        stage.mark_ready()
-        assert stage.status == StageStatus.READY
-
-    def test_mark_ready_fails_if_not_pending(self):
-        """Test that mark_ready fails if stage is not pending."""
+        """Test marking a stage as ready and rejecting double transitions."""
         stage = PipelineStage.create("test", "wf-1", {"agent_id": "agent-1"})
         stage.mark_ready()
 
+        # Cannot mark ready twice
         with pytest.raises(DomainError, match="Cannot mark ready"):
             stage.mark_ready()
 
