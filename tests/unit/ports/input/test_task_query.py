@@ -308,7 +308,7 @@ class TestITaskQueryPortInterface:
         class IncompletePort(ITaskQueryPort):
             async def get_execution_status(self, execution_id):
                 pass
-            # Missing other methods
+            # Missing: list_executions, get_artifacts, get_execution_history, get_workflow_executions
 
         with pytest.raises(TypeError):
             IncompletePort()
@@ -329,12 +329,20 @@ class TestITaskQueryPortInterface:
                     status=ExecutionStatus.RUNNING
                 )
 
-            async def list_executions(self, **kwargs):
+            async def list_executions(
+                self,
+                workflow_run_id=None,
+                work_item_id=None,
+                project_name=None,
+                status=None,
+                page=1,
+                page_size=50
+            ):
                 return ExecutionListResult(
                     executions=[],
                     total_count=0,
-                    page=1,
-                    page_size=50,
+                    page=page,
+                    page_size=page_size,
                     has_next=False
                 )
 
@@ -381,17 +389,41 @@ class TestTaskQueryPortBehavior:
                     status=ExecutionStatus.COMPLETED
                 )
 
-            async def list_executions(self, **kwargs):
-                pass
+            async def list_executions(
+                self,
+                workflow_run_id=None,
+                work_item_id=None,
+                project_name=None,
+                status=None,
+                page=1,
+                page_size=50
+            ):
+                return ExecutionListResult(
+                    executions=[],
+                    total_count=0,
+                    page=page,
+                    page_size=page_size,
+                    has_next=False
+                )
 
             async def get_artifacts(self, execution_id, artifact_type=None):
-                pass
+                return ArtifactListResult(artifacts=[], total_count=0)
 
             async def get_execution_history(self, execution_id, limit=None):
-                pass
+                return ExecutionHistory(
+                    execution_id=execution_id,
+                    entries=[],
+                    total_entries=0
+                )
 
             async def get_workflow_executions(self, workflow_run_id):
-                pass
+                return ExecutionListResult(
+                    executions=[],
+                    total_count=0,
+                    page=1,
+                    page_size=50,
+                    has_next=False
+                )
 
         port = MockPort()
         status = await port.get_execution_status("exec-123")
@@ -405,7 +437,16 @@ class TestTaskQueryPortBehavior:
 
         class MockPort(ITaskQueryPort):
             async def get_execution_status(self, execution_id):
-                pass
+                return ExecutionStatusInfo(
+                    execution_id=execution_id,
+                    workflow_run_id="wf-123",
+                    work_item_id="item-123",
+                    project_name="test",
+                    pipeline_name="ci",
+                    stage_name="build",
+                    agent_name="agent",
+                    status=ExecutionStatus.RUNNING
+                )
 
             async def list_executions(
                 self,
@@ -426,13 +467,23 @@ class TestTaskQueryPortBehavior:
                 )
 
             async def get_artifacts(self, execution_id, artifact_type=None):
-                pass
+                return ArtifactListResult(artifacts=[], total_count=0)
 
             async def get_execution_history(self, execution_id, limit=None):
-                pass
+                return ExecutionHistory(
+                    execution_id=execution_id,
+                    entries=[],
+                    total_entries=0
+                )
 
             async def get_workflow_executions(self, workflow_run_id):
-                pass
+                return ExecutionListResult(
+                    executions=[],
+                    total_count=0,
+                    page=1,
+                    page_size=50,
+                    has_next=False
+                )
 
         port = MockPort()
 

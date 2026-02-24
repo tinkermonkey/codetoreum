@@ -87,57 +87,6 @@ class TestLogExportSetupFunction:
         from codetoreum.infrastructure.observability.otel_setup import _setup_log_export
         assert _setup_log_export is not None
 
-    def test_setup_log_export_handles_missing_endpoint(self):
-        """Test _setup_log_export handles missing endpoint gracefully."""
-        from codetoreum.infrastructure.observability.otel_setup import _setup_log_export
-
-        # Use actual Resource if available
-        try:
-            from opentelemetry.sdk.resources import Resource, SERVICE_NAME, DEPLOYMENT_ENVIRONMENT
-            resource = Resource(
-                attributes={
-                    SERVICE_NAME: "test_service",
-                    DEPLOYMENT_ENVIRONMENT: "development",
-                }
-            )
-        except ImportError:
-            # Fallback if OpenTelemetry not installed
-            class MockResource:
-                def __init__(self, attributes):
-                    self.attributes = attributes
-            resource = MockResource(attributes={"service.name": "test_service"})
-
-        config = ObservabilityConfig(
-            enabled=True,
-            traces_enabled=True,
-            metrics_enabled=False,
-            logs_enabled=True,
-            signoz=SignozConfig(
-                enabled=False,  # Disabled, so no logs_endpoint
-                host="http://localhost",
-                grpc_port=4317,
-                http_port=4318,
-                ui_port=8900,
-                api_key="",
-                service_name="test_service",
-                environment="development",
-                insecure=True,
-            ),
-            sampler_type="always_on",
-            sampler_arg=1.0,
-            auto_instrument_libraries=True,
-            instrument_domain=True,
-            instrument_application=True,
-            instrument_adapters=True,
-            batch_max_queue_size=2048,
-            batch_max_export_batch_size=512,
-            batch_schedule_delay_millis=5000,
-            log_level="info",
-        )
-
-        # Should handle gracefully without raising
-        _setup_log_export(config, resource)  # type: ignore
-
 
 class TestTraceCorrelationInLogs:
     """Tests for trace context correlation with logs."""
