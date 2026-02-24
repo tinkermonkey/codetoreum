@@ -78,6 +78,9 @@ class TestAuditStageInfoLiteralType:
                 name=f"test-stage-{status}",
                 status=status,
                 events=[],
+                output=None,
+                errorMessage=None,
+                metadata={},
             )
             assert stage_info.status == status, f"Status {status} should be valid"
 
@@ -90,6 +93,9 @@ class TestAuditStageInfoLiteralType:
                 name="test-stage",
                 status="invalid_status",  # Not in Literal
                 events=[],
+                output=None,
+                errorMessage=None,
+                metadata={},
             )
 
         # Pydantic should reject this

@@ -59,7 +59,7 @@ class TestGitHubDiscussionAdapterWebhook:
         """Webhook for comment.created emits comment.needs_response for human comments."""
         # Setup
         adapter.start_monitoring("123", monitoring_config)
-        events = []
+        events: List[CommentNeedsResponseEvent] = []
         adapter.on("comment.needs_response", events.append)
 
         # Payload for human comment
@@ -92,7 +92,7 @@ class TestGitHubDiscussionAdapterWebhook:
         """Webhook for bot comments does not emit events."""
         # Setup
         adapter.start_monitoring("123", monitoring_config)
-        events = []
+        events: List[CommentNeedsResponseEvent] = []
         adapter.on("comment.needs_response", events.append)
 
         # Payload for bot comment
@@ -116,7 +116,7 @@ class TestGitHubDiscussionAdapterWebhook:
     @pytest.mark.asyncio
     async def test_webhook_ignores_unmonitored_issues(self, adapter):
         """Webhook for unmonitored issues is ignored."""
-        events = []
+        events: List[CommentNeedsResponseEvent] = []
         adapter.on("comment.needs_response", events.append)
 
         payload = {
@@ -138,7 +138,7 @@ class TestGitHubDiscussionAdapterWebhook:
     async def test_webhook_ignores_deleted_action(self, adapter, monitoring_config):
         """Webhook for deleted/modified comments is ignored."""
         adapter.start_monitoring("123", monitoring_config)
-        events = []
+        events: List[CommentNeedsResponseEvent] = []
         adapter.on("comment.needs_response", events.append)
 
         payload = {
@@ -247,7 +247,7 @@ class TestGitHubDiscussionAdapterPolling:
         polling_adapter.get_thread = mock_get_thread
 
         # Subscribe to events
-        events = []
+        events: List[CommentNeedsResponseEvent] = []
         polling_adapter.on("comment.needs_response", events.append)
 
         # Wait for 3 events total: alice, bob (first cycle) + charlie (second cycle)
@@ -422,7 +422,7 @@ class TestGitHubDiscussionAdapterCommands:
             ),
         )
 
-        events = []
+        events: List[CommentPostedEvent] = []
         adapter.on("comment.posted", events.append)
 
         with patch.object(adapter, "_get_client") as mock_get_client:
