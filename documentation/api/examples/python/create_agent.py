@@ -4,9 +4,12 @@ Example: Create a new agent in Codetoreum
 This example demonstrates how to create a new agent with capabilities
 and MCP server configuration.
 """
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
-import requests
+import requests  # type: ignore[import-untyped]
+
+if TYPE_CHECKING:
+    pass
 
 
 # Configuration
@@ -19,9 +22,9 @@ def create_agent(
     description: str,
     agent_type: str = "claude_code",
     capabilities: Optional[list[str]] = None,
-    mcp_servers: Optional[list[Dict[str, Any]]] = None,
-    configuration: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
+    mcp_servers: Optional[list[dict[str, Any]]] = None,
+    configuration: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
     """
     Create a new agent.
 
@@ -59,10 +62,10 @@ def create_agent(
         "active": True
     }
 
-    response = requests.post(url, json=payload, headers=headers)
+    response = requests.post(url, json=payload, headers=headers)  # type: ignore[attr-defined]
     response.raise_for_status()
 
-    agent_data = response.json()
+    agent_data: dict[str, Any] = response.json()  # type: ignore[attr-defined]
     print(f"✓ Created agent: {agent_data['id']}")
 
     # Add MCP servers if provided
@@ -73,7 +76,7 @@ def create_agent(
     return agent_data
 
 
-def add_mcp_server(agent_id: str, mcp_config: Dict[str, Any]) -> Dict[str, Any]:
+def add_mcp_server(agent_id: str, mcp_config: dict[str, Any]) -> dict[str, Any]:
     """
     Add MCP server to an agent.
 
@@ -91,14 +94,15 @@ def add_mcp_server(agent_id: str, mcp_config: Dict[str, Any]) -> Dict[str, Any]:
         "Content-Type": "application/json"
     }
 
-    response = requests.post(url, json=mcp_config, headers=headers)
+    response = requests.post(url, json=mcp_config, headers=headers)  # type: ignore[attr-defined]
     response.raise_for_status()
 
+    result: dict[str, Any] = response.json()  # type: ignore[attr-defined]
     print(f"✓ Added MCP server: {mcp_config['name']}")
-    return response.json()
+    return result
 
 
-def main():
+def main() -> None:
     """Example usage."""
     try:
         # Example 1: Create a backend development agent
