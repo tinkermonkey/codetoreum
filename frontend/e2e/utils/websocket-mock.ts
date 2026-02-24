@@ -127,7 +127,7 @@ export async function mockWebSocket(page: Page) {
  */
 export async function sendMockWebSocketEvent(page: Page, event: MockWebSocketEvent) {
   await page.evaluate((evt) => {
-    ;(window as any).__mockWebSocket?.sendEvent(evt)
+    (window as any).__mockWebSocket?.sendEvent(evt)
   }, event)
 }
 
@@ -144,14 +144,6 @@ export async function waitForMockWebSocketConnection(page: Page, timeout: number
   )
 }
 
-/**
- * Clear all WebSocket instances (cleanup)
- */
-export async function clearMockWebSocketInstances(page: Page) {
-  await page.evaluate(() => {
-    ;(window as any).__mockWebSocket?.clearInstances()
-  })
-}
 
 /**
  * Send a sequence of events with delays
