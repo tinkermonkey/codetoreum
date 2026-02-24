@@ -67,6 +67,7 @@ from codetoreum.application.configuration_service import ConfigurationService
 from codetoreum.application.work_item_service import WorkItemService
 from codetoreum.application.container_recovery_service import ContainerRecoveryService
 from codetoreum.application.multi_project_orchestrator import MultiProjectOrchestrator
+from codetoreum.application.workflow_run_query_service import WorkflowRunQueryService
 
 # Infrastructure
 from codetoreum.infrastructure.event_bus import EventBus
@@ -714,7 +715,10 @@ class SimulationApplicationBootstrap:
         workspace_query = MockWorkspaceQueryAdapter()
         workflow_command = MockWorkflowCommandAdapter()
         workflow_query = MockWorkflowQueryAdapter()
-        workflow_run_query = MockWorkflowRunQueryAdapter()
+        workflow_run_query = WorkflowRunQueryService(
+            event_store=self.adapters.event_store,
+            ticket_system=self.adapters.ticket_system,
+        )
         orchestration_command = MockOrchestrationCommandAdapter()
         workflow_definition_command = MockWorkflowDefinitionCommandAdapter()
         config_command = MockConfigCommandAdapter()
@@ -1037,6 +1041,7 @@ class SimulationApplicationBootstrap:
             board_service=self.adapters.board,
             lock_service=self.adapters.lock_service,
             workflow_config=self.adapters.workflow_config,
+            event_store=self.adapters.event_store,
             agent_executor=self.adapters.agent_executor,
             event_bus=self.infrastructure.event_bus,
         )

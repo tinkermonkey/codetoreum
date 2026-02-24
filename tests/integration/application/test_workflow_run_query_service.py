@@ -208,7 +208,7 @@ class TestGetWorkflowRun:
         )
         # Store with the expected work_item_id
         work_item.id = sample_workflow_events["work_item_id"]
-        work_item.external_id = "ISSUE-123"
+        work_item.external_id = "123"
         ticket_system._work_items[work_item.id] = work_item
 
         # Create query service with ticket system
@@ -224,7 +224,7 @@ class TestGetWorkflowRun:
 
         # Assert
         assert result.issue_title == "Test Issue"
-        assert result.issue_number == "ISSUE-123"
+        assert result.issue_number == 123
         assert result.project == "project-1"
 
 
@@ -465,7 +465,7 @@ class TestCaching:
         )
         # Store with the expected work_item_id
         work_item.id = sample_workflow_events["work_item_id"]
-        work_item.external_id = "ISSUE-456"
+        work_item.external_id = "456"
         ticket_system._work_items[work_item.id] = work_item
 
         # Create query service
@@ -486,7 +486,7 @@ class TestCaching:
 
         # Assert metadata is the same (verifies caching behavior)
         assert result1.issue_title == result2.issue_title == "Cached Issue"
-        assert result1.issue_number == result2.issue_number == "ISSUE-456"
+        assert result1.issue_number == result2.issue_number == 456
 
         # Verify cache size increased (indicates work item was cached)
         cache_size = await query_service._work_item_cache.size()

@@ -618,6 +618,16 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
 
         return processed_summaries
 
+    @staticmethod
+    def _parse_issue_number(external_id: Optional[str]) -> Optional[int]:
+        """Parse issue number from external_id, stripping any leading '#'."""
+        if not external_id:
+            return None
+        try:
+            return int(str(external_id).lstrip("#"))
+        except (ValueError, TypeError):
+            return None
+
     def _default_metadata(self) -> Dict[str, Any]:
         """
         Get default metadata for when work item fetch fails.
@@ -733,7 +743,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
                 work_item = await self.ticket_system.get_work_item(WorkItemId(work_item_id))
                 metadata = {
                     "issue_title": work_item.title,
-                    "issue_number": work_item.external_id,
+                    "issue_number": self._parse_issue_number(work_item.external_id),
                     "project": work_item.project_id,
                     "triggered_by": getattr(work_item, 'assignee', None) or work_item.assigned_agent_id,
                     "priority": work_item.priority.name if work_item.priority else None,

@@ -7,7 +7,9 @@ Subscribes to workitem.column_changed events and orchestrates:
 """
 
 import logging
-from typing import Optional
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
+from uuid import uuid4
 
 from codetoreum.application.pipeline_lock_service import (
     IQueuedPipelineLockService,
@@ -18,11 +20,20 @@ from codetoreum.domain.board_workflow_template import (
     ColumnTemplate,
     ColumnType,
 )
-from codetoreum.domain.events import DomainEvent, WorkItemColumnChanged
+from codetoreum.domain.events import (
+    DomainEvent,
+    WorkItemColumnChanged,
+    WorkflowCompleted,
+    WorkflowCreated,
+    WorkflowFailed,
+    WorkflowStageAdvanced,
+    WorkflowStarted,
+)
 from codetoreum.infrastructure.event_bus import EventHandler, event_handler, EventBus
 from codetoreum.ports.exceptions import ExternalServiceError, ResourceNotFoundError
 from codetoreum.ports.output.agent_executor import IAgentExecutor
 from codetoreum.ports.output.board_service import IBoardService, MovedByType
+from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 logger = logging.getLogger(__name__)
@@ -71,6 +82,7 @@ class BoardColumnEventHandler(EventHandler):
         workflow_config: IWorkflowConfigService,
         agent_executor: IAgentExecutor,
         event_bus: EventBus,
+        event_store: Optional[IEventStore] = None,
     ):
         """
         Initialize board column event handler.
@@ -81,12 +93,16 @@ class BoardColumnEventHandler(EventHandler):
             workflow_config: Configuration service for workflow templates
             agent_executor: Service for triggering agent executions
             event_bus: Event bus for publishing domain events
+            event_store: Optional event store for persisting workflow lifecycle events
         """
         self.board_service = board_service
         self.lock_service = lock_service
         self.workflow_config = workflow_config
         self.agent_executor = agent_executor
         self.event_bus = event_bus
+        self.event_store = event_store
+        # Tracks active workflow runs: work_item_id -> run metadata
+        self._active_runs: Dict[str, Dict[str, Any]] = {}
 
     def get_event_types(self) -> list[str]:
         """Get list of event types this handler processes.
@@ -261,6 +277,11 @@ class BoardColumnEventHandler(EventHandler):
         if result.status == LockStatus.ACQUIRED:
             logger.info(f"Lock acquired for {work_item_id}")
 
+            # Start workflow run lifecycle tracking
+            await self._start_workflow_run(
+                work_item_id, project_id, board_id, column_config, workflow_config
+            )
+
             # Trigger agent if column has one
             if column_config.agent_id:
                 await self._trigger_agent(work_item_id, column_config)
@@ -333,6 +354,9 @@ class BoardColumnEventHandler(EventHandler):
             f"next work item: {release_result.next_work_item_id}"
         )
 
+        # Complete workflow run lifecycle tracking
+        await self._complete_workflow_run(work_item_id, column_config.name)
+
         # Trigger agent for next queued item if one exists
         if release_result.next_work_item_id:
             try:
@@ -364,6 +388,163 @@ class BoardColumnEventHandler(EventHandler):
                     extra={"error_id": "ERR_BOARD_EVENT_NEXT_AGENT_TRIGGER_FAILURE", "work_item_id": release_result.next_work_item_id},
                 )
                 # Next item holds lock but agent never triggered - PROBLEM
+
+    # ========================================================================
+    # Workflow Run Lifecycle Tracking
+    # ========================================================================
+
+    async def _start_workflow_run(
+        self,
+        work_item_id: str,
+        project_id: str,
+        board_id: str,
+        column_config: ColumnTemplate,
+        workflow_config: BoardWorkflowTemplate,
+    ) -> None:
+        """Persist WorkflowCreated + WorkflowStarted events when pipeline begins."""
+        if not self.event_store:
+            return
+
+        workflow_run_id = str(uuid4())
+        now = datetime.now(timezone.utc)
+        stage_count = len([c for c in workflow_config.columns if c.agent_id])
+
+        self._active_runs[work_item_id] = {
+            "run_id": workflow_run_id,
+            "project_id": project_id,
+            "board_id": board_id,
+            "template_id": workflow_config.id,
+            "started_at": now,
+            "stage_index": 0,
+        }
+
+        created = WorkflowCreated(
+            aggregate_id=workflow_run_id,
+            payload={
+                "work_item_id": work_item_id,
+                "template_id": workflow_config.id,
+                "project_id": project_id,
+                "stage_count": stage_count,
+            },
+        )
+        started = WorkflowStarted(
+            aggregate_id=workflow_run_id,
+            payload={
+                "started_at": now.isoformat(),
+                "work_item_id": work_item_id,
+                "first_stage": column_config.name,
+            },
+        )
+        try:
+            await self.event_store.append(workflow_run_id, [created, started])
+            logger.debug(f"Workflow run {workflow_run_id} started for {work_item_id}")
+        except Exception as e:
+            logger.error(
+                f"Failed to persist workflow run start for {work_item_id}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_BOARD_EVENT_WORKFLOW_RUN_START_FAILURE"},
+            )
+
+    async def _advance_workflow_stage(
+        self,
+        work_item_id: str,
+        from_stage: str,
+        to_stage: str,
+    ) -> None:
+        """Persist WorkflowStageAdvanced event on auto-progression."""
+        if not self.event_store or work_item_id not in self._active_runs:
+            return
+
+        run_info = self._active_runs[work_item_id]
+        run_info["stage_index"] += 1
+        workflow_run_id = run_info["run_id"]
+
+        event = WorkflowStageAdvanced(
+            aggregate_id=workflow_run_id,
+            payload={
+                "stage_index": run_info["stage_index"],
+                "from_stage": from_stage,
+                "to_stage": to_stage,
+            },
+        )
+        try:
+            await self.event_store.append(workflow_run_id, [event])
+        except Exception as e:
+            logger.error(
+                f"Failed to persist stage advance for {work_item_id}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_BOARD_EVENT_WORKFLOW_STAGE_ADVANCE_FAILURE"},
+            )
+
+    async def _complete_workflow_run(
+        self,
+        work_item_id: str,
+        exit_column: str,
+    ) -> None:
+        """Persist WorkflowCompleted event when pipeline reaches exit column."""
+        if not self.event_store or work_item_id not in self._active_runs:
+            return
+
+        run_info = self._active_runs.pop(work_item_id)
+        workflow_run_id = run_info["run_id"]
+        now = datetime.now(timezone.utc)
+        duration = (now - run_info["started_at"]).total_seconds()
+
+        event = WorkflowCompleted(
+            aggregate_id=workflow_run_id,
+            payload={
+                "completed_at": now.isoformat(),
+                "work_item_id": work_item_id,
+                "duration_seconds": duration,
+                "exit_column": exit_column,
+            },
+        )
+        try:
+            await self.event_store.append(workflow_run_id, [event])
+            logger.debug(
+                f"Workflow run {workflow_run_id} completed for {work_item_id} "
+                f"({duration:.1f}s)"
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to persist workflow run completion for {work_item_id}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_BOARD_EVENT_WORKFLOW_RUN_COMPLETE_FAILURE"},
+            )
+
+    async def _fail_workflow_run(
+        self,
+        work_item_id: str,
+        reason: str,
+    ) -> None:
+        """Persist WorkflowFailed event on agent failure."""
+        if not self.event_store or work_item_id not in self._active_runs:
+            return
+
+        run_info = self._active_runs.pop(work_item_id)
+        workflow_run_id = run_info["run_id"]
+        now = datetime.now(timezone.utc)
+
+        event = WorkflowFailed(
+            aggregate_id=workflow_run_id,
+            payload={
+                "failed_at": now.isoformat(),
+                "reason": reason,
+                "failed_stage": "",
+                "work_item_id": work_item_id,
+            },
+        )
+        try:
+            await self.event_store.append(workflow_run_id, [event])
+            logger.debug(
+                f"Workflow run {workflow_run_id} failed for {work_item_id}: {reason}"
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to persist workflow run failure for {work_item_id}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_BOARD_EVENT_WORKFLOW_RUN_FAIL_FAILURE"},
+            )
 
     async def _trigger_agent(
         self, work_item_id: str, column_config: ColumnTemplate
@@ -422,6 +603,7 @@ class BoardColumnEventHandler(EventHandler):
             logger.warning(
                 f"Agent failed for {work_item_id}, skipping auto-progression"
             )
+            await self._fail_workflow_run(work_item_id, "Agent execution failed")
             return
 
         try:
@@ -457,6 +639,10 @@ class BoardColumnEventHandler(EventHandler):
             logger.info(
                 f"Auto-progressing {work_item_id} from {current_position.column_name} "
                 f"to {next_column_name}"
+            )
+
+            await self._advance_workflow_stage(
+                work_item_id, current_position.column_name, next_column_name
             )
 
             await self.board_service.move_item_to_column(
