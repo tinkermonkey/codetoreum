@@ -2,9 +2,11 @@
 
 import pytest
 from datetime import timedelta
+from typing import Callable
 
 from codetoreum.infrastructure.simulation import (
     SimulationConfig,
+    SimulationResult,
     SimulationRunner,
 )
 
@@ -224,7 +226,7 @@ async def test_scenario_10_agent_execution():
 
 @pytest.mark.simulation
 @pytest.mark.asyncio
-async def test_all_scenarios_meet_performance_target():
+async def test_all_scenarios_meet_performance_target() -> None:
     """
     Meta-test: Verify all scenarios meet the 10-100x performance target.
 
@@ -232,7 +234,9 @@ async def test_all_scenarios_meet_performance_target():
     MockRepairCycleAdapter directly, not through SimulationRunner.
     It has its own test suite in scenarios/scenario_07_repair_cycle.py.
     """
-    scenarios = [
+    scenarios: list[
+        tuple[str, Callable[[], SimulationConfig], Callable[[SimulationRunner], object]]
+    ] = [
         ("Simple Workflow", create_simple_config, run_simple_scenario),
         ("Parallel Executions", create_parallel_config, run_parallel_scenario),
         ("Review Cycle", create_review_config, run_review_scenario),
@@ -241,7 +245,7 @@ async def test_all_scenarios_meet_performance_target():
         ("Agent Execution", create_agent_execution_config, run_agent_execution_scenario),
     ]
 
-    results = []
+    results: list[tuple[str, SimulationResult]] = []
 
     for name, create_config_func, run_func in scenarios:
         config = create_config_func()
