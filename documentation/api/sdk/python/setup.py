@@ -40,6 +40,7 @@ setup(
             "black>=23.0",
             "mypy>=1.0",
             "flake8>=6.0",
+            "types-requests>=2.28.0",
         ],
     },
     project_urls={

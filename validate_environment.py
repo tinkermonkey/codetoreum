@@ -45,7 +45,7 @@ def run_command(cmd: Union[List[str], str], description: str) -> bool:
         return False
 
 
-def main():
+def main() -> None:
     """Run all validation tests."""
     print("=" * 70)
     print("Codetoreum Agent Environment Validation")
