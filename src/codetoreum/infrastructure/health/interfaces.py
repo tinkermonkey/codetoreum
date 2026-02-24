@@ -4,7 +4,7 @@ Defines contracts for liveness and readiness probes.
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, Optional, List
@@ -34,17 +34,13 @@ class HealthCheckResult:
     """Result of a health check."""
     status: HealthStatus
     message: Optional[str] = None
-    timestamp: datetime = None
-    dependencies: Optional[List[DependencyHealth]] = None
-    metadata: Optional[Dict] = None
+    timestamp: Optional[datetime] = None
+    dependencies: List[DependencyHealth] = field(default_factory=list)
+    metadata: Dict = field(default_factory=dict)
 
     def __post_init__(self):
         if self.timestamp is None:
             self.timestamp = datetime.now(timezone.utc)
-        if self.dependencies is None:
-            self.dependencies = []
-        if self.metadata is None:
-            self.metadata = {}
 
 
 class IHealthCheck(ABC):
