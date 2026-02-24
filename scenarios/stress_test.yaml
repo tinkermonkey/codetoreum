@@ -46,7 +46,7 @@ agents:
     description: "Worker agent for parallel processing"
     capabilities:
       - "code_generation"
-    llm_model: "claude-3-5-sonnet-20241022"
+    llm_model: "claude-sonnet-4-6"
     temperature: 0.7
     max_tokens: 2048
     enabled: true
@@ -58,7 +58,7 @@ agents:
     description: "Validation agent"
     capabilities:
       - "code_review"
-    llm_model: "claude-3-5-sonnet-20241022"
+    llm_model: "claude-sonnet-4-6"
     temperature: 0.5
     max_tokens: 1024
     enabled: true

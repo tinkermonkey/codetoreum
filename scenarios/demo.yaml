@@ -1,14 +1,17 @@
-# Demo Scenario
+# SDLC Pipeline Scenario
 #
-# Demonstration scenario with realistic project structure and data.
-# Showcases typical workflow with multiple stages and agent types.
+# Canonical 7-stage SDLC workflow used as the primary simulation scenario.
+# Matches Scenario 06 specification in SCENARIOS_COMPLETE.md.
+#
+# Stages: Requirements → Design → Implementation → Code Review → Testing → Integration → Release
+# Simulated duration: ~45 minutes | Real duration at 100x: ~27 seconds
 
-name: "Demo Scenario"
-description: "Realistic demo scenario for showcasing platform capabilities"
-version: "1.0"
+name: "SDLC Pipeline"
+description: "Full 7-stage SDLC pipeline - canonical workflow for simulation testing"
+version: "2.0"
 
-# Simulation settings (slower for demo visualization)
-speed_multiplier: 5.0
+# Simulation settings
+speed_multiplier: 100.0
 auto_advance: false
 
 # Projects
@@ -20,123 +23,140 @@ projects:
     metadata:
       stack: "React + FastAPI"
       team: "product-engineering"
-      priority: "high"
 
 # Workflows
 workflows:
-  - name: "feature-development-workflow"
-    description: "Complete feature development lifecycle"
+  - name: "sdlc-workflow"
+    description: "Full 7-stage SDLC pipeline"
     stages:
-      - name: "architecture-design"
-        agent_type: "software_architect"
-        description: "Design system architecture and APIs"
+      - name: "requirements"
+        agent_type: "requirements_analyst"
+        description: "Parse and understand requirements"
         order: 1
         max_retries: 2
-        timeout_seconds: 7200
+        timeout_seconds: 600
+
+      - name: "design"
+        agent_type: "software_architect"
+        description: "Create design document"
+        order: 2
+        max_retries: 2
+        timeout_seconds: 1200
 
       - name: "implementation"
-        agent_type: "senior_developer"
-        description: "Implement the feature"
-        order: 2
+        agent_type: "senior_software_engineer"
+        description: "Generate code"
+        order: 3
         max_retries: 3
-        timeout_seconds: 10800
+        timeout_seconds: 1800
 
       - name: "code-review"
         agent_type: "code_reviewer"
-        description: "Review code quality and best practices"
-        order: 3
+        description: "Review approval gate"
+        order: 4
         max_retries: 2
-        timeout_seconds: 3600
+        timeout_seconds: 1200
 
       - name: "testing"
         agent_type: "qa_engineer"
-        description: "Test functionality and edge cases"
-        order: 4
-        max_retries: 3
-        timeout_seconds: 7200
-
-      - name: "security-scan"
-        agent_type: "security_analyst"
-        description: "Security and vulnerability analysis"
+        description: "Run UNIT → INTEGRATION → E2E tests"
         order: 5
+        max_retries: 3
+        timeout_seconds: 2400
+
+      - name: "integration"
+        agent_type: "devops_engineer"
+        description: "Merge to main branch"
+        order: 6
         max_retries: 2
-        timeout_seconds: 3600
+        timeout_seconds: 1200
+
+      - name: "release"
+        agent_type: "release_manager"
+        description: "Prepare release notes"
+        order: 7
+        max_retries: 1
+        timeout_seconds: 600
 
 # Agents
 agents:
+  - name: "requirements_analyst"
+    agent_type: "requirements_analyst"
+    description: "Parses and structures requirements from issue descriptions"
+    capabilities:
+      - "code_review"
+    llm_model: "claude-sonnet-4-6"
+    temperature: 0.5
+    max_tokens: 4096
+    enabled: true
+
   - name: "software_architect"
     agent_type: "software_architect"
-    description: "Senior software architect with system design expertise"
+    description: "Designs system architecture and produces design documents"
     capabilities:
       - "code_generation"
       - "code_review"
-    llm_model: "claude-3-5-sonnet-20241022"
+    llm_model: "claude-sonnet-4-6"
     temperature: 0.7
     max_tokens: 8192
-    system_prompt: "You are a senior software architect. Focus on system design, scalability, and best practices."
     enabled: true
-    metadata:
-      specialization: "distributed_systems"
 
-  - name: "senior_developer"
-    agent_type: "senior_developer"
-    description: "Experienced full-stack developer"
+  - name: "senior_software_engineer"
+    agent_type: "senior_software_engineer"
+    description: "Implements features based on design documents"
     capabilities:
       - "code_generation"
-    llm_model: "claude-3-5-sonnet-20241022"
+    llm_model: "claude-sonnet-4-6"
     temperature: 0.7
     max_tokens: 8192
-    system_prompt: "You are a senior full-stack developer. Write clean, maintainable, well-tested code."
     enabled: true
-    metadata:
-      languages: ["Python", "TypeScript", "JavaScript"]
 
   - name: "code_reviewer"
     agent_type: "code_reviewer"
-    description: "Code quality and best practices reviewer"
+    description: "Reviews code quality, correctness, and adherence to design"
     capabilities:
       - "code_review"
-    llm_model: "claude-3-5-sonnet-20241022"
+    llm_model: "claude-sonnet-4-6"
     temperature: 0.5
     max_tokens: 4096
-    system_prompt: "You are a code reviewer. Focus on code quality, readability, and maintainability."
     enabled: true
-    metadata:
-      review_style: "constructive"
 
   - name: "qa_engineer"
     agent_type: "qa_engineer"
-    description: "QA engineer specializing in test automation"
+    description: "Writes and runs UNIT, INTEGRATION, and E2E tests"
     capabilities:
       - "testing"
       - "code_generation"
-    llm_model: "claude-3-5-sonnet-20241022"
+    llm_model: "claude-sonnet-4-6"
     temperature: 0.6
     max_tokens: 6144
-    system_prompt: "You are a QA engineer. Write comprehensive tests and identify edge cases."
     enabled: true
-    metadata:
-      frameworks: ["pytest", "jest"]
 
-  - name: "security_analyst"
-    agent_type: "security_analyst"
-    description: "Security specialist focusing on vulnerability detection"
+  - name: "devops_engineer"
+    agent_type: "devops_engineer"
+    description: "Merges branches and manages CI/CD pipeline"
     capabilities:
-      - "security_analysis"
-      - "code_review"
-    llm_model: "claude-3-5-sonnet-20241022"
+      - "code_generation"
+    llm_model: "claude-sonnet-4-6"
     temperature: 0.4
     max_tokens: 4096
-    system_prompt: "You are a security analyst. Identify vulnerabilities and security risks."
     enabled: true
-    metadata:
-      focus_areas: ["OWASP Top 10", "authentication", "data_protection"]
+
+  - name: "release_manager"
+    agent_type: "release_manager"
+    description: "Prepares release notes and coordinates deployment"
+    capabilities:
+      - "code_review"
+    llm_model: "claude-sonnet-4-6"
+    temperature: 0.5
+    max_tokens: 2048
+    enabled: true
 
 # Work Items
 work_items:
   - title: "Add user authentication system"
     description: |
-      Implement OAuth2-based authentication system with JWT tokens.
+      Implement OAuth2-based authentication with JWT tokens.
 
       Requirements:
       - OAuth2 provider integration (Google, GitHub)
@@ -146,11 +166,8 @@ work_items:
     labels:
       - "feature"
       - "authentication"
-      - "security"
     priority: "high"
     status: "new"
-    metadata:
-      estimated_hours: 16
 
   - title: "Implement real-time notifications"
     description: |
@@ -164,29 +181,8 @@ work_items:
     labels:
       - "feature"
       - "websocket"
-      - "real-time"
     priority: "medium"
     status: "new"
-    metadata:
-      estimated_hours: 12
-
-  - title: "Create admin dashboard"
-    description: |
-      Build admin dashboard for system monitoring and configuration.
-
-      Requirements:
-      - User management interface
-      - System metrics visualization
-      - Configuration editor
-      - Activity logs viewer
-    labels:
-      - "feature"
-      - "admin"
-      - "ui"
-    priority: "medium"
-    status: "new"
-    metadata:
-      estimated_hours: 20
 
   - title: "Optimize database queries"
     description: |
@@ -195,39 +191,17 @@ work_items:
       - Add missing indexes
       - Optimize N+1 query patterns
       - Implement query result caching
-      - Add connection pooling
     labels:
       - "performance"
       - "database"
-      - "optimization"
     priority: "high"
     status: "new"
-    metadata:
-      estimated_hours: 8
-
-  - title: "Add API rate limiting"
-    description: |
-      Implement rate limiting for public API endpoints.
-
-      Requirements:
-      - Token bucket algorithm
-      - Per-user and per-IP limits
-      - Custom limit configuration
-      - Rate limit headers
-    labels:
-      - "feature"
-      - "api"
-      - "security"
-    priority: "medium"
-    status: "new"
-    metadata:
-      estimated_hours: 6
 
 # Boards
 boards:
   - board_id: "board-1"
-    board_name: "Feature Development Board"
-    columns: ["Backlog", "Ready", "In Progress", "Review", "Done"]
+    board_name: "SDLC Board"
+    columns: ["Backlog", "Ready", "In Progress", "Code Review", "Testing", "Done"]
 
 # Board placements
 board_placements:
@@ -235,19 +209,15 @@ board_placements:
     column: "Backlog"
   - work_item_title: "Implement real-time notifications"
     column: "Backlog"
-  - work_item_title: "Create admin dashboard"
-    column: "Backlog"
   - work_item_title: "Optimize database queries"
-    column: "Backlog"
-  - work_item_title: "Add API rate limiting"
     column: "Backlog"
 
 # Additional metadata
 metadata:
-  scenario_type: "demo"
+  scenario_type: "sdlc_pipeline"
   author: "codetoreum-team"
-  use_case: "product_demonstration"
+  scenario_ref: "Scenario 06 (SCENARIOS_COMPLETE.md)"
   tags:
-    - "demo"
-    - "realistic"
+    - "sdlc"
     - "full-lifecycle"
+    - "canonical"
