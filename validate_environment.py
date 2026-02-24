@@ -8,9 +8,10 @@ required tools and dependencies installed correctly.
 
 import subprocess
 import sys
+from typing import Union, List
 
 
-def run_command(cmd, description):
+def run_command(cmd: Union[List[str], str], description: str) -> bool:
     """Run a command in the Docker container and check the result."""
     print(f"Testing: {description}...", end=" ")
     try:

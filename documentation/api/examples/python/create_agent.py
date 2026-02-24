@@ -4,7 +4,7 @@ Example: Create a new agent in Codetoreum
 This example demonstrates how to create a new agent with capabilities
 and MCP server configuration.
 """
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import requests
 
@@ -18,9 +18,9 @@ def create_agent(
     name: str,
     description: str,
     agent_type: str = "claude_code",
-    capabilities: list[str] = None,
-    mcp_servers: list[Dict[str, Any]] = None,
-    configuration: Dict[str, Any] = None
+    capabilities: Optional[list[str]] = None,
+    mcp_servers: Optional[list[Dict[str, Any]]] = None,
+    configuration: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """
     Create a new agent.
