@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { AlertTriangle, XCircle, Activity } from 'lucide-react'
 import { useActiveAgents } from '../hooks/useActiveAgents'
 import { useAgentActions } from '../hooks/useAgentActions'
+import { useAgentState } from '../contexts/AgentStateContext'
 import { formatDuration, getRuntimeMs } from '../utils/stateHelpers'
 
 /**
@@ -41,7 +42,8 @@ const ActiveAgents = ({
   ContainerComponent = 'div',
   containerClassName = 'bg-gh-canvas p-3 rounded-md border border-gh-border'
 }) => {
-  const { agents: activeAgents, agentCount, loading, fetchError } = useActiveAgents()
+  const { agents: activeAgents } = useActiveAgents()
+  const { fetchError } = useAgentState()
   const { killAgent, isKillingAgent, error: actionError, clearError } = useAgentActions()
   const [showKillModal, setShowKillModal] = useState(false)
   const [selectedAgent, setSelectedAgent] = useState(null)

@@ -54,7 +54,6 @@ export default function AgentState() {
     // Start from most recent logs (end of array since they're appended)
     for (let i = logs.length - 1; i >= 0; i--) {
       const log = logs[i]
-      const event = log.event
 
       // Extract agent name from most recent log
       if (!currentAgent && log.agent) {
