@@ -14,7 +14,7 @@ import time
 import httpx
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Run a full workflow simulation")
     parser.add_argument("--server", default="http://localhost:8000", help="Simulation server URL")
     parser.add_argument("--project-id", required=True, help="Project ID")
