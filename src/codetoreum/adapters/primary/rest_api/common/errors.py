@@ -2,7 +2,6 @@
 Standardized error handling for REST API.
 """
 from enum import Enum
-from typing import Optional
 
 from fastapi import HTTPException, status
 from pydantic import BaseModel, Field
@@ -29,14 +28,14 @@ class ErrorResponse(BaseModel):
 
     error_code: ErrorCode = Field(..., description="Machine-readable error code")
     message: str = Field(..., description="Human-readable error message")
-    details: Optional[dict] = Field(None, description="Additional error details")
+    details: dict | None = Field(None, description="Additional error details")
 
 
 def create_error_response(
     status_code: int,
     error_code: ErrorCode,
     message: str,
-    details: Optional[dict] = None,
+    details: dict | None = None,
 ) -> HTTPException:
     """
     Create a standardized HTTP exception with error response.
@@ -71,7 +70,7 @@ def not_found_error(resource: str, resource_id: str) -> HTTPException:
     )
 
 
-def conflict_error(message: str, details: Optional[dict] = None) -> HTTPException:
+def conflict_error(message: str, details: dict | None = None) -> HTTPException:
     """Create a 409 Conflict error."""
     return create_error_response(
         status_code=status.HTTP_409_CONFLICT,
@@ -81,7 +80,7 @@ def conflict_error(message: str, details: Optional[dict] = None) -> HTTPExceptio
     )
 
 
-def validation_error(message: str, details: Optional[dict] = None) -> HTTPException:
+def validation_error(message: str, details: dict | None = None) -> HTTPException:
     """Create a 400 Validation error."""
     return create_error_response(
         status_code=status.HTTP_400_BAD_REQUEST,

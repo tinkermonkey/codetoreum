@@ -21,9 +21,9 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
-from fastapi import WebSocket, WebSocketDisconnect, Query
+from fastapi import WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
 from codetoreum.config import (
@@ -37,8 +37,8 @@ from codetoreum.config import (
 from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.observability.websocket_instrumentation import (
-    WebSocketSessionTracer,
     WebSocketMessageTracer,
+    WebSocketSessionTracer,
 )
 
 logger = logging.getLogger(__name__)
@@ -106,20 +106,20 @@ class EventFilter:
     """
 
     subscription_type: SubscriptionType
-    workflow_run_id: Optional[str] = None
-    execution_id: Optional[str] = None
-    work_item_id: Optional[str] = None  # New filter
-    workflow_id: Optional[str] = None  # New filter
-    agent_id: Optional[str] = None  # New filter
-    project_name: Optional[str] = None
-    event_types: Optional[List[str]] = None  # Multiple types use OR logic
+    workflow_run_id: str | None = None
+    execution_id: str | None = None
+    work_item_id: str | None = None  # New filter
+    workflow_id: str | None = None  # New filter
+    agent_id: str | None = None  # New filter
+    project_name: str | None = None
+    event_types: list[str] | None = None  # Multiple types use OR logic
 
 
 class WebSocketMessage(BaseModel):
     """Base message for WebSocket communication"""
 
     type: str
-    data: Dict[str, Any]
+    data: dict[str, Any]
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
@@ -139,13 +139,13 @@ class SubscribeMessage(BaseModel):
 
     type: str = "subscribe"
     subscription_type: str
-    workflow_run_id: Optional[str] = None
-    execution_id: Optional[str] = None
-    work_item_id: Optional[str] = None
-    workflow_id: Optional[str] = None
-    agent_id: Optional[str] = None
-    project_name: Optional[str] = None
-    event_types: Optional[List[str]] = None
+    workflow_run_id: str | None = None
+    execution_id: str | None = None
+    work_item_id: str | None = None
+    workflow_id: str | None = None
+    agent_id: str | None = None
+    project_name: str | None = None
+    event_types: list[str] | None = None
 
 
 class UnsubscribeMessage(BaseModel):
@@ -161,7 +161,7 @@ class EventMessage(BaseModel):
     type: str = "event"
     event_id: str
     event_type: str
-    data: Dict[str, Any]
+    data: dict[str, Any]
     timestamp: datetime
 
 
@@ -173,7 +173,7 @@ class LogMessage(BaseModel):
     level: str
     message: str
     timestamp: datetime
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: dict[str, Any] | None = None
 
 
 class ErrorMessage(BaseModel):
@@ -249,11 +249,11 @@ class ConnectionState:
     """State for a single WebSocket connection"""
 
     websocket: WebSocket
-    subscriptions: List[EventFilter]
-    buffer: List[Dict[str, Any]]  # Buffered messages
+    subscriptions: list[EventFilter]
+    buffer: list[dict[str, Any]]  # Buffered messages
     last_heartbeat: float  # Timestamp of last heartbeat
     authenticated: bool = True  # Authentication status
-    rate_limiter: Optional[RateLimiter] = None  # Rate limiter for incoming messages
+    rate_limiter: RateLimiter | None = None  # Rate limiter for incoming messages
 
 
 class ConnectionManager:
@@ -275,9 +275,9 @@ class ConnectionManager:
 
     def __init__(
         self,
-        config: Optional[WebSocketConfig] = None,
-        redis_pubsub: Optional[Any] = None,
-        redis_client: Optional[Any] = None,
+        config: WebSocketConfig | None = None,
+        redis_pubsub: Any | None = None,
+        redis_client: Any | None = None,
     ):
         """
         Initialize connection manager.
@@ -293,25 +293,25 @@ class ConnectionManager:
         self._background_tasks: set[asyncio.Task] = set()
 
         # Active connections: connection_id -> ConnectionState
-        self.connections: Dict[str, ConnectionState] = {}
+        self.connections: dict[str, ConnectionState] = {}
 
         # Reverse index: workflow_run_id -> Set[connection_id]
-        self.workflow_subscribers: Dict[str, Set[str]] = {}
+        self.workflow_subscribers: dict[str, set[str]] = {}
 
         # Reverse index: execution_id -> Set[connection_id]
-        self.execution_subscribers: Dict[str, Set[str]] = {}
+        self.execution_subscribers: dict[str, set[str]] = {}
 
         # Reverse index: work_item_id -> Set[connection_id]
-        self.work_item_subscribers: Dict[str, Set[str]] = {}
+        self.work_item_subscribers: dict[str, set[str]] = {}
 
         # Reverse index: workflow_id -> Set[connection_id]
-        self.workflow_definition_subscribers: Dict[str, Set[str]] = {}
+        self.workflow_definition_subscribers: dict[str, set[str]] = {}
 
         # Reverse index: agent_id -> Set[connection_id]
-        self.agent_subscribers: Dict[str, Set[str]] = {}
+        self.agent_subscribers: dict[str, set[str]] = {}
 
         # Reverse index: project_name -> Set[connection_id]
-        self.project_subscribers: Dict[str, Set[str]] = {}
+        self.project_subscribers: dict[str, set[str]] = {}
 
         # Statistics
         self.stats = {
@@ -350,7 +350,7 @@ class ConnectionManager:
                 extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
             )
 
-    async def _handle_redis_event(self, message: Dict[str, Any]) -> None:
+    async def _handle_redis_event(self, message: dict[str, Any]) -> None:
         """
         Handle event received from Redis pub/sub.
 
@@ -649,7 +649,7 @@ class ConnectionManager:
             self.project_subscribers[filter.project_name].add(connection_id)
 
     async def send_personal_message(
-        self, message: Dict[str, Any], connection_id: str
+        self, message: dict[str, Any], connection_id: str
     ) -> bool:
         """
         Send a message to a specific connection with backpressure handling.
@@ -771,7 +771,7 @@ class ConnectionManager:
 
         self.disconnect(connection_id)
 
-    def _extract_event_attributes(self, event_dict: Dict[str, Any]) -> Dict[str, Optional[str]]:
+    def _extract_event_attributes(self, event_dict: dict[str, Any]) -> dict[str, str | None]:
         """
         Extract standard attributes from event data with consistent fallbacks.
 
@@ -792,7 +792,7 @@ class ConnectionManager:
             "project_name": event_dict.get("project_name") or payload.get("project_name"),
         }
 
-    async def _broadcast_event_local(self, event_dict: Dict[str, Any]) -> None:
+    async def _broadcast_event_local(self, event_dict: dict[str, Any]) -> None:
         """
         Broadcast event to local connections only (not via Redis).
 
@@ -806,7 +806,7 @@ class ConnectionManager:
         event_type = event_dict.get("event_type", "UnknownEvent")
 
         # Start with all connections, then intersect with relevant indices
-        relevant_connections: Optional[Set[str]] = None
+        relevant_connections: set[str] | None = None
 
         # Find subscribers using reverse indices (fast set operations)
         if attributes["workflow_run_id"] and attributes["workflow_run_id"] in self.workflow_subscribers:
@@ -837,7 +837,7 @@ class ConnectionManager:
         connections_to_check = relevant_connections if relevant_connections is not None else set(self.connections.keys())
 
         # Determine final recipients by applying detailed filter matching
-        recipient_ids: Set[str] = set()
+        recipient_ids: set[str] = set()
         for connection_id in connections_to_check:
             if connection_id not in self.connections:
                 continue
@@ -893,7 +893,7 @@ class ConnectionManager:
             await self._broadcast_event_local(event_dict)
 
     def _event_matches_filter_dict(
-        self, event_type: str, event_dict: Dict[str, Any], filter: EventFilter
+        self, event_type: str, event_dict: dict[str, Any], filter: EventFilter
     ) -> bool:
         """
         Check if event matches filter criteria (dictionary version).
@@ -967,7 +967,7 @@ class ConnectionManager:
         return True
 
     def _event_matches_filter(
-        self, event: DomainEvent, event_dict: Dict[str, Any], filter: EventFilter
+        self, event: DomainEvent, event_dict: dict[str, Any], filter: EventFilter
     ) -> bool:
         """
         Check if event matches filter criteria.
@@ -1067,10 +1067,10 @@ class WebSocketAdapter:
 
     def __init__(
         self,
-        config: Optional[WebSocketConfig] = None,
-        auth_manager: Optional[Any] = None,
-        redis_pubsub: Optional[Any] = None,
-        redis_client: Optional[Any] = None,
+        config: WebSocketConfig | None = None,
+        auth_manager: Any | None = None,
+        redis_pubsub: Any | None = None,
+        redis_client: Any | None = None,
     ):
         """
         Initialize WebSocket adapter.
@@ -1084,13 +1084,13 @@ class WebSocketAdapter:
         self.manager = ConnectionManager(config, redis_pubsub, redis_client)
         self.auth_manager = auth_manager
         self._connection_counter = 0
-        self._heartbeat_task: Optional[asyncio.Task] = None
+        self._heartbeat_task: asyncio.Task | None = None
         self._background_tasks: set[asyncio.Task] = set()
 
         # Instrumentation for distributed tracing
         self._session_tracer = WebSocketSessionTracer()
-        self._session_spans: Dict[str, Optional[Any]] = {}
-        self._message_tracers: Dict[str, Optional[WebSocketMessageTracer]] = {}
+        self._session_spans: dict[str, Any | None] = {}
+        self._message_tracers: dict[str, WebSocketMessageTracer | None] = {}
 
     def get_next_connection_id(self) -> str:
         """
@@ -1102,7 +1102,7 @@ class WebSocketAdapter:
         self._connection_counter += 1
         return f"ws-{self._connection_counter}"
 
-    async def handle_websocket(self, websocket: WebSocket, token: Optional[str] = None) -> None:
+    async def handle_websocket(self, websocket: WebSocket, token: str | None = None) -> None:
         """
         Handle WebSocket connection with authentication.
 
@@ -1407,7 +1407,7 @@ class WebSocketAdapter:
         )
 
     async def _handle_subscribe_with_instrumentation(
-        self, connection_id: str, message: Dict[str, Any]
+        self, connection_id: str, message: dict[str, Any]
     ) -> None:
         """
         Handle subscribe message with instrumentation.
@@ -1450,7 +1450,7 @@ class WebSocketAdapter:
             raise
 
     async def _handle_unsubscribe_with_instrumentation(
-        self, connection_id: str, message: Dict[str, Any]
+        self, connection_id: str, message: dict[str, Any]
     ) -> None:
         """
         Handle unsubscribe message with instrumentation.
@@ -1508,7 +1508,7 @@ class WebSocketAdapter:
             )
             raise
 
-    async def _handle_subscribe(self, connection_id: str, message: Dict[str, Any]) -> None:
+    async def _handle_subscribe(self, connection_id: str, message: dict[str, Any]) -> None:
         """
         Handle subscribe message with extended filtering support.
 
@@ -1571,7 +1571,7 @@ class WebSocketAdapter:
                 connection_id,
             )
 
-    async def _handle_unsubscribe(self, connection_id: str, message: Dict[str, Any]) -> None:
+    async def _handle_unsubscribe(self, connection_id: str, message: dict[str, Any]) -> None:
         """
         Handle unsubscribe message.
 

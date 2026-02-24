@@ -6,7 +6,6 @@ and error handling middleware into a FastAPI application.
 """
 
 from fastapi import FastAPI
-from starlette.middleware.base import BaseHTTPMiddleware
 
 from codetoreum.adapters.primary.error_middleware import (
     DEBUG_MODE,

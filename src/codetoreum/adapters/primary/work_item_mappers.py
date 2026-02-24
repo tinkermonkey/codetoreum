@@ -5,25 +5,26 @@ Maps between domain models and API DTOs for work items.
 This keeps the domain layer independent of API concerns.
 """
 
-from typing import List
 
 from codetoreum.adapters.primary.work_item_dtos import (
     CreateWorkItemRequest,
     UpdateWorkItemRequest,
-    WorkItemResponse,
+    WorkItemCommandResult,
     WorkItemDetailResponse,
     WorkItemListResponse,
-    WorkItemCommandResult,
+    WorkItemResponse,
 )
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority
 from codetoreum.ports.input.work_item_command import (
     CreateWorkItemCommand,
     UpdateWorkItemCommand,
+)
+from codetoreum.ports.input.work_item_command import (
     WorkItemCommandResult as DomainCommandResult,
 )
 from codetoreum.ports.input.work_item_query import (
-    WorkItemListResult,
     WorkItemHistory,
+    WorkItemListResult,
 )
 
 

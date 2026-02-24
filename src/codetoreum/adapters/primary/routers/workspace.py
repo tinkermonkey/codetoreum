@@ -6,25 +6,24 @@ and resource usage tracking.
 """
 
 from datetime import datetime
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from codetoreum.config import (
-    WORKSPACE_DEFAULT_PAGE_SIZE,
-    WORKSPACE_MAX_PAGE_SIZE,
-    DEFAULT_OFFSET,
-)
 from codetoreum.adapters.primary.exception_mapper import map_exception_to_http
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
 from codetoreum.adapters.primary.workspace_dtos import (
     MountedFileInfo,
-    ResourceUsageSummaryResponse,
     ResourceUsageInfo,
+    ResourceUsageSummaryResponse,
     WorkspaceListItemResponse,
-    WorkspaceLogsResponse,
     WorkspaceListResponse,
+    WorkspaceLogsResponse,
     WorkspaceResponse,
+)
+from codetoreum.config import (
+    DEFAULT_OFFSET,
+    WORKSPACE_DEFAULT_PAGE_SIZE,
+    WORKSPACE_MAX_PAGE_SIZE,
 )
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.ports.exceptions import PortError
@@ -39,7 +38,7 @@ from codetoreum.ports.input.workspace_query import (
 
 def create_workspace_router(
     query_port: IWorkspaceQueryPort,
-    auth_deps: Optional[SimpleAuthDependencies] = None,
+    auth_deps: SimpleAuthDependencies | None = None,
 ) -> APIRouter:
     """
     Create the workspace REST API router.
@@ -72,11 +71,11 @@ def create_workspace_router(
         response_description="List of workspaces with resource usage",
     )
     async def list_workspaces(
-        execution_id: Optional[str] = Query(None, description="Filter by execution ID"),
-        agent_id: Optional[str] = Query(None, description="Filter by agent ID"),
-        work_item_id: Optional[str] = Query(None, description="Filter by work item ID"),
-        project_id: Optional[str] = Query(None, description="Filter by project ID"),
-        status: Optional[str] = Query(None, description="Filter by status (running, stopped, etc.)"),
+        execution_id: str | None = Query(None, description="Filter by execution ID"),
+        agent_id: str | None = Query(None, description="Filter by agent ID"),
+        work_item_id: str | None = Query(None, description="Filter by work item ID"),
+        project_id: str | None = Query(None, description="Filter by project ID"),
+        status: str | None = Query(None, description="Filter by status (running, stopped, etc.)"),
         offset: int = Query(DEFAULT_OFFSET, ge=0, description="Pagination offset"),
         limit: int = Query(WORKSPACE_DEFAULT_PAGE_SIZE, ge=1, le=WORKSPACE_MAX_PAGE_SIZE, description=f"Pagination limit (max {WORKSPACE_MAX_PAGE_SIZE})"),
     ) -> WorkspaceListResponse:
@@ -353,7 +352,7 @@ def create_workspace_router(
         response_description="Aggregate resource usage across all workspaces",
     )
     async def get_resource_usage_summary(
-        project_id: Optional[str] = Query(None, description="Filter by project"),
+        project_id: str | None = Query(None, description="Filter by project"),
     ) -> ResourceUsageSummaryResponse:
         """
         Get aggregate resource usage across all workspaces.
@@ -416,8 +415,8 @@ def create_workspace_router(
     )
     async def get_workspace_logs(
         workspace_id: str,
-        tail: Optional[int] = Query(None, ge=1, le=1000, description="Number of lines from end (max 1000)"),
-        since: Optional[datetime] = Query(None, description="Filter logs from timestamp"),
+        tail: int | None = Query(None, ge=1, le=1000, description="Number of lines from end (max 1000)"),
+        since: datetime | None = Query(None, description="Filter logs from timestamp"),
     ) -> WorkspaceLogsResponse:
         """
         Get workspace container logs.

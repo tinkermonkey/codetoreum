@@ -5,17 +5,13 @@ Handles listing and filtering executions.
 """
 
 from datetime import datetime
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
-
-from codetoreum.config import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, DEFAULT_OFFSET
 from fastapi import status as http_status
-
-from codetoreum.config import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, DEFAULT_OFFSET
 
 from codetoreum.adapters.primary.execution_dtos import ExecutionListResponse
 from codetoreum.adapters.primary.execution_mappers import ExecutionMapper
+from codetoreum.config import DEFAULT_OFFSET, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from codetoreum.domain.agent_execution import ExecutionStatus
 from codetoreum.ports.input.execution_query import (
     ExecutionFilters,
@@ -44,13 +40,13 @@ def register_list_endpoints(
         },
     )
     async def list_executions(
-        status: Optional[str] = Query(None, description="Filter by status (pending, initialized, running, completed, failed, timeout, cancelled)"),
-        agent_id: Optional[str] = Query(None, description="Filter by agent ID"),
-        work_item_id: Optional[str] = Query(None, description="Filter by work item ID"),
-        workflow_id: Optional[str] = Query(None, description="Filter by workflow ID"),
-        stage_name: Optional[str] = Query(None, description="Filter by stage name"),
-        start_date: Optional[str] = Query(None, description="Filter by start date (ISO 8601 format)"),
-        end_date: Optional[str] = Query(None, description="Filter by end date (ISO 8601 format)"),
+        status: str | None = Query(None, description="Filter by status (pending, initialized, running, completed, failed, timeout, cancelled)"),
+        agent_id: str | None = Query(None, description="Filter by agent ID"),
+        work_item_id: str | None = Query(None, description="Filter by work item ID"),
+        workflow_id: str | None = Query(None, description="Filter by workflow ID"),
+        stage_name: str | None = Query(None, description="Filter by stage name"),
+        start_date: str | None = Query(None, description="Filter by start date (ISO 8601 format)"),
+        end_date: str | None = Query(None, description="Filter by end date (ISO 8601 format)"),
         offset: int = Query(DEFAULT_OFFSET, ge=0, description="Offset for pagination"),
         limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description=f"Limit for pagination (max {MAX_PAGE_SIZE})"),
         sort_by: str = Query("initialized_at", description="Sort field (initialized_at, started_at, completed_at, duration_seconds, status)"),

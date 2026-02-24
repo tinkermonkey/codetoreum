@@ -6,42 +6,40 @@ Provides RESTful endpoints for querying workflow execution runs.
 
 import logging
 from datetime import datetime
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
 
+from codetoreum.adapters.primary.audit_dtos import WorkflowRunAuditResponse
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
 from codetoreum.adapters.primary.workflow_run_dtos import (
-    WorkflowRunResponse,
-    WorkflowRunListResponse,
     WorkflowEventsListResponse,
+    WorkflowRunListResponse,
+    WorkflowRunResponse,
 )
-from codetoreum.adapters.primary.audit_dtos import WorkflowRunAuditResponse
 from codetoreum.adapters.primary.workflow_run_mappers import WorkflowRunMapper
+from codetoreum.config import (
+    DEFAULT_OFFSET,
+    DEFAULT_PAGE_SIZE,
+    MAX_PAGE_SIZE,
+)
 from codetoreum.config.defaults import AUDIT_EVENTS_MAX_PAGE_SIZE
+from codetoreum.ports.exceptions import ResourceNotFoundError
 from codetoreum.ports.input.workflow_run_query import (
     IWorkflowRunQueryPort,
+    SortOrder,
     WorkflowRunFilters,
     WorkflowRunPaginationParams,
     WorkflowRunSortField,
     WorkflowRunStatus,
-    SortOrder,
 )
-from codetoreum.ports.exceptions import ResourceNotFoundError
-from codetoreum.config import (
-    DEFAULT_PAGE_SIZE,
-    MAX_PAGE_SIZE,
-    DEFAULT_OFFSET,
-)
-
 
 logger = logging.getLogger(__name__)
 
 
 def create_workflow_runs_router(
     query_port: IWorkflowRunQueryPort,
-    auth_deps: Optional[SimpleAuthDependencies] = None,
+    auth_deps: SimpleAuthDependencies | None = None,
 ) -> APIRouter:
     """
     Create the workflow runs REST API router.
@@ -74,10 +72,10 @@ def create_workflow_runs_router(
         response_description="List of workflow runs",
     )
     async def list_workflow_runs(
-        status: Optional[str] = Query(None, description="Filter by status (comma-separated: running,completed,failed,cancelled)"),
-        projectId: Optional[str] = Query(None, description="Filter by project ID", alias="projectId"),
-        workItemId: Optional[str] = Query(None, description="Filter by work item ID", alias="workItemId"),
-        workflowId: Optional[str] = Query(None, description="Filter by workflow template ID", alias="workflowId"),
+        status: str | None = Query(None, description="Filter by status (comma-separated: running,completed,failed,cancelled)"),
+        projectId: str | None = Query(None, description="Filter by project ID", alias="projectId"),
+        workItemId: str | None = Query(None, description="Filter by work item ID", alias="workItemId"),
+        workflowId: str | None = Query(None, description="Filter by workflow template ID", alias="workflowId"),
         offset: int = Query(DEFAULT_OFFSET, ge=0, description="Offset for pagination"),
         limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description=f"Limit for pagination (max {MAX_PAGE_SIZE})"),
         sortBy: str = Query("startedAt", description="Sort field (startedAt, completedAt, duration)", alias="sortBy"),
@@ -239,8 +237,8 @@ def create_workflow_runs_router(
         workflow_run_id: str,
         offset: int = Query(0, ge=0, description="Pagination offset"),
         limit: int = Query(50, ge=1, le=AUDIT_EVENTS_MAX_PAGE_SIZE, description=f"Pagination limit (default 50, max {AUDIT_EVENTS_MAX_PAGE_SIZE})"),
-        eventTypes: Optional[str] = Query(None, description="Filter by event types (comma-separated)", alias="eventTypes"),
-        since: Optional[datetime] = Query(None, description="ISO timestamp - events after this time"),
+        eventTypes: str | None = Query(None, description="Filter by event types (comma-separated)", alias="eventTypes"),
+        since: datetime | None = Query(None, description="ISO timestamp - events after this time"),
     ) -> WorkflowEventsListResponse:
         """
         Get events for a specific workflow run.

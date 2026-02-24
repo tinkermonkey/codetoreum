@@ -6,28 +6,18 @@ contracts from the internal domain models, allowing independent evolution.
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from codetoreum.adapters.primary.api_models import PaginatedResponse
 from codetoreum.config import (
-    MAX_WORKFLOW_NAME_LENGTH,
     MAX_DESCRIPTION_LENGTH,
-    MAX_PROJECT_ID_LENGTH,
-    MAX_STAGE_NAME_LENGTH,
-    MAX_ERROR_TYPE_LENGTH,
     MAX_ERROR_MESSAGE_LENGTH,
-    MAX_CONDITION_TYPE_LENGTH,
-    MAX_VALIDATION_MESSAGE_LENGTH,
-    MAX_WORK_ITEM_ID_LENGTH,
-    MAX_WORKFLOW_ID_LENGTH,
-    MAX_REASON_LENGTH,
-    MIN_STAGES_COUNT,
+    MAX_STAGE_NAME_LENGTH,
+    MAX_WORKFLOW_NAME_LENGTH,
     MIN_FIELD_LENGTH,
 )
-
-from codetoreum.adapters.primary.api_models import PaginatedResponse
-
 
 # ============================================================================
 # Workflow Stage Models
@@ -39,7 +29,7 @@ class StageTransition(BaseModel):
 
     from_stage: str = Field(..., description="Source stage name", min_length=MIN_FIELD_LENGTH, max_length=MAX_STAGE_NAME_LENGTH)
     to_stage: str = Field(..., description="Target stage name", min_length=MIN_FIELD_LENGTH, max_length=MAX_STAGE_NAME_LENGTH)
-    condition: Optional[str] = Field(None, description="Transition condition (optional)", max_length=MAX_ERROR_MESSAGE_LENGTH)
+    condition: str | None = Field(None, description="Transition condition (optional)", max_length=MAX_ERROR_MESSAGE_LENGTH)
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -56,7 +46,7 @@ class StageEntryCondition(BaseModel):
     """Entry condition for a workflow stage"""
 
     condition_type: str = Field(..., description="Type of condition (status, label, approval, etc.)", min_length=MIN_FIELD_LENGTH, max_length=MAX_STAGE_NAME_LENGTH)
-    parameters: Dict[str, Any] = Field(default_factory=dict, description="Condition parameters")
+    parameters: dict[str, Any] = Field(default_factory=dict, description="Condition parameters")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -73,13 +63,13 @@ class WorkflowStageResponse(BaseModel):
 
     name: str = Field(..., description="Stage name (unique within workflow)", max_length=MAX_STAGE_NAME_LENGTH)
     agent_name: str = Field(..., description="Agent to execute this stage", max_length=MAX_STAGE_NAME_LENGTH)
-    timeout_seconds: Optional[int] = Field(None, description="Stage timeout in seconds", ge=1)
+    timeout_seconds: int | None = Field(None, description="Stage timeout in seconds", ge=1)
     retry_count: int = Field(0, description="Number of retries on failure", ge=0)
-    entry_conditions: List[StageEntryCondition] = Field(
+    entry_conditions: list[StageEntryCondition] = Field(
         default_factory=list,
         description="Conditions that must be met to enter this stage"
     )
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional stage metadata")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional stage metadata")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -108,10 +98,10 @@ class WorkflowStageRequest(BaseModel):
 
     name: str = Field(..., description="Stage name", min_length=MIN_FIELD_LENGTH, max_length=MAX_STAGE_NAME_LENGTH)
     agent_name: str = Field(..., description="Agent to execute this stage", min_length=MIN_FIELD_LENGTH)
-    timeout_seconds: Optional[int] = Field(None, ge=1, le=7200, description="Stage timeout (max 2 hours)")
+    timeout_seconds: int | None = Field(None, ge=1, le=7200, description="Stage timeout (max 2 hours)")
     retry_count: int = Field(0, ge=0, le=5, description="Retry count (max 5)")
-    entry_conditions: List[StageEntryCondition] = Field(default_factory=list)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    entry_conditions: list[StageEntryCondition] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -138,14 +128,14 @@ class CreateWorkflowRequest(BaseModel):
     name: str = Field(..., description="Workflow name", min_length=MIN_FIELD_LENGTH, max_length=MAX_WORKFLOW_NAME_LENGTH)
     description: str = Field(..., description="Workflow description", max_length=MAX_DESCRIPTION_LENGTH)
     project_id: str = Field(..., description="Project ID this workflow belongs to", min_length=MIN_FIELD_LENGTH, max_length=MAX_STAGE_NAME_LENGTH)
-    stages: List[WorkflowStageRequest] = Field(..., description="Workflow stages", min_length=MIN_FIELD_LENGTH)
-    transitions: List[StageTransition] = Field(default_factory=list, description="Stage transitions")
-    work_item_types: Optional[List[str]] = Field(
+    stages: list[WorkflowStageRequest] = Field(..., description="Workflow stages", min_length=MIN_FIELD_LENGTH)
+    transitions: list[StageTransition] = Field(default_factory=list, description="Stage transitions")
+    work_item_types: list[str] | None = Field(
         None,
         description="Work item types this workflow applies to (issue, pr, discussion)"
     )
     is_template: bool = Field(False, description="Whether this is a reusable template")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional workflow metadata")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional workflow metadata")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -185,12 +175,12 @@ class CreateWorkflowRequest(BaseModel):
 class UpdateWorkflowRequest(BaseModel):
     """Request to update an existing workflow definition"""
 
-    name: Optional[str] = Field(None, description="Updated workflow name", min_length=MIN_FIELD_LENGTH, max_length=MAX_WORKFLOW_NAME_LENGTH)
-    description: Optional[str] = Field(None, description="Updated description", max_length=MAX_DESCRIPTION_LENGTH)
-    stages: Optional[List[WorkflowStageRequest]] = Field(None, description="Updated stages", min_length=MIN_FIELD_LENGTH)
-    transitions: Optional[List[StageTransition]] = Field(None, description="Updated transitions")
-    work_item_types: Optional[List[str]] = Field(None, description="Updated work item types")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="Updated metadata")
+    name: str | None = Field(None, description="Updated workflow name", min_length=MIN_FIELD_LENGTH, max_length=MAX_WORKFLOW_NAME_LENGTH)
+    description: str | None = Field(None, description="Updated description", max_length=MAX_DESCRIPTION_LENGTH)
+    stages: list[WorkflowStageRequest] | None = Field(None, description="Updated stages", min_length=MIN_FIELD_LENGTH)
+    transitions: list[StageTransition] | None = Field(None, description="Updated transitions")
+    work_item_types: list[str] | None = Field(None, description="Updated work item types")
+    metadata: dict[str, Any] | None = Field(None, description="Updated metadata")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -218,14 +208,14 @@ class WorkflowResponse(BaseModel):
     description: str = Field(..., description="Workflow description")
     project_id: str = Field(..., description="Project ID")
     version: int = Field(..., description="Workflow version number")
-    stages: List[WorkflowStageResponse] = Field(..., description="Workflow stages")
-    transitions: List[StageTransition] = Field(default_factory=list, description="Stage transitions")
-    work_item_types: List[str] = Field(default_factory=list, description="Applicable work item types")
+    stages: list[WorkflowStageResponse] = Field(..., description="Workflow stages")
+    transitions: list[StageTransition] = Field(default_factory=list, description="Stage transitions")
+    work_item_types: list[str] = Field(default_factory=list, description="Applicable work item types")
     is_template: bool = Field(..., description="Whether this is a template")
     is_active: bool = Field(..., description="Whether workflow is active")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -272,7 +262,7 @@ class WorkflowSummaryResponse(BaseModel):
     project_id: str = Field(..., description="Project ID")
     version: int = Field(..., description="Current version")
     stage_count: int = Field(..., description="Number of stages")
-    work_item_types: List[str] = Field(default_factory=list, description="Applicable work item types")
+    work_item_types: list[str] = Field(default_factory=list, description="Applicable work item types")
     is_template: bool = Field(..., description="Whether this is a template")
     is_active: bool = Field(..., description="Whether workflow is active")
     created_at: datetime = Field(..., description="Creation timestamp")
@@ -284,7 +274,7 @@ class WorkflowSummaryResponse(BaseModel):
 class WorkflowListResponse(PaginatedResponse):
     """Response with list of workflows"""
 
-    workflows: List[WorkflowSummaryResponse] = Field(..., description="List of workflows")
+    workflows: list[WorkflowSummaryResponse] = Field(..., description="List of workflows")
 
     model_config = ConfigDict()
 
@@ -294,7 +284,7 @@ class WorkflowVersionResponse(BaseModel):
 
     version: int = Field(..., description="Version number")
     created_at: datetime = Field(..., description="When this version was created")
-    created_by: Optional[str] = Field(None, description="Who created this version")
+    created_by: str | None = Field(None, description="Who created this version")
     changes_summary: str = Field(..., description="Summary of changes in this version")
 
     model_config = ConfigDict()
@@ -304,7 +294,7 @@ class WorkflowVersionListResponse(BaseModel):
     """Response with workflow version history"""
 
     workflow_id: str = Field(..., description="Workflow ID")
-    versions: List[WorkflowVersionResponse] = Field(..., description="Version history")
+    versions: list[WorkflowVersionResponse] = Field(..., description="Version history")
     total_count: int = Field(..., description="Total version count")
 
     model_config = ConfigDict()
@@ -315,9 +305,9 @@ class WorkflowCommandResult(BaseModel):
 
     success: bool = Field(..., description="Whether operation succeeded")
     workflow_id: str = Field(..., description="Workflow ID")
-    version: Optional[int] = Field(None, description="New version number (for updates)")
+    version: int | None = Field(None, description="New version number (for updates)")
     message: str = Field(..., description="Result message")
-    errors: Optional[List[str]] = Field(None, description="Error messages if any")
+    errors: list[str] | None = Field(None, description="Error messages if any")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -342,8 +332,8 @@ class WorkflowValidationError(BaseModel):
 
     error_type: str = Field(..., description="Error type (circular_dependency, invalid_agent, etc.)", max_length=MAX_STAGE_NAME_LENGTH)
     message: str = Field(..., description="Error message", max_length=MAX_ERROR_MESSAGE_LENGTH)
-    stage_name: Optional[str] = Field(None, description="Stage that caused the error", max_length=MAX_STAGE_NAME_LENGTH)
-    details: Dict[str, Any] = Field(default_factory=dict, description="Additional error details")
+    stage_name: str | None = Field(None, description="Stage that caused the error", max_length=MAX_STAGE_NAME_LENGTH)
+    details: dict[str, Any] = Field(default_factory=dict, description="Additional error details")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -363,8 +353,8 @@ class WorkflowValidationResponse(BaseModel):
     """Workflow validation result"""
 
     is_valid: bool = Field(..., description="Whether workflow is valid")
-    errors: List[WorkflowValidationError] = Field(default_factory=list, description="Validation errors")
-    warnings: List[str] = Field(default_factory=list, description="Validation warnings (non-blocking)")
+    errors: list[WorkflowValidationError] = Field(default_factory=list, description="Validation errors")
+    warnings: list[str] = Field(default_factory=list, description="Validation warnings (non-blocking)")
 
     model_config = ConfigDict(
         json_schema_extra={

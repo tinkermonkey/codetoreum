@@ -25,7 +25,7 @@ import type {
   ExecutionSummary,
   StartExecutionRequest,
 } from '../types'
-import { ApiError, createApiError, ErrorCode } from '../types/errors'
+
 import { apiConfig } from '../config/api.config'
 import { createResilienceDecoratorFromConfig } from '../infrastructure/resilience'
 import { dispatchEvent, AppEventType } from '../infrastructure/events'
@@ -372,7 +372,7 @@ export const projectConfigApi = {
       }>
       total_versions: number
     }>(`/config/projects/${projectId}/history`)
-    return response.history.map((entry, index) => ({
+    return response.history.map((entry) => ({
       id: `${response.config_id}-v${entry.version}`,
       project_id: response.config_id,
       config_type: response.config_type as 'project' | 'agent' | 'pipeline',

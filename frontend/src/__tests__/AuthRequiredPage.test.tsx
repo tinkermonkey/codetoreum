@@ -91,7 +91,7 @@ describe('AuthRequiredPage', () => {
         logout: jest.fn(),
       });
 
-      const { container } = render(
+      render(
         <MemoryRouter initialEntries={['/dashboard/settings']}>
           <Routes>
             <Route

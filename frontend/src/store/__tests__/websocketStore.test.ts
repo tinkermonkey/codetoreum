@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { useWebSocketStore, WebSocketEvent, WebSocketMessage } from '../websocketStore'
+import { useWebSocketStore } from '../websocketStore'
 import { useAuthStore } from '../authStore'
 
 // Mock WebSocket

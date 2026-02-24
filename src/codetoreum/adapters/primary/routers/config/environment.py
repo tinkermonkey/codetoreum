@@ -12,7 +12,7 @@ from codetoreum.adapters.primary.config_dtos import (
 )
 from codetoreum.adapters.primary.exception_mapper import map_exception_to_http
 from codetoreum.domain.exceptions import DomainError
-from codetoreum.infrastructure.security import validate_env_var_name, InvalidInputError
+from codetoreum.infrastructure.security import InvalidInputError, validate_env_var_name
 from codetoreum.ports.exceptions import PortError
 from codetoreum.ports.input.config_command import (
     AddEnvironmentVariableCommand,

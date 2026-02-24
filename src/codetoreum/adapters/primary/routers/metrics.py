@@ -6,22 +6,15 @@ and resilience infrastructure monitoring.
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from codetoreum.config import (
-    DEFAULT_METRICS_AGGREGATION_WINDOW_SECONDS,
-    MIN_METRICS_AGGREGATION_WINDOW_SECONDS,
-    MAX_METRICS_AGGREGATION_WINDOW_SECONDS,
-)
-from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
 from codetoreum.adapters.primary.metrics_dtos import (
-    ActiveAgentsResponse,
     ActiveAgentResponse,
+    ActiveAgentsResponse,
     AgentExecutionMetricsResponse,
-    ApiUsageResponse,
     ApiUsageQuotaResponse,
+    ApiUsageResponse,
     EndpointMetricsResponse,
     IntegrationStatusResponse,
     MetricNamesResponse,
@@ -31,12 +24,18 @@ from codetoreum.adapters.primary.metrics_dtos import (
     SimulationModeResponse,
     SystemHealthResponse,
 )
+from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
+from codetoreum.config import (
+    DEFAULT_METRICS_AGGREGATION_WINDOW_SECONDS,
+    MAX_METRICS_AGGREGATION_WINDOW_SECONDS,
+    MIN_METRICS_AGGREGATION_WINDOW_SECONDS,
+)
 from codetoreum.ports.input.metrics_query import IMetricsQueryPort
 
 
 def create_metrics_router(
     metrics_query_port: IMetricsQueryPort,
-    auth_deps: Optional[SimpleAuthDependencies] = None,
+    auth_deps: SimpleAuthDependencies | None = None,
 ) -> APIRouter:
     """
     Create the metrics REST API router.
@@ -156,8 +155,8 @@ def create_metrics_router(
         dependencies=auth_dependency,
     )
     async def get_performance_metrics(
-        start_time: Optional[datetime] = Query(None, description="Start of time range (default: last hour)"),
-        end_time: Optional[datetime] = Query(None, description="End of time range (default: now)"),
+        start_time: datetime | None = Query(None, description="Start of time range (default: last hour)"),
+        end_time: datetime | None = Query(None, description="End of time range (default: now)"),
         aggregation_window_seconds: int = Query(
             DEFAULT_METRICS_AGGREGATION_WINDOW_SECONDS,
             ge=MIN_METRICS_AGGREGATION_WINDOW_SECONDS,
@@ -240,8 +239,8 @@ def create_metrics_router(
         dependencies=auth_dependency,
     )
     async def get_resilience_metrics(
-        start_time: Optional[datetime] = Query(None, description="Start of time range (default: last hour)"),
-        end_time: Optional[datetime] = Query(None, description="End of time range (default: now)"),
+        start_time: datetime | None = Query(None, description="Start of time range (default: last hour)"),
+        end_time: datetime | None = Query(None, description="End of time range (default: now)"),
     ) -> ResilienceMetricsResponse:
         """
         Get resilience infrastructure metrics.
@@ -442,9 +441,9 @@ def create_metrics_router(
         dependencies=auth_dependency,
     )
     async def get_endpoint_metrics(
-        endpoint_path: Optional[str] = Query(None, description="Filter by specific endpoint"),
-        start_time: Optional[datetime] = Query(None, description="Start of time range (default: last hour)"),
-        end_time: Optional[datetime] = Query(None, description="End of time range (default: now)"),
+        endpoint_path: str | None = Query(None, description="Filter by specific endpoint"),
+        start_time: datetime | None = Query(None, description="Start of time range (default: last hour)"),
+        end_time: datetime | None = Query(None, description="End of time range (default: now)"),
     ) -> EndpointMetricsResponse:
         """
         Get per-endpoint API metrics.
@@ -518,9 +517,9 @@ def create_metrics_router(
         dependencies=auth_dependency,
     )
     async def get_agent_execution_metrics(
-        agent_name: Optional[str] = Query(None, description="Filter by specific agent"),
-        start_time: Optional[datetime] = Query(None, description="Start of time range (default: last hour)"),
-        end_time: Optional[datetime] = Query(None, description="End of time range (default: now)"),
+        agent_name: str | None = Query(None, description="Filter by specific agent"),
+        start_time: datetime | None = Query(None, description="Start of time range (default: last hour)"),
+        end_time: datetime | None = Query(None, description="End of time range (default: now)"),
     ) -> AgentExecutionMetricsResponse:
         """
         Get agent execution metrics.
@@ -598,7 +597,7 @@ def create_metrics_router(
         dependencies=auth_dependency,
     )
     async def list_metric_names(
-        prefix: Optional[str] = Query(None, description="Filter by prefix"),
+        prefix: str | None = Query(None, description="Filter by prefix"),
     ) -> MetricNamesResponse:
         """
         List available metric names.
@@ -776,9 +775,9 @@ def create_metrics_router(
         dependencies=auth_dependency,
     )
     async def get_repair_cycle_metrics(
-        agent_name: Optional[str] = Query(None, description="Filter by specific agent"),
-        start_time: Optional[datetime] = Query(None, description="Start of time range (default: last hour)"),
-        end_time: Optional[datetime] = Query(None, description="End of time range (default: now)"),
+        agent_name: str | None = Query(None, description="Filter by specific agent"),
+        start_time: datetime | None = Query(None, description="Start of time range (default: last hour)"),
+        end_time: datetime | None = Query(None, description="End of time range (default: now)"),
     ) -> RepairCycleMetricsResponse:
         """
         Get repair cycle metrics.

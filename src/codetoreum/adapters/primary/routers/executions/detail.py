@@ -4,7 +4,6 @@ Execution Detail Endpoints
 Handles retrieving detailed execution status and history.
 """
 
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi import status as http_status
@@ -87,7 +86,7 @@ def register_detail_endpoints(
     )
     async def get_execution_history(
         execution_id: str,
-        limit: Optional[int] = Query(None, ge=1, le=1000, description="Limit number of events (max 1000)"),
+        limit: int | None = Query(None, ge=1, le=1000, description="Limit number of events (max 1000)"),
     ) -> ExecutionHistoryResponse:
         """
         Get event history timeline for an execution.

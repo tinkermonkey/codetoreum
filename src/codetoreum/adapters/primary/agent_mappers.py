@@ -4,10 +4,8 @@ Agent Mappers
 Converts between domain models and API DTOs for agents.
 """
 
-from typing import Dict, Optional
 
 from codetoreum.adapters.primary.agent_dtos import (
-    AgentCapabilityDTO,
     AgentCommandResult,
     AgentExecutionStatsDTO,
     AgentListResponse,
@@ -16,9 +14,11 @@ from codetoreum.adapters.primary.agent_dtos import (
     CreateAgentRequest,
     UpdateAgentRequest,
 )
-from codetoreum.domain.agent import Agent, AgentCapability, AgentType
+from codetoreum.domain.agent import AgentCapability, AgentType
 from codetoreum.ports.input.agent_command import (
     AgentCommandResult as PortAgentCommandResult,
+)
+from codetoreum.ports.input.agent_command import (
     CreateAgentCommand,
     UpdateAgentCommand,
 )
@@ -34,7 +34,7 @@ class AgentMapper:
     ]
 
     @staticmethod
-    def _mask_sensitive_values(env_vars: Optional[Dict[str, str]]) -> Optional[Dict[str, str]]:
+    def _mask_sensitive_values(env_vars: dict[str, str] | None) -> dict[str, str] | None:
         """
         Mask sensitive environment variable values.
 

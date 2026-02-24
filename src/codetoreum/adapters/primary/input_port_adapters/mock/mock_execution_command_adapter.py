@@ -4,10 +4,10 @@ Mock Execution Command Adapter
 In-memory implementation of IExecutionCommandPort for development and testing.
 """
 
-from datetime import datetime, timezone
-from typing import Dict
 from threading import RLock
 
+from codetoreum.domain.agent_execution import AgentExecution
+from codetoreum.domain.exceptions import ExecutionNotFoundError, InvalidStateError
 from codetoreum.ports.input.execution_command import (
     ExecutionCommandResult,
     IExecutionCommandPort,
@@ -15,8 +15,6 @@ from codetoreum.ports.input.execution_command import (
     ResumeExecutionCommand,
     TerminateExecutionCommand,
 )
-from codetoreum.domain.agent_execution import AgentExecution, ExecutionStatus
-from codetoreum.domain.exceptions import ExecutionNotFoundError, InvalidStateError
 
 
 class MockExecutionCommandAdapter(IExecutionCommandPort):
@@ -25,7 +23,7 @@ class MockExecutionCommandAdapter(IExecutionCommandPort):
     """
 
     def __init__(self):
-        self._executions: Dict[str, AgentExecution] = {}
+        self._executions: dict[str, AgentExecution] = {}
         self._lock = RLock()
 
     def add_execution(self, execution: AgentExecution):

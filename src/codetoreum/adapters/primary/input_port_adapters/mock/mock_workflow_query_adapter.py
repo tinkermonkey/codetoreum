@@ -5,19 +5,17 @@ In-memory implementation of IWorkflowQueryPort for development and testing.
 """
 
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
 from threading import RLock
 
 from codetoreum.ports.input.workflow_query import (
     IWorkflowQueryPort,
+    StageInfo,
     WorkflowDefinitionInfo,
-    WorkflowSummaryInfo,
     WorkflowListResult,
+    WorkflowSummaryInfo,
+    WorkflowValidationResult,
     WorkflowVersionHistoryResult,
     WorkflowVersionInfo,
-    WorkflowValidationResult,
-    StageInfo,
-    StageTransitionInfo,
 )
 
 
@@ -27,11 +25,11 @@ class MockWorkflowQueryAdapter(IWorkflowQueryPort):
     """
 
     def __init__(self):
-        self._workflows: Dict[str, Dict] = {}
+        self._workflows: dict[str, dict] = {}
         self._lock = RLock()
 
     async def get_workflow(
-        self, workflow_id: str, version: Optional[int] = None
+        self, workflow_id: str, version: int | None = None
     ) -> WorkflowDefinitionInfo:
         """Get a workflow definition."""
         return WorkflowDefinitionInfo(
@@ -103,7 +101,7 @@ class MockWorkflowQueryAdapter(IWorkflowQueryPort):
         )
 
     async def validate_workflow(
-        self, workflow_id: str, version: Optional[int] = None
+        self, workflow_id: str, version: int | None = None
     ) -> WorkflowValidationResult:
         """Validate a workflow."""
         return WorkflowValidationResult(
@@ -113,8 +111,8 @@ class MockWorkflowQueryAdapter(IWorkflowQueryPort):
         )
 
     async def get_workflows_for_work_item_type(
-        self, work_item_type: str, project_id: Optional[str] = None
-    ) -> List[WorkflowSummaryInfo]:
+        self, work_item_type: str, project_id: str | None = None
+    ) -> list[WorkflowSummaryInfo]:
         """Get workflows for a work item type."""
         return []
 

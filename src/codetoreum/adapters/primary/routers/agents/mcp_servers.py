@@ -12,8 +12,8 @@ from codetoreum.adapters.primary.agent_dtos import (
 )
 from codetoreum.adapters.primary.agent_mappers import AgentMapper
 from codetoreum.ports.input.agent_command import (
-    IAgentCommandPort,
     AddMcpServerCommand,
+    IAgentCommandPort,
     RemoveMcpServerCommand,
 )
 from codetoreum.ports.input.agent_query import IAgentQueryPort

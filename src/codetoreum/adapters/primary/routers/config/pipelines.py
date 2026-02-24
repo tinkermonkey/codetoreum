@@ -6,8 +6,6 @@ Handles CRUD operations for pipeline configurations.
 
 from fastapi import APIRouter, HTTPException, Query, status
 
-from codetoreum.config import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, DEFAULT_OFFSET
-
 from codetoreum.adapters.primary.config_dtos import (
     ConfigurationCommandResponse,
     PipelineConfigResponse,
@@ -15,6 +13,7 @@ from codetoreum.adapters.primary.config_dtos import (
     UpdatePipelineConfigRequest,
 )
 from codetoreum.adapters.primary.exception_mapper import map_exception_to_http
+from codetoreum.config import DEFAULT_OFFSET, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.ports.exceptions import PortError
 from codetoreum.ports.input.config_command import (

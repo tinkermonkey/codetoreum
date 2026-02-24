@@ -5,10 +5,11 @@ In-memory implementation of IAgentCommandPort for development and testing.
 """
 
 from datetime import datetime, timezone
-from typing import Dict
 from threading import RLock
 from uuid import uuid4
 
+from codetoreum.domain.agent import Agent, AgentCapability
+from codetoreum.domain.exceptions import AgentNotFoundError, DomainError
 from codetoreum.ports.input.agent_command import (
     AddAgentCapabilityCommand,
     AddMcpServerCommand,
@@ -20,8 +21,6 @@ from codetoreum.ports.input.agent_command import (
     UpdateAgentCapabilityCommand,
     UpdateAgentCommand,
 )
-from codetoreum.domain.agent import Agent, AgentCapability, AgentType
-from codetoreum.domain.exceptions import AgentNotFoundError, DomainError
 
 
 class MockAgentCommandAdapter(IAgentCommandPort):
@@ -34,8 +33,8 @@ class MockAgentCommandAdapter(IAgentCommandPort):
     """
 
     def __init__(self):
-        self._agents: Dict[str, Agent] = {}
-        self._agents_by_name: Dict[str, str] = {}  # name -> agent_id
+        self._agents: dict[str, Agent] = {}
+        self._agents_by_name: dict[str, str] = {}  # name -> agent_id
         self._lock = RLock()
 
     async def create_agent(self, command: CreateAgentCommand) -> Agent:

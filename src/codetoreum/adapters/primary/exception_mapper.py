@@ -11,7 +11,6 @@ Design:
 - Single responsibility: translate exceptions to HTTP responses
 """
 
-from typing import Optional
 
 from fastapi import HTTPException, status
 
@@ -22,9 +21,12 @@ from codetoreum.domain.exceptions import (
     ExecutionNotFoundError,
     InvalidStateError,
     PipelineNotFoundError,
-    WorkItemNotFoundError as DomainWorkItemNotFoundError,
     WorkspaceNotFoundError,
 )
+from codetoreum.domain.exceptions import (
+    WorkItemNotFoundError as DomainWorkItemNotFoundError,
+)
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.logging import get_logger
 from codetoreum.ports.exceptions import (
     AuthenticationError,
@@ -35,33 +37,42 @@ from codetoreum.ports.exceptions import (
     RateLimitError,
     ResourceNotFoundError,
     TimeoutError,
-    ValidationError as PortValidationError,
 )
+from codetoreum.ports.exceptions import ValidationError as PortValidationError
 from codetoreum.ports.input.exceptions import (
     AgentExecutionNotFoundError,
-    AgentNotFoundError as InputPortAgentNotFoundError,
     ArtifactNotFoundError,
     CommandFileNotFoundError,
     CommandNotFoundError,
-    PermissionError as InputPortPermissionError,
-    PipelineNotFoundError as InputPortPipelineNotFoundError,
     PortException,
     ProjectNotFoundError,
     StageNotFoundError,
     SubAgentNotFoundError,
-    ValidationError as InputPortValidationError,
     VariableNotFoundError,
     WorkflowNotActiveError,
     WorkflowNotFoundError,
     WorkflowNotPausedError,
+)
+from codetoreum.ports.input.exceptions import (
+    AgentNotFoundError as InputPortAgentNotFoundError,
+)
+from codetoreum.ports.input.exceptions import (
+    PermissionError as InputPortPermissionError,
+)
+from codetoreum.ports.input.exceptions import (
+    PipelineNotFoundError as InputPortPipelineNotFoundError,
+)
+from codetoreum.ports.input.exceptions import (
+    ValidationError as InputPortValidationError,
+)
+from codetoreum.ports.input.exceptions import (
     WorkItemNotFoundError as InputPortWorkItemNotFoundError,
 )
-from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = get_logger(__name__)
 
 
-def map_exception_to_http(exc: Exception, default_detail: Optional[str] = None) -> HTTPException:
+def map_exception_to_http(exc: Exception, default_detail: str | None = None) -> HTTPException:
     """
     Map domain, port, and input port exceptions to HTTP exceptions.
 

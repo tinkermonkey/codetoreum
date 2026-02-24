@@ -4,21 +4,20 @@ Mock Config Command Adapter
 In-memory implementation of IConfigurationCommandPort for development and testing.
 """
 
-from typing import Dict
 from threading import RLock
 
 from codetoreum.ports.input.config_command import (
+    AddEnvironmentVariableCommand,
+    ConfigurationCommandResult,
     IConfigurationCommandPort,
-    UpdateProjectConfigCommand,
+    MountCommandCommand,
+    MountSubAgentCommand,
+    RemoveEnvironmentVariableCommand,
+    UnmountCommandCommand,
+    UnmountSubAgentCommand,
     UpdateAgentConfigCommand,
     UpdatePipelineConfigCommand,
-    AddEnvironmentVariableCommand,
-    RemoveEnvironmentVariableCommand,
-    MountCommandCommand,
-    UnmountCommandCommand,
-    MountSubAgentCommand,
-    UnmountSubAgentCommand,
-    ConfigurationCommandResult,
+    UpdateProjectConfigCommand,
 )
 
 
@@ -28,7 +27,7 @@ class MockConfigCommandAdapter(IConfigurationCommandPort):
     """
 
     def __init__(self, configuration_service=None):
-        self._configs: Dict[str, Dict] = {}
+        self._configs: dict[str, dict] = {}
         self._lock = RLock()
         self._service = configuration_service
 

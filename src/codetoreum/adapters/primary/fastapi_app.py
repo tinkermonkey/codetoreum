@@ -19,17 +19,14 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from fastapi import Depends, FastAPI, Header, Query, Request, Response, WebSocket
-
-# OpenTelemetry / Signoz integration
-from codetoreum.infrastructure.observability.config import ObservabilityConfig
-from codetoreum.infrastructure.observability.otel_setup import setup_opentelemetry
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -38,7 +35,6 @@ from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from codetoreum.config import DEFAULT_RATE_LIMIT, DEFAULT_API_PORT
 from codetoreum.adapters.primary.api_models import (
     HealthCheckResponse,
     ReadinessCheckResponse,
@@ -52,21 +48,31 @@ from codetoreum.adapters.primary.github_webhook_adapter import (
     ILogger,
 )
 from codetoreum.adapters.primary.rest_api_adapter import RestAPIAdapter
-from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
-from codetoreum.adapters.primary.websocket_adapter import WebSocketAdapter, WebSocketConfig
-from codetoreum.adapters.primary.routers.work_items import create_work_items_router
-from codetoreum.adapters.primary.routers.workflows import create_workflows_router
-from codetoreum.adapters.primary.routers.workflow_runs import create_workflow_runs_router
+from codetoreum.adapters.primary.routers.agents import create_agents_router
+from codetoreum.adapters.primary.routers.config import create_config_router
+from codetoreum.adapters.primary.routers.events import create_events_router
+from codetoreum.adapters.primary.routers.executions import create_executions_router
+from codetoreum.adapters.primary.routers.metrics import create_metrics_router
 from codetoreum.adapters.primary.routers.orchestrator import create_orchestrator_router
 from codetoreum.adapters.primary.routers.scheduler import create_scheduler_router
-from codetoreum.adapters.primary.routers.agents import create_agents_router
-from codetoreum.adapters.primary.routers.executions import create_executions_router
-from codetoreum.adapters.primary.routers.config import create_config_router
-from codetoreum.adapters.primary.routers.metrics import create_metrics_router
+from codetoreum.adapters.primary.routers.work_items import create_work_items_router
+from codetoreum.adapters.primary.routers.workflow_runs import (
+    create_workflow_runs_router,
+)
+from codetoreum.adapters.primary.routers.workflows import create_workflows_router
 from codetoreum.adapters.primary.routers.workspace import create_workspace_router
-from codetoreum.adapters.primary.routers.events import create_events_router
+from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
+from codetoreum.adapters.primary.websocket_adapter import (
+    WebSocketAdapter,
+    WebSocketConfig,
+)
+from codetoreum.config import DEFAULT_API_PORT, DEFAULT_RATE_LIMIT
 from codetoreum.infrastructure.auth import SimpleTokenAuthManager
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+
+# OpenTelemetry / Signoz integration
+from codetoreum.infrastructure.observability.config import ObservabilityConfig
+from codetoreum.infrastructure.observability.otel_setup import setup_opentelemetry
 from codetoreum.ports.input.agent_command import IAgentCommandPort
 from codetoreum.ports.input.agent_query import IAgentQueryPort
 from codetoreum.ports.input.config_command import IConfigurationCommandPort
@@ -74,17 +80,18 @@ from codetoreum.ports.input.config_query import IConfigurationQueryPort
 from codetoreum.ports.input.execution_command import IExecutionCommandPort
 from codetoreum.ports.input.execution_query import IExecutionQueryPort
 from codetoreum.ports.input.metrics_query import IMetricsQueryPort
-from codetoreum.ports.input.task_query import ITaskQueryPort
-from codetoreum.ports.input.workspace_query import IWorkspaceQueryPort
-from codetoreum.ports.input.workflow_command import IWorkflowCommandPort
-from codetoreum.ports.input.workflow_query import IWorkflowQueryPort
-from codetoreum.ports.input.workflow_run_query import IWorkflowRunQueryPort
-from codetoreum.ports.input.workflow_definition_command import IWorkflowDefinitionCommandPort
 from codetoreum.ports.input.orchestration_command import IOrchestrationCommandPort
+from codetoreum.ports.input.task_query import ITaskQueryPort
 from codetoreum.ports.input.work_item_command import IWorkItemCommandPort
 from codetoreum.ports.input.work_item_query import IWorkItemQueryPort
+from codetoreum.ports.input.workflow_command import IWorkflowCommandPort
+from codetoreum.ports.input.workflow_definition_command import (
+    IWorkflowDefinitionCommandPort,
+)
+from codetoreum.ports.input.workflow_query import IWorkflowQueryPort
+from codetoreum.ports.input.workflow_run_query import IWorkflowRunQueryPort
+from codetoreum.ports.input.workspace_query import IWorkspaceQueryPort
 from codetoreum.ports.output.event_store import IEventStore
-
 
 logger = logging.getLogger(__name__)
 
@@ -234,10 +241,10 @@ def create_app(
     event_bus: IEventBus,
     config_service: IConfigurationService,
     logger: ILogger,
-    auth_secret_key: Optional[str] = None,
+    auth_secret_key: str | None = None,
     disable_auth: bool = False,
-    cors_origins: Optional[list] = None,
-    container_recovery_service: Optional[Any] = None,
+    cors_origins: list | None = None,
+    container_recovery_service: Any | None = None,
 ) -> FastAPI:
     """
     Create and configure FastAPI application.
@@ -421,7 +428,7 @@ def create_app(
         x_github_delivery: str = Header(...),
         x_github_event: str = Header(...),
         x_hub_signature_256: str = Header(...),
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Receives and processes GitHub webhook events.
 
@@ -551,7 +558,7 @@ def create_app(
     @app.websocket("/api/v2/events/stream")
     async def websocket_events(
         websocket: WebSocket,
-        token: Optional[str] = Query(None),
+        token: str | None = Query(None),
     ):
         """
         WebSocket endpoint for real-time event streaming.
@@ -649,7 +656,7 @@ def create_app(
     @app.websocket("/ws/events")
     async def websocket_events_legacy(
         websocket: WebSocket,
-        token: Optional[str] = Query(None),
+        token: str | None = Query(None),
     ):
         """Legacy WebSocket endpoint. Use /api/v2/events/stream instead."""
         await websocket_adapter.handle_websocket(websocket, token=token)
@@ -740,7 +747,7 @@ def create_app(
         summary="Logout and clear authentication cookie",
         dependencies=[Depends(auth_deps.require_auth)] if auth_deps else [],
     )
-    async def logout(response: Response) -> Dict[str, Any]:
+    async def logout(response: Response) -> dict[str, Any]:
         """
         Logout by clearing the httpOnly authentication cookie.
 
@@ -801,40 +808,36 @@ def create_development_app() -> FastAPI:
     from codetoreum.adapters.primary.github_webhook_adapter import (
         IConfigurationService,
         IEventBus,
-        ILogger,
     )
+    from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
     from codetoreum.ports.input.config_command import (
-        IConfigurationCommandPort,
         ConfigurationCommandResult,
+        IConfigurationCommandPort,
     )
     from codetoreum.ports.input.task_query import (
-        ITaskQueryPort,
-        ExecutionStatusInfo,
-        ExecutionStatus,
-        ExecutionListResult,
-        ExecutionListItem,
         ArtifactListResult,
         ExecutionHistory,
+        ExecutionListResult,
+        ExecutionStatus,
+        ExecutionStatusInfo,
+        ITaskQueryPort,
+    )
+    from codetoreum.ports.input.work_item_command import (
+        CreateWorkItemCommand,
+        IWorkItemCommandPort,
+        UpdateWorkItemCommand,
+        WorkItemCommandResult,
+    )
+    from codetoreum.ports.input.work_item_query import (
+        IWorkItemQueryPort,
+        WorkItemHistory,
+        WorkItemListResult,
     )
     from codetoreum.ports.input.workflow_command import (
         IWorkflowCommandPort,
         StartWorkflowCommand,
         WorkflowCommandResult,
     )
-    from codetoreum.ports.input.work_item_command import (
-        IWorkItemCommandPort,
-        CreateWorkItemCommand,
-        UpdateWorkItemCommand,
-        WorkItemCommandResult,
-    )
-    from codetoreum.ports.input.work_item_query import (
-        IWorkItemQueryPort,
-        WorkItemFilters,
-        PaginationParams as WIPaginationParams,
-        WorkItemListResult,
-        WorkItemHistory,
-    )
-    from codetoreum.domain.work_item import WorkItem, WorkItemStatus, WorkItemPriority
 
     # Mock implementations for development
     class MockWorkflowCommandPort(IWorkflowCommandPort):
@@ -957,10 +960,10 @@ def create_development_app() -> FastAPI:
         async def list_pipelines(self, project_id: str) -> list:
             return []
 
-        async def search_configs(self, query: str, config_type: Optional[str] = None) -> list:
+        async def search_configs(self, query: str, config_type: str | None = None) -> list:
             return []
 
-        async def get_config_version(self, config_id: str, version: int) -> Dict[str, Any]:
+        async def get_config_version(self, config_id: str, version: int) -> dict[str, Any]:
             return {}
 
         async def list_config_versions(self, config_id: str, limit: int = 10) -> list:
@@ -1366,7 +1369,11 @@ def create_development_app() -> FastAPI:
         """Mock workflow run query port for development."""
 
         async def get_workflow_run(self, workflow_run_id: str):
-            from codetoreum.ports.input.workflow_run_query import WorkflowRunInfo, WorkflowRunStatus, WorkflowRunStageInfo
+            from codetoreum.ports.input.workflow_run_query import (
+                WorkflowRunInfo,
+                WorkflowRunStageInfo,
+                WorkflowRunStatus,
+            )
             return WorkflowRunInfo(
                 id=workflow_run_id,
                 work_item_id="wi-mock-123",
@@ -1405,7 +1412,11 @@ def create_development_app() -> FastAPI:
             )
 
         async def list_workflow_runs(self, filters=None, pagination=None):
-            from codetoreum.ports.input.workflow_run_query import WorkflowRunListResult, WorkflowRunSummary, WorkflowRunStatus
+            from codetoreum.ports.input.workflow_run_query import (
+                WorkflowRunListResult,
+                WorkflowRunStatus,
+                WorkflowRunSummary,
+            )
             return WorkflowRunListResult(
                 runs=[
                     WorkflowRunSummary(
@@ -1433,7 +1444,9 @@ def create_development_app() -> FastAPI:
             )
 
         async def get_workflow_run_events(self, workflow_run_id: str, offset=0, limit=50, event_types=None, since=None):
-            from codetoreum.ports.input.workflow_run_query import WorkflowRunEventsResult
+            from codetoreum.ports.input.workflow_run_query import (
+                WorkflowRunEventsResult,
+            )
             return WorkflowRunEventsResult(
                 events=[
                     {
@@ -1457,7 +1470,12 @@ def create_development_app() -> FastAPI:
             )
 
         async def get_workflow_run_audit(self, workflow_run_id: str, offset=0, limit=100, include_validation=True):
-            from codetoreum.ports.input.workflow_run_query import WorkflowRunSummary, WorkflowRunStatus, WorkflowRunAuditResult
+            from codetoreum.ports.input.workflow_run_query import (
+                WorkflowRunAuditResult,
+                WorkflowRunStatus,
+                WorkflowRunSummary,
+            )
+
             # Mock audit response
             return WorkflowRunAuditResult(
                 workflow_run=WorkflowRunSummary(
@@ -1510,7 +1528,10 @@ def create_development_app() -> FastAPI:
         """Mock workflow query port for development."""
 
         async def get_workflow(self, workflow_id: str, version=None):
-            from codetoreum.ports.input.workflow_query import WorkflowDefinitionInfo, StageInfo, StageTransitionInfo
+            from codetoreum.ports.input.workflow_query import (
+                StageInfo,
+                WorkflowDefinitionInfo,
+            )
             return WorkflowDefinitionInfo(
                 id=workflow_id,
                 name="mock-workflow",
@@ -1537,7 +1558,10 @@ def create_development_app() -> FastAPI:
             )
 
         async def list_workflows(self, filters=None, pagination=None):
-            from codetoreum.ports.input.workflow_query import WorkflowListResult, WorkflowSummaryInfo
+            from codetoreum.ports.input.workflow_query import (
+                WorkflowListResult,
+                WorkflowSummaryInfo,
+            )
             summary = WorkflowSummaryInfo(
                 id="wf-mock-123",
                 name="mock-workflow",
@@ -1560,7 +1584,10 @@ def create_development_app() -> FastAPI:
             )
 
         async def get_workflow_versions(self, workflow_id: str, limit=10):
-            from codetoreum.ports.input.workflow_query import WorkflowVersionHistoryResult, WorkflowVersionInfo
+            from codetoreum.ports.input.workflow_query import (
+                WorkflowVersionHistoryResult,
+                WorkflowVersionInfo,
+            )
             return WorkflowVersionHistoryResult(
                 workflow_id=workflow_id,
                 versions=[
@@ -1592,7 +1619,9 @@ def create_development_app() -> FastAPI:
         """Mock workflow definition command port for development."""
 
         async def create_workflow_definition(self, command):
-            from codetoreum.ports.input.workflow_definition_command import WorkflowDefinitionCommandResult
+            from codetoreum.ports.input.workflow_definition_command import (
+                WorkflowDefinitionCommandResult,
+            )
             return WorkflowDefinitionCommandResult(
                 success=True,
                 workflow_id="wf-mock-123",
@@ -1601,7 +1630,9 @@ def create_development_app() -> FastAPI:
             )
 
         async def update_workflow_definition(self, command):
-            from codetoreum.ports.input.workflow_definition_command import WorkflowDefinitionCommandResult
+            from codetoreum.ports.input.workflow_definition_command import (
+                WorkflowDefinitionCommandResult,
+            )
             return WorkflowDefinitionCommandResult(
                 success=True,
                 workflow_id=command.workflow_id,
@@ -1610,7 +1641,9 @@ def create_development_app() -> FastAPI:
             )
 
         async def delete_workflow_definition(self, command):
-            from codetoreum.ports.input.workflow_definition_command import WorkflowDefinitionCommandResult
+            from codetoreum.ports.input.workflow_definition_command import (
+                WorkflowDefinitionCommandResult,
+            )
             return WorkflowDefinitionCommandResult(
                 success=True,
                 workflow_id=command.workflow_id,
@@ -1619,7 +1652,9 @@ def create_development_app() -> FastAPI:
             )
 
         async def activate_workflow_definition(self, workflow_id: str):
-            from codetoreum.ports.input.workflow_definition_command import WorkflowDefinitionCommandResult
+            from codetoreum.ports.input.workflow_definition_command import (
+                WorkflowDefinitionCommandResult,
+            )
             return WorkflowDefinitionCommandResult(
                 success=True,
                 workflow_id=workflow_id,
@@ -1628,7 +1663,9 @@ def create_development_app() -> FastAPI:
             )
 
         async def deactivate_workflow_definition(self, workflow_id: str):
-            from codetoreum.ports.input.workflow_definition_command import WorkflowDefinitionCommandResult
+            from codetoreum.ports.input.workflow_definition_command import (
+                WorkflowDefinitionCommandResult,
+            )
             return WorkflowDefinitionCommandResult(
                 success=True,
                 workflow_id=workflow_id,
@@ -1640,7 +1677,9 @@ def create_development_app() -> FastAPI:
         """Mock orchestration command port for development."""
 
         async def start_execution(self, command):
-            from codetoreum.ports.input.orchestration_command import OrchestrationCommandResult
+            from codetoreum.ports.input.orchestration_command import (
+                OrchestrationCommandResult,
+            )
             return OrchestrationCommandResult(
                 success=True,
                 execution_id="exec-mock-123",
@@ -1651,7 +1690,9 @@ def create_development_app() -> FastAPI:
             )
 
         async def cancel_execution(self, command):
-            from codetoreum.ports.input.orchestration_command import OrchestrationCommandResult
+            from codetoreum.ports.input.orchestration_command import (
+                OrchestrationCommandResult,
+            )
             return OrchestrationCommandResult(
                 success=True,
                 execution_id="exec-mock-123",
@@ -1661,7 +1702,9 @@ def create_development_app() -> FastAPI:
             )
 
         async def pause_execution(self, command):
-            from codetoreum.ports.input.orchestration_command import OrchestrationCommandResult
+            from codetoreum.ports.input.orchestration_command import (
+                OrchestrationCommandResult,
+            )
             return OrchestrationCommandResult(
                 success=True,
                 execution_id="exec-mock-123",
@@ -1671,7 +1714,9 @@ def create_development_app() -> FastAPI:
             )
 
         async def resume_execution(self, command):
-            from codetoreum.ports.input.orchestration_command import OrchestrationCommandResult
+            from codetoreum.ports.input.orchestration_command import (
+                OrchestrationCommandResult,
+            )
             return OrchestrationCommandResult(
                 success=True,
                 execution_id="exec-mock-123",
@@ -1681,7 +1726,9 @@ def create_development_app() -> FastAPI:
             )
 
         async def check_entry_conditions(self, work_item_id: str, workflow_id: str, stage_name=None):
-            from codetoreum.ports.input.orchestration_command import EntryConditionCheckResult
+            from codetoreum.ports.input.orchestration_command import (
+                EntryConditionCheckResult,
+            )
             return EntryConditionCheckResult(
                 can_start=True,
                 stage_name=stage_name or "development",
@@ -1906,8 +1953,8 @@ def create_development_app() -> FastAPI:
         """Mock execution query port for development."""
 
         async def get_execution(self, execution_id: str):
-            from codetoreum.ports.input.execution_query import ExecutionInfo
             from codetoreum.domain.agent_execution import ExecutionStatus
+            from codetoreum.ports.input.execution_query import ExecutionInfo
             return ExecutionInfo(
                 id=execution_id,
                 agent_id="agent-mock-123",
@@ -1931,8 +1978,11 @@ def create_development_app() -> FastAPI:
             )
 
         async def list_executions(self, filters=None, pagination=None):
-            from codetoreum.ports.input.execution_query import ExecutionInfo, ExecutionListResult
             from codetoreum.domain.agent_execution import ExecutionStatus
+            from codetoreum.ports.input.execution_query import (
+                ExecutionInfo,
+                ExecutionListResult,
+            )
             return ExecutionListResult(
                 executions=[
                     ExecutionInfo(
@@ -2068,7 +2118,11 @@ def create_development_app() -> FastAPI:
         """Mock metrics query port for development."""
 
         async def get_system_health(self):
-            from codetoreum.ports.input.metrics_query import SystemHealthInfo, ComponentHealthInfo, ComponentHealth
+            from codetoreum.ports.input.metrics_query import (
+                ComponentHealth,
+                ComponentHealthInfo,
+                SystemHealthInfo,
+            )
             return SystemHealthInfo(
                 status=ComponentHealth.HEALTHY,
                 components=[
@@ -2087,7 +2141,10 @@ def create_development_app() -> FastAPI:
             )
 
         async def get_component_health(self, component_name: str):
-            from codetoreum.ports.input.metrics_query import ComponentHealthInfo, ComponentHealth
+            from codetoreum.ports.input.metrics_query import (
+                ComponentHealth,
+                ComponentHealthInfo,
+            )
             return ComponentHealthInfo(
                 component_name=component_name,
                 status=ComponentHealth.HEALTHY,
@@ -2135,7 +2192,10 @@ def create_development_app() -> FastAPI:
             )
 
         async def get_integration_status(self):
-            from codetoreum.ports.input.metrics_query import IntegrationStatus, ComponentHealth
+            from codetoreum.ports.input.metrics_query import (
+                ComponentHealth,
+                IntegrationStatus,
+            )
             return IntegrationStatus(
                 github_connected=True,
                 github_api_calls_remaining=5000,
@@ -2265,7 +2325,11 @@ def create_development_app() -> FastAPI:
         """Mock workspace query port for development."""
 
         async def get_workspace(self, workspace_id: str):
-            from codetoreum.ports.input.workspace_query import WorkspaceInfo, WorkspaceStatus, ResourceUsage
+            from codetoreum.ports.input.workspace_query import (
+                ResourceUsage,
+                WorkspaceInfo,
+                WorkspaceStatus,
+            )
             return WorkspaceInfo(
                 workspace_id=workspace_id,
                 execution_id="exec-123",
@@ -2376,7 +2440,10 @@ app = create_development_app()
 _otel_instrumented = False
 
 if not _otel_instrumented:
-    from codetoreum.infrastructure.observability import ObservabilityConfig, setup_opentelemetry
+    from codetoreum.infrastructure.observability import (
+        ObservabilityConfig,
+        setup_opentelemetry,
+    )
 
     _otel_config = ObservabilityConfig.from_env()
     if _otel_config.enabled and _otel_config.traces_enabled and _otel_config.signoz.enabled:

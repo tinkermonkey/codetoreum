@@ -27,20 +27,6 @@ function getStateIcon(state: CircuitBreakerState) {
 }
 
 /**
- * Get text color for circuit breaker state
- */
-function getStateColor(state: CircuitBreakerState): string {
-  switch (state) {
-    case 'closed':
-      return 'text-green-500'
-    case 'half_open':
-      return 'text-yellow-500'
-    case 'open':
-      return 'text-red-500'
-  }
-}
-
-/**
  * Get label for circuit breaker state
  */
 function getStateLabel(state: CircuitBreakerState): string {

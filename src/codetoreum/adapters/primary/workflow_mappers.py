@@ -6,55 +6,52 @@ This keeps the domain layer independent of API concerns.
 """
 
 from datetime import datetime, timezone
-from typing import List
 
-from codetoreum.adapters.primary.workflow_dtos import (
-    CreateWorkflowRequest,
-    UpdateWorkflowRequest,
-    WorkflowResponse,
-    WorkflowSummaryResponse,
-    WorkflowListResponse,
-    WorkflowStageResponse,
-    StageTransition,
-    StageEntryCondition,
-    WorkflowCommandResult,
-    WorkflowVersionResponse,
-    WorkflowVersionListResponse,
-    WorkflowValidationError,
-    WorkflowValidationResponse,
-)
 from codetoreum.adapters.primary.orchestration_dtos import (
+    ConditionValidationResult,
+    EntryConditionValidationResponse,
+    ExecutionQueueResponse,
+    QueuedExecutionInfo,
     StartWorkflowExecutionRequest,
     StartWorkflowExecutionResponse,
     WorkflowExecutionResponse,
-    QueuedExecutionInfo,
-    ExecutionQueueResponse,
-    EntryConditionValidationResponse,
-    ConditionValidationResult,
 )
+from codetoreum.adapters.primary.workflow_dtos import (
+    CreateWorkflowRequest,
+    StageEntryCondition,
+    StageTransition,
+    UpdateWorkflowRequest,
+    WorkflowCommandResult,
+    WorkflowListResponse,
+    WorkflowResponse,
+    WorkflowStageResponse,
+    WorkflowSummaryResponse,
+    WorkflowValidationError,
+    WorkflowValidationResponse,
+    WorkflowVersionListResponse,
+    WorkflowVersionResponse,
+)
+from codetoreum.ports.input.orchestration_command import (
+    EntryConditionCheckResult,
+    ExecutionPriority,
+    OrchestrationCommandResult,
+    StartExecutionCommand,
+)
+from codetoreum.ports.input.task_query import ExecutionListResult
 from codetoreum.ports.input.workflow_definition_command import (
     CreateWorkflowDefinitionCommand,
-    UpdateWorkflowDefinitionCommand,
     StageDefinition,
     StageTransitionDefinition,
+    UpdateWorkflowDefinitionCommand,
     WorkflowDefinitionCommandResult,
 )
 from codetoreum.ports.input.workflow_query import (
     WorkflowDefinitionInfo,
-    WorkflowSummaryInfo,
     WorkflowListResult,
-    WorkflowVersionHistoryResult,
+    WorkflowSummaryInfo,
     WorkflowValidationResult,
-    StageInfo,
-    StageTransitionInfo,
+    WorkflowVersionHistoryResult,
 )
-from codetoreum.ports.input.orchestration_command import (
-    StartExecutionCommand,
-    ExecutionPriority,
-    OrchestrationCommandResult,
-    EntryConditionCheckResult,
-)
-from codetoreum.ports.input.task_query import ExecutionListResult, ExecutionListItem
 
 
 class WorkflowMapper:

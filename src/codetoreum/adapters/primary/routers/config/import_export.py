@@ -4,7 +4,6 @@ Configuration Import/Export Endpoints
 Handles file uploads for configuration imports (YAML, JSON, etc.).
 """
 
-from typing import Optional
 
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
@@ -16,8 +15,8 @@ class ImportResponse(BaseModel):
     """Response for import operations"""
     success: bool
     message: str
-    imported_count: Optional[int] = None
-    errors: Optional[list[str]] = None
+    imported_count: int | None = None
+    errors: list[str] | None = None
 
 
 def register_import_export_endpoints(router: APIRouter) -> None:

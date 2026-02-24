@@ -4,27 +4,26 @@ Workflow Run Mappers
 Maps between domain models and DTOs for workflow runs.
 """
 
-from typing import List
 
+from codetoreum.adapters.primary.audit_dtos import (
+    AuditStageInfo,
+    AuditValidationResult,
+    WorkflowRunAuditResponse,
+)
 from codetoreum.adapters.primary.workflow_run_dtos import (
-    WorkflowRunSummaryResponse,
-    WorkflowRunResponse,
-    WorkflowRunListResponse,
-    WorkflowRunStageResponse,
     WorkflowEventResponse,
     WorkflowEventsListResponse,
-)
-from codetoreum.adapters.primary.audit_dtos import (
-    WorkflowRunAuditResponse,
-    AuditValidationResult,
-    AuditStageInfo,
+    WorkflowRunListResponse,
+    WorkflowRunResponse,
+    WorkflowRunStageResponse,
+    WorkflowRunSummaryResponse,
 )
 from codetoreum.ports.input.workflow_run_query import (
+    WorkflowRunAuditResult,
     WorkflowRunInfo,
-    WorkflowRunSummary,
     WorkflowRunListResult,
     WorkflowRunStageInfo,
-    WorkflowRunAuditResult,
+    WorkflowRunSummary,
 )
 
 
@@ -146,7 +145,7 @@ class WorkflowRunMapper:
         )
 
     @staticmethod
-    def to_events_list_response(events: List[dict], total_count: int, offset: int, limit: int, has_next: bool) -> WorkflowEventsListResponse:
+    def to_events_list_response(events: list[dict], total_count: int, offset: int, limit: int, has_next: bool) -> WorkflowEventsListResponse:
         """
         Convert list of events to events list response DTO.
 

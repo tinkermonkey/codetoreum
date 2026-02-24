@@ -5,21 +5,19 @@ including login, token refresh, user management, and API key management.
 """
 
 from datetime import datetime
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
 
-from codetoreum.config import (
-    MIN_USERNAME_LENGTH,
-    MAX_USERNAME_LENGTH,
-    MIN_PASSWORD_LENGTH,
-    MIN_API_KEY_NAME_LENGTH,
-    MAX_API_KEY_NAME_LENGTH,
-)
-
 from codetoreum.adapters.primary.auth_dependencies import AuthDependencies
+from codetoreum.config import (
+    MAX_API_KEY_NAME_LENGTH,
+    MAX_USERNAME_LENGTH,
+    MIN_API_KEY_NAME_LENGTH,
+    MIN_PASSWORD_LENGTH,
+    MIN_USERNAME_LENGTH,
+)
 from codetoreum.domain.user import AuthContext, Permission, UserRole
 from codetoreum.ports.input.authentication import (
     AuthenticationError,
@@ -32,7 +30,6 @@ from codetoreum.ports.input.authentication import (
     UserNotFoundError,
     ValidationError,
 )
-
 
 # ============================================================================
 # Request/Response Models
@@ -52,7 +49,7 @@ class LoginResponse(BaseModel):
     access_token: str = Field(..., description="JWT access token")
     token_type: str = Field(default="bearer", description="Token type")
     expires_in: int = Field(..., description="Token expiration in seconds")
-    refresh_token: Optional[str] = Field(None, description="Refresh token")
+    refresh_token: str | None = Field(None, description="Refresh token")
 
 
 class RefreshTokenRequest(BaseModel):
@@ -73,10 +70,10 @@ class CreateUserRequest(BaseModel):
 class UpdateUserRequest(BaseModel):
     """Update user request model."""
 
-    email: Optional[EmailStr] = Field(None, description="Email address")
-    password: Optional[str] = Field(None, min_length=MIN_PASSWORD_LENGTH, description="Password")
-    roles: Optional[list[UserRole]] = Field(None, description="User roles")
-    is_active: Optional[bool] = Field(None, description="Active status")
+    email: EmailStr | None = Field(None, description="Email address")
+    password: str | None = Field(None, min_length=MIN_PASSWORD_LENGTH, description="Password")
+    roles: list[UserRole] | None = Field(None, description="User roles")
+    is_active: bool | None = Field(None, description="Active status")
 
 
 class UserResponse(BaseModel):
@@ -89,7 +86,7 @@ class UserResponse(BaseModel):
     is_active: bool = Field(..., description="Active status")
     is_verified: bool = Field(..., description="Verified status")
     created_at: datetime = Field(..., description="Creation timestamp")
-    last_login_at: Optional[datetime] = Field(None, description="Last login timestamp")
+    last_login_at: datetime | None = Field(None, description="Last login timestamp")
 
 
 class CreateAPIKeyRequest(BaseModel):
@@ -99,7 +96,7 @@ class CreateAPIKeyRequest(BaseModel):
     roles: list[UserRole] = Field(
         default=[UserRole.SERVICE_ACCOUNT], description="API key roles"
     )
-    expires_at: Optional[datetime] = Field(None, description="Expiration timestamp")
+    expires_at: datetime | None = Field(None, description="Expiration timestamp")
 
 
 class APIKeyResponse(BaseModel):
@@ -107,12 +104,12 @@ class APIKeyResponse(BaseModel):
 
     id: UUID = Field(..., description="API key ID")
     name: str = Field(..., description="API key name")
-    key: Optional[str] = Field(None, description="API key (only returned on creation)")
+    key: str | None = Field(None, description="API key (only returned on creation)")
     roles: list[UserRole] = Field(..., description="API key roles")
     is_active: bool = Field(..., description="Active status")
-    expires_at: Optional[datetime] = Field(None, description="Expiration timestamp")
+    expires_at: datetime | None = Field(None, description="Expiration timestamp")
     created_at: datetime = Field(..., description="Creation timestamp")
-    last_used_at: Optional[datetime] = Field(None, description="Last usage timestamp")
+    last_used_at: datetime | None = Field(None, description="Last usage timestamp")
 
 
 class MeResponse(BaseModel):

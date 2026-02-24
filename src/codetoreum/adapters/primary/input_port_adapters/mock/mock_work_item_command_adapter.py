@@ -5,10 +5,11 @@ In-memory implementation of IWorkItemCommandPort for development and testing.
 """
 
 from datetime import datetime, timezone
-from typing import Dict
 from threading import RLock
 from uuid import uuid4
 
+from codetoreum.domain.exceptions import WorkItemNotFoundError
+from codetoreum.domain.work_item import WorkItem, WorkItemStatus
 from codetoreum.ports.input.work_item_command import (
     AssignAgentCommand,
     AttachWorkflowCommand,
@@ -20,8 +21,6 @@ from codetoreum.ports.input.work_item_command import (
     UpdateWorkItemCommand,
     WorkItemCommandResult,
 )
-from codetoreum.domain.work_item import WorkItem, WorkItemStatus
-from codetoreum.domain.exceptions import WorkItemNotFoundError, DomainError
 
 
 class MockWorkItemCommandAdapter(IWorkItemCommandPort):
@@ -30,7 +29,7 @@ class MockWorkItemCommandAdapter(IWorkItemCommandPort):
     """
 
     def __init__(self):
-        self._work_items: Dict[str, WorkItem] = {}
+        self._work_items: dict[str, WorkItem] = {}
         self._lock = RLock()
 
     async def create_work_item(self, command: CreateWorkItemCommand) -> WorkItem:

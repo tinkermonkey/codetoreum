@@ -4,7 +4,6 @@ This module provides FastAPI dependencies for authentication and
 authorization using JWT tokens, API keys, and session cookies.
 """
 
-from typing import Optional
 
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -39,8 +38,8 @@ class AuthDependencies:
 
     async def get_current_user(
         self,
-        credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
-        x_api_key: Optional[str] = Header(None),
+        credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+        x_api_key: str | None = Header(None),
     ) -> AuthContext:
         """Get current authenticated user from JWT token or API key.
 
@@ -88,9 +87,9 @@ class AuthDependencies:
 
     async def get_optional_user(
         self,
-        credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
-        x_api_key: Optional[str] = Header(None),
-    ) -> Optional[AuthContext]:
+        credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+        x_api_key: str | None = Header(None),
+    ) -> AuthContext | None:
         """Get current authenticated user or None if not authenticated.
 
         This dependency can be used on endpoints that optionally support authentication.

@@ -25,7 +25,7 @@ from .logs import register_logs_endpoints
 def create_executions_router(
     command_port: IExecutionCommandPort,
     query_port: IExecutionQueryPort,
-    auth_deps: Optional[SimpleAuthDependencies] = None,
+    auth_deps: SimpleAuthDependencies | None = None,
 ) -> APIRouter:
     """
     Create the executions REST API router.

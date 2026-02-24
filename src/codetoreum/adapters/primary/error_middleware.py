@@ -308,6 +308,7 @@ async def error_handling_middleware(request: Request, call_next: Callable):
 # from starlette.middleware.base import BaseHTTPMiddleware
 # from codetoreum.infrastructure.logging import configure_logging
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+
 #
 # # Configure logging at application startup
 # configure_logging(

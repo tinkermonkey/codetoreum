@@ -7,13 +7,13 @@ Provides endpoints for creating, updating, and deleting agents.
 from fastapi import APIRouter, HTTPException, status
 
 from codetoreum.adapters.primary.agent_dtos import (
+    AgentCommandResult,
     AgentResponse,
     CreateAgentRequest,
     UpdateAgentRequest,
-    AgentCommandResult,
 )
 from codetoreum.adapters.primary.agent_mappers import AgentMapper
-from codetoreum.infrastructure.audit import get_audit_logger, AuditEventType
+from codetoreum.infrastructure.audit import AuditEventType, get_audit_logger
 from codetoreum.ports.input.agent_command import IAgentCommandPort
 from codetoreum.ports.input.agent_query import IAgentQueryPort
 

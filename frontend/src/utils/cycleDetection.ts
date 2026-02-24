@@ -1,5 +1,5 @@
 import type { WorkflowEvent } from '@/types/workflow-event'
-import type { Cycle, CycleType, AgentExecution } from '@/types/flow'
+import type { Cycle } from '@/types/flow'
 
 /**
  * Detects strongly connected components (cycles) in the event graph

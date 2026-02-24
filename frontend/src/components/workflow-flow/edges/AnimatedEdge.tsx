@@ -3,7 +3,6 @@ import { BaseEdge, EdgeLabelRenderer, EdgeProps, getSmoothStepPath } from '@xyfl
 
 export const AnimatedEdge = memo(
   ({
-    id,
     sourceX,
     sourceY,
     targetX,

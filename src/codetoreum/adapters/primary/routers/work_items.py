@@ -5,39 +5,39 @@ Provides RESTful CRUD endpoints for work items (issues, tasks) with
 filtering, pagination, and search capabilities.
 """
 
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-
-from codetoreum.config import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, DEFAULT_OFFSET
 
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
 from codetoreum.adapters.primary.work_item_dtos import (
     CreateWorkItemRequest,
     UpdateWorkItemRequest,
-    WorkItemResponse,
+    WorkItemCommandResult,
     WorkItemDetailResponse,
     WorkItemListResponse,
-    WorkItemCommandResult,
+    WorkItemResponse,
 )
 from codetoreum.adapters.primary.work_item_mappers import WorkItemMapper
-from codetoreum.domain.work_item import WorkItemStatus, WorkItemPriority
-from codetoreum.infrastructure.security import sanitize_search_query, InvalidInputError
+from codetoreum.config import DEFAULT_OFFSET, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
+from codetoreum.domain.work_item import WorkItemPriority, WorkItemStatus
+from codetoreum.infrastructure.security import InvalidInputError, sanitize_search_query
 from codetoreum.ports.input.work_item_command import IWorkItemCommandPort
 from codetoreum.ports.input.work_item_query import (
     IWorkItemQueryPort,
-    WorkItemFilters,
-    PaginationParams as DomainPaginationParams,
     SortField,
     SortOrder,
+    WorkItemFilters,
     WorkItemSearchParams,
+)
+from codetoreum.ports.input.work_item_query import (
+    PaginationParams as DomainPaginationParams,
 )
 
 
 def create_work_items_router(
     command_port: IWorkItemCommandPort,
     query_port: IWorkItemQueryPort,
-    auth_deps: Optional[SimpleAuthDependencies] = None,
+    auth_deps: SimpleAuthDependencies | None = None,
 ) -> APIRouter:
     """
     Create the work items REST API router.
@@ -137,13 +137,13 @@ def create_work_items_router(
         response_description="List of work items",
     )
     async def list_work_items(
-        project_id: Optional[str] = Query(None, description="Filter by project ID"),
-        status: Optional[str] = Query(None, description="Filter by status (NEW, ASSIGNED, IN_PROGRESS, etc.)"),
-        assignee: Optional[str] = Query(None, description="Filter by assigned agent ID"),
-        labels: Optional[str] = Query(None, description="Filter by labels (comma-separated, AND logic)"),
-        workflow_stage: Optional[str] = Query(None, description="Filter by workflow stage"),
-        priority: Optional[str] = Query(None, description="Filter by priority (LOW, MEDIUM, HIGH, CRITICAL)"),
-        search: Optional[str] = Query(None, description="Search in title and description"),
+        project_id: str | None = Query(None, description="Filter by project ID"),
+        status: str | None = Query(None, description="Filter by status (NEW, ASSIGNED, IN_PROGRESS, etc.)"),
+        assignee: str | None = Query(None, description="Filter by assigned agent ID"),
+        labels: str | None = Query(None, description="Filter by labels (comma-separated, AND logic)"),
+        workflow_stage: str | None = Query(None, description="Filter by workflow stage"),
+        priority: str | None = Query(None, description="Filter by priority (LOW, MEDIUM, HIGH, CRITICAL)"),
+        search: str | None = Query(None, description="Search in title and description"),
         offset: int = Query(DEFAULT_OFFSET, ge=0, description="Offset for pagination"),
         limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description=f"Limit for pagination (max {MAX_PAGE_SIZE})"),
         sort_by: str = Query("updated_at", description="Sort field (created_at, updated_at, priority, title, status)"),

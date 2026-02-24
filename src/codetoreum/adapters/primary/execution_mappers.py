@@ -20,7 +20,6 @@ from codetoreum.ports.input.execution_command import (
     ExecutionCommandResult as PortExecutionCommandResult,
 )
 from codetoreum.ports.input.execution_query import (
-    ErrorType,
     ExecutionHistory,
     ExecutionInfo,
     ExecutionListResult,

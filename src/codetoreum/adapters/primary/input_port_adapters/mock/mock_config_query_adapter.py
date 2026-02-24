@@ -10,9 +10,14 @@ dictionaries.
 """
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
 from threading import RLock
+from typing import TYPE_CHECKING, Any, Optional
 
+from codetoreum.domain.exceptions import (
+    AgentNotFoundError,
+    ConfigNotFoundError,
+    PipelineNotFoundError,
+)
 from codetoreum.ports.input.config_query import (
     AgentConfigInfo,
     ConfigSearchResult,
@@ -22,11 +27,6 @@ from codetoreum.ports.input.config_query import (
     PaginationParams,
     PipelineConfigInfo,
     ProjectConfigInfo,
-)
-from codetoreum.domain.exceptions import (
-    AgentNotFoundError,
-    PipelineNotFoundError,
-    ConfigNotFoundError,
 )
 
 if TYPE_CHECKING:
@@ -45,11 +45,11 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
 
     def __init__(self, config_store: Optional["InMemoryConfigStore"] = None):
         self._config_store = config_store
-        self._projects: Dict[str, ProjectConfigInfo] = {}
-        self._projects_by_name: Dict[str, str] = {}  # name -> project_id
-        self._agents: Dict[str, Dict[str, AgentConfigInfo]] = {}  # project_id -> {agent_name -> config}
-        self._pipelines: Dict[str, Dict[str, PipelineConfigInfo]] = {}  # project_id -> {pipeline_name -> config}
-        self._version_history: Dict[str, List[ConfigVersionInfo]] = {}  # config_id -> versions
+        self._projects: dict[str, ProjectConfigInfo] = {}
+        self._projects_by_name: dict[str, str] = {}  # name -> project_id
+        self._agents: dict[str, dict[str, AgentConfigInfo]] = {}  # project_id -> {agent_name -> config}
+        self._pipelines: dict[str, dict[str, PipelineConfigInfo]] = {}  # project_id -> {pipeline_name -> config}
+        self._version_history: dict[str, list[ConfigVersionInfo]] = {}  # config_id -> versions
         self._lock = RLock()
 
     # =========================================================================
@@ -171,8 +171,8 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
             return self._pipelines[project_id][pipeline_name]
 
     async def list_projects(
-        self, pagination: Optional[PaginationParams] = None
-    ) -> List[ProjectConfigInfo]:
+        self, pagination: PaginationParams | None = None
+    ) -> list[ProjectConfigInfo]:
         """List all projects."""
         if self._config_store:
             configs = await self._config_store.list_projects()
@@ -191,8 +191,8 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
             return projects
 
     async def list_agents(
-        self, project_id: Optional[str] = None, pagination: Optional[PaginationParams] = None
-    ) -> List[AgentConfigInfo]:
+        self, project_id: str | None = None, pagination: PaginationParams | None = None
+    ) -> list[AgentConfigInfo]:
         """List agents. When project_id is None, returns agents across all projects."""
         if self._config_store:
             if project_id is not None:
@@ -226,8 +226,8 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
             return agents
 
     async def list_pipelines(
-        self, project_id: Optional[str] = None, pagination: Optional[PaginationParams] = None
-    ) -> List[PipelineConfigInfo]:
+        self, project_id: str | None = None, pagination: PaginationParams | None = None
+    ) -> list[PipelineConfigInfo]:
         """List pipelines. When project_id is None, returns pipelines across all projects."""
         if self._config_store:
             if project_id is not None:
@@ -262,13 +262,13 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
     async def search_configs(
         self,
         query: str,
-        config_type: Optional[str] = None,
-        project_id: Optional[str] = None,
-        pagination: Optional[PaginationParams] = None,
+        config_type: str | None = None,
+        project_id: str | None = None,
+        pagination: PaginationParams | None = None,
     ) -> ConfigSearchResults:
         """Search across all configurations using full-text search."""
         with self._lock:
-            results: List[ConfigSearchResult] = []
+            results: list[ConfigSearchResult] = []
             query_lower = query.lower()
 
             # Search projects
@@ -307,7 +307,7 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
 
     async def get_config_version_history(
         self, config_id: str, config_type: str, limit: int = 10
-    ) -> List[ConfigVersionInfo]:
+    ) -> list[ConfigVersionInfo]:
         """Get version history for a configuration."""
         with self._lock:
             history = self._version_history.get(config_id, [])
@@ -315,7 +315,7 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
 
     async def get_config_version(
         self, config_id: str, config_type: str, version: int
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get a specific version of a configuration."""
         with self._lock:
             # For mock, just return current version
@@ -330,7 +330,7 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
             raise ConfigNotFoundError(f"Configuration with ID {config_id} not found")
 
     async def count_configs(
-        self, config_type: Optional[str] = None, project_id: Optional[str] = None
+        self, config_type: str | None = None, project_id: str | None = None
     ) -> int:
         """Count configurations."""
         if self._config_store:

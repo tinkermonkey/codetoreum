@@ -4,6 +4,7 @@ This adapter provides a simple logger interface for the FastAPI application laye
 """
 
 import logging
+
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)

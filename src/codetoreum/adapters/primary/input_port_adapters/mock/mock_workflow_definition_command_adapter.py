@@ -4,15 +4,14 @@ Mock Workflow Definition Command Adapter
 In-memory implementation of IWorkflowDefinitionCommandPort for development and testing.
 """
 
-from typing import Dict
 from threading import RLock
 from uuid import uuid4
 
 from codetoreum.ports.input.workflow_definition_command import (
-    IWorkflowDefinitionCommandPort,
     CreateWorkflowDefinitionCommand,
-    UpdateWorkflowDefinitionCommand,
     DeleteWorkflowDefinitionCommand,
+    IWorkflowDefinitionCommandPort,
+    UpdateWorkflowDefinitionCommand,
     WorkflowDefinitionCommandResult,
 )
 
@@ -23,7 +22,7 @@ class MockWorkflowDefinitionCommandAdapter(IWorkflowDefinitionCommandPort):
     """
 
     def __init__(self):
-        self._workflows: Dict[str, Dict] = {}
+        self._workflows: dict[str, dict] = {}
         self._lock = RLock()
 
     async def create_workflow_definition(

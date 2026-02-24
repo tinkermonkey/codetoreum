@@ -6,10 +6,8 @@ These models decouple the API contract from domain models.
 """
 
 from datetime import datetime
-from typing import List, Optional
 
 from pydantic import BaseModel, Field
-
 
 # ============================================================================
 # Request Models
@@ -19,7 +17,7 @@ from pydantic import BaseModel, Field
 class TerminateExecutionRequest(BaseModel):
     """Request to terminate an execution."""
 
-    reason: Optional[str] = Field(None, description="Optional reason for termination", max_length=500)
+    reason: str | None = Field(None, description="Optional reason for termination", max_length=500)
 
 
 # ============================================================================
@@ -30,10 +28,10 @@ class TerminateExecutionRequest(BaseModel):
 class ContainerStatusDTO(BaseModel):
     """Container status information DTO."""
 
-    container_id: Optional[str] = None
-    container_name: Optional[str] = None
-    last_known_status: Optional[str] = None
-    exit_code: Optional[int] = None
+    container_id: str | None = None
+    container_name: str | None = None
+    last_known_status: str | None = None
+    exit_code: int | None = None
 
 
 class ExecutionErrorDetailDTO(BaseModel):
@@ -44,7 +42,7 @@ class ExecutionErrorDetailDTO(BaseModel):
         description="Error type (CONTAINER_CRASHED, EXECUTION_TIMEOUT, AGENT_FAILURE, UNKNOWN)",
     )
     message: str = Field(..., description="Error message")
-    container_status: Optional[ContainerStatusDTO] = Field(
+    container_status: ContainerStatusDTO | None = Field(
         None, description="Container status (for container crashes)"
     )
     partial_logs_available: bool = Field(
@@ -62,20 +60,20 @@ class ExecutionResponse(BaseModel):
     workflow_id: str
     stage_name: str
     status: str
-    container_name: Optional[str] = None
-    container_id: Optional[str] = None
-    output: Optional[str] = None
-    error_message: Optional[str] = None
-    error_detail: Optional[ExecutionErrorDetailDTO] = None
-    exit_code: Optional[int] = None
+    container_name: str | None = None
+    container_id: str | None = None
+    output: str | None = None
+    error_message: str | None = None
+    error_detail: ExecutionErrorDetailDTO | None = None
+    exit_code: int | None = None
     input_tokens: int = 0
     output_tokens: int = 0
-    duration_seconds: Optional[float] = None
+    duration_seconds: float | None = None
     initialized_at: datetime
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    elapsed_time_seconds: Optional[float] = None
-    current_stage: Optional[str] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    elapsed_time_seconds: float | None = None
+    current_stage: str | None = None
 
 
 class ExecutionSummaryResponse(BaseModel):
@@ -88,16 +86,16 @@ class ExecutionSummaryResponse(BaseModel):
     stage_name: str
     status: str
     initialized_at: datetime
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    duration_seconds: Optional[float] = None
-    error_type: Optional[str] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    duration_seconds: float | None = None
+    error_type: str | None = None
 
 
 class ExecutionListResponse(BaseModel):
     """Execution list response with pagination."""
 
-    executions: List[ExecutionSummaryResponse]
+    executions: list[ExecutionSummaryResponse]
     total_count: int
     offset: int
     limit: int
@@ -112,16 +110,16 @@ class LogEntryDTO(BaseModel):
     timestamp: datetime
     level: str
     message: str
-    stage: Optional[str] = None
+    stage: str | None = None
 
 
 class ExecutionLogsResponse(BaseModel):
     """Execution logs response."""
 
     execution_id: str
-    logs: List[LogEntryDTO]
+    logs: list[LogEntryDTO]
     total_lines: int
-    stage: Optional[str] = None
+    stage: str | None = None
     has_more: bool = False
 
 
@@ -137,7 +135,7 @@ class ExecutionHistoryResponse(BaseModel):
     """Execution history response."""
 
     execution_id: str
-    events: List[ExecutionHistoryEntryDTO]
+    events: list[ExecutionHistoryEntryDTO]
     total_events: int
 
 
@@ -147,5 +145,5 @@ class ExecutionCommandResult(BaseModel):
     success: bool
     execution_id: str
     message: str
-    new_status: Optional[str] = None
-    errors: Optional[List[str]] = None
+    new_status: str | None = None
+    errors: list[str] | None = None

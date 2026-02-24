@@ -237,7 +237,7 @@ describe('useAuth hook', () => {
           }),
         });
 
-      const { result } = renderHook(() => useAuth());
+      renderHook(() => useAuth());
 
       await waitFor(() => {
         expect(localStorageMock.getItem('authToken')).toBe(newToken);

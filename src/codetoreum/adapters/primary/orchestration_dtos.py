@@ -5,19 +5,16 @@ DTOs for orchestration and scheduler REST API endpoints.
 """
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from codetoreum.adapters.primary.api_models import PaginatedResponse
 from codetoreum.config import (
-    MAX_WORK_ITEM_ID_LENGTH,
-    MAX_WORKFLOW_ID_LENGTH,
-    MAX_STAGE_NAME_LENGTH,
     MAX_REASON_LENGTH,
+    MAX_WORK_ITEM_ID_LENGTH,
     MIN_FIELD_LENGTH,
 )
-
-from codetoreum.adapters.primary.api_models import PaginatedResponse
 
 
 class ExecutionPriority(str, Enum):
@@ -39,9 +36,9 @@ class StartWorkflowExecutionRequest(BaseModel):
 
     work_item_id: str = Field(..., description="Work item ID to execute workflow for", min_length=MIN_FIELD_LENGTH, max_length=MAX_WORK_ITEM_ID_LENGTH)
     workflow_id: str = Field(..., description="Workflow definition ID to use", min_length=MIN_FIELD_LENGTH, max_length=MAX_WORK_ITEM_ID_LENGTH)
-    stage_name: Optional[str] = Field(None, description="Stage to start from (optional, defaults to first stage)", max_length=100)
+    stage_name: str | None = Field(None, description="Stage to start from (optional, defaults to first stage)", max_length=100)
     priority: ExecutionPriority = Field(ExecutionPriority.MEDIUM, description="Execution priority")
-    context: Dict[str, Any] = Field(default_factory=dict, description="Additional execution context")
+    context: dict[str, Any] = Field(default_factory=dict, description="Additional execution context")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -92,7 +89,7 @@ class PauseWorkflowExecutionRequest(BaseModel):
 class ResumeWorkflowExecutionRequest(BaseModel):
     """Request to resume a paused workflow execution"""
 
-    from_stage: Optional[str] = Field(None, description="Stage to resume from (defaults to paused stage)", max_length=100)
+    from_stage: str | None = Field(None, description="Stage to resume from (defaults to paused stage)", max_length=100)
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -116,8 +113,8 @@ class WorkflowExecutionResponse(BaseModel):
     work_item_id: str = Field(..., description="Work item ID")
     workflow_id: str = Field(..., description="Workflow definition ID")
     status: str = Field(..., description="Execution status")
-    current_stage: Optional[str] = Field(None, description="Current stage name")
-    started_at: Optional[datetime] = Field(None, description="Execution start time")
+    current_stage: str | None = Field(None, description="Current stage name")
+    started_at: datetime | None = Field(None, description="Execution start time")
     message: str = Field(..., description="Status message")
 
     model_config = ConfigDict(
@@ -176,8 +173,8 @@ class QueuedExecutionInfo(BaseModel):
     status: str = Field(..., description="Execution status (QUEUED, RUNNING, etc.)")
     priority: str = Field(..., description="Execution priority")
     queued_at: datetime = Field(..., description="When execution was queued")
-    started_at: Optional[datetime] = Field(None, description="When execution started (if running)")
-    estimated_duration_seconds: Optional[int] = Field(None, description="Estimated duration")
+    started_at: datetime | None = Field(None, description="When execution started (if running)")
+    estimated_duration_seconds: int | None = Field(None, description="Estimated duration")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -202,8 +199,8 @@ class QueuedExecutionInfo(BaseModel):
 class ExecutionQueueResponse(PaginatedResponse):
     """Response with execution queue information"""
 
-    executions: List[QueuedExecutionInfo] = Field(..., description="List of queued/running executions")
-    queue_stats: Dict[str, int] = Field(
+    executions: list[QueuedExecutionInfo] = Field(..., description="List of queued/running executions")
+    queue_stats: dict[str, int] = Field(
         default_factory=dict,
         description="Queue statistics (total_queued, total_running, by_priority, etc.)"
     )
@@ -254,7 +251,7 @@ class EntryConditionValidationRequest(BaseModel):
 
     work_item_id: str = Field(..., description="Work item ID to validate", min_length=MIN_FIELD_LENGTH, max_length=MAX_WORK_ITEM_ID_LENGTH)
     workflow_id: str = Field(..., description="Workflow ID to validate against", min_length=MIN_FIELD_LENGTH, max_length=MAX_WORK_ITEM_ID_LENGTH)
-    stage_name: Optional[str] = Field(None, description="Specific stage to validate (optional)", max_length=100)
+    stage_name: str | None = Field(None, description="Specific stage to validate (optional)", max_length=100)
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -273,7 +270,7 @@ class ConditionValidationResult(BaseModel):
     condition_type: str = Field(..., description="Type of condition", max_length=100)
     is_met: bool = Field(..., description="Whether condition is met")
     message: str = Field(..., description="Validation message", max_length=500)
-    details: Dict[str, Any] = Field(default_factory=dict, description="Additional details")
+    details: dict[str, Any] = Field(default_factory=dict, description="Additional details")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -292,8 +289,8 @@ class EntryConditionValidationResponse(BaseModel):
 
     can_start: bool = Field(..., description="Whether workflow can start")
     stage_name: str = Field(..., description="Stage being validated")
-    condition_results: List[ConditionValidationResult] = Field(..., description="Results for each condition")
-    blocking_conditions: List[str] = Field(default_factory=list, description="Conditions that are not met")
+    condition_results: list[ConditionValidationResult] = Field(..., description="Results for each condition")
+    blocking_conditions: list[str] = Field(default_factory=list, description="Conditions that are not met")
 
     model_config = ConfigDict(
         json_schema_extra={

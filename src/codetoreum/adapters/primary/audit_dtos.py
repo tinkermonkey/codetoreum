@@ -6,15 +6,14 @@ audit information with sequence validation and stage grouping.
 """
 
 from datetime import datetime
-from typing import List, Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from codetoreum.adapters.primary.workflow_run_dtos import (
-    WorkflowRunSummaryResponse,
     WorkflowEventResponse,
+    WorkflowRunSummaryResponse,
 )
-
 
 # ============================================================================
 # Validation Models
@@ -25,7 +24,7 @@ class OutOfOrderEvent(BaseModel):
     """Event that occurred out of expected sequence."""
 
     eventType: str = Field(..., description="Event type name", serialization_alias="eventType")
-    timestamp: Optional[datetime] = Field(None, description="When event occurred (optional until out-of-order detection is fully implemented)")
+    timestamp: datetime | None = Field(None, description="When event occurred (optional until out-of-order detection is fully implemented)")
     expectedPosition: int = Field(..., description="Expected position in sequence", serialization_alias="expectedPosition")
     actualPosition: int = Field(..., description="Actual position in sequence", serialization_alias="actualPosition")
 
@@ -46,11 +45,11 @@ class AuditValidationResult(BaseModel):
     """Validation results for event sequence."""
 
     sequenceValid: bool = Field(..., description="Whether event sequence is valid", serialization_alias="sequenceValid")
-    expectedSequence: List[str] = Field(..., description="Expected event type names", serialization_alias="expectedSequence")
-    actualSequence: List[str] = Field(..., description="Actual event type names", serialization_alias="actualSequence")
-    missingEvents: List[str] = Field(..., description="Expected events that didn't occur", serialization_alias="missingEvents")
-    unexpectedEvents: List[str] = Field(..., description="Events that shouldn't have occurred", serialization_alias="unexpectedEvents")
-    outOfOrderEvents: List[OutOfOrderEvent] = Field(..., description="Events in wrong sequence", serialization_alias="outOfOrderEvents")
+    expectedSequence: list[str] = Field(..., description="Expected event type names", serialization_alias="expectedSequence")
+    actualSequence: list[str] = Field(..., description="Actual event type names", serialization_alias="actualSequence")
+    missingEvents: list[str] = Field(..., description="Expected events that didn't occur", serialization_alias="missingEvents")
+    unexpectedEvents: list[str] = Field(..., description="Events that shouldn't have occurred", serialization_alias="unexpectedEvents")
+    outOfOrderEvents: list[OutOfOrderEvent] = Field(..., description="Events in wrong sequence", serialization_alias="outOfOrderEvents")
 
     model_config = ConfigDict(
         populate_by_name=True,
@@ -124,12 +123,12 @@ class AuditStageInfo(BaseModel):
 
     name: str = Field(..., description="Stage name")
     status: Literal["pending", "ready", "running", "completed", "failed", "skipped"] = Field(..., description="Stage status")
-    startedAt: Optional[datetime] = Field(None, description="Stage start time", serialization_alias="startedAt")
-    completedAt: Optional[datetime] = Field(None, description="Stage completion time", serialization_alias="completedAt")
-    durationSeconds: Optional[float] = Field(None, description="Stage duration in seconds", serialization_alias="durationSeconds")
-    events: List[WorkflowEventResponse] = Field(default_factory=list, description="Events for this stage")
-    output: Optional[str] = Field(None, description="Stage output content")
-    errorMessage: Optional[str] = Field(None, description="Error message if stage failed", serialization_alias="errorMessage")
+    startedAt: datetime | None = Field(None, description="Stage start time", serialization_alias="startedAt")
+    completedAt: datetime | None = Field(None, description="Stage completion time", serialization_alias="completedAt")
+    durationSeconds: float | None = Field(None, description="Stage duration in seconds", serialization_alias="durationSeconds")
+    events: list[WorkflowEventResponse] = Field(default_factory=list, description="Events for this stage")
+    output: str | None = Field(None, description="Stage output content")
+    errorMessage: str | None = Field(None, description="Error message if stage failed", serialization_alias="errorMessage")
     metadata: dict = Field(default_factory=dict, description="Additional stage metadata")
 
     @model_validator(mode="after")
@@ -181,9 +180,9 @@ class WorkflowRunAuditResponse(BaseModel):
     """Comprehensive audit response for workflow run."""
 
     workflowRun: WorkflowRunSummaryResponse = Field(..., description="Workflow run summary", serialization_alias="workflowRun")
-    events: List[WorkflowEventResponse] = Field(..., description="All workflow events")
-    stages: List[AuditStageInfo] = Field(..., description="Stage-grouped event information")
-    validation: Optional[AuditValidationResult] = Field(None, description="Sequence validation results (optional, only included when include_validation=true)")
+    events: list[WorkflowEventResponse] = Field(..., description="All workflow events")
+    stages: list[AuditStageInfo] = Field(..., description="Stage-grouped event information")
+    validation: AuditValidationResult | None = Field(None, description="Sequence validation results (optional, only included when include_validation=true)")
     totalEventCount: int = Field(..., description="Total number of events", serialization_alias="totalEventCount")
     offset: int = Field(..., description="Event list offset for pagination")
     limit: int = Field(..., description="Event list limit for pagination")

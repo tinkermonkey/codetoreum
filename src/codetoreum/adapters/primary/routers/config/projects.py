@@ -4,20 +4,10 @@ Project Configuration Endpoints
 Handles CRUD operations for project configurations including environment variables.
 """
 
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, status
 
-from codetoreum.config import (
-    DEFAULT_PAGE_SIZE,
-    MAX_PAGE_SIZE,
-    DEFAULT_OFFSET,
-    VERSIONS_DEFAULT_LIMIT,
-    VERSIONS_MAX_LIMIT,
-)
-
 from codetoreum.adapters.primary.config_dtos import (
-    AddEnvironmentVariableRequest,
     ConfigurationCommandResponse,
     ConfigVersionHistoryResponse,
     ProjectConfigResponse,
@@ -25,12 +15,17 @@ from codetoreum.adapters.primary.config_dtos import (
     UpdateProjectConfigRequest,
 )
 from codetoreum.adapters.primary.exception_mapper import map_exception_to_http
+from codetoreum.config import (
+    DEFAULT_OFFSET,
+    DEFAULT_PAGE_SIZE,
+    MAX_PAGE_SIZE,
+    VERSIONS_DEFAULT_LIMIT,
+    VERSIONS_MAX_LIMIT,
+)
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.ports.exceptions import PortError
 from codetoreum.ports.input.config_command import (
-    AddEnvironmentVariableCommand,
     IConfigurationCommandPort,
-    RemoveEnvironmentVariableCommand,
     UpdateProjectConfigCommand,
 )
 from codetoreum.ports.input.config_query import (

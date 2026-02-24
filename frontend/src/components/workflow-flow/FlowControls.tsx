@@ -1,4 +1,4 @@
-import { ZoomIn, ZoomOut, Maximize2, Minimize2 } from 'lucide-react'
+import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react'
 import { useReactFlow } from '@xyflow/react'
 
 interface FlowControlsProps {

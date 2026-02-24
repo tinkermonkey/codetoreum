@@ -7,12 +7,11 @@ and translating them into domain commands.
 
 import hashlib
 import hmac
-import json
 import logging
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Dict, List, Optional
+from datetime import datetime, timezone
+from typing import Any, Callable
 
 from fastapi import Header, HTTPException, Request
 
@@ -21,18 +20,17 @@ try:
 except ImportError:
     trace = None
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.infrastructure.observability.instrumentation import instrument_async_function
-from codetoreum.ports.output.config_store import IConfigStore
-from codetoreum.ports.output.event_store import IEventStore
+from codetoreum.infrastructure.observability.instrumentation import (
+    instrument_async_function,
+)
 from codetoreum.ports.input.workflow_command import (
     IWorkflowCommandPort,
     StartWorkflowCommand,
     TriggerType,
-    WorkflowCommandResult,
 )
-from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.ports.output.config_store import IConfigStore
 
 # Type aliases for missing interfaces
 IEventBus = EventBus
@@ -53,7 +51,7 @@ class WebhookEvent:
 
     delivery_id: str
     event_type: str
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
     signature: str
     timestamp: datetime
     repository: str
@@ -65,8 +63,8 @@ class WebhookProcessingResult:
 
     success: bool
     message: str
-    commands_created: List[str]
-    errors: Optional[List[str]] = None
+    commands_created: list[str]
+    errors: list[str] | None = None
     processing_time_ms: float = 0.0
 
 
@@ -164,7 +162,7 @@ class GitHubWebhookAdapter:
         self.logger = logger
 
         # Event handlers by GitHub event type
-        self.handlers: Dict[str, Callable] = {
+        self.handlers: dict[str, Callable] = {
             "project_card": self._handle_project_card_event,
             "issues": self._handle_issues_event,
             "issue_comment": self._handle_issue_comment_event,
@@ -173,7 +171,7 @@ class GitHubWebhookAdapter:
         }
 
         # Track processed delivery IDs for idempotency (in-memory for now)
-        self._processed_deliveries: Dict[str, WebhookProcessingResult] = {}
+        self._processed_deliveries: dict[str, WebhookProcessingResult] = {}
 
     @instrument_async_function(
         name="github.webhook.receive",
@@ -185,7 +183,7 @@ class GitHubWebhookAdapter:
         x_github_delivery: str = Header(...),
         x_github_event: str = Header(...),
         x_hub_signature_256: str = Header(...),
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         FastAPI endpoint handler for webhook reception.
 
@@ -348,23 +346,23 @@ class GitHubWebhookAdapter:
         # Unknown event type - consider valid (ignore)
         return True
 
-    def _validate_project_card_payload(self, payload: Dict[str, Any]) -> bool:
+    def _validate_project_card_payload(self, payload: dict[str, Any]) -> bool:
         """Validate project_card event payload"""
         return "action" in payload and "project_card" in payload
 
-    def _validate_issues_payload(self, payload: Dict[str, Any]) -> bool:
+    def _validate_issues_payload(self, payload: dict[str, Any]) -> bool:
         """Validate issues event payload"""
         return "action" in payload and "issue" in payload
 
-    def _validate_issue_comment_payload(self, payload: Dict[str, Any]) -> bool:
+    def _validate_issue_comment_payload(self, payload: dict[str, Any]) -> bool:
         """Validate issue_comment event payload"""
         return "action" in payload and "issue" in payload and "comment" in payload
 
-    def _validate_pull_request_payload(self, payload: Dict[str, Any]) -> bool:
+    def _validate_pull_request_payload(self, payload: dict[str, Any]) -> bool:
         """Validate pull_request event payload"""
         return "action" in payload and "pull_request" in payload
 
-    def _validate_discussion_payload(self, payload: Dict[str, Any]) -> bool:
+    def _validate_discussion_payload(self, payload: dict[str, Any]) -> bool:
         """Validate discussion event payload"""
         return "action" in payload and "discussion" in payload
 
@@ -420,7 +418,7 @@ class GitHubWebhookAdapter:
     )
     async def _handle_project_card_event(
         self, event: WebhookEvent, project: str
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Handle project_card event (card movement).
 
@@ -491,7 +489,7 @@ class GitHubWebhookAdapter:
     )
     async def _handle_issues_event(
         self, event: WebhookEvent, project: str
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Handle issues event (issue created/updated).
 
@@ -517,7 +515,7 @@ class GitHubWebhookAdapter:
     )
     async def _handle_issue_comment_event(
         self, event: WebhookEvent, project: str
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Handle issue_comment event (agent feedback).
 
@@ -547,7 +545,7 @@ class GitHubWebhookAdapter:
     )
     async def _handle_pull_request_event(
         self, event: WebhookEvent, project: str
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Handle pull_request event.
 
@@ -575,7 +573,7 @@ class GitHubWebhookAdapter:
     )
     async def _handle_discussion_event(
         self, event: WebhookEvent, project: str
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Handle discussion event.
 
@@ -595,7 +593,7 @@ class GitHubWebhookAdapter:
         # Placeholder for future implementation
         return []
 
-    async def _identify_project(self, repository: str) -> Optional[str]:
+    async def _identify_project(self, repository: str) -> str | None:
         """
         Map GitHub repository to internal project name.
 
@@ -617,7 +615,7 @@ class GitHubWebhookAdapter:
 
     async def _map_column_to_stage(
         self, project: str, column_id: int
-    ) -> Optional[StageInfo]:
+    ) -> StageInfo | None:
         """
         Map GitHub project column ID to pipeline stage.
 
@@ -668,7 +666,7 @@ class GitHubWebhookAdapter:
 
         return None
 
-    def _extract_work_item_id(self, content_url: str) -> Optional[str]:
+    def _extract_work_item_id(self, content_url: str) -> str | None:
         """
         Extract issue/PR number from GitHub API URL.
 

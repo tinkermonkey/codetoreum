@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Eye, EyeOff, Save } from 'lucide-react'
+import { useQuery, useMutation } from '@tanstack/react-query'
+import { Plus, Trash2, Eye, EyeOff } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import {
@@ -14,8 +14,7 @@ import { projectConfigApi } from '../api/client'
 import type { ProjectConfig } from '../types'
 
 export default function ProjectConfigPage() {
-  const [selectedProjectIndex, setSelectedProjectIndex] = useState(0)
-  const queryClient = useQueryClient()
+  const [selectedProjectIndex] = useState(0)
 
   // Fetch project list (each item already contains full config)
   const { data: projects = [], isLoading, error } = useQuery({
@@ -338,10 +337,8 @@ function MountedCommandsSection({
 // Mounted Sub-Agents Section
 function MountedSubAgentsSection({
   config,
-  queryClient,
 }: {
   config: ProjectConfig
-  queryClient: any
 }) {
   return (
     <Card>
@@ -376,10 +373,8 @@ function MountedSubAgentsSection({
 // Repository Settings Section
 function RepositorySettingsSection({
   config,
-  queryClient,
 }: {
   config: ProjectConfig
-  queryClient: any
 }) {
   return (
     <Card>

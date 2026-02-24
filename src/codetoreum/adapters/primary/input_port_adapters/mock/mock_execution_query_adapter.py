@@ -5,13 +5,10 @@ In-memory implementation of IExecutionQueryPort for development and testing.
 """
 
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
 from threading import RLock
 
+from codetoreum.domain.exceptions import ExecutionNotFoundError
 from codetoreum.ports.input.execution_query import (
-    ContainerStatus,
-    ErrorType,
-    ExecutionErrorDetail,
     ExecutionFilters,
     ExecutionHistory,
     ExecutionHistoryEntry,
@@ -24,7 +21,6 @@ from codetoreum.ports.input.execution_query import (
     LogEntry,
     SortOrder,
 )
-from codetoreum.domain.exceptions import ExecutionNotFoundError
 
 
 class MockExecutionQueryAdapter(IExecutionQueryPort):
@@ -33,9 +29,9 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
     """
 
     def __init__(self):
-        self._executions: Dict[str, ExecutionInfo] = {}
-        self._logs: Dict[str, List[LogEntry]] = {}  # execution_id -> logs
-        self._history: Dict[str, List[ExecutionHistoryEntry]] = {}  # execution_id -> history
+        self._executions: dict[str, ExecutionInfo] = {}
+        self._logs: dict[str, list[LogEntry]] = {}  # execution_id -> logs
+        self._history: dict[str, list[ExecutionHistoryEntry]] = {}  # execution_id -> history
         self._lock = RLock()
 
     def add_execution(self, execution_info: ExecutionInfo):
@@ -70,8 +66,8 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
 
     async def list_executions(
         self,
-        filters: Optional[ExecutionFilters] = None,
-        pagination: Optional[ExecutionPaginationParams] = None,
+        filters: ExecutionFilters | None = None,
+        pagination: ExecutionPaginationParams | None = None,
     ) -> ExecutionListResult:
         """List executions with optional filtering and pagination."""
         with self._lock:
@@ -109,8 +105,8 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
     async def get_execution_logs(
         self,
         execution_id: str,
-        stage: Optional[str] = None,
-        tail: Optional[int] = None,
+        stage: str | None = None,
+        tail: int | None = None,
     ) -> ExecutionLogs:
         """Get execution logs."""
         with self._lock:
@@ -136,7 +132,7 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
             )
 
     async def get_execution_history(
-        self, execution_id: str, limit: Optional[int] = None
+        self, execution_id: str, limit: int | None = None
     ) -> ExecutionHistory:
         """Get execution event history."""
         with self._lock:
@@ -155,7 +151,7 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
                 total_events=len(history),
             )
 
-    async def count_executions(self, filters: Optional[ExecutionFilters] = None) -> int:
+    async def count_executions(self, filters: ExecutionFilters | None = None) -> int:
         """Count executions matching filters."""
         with self._lock:
             executions = list(self._executions.values())
@@ -166,8 +162,8 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
             return len(executions)
 
     def _apply_filters(
-        self, executions: List[ExecutionInfo], filters: ExecutionFilters
-    ) -> List[ExecutionInfo]:
+        self, executions: list[ExecutionInfo], filters: ExecutionFilters
+    ) -> list[ExecutionInfo]:
         """Apply filters to execution list."""
         result = executions
 
@@ -202,9 +198,9 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
 
     def _sort_executions(
         self,
-        executions: List[ExecutionInfo],
+        executions: list[ExecutionInfo],
         pagination: ExecutionPaginationParams,
-    ) -> List[ExecutionInfo]:
+    ) -> list[ExecutionInfo]:
         """Sort executions based on pagination parameters."""
         reverse = pagination.sort_order == SortOrder.DESC
 

@@ -4,10 +4,11 @@ Mock Workspace Query Adapter
 In-memory implementation of IWorkspaceQueryPort for development and testing.
 """
 
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import datetime
 from threading import RLock
+from typing import Any
 
+from codetoreum.domain.exceptions import WorkspaceNotFoundError
 from codetoreum.ports.input.workspace_query import (
     IWorkspaceQueryPort,
     PaginationParams,
@@ -17,7 +18,6 @@ from codetoreum.ports.input.workspace_query import (
     WorkspaceListItem,
     WorkspaceListResult,
 )
-from codetoreum.domain.exceptions import WorkspaceNotFoundError
 
 
 class MockWorkspaceQueryAdapter(IWorkspaceQueryPort):
@@ -26,9 +26,9 @@ class MockWorkspaceQueryAdapter(IWorkspaceQueryPort):
     """
 
     def __init__(self):
-        self._workspaces: Dict[str, WorkspaceInfo] = {}
-        self._workspaces_by_execution: Dict[str, str] = {}  # execution_id -> workspace_id
-        self._logs: Dict[str, List[str]] = {}  # workspace_id -> log lines
+        self._workspaces: dict[str, WorkspaceInfo] = {}
+        self._workspaces_by_execution: dict[str, str] = {}  # execution_id -> workspace_id
+        self._logs: dict[str, list[str]] = {}  # workspace_id -> log lines
         self._lock = RLock()
 
     def add_workspace(self, workspace_info: WorkspaceInfo):
@@ -75,8 +75,8 @@ class MockWorkspaceQueryAdapter(IWorkspaceQueryPort):
 
     async def list_workspaces(
         self,
-        filters: Optional[WorkspaceFilters] = None,
-        pagination: Optional[PaginationParams] = None,
+        filters: WorkspaceFilters | None = None,
+        pagination: PaginationParams | None = None,
     ) -> WorkspaceListResult:
         """List workspaces with optional filtering."""
         with self._lock:
@@ -123,7 +123,7 @@ class MockWorkspaceQueryAdapter(IWorkspaceQueryPort):
             )
 
     async def list_active_workspaces(
-        self, pagination: Optional[PaginationParams] = None
+        self, pagination: PaginationParams | None = None
     ) -> WorkspaceListResult:
         """List all active workspaces (running or initializing)."""
         filters = WorkspaceFilters()
@@ -168,8 +168,8 @@ class MockWorkspaceQueryAdapter(IWorkspaceQueryPort):
             )
 
     async def get_resource_usage_summary(
-        self, project_id: Optional[str] = None
-    ) -> Dict[str, Any]:
+        self, project_id: str | None = None
+    ) -> dict[str, Any]:
         """Get aggregate resource usage across workspaces."""
         with self._lock:
             workspaces = list(self._workspaces.values())
@@ -202,7 +202,7 @@ class MockWorkspaceQueryAdapter(IWorkspaceQueryPort):
                 "total_disk_mb": total_disk,
             }
 
-    async def count_workspaces(self, filters: Optional[WorkspaceFilters] = None) -> int:
+    async def count_workspaces(self, filters: WorkspaceFilters | None = None) -> int:
         """Count workspaces matching filters."""
         with self._lock:
             workspaces = list(self._workspaces.values())
@@ -215,9 +215,9 @@ class MockWorkspaceQueryAdapter(IWorkspaceQueryPort):
     async def get_workspace_logs(
         self,
         workspace_id: str,
-        tail: Optional[int] = None,
-        since: Optional[datetime] = None,
-    ) -> List[str]:
+        tail: int | None = None,
+        since: datetime | None = None,
+    ) -> list[str]:
         """Get workspace container logs."""
         with self._lock:
             if workspace_id not in self._workspaces:
@@ -237,8 +237,8 @@ class MockWorkspaceQueryAdapter(IWorkspaceQueryPort):
             return logs
 
     def _apply_filters(
-        self, workspaces: List[WorkspaceInfo], filters: WorkspaceFilters
-    ) -> List[WorkspaceInfo]:
+        self, workspaces: list[WorkspaceInfo], filters: WorkspaceFilters
+    ) -> list[WorkspaceInfo]:
         """Apply filters to workspace list."""
         result = workspaces
 

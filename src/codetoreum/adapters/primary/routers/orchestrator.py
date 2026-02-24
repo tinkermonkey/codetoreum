@@ -5,25 +5,24 @@ Provides RESTful endpoints for workflow orchestration operations including
 starting, pausing, resuming, and canceling workflow executions.
 """
 
-from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
-from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
 from codetoreum.adapters.primary.orchestration_dtos import (
+    CancelWorkflowExecutionRequest,
+    EntryConditionValidationRequest,
+    EntryConditionValidationResponse,
+    PauseWorkflowExecutionRequest,
+    ResumeWorkflowExecutionRequest,
     StartWorkflowExecutionRequest,
     StartWorkflowExecutionResponse,
     WorkflowExecutionResponse,
-    CancelWorkflowExecutionRequest,
-    PauseWorkflowExecutionRequest,
-    ResumeWorkflowExecutionRequest,
-    EntryConditionValidationRequest,
-    EntryConditionValidationResponse,
 )
+from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
 from codetoreum.adapters.primary.workflow_mappers import OrchestrationMapper
 from codetoreum.ports.input.orchestration_command import (
-    IOrchestrationCommandPort,
     CancelExecutionCommand,
+    IOrchestrationCommandPort,
     PauseExecutionCommand,
     ResumeExecutionCommand,
 )
@@ -31,7 +30,7 @@ from codetoreum.ports.input.orchestration_command import (
 
 def create_orchestrator_router(
     orchestration_command_port: IOrchestrationCommandPort,
-    auth_deps: Optional[SimpleAuthDependencies] = None,
+    auth_deps: SimpleAuthDependencies | None = None,
 ) -> APIRouter:
     """
     Create the orchestrator REST API router.

@@ -4,22 +4,18 @@ Events REST API Router
 Provides REST endpoints for historical event queries and event replay.
 """
 
-import uuid
 from datetime import datetime, timezone
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-
-from codetoreum.config import (
-    EVENTS_DEFAULT_PAGE_SIZE,
-    EVENTS_MAX_PAGE_SIZE,
-    DEFAULT_OFFSET,
-)
 from pydantic import BaseModel, Field
 
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
+from codetoreum.config import (
+    DEFAULT_OFFSET,
+    EVENTS_DEFAULT_PAGE_SIZE,
+    EVENTS_MAX_PAGE_SIZE,
+)
 from codetoreum.ports.output.event_store import IEventStore
-
 
 # ============================================================================
 # DTOs (Data Transfer Objects)
@@ -35,9 +31,9 @@ class EventDTO(BaseModel):
     aggregate_id: str
     aggregate_type: str
     occurred_at: datetime
-    correlation_id: Optional[str] = None
-    causation_id: Optional[str] = None
-    user_id: Optional[str] = None
+    correlation_id: str | None = None
+    causation_id: str | None = None
+    user_id: str | None = None
     payload: dict
     metadata: dict = Field(default_factory=dict)
 
@@ -45,7 +41,7 @@ class EventDTO(BaseModel):
 class EventListResponse(BaseModel):
     """Response for event list queries"""
 
-    events: List[EventDTO]
+    events: list[EventDTO]
     total_count: int
     offset: int
     limit: int
@@ -55,10 +51,10 @@ class EventListResponse(BaseModel):
 class EventReplayRequest(BaseModel):
     """Request to replay events"""
 
-    stream_id: Optional[str] = None
+    stream_id: str | None = None
     from_version: int = 0
-    to_version: Optional[int] = None
-    event_types: Optional[List[str]] = None
+    to_version: int | None = None
+    event_types: list[str] | None = None
 
 
 class EventReplayResponse(BaseModel):
@@ -66,9 +62,9 @@ class EventReplayResponse(BaseModel):
 
     replay_id: str
     status: str = "accepted"
-    stream_id: Optional[str]
+    stream_id: str | None
     from_version: int
-    to_version: Optional[int]
+    to_version: int | None
     estimated_event_count: int
     message: str
 
@@ -79,8 +75,8 @@ class EventStatisticsResponse(BaseModel):
     total_events: int
     total_streams: int
     event_types: dict
-    oldest_event: Optional[datetime]
-    newest_event: Optional[datetime]
+    oldest_event: datetime | None
+    newest_event: datetime | None
 
 
 # ============================================================================
@@ -90,7 +86,7 @@ class EventStatisticsResponse(BaseModel):
 
 def create_events_router(
     event_store: IEventStore,
-    auth_deps: Optional[SimpleAuthDependencies] = None,
+    auth_deps: SimpleAuthDependencies | None = None,
 ) -> APIRouter:
     """
     Create events REST API router.
@@ -115,18 +111,18 @@ def create_events_router(
         description="Query historical events with pagination and filtering",
     )
     async def get_events(
-        event_type: Optional[str] = Query(None, description="Filter by event type"),
-        aggregate_type: Optional[str] = Query(
+        event_type: str | None = Query(None, description="Filter by event type"),
+        aggregate_type: str | None = Query(
             None, description="Filter by aggregate type"
         ),
-        aggregate_id: Optional[str] = Query(None, description="Filter by aggregate ID"),
-        correlation_id: Optional[str] = Query(
+        aggregate_id: str | None = Query(None, description="Filter by aggregate ID"),
+        correlation_id: str | None = Query(
             None, description="Filter by correlation ID"
         ),
-        start_time: Optional[datetime] = Query(
+        start_time: datetime | None = Query(
             None, description="Filter events after this timestamp"
         ),
-        end_time: Optional[datetime] = Query(
+        end_time: datetime | None = Query(
             None, description="Filter events before this timestamp"
         ),
         offset: int = Query(DEFAULT_OFFSET, ge=0, description="Number of events to skip"),

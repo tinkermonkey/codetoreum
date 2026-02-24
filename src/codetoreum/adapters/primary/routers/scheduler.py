@@ -5,21 +5,19 @@ Provides RESTful endpoints for viewing and managing the execution queue and
 scheduler status.
 """
 
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from codetoreum.config import SCHEDULER_DEFAULT_PAGE_SIZE, SCHEDULER_MAX_PAGE_SIZE
-
-from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
 from codetoreum.adapters.primary.orchestration_dtos import ExecutionQueueResponse
+from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
 from codetoreum.adapters.primary.workflow_mappers import OrchestrationMapper
-from codetoreum.ports.input.task_query import ITaskQueryPort, ExecutionStatus
+from codetoreum.config import SCHEDULER_DEFAULT_PAGE_SIZE, SCHEDULER_MAX_PAGE_SIZE
+from codetoreum.ports.input.task_query import ExecutionStatus, ITaskQueryPort
 
 
 def create_scheduler_router(
     task_query_port: ITaskQueryPort,
-    auth_deps: Optional[SimpleAuthDependencies] = None,
+    auth_deps: SimpleAuthDependencies | None = None,
 ) -> APIRouter:
     """
     Create the scheduler REST API router.
@@ -52,14 +50,14 @@ def create_scheduler_router(
         response_description="List of queued and running executions",
     )
     async def get_execution_queue(
-        status_filter: Optional[str] = Query(
+        status_filter: str | None = Query(
             None,
             alias="status",
             description="Filter by status (queued, running, pending)"
         ),
-        workflow_run_id: Optional[str] = Query(None, description="Filter by workflow run ID"),
-        work_item_id: Optional[str] = Query(None, description="Filter by work item ID"),
-        project_name: Optional[str] = Query(None, description="Filter by project name"),
+        workflow_run_id: str | None = Query(None, description="Filter by workflow run ID"),
+        work_item_id: str | None = Query(None, description="Filter by work item ID"),
+        project_name: str | None = Query(None, description="Filter by project name"),
         page: int = Query(1, ge=1, description="Page number (1-indexed)"),
         page_size: int = Query(SCHEDULER_DEFAULT_PAGE_SIZE, ge=1, le=SCHEDULER_MAX_PAGE_SIZE, description=f"Items per page (max {SCHEDULER_MAX_PAGE_SIZE})"),
     ) -> ExecutionQueueResponse:

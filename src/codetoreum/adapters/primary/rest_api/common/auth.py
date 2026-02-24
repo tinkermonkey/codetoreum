@@ -1,9 +1,8 @@
 """
 Authentication dependencies for REST API endpoints.
 """
-from typing import Optional
 
-from fastapi import Depends, Header
+from fastapi import Header
 
 from .errors import unauthorized_error
 
@@ -17,7 +16,7 @@ class User:
 
 
 async def get_current_user(
-    authorization: Optional[str] = Header(None, description="Bearer token")
+    authorization: str | None = Header(None, description="Bearer token")
 ) -> User:
     """
     Dependency to extract and validate current user from Authorization header.

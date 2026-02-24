@@ -5,18 +5,17 @@ In-memory implementation of IOrchestrationCommandPort for development and testin
 """
 
 from datetime import datetime, timezone
-from typing import Dict, Optional
 from threading import RLock
 from uuid import uuid4
 
 from codetoreum.ports.input.orchestration_command import (
-    IOrchestrationCommandPort,
-    StartExecutionCommand,
     CancelExecutionCommand,
+    EntryConditionCheckResult,
+    IOrchestrationCommandPort,
+    OrchestrationCommandResult,
     PauseExecutionCommand,
     ResumeExecutionCommand,
-    OrchestrationCommandResult,
-    EntryConditionCheckResult,
+    StartExecutionCommand,
 )
 
 
@@ -26,7 +25,7 @@ class MockOrchestrationCommandAdapter(IOrchestrationCommandPort):
     """
 
     def __init__(self):
-        self._executions: Dict[str, Dict] = {}
+        self._executions: dict[str, dict] = {}
         self._lock = RLock()
 
     async def start_execution(self, command: StartExecutionCommand) -> OrchestrationCommandResult:
@@ -97,7 +96,7 @@ class MockOrchestrationCommandAdapter(IOrchestrationCommandPort):
         self,
         work_item_id: str,
         workflow_id: str,
-        stage_name: Optional[str] = None,
+        stage_name: str | None = None,
     ) -> EntryConditionCheckResult:
         """Check entry conditions for a workflow stage."""
         return EntryConditionCheckResult(

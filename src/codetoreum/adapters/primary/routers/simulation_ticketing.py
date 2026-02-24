@@ -9,8 +9,7 @@ This router is ONLY mounted in SimulationApplicationBootstrap, never in producti
 """
 
 import logging
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
@@ -33,10 +32,10 @@ class SimCreateIssueRequest(BaseModel):
     title: str = Field(..., description="Issue title", min_length=1)
     description: str = Field(default="", description="Issue description")
     project_id: str = Field(..., description="Project ID")
-    labels: List[str] = Field(default_factory=list, description="Labels")
+    labels: list[str] = Field(default_factory=list, description="Labels")
     priority: str = Field(default="medium", description="Priority: low, medium, high, critical")
-    board_id: Optional[str] = Field(None, description="Board to place issue on")
-    column: Optional[str] = Field(None, description="Column to place issue in (requires board_id)")
+    board_id: str | None = Field(None, description="Board to place issue on")
+    column: str | None = Field(None, description="Column to place issue in (requires board_id)")
 
 
 class SimMoveIssueRequest(BaseModel):
@@ -61,16 +60,16 @@ class SimIssueResponse(BaseModel):
     project_id: str
     status: str
     priority: str
-    labels: List[str]
+    labels: list[str]
     created_at: str
-    external_id: Optional[str] = None
-    board_position: Optional[Dict[str, Any]] = None
+    external_id: str | None = None
+    board_position: dict[str, Any] | None = None
 
 
 class SimIssueListResponse(BaseModel):
     """List of issues response."""
 
-    issues: List[SimIssueResponse]
+    issues: list[SimIssueResponse]
     total: int
 
 
@@ -100,7 +99,7 @@ class SimBoardColumnResponse(BaseModel):
     name: str
     position: int
     item_count: int
-    work_item_ids: List[str]
+    work_item_ids: list[str]
 
 
 class SimBoardColumnsResponse(BaseModel):
@@ -108,7 +107,7 @@ class SimBoardColumnsResponse(BaseModel):
 
     board_id: str
     board_name: str
-    columns: List[SimBoardColumnResponse]
+    columns: list[SimBoardColumnResponse]
 
 
 class SimBoardItemResponse(BaseModel):
@@ -123,7 +122,7 @@ class SimBoardItemsResponse(BaseModel):
     """All board items response."""
 
     board_id: str
-    items: List[SimBoardItemResponse]
+    items: list[SimBoardItemResponse]
     total: int
 
 
@@ -131,7 +130,7 @@ class SimMovementHistoryEntry(BaseModel):
     """Movement history entry."""
 
     work_item_id: str
-    from_column: Optional[str]
+    from_column: str | None
     to_column: str
     moved_by: str
     timestamp: str
@@ -141,7 +140,7 @@ class SimBoardHistoryResponse(BaseModel):
     """Board movement history response."""
 
     board_id: str
-    movements: List[SimMovementHistoryEntry]
+    movements: list[SimMovementHistoryEntry]
     total: int
 
 
@@ -229,7 +228,7 @@ def create_simulation_ticketing_router(
         )
 
     @router.get("/issues", response_model=SimIssueListResponse)
-    async def list_issues(project_id: Optional[str] = None):
+    async def list_issues(project_id: str | None = None):
         """List all issues, optionally filtered by project_id."""
         items = await ticket_adapter.list_work_items(project_id=project_id)
         issues = [

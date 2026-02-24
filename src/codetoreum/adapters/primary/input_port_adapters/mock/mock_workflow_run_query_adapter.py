@@ -5,20 +5,19 @@ In-memory implementation of IWorkflowRunQueryPort for development and testing.
 """
 
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
 from threading import RLock
 
 from codetoreum.ports.input.workflow_run_query import (
     IWorkflowRunQueryPort,
-    WorkflowRunInfo,
-    WorkflowRunStatus,
-    WorkflowRunStageInfo,
-    WorkflowRunSummary,
-    WorkflowRunListResult,
-    WorkflowRunFilters,
-    WorkflowRunPaginationParams,
-    WorkflowRunEventsResult,
     WorkflowRunAuditResult,
+    WorkflowRunEventsResult,
+    WorkflowRunFilters,
+    WorkflowRunInfo,
+    WorkflowRunListResult,
+    WorkflowRunPaginationParams,
+    WorkflowRunStageInfo,
+    WorkflowRunStatus,
+    WorkflowRunSummary,
 )
 
 
@@ -28,7 +27,7 @@ class MockWorkflowRunQueryAdapter(IWorkflowRunQueryPort):
     """
 
     def __init__(self):
-        self._runs: Dict[str, Dict] = {}
+        self._runs: dict[str, dict] = {}
         self._lock = RLock()
 
     async def get_workflow_run(self, workflow_run_id: str) -> WorkflowRunInfo:
@@ -72,8 +71,8 @@ class MockWorkflowRunQueryAdapter(IWorkflowRunQueryPort):
 
     async def list_workflow_runs(
         self,
-        filters: Optional[WorkflowRunFilters] = None,
-        pagination: Optional[WorkflowRunPaginationParams] = None,
+        filters: WorkflowRunFilters | None = None,
+        pagination: WorkflowRunPaginationParams | None = None,
     ) -> WorkflowRunListResult:
         """List workflow runs."""
         return WorkflowRunListResult(
@@ -107,8 +106,8 @@ class MockWorkflowRunQueryAdapter(IWorkflowRunQueryPort):
         workflow_run_id: str,
         offset: int = 0,
         limit: int = 50,
-        event_types: Optional[List[str]] = None,
-        since: Optional[datetime] = None,
+        event_types: list[str] | None = None,
+        since: datetime | None = None,
     ) -> WorkflowRunEventsResult:
         """Get events for a workflow run."""
         return WorkflowRunEventsResult(

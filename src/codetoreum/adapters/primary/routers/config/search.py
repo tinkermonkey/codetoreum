@@ -4,12 +4,11 @@ Configuration Search Endpoints
 Handles full-text search across all configuration types.
 """
 
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, status
 
-from codetoreum.config import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from codetoreum.adapters.primary.config_dtos import ConfigSearchResponse
+from codetoreum.config import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from codetoreum.ports.input.config_query import (
     IConfigurationQueryPort,
     PaginationParams,
@@ -30,8 +29,8 @@ def register_search_endpoints(
     )
     async def search_configs(
         query: str = Query(..., min_length=1, description="Search query string"),
-        config_type: Optional[str] = Query(None, description="Filter by type (project, agent, pipeline)"),
-        project_id: Optional[str] = Query(None, description="Filter by project"),
+        config_type: str | None = Query(None, description="Filter by type (project, agent, pipeline)"),
+        project_id: str | None = Query(None, description="Filter by project"),
         limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description=f"Maximum results (max {MAX_PAGE_SIZE})"),
     ) -> ConfigSearchResponse:
         """

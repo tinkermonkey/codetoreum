@@ -12,13 +12,13 @@ import {
   AlertCircle,
   Activity,
   ArrowRight,
-  Pause,
   GitBranch,
   Eye,
   Ban,
 } from 'lucide-react';
 import { WorkflowEventType } from '../../types/workflow-event';
 import { cn } from '../../lib/utils';
+import { getEventLabel } from '../../utils/eventLabelMap';
 
 interface EventIconProps {
   eventType: WorkflowEventType;
@@ -119,25 +119,4 @@ export function EventIcon({ eventType, className }: EventIconProps): React.React
       <Icon className={cn('w-4 h-4', config.color)} aria-hidden="true" />
     </div>
   );
-}
-
-export function getEventLabel(eventType: WorkflowEventType): string {
-  const labels: Record<WorkflowEventType, string> = {
-    WorkflowStarted: 'Workflow Started',
-    WorkflowCompleted: 'Workflow Completed',
-    WorkflowFailed: 'Workflow Failed',
-    WorkflowCancelled: 'Workflow Cancelled',
-    ExecutionStarted: 'Agent Execution Started',
-    ExecutionCompleted: 'Agent Execution Completed',
-    ExecutionFailed: 'Agent Execution Failed',
-    ExecutionCancelled: 'Agent Execution Cancelled',
-    StageAdvanced: 'Stage Advanced',
-    ReviewStarted: 'Review Started',
-    ReviewCompleted: 'Review Approved',
-    ReviewRejected: 'Review Rejected',
-    ErrorOccurred: 'Error Occurred',
-    StatusUpdate: 'Status Update',
-  };
-
-  return labels[eventType];
 }

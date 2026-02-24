@@ -28,7 +28,7 @@ from .search import register_search_endpoints
 def create_config_router(
     command_port: IConfigurationCommandPort,
     query_port: IConfigurationQueryPort,
-    auth_deps: Optional[SimpleAuthDependencies] = None,
+    auth_deps: SimpleAuthDependencies | None = None,
 ) -> APIRouter:
     """
     Create the configuration REST API router.

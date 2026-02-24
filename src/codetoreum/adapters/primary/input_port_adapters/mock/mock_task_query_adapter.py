@@ -5,19 +5,15 @@ In-memory implementation of ITaskQueryPort for development and testing.
 """
 
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
 from threading import RLock
 
 from codetoreum.ports.input.task_query import (
-    ITaskQueryPort,
-    ExecutionStatusInfo,
-    ExecutionStatus,
-    ExecutionListResult,
-    ExecutionListItem,
     ArtifactListResult,
-    ArtifactInfo,
     ExecutionHistory,
-    ExecutionHistoryEntry,
+    ExecutionListResult,
+    ExecutionStatus,
+    ExecutionStatusInfo,
+    ITaskQueryPort,
 )
 
 
@@ -27,7 +23,7 @@ class MockTaskQueryAdapter(ITaskQueryPort):
     """
 
     def __init__(self):
-        self._executions: Dict[str, Dict] = {}
+        self._executions: dict[str, dict] = {}
         self._lock = RLock()
 
     async def get_execution_status(
@@ -50,10 +46,10 @@ class MockTaskQueryAdapter(ITaskQueryPort):
 
     async def list_executions(
         self,
-        workflow_run_id: Optional[str] = None,
-        work_item_id: Optional[str] = None,
-        project_name: Optional[str] = None,
-        status: Optional[ExecutionStatus] = None,
+        workflow_run_id: str | None = None,
+        work_item_id: str | None = None,
+        project_name: str | None = None,
+        status: ExecutionStatus | None = None,
         page: int = 1,
         page_size: int = 50,
     ) -> ExecutionListResult:
@@ -69,7 +65,7 @@ class MockTaskQueryAdapter(ITaskQueryPort):
     async def get_artifacts(
         self,
         execution_id: str,
-        artifact_type: Optional[str] = None,
+        artifact_type: str | None = None,
     ) -> ArtifactListResult:
         """Get execution artifacts."""
         return ArtifactListResult(artifacts=[], total_count=0)
@@ -77,7 +73,7 @@ class MockTaskQueryAdapter(ITaskQueryPort):
     async def get_execution_history(
         self,
         execution_id: str,
-        limit: Optional[int] = None,
+        limit: int | None = None,
     ) -> ExecutionHistory:
         """Get execution history."""
         return ExecutionHistory(

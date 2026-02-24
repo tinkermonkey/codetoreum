@@ -10,7 +10,7 @@
  */
 
 import { test, expect } from '@playwright/test'
-import { setupTestEnvironment, waitForPageLoad } from './utils/setup'
+import { setupTestEnvironment } from './utils/setup'
 import {
   mockWorkflowRuns,
   mockWorkflowRunDetails,
@@ -102,8 +102,8 @@ test.describe('Workflow Run Monitoring', () => {
       await expect(page.locator(`text=${runningWorkflowRun.issueTitle}`)).toBeVisible()
 
       // Completed runs should not be visible (or count should be 1)
-      const workflowCards = page.locator('[class*="border"][class*="rounded"]')
-      // Note: This assertion depends on actual filter implementation
+      // workflowCards defined but unused - implementation depends on actual filter
+      // This assertion depends on actual filter implementation
     } else {
       // If no filter UI exists yet, skip with warning
       console.warn('Filter UI not implemented - test partially skipped')
