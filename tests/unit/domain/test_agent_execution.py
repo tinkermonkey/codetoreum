@@ -624,5 +624,6 @@ class TestAgentExecutionCompleteLifecycle:
         assert execution.is_failed()
         assert execution.is_terminal()
         assert not execution.is_completed()
+        assert execution.error_message is not None
         assert "timeout" in execution.error_message.lower()
         assert execution.exit_code == -1

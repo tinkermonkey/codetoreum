@@ -1,6 +1,7 @@
 """Unit tests for code review events."""
 
 import pytest
+from typing import cast
 
 from codetoreum.domain.events import (
     Comment,
@@ -8,6 +9,7 @@ from codetoreum.domain.events import (
     ReviewStatusChangedEvent,
     now_iso,
 )
+from codetoreum.domain.events.review_events import CodeReviewStatus
 
 # For immutability tests (when events become frozen dataclasses)
 try:
@@ -120,7 +122,7 @@ class TestReviewStatusChangedEvent:
                 review_id="pr-123",
                 project_id="proj-1",
                 previous_status="open",
-                new_status="pending",  # Invalid status
+                new_status=cast("CodeReviewStatus", "pending"),  # Invalid status - testing validation
             )
 
     def test_missing_review_id(self):
@@ -322,13 +324,13 @@ class TestReviewStatusChangedEventImmutability:
         # ReviewStatusChangedEvent is a frozen dataclass, so attempting to modify
         # any attribute should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            event.review_id = "pr-456"  # type: ignore
+            event.review_id = "pr-456"
 
         with pytest.raises(FrozenInstanceError):
-            event.previous_status = "closed"  # type: ignore
+            event.previous_status = "closed"
 
         with pytest.raises(FrozenInstanceError):
-            event.new_status = "rejected"  # type: ignore
+            event.new_status = "rejected"
 
 
 class TestReviewCommentAddedEventImmutability:
@@ -359,10 +361,10 @@ class TestReviewCommentAddedEventImmutability:
         # ReviewCommentAddedEvent is a frozen dataclass, so attempting to modify
         # any attribute should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            event.review_id = "pr-456"  # type: ignore
+            event.review_id = "pr-456"
 
         with pytest.raises(FrozenInstanceError):
-            event.comment = Comment("rc-2", "bob", "Different comment", now_iso())  # type: ignore
+            event.comment = Comment("rc-2", "bob", "Different comment", now_iso())
 
     def test_review_comment_added_nested_comment_immutability(self):
         """Test that nested Comment object in ReviewCommentAddedEvent is immutable."""
@@ -384,6 +386,7 @@ class TestReviewCommentAddedEventImmutability:
         )
 
         # Verify comment attributes are preserved
+        assert event.comment is not None
         assert event.comment.id == "rc-1"
         assert event.comment.body == "Great work!"
         assert event.comment.is_bot is False
@@ -391,7 +394,7 @@ class TestReviewCommentAddedEventImmutability:
         # Comment is a frozen dataclass, so attempting to modify
         # its attributes should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            event.comment.author = "bob"  # type: ignore
+            event.comment.author = "bob"
 
         with pytest.raises(FrozenInstanceError):
-            event.comment.body = "Different feedback"  # type: ignore
+            event.comment.body = "Different feedback"
