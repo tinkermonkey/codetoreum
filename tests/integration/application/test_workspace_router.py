@@ -129,7 +129,6 @@ def sample_agent():
         agent_type=AgentType.DEVELOPER,
         capabilities={
             "code_generation": AgentCapability(skill="code_generation", proficiency=0.9),
-            "makes_code_changes": True,
         },
         role_description="Develops code",
         model="claude-sonnet-4-5",
@@ -156,7 +155,6 @@ def analyst_agent():
         agent_type=AgentType.REQUIREMENTS_ANALYST,
         capabilities={
             "analysis": AgentCapability(skill="analysis", proficiency=0.95),
-            "makes_code_changes": False,
         },
         role_description="Analyzes requirements",
         model="claude-sonnet-4-5",

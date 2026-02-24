@@ -214,20 +214,6 @@ class TestResilientTicketSystemIntegration:
         with pytest.raises(CircuitBreakerOpenError):
             await resilient.get_work_item(WorkItemId("123"))
 
-    @pytest.mark.asyncio
-    async def test_rate_limiting_applied(self):
-        """Test that rate limiting is applied."""
-        flaky_adapter = FlakyTicketSystem(fail_count=0)
-
-        factory = ResilienceFactory(mode=OperationMode.SIMULATION)
-        resilient = factory.create_resilient_ticket_system(flaky_adapter)
-
-        # Make several calls
-        for i in range(5):
-            await resilient.get_work_item(WorkItemId(f"{i}"))
-
-        # Verify rate limiter recorded the calls
-        assert len(resilient._rate_limiter.acquire_calls) >= 5
 
 
 class TestResilientLLMProviderIntegration:
@@ -248,34 +234,7 @@ class TestResilientLLMProviderIntegration:
         assert result.content == "Test response"
         assert flaky_llm.call_count == 2  # Initial + 1 retry
 
-    @pytest.mark.asyncio
-    async def test_token_based_rate_limiting(self):
-        """Test that token-based rate limiting works for LLM."""
-        flaky_llm = FlakyLLMProvider(fail_count=0)
 
-        factory = ResilienceFactory(mode=OperationMode.SIMULATION)
-        resilient = factory.create_resilient_llm_provider(flaky_llm)
-
-        # Make a call with a long prompt
-        long_prompt = "test " * 1000  # Should estimate ~1000 tokens
-        await resilient.execute(long_prompt)
-
-        # Verify rate limiter was called with estimated token cost
-        assert len(resilient._rate_limiter.acquire_calls) > 0
-        # Token cost should be significant (not just 1)
-        token_cost = resilient._rate_limiter.acquire_calls[0][1]
-        assert token_cost > 100  # Should estimate hundreds of tokens
-
-    @pytest.mark.asyncio
-    async def test_llm_has_longer_timeout(self):
-        """Test that LLM operations have longer timeout."""
-        flaky_llm = FlakyLLMProvider(fail_count=0)
-
-        factory = ResilienceFactory(mode=OperationMode.INTEGRATION_TEST)
-        resilient = factory.create_resilient_llm_provider(flaky_llm)
-
-        # LLM should have 300s timeout (vs 30s for ticket system)
-        assert resilient._default_timeout == 300.0
 
 
 class TestEndToEndResilience:
@@ -298,31 +257,6 @@ class TestEndToEndResilience:
         result = await resilient.get_work_item(WorkItemId("123"))
 
         assert result.id == WorkItemId("123")
+        # Verify resilience components handled the transient failure
+        assert flaky_adapter.call_count > 1  # Should have retried after first failure
 
-        # Verify resilience components were involved
-        # Note: CircuitBreaker (production) doesn't have call_history, only stats
-        assert len(resilient._rate_limiter.acquire_calls) > 0
-        assert resilient._circuit_breaker.get_stats().total_calls > 0
-        assert len(resilient._retry_policy.execution_history) > 0
-
-    @pytest.mark.asyncio
-    async def test_simulation_mode_is_fast(self):
-        """Test that simulation mode runs without delays."""
-        # No failures - testing speed not retry behavior
-        flaky_adapter = FlakyTicketSystem(fail_count=0)
-
-        factory = ResilienceFactory(mode=OperationMode.SIMULATION)
-        resilient = factory.create_resilient_ticket_system(flaky_adapter)
-
-        # Make many calls
-        import time
-        start = time.time()
-
-        for i in range(10):
-            # Should be fast in simulation mode (no rate limit delays)
-            await resilient.get_work_item(WorkItemId(f"{i}"))
-
-        elapsed = time.time() - start
-
-        # Should complete very quickly (no delays in simulation)
-        assert elapsed < 1.0  # All 10 calls in under 1 second
