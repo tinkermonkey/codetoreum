@@ -170,6 +170,26 @@ from .project_events import (
     OrchestrationCycleCompletedEvent,
 )
 
+# Queue events
+from .queue_events import (
+    QueueItemAddedEvent,
+    QueueItemRemovedEvent,
+    QueuePositionChangedEvent,
+)
+
+# Repository events
+from .repository_events import (
+    CommitCreatedEvent,
+    BranchCreatedEvent,
+    FilesStagedEvent,
+)
+
+# Storage events
+from .storage_events import (
+    ArtifactUploadedEvent,
+    ArtifactDeletedEvent,
+)
+
 __all__ = [
     # Legacy domain events (from events.py)
     "DomainEvent",
@@ -294,4 +314,15 @@ __all__ = [
     "ProjectEnabledEvent",
     "ProjectDisabledEvent",
     "OrchestrationCycleCompletedEvent",
+    # Queue events
+    "QueueItemAddedEvent",
+    "QueueItemRemovedEvent",
+    "QueuePositionChangedEvent",
+    # Repository events
+    "CommitCreatedEvent",
+    "BranchCreatedEvent",
+    "FilesStagedEvent",
+    # Storage events
+    "ArtifactUploadedEvent",
+    "ArtifactDeletedEvent",
 ]

@@ -21,7 +21,6 @@ import logging
 import threading
 from datetime import datetime, timezone
 from typing import Callable, Dict, List, Optional, Tuple
-from uuid import uuid4
 
 from codetoreum.ports.output.pipeline_queue_service import (
     IPipelineQueueService,
@@ -213,6 +212,7 @@ class InMemoryQueueService(IPipelineQueueService):
             )
 
             # Emit domain event
+            # Note: source="mock" identifies this as a test/simulation event for traceability
             self._event_emitter.emit(
                 QueueItemAddedEvent(
                     type="queue.item_added",
@@ -314,6 +314,7 @@ class InMemoryQueueService(IPipelineQueueService):
                         )
 
                         # Emit domain event
+                        # Note: source="mock" identifies this as a test/simulation event for traceability
                         self._event_emitter.emit(
                             QueueItemRemovedEvent(
                                 type="queue.item_removed",
@@ -500,6 +501,7 @@ class InMemoryQueueService(IPipelineQueueService):
 
                             # Emit position change event if position changed
                             if entry.position_in_column != position:
+                                # Note: source="mock" identifies this as a test/simulation event for traceability
                                 self._event_emitter.emit(
                                     QueuePositionChangedEvent(
                                         type="queue.position_changed",

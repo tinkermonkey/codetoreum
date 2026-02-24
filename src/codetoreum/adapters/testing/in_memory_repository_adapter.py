@@ -198,6 +198,7 @@ class InMemoryRepositoryAdapter(IRepository):
             self._branches[(repo_id, branch_name)] = source_commit
 
             # Emit domain event
+            # Note: source="mock" identifies this as a test/simulation event for traceability
             self._event_emitter.emit(
                 BranchCreatedEvent(
                     type="repository.branch_created",
@@ -268,7 +269,11 @@ class InMemoryRepositoryAdapter(IRepository):
             self._branches[(repo_id, current_branch)] = commit_sha
 
             # Emit FilesStagedEvent if files were provided
+            # Note: For the in-memory adapter, FilesStagedEvent is emitted as part of the commit
+            # operation to keep state changes atomic. In real git, staging and committing are
+            # separate operations, but the in-memory adapter combines them.
             if changed_files:
+                # Note: source="mock" identifies this as a test/simulation event for traceability
                 self._event_emitter.emit(
                     FilesStagedEvent(
                         type="repository.files_staged",
@@ -281,6 +286,7 @@ class InMemoryRepositoryAdapter(IRepository):
                 )
 
             # Emit CommitCreatedEvent
+            # Note: source="mock" identifies this as a test/simulation event for traceability
             self._event_emitter.emit(
                 CommitCreatedEvent(
                     type="repository.commit_created",

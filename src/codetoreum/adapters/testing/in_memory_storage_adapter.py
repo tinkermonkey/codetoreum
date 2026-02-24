@@ -56,6 +56,7 @@ class InMemoryStorageAdapter(IStorage):
             }
 
             # Emit domain event
+            # Note: source="mock" identifies this as a test/simulation event for traceability
             self._event_emitter.emit(
                 ArtifactUploadedEvent(
                     type="storage.artifact_uploaded",
@@ -78,6 +79,8 @@ class InMemoryStorageAdapter(IStorage):
         """Upload from file."""
         if not file_path.exists():
             raise ResourceNotFoundError(f"File not found: {file_path}")
+        # Note: File I/O is intentionally done outside the lock since reading from disk
+        # should not block the storage lock. The actual state modification (storage) is locked.
         content = file_path.read_bytes()
         await self.upload(key, content, content_type, metadata)
 
@@ -102,6 +105,7 @@ class InMemoryStorageAdapter(IStorage):
             self._metadata.pop(key)
 
             # Emit domain event
+            # Note: source="mock" identifies this as a test/simulation event for traceability
             self._event_emitter.emit(
                 ArtifactDeletedEvent(
                     type="storage.artifact_deleted",
@@ -116,19 +120,22 @@ class InMemoryStorageAdapter(IStorage):
         """Delete multiple files."""
         with self._lock:
             for key in keys:
-                self._objects.pop(key, None)
-                self._metadata.pop(key, None)
+                # Only emit event if key actually exists
+                if key in self._objects:
+                    self._objects.pop(key, None)
+                    self._metadata.pop(key, None)
 
-                # Emit domain event for each deleted artifact
-                self._event_emitter.emit(
-                    ArtifactDeletedEvent(
-                        type="storage.artifact_deleted",
-                        timestamp=datetime.now(timezone.utc).isoformat(),
-                        source="mock",
-                        key=key,
-                        project_id=None,
+                    # Emit domain event for each deleted artifact
+                    # Note: source="mock" identifies this as a test/simulation event for traceability
+                    self._event_emitter.emit(
+                        ArtifactDeletedEvent(
+                            type="storage.artifact_deleted",
+                            timestamp=datetime.now(timezone.utc).isoformat(),
+                            source="mock",
+                            key=key,
+                            project_id=None,
+                        )
                     )
-                )
 
     async def list_files(
         self,
@@ -194,6 +201,7 @@ class InMemoryStorageAdapter(IStorage):
             self._metadata[destination_key]["last_modified"] = datetime.now(timezone.utc)
 
             # Emit ArtifactUploadedEvent for the copied artifact
+            # Note: source="mock" identifies this as a test/simulation event for traceability
             self._event_emitter.emit(
                 ArtifactUploadedEvent(
                     type="storage.artifact_uploaded",
