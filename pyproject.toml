@@ -158,6 +158,9 @@ ignore = [
 "documentation/api/examples/**/*.py" = [
     "S105",    # Hardcoded password in example code (placeholders only)
 ]
+"documentation/api/sdk/python/**/*.py" = [
+    "ANN401",  # Dynamically typed expressions allowed in SDK (client injection pattern)
+]
 "__init__.py" = [
     "F401",    # Imported but unused
 ]
