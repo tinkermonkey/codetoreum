@@ -60,7 +60,6 @@ Located in [`examples/python/`](examples/python/):
 |------|-------------|
 | `create_agent.py` | Create agents with capabilities and MCP servers |
 | `list_executions.py` | List and monitor agent executions |
-| `websocket_events.py` | Real-time event streaming via WebSocket |
 | `start_workflow.py` | Create work items and start workflows |
 
 **Running Python Examples**:
@@ -71,7 +70,6 @@ export API_TOKEN="your_token_here"
 # Run examples
 python examples/python/create_agent.py
 python examples/python/list_executions.py
-python examples/python/websocket_events.py
 python examples/python/start_workflow.py
 ```
 
@@ -537,7 +535,7 @@ Real-time event streaming via WebSocket:
 }
 ```
 
-See [`examples/python/websocket_events.py`](examples/python/websocket_events.py) for detailed usage.
+For WebSocket event streaming implementation details, refer to the API endpoint specification above.
 
 ## Contributing
 

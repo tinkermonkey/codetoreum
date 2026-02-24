@@ -1,16 +1,21 @@
 """Workflows resource client"""
-from typing import Dict, List, Optional
+from typing import Any, Optional
 from ..models import Workflow, PaginatedResponse
 from ..exceptions import CodetoreumError
+
+
+# Type aliases to avoid shadowing the list() method defined in this class
+DictAny = dict[str, Any]
+ListDictAny = list[dict[str, Any]]
 
 
 class WorkflowsResource:
     """Client for workflows endpoints."""
 
-    def __init__(self, client):
+    def __init__(self, client: Any) -> None:
         self.client = client
 
-    def _validate_workflow_params(self, name: str, description: str, stages: List[Dict]):
+    def _validate_workflow_params(self, name: str, description: str, stages: ListDictAny) -> None:
         """Validate workflow creation parameters."""
         if not name or not isinstance(name, str) or not name.strip():
             raise ValueError("name must be a non-empty string")
@@ -34,9 +39,9 @@ class WorkflowsResource:
         self,
         name: str,
         description: str,
-        stages: List[Dict],
+        stages: ListDictAny,
         enabled: bool = True,
-        **kwargs
+        **kwargs: Any
     ) -> Workflow:
         """
         Create a workflow definition.
@@ -94,7 +99,7 @@ class WorkflowsResource:
         enabled: Optional[bool] = None,
         limit: int = 100,
         offset: int = 0,
-        **filters
+        **filters: Any
     ) -> PaginatedResponse:
         """
         List workflows.
@@ -113,7 +118,7 @@ class WorkflowsResource:
             >>> for workflow in workflows.items:
             ...     print(f"{workflow.name}: {len(workflow.stages)} stages")
         """
-        params = {"limit": limit, "offset": offset}
+        params: DictAny = {"limit": limit, "offset": offset}
 
         if enabled is not None:
             params["enabled"] = enabled
@@ -154,9 +159,9 @@ class WorkflowsResource:
         workflow_id: str,
         name: Optional[str] = None,
         description: Optional[str] = None,
-        stages: Optional[List[Dict]] = None,
+        stages: Optional[ListDictAny] = None,
         enabled: Optional[bool] = None,
-        **updates
+        **updates: Any
     ) -> Workflow:
         """
         Update workflow definition.
@@ -186,7 +191,7 @@ class WorkflowsResource:
         if not workflow_id or not isinstance(workflow_id, str) or not workflow_id.strip():
             raise ValueError("workflow_id must be a non-empty string")
 
-        payload = {}
+        payload: DictAny = {}
 
         if name is not None:
             if not isinstance(name, str) or not name.strip():
@@ -216,7 +221,7 @@ class WorkflowsResource:
         data = self.client.put(f"/api/v2/workflows/{workflow_id}", json=payload)
         return Workflow.from_dict(data)
 
-    def delete(self, workflow_id: str) -> dict:
+    def delete(self, workflow_id: str) -> DictAny:
         """
         Delete workflow definition.
 
@@ -237,7 +242,8 @@ class WorkflowsResource:
         if not workflow_id or not isinstance(workflow_id, str) or not workflow_id.strip():
             raise ValueError("workflow_id must be a non-empty string")
 
-        return self.client.delete(f"/api/v2/workflows/{workflow_id}")
+        result = self.client.delete(f"/api/v2/workflows/{workflow_id}")
+        return result if isinstance(result, dict) else {}
 
     def get_runs(
         self,
@@ -272,7 +278,7 @@ class WorkflowsResource:
         if not workflow_id or not isinstance(workflow_id, str) or not workflow_id.strip():
             raise ValueError("workflow_id must be a non-empty string")
 
-        params = {"limit": limit, "offset": offset}
+        params: DictAny = {"limit": limit, "offset": offset}
         if status:
             params["status"] = status
 
