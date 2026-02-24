@@ -23,9 +23,6 @@ export interface MockWebSocketEvent {
  */
 export async function mockWebSocket(page: Page) {
   await page.addInitScript(() => {
-    // Store original WebSocket
-    const OriginalWebSocket = window.WebSocket
-
     // Mock WebSocket class
     class MockWebSocket extends EventTarget {
       public url: string
@@ -44,7 +41,7 @@ export async function mockWebSocket(page: Page) {
       // Store for programmatic control
       private static instances: MockWebSocket[] = []
 
-      constructor(url: string | URL, protocols?: string | string[]) {
+      constructor(url: string | URL, _protocols?: string | string[]) {
         super()
         this.url = url.toString()
         MockWebSocket.instances.push(this)
@@ -58,7 +55,7 @@ export async function mockWebSocket(page: Page) {
         }, 100)
       }
 
-      send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
+      send(_data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
         // Mock send - do nothing in tests
       }
 

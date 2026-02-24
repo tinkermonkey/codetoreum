@@ -5,7 +5,7 @@
  */
 
 import { Page, Route } from '@playwright/test'
-import type { SystemHealth, CircuitBreaker, AgentExecution } from '../../src/types/system-status'
+import type { SystemHealth, CircuitBreaker } from '../../src/types/system-status'
 import type { WorkflowRun, WorkflowRunsResponse } from '../../src/types/workflow-run'
 import type { Execution } from '../../src/types'
 
