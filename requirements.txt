@@ -78,3 +78,6 @@ mkdocs-material>=9.6.0
 
 # Development Tools
 pre-commit>=4.1.0
+
+# Type Stubs
+types-requests>=2.28.0
