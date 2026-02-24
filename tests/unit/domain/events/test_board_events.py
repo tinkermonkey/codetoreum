@@ -364,8 +364,8 @@ class TestBoardReconciledEvent:
             source="github",
             project_id="proj-1",
             board_id="board-1",
-            columns_added=["Col A", "Col B", "Col C"],
-            columns_removed=["Old Col"],
+            columns_added=("Col A", "Col B", "Col C"),
+            columns_removed=("Old Col",),
             items_moved=5,
         )
 
@@ -483,8 +483,8 @@ class TestBoardReconciledEventImmutability:
             source="github",
             project_id="proj-1",
             board_id="board-1",
-            columns_added=["New Column"],
-            columns_removed=["Old Column"],
+            columns_added=("New Column",),
+            columns_removed=("Old Column",),
         )
 
         # Verify the event is properly created
@@ -507,8 +507,8 @@ class TestBoardReconciledEventImmutability:
             source="github",
             project_id="proj-1",
             board_id="board-1",
-            columns_added=["New Column"],
-            columns_removed=["Old Column"],
+            columns_added=("New Column",),
+            columns_removed=("Old Column",),
         )
 
         # Verify columns are stored as tuples (immutable)

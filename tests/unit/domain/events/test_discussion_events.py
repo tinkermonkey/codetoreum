@@ -236,7 +236,7 @@ class TestCommentContext:
         )
 
         with pytest.raises(FrozenInstanceError):
-            context.thread_id = "t2"
+            object.__setattr__(context, "thread_id", "t2")
 
     def test_context_with_invalid_parent_comment_raises_error(self):
         """Test that CommentContext with invalid parent Comment raises error."""
@@ -382,7 +382,7 @@ class TestCommentContext:
         with pytest.raises(ValueError, match="parent_comment cannot be None"):
             CommentContext.for_reply(
                 thread_id="t1",
-                parent_comment=None,
+                parent_comment=None,  # type: ignore
             )
 
 
@@ -620,13 +620,13 @@ class TestCommentImmutability:
         # Comment is a frozen dataclass, so attempting to modify
         # any attribute should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            comment.id = "comment-456"  # type: ignore
+            object.__setattr__(comment, "id", "comment-456")
 
         with pytest.raises(FrozenInstanceError):
-            comment.author = "bob"  # type: ignore
+            object.__setattr__(comment, "author", "bob")
 
         with pytest.raises(FrozenInstanceError):
-            comment.body = "Different text"  # type: ignore
+            object.__setattr__(comment, "body", "Different text")
 
     def test_comment_bot_immutability(self):
         """Test immutability of bot comment (frozen dataclass)."""
@@ -645,10 +645,10 @@ class TestCommentImmutability:
 
         # Comment is frozen, so modification should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            comment.is_bot = False  # type: ignore
+            object.__setattr__(comment, "is_bot", False)
 
         with pytest.raises(FrozenInstanceError):
-            comment.parent_id = "comment-456"  # type: ignore
+            object.__setattr__(comment, "parent_id", "comment-456")
 
 
 class TestCommentContextImmutability:
@@ -671,13 +671,13 @@ class TestCommentContextImmutability:
         # CommentContext is a frozen dataclass, so attempting to modify
         # any attribute should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            context.thread_id = "thread-2"  # type: ignore
+            object.__setattr__(context, "thread_id", "thread-2")
 
         with pytest.raises(FrozenInstanceError):
-            context.column_name = "Done"  # type: ignore
+            object.__setattr__(context, "column_name", "Done")
 
         with pytest.raises(FrozenInstanceError):
-            context.is_initial_request = True  # type: ignore
+            object.__setattr__(context, "is_initial_request", True)
 
     def test_comment_context_with_parent_comment_immutability(self):
         """Test immutability of CommentContext with nested parent comment."""
@@ -696,11 +696,13 @@ class TestCommentContextImmutability:
 
         # Verify nested comment is preserved
         assert context.parent_comment == parent
+        assert context.parent_comment is not None
         assert context.parent_comment.id == "p1"
 
         # Nested comment is also frozen, so modification should fail
+        assert context.parent_comment is not None
         with pytest.raises(FrozenInstanceError):
-            context.parent_comment.author = "bob"  # type: ignore
+            object.__setattr__(context.parent_comment, "author", "bob")
 
         # And the context field itself cannot be reassigned
         with pytest.raises(FrozenInstanceError):
@@ -743,13 +745,13 @@ class TestCommentNeedsResponseEventImmutability:
         # CommentNeedsResponseEvent is a frozen dataclass, so attempting to modify
         # any attribute should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            event.work_item_id = "456"  # type: ignore
+            object.__setattr__(event, "work_item_id", "456")
 
         with pytest.raises(FrozenInstanceError):
-            event.comment = Comment("c2", "bob", "Different comment", now_iso())  # type: ignore
+            object.__setattr__(event, "comment", Comment("c2", "bob", "Different comment", now_iso()))
 
         with pytest.raises(FrozenInstanceError):
-            event.context = CommentContext(thread_id="t2")  # type: ignore
+            object.__setattr__(event, "context", CommentContext(thread_id="t2"))
 
 
 class TestCommentPostedEventImmutability:
@@ -782,10 +784,10 @@ class TestCommentPostedEventImmutability:
         # CommentPostedEvent is a frozen dataclass, so attempting to modify
         # any attribute should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            event.work_item_id = "456"  # type: ignore
+            object.__setattr__(event, "work_item_id", "456")
 
         with pytest.raises(FrozenInstanceError):
-            event.comment = Comment("c2", "bob", "Different comment", now_iso())  # type: ignore
+            object.__setattr__(event, "comment", Comment("c2", "bob", "Different comment", now_iso()))
 
     def test_comment_posted_event_bot_comment_immutability(self):
         """Test immutability of CommentPostedEvent with bot comment (frozen dataclass)."""
@@ -812,10 +814,10 @@ class TestCommentPostedEventImmutability:
 
         # Nested comment is frozen, so modification should fail
         with pytest.raises(FrozenInstanceError):
-            event.comment.is_bot = False  # type: ignore
+            object.__setattr__(event.comment, "is_bot", False)
 
         with pytest.raises(FrozenInstanceError):
-            event.comment.author = "alice"  # type: ignore
+            object.__setattr__(event.comment, "author", "alice")
 
 
 class TestAgentResponsePostedEvent:
@@ -1029,22 +1031,22 @@ class TestAgentResponsePostedEventImmutability:
         # AgentResponsePostedEvent is a frozen dataclass, so attempting to modify
         # any attribute should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            event.work_item_id = "issue-2"  # type: ignore
+            object.__setattr__(event, "work_item_id", "issue-2")
 
         with pytest.raises(FrozenInstanceError):
-            event.project_id = "proj-2"  # type: ignore
+            object.__setattr__(event, "project_id", "proj-2")
 
         with pytest.raises(FrozenInstanceError):
-            event.comment_id = "comment-99"  # type: ignore
+            object.__setattr__(event, "comment_id", "comment-99")
 
         with pytest.raises(FrozenInstanceError):
-            event.response_comment_id = "comment-100"  # type: ignore
+            object.__setattr__(event, "response_comment_id", "comment-100")
 
         with pytest.raises(FrozenInstanceError):
-            event.agent_name = "bug-fixer"  # type: ignore
+            object.__setattr__(event, "agent_name", "bug-fixer")
 
         with pytest.raises(FrozenInstanceError):
-            event.conversation_id = "conv-different"  # type: ignore
+            object.__setattr__(event, "conversation_id", "conv-different")
 
     def test_agent_response_posted_event_multiple_modifications_fail(self):
         """Test that multiple attempts to modify frozen event all fail."""
@@ -1062,4 +1064,4 @@ class TestAgentResponsePostedEventImmutability:
         # All modification attempts should fail consistently
         for attempt in range(3):
             with pytest.raises(FrozenInstanceError):
-                event.work_item_id = f"issue-{attempt}"  # type: ignore
+                object.__setattr__(event, "work_item_id", f"issue-{attempt}")
