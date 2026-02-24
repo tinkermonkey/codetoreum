@@ -229,7 +229,7 @@ class TestImmutability:
             context.create_pr = False
 
         with pytest.raises(Exception):
-            context.workspace_type = WorkspaceType.DISCUSSION
+            context.workspace_type = WorkspaceType.ISSUE
 
 
 class TestEquality:

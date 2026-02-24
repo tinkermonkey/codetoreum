@@ -163,14 +163,14 @@ class SimpleTokenAuthManager:
 
         return {"Set-Cookie": cookie_value}
 
-    def validate_token(self, token: str) -> bool:
+    def validate_token(self, token: Optional[str]) -> bool:
         """
         Validate a provided token.
 
         This uses constant-time comparison to prevent timing attacks.
 
         Args:
-            token: Token to validate
+            token: Token to validate (can be None)
 
         Returns:
             True if valid, False otherwise
