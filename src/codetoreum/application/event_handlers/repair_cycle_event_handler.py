@@ -8,7 +8,7 @@ Subscribes to workitem.column_changed events and orchestrates:
 
 import logging
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 from codetoreum.domain.events import DomainEvent, WorkItemColumnChanged
 from codetoreum.domain.repair_cycle_types import (
@@ -101,7 +101,7 @@ class RepairCycleEventHandler(EventHandler):
         """Get the event bus if configured."""
         return self._event_bus
 
-    def get_event_types(self) -> list[str]:
+    def get_event_types(self) -> List[str]:
         """Get list of event types this handler processes.
 
         Returns:

@@ -18,10 +18,13 @@ from codetoreum.domain.repair_cycle_types import (
 )
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
-from codetoreum.ports.output.repair_cycle_service import IRepairCycle
+from codetoreum.ports.output.repair_cycle_service import (
+    IRepairCycle,
+    RepairCycleContext,
+)
 
 
-class MockRepairCycleAdapter(IRepairCycle):
+class MockRepairCycleAdapter:
     """Mock repair cycle adapter for testing."""
 
     def __init__(self):
@@ -58,11 +61,56 @@ class MockRepairCycleAdapter(IRepairCycle):
             timestamp="2024-01-01T00:00:00Z",
         )
 
-    async def execute(self, context: RepairCycleEventContext) -> RepairCycleResult:
+    async def execute(self, context: RepairCycleContext) -> RepairCycleResult:
         """Execute repair cycle."""
         self.executed = True
         self.last_context = context
         return self.result
+
+    async def run_tests(
+        self,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ) -> RepairTestResult:
+        """Execute tests (stub for protocol compliance)."""
+        return RepairTestResult(
+            test_type=RepairTestType.UNIT,
+            iteration=1,
+            passed=0,
+            failed=0,
+            warnings=0,
+            failures=(),
+            warning_list=(),
+            raw_output="",
+            timestamp="2024-01-01T00:00:00Z",
+        )
+
+    async def fix_failures_by_file(
+        self,
+        grouped_failures,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ) -> int:
+        """Fix failures (stub for protocol compliance)."""
+        return 0
+
+    async def handle_warnings(
+        self,
+        test_result: RepairTestResult,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ) -> int:
+        """Handle warnings (stub for protocol compliance)."""
+        return 0
+
+    async def checkpoint(
+        self,
+        test_type: RepairTestType,
+        iteration: int,
+        context: RepairCycleContext,
+    ) -> None:
+        """Checkpoint (stub for protocol compliance)."""
+        pass
 
 
 # ====================================================================================
