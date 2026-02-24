@@ -469,6 +469,14 @@ def create_app(
     )
     app.include_router(work_items_router)
 
+    # Include Workflow Runs router (must be registered before Workflows router to
+    # prevent /api/v2/workflows/{id} from greedily matching /api/v2/workflows/runs)
+    workflow_runs_router = create_workflow_runs_router(
+        query_port=workflow_run_query_port,
+        auth_deps=auth_deps,
+    )
+    app.include_router(workflow_runs_router)
+
     # Include Workflows router
     workflows_router = create_workflows_router(
         definition_command_port=workflow_definition_command_port,
@@ -476,13 +484,6 @@ def create_app(
         auth_deps=auth_deps,
     )
     app.include_router(workflows_router)
-
-    # Include Workflow Runs router
-    workflow_runs_router = create_workflow_runs_router(
-        query_port=workflow_run_query_port,
-        auth_deps=auth_deps,
-    )
-    app.include_router(workflow_runs_router)
 
     # Include Orchestrator router
     orchestrator_router = create_orchestrator_router(

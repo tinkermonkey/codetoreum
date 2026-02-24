@@ -141,9 +141,19 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
     }
 
     // Close existing connection if any (prevents resource leak)
+    // Null out onclose before closing to prevent the reconnect logic from
+    // firing and creating a new connection that we immediately replace.
     if (state.ws) {
       console.log('[WebSocket] Closing existing connection before reconnect')
+      state.ws.onclose = null
       state.ws.close()
+    }
+
+    // Clear any pending reconnect timeout to avoid a stale reconnect
+    // firing after we deliberately establish a new connection here.
+    if (reconnectTimeout) {
+      clearTimeout(reconnectTimeout)
+      reconnectTimeout = null
     }
 
     // Don't connect if already connecting
