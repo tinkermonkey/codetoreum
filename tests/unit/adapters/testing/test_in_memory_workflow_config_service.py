@@ -24,9 +24,9 @@ def sample_workflow_template():
     return BoardWorkflowTemplate(
         id="workflow-1",
         name="Standard Workflow",
-        pipeline_trigger_columns=["In Progress"],
-        exit_columns=["Done"],
-        columns=[
+        pipeline_trigger_columns=("In Progress",),
+        exit_columns=("Done",),
+        columns=(
             ColumnTemplate(
                 name="Backlog",
                 type=ColumnType.MANUAL,
@@ -54,7 +54,7 @@ def sample_workflow_template():
                 position=2,
                 auto_progress_on_completion=False,
             ),
-        ],
+        ),
     )
 
 
@@ -224,9 +224,9 @@ class TestIntegration:
         template2 = BoardWorkflowTemplate(
             id="workflow-alt",
             name="Alternative Workflow",
-            pipeline_trigger_columns=["Backlog"],
-            exit_columns=["Archived"],
-            columns=[
+            pipeline_trigger_columns=("Backlog",),
+            exit_columns=("Archived",),
+            columns=(
                 ColumnTemplate(
                     name="Backlog",
                     type=ColumnType.MANUAL,
@@ -245,7 +245,7 @@ class TestIntegration:
                     position=1,
                     auto_progress_on_completion=False,
                 ),
-            ],
+            ),
         )
 
         # Register different templates for different boards

@@ -24,7 +24,7 @@ from codetoreum.ports.output.event_store import IEventStore
 class MockEvent(DomainEvent):
     """Mock domain event for testing."""
 
-    def __init__(self, event_type: str, payload: Dict[str, Any], occurred_at: datetime = None):
+    def __init__(self, event_type: str, payload: Dict[str, Any], occurred_at: Optional[datetime] = None):
         self.event_type = event_type
         self.event_id = "test-event-id"
         self.aggregate_id = "test-aggregate-id"
@@ -49,7 +49,7 @@ class MockEventStore(IEventStore):
     def __init__(self):
         self.events: List[DomainEvent] = []
         self.should_fail = False
-        self.fail_on_type: str = None
+        self.fail_on_type: Optional[str] = None
 
     async def append(
         self,
@@ -117,7 +117,7 @@ class MockEventStore(IEventStore):
         return ["test-stream"]
 
     async def get_events_by_type(
-        self, event_type: str, since: datetime = None, limit: int = None
+        self, event_type: str, since: Optional[datetime] = None, limit: int = 1000
     ) -> List[DomainEvent]:
         events = [e for e in self.events if e.event_type == event_type]
 
