@@ -4,10 +4,11 @@ Example: List and monitor agent executions
 This example demonstrates how to list executions, filter by status,
 and retrieve execution logs.
 """
-import requests
 import time
-from typing import List, Dict, Any, Optional
 from datetime import datetime
+from typing import Any, Dict, List, Optional, cast
+
+import requests  # type: ignore[import-untyped]
 
 
 # Configuration
@@ -70,7 +71,7 @@ def list_executions(
     response = requests.get(url, headers=headers, params=params)
     response.raise_for_status()
 
-    return response.json()
+    return cast(Dict[str, Any], response.json())
 
 
 def get_execution_details(execution_id: str) -> Dict[str, Any]:
@@ -92,7 +93,7 @@ def get_execution_details(execution_id: str) -> Dict[str, Any]:
     response = requests.get(url, headers=headers)
     response.raise_for_status()
 
-    return response.json()
+    return cast(Dict[str, Any], response.json())
 
 
 def get_execution_logs(
@@ -124,8 +125,8 @@ def get_execution_logs(
     response = requests.get(url, headers=headers, params=params)
     response.raise_for_status()
 
-    data = response.json()
-    return data.get("logs", [])
+    data = cast(Dict[str, Any], response.json())
+    return cast(List[str], data.get("logs", []))
 
 
 def wait_for_execution(
@@ -186,7 +187,7 @@ def wait_for_execution(
         time.sleep(check_interval)
 
 
-def main():
+def main() -> None:
     """Example usage."""
     try:
         print("=== Listing Running Executions ===\n")

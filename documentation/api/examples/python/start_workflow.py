@@ -4,8 +4,9 @@ Example: Start workflow execution for a work item
 This example demonstrates how to create a work item and start
 a workflow execution.
 """
-import requests
-from typing import Dict, Any, Optional
+from typing import Any
+
+import requests  # type: ignore[import-untyped]
 
 
 # Configuration
@@ -17,10 +18,10 @@ def create_work_item(
     title: str,
     description: str,
     project_id: str,
-    labels: list[str] = None,
+    labels: list[str] | None = None,
     priority: str = "medium",
-    external_id: Optional[str] = None
-) -> Dict[str, Any]:
+    external_id: str | None = None,
+) -> dict[str, Any]:
     """
     Create a new work item.
 
@@ -57,15 +58,15 @@ def create_work_item(
     response = requests.post(url, json=payload, headers=headers)
     response.raise_for_status()
 
-    work_item = response.json()
+    work_item: dict[str, Any] = response.json()
     print(f"✓ Created work item: {work_item['id']}")
     return work_item
 
 
 def start_workflow(
     work_item_id: str,
-    workflow_id: Optional[str] = None
-) -> Dict[str, Any]:
+    workflow_id: str | None = None,
+) -> dict[str, Any]:
     """
     Start workflow execution for a work item.
 
@@ -96,15 +97,15 @@ def start_workflow(
     response = requests.post(url, json=payload, headers=headers)
     response.raise_for_status()
 
-    workflow_run = response.json()
+    workflow_run: dict[str, Any] = response.json()
     print(f"✓ Started workflow run: {workflow_run['workflow_run_id']}")
     return workflow_run
 
 
 def check_entry_conditions(
     work_item_id: str,
-    stage_name: str
-) -> Dict[str, Any]:
+    stage_name: str,
+) -> dict[str, Any]:
     """
     Check if entry conditions are met for a stage.
 
@@ -130,10 +131,11 @@ def check_entry_conditions(
     response = requests.post(url, json=payload, headers=headers)
     response.raise_for_status()
 
-    return response.json()
+    result: dict[str, Any] = response.json()
+    return result
 
 
-def pause_workflow(workflow_run_id: str) -> Dict[str, Any]:
+def pause_workflow(workflow_run_id: str) -> dict[str, Any]:
     """
     Pause a running workflow.
 
@@ -153,10 +155,11 @@ def pause_workflow(workflow_run_id: str) -> Dict[str, Any]:
     response.raise_for_status()
 
     print(f"✓ Paused workflow run: {workflow_run_id}")
-    return response.json()
+    result: dict[str, Any] = response.json()
+    return result
 
 
-def resume_workflow(workflow_run_id: str) -> Dict[str, Any]:
+def resume_workflow(workflow_run_id: str) -> dict[str, Any]:
     """
     Resume a paused workflow.
 
@@ -176,10 +179,11 @@ def resume_workflow(workflow_run_id: str) -> Dict[str, Any]:
     response.raise_for_status()
 
     print(f"✓ Resumed workflow run: {workflow_run_id}")
-    return response.json()
+    result: dict[str, Any] = response.json()
+    return result
 
 
-def cancel_workflow(workflow_run_id: str) -> Dict[str, Any]:
+def cancel_workflow(workflow_run_id: str) -> dict[str, Any]:
     """
     Cancel a workflow execution.
 
@@ -199,10 +203,11 @@ def cancel_workflow(workflow_run_id: str) -> Dict[str, Any]:
     response.raise_for_status()
 
     print(f"✓ Cancelled workflow run: {workflow_run_id}")
-    return response.json()
+    result: dict[str, Any] = response.json()
+    return result
 
 
-def main():
+def main() -> None:
     """Example usage."""
     try:
         # Example 1: Create work item and start workflow
