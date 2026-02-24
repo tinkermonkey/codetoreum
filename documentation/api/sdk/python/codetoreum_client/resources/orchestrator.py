@@ -1,14 +1,17 @@
 """
 Orchestrator resource client
 """
-from typing import Any, Optional
+from typing import Any, Optional, TYPE_CHECKING
 from ..models import WorkflowRun
+
+if TYPE_CHECKING:
+    from ..client import CodetoreumClient
 
 
 class OrchestratorResource:
     """Client for orchestrator endpoints."""
 
-    def __init__(self, client: Any) -> None:
+    def __init__(self, client: "CodetoreumClient") -> None:
         self.client = client
 
     def start_workflow(

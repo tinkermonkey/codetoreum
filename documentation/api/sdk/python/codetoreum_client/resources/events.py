@@ -1,15 +1,18 @@
 """Events resource client (WebSocket)"""
 import json
-from typing import AsyncIterator, Callable, Iterator, Optional
+from typing import Any, AsyncIterator, Callable, Iterator, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..client import CodetoreumClient
 
 
 class EventsResource:
     """Client for real-time event streaming via WebSocket."""
 
-    def __init__(self, client):
+    def __init__(self, client: "CodetoreumClient") -> None:
         self.client = client
 
-    def stream(self) -> Iterator[dict]:
+    def stream(self) -> Iterator[dict[str, Any]]:
         """
         Stream real-time events via WebSocket (synchronous interface).
 
@@ -73,7 +76,7 @@ class EventsResource:
         finally:
             loop.close()
 
-    async def stream_async(self) -> AsyncIterator[dict]:
+    async def stream_async(self) -> AsyncIterator[dict[str, Any]]:
         """
         Stream real-time events via WebSocket (async interface).
 

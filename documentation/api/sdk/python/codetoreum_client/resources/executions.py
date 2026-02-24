@@ -1,14 +1,17 @@
 """
 Executions resource client
 """
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, List, Optional, TYPE_CHECKING, cast
 from ..models import Execution, PaginatedResponse
+
+if TYPE_CHECKING:
+    from ..client import CodetoreumClient
 
 
 class ExecutionsResource:
     """Client for executions endpoints."""
 
-    def __init__(self, client):
+    def __init__(self, client: "CodetoreumClient") -> None:
         self.client = client
 
     def list(
@@ -104,9 +107,9 @@ class ExecutionsResource:
             params["tail"] = tail
 
         data = self.client.get(f"/api/v2/executions/{execution_id}/logs", params=params)
-        return data.get("logs", [])
+        return cast(List[str], data.get("logs", []))
 
-    def get_history(self, execution_id: str) -> list[dict[str, Any]]:
+    def get_history(self, execution_id: str) -> List[dict[str, Any]]:
         """
         Get execution event history.
 
@@ -120,7 +123,7 @@ class ExecutionsResource:
             >>> history = client.executions.get_history("exec_abc123")
         """
         data = self.client.get(f"/api/v2/executions/{execution_id}/history")
-        return data.get("events", [])
+        return cast(List[dict[str, Any]], data.get("events", []))
 
     def terminate(self, execution_id: str) -> Execution:
         """

@@ -1,12 +1,15 @@
 """Metrics resource client"""
 
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..client import CodetoreumClient
 
 
 class MetricsResource:
     """Client for metrics endpoints."""
 
-    def __init__(self, client: Any) -> None:
+    def __init__(self, client: "CodetoreumClient") -> None:
         self.client = client
 
     def health(self) -> dict[str, Any]:

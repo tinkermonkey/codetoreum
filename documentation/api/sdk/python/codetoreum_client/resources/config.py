@@ -1,12 +1,15 @@
 """Configuration resource client"""
-from typing import Any, Optional
+from typing import Any, Optional, TYPE_CHECKING, cast
 from ..exceptions import CodetoreumError
+
+if TYPE_CHECKING:
+    from ..client import CodetoreumClient
 
 
 class ConfigurationResource:
     """Client for configuration endpoints."""
 
-    def __init__(self, client):
+    def __init__(self, client: "CodetoreumClient") -> None:
         self.client = client
 
     def get_project(self, project_id: str) -> dict[str, Any]:
@@ -208,7 +211,7 @@ class ConfigurationResource:
             raise ValueError("project_id must be a non-empty string")
 
         data = self.client.get(f"/api/v2/config/projects/{project_id}/env-vars")
-        return data.get("env_vars", [])
+        return cast(list[dict[str, Any]], data.get("env_vars", []))
 
     def set_env_var(
         self,
