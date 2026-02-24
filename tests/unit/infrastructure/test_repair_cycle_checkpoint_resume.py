@@ -7,7 +7,7 @@ integration with checkpointing.
 import pytest
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Tuple, cast
+from typing import Any, Tuple
 
 from codetoreum.adapters.testing.in_memory_checkpoint_store import InMemoryCheckpointStore
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
@@ -32,7 +32,7 @@ class _RepairCycleContextImpl:
     checkpoint_interval: int
 
 
-def _create_repair_cycle_context(**kwargs: Any) -> RepairCycleContext:
+def _create_repair_cycle_context(**kwargs: Any) -> _RepairCycleContextImpl:
     """Factory function to create RepairCycleContext instances for testing."""
     defaults: dict[str, Any] = {
         "stage_name": "code_review",
@@ -43,7 +43,7 @@ def _create_repair_cycle_context(**kwargs: Any) -> RepairCycleContext:
         "checkpoint_interval": 1,
     }
     defaults.update(kwargs)
-    return cast(RepairCycleContext, _RepairCycleContextImpl(**defaults))
+    return _RepairCycleContextImpl(**defaults)
 
 
 @pytest.mark.asyncio
