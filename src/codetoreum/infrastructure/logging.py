@@ -272,12 +272,12 @@ def configure_logging(
         logging.error(f"Failed to configure structured logging, using basic config: {e}")
 
 
-def set_correlation_id(correlation_id: str) -> None:
+def set_correlation_id(correlation_id: Optional[str]) -> None:
     """
     Set correlation ID for the current context.
 
     Args:
-        correlation_id: Correlation ID to set
+        correlation_id: Correlation ID to set (None to clear)
     """
     correlation_id_context.set(correlation_id)
 

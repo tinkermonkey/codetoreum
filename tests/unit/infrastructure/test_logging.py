@@ -409,6 +409,7 @@ class TestCorrelationIdFilter:
         result = filter_obj.filter(record)
 
         assert result is True
+        assert hasattr(record, "correlation_id")
         assert record.correlation_id == correlation_id
 
     def test_handles_missing_correlation_id(self):
@@ -429,6 +430,7 @@ class TestCorrelationIdFilter:
         result = filter_obj.filter(record)
 
         assert result is True
+        assert hasattr(record, "correlation_id")
         assert record.correlation_id == "N/A"
 
 
