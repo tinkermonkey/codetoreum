@@ -14,6 +14,10 @@ from codetoreum.infrastructure.security import (
     validate_agent_name,
 )
 
+# Constants for validation
+MAX_ROLE_DESCRIPTION_LENGTH = 2000
+MAX_CAPABILITIES_COUNT = 50
+
 # ============================================================================
 # Request Models
 # ============================================================================
@@ -43,7 +47,10 @@ class CreateAgentRequest(BaseModel):
     display_name: str = Field(..., description="Human-readable agent name", max_length=200)
     agent_type: str = Field(
         ...,
-        description="Agent type (maker, reviewer, specialized, requirements_analyst, architect, developer, tester, devops)",
+        description=(
+            "Agent type (maker, reviewer, specialized, requirements_analyst, "
+            "architect, developer, tester, devops)"
+        ),
     )
     role_description: str = Field(..., description="Description of agent's role")
     model: str = Field(..., description="LLM model to use", max_length=100)
@@ -68,16 +75,16 @@ class CreateAgentRequest(BaseModel):
 
     @field_validator("name")
     @classmethod
-    def validate_name(cls, v):
+    def validate_name(cls, v: str) -> str:
         """Validate agent name using centralized validation."""
         try:
             return validate_agent_name(v)
         except InvalidInputError as e:
-            raise ValueError(str(e))
+            raise ValueError(str(e)) from e
 
     @field_validator("agent_type")
     @classmethod
-    def validate_agent_type(cls, v):
+    def validate_agent_type(cls, v: str) -> str:
         """Validate agent type is valid."""
         valid_types = [
             "maker",
@@ -96,10 +103,10 @@ class CreateAgentRequest(BaseModel):
 
     @field_validator("role_description")
     @classmethod
-    def validate_role_description(cls, v):
+    def validate_role_description(cls, v: str) -> str:
         """Validate role description length."""
-        if len(v) > 2000:
-            msg = "Role description too long (max 2000 characters)"
+        if len(v) > MAX_ROLE_DESCRIPTION_LENGTH:
+            msg = f"Role description too long (max {MAX_ROLE_DESCRIPTION_LENGTH} characters)"
             raise ValueError(msg)
         if len(v.strip()) == 0:
             msg = "Role description cannot be empty"
@@ -108,13 +115,15 @@ class CreateAgentRequest(BaseModel):
 
     @field_validator("capabilities")
     @classmethod
-    def validate_capabilities(cls, v):
+    def validate_capabilities(
+        cls, v: dict[str, AgentCapabilityDTO]
+    ) -> dict[str, AgentCapabilityDTO]:
         """Validate capabilities dictionary."""
         if not v:
             msg = "At least one capability is required"
             raise ValueError(msg)
-        if len(v) > 50:
-            msg = "Too many capabilities (max 50)"
+        if len(v) > MAX_CAPABILITIES_COUNT:
+            msg = f"Too many capabilities (max {MAX_CAPABILITIES_COUNT})"
             raise ValueError(msg)
         return v
 

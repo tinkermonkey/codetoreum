@@ -173,8 +173,24 @@ ignore = [
     "BLE001",  # Catch blind exception acceptable in examples
     "ERA001",  # Commented-out code acceptable in examples
 ]
+"documentation/api/generate_openapi.py" = [
+    "INP001",  # Not a package, standalone script
+    "T201",    # Print statements acceptable in utility script
+    "PLC0415", # Import in function acceptable for lazy loading
+    "PTH123",  # open() acceptable in utility script
+]
 "documentation/api/sdk/python/**/*.py" = [
     "ANN401",  # Dynamically typed expressions allowed in SDK (client injection pattern)
+]
+"scripts/**/*.py" = [
+    "T201",    # Print statements acceptable in CLI scripts
+    "ARG",     # Unused arguments acceptable in CLI scripts
+    "ANN",     # Type annotations not required in CLI scripts
+]
+"src/codetoreum/adapters/primary/app_example.py" = [
+    "ANN201",  # Return type annotations optional in example code
+    "S104",    # Binding to all interfaces acceptable in example
+    "G004",    # f-strings acceptable in example logging
 ]
 "__init__.py" = [
     "F401",    # Imported but unused

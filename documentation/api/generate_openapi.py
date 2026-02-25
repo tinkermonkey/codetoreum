@@ -303,10 +303,13 @@ Legacy v1 API still available for backward compatibility.
     # Add error responses to all paths
     for path_data in spec.get("paths", {}).values():
         for operation in path_data.values():
-            if isinstance(operation, dict) and "responses" in operation:
+            if (
+                isinstance(operation, dict)
+                and "responses" in operation
+                and operation.get("tags", [None])[0] != "health"
+            ):
                 # Skip health check endpoints (they don't require auth)
-                if operation.get("tags", [None])[0] != "health":
-                    operation["responses"].update(common_error_responses)
+                operation["responses"].update(common_error_responses)
 
     return spec
 

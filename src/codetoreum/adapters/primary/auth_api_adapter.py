@@ -138,7 +138,7 @@ class AuthAPIAdapter:
         router: FastAPI router
     """
 
-    def __init__(self, auth_service: IAuthenticationPort):
+    def __init__(self, auth_service: IAuthenticationPort) -> None:
         """Initialize auth API adapter.
 
         Args:
@@ -251,7 +251,7 @@ class AuthAPIAdapter:
         )
         async def create_user(
             request: CreateUserRequest,
-            auth: AuthContext = Depends(
+            _auth: AuthContext = Depends(
                 self.auth_deps.require_permission(Permission.USER_CREATE)
             ),
         ) -> UserResponse:
@@ -297,7 +297,7 @@ class AuthAPIAdapter:
         )
         async def get_user(
             user_id: UUID,
-            auth: AuthContext = Depends(
+            _auth: AuthContext = Depends(
                 self.auth_deps.require_permission(Permission.USER_VIEW)
             ),
         ) -> UserResponse:
@@ -334,7 +334,7 @@ class AuthAPIAdapter:
         async def update_user(
             user_id: UUID,
             request: UpdateUserRequest,
-            auth: AuthContext = Depends(
+            _auth: AuthContext = Depends(
                 self.auth_deps.require_permission(Permission.USER_UPDATE)
             ),
         ) -> UserResponse:
@@ -380,7 +380,7 @@ class AuthAPIAdapter:
         )
         async def delete_user(
             user_id: UUID,
-            auth: AuthContext = Depends(
+            _auth: AuthContext = Depends(
                 self.auth_deps.require_permission(Permission.USER_DELETE)
             ),
         ) -> None:
@@ -475,7 +475,7 @@ class AuthAPIAdapter:
         )
         async def revoke_api_key(
             key_id: UUID,
-            auth: AuthContext = Depends(self.auth_deps.get_current_user),
+            _auth: AuthContext = Depends(self.auth_deps.get_current_user),
         ) -> None:
             """
             Revoke an API key.

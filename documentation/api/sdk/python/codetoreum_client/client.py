@@ -42,7 +42,7 @@ class CodetoreumClient:
         base_url: str = "http://localhost:8000",
         timeout: int = 30,
         verify_ssl: bool = True,
-    ):
+    ) -> None:
         if not api_token:
             raise ValueError("api_token is required")
 

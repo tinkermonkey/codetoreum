@@ -23,7 +23,7 @@ class UpdateProjectConfigRequest(BaseModel):
 
     @field_validator("updates")
     @classmethod
-    def validate_updates(cls, v):
+    def validate_updates(cls, v: dict[str, Any]) -> dict[str, Any]:
         if not v:
             msg = "Updates cannot be empty"
             raise ValueError(msg)
@@ -37,7 +37,7 @@ class UpdateAgentConfigRequest(BaseModel):
 
     @field_validator("updates")
     @classmethod
-    def validate_updates(cls, v):
+    def validate_updates(cls, v: dict[str, Any]) -> dict[str, Any]:
         if not v:
             msg = "Updates cannot be empty"
             raise ValueError(msg)
@@ -51,7 +51,7 @@ class UpdatePipelineConfigRequest(BaseModel):
 
     @field_validator("updates")
     @classmethod
-    def validate_updates(cls, v):
+    def validate_updates(cls, v: dict[str, Any]) -> dict[str, Any]:
         if not v:
             msg = "Updates cannot be empty"
             raise ValueError(msg)
@@ -68,16 +68,16 @@ class AddEnvironmentVariableRequest(BaseModel):
 
     @field_validator("variable_name")
     @classmethod
-    def validate_variable_name(cls, v):
+    def validate_variable_name(cls, v: str) -> str:
         # Use centralized validation for environment variable names
         try:
             return validate_env_var_name(v)
         except InvalidInputError as e:
-            raise ValueError(str(e))
+            raise ValueError(str(e)) from e
 
     @field_validator("variable_value")
     @classmethod
-    def validate_variable_value(cls, v):
+    def validate_variable_value(cls, v: str) -> str:
         # Sanitize value - strip leading/trailing whitespace
         # Don't allow null bytes or other control characters except tabs and newlines
         if "\x00" in v:
@@ -108,7 +108,7 @@ class SearchConfigsRequest(BaseModel):
 
     @field_validator("config_type")
     @classmethod
-    def validate_config_type(cls, v):
+    def validate_config_type(cls, v: str | None) -> str | None:
         if v and v not in ["project", "agent", "pipeline"]:
             msg = "config_type must be one of: project, agent, pipeline"
             raise ValueError(msg)
