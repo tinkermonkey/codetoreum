@@ -4,6 +4,7 @@ from codetoreum.adapters.testing.capturing_mock_event_emitter import (
     CapturingMockEventEmitter,
 )
 from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
+from codetoreum.adapters.testing.in_memory_config_store import InMemoryConfigStore
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.adapters.testing.in_memory_metrics_adapter import InMemoryMetricsAdapter
 from codetoreum.adapters.testing.in_memory_queue_service import InMemoryQueueService
@@ -39,6 +40,7 @@ __all__ = [
     "CapturingMockEventEmitter",
     "CircuitBreakerTripped",
     "FakeContainerAdapter",
+    "InMemoryConfigStore",
     "InMemoryEventStore",
     "InMemoryMetricsAdapter",
     "InMemoryQueueService",

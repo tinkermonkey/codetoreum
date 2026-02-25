@@ -301,6 +301,8 @@ async def simulation_app(
     """
     if not simulation_bootstrap.app:
         raise RuntimeError("Bootstrap app not initialized")
+    # Cast needed because bootstrap.py has ignore_errors in mypy config,
+    # making app typed as Any despite runtime type being FastAPI | None
     return cast(FastAPI, simulation_bootstrap.app)
 
 
