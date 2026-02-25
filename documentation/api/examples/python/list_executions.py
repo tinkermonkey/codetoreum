@@ -8,7 +8,7 @@ import time
 from datetime import datetime
 from typing import Any, cast
 
-import requests  # type: ignore[import-untyped]
+import requests
 
 # Configuration
 BASE_URL = "http://localhost:8000"
@@ -50,7 +50,7 @@ def list_executions(
         "Authorization": f"Bearer {API_TOKEN}"
     }
 
-    params = {
+    params: dict[str, str | int] = {
         "offset": offset,
         "limit": limit,
         "sort_by": sort_by,
@@ -117,7 +117,7 @@ def get_execution_logs(
         "Authorization": f"Bearer {API_TOKEN}"
     }
 
-    params = {}
+    params: dict[str, int] = {}
     if tail:
         params["tail"] = tail
 

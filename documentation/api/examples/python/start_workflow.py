@@ -6,7 +6,7 @@ a workflow execution.
 """
 from typing import Any
 
-import requests  # type: ignore[import-untyped]
+import requests
 
 # Configuration
 BASE_URL = "http://localhost:8000"
