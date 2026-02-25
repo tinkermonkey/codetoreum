@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
 from codetoreum.domain.work_item import WorkItemPriority
+from codetoreum.ports.exceptions import ResourceNotFoundError
 from codetoreum.ports.output.board_service import MovedByType
 
 logger = logging.getLogger(__name__)
@@ -250,7 +251,7 @@ def create_simulation_ticketing_router(
         """Get issue details by ID."""
         try:
             item = await ticket_adapter.get_work_item(issue_id)
-        except Exception:
+        except ResourceNotFoundError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Issue not found: {issue_id}",
@@ -264,7 +265,7 @@ def create_simulation_ticketing_router(
                 "column": pos.column_name,
                 "position": pos.position,
             }
-        except ValueError:
+        except ResourceNotFoundError:
             pass
 
         return SimIssueResponse(
@@ -290,7 +291,7 @@ def create_simulation_ticketing_router(
         # Verify issue exists
         try:
             item = await ticket_adapter.get_work_item(issue_id)
-        except Exception:
+        except ResourceNotFoundError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Issue not found: {issue_id}",
@@ -301,7 +302,7 @@ def create_simulation_ticketing_router(
 
         try:
             result = await board_adapter.move_item_to_column(issue_id, request.target_column, MovedByType.HUMAN)
-        except ValueError as e:
+        except ResourceNotFoundError as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(e),
@@ -321,7 +322,7 @@ def create_simulation_ticketing_router(
         # Verify issue exists
         try:
             await ticket_adapter.get_work_item(issue_id)
-        except Exception:
+        except ResourceNotFoundError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Issue not found: {issue_id}",
