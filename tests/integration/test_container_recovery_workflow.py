@@ -8,6 +8,7 @@ These tests verify:
 """
 
 from datetime import datetime
+from typing import TypeVar, Generic
 
 import pytest
 
@@ -24,6 +25,8 @@ from codetoreum.domain.events.container_recovery_events import (
     ContainerRecoveredEvent,
     ContainerRecoveryCompletedEvent,
 )
+
+T = TypeVar("T", bound=CodetoreumEvent)
 
 
 class EventCollector(MockEventEmitter):
@@ -47,7 +50,7 @@ class EventCollector(MockEventEmitter):
         self.events.append(event)
         super().emit(event)
 
-    def get_events_by_type(self, event_type: type) -> list[CodetoreumEvent]:
+    def get_events_by_type(self, event_type: type[T]) -> list[T]:
         """Get all events of a specific type.
 
         Args:
@@ -56,7 +59,7 @@ class EventCollector(MockEventEmitter):
         Returns:
             List of events matching the given type
         """
-        return [e for e in self.events if isinstance(e, event_type)]
+        return [e for e in self.events if isinstance(e, event_type)]  # type: ignore[return-value]
 
 
 class TestContainerRecoveryWorkflowWithMocks:

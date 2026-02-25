@@ -35,13 +35,15 @@ class TestSimulationTicketingIntegration:
     @pytest.fixture
     def client(self, bootstrap):
         """TestClient for the bootstrapped FastAPI app."""
-        return TestClient(bootstrap.app)
+        with TestClient(bootstrap.app) as test_client:
+            yield test_client
 
     @pytest.fixture
     def seeded_client(self, seeded_bootstrap):
         """TestClient with seeded data."""
         bootstrap, seeder = seeded_bootstrap
-        return TestClient(bootstrap.app), seeder
+        with TestClient(bootstrap.app) as test_client:
+            yield test_client, seeder
 
     # =========================================================================
     # Bootstrap Integration Tests
