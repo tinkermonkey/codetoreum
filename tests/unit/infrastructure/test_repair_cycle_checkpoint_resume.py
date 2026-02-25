@@ -129,8 +129,8 @@ class TestCheckpointStorage:
         await store.delete_checkpoint("run-123")
 
         # Verify all deleted
-        for test_type in ["UNIT", "INTEGRATION", "E2E"]:
-            exists = await store.checkpoint_exists("run-123", test_type)
+        for test_type in [RepairTestType.UNIT, RepairTestType.INTEGRATION, RepairTestType.E2E]:
+            exists = await store.checkpoint_exists("run-123", test_type.value)
             assert not exists
 
     async def test_delete_checkpoint_idempotent(self, store):
