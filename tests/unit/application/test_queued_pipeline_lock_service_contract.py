@@ -5,6 +5,7 @@ interface contract. New implementations should pass all these tests.
 """
 
 import pytest
+from datetime import UTC, datetime
 
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
@@ -298,7 +299,7 @@ class TestQueuedPipelineLockServiceContract:
         state1.queue.append(QueueEntry(
             work_item_id="fake",
             board_position=999,
-            enqueued_at=state1.lock_acquired_at or state1.lock_acquired_at  # type: ignore
+            enqueued_at=datetime.now(UTC)
         ))
         # Get state again
         state2 = await service.get_queue_state(
