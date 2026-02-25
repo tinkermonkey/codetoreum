@@ -8,6 +8,7 @@ This test suite verifies:
 4. _build_stage_info correctly maps all 6 StageStatus enum values
 """
 
+from typing import Literal, cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -64,7 +65,14 @@ class TestAuditStageInfoLiteralType:
     def test_all_status_values_allowed(self):
         """Verify AuditStageInfo accepts all 6 status values."""
         # All 6 status values from StageStatus enum
-        valid_statuses = ["pending", "ready", "running", "completed", "failed", "skipped"]
+        valid_statuses: list[Literal["pending", "ready", "running", "completed", "failed", "skipped"]] = [
+            "pending",
+            "ready",
+            "running",
+            "completed",
+            "failed",
+            "skipped",
+        ]
 
         for status in valid_statuses:
             # Should not raise validation error
@@ -88,7 +96,7 @@ class TestAuditStageInfoLiteralType:
         with pytest.raises(ValidationError) as exc_info:
             AuditStageInfo(
                 name="test-stage",
-                status="invalid_status",  # Not in Literal
+                status=cast(Literal["pending", "ready", "running", "completed", "failed", "skipped"], "invalid_status"),  # Not in Literal
                 startedAt=None,
                 completedAt=None,
                 durationSeconds=None,

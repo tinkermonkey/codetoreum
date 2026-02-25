@@ -165,7 +165,7 @@ async def _get_workflow_run_id(
     if not result.runs:
         raise ValueError("No workflow runs returned")
     first_run = result.runs[0]
-    return first_run.id  # type: ignore[no-any-return]
+    return first_run.id
 
 
 # ============================================================================
