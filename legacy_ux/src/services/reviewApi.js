@@ -45,7 +45,7 @@ export const reviewApi = {
     const endpoint = filter.filter_id
       ? `${API_BASE}/api/review-filters/${filter.filter_id}`
       : `${API_BASE}/api/review-filters`
-    
+
     const method = filter.filter_id ? 'put' : 'post'
     return apiClient[method](endpoint, filter)
   },

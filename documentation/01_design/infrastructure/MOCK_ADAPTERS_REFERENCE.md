@@ -927,4 +927,3 @@ runner.clear_captured_data()  # Clear events/metrics
 - `src/codetoreum/adapters/testing/` - Implementation source
 - `tests/simulation/` - Usage examples
 - `src/codetoreum/ports/output/` - Port interface definitions
-

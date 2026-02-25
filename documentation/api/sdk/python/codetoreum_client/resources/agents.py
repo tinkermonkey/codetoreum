@@ -35,12 +35,10 @@ class AgentsResource:
             "test_engineer",
             "documentation_specialist",
             "devops_engineer",
-            "custom"
+            "custom",
         ]
         if agent_type not in valid_types:
-            raise ValueError(
-                f"agent_type must be one of {valid_types}, got '{agent_type}'"
-            )
+            raise ValueError(f"agent_type must be one of {valid_types}, got '{agent_type}'")
 
     def create(
         self,
@@ -49,7 +47,7 @@ class AgentsResource:
         agent_type: str,
         capabilities: builtins.list[str] | None = None,
         config: dict[str, Any] | None = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> Agent:
         """
         Create a new agent.
@@ -107,7 +105,7 @@ class AgentsResource:
         status: str | None = None,
         limit: int = 100,
         offset: int = 0,
-        **filters: Any
+        **filters: Any,
     ) -> PaginatedResponse:
         """
         List agents with optional filtering.
@@ -175,7 +173,7 @@ class AgentsResource:
         capabilities: builtins.list[str] | None = None,
         config: dict[str, Any] | None = None,
         status: str | None = None,
-        **updates: Any
+        **updates: Any,
     ) -> Agent:
         """
         Update an agent.
@@ -304,7 +302,5 @@ class AgentsResource:
 
         from ..models import Execution
 
-        data: dict[str, Any] = self.client.get(
-            f"/api/v2/agents/{agent_id}/executions", params=params
-        )
+        data: dict[str, Any] = self.client.get(f"/api/v2/agents/{agent_id}/executions", params=params)
         return PaginatedResponse.from_dict(data, Execution)

@@ -19,7 +19,7 @@ export default function Header() {
     unhealthyComponents,
     status: healthStatus
   } = useSystemHealth()
-  
+
   const {
     summary: cbSummary,
     hasOpenBreakers,
@@ -38,7 +38,7 @@ export default function Header() {
         return null
     }
   }
-  
+
   const getStateColor = (state) => {
     switch (state) {
       case 'closed':

@@ -1,4 +1,5 @@
 """Events resource client (WebSocket)"""
+
 import json
 from collections.abc import AsyncIterator, Iterator
 from typing import TYPE_CHECKING, Any
@@ -39,10 +40,7 @@ class EventsResource:
 
             import websockets
         except ImportError:
-            raise ImportError(
-                "WebSocket support requires 'websockets' library. "
-                "Install with: pip install websockets"
-            )
+            raise ImportError("WebSocket support requires 'websockets' library. Install with: pip install websockets")
 
         # Check if we're already in an event loop
         try:
@@ -97,10 +95,7 @@ class EventsResource:
         try:
             import websockets
         except ImportError:
-            raise ImportError(
-                "WebSocket support requires 'websockets' library. "
-                "Install with: pip install websockets"
-            )
+            raise ImportError("WebSocket support requires 'websockets' library. Install with: pip install websockets")
 
         ws_url = self.client.base_url.replace("http://", "ws://").replace("https://", "wss://")
         ws_url = f"{ws_url}/api/v2/events/stream?token={self.client.api_token}"

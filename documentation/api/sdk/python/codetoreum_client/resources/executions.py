@@ -1,6 +1,7 @@
 """
 Executions resource client
 """
+
 import builtins
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
@@ -214,9 +215,7 @@ class ExecutionsResource:
 
         while True:
             if time.time() - start_time > timeout:
-                raise TimeoutError(
-                    f"Execution {execution_id} did not complete within {timeout}s"
-                )
+                raise TimeoutError(f"Execution {execution_id} did not complete within {timeout}s")
 
             execution: Execution = self.get(execution_id)
 

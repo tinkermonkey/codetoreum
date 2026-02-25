@@ -14,12 +14,12 @@ Implemented a JupyterLab-style single-token authentication system that:
   - Token valid for 365 days by default
   - Uses HS256 algorithm with configurable secret key
   - Prints authentication URL to console on startup
-  
+
 - **Provides authentication dependencies for FastAPI** (`src/adapters/primary/simple_auth_dependencies.py`)
   - `require_auth`: Dependency for protected endpoints
   - `optional_auth`: Dependency for optionally-protected endpoints
   - Supports both Authorization header (`Bearer <token>`) and query parameter (`?token=<token>`)
-  
+
 - **Security features**:
   - Constant-time token comparison (via JWT library)
   - Rejects expired tokens
@@ -33,14 +33,14 @@ Enhanced the existing FastAPI application (`src/adapters/primary/fastapi_app.py`
 - **Health check endpoints** (unauthenticated):
   - `GET /api/v2/health` - Basic health check
   - `GET /api/v2/health/ready` - Readiness check
-  
+
 - **Token information endpoint** (authenticated):
   - `GET /api/v2/auth/token-info` - Get token metadata
-  
+
 - **Protected API endpoints**:
   - All REST API endpoints (`/api/v1/*`) now require authentication
   - Webhook endpoints (`/webhooks/github`) remain unauthenticated (use signature verification)
-  
+
 - **OpenAPI documentation** (unauthenticated):
   - `/api/docs` - Swagger UI
   - `/api/redoc` - ReDoc
@@ -174,7 +174,7 @@ const token = urlParams.get('token');
 if (token) {
     // Store token
     localStorage.setItem('codetoreum_token', token);
-    
+
     // Clean URL
     window.history.replaceState({}, '', '/');
 }

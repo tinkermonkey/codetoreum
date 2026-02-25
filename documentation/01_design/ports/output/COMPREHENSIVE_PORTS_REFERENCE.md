@@ -756,4 +756,3 @@ Benefits:
 - `REPAIR_CYCLE_CONTRACT.md` - Repair cycle service specification
 - `/design/output_ports/` - Individual port design documents (legacy)
 - `/src/codetoreum/ports/output/` - Port implementations
-

@@ -4,6 +4,7 @@ Example: List and monitor agent executions
 This example demonstrates how to list executions, filter by status,
 and retrieve execution logs.
 """
+
 import time
 from datetime import datetime
 from typing import Any, cast
@@ -23,7 +24,7 @@ def list_executions(
     offset: int = 0,
     limit: int = 50,
     sort_by: str = "started_at",
-    sort_order: str = "desc"
+    sort_order: str = "desc",
 ) -> dict[str, Any]:
     """
     List agent executions with filtering and pagination.
@@ -46,15 +47,13 @@ def list_executions(
     """
     url = f"{BASE_URL}/api/v2/executions/"
 
-    headers = {
-        "Authorization": f"Bearer {API_TOKEN}"
-    }
+    headers = {"Authorization": f"Bearer {API_TOKEN}"}
 
     params: dict[str, str | int] = {
         "offset": offset,
         "limit": limit,
         "sort_by": sort_by,
-        "sort_order": sort_order
+        "sort_order": sort_order,
     }
 
     # Add optional filters
@@ -85,9 +84,7 @@ def get_execution_details(execution_id: str) -> dict[str, Any]:
     """
     url = f"{BASE_URL}/api/v2/executions/{execution_id}"
 
-    headers = {
-        "Authorization": f"Bearer {API_TOKEN}"
-    }
+    headers = {"Authorization": f"Bearer {API_TOKEN}"}
 
     response = requests.get(url, headers=headers)
     response.raise_for_status()
@@ -95,11 +92,7 @@ def get_execution_details(execution_id: str) -> dict[str, Any]:
     return cast("dict[str, Any]", response.json())
 
 
-def get_execution_logs(
-    execution_id: str,
-    tail: int | None = None,
-    follow: bool = False
-) -> list[str]:
+def get_execution_logs(execution_id: str, tail: int | None = None, follow: bool = False) -> list[str]:
     """
     Get execution logs.
 
@@ -113,9 +106,7 @@ def get_execution_logs(
     """
     url = f"{BASE_URL}/api/v2/executions/{execution_id}/logs"
 
-    headers = {
-        "Authorization": f"Bearer {API_TOKEN}"
-    }
+    headers = {"Authorization": f"Bearer {API_TOKEN}"}
 
     params: dict[str, int] = {}
     if tail:
@@ -129,10 +120,7 @@ def get_execution_logs(
 
 
 def wait_for_execution(
-    execution_id: str,
-    check_interval: int = 5,
-    timeout: int = 3600,
-    print_logs: bool = True
+    execution_id: str, check_interval: int = 5, timeout: int = 3600, print_logs: bool = True
 ) -> dict[str, Any]:
     """
     Wait for an execution to complete.
@@ -222,7 +210,7 @@ def main() -> None:
                     execution_id,
                     check_interval=5,
                     timeout=300,  # 5 minutes
-                    print_logs=True
+                    print_logs=True,
                 )
                 print(f"\n✓ Execution completed with status: {final_status['status']}")
             except TimeoutError as e:

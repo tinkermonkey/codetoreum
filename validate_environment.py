@@ -21,12 +21,7 @@ def run_command(cmd: Sequence[str] | str, description: str) -> bool:
         else:
             docker_cmd = ["docker", "run", "--rm", "codetoreum-agent:latest"] + list(cmd)
 
-        result = subprocess.run(
-            docker_cmd,
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
+        result = subprocess.run(docker_cmd, capture_output=True, text=True, timeout=30, check=False)
         if result.returncode == 0:
             output = result.stdout.strip()
             if output:
@@ -59,11 +54,9 @@ def main() -> None:
         (["git", "--version"], "Git CLI version"),
         (["which", "gh"], "GitHub CLI availability"),
         (["gh", "--version"], "GitHub CLI version"),
-
         # Python environment
         (["python3", "--version"], "Python version"),
         (["pip", "--version"], "pip version"),
-
         # Core Python dependencies
         ("python3 -c 'import fastapi'", "FastAPI import"),
         ("python3 -c 'import sqlalchemy'", "SQLAlchemy import"),
@@ -71,7 +64,6 @@ def main() -> None:
         ("python3 -c 'import docker'", "Docker SDK import"),
         ("python3 -c 'import pytest'", "pytest import"),
         ("python3 -c 'import git'", "GitPython import"),
-
         # Build tools
         (["which", "gcc"], "GCC availability"),
         (["which", "make"], "make availability"),

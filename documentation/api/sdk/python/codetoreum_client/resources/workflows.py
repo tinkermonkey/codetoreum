@@ -1,4 +1,5 @@
 """Workflows resource client"""
+
 from typing import Any
 
 from ..models import PaginatedResponse, Workflow
@@ -34,14 +35,7 @@ class WorkflowsResource:
             if "agent_id" not in stage or not stage["agent_id"]:
                 raise ValueError(f"stage {i} must have a non-empty 'agent_id' field")
 
-    def create(
-        self,
-        name: str,
-        description: str,
-        stages: ListDictAny,
-        enabled: bool = True,
-        **kwargs: Any
-    ) -> Workflow:
+    def create(self, name: str, description: str, stages: ListDictAny, enabled: bool = True, **kwargs: Any) -> Workflow:
         """
         Create a workflow definition.
 
@@ -93,13 +87,7 @@ class WorkflowsResource:
         data = self.client.post("/api/v2/workflows/", json=payload)
         return Workflow.from_dict(data)
 
-    def list(
-        self,
-        enabled: bool | None = None,
-        limit: int = 100,
-        offset: int = 0,
-        **filters: Any
-    ) -> PaginatedResponse:
+    def list(self, enabled: bool | None = None, limit: int = 100, offset: int = 0, **filters: Any) -> PaginatedResponse:
         """
         List workflows.
 
@@ -160,7 +148,7 @@ class WorkflowsResource:
         description: str | None = None,
         stages: ListDictAny | None = None,
         enabled: bool | None = None,
-        **updates: Any
+        **updates: Any,
     ) -> Workflow:
         """
         Update workflow definition.
@@ -245,11 +233,7 @@ class WorkflowsResource:
         return result if isinstance(result, dict) else {}
 
     def get_runs(
-        self,
-        workflow_id: str,
-        status: str | None = None,
-        limit: int = 100,
-        offset: int = 0
+        self, workflow_id: str, status: str | None = None, limit: int = 100, offset: int = 0
     ) -> PaginatedResponse:
         """
         Get workflow execution runs for a specific workflow.
@@ -282,5 +266,6 @@ class WorkflowsResource:
             params["status"] = status
 
         from ..models import WorkflowRun
+
         data = self.client.get(f"/api/v2/workflows/{workflow_id}/runs", params=params)
         return PaginatedResponse.from_dict(data, WorkflowRun)

@@ -304,4 +304,3 @@ ValueError("Config error")
 - `domains/repair_cycle_domain.md` - Domain model specification
 - `events/repair_cycle_events.md` - Event catalog
 - `application_services/repair_cycle_orchestrator.md` - Orchestration patterns
-

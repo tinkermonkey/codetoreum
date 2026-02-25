@@ -30,7 +30,7 @@ import { mergePipelineRunEvents, mergeArrayByIdStable } from '../utils/eventMerg
  */
 const PipelineEventNode = ({ data }) => {
   const { label, type, status, metadata, isActive } = data
-  
+
   // Determine colors based on type and status
   const getNodeStyle = () => {
     const baseStyle = {
@@ -41,7 +41,7 @@ const PipelineEventNode = ({ data }) => {
       maxWidth: '300px',
       boxShadow: isActive ? '0 0 10px rgba(88, 166, 255, 0.5)' : '0 2px 4px rgba(0,0,0,0.1)',
     }
-    
+
     switch (type) {
       case 'pipeline_created':
         return {
@@ -144,7 +144,7 @@ const PipelineEventNode = ({ data }) => {
         }
     }
   }
-  
+
   const getIcon = () => {
     switch (type) {
       case 'pipeline_created':
@@ -165,12 +165,12 @@ const PipelineEventNode = ({ data }) => {
         return <Activity className="w-4 h-4" />
     }
   }
-  
+
   return (
     <div style={getNodeStyle()} className="relative">
       {/* Candy stripe animation for active agents */}
       {isActive && (
-        <div 
+        <div
           className="absolute top-0 left-0 right-0 h-1 rounded-t-md overflow-hidden"
           style={{
             backgroundImage: 'linear-gradient(45deg, rgba(255,255,255,.2) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.2) 50%, rgba(255,255,255,.2) 75%, transparent 75%, transparent)',
@@ -179,9 +179,9 @@ const PipelineEventNode = ({ data }) => {
           }}
         />
       )}
-      
+
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
-      
+
       <div className="flex items-start gap-2">
         <div className="mt-0.5">{getIcon()}</div>
         <div className="flex-1">
@@ -193,7 +193,7 @@ const PipelineEventNode = ({ data }) => {
           )}
         </div>
       </div>
-      
+
       <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
     </div>
   )
@@ -225,7 +225,7 @@ function PipelineRunView() {
   const [cycles, setCycles] = useState(new Map()) // Track cycle collapse state
   const completedLimit = 10
   const { events: socketEvents } = useSocket()
-  
+
   // Fetch active pipeline runs
   const fetchActivePipelineRuns = useCallback(async (isInitialLoad = false) => {
     try {
@@ -257,14 +257,14 @@ function PipelineRunView() {
       }
     }
   }, [selectedPipelineRun])
-  
+
   // Fetch completed pipeline runs with pagination
   const fetchCompletedPipelineRuns = useCallback(async (offset = 0, append = false) => {
     try {
       setLoadingCompleted(true)
       const response = await fetch(`/completed-pipeline-runs?limit=${completedLimit}&offset=${offset}`)
       const data = await response.json()
-      
+
       if (data.success) {
         console.log('[PipelineRun] Fetched completed pipeline runs:', data.runs.length)
         // Use stable merge to prevent unnecessary re-renders
@@ -273,7 +273,7 @@ function PipelineRunView() {
           return mergeArrayByIdStable(append ? current : [], combinedRuns)
         })
         setHasMoreCompleted(data.runs.length === completedLimit)
-        
+
         // Auto-select first completed run if on completed tab and none selected
         if (!selectedPipelineRun && data.runs.length > 0 && selectedTab === 'completed') {
           setSelectedPipelineRun(data.runs[0])
@@ -285,22 +285,22 @@ function PipelineRunView() {
       setLoadingCompleted(false)
     }
   }, [selectedPipelineRun, selectedTab, completedLimit])
-  
+
   // Load more completed runs
   const loadMoreCompleted = useCallback(() => {
     const newOffset = completedOffset + completedLimit
     setCompletedOffset(newOffset)
     fetchCompletedPipelineRuns(newOffset, true)
   }, [completedOffset, completedLimit, fetchCompletedPipelineRuns])
-  
+
   // Fetch workflow configuration for selected pipeline run
   const fetchWorkflowConfig = useCallback(async (project, board) => {
     if (!project || !board) return
-    
+
     try {
       const response = await fetch(`/api/workflow-config/${project}/${board}`)
       const data = await response.json()
-      
+
       if (data.success) {
         console.log(`📋 [Pipeline Run] Loaded workflow config for ${project}/${board}:`, data.workflow)
         setWorkflowConfig(data.workflow)
@@ -313,16 +313,16 @@ function PipelineRunView() {
       setWorkflowConfig(null)
     }
   }, [])
-  
+
   // Fetch events for selected pipeline run
   const fetchPipelineRunEvents = useCallback(async (pipelineRunId) => {
     if (!pipelineRunId) return
-    
+
     try {
       setLoadingEvents(true)
       const response = await fetch(`/pipeline-run-events?workflow_run_id=${pipelineRunId}`)
       const data = await response.json()
-      
+
       if (data.success) {
         // Use stable merge for events
         setPipelineRunEvents(current => {
@@ -344,19 +344,19 @@ function PipelineRunView() {
       setLoadingEvents(false)
     }
   }, [])
-  
+
   // Handle cycle collapse/expand toggle
   const handleToggleCycle = useCallback((cycleId) => {
     setCycles(prevCycles => toggleCycleCollapsed(prevCycles, cycleId))
     // State update will trigger useEffect to rebuild flowchart
   }, [])
-  
+
   // Merge API events with live WebSocket events
   const mergedEvents = useMemo(() => {
     if (!selectedPipelineRun) return []
     return mergePipelineRunEvents(pipelineRunEvents, socketEvents, selectedPipelineRun)
   }, [pipelineRunEvents, socketEvents, selectedPipelineRun])
-  
+
   // Build flowchart from events
   const buildFlowchart = useCallback(() => {
     if (!mergedEvents.length || !selectedPipelineRun) {
@@ -365,20 +365,20 @@ function PipelineRunView() {
       setChartHeight(600)
       return
     }
-    
+
     const newNodes = []
     const newEdges = []
-    
+
     // Track currently active agents from socket events
     const activeAgents = new Set()
     socketEvents
       .filter(e => e.event_type === 'agent_initialized')
       .forEach(e => activeAgents.add(e.agent))
-    
+
     socketEvents
       .filter(e => ['agent_completed', 'agent_failed'].includes(e.event_type))
       .forEach(e => activeAgents.delete(e.agent))
-    
+
     // Add pipeline created node
     const createdNode = {
       id: 'created',
@@ -392,16 +392,16 @@ function PipelineRunView() {
       draggable: false,
     }
     newNodes.push(createdNode)
-    
+
     // Track agent executions: map of agent -> [execution instances]
     const agentExecutions = new Map()
-    
+
     // First pass: identify all agent executions
     mergedEvents.forEach(event => {
       if (event.event_category === 'agent_lifecycle') {
         const agent = event.agent
         const taskId = event.task_id
-        
+
         if (event.event_type === 'agent_initialized') {
           if (!agentExecutions.has(agent)) {
             agentExecutions.set(agent, [])
@@ -426,10 +426,10 @@ function PipelineRunView() {
         }
       }
     })
-    
+
     // Identify review cycles (agents with multiple executions)
     const detectedCycles = identifyCycles(pipelineRunEvents, agentExecutions, workflowConfig)
-    
+
     // Merge with existing cycle state (preserve collapse state)
     // NOTE: Don't call setCycles here to avoid updating state during render
     const updatedCycles = new Map(detectedCycles)
@@ -442,47 +442,47 @@ function PipelineRunView() {
         })
       }
     })
-    
+
     // Second pass: build nodes and edges chronologically
     let previousNodeId = 'created'
     const processedAgents = new Set()
-    
+
     // Process events chronologically
-    const sortedEvents = [...pipelineRunEvents].sort((a, b) => 
+    const sortedEvents = [...pipelineRunEvents].sort((a, b) =>
       new Date(a.timestamp) - new Date(b.timestamp)
     )
-    
+
     sortedEvents.forEach((event, idx) => {
       let currentNodeId = null
-      
+
       // Decision events
       if (event.event_category === 'decision') {
         const nodeId = `decision-${idx}`
         const decisionType = event.event_type || 'decision'
         const reason = event.reason || ''
-        
+
         // Build enhanced metadata
         const metadataParts = []
-        
+
         // Add decision category badge
         if (event.decision_category) {
           metadataParts.push(`[${event.decision_category}]`)
         }
-        
+
         // Add key decision details
         if (event.decision) {
           if (event.decision.selected_agent) metadataParts.push(`→ ${event.decision.selected_agent}`)
           if (event.decision.to_status) metadataParts.push(`→ ${event.decision.to_status}`)
           if (event.decision.action) metadataParts.push(`${event.decision.action}`)
         }
-        
+
         // Add truncated reason
         if (reason) {
           const maxLen = 50
           const truncated = reason.length > maxLen ? reason.substring(0, maxLen) + '...' : reason
           metadataParts.push(truncated)
         }
-        
+
         newNodes.push({
           id: nodeId,
           type: 'pipelineEvent',
@@ -496,27 +496,27 @@ function PipelineRunView() {
           },
           draggable: false,
         })
-        
+
         currentNodeId = nodeId
       }
-      
+
       // Agent execution starts
       else if (event.event_category === 'agent_lifecycle' && event.event_type === 'agent_initialized') {
         const agent = event.agent
         const taskId = event.task_id
         const executions = agentExecutions.get(agent) || []
         const executionIndex = executions.findIndex(e => e.taskId === taskId)
-        
+
         // Check if this is part of a review cycle
         if (updatedCycles.has(agent)) {
           const cycleExecutions = updatedCycles.get(agent).executions
           const cycleIndex = cycleExecutions.findIndex(e => e.taskId === taskId)
-          
+
           const nodeId = `agent-${agent}-${cycleIndex}`
-          
+
           const execution = cycleExecutions[cycleIndex]
           const isActive = execution.isActive
-          
+
           newNodes.push({
             id: nodeId,
             type: 'pipelineEvent',
@@ -530,7 +530,7 @@ function PipelineRunView() {
             },
             draggable: false,
           })
-          
+
           // Add feedback edge if this is a retry (not the first execution)
           if (cycleIndex > 0) {
             const previousExecutionId = `agent-${agent}-${cycleIndex - 1}`
@@ -548,14 +548,14 @@ function PipelineRunView() {
               style: { stroke: '#f59e0b', strokeDasharray: '5,5' },
             })
           }
-          
+
           currentNodeId = nodeId
         } else {
           // Single execution agent
           const nodeId = `agent-${agent}-${executionIndex}`
           const execution = executions[executionIndex]
           const isActive = execution.isActive
-          
+
           newNodes.push({
             id: nodeId,
             type: 'pipelineEvent',
@@ -569,13 +569,13 @@ function PipelineRunView() {
             },
             draggable: false,
           })
-          
+
           currentNodeId = nodeId
         }
-        
+
         processedAgents.add(agent)
       }
-      
+
       // Connect to previous node
       if (currentNodeId && previousNodeId) {
         newEdges.push({
@@ -592,7 +592,7 @@ function PipelineRunView() {
         previousNodeId = currentNodeId
       }
     })
-    
+
     // Add pipeline completed node if pipeline is complete
     if (selectedPipelineRun.status === 'completed') {
       const completedNode = {
@@ -602,14 +602,14 @@ function PipelineRunView() {
         data: {
           label: 'Pipeline Completed',
           type: 'pipeline_completed',
-          metadata: selectedPipelineRun.ended_at 
+          metadata: selectedPipelineRun.ended_at
             ? new Date(selectedPipelineRun.ended_at).toLocaleString()
             : '',
         },
         draggable: false,
       }
       newNodes.push(completedNode)
-      
+
       // Connect last node to completed
       if (previousNodeId !== 'created') {
         newEdges.push({
@@ -625,7 +625,7 @@ function PipelineRunView() {
         })
       }
     }
-    
+
     // Apply custom cycle layout
     const { nodes: layoutedNodes, cycleNodes } = applyCycleLayout(
       newNodes,
@@ -640,10 +640,10 @@ function PipelineRunView() {
         viewportHeight: 600,
       }
     )
-    
+
     // Update edges for collapsed cycles
     const updatedEdges = updateEdgesForCycles(newEdges, updatedCycles, agentExecutions)
-    
+
     // Add toggle callback to cycle nodes
     const finalNodes = layoutedNodes.map(node => {
       if (node.type === 'cycleBounding') {
@@ -657,15 +657,15 @@ function PipelineRunView() {
       }
       return node
     })
-    
+
     // Calculate chart dimensions based on layout
     const maxX = Math.max(...finalNodes.map(n => n.position.x + (n.style?.width || 250)))
     const maxY = Math.max(...finalNodes.map(n => n.position.y + (n.style?.height || 80)))
     setChartHeight(Math.max(600, maxY + 100))
-    
+
     setNodes(finalNodes)
     setEdges(updatedEdges)
-    
+
     // Fit view after layout is complete
     if (reactFlowInstance) {
       setTimeout(() => {
@@ -673,20 +673,20 @@ function PipelineRunView() {
       }, 50)
     }
   }, [mergedEvents, selectedPipelineRun, socketEvents, cycles, workflowConfig, setNodes, setEdges, reactFlowInstance, handleToggleCycle])
-  
+
   // Initial load
   useEffect(() => {
     fetchActivePipelineRuns(true) // Pass true for initial load
     fetchCompletedPipelineRuns(0, false)
   }, [])
-  
+
   // Fetch data when tab changes
   useEffect(() => {
     if (selectedTab === 'completed' && completedPipelineRuns.length === 0) {
       fetchCompletedPipelineRuns(0, false)
     }
   }, [selectedTab])
-  
+
   // Load events when pipeline run selected
   useEffect(() => {
     if (selectedPipelineRun) {
@@ -695,13 +695,13 @@ function PipelineRunView() {
       fetchWorkflowConfig(selectedPipelineRun.project, selectedPipelineRun.board)
     }
   }, [selectedPipelineRun, fetchPipelineRunEvents, fetchWorkflowConfig])
-  
+
   // Detect and update cycles when events or workflow config changes
   useEffect(() => {
     if (!mergedEvents.length) return
-    
+
     console.log('🔄 [Pipeline Run] Detecting cycles with workflow config:', workflowConfig ? 'loaded' : 'not loaded')
-    
+
     // Build agent executions map
     const agentExecutions = new Map()
     mergedEvents.forEach(event => {
@@ -716,7 +716,7 @@ function PipelineRunView() {
         })
       }
     })
-    
+
     // Debug: Log detailed information about what we're passing to cycle detection
     console.group('📊 [Pipeline Run] Cycle Detection Input Data')
     console.log('Total events:', mergedEvents.length)
@@ -725,7 +725,7 @@ function PipelineRunView() {
       console.log(`  - ${agent}: ${executions.length} execution(s)`, executions.map(e => e.taskId))
     })
     console.log('Workflow config:', workflowConfig)
-    
+
     // Store data for debugging (accessible via window.debugPipelineData in console)
     window.debugPipelineData = {
       selectedPipelineRun,
@@ -738,10 +738,10 @@ function PipelineRunView() {
     }
     console.log('💾 Debug data stored in window.debugPipelineData')
     console.groupEnd()
-    
+
     // Detect cycles - pass workflow config for configuration-based detection
     const detectedCycles = identifyCycles(pipelineRunEvents, agentExecutions, workflowConfig)
-    
+
     console.log(`🔄 [Pipeline Run] Detected ${detectedCycles.size} cycles`)
     detectedCycles.forEach((cycle, cycleId) => {
       console.log(`  - ${cycleId}:`, {
@@ -750,7 +750,7 @@ function PipelineRunView() {
         agents: [...new Set(cycle.agentExecutions?.map(e => e.agent) || [])]
       })
     })
-    
+
     // Merge with existing collapse state
     setCycles(prevCycles => {
       const updated = new Map(detectedCycles)
@@ -762,12 +762,12 @@ function PipelineRunView() {
       return updated
     })
   }, [mergedEvents, workflowConfig, selectedPipelineRun])
-  
+
   // Rebuild flowchart when events or socket events change
   useEffect(() => {
     buildFlowchart()
   }, [buildFlowchart])
-  
+
   // Update on socket events
   useEffect(() => {
     if (socketEvents.length > 0) {
@@ -781,19 +781,19 @@ function PipelineRunView() {
       }
     }
   }, [socketEvents])
-  
+
   const onNodeMouseEnter = useCallback((event, node) => {
     setHoveredNode(node)
   }, [])
-  
+
   const onNodeMouseLeave = useCallback(() => {
     setHoveredNode(null)
   }, [])
-  
+
   return (
     <div className="min-h-screen p-5 bg-gh-canvas text-gh-fg">
       <Header />
-      
+
       <div className="flex items-center justify-between my-3">
         <NavigationTabs />
         <button
@@ -805,12 +805,12 @@ function PipelineRunView() {
           Refresh
         </button>
       </div>
-      
+
       <div className="flex gap-4">
         {/* Pipeline Run Selector */}
         <div className="w-64 bg-gh-canvas-subtle rounded-md border border-gh-border p-4">
           <h3 className="text-lg font-semibold mb-3">Pipeline Runs</h3>
-          
+
           {/* Tabs */}
           <div className="flex gap-2 mb-4 border-b border-gh-border">
             <button
@@ -834,7 +834,7 @@ function PipelineRunView() {
               Completed
             </button>
           </div>
-          
+
           {/* Active Pipeline Runs */}
           {selectedTab === 'active' && (
             <>
@@ -875,7 +875,7 @@ function PipelineRunView() {
               )}
             </>
           )}
-          
+
           {/* Completed Pipeline Runs */}
           {selectedTab === 'completed' && (
             <>
@@ -923,7 +923,7 @@ function PipelineRunView() {
                       </button>
                     ))}
                   </div>
-                  
+
                   {/* Load More Button */}
                   {hasMoreCompleted && (
                     <button
@@ -946,7 +946,7 @@ function PipelineRunView() {
             </>
           )}
         </div>
-        
+
         {/* Pipeline Run Flowchart */}
         <div className="flex-1 bg-gh-canvas-subtle rounded-md border border-gh-border p-4 flex gap-4">
           <div className="flex-1">
@@ -963,7 +963,7 @@ function PipelineRunView() {
                       {selectedPipelineRun.ended_at && ` • Ended: ${new Date(selectedPipelineRun.ended_at).toLocaleString()}`}
                     </p>
                   </div>
-                  
+
                   {/* Debug: Download Data Button */}
                   <button
                     onClick={() => {
@@ -996,7 +996,7 @@ function PipelineRunView() {
                     📥 Download Debug Data
                   </button>
                 </div>
-                
+
                 {loadingEvents ? (
                   <div className="flex items-center justify-center h-96">
                     <RefreshCw className="w-8 h-8 animate-spin text-gh-accent-primary" />
@@ -1024,7 +1024,7 @@ function PipelineRunView() {
                       <Background />
                       <Controls />
                     </ReactFlow>
-                    
+
                     {/* Hover tooltip */}
                     {hoveredNode && hoveredNode.data.metadata && (
                       <div className="absolute top-20 right-4 bg-gh-canvas-inset border border-gh-border rounded-md p-3 shadow-lg max-w-sm z-10">
@@ -1045,7 +1045,7 @@ function PipelineRunView() {
               </div>
             )}
           </div>
-          
+
           {/* Collapsible Legend Panel */}
           <div className={`transition-all duration-300 ${legendOpen ? 'w-64' : 'w-10'} bg-gh-canvas border border-gh-border rounded-md`}>
             <div className="flex items-center justify-between p-3 border-b border-gh-border">
@@ -1062,7 +1062,7 @@ function PipelineRunView() {
                 )}
               </button>
             </div>
-            
+
             {legendOpen && (
               <div className="p-3 space-y-4 overflow-y-auto" style={{ maxHeight: `${chartHeight}px` }}>
                 <div>
@@ -1100,7 +1100,7 @@ function PipelineRunView() {
                     </div>
                   </div>
                 </div>
-                
+
                 <div>
                   <h4 className="text-xs font-semibold mb-2 text-gh-fg-muted">Decision Categories</h4>
                   <div className="space-y-2 text-xs">
@@ -1143,7 +1143,7 @@ function PipelineRunView() {
           </div>
         </div>
       </div>
-      
+
       {/* Add CSS for candy stripe animation */}
       <style>{`
         @keyframes stripes {

@@ -4,6 +4,7 @@ Example: Start workflow execution for a work item
 This example demonstrates how to create a work item and start
 a workflow execution.
 """
+
 from typing import Any
 
 import requests
@@ -37,10 +38,7 @@ def create_work_item(
     """
     url = f"{BASE_URL}/api/v2/work-items/"
 
-    headers = {
-        "Authorization": f"Bearer {API_TOKEN}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": f"Bearer {API_TOKEN}", "Content-Type": "application/json"}
 
     payload = {
         "title": title,
@@ -48,7 +46,7 @@ def create_work_item(
         "project_id": project_id,
         "labels": labels or [],
         "priority": priority,
-        "status": "pending"
+        "status": "pending",
     }
 
     if external_id:
@@ -81,14 +79,9 @@ def start_workflow(
     """
     url = f"{BASE_URL}/api/v2/orchestrator/start"
 
-    headers = {
-        "Authorization": f"Bearer {API_TOKEN}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": f"Bearer {API_TOKEN}", "Content-Type": "application/json"}
 
-    payload = {
-        "work_item_id": work_item_id
-    }
+    payload = {"work_item_id": work_item_id}
 
     if workflow_id:
         payload["workflow_id"] = workflow_id
@@ -117,15 +110,9 @@ def check_entry_conditions(
     """
     url = f"{BASE_URL}/api/v2/orchestrator/check-entry-conditions"
 
-    headers = {
-        "Authorization": f"Bearer {API_TOKEN}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": f"Bearer {API_TOKEN}", "Content-Type": "application/json"}
 
-    payload = {
-        "work_item_id": work_item_id,
-        "stage_name": stage_name
-    }
+    payload = {"work_item_id": work_item_id, "stage_name": stage_name}
 
     response = requests.post(url, json=payload, headers=headers)
     response.raise_for_status()
@@ -146,9 +133,7 @@ def pause_workflow(workflow_run_id: str) -> dict[str, Any]:
     """
     url = f"{BASE_URL}/api/v2/orchestrator/{workflow_run_id}/pause"
 
-    headers = {
-        "Authorization": f"Bearer {API_TOKEN}"
-    }
+    headers = {"Authorization": f"Bearer {API_TOKEN}"}
 
     response = requests.post(url, headers=headers)
     response.raise_for_status()
@@ -170,9 +155,7 @@ def resume_workflow(workflow_run_id: str) -> dict[str, Any]:
     """
     url = f"{BASE_URL}/api/v2/orchestrator/{workflow_run_id}/resume"
 
-    headers = {
-        "Authorization": f"Bearer {API_TOKEN}"
-    }
+    headers = {"Authorization": f"Bearer {API_TOKEN}"}
 
     response = requests.post(url, headers=headers)
     response.raise_for_status()
@@ -194,9 +177,7 @@ def cancel_workflow(workflow_run_id: str) -> dict[str, Any]:
     """
     url = f"{BASE_URL}/api/v2/orchestrator/{workflow_run_id}/cancel"
 
-    headers = {
-        "Authorization": f"Bearer {API_TOKEN}"
-    }
+    headers = {"Authorization": f"Bearer {API_TOKEN}"}
 
     response = requests.post(url, headers=headers)
     response.raise_for_status()
@@ -224,7 +205,7 @@ def main() -> None:
             project_id="my-api-project",
             labels=["feature", "api", "backend"],
             priority="high",
-            external_id="GH-456"
+            external_id="GH-456",
         )
 
         print(f"\nWork Item ID: {work_item['id']}")

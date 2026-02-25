@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useSocket } from '../contexts/SocketContext'
-import { 
-  Activity, AlertCircle, CheckCircle, XCircle, GitBranch, MessageSquare, 
+import {
+  Activity, AlertCircle, CheckCircle, XCircle, GitBranch, MessageSquare,
   PlayCircle, RotateCcw, AlertTriangle, Users, FileCode, Clock, ExternalLink
 } from 'lucide-react'
 
@@ -10,13 +10,13 @@ const PipelineRunEventLogEvent = ({ event, children, icon: Icon, color = 'bg-gra
   const formatTimestamp = (timestamp) => {
     if (!timestamp) return ''
     const date = new Date(timestamp)
-    return date.toLocaleString('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
-      hour: '2-digit', 
-      minute: '2-digit', 
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
       second: '2-digit',
-      hour12: false 
+      hour12: false
     })
   }
 
@@ -47,7 +47,7 @@ const PipelineRunEventLogEvent = ({ event, children, icon: Icon, color = 'bg-gra
             </div>
           )}
         </div>
-        
+
         {/* Event-specific content */}
         <div className="text-sm text-gh-fg-muted">
           {children}
@@ -62,7 +62,7 @@ const AgentInitializedEvent = ({ event }) => {
   // agent_execution_id can be at top level or in data (for backwards compatibility)
   const agentExecutionId = event.agent_execution_id || event.data?.agent_execution_id
   const taskId = event.task_id || event.data?.task_id
-  
+
   return (
     <PipelineRunEventLogEvent event={event} icon={PlayCircle} color="bg-blue-600">
       <div>Agent initialized: <span className="font-mono text-gh-accent-fg">{event.agent}</span></div>
@@ -72,7 +72,7 @@ const AgentInitializedEvent = ({ event }) => {
       {agentExecutionId && (
         <div className="text-xs mt-1 flex items-center gap-2">
           <span>Execution ID: <span className="font-mono">{agentExecutionId.substring(0, 16)}...</span></span>
-          <a 
+          <a
             href={`/agent-execution/${agentExecutionId}`}
             rel="noopener noreferrer"
             className="text-gh-accent-fg hover:underline inline-flex items-center gap-1"
@@ -347,21 +347,21 @@ const getEventComponent = (event) => {
     'agent_initialized': AgentInitializedEvent,
     'agent_completed': AgentCompletedEvent,
     'agent_failed': AgentFailedEvent,
-    
+
     // Routing
     'agent_routing_decision': AgentRoutingDecisionEvent,
     'agent_selected': AgentSelectedEvent,
-    
+
     // Feedback
     'feedback_detected': FeedbackDetectedEvent,
     'feedback_listening_started': FeedbackListeningStartedEvent,
     'feedback_listening_stopped': FeedbackListeningStoppedEvent,
-    
+
     // Status Progression
     'status_progression_started': StatusProgressionStartedEvent,
     'status_progression_completed': StatusProgressionCompletedEvent,
     'status_progression_failed': StatusProgressionFailedEvent,
-    
+
     // Review Cycles
     'review_cycle_started': ReviewCycleStartedEvent,
     'review_cycle_iteration': ReviewCycleIterationEvent,
@@ -369,24 +369,24 @@ const getEventComponent = (event) => {
     'review_cycle_reviewer_selected': ReviewCycleReviewerSelectedEvent,
     'review_cycle_escalated': ReviewCycleEscalatedEvent,
     'review_cycle_completed': ReviewCycleCompletedEvent,
-    
+
     // Error Handling
     'error_encountered': ErrorEncounteredEvent,
     'error_recovered': ErrorRecoveredEvent,
-    
+
     // Task Queue
     'task_queued': TaskQueuedEvent,
     'task_dequeued': TaskDequeuedEvent,
-    
+
     // Branch Management
     'branch_created': BranchCreatedEvent,
     'branch_reused': BranchReusedEvent,
-    
+
     // Conversational
     'conversational_loop_started': ConversationalLoopStartedEvent,
     'conversational_question_routed': ConversationalQuestionRoutedEvent,
   }
-  
+
   const Component = eventTypeMap[event.event_type] || GenericEvent
   return <Component key={event.event_id} event={event} />
 }
@@ -395,34 +395,34 @@ const getEventComponent = (event) => {
 export default function PipelineRunEventLog({ pipelineRun, events: initialEvents = [], isActive = false }) {
   const [events, setEvents] = useState(initialEvents)
   const { events: socketEvents } = useSocket()
-  
+
   // Update events when new socket events arrive for this pipeline run
   useEffect(() => {
     if (!isActive || !pipelineRun) return
-    
+
     // Filter socket events for this pipeline run
     const newEvents = socketEvents.filter(e =>
       e.workflow_run_id === pipelineRun.id &&
       !events.find(existing => existing.event_id === e.event_id)
     )
-    
+
     if (newEvents.length > 0) {
-      setEvents(prev => [...prev, ...newEvents].sort((a, b) => 
+      setEvents(prev => [...prev, ...newEvents].sort((a, b) =>
         new Date(a.timestamp) - new Date(b.timestamp)
       ))
     }
   }, [socketEvents, isActive, pipelineRun, events])
-  
+
   // Update events when initialEvents prop changes
   useEffect(() => {
     setEvents(initialEvents)
   }, [initialEvents])
-  
+
   // Sort events oldest to newest
   const sortedEvents = useMemo(() => {
     return [...events].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
   }, [events])
-  
+
   if (!pipelineRun) {
     return (
       <div className="flex items-center justify-center h-96 text-gh-fg-muted">
@@ -430,7 +430,7 @@ export default function PipelineRunEventLog({ pipelineRun, events: initialEvents
       </div>
     )
   }
-  
+
   return (
     <div className="bg-gh-canvas-subtle rounded-md border border-gh-border">
       <div className="p-4 border-b border-gh-border">
@@ -449,7 +449,7 @@ export default function PipelineRunEventLog({ pipelineRun, events: initialEvents
           </span>
         </div>
       </div>
-      
+
       <div className="">
         {sortedEvents.length === 0 ? (
           <div className="flex items-center justify-center h-96 text-gh-fg-muted">

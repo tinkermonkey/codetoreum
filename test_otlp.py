@@ -2,6 +2,7 @@
 """
 Test OTLP trace export to SigNoz
 """
+
 import time
 
 from opentelemetry import trace
@@ -11,9 +12,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
 
 # Create resource
-resource = Resource(attributes={
-    SERVICE_NAME: "test-otlp-export"
-})
+resource = Resource(attributes={SERVICE_NAME: "test-otlp-export"})
 
 # Create tracer provider
 provider = TracerProvider(resource=resource)

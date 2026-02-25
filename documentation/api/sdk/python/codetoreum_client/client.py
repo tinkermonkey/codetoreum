@@ -1,6 +1,7 @@
 """
 Main Codetoreum client class
 """
+
 from typing import Any, cast
 from urllib.parse import urljoin
 
@@ -53,11 +54,13 @@ class CodetoreumClient:
 
         # Create session with default headers
         self.session = requests.Session()
-        self.session.headers.update({
-            "Authorization": f"Bearer {api_token}",
-            "Content-Type": "application/json",
-            "User-Agent": "codetoreum-python-sdk/2.0.0",
-        })
+        self.session.headers.update(
+            {
+                "Authorization": f"Bearer {api_token}",
+                "Content-Type": "application/json",
+                "User-Agent": "codetoreum-python-sdk/2.0.0",
+            }
+        )
         self.session.verify = verify_ssl
 
         # Initialize resource clients

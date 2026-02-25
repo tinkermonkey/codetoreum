@@ -17,14 +17,10 @@ class WorkspacesResource:
 
     def get(self, workspace_id: str) -> dict[str, Any]:
         """Get workspace status."""
-        result: dict[str, Any] = self.client.get(
-            f"/api/v2/workspace/{workspace_id}"
-        )
+        result: dict[str, Any] = self.client.get(f"/api/v2/workspace/{workspace_id}")
         return result
 
     def get_resource_usage(self) -> dict[str, Any]:
         """Get resource usage summary."""
-        result: dict[str, Any] = self.client.get(
-            "/api/v2/workspace/resource-usage"
-        )
+        result: dict[str, Any] = self.client.get("/api/v2/workspace/resource-usage")
         return result

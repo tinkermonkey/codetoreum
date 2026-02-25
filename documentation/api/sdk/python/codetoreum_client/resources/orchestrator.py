@@ -1,6 +1,7 @@
 """
 Orchestrator resource client
 """
+
 from typing import TYPE_CHECKING, Any
 
 from ..models import WorkflowRun
@@ -118,8 +119,5 @@ class OrchestratorResource:
             "stage_name": stage_name,
         }
 
-        result: dict[str, Any] = self.client.post(
-            "/api/v2/orchestrator/check-entry-conditions",
-            json=payload
-        )
+        result: dict[str, Any] = self.client.post("/api/v2/orchestrator/check-entry-conditions", json=payload)
         return result

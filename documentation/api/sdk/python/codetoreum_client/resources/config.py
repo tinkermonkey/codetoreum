@@ -1,4 +1,5 @@
 """Configuration resource client"""
+
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
@@ -55,12 +56,7 @@ class ConfigurationResource:
         return data
 
     def create_project(
-        self,
-        project_id: str,
-        name: str,
-        repository_url: str,
-        branch: str = "main",
-        **config: Any
+        self, project_id: str, name: str, repository_url: str, branch: str = "main", **config: Any
     ) -> dict[str, Any]:
         """
         Create a new project configuration.
@@ -111,7 +107,7 @@ class ConfigurationResource:
         name: str | None = None,
         repository_url: str | None = None,
         branch: str | None = None,
-        **updates: Any
+        **updates: Any,
     ) -> dict[str, Any]:
         """
         Update project configuration.
@@ -212,13 +208,7 @@ class ConfigurationResource:
         data = self.client.get(f"/api/v2/config/projects/{project_id}/env-vars")
         return cast("list[dict[str, Any]]", data.get("env_vars", []))
 
-    def set_env_var(
-        self,
-        project_id: str,
-        name: str,
-        value: str,
-        is_secret: bool = False
-    ) -> dict[str, Any]:
+    def set_env_var(self, project_id: str, name: str, value: str, is_secret: bool = False) -> dict[str, Any]:
         """
         Set an environment variable for a project.
 
@@ -250,16 +240,9 @@ class ConfigurationResource:
         if not isinstance(value, str):
             raise ValueError("value must be a string")
 
-        payload = {
-            "name": name.strip(),
-            "value": value,
-            "is_secret": is_secret
-        }
+        payload = {"name": name.strip(), "value": value, "is_secret": is_secret}
 
-        return self.client.post(
-            f"/api/v2/config/projects/{project_id}/env-vars",
-            json=payload
-        )
+        return self.client.post(f"/api/v2/config/projects/{project_id}/env-vars", json=payload)
 
     def delete_env_var(self, project_id: str, name: str) -> dict[str, Any]:
         """

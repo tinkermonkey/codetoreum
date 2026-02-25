@@ -1220,4 +1220,3 @@ Use scenarios in this order for CI/CD:
 - `tests/simulation/README.md` - Framework overview
 - `src/codetoreum/infrastructure/simulation/` - Implementation
 - `SCENARIO_06_DOCUMENTATION.md` - Detailed Scenario 06 spec
-

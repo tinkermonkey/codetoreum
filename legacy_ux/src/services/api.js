@@ -19,23 +19,23 @@ class ApiClient {
 
     try {
       const response = await fetch(url, config)
-      
+
       // Handle non-JSON responses (like plain text)
       const contentType = response.headers.get('content-type')
       if (contentType && contentType.includes('application/json')) {
         const data = await response.json()
-        
+
         if (!response.ok) {
           throw new Error(data.error || data.message || `HTTP ${response.status}`)
         }
-        
+
         return data
       }
-      
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
-      
+
       return response
     } catch (error) {
       console.error(`API Error [${endpoint}]:`, error)

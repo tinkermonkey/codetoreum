@@ -244,11 +244,11 @@ function AgentExecutionView() {
     if (!executionData) {
       return { executionEvents: [], agentState: {}, mergedLogs: [] }
     }
-    
+
     const agent = executionData.agent
     const startTimestamp = normalizeTimestamp(executionData.started_at)
     const endTimestamp = executionData.ended_at ? normalizeTimestamp(executionData.ended_at) : null
-    
+
     console.log('[AgentExecution] useMemo triggered:', {
       agent,
       executionLogsCount: executionLogs.length,
@@ -256,16 +256,16 @@ function AgentExecutionView() {
       startTimestamp,
       endTimestamp
     })
-    
+
     // Use shared utility to merge API logs with WebSocket events
     const logs = mergeAgentExecutionEvents(executionLogs, allLogs, executionData)
-    
+
     console.log('[AgentExecution] Merged logs:', {
       mergedCount: logs.length,
       apiLogsCount: executionLogs.length,
       newLogsFromWebSocket: logs.length - executionLogs.length
     })
-    
+
     // Filter events for this execution (for display purposes only, not for state)
     const filteredEvents = allLogs.filter(event => {
       if (event.agent !== agent) return false
@@ -275,25 +275,25 @@ function AgentExecutionView() {
       if (endTimestamp && eventTimestamp > endTimestamp) return false
       return true
     })
-    
+
     // Build agent state from merged logs (API + WebSocket)
     let lastTodoWrite = null
     let lastTextMessage = null
     let lastToolCall = null
     let previousToolCall = null
     let previousToolResult = null
-    
+
     // Process merged logs in reverse (most recent first) to find latest states
     for (let i = logs.length - 1; i >= 0; i--) {
       const log = logs[i]
       const event = log.raw_event?.event
       const normalizedLogTimestamp = normalizeTimestamp(log.timestamp)
-      
+
       if (event?.type === 'assistant' && event?.message?.content) {
         const contents = Array.isArray(event.message.content)
           ? event.message.content
           : [event.message.content]
-        
+
         for (const item of contents) {
           if (item.type === 'text' && !lastTextMessage && item.text?.trim()) {
             lastTextMessage = {
@@ -328,25 +328,25 @@ function AgentExecutionView() {
           }
         }
       }
-      
+
       if (lastTodoWrite && lastTextMessage && lastToolCall && previousToolCall) break
     }
-    
+
     // Find tool result for previous tool call
     if (previousToolCall) {
       for (let i = logs.length - 1; i >= 0; i--) {
         const log = logs[i]
         const event = log.raw_event?.event
         const normalizedLogTimestamp = normalizeTimestamp(log.timestamp)
-        
+
         const isBeforeOrAtLastToolCall = normalizedLogTimestamp && lastToolCall.timestamp && normalizedLogTimestamp <= lastToolCall.timestamp
         const isAfterOrAtPreviousToolCall = normalizedLogTimestamp && previousToolCall.timestamp && normalizedLogTimestamp >= previousToolCall.timestamp
-        
+
         if (isBeforeOrAtLastToolCall && isAfterOrAtPreviousToolCall && event?.type === 'user' && event?.message?.content) {
           const contents = Array.isArray(event.message.content)
             ? event.message.content
             : [event.message.content]
-          
+
           for (const item of contents) {
             if (item.type === 'tool_result') {
               const timeDiff = Math.abs(normalizedLogTimestamp - previousToolCall.timestamp)
@@ -364,7 +364,7 @@ function AgentExecutionView() {
         }
       }
     }
-    
+
     // Use prompt_event from API response instead of searching events
     let inputPrompt = null
     if (promptEvent && promptEvent.raw_event?.data?.prompt) {
@@ -377,7 +377,7 @@ function AgentExecutionView() {
         }
       }
     }
-    
+
     return {
       executionEvents: filteredEvents,
       agentState: {
@@ -391,19 +391,19 @@ function AgentExecutionView() {
       mergedLogs: logs
     }
   }, [executionData, executionLogs, allLogs, promptEvent])
-  
+
   // Auto-scroll logs
   useEffect(() => {
     if (autoScroll && logsContainerRef.current) {
       logsContainerRef.current.scrollTop = logsContainerRef.current.scrollHeight
     }
   }, [mergedLogs, autoScroll])
-  
+
   const formatToolCall = (toolCall) => {
     if (!toolCall) return null
-    
+
     const { name, input } = toolCall
-    
+
     switch (name) {
       case 'Bash':
         return `${input.command || ''}`
@@ -421,17 +421,17 @@ function AgentExecutionView() {
         return input.description || JSON.stringify(input)
     }
   }
-  
+
   const getTodoStats = (todos) => {
     if (!todos || todos.length === 0) return { total: 0, completed: 0, inProgress: 0, pending: 0 }
-    
+
     const completed = todos.filter(t => t.status === 'completed').length
     const inProgress = todos.filter(t => t.status === 'in_progress').length
     const pending = todos.filter(t => t.status === 'pending').length
-    
+
     return { total: todos.length, completed, inProgress, pending }
   }
-  
+
   const getStatusIndicator = () => {
     if (!executionData) {
       return { color: 'bg-gh-fg-muted', label: 'Unknown' }
@@ -447,23 +447,23 @@ function AgentExecutionView() {
     }
     return { color: 'bg-gh-fg-muted', label: 'Idle' }
   }
-  
+
   const formatLogContent = (log) => {
     const event = log.raw_event?.event
     let logType = 'text'
     let logContent = ''
     let toolData = null
-    
+
     // If there's no event data (e.g., system events), return empty
     if (!event) {
       return { logType: 'text', logContent: log.event_type || '', toolData: null }
     }
-    
+
     if (event?.type === 'assistant') {
       const msg = event.message
       if (msg?.content) {
         const contents = Array.isArray(msg.content) ? msg.content : [msg.content]
-        
+
         for (const item of contents) {
           if (item.type === 'text') {
             logType = 'text'
@@ -473,7 +473,7 @@ function AgentExecutionView() {
             logType = 'tool'
             const toolName = item.name
             const input = item.input || {}
-            
+
             switch (toolName) {
               case 'Bash':
                 logContent = `Bash: ${input.command || ''}`
@@ -503,7 +503,7 @@ function AgentExecutionView() {
             break
           }
         }
-        
+
         if (!logContent && msg.usage) {
           logType = 'usage'
           const usage = msg.usage
@@ -527,10 +527,10 @@ function AgentExecutionView() {
         }
       }
     }
-    
+
     return { logType, logContent, toolData }
   }
-  
+
   const getLogTypeColor = (type) => {
     switch (type) {
       case 'tool': return 'bg-gh-warning'
@@ -541,12 +541,12 @@ function AgentExecutionView() {
       default: return 'bg-gh-fg-muted'
     }
   }
-  
+
   const status = getStatusIndicator()
   const { lastTodoWrite, lastTextMessage, lastToolCall, previousToolCall, previousToolResult, inputPrompt } = agentState
   const todoStats = getTodoStats(lastTodoWrite?.todos)
   const isExecuting = executionData?.status === 'running'
-  
+
   if (loading) {
     return (
       <div className="min-h-screen p-5 bg-gh-canvas text-gh-fg">
@@ -556,7 +556,7 @@ function AgentExecutionView() {
       </div>
     )
   }
-  
+
   if (error || !executionData) {
     return (
       <div className="min-h-screen p-5 bg-gh-canvas text-gh-fg">
@@ -569,7 +569,7 @@ function AgentExecutionView() {
       </div>
     )
   }
-  
+
   return (
     <div className="min-h-screen p-5 bg-gh-canvas text-gh-fg">
 
@@ -656,7 +656,7 @@ function AgentExecutionView() {
             </span>
           </div>
         </div>
-        
+
         <div className="p-4">
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div className="space-y-2">
@@ -705,7 +705,7 @@ function AgentExecutionView() {
               )}
             </div>
           </div>
-          
+
           {/* When completed, use two-row layout */}
           {executionData.status === 'completed' ? (
             <div className="space-y-4">
@@ -1195,7 +1195,7 @@ function AgentExecutionView() {
             </button>
           </div>
         </div>
-        
+
         <div
           ref={logsContainerRef}
           className="min-h-[300px] max-h-[50vh] overflow-y-auto font-mono text-xs"
@@ -1208,7 +1208,7 @@ function AgentExecutionView() {
             mergedLogs.map((log, idx) => {
               const { logType, logContent, toolData } = formatLogContent(log)
               if (!logContent) return null
-              
+
               return (
                 <div
                   key={idx}

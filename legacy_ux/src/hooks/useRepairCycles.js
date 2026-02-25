@@ -15,7 +15,7 @@ export const useRepairCycles = () => {
     try {
       const response = await fetch('http://localhost:5001/api/repair-cycle-containers')
       const data = await response.json()
-      
+
       if (data.success) {
         setContainers(data.containers)
         setError(null)
@@ -32,10 +32,10 @@ export const useRepairCycles = () => {
   // Fetch on mount and when events change
   useEffect(() => {
     fetchContainers()
-    
+
     // Refresh every 5 seconds
     const interval = setInterval(fetchContainers, 5000)
-    
+
     return () => clearInterval(interval)
   }, [])
 
@@ -44,7 +44,7 @@ export const useRepairCycles = () => {
     if (!events || events.length === 0) return
 
     const latestEvent = events[events.length - 1]
-    
+
     if (latestEvent.event_type?.startsWith('repair_cycle_container_')) {
       // Refresh when any repair cycle event occurs
       fetchContainers()

@@ -1,6 +1,7 @@
 """
 Data models for Codetoreum API resources
 """
+
 from dataclasses import dataclass, field
 from typing import Any, TypeVar, cast
 

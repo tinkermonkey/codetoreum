@@ -49,12 +49,12 @@ export function deriveActiveAgentsFromEvents(events) {
   const runningAgents = Array.from(agentStates.values()).filter((agent) => {
     return agent.status === 'running'
   })
-  
+
   // Debug logging (can be removed later)
   if (typeof window !== 'undefined') {
     console.debug(`[deriveActiveAgentsFromEvents] Processed ${events.length} events, found ${runningAgents.length} active agents`)
   }
-  
+
   return runningAgents
 }
 
@@ -71,7 +71,7 @@ export function parseTimestamp(timestamp) {
 
   try {
     let date
-    
+
     // Handle different timestamp formats
     if (typeof timestamp === 'string') {
       // If the ISO string doesn't have a timezone indicator, assume it's UTC
@@ -89,13 +89,13 @@ export function parseTimestamp(timestamp) {
       // Timestamp in seconds
       date = new Date(timestamp * 1000)
     }
-    
+
     // Validate the date
     if (isNaN(date.getTime())) {
       console.warn('[parseTimestamp] Invalid timestamp:', timestamp)
       return null
     }
-    
+
     return date
   } catch (error) {
     console.error('[parseTimestamp] Error parsing timestamp:', error, 'timestamp:', timestamp)
@@ -113,16 +113,16 @@ export function getRuntimeMs(startedAt) {
   if (!start) {
     return 0
   }
-  
+
   const now = new Date()
   const diffMs = now - start
-  
+
   // Handle negative durations (future timestamps)
   if (diffMs < 0) {
     console.warn('[getRuntimeMs] Negative duration - timestamp is in the future:', startedAt)
     return 0
   }
-  
+
   return diffMs
 }
 
@@ -133,11 +133,11 @@ export function getRuntimeMs(startedAt) {
  */
 export function formatDuration(startedAt) {
   const diffMs = getRuntimeMs(startedAt)
-  
+
   if (diffMs === 0) {
     return '0s'
   }
-  
+
   const diffMins = Math.floor(diffMs / 60000)
   const diffSecs = Math.floor((diffMs % 60000) / 1000)
 
@@ -154,7 +154,7 @@ export function formatDuration(startedAt) {
  */
 export function getUnhealthyComponents(systemHealth) {
   if (!systemHealth?.orchestrator?.checks) return []
-  
+
   return Object.entries(systemHealth.orchestrator.checks).filter(
     ([, check]) => !check.healthy
   )

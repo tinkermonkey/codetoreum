@@ -4,6 +4,7 @@ Example: Create a new agent in Codetoreum
 This example demonstrates how to create a new agent with capabilities
 and MCP server configuration.
 """
+
 import logging
 from typing import Any, cast
 
@@ -54,7 +55,8 @@ def create_agent(
         "description": description,
         "agent_type": agent_type,
         "capabilities": capabilities or [],
-        "configuration": configuration or {
+        "configuration": configuration
+        or {
             "model": "claude-sonnet-4",
             "temperature": 0.7,
             "max_tokens": 4000,
@@ -94,9 +96,7 @@ def add_mcp_server(agent_id: str, mcp_config: dict[str, Any]) -> dict[str, Any]:
         "Content-Type": "application/json",
     }
 
-    response = requests.post(
-        url, json=mcp_config, headers=headers, timeout=30
-    )
+    response = requests.post(url, json=mcp_config, headers=headers, timeout=30)
     response.raise_for_status()
 
     result: dict[str, Any] = cast("dict[str, Any]", response.json())
@@ -148,9 +148,7 @@ def main() -> None:
 
         logger.info("Agent ID: %s", backend_agent["id"])
         logger.info("Name: %s", backend_agent["name"])
-        logger.info(
-            "Capabilities: %s", ", ".join(backend_agent["capabilities"])
-        )
+        logger.info("Capabilities: %s", ", ".join(backend_agent["capabilities"]))
 
         logger.info("✓ Created agent successfully")
 
@@ -158,9 +156,7 @@ def main() -> None:
         logger.exception("API Error: %s", e.response.status_code)
         try:
             error_detail = e.response.json()
-            logger.error(
-                "Detail: %s", error_detail.get("detail", "No details provided")
-            )
+            logger.error("Detail: %s", error_detail.get("detail", "No details provided"))
         except ValueError:
             logger.error("Detail: %s", e.response.text)
     except requests.exceptions.ConnectionError:
@@ -170,9 +166,7 @@ def main() -> None:
     except requests.exceptions.RequestException as e:
         logger.exception("Request Error: %s", str(e))
     except Exception as e:
-        logger.exception(
-            "Unexpected Error: %s: %s", type(e).__name__, str(e)
-        )
+        logger.exception("Unexpected Error: %s: %s", type(e).__name__, str(e))
 
 
 if __name__ == "__main__":
