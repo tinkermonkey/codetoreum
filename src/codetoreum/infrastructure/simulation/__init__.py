@@ -1,4 +1,6 @@
 """Simulation infrastructure for testing."""
+from typing import Any
+
 from .mock_tracer import (
     MockTracer,
     SpanCapture,
@@ -85,7 +87,7 @@ __all__ = [
 ]
 
 
-def __getattr__(name: str) -> object:
+def __getattr__(name: str) -> Any:
     """Lazy import bootstrap and seeding components to avoid circular imports."""
     if name == "SimulationApplicationBootstrap":
         from .bootstrap import SimulationApplicationBootstrap

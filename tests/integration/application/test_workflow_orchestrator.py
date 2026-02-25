@@ -140,7 +140,7 @@ class MockWorkflowStateManager(IWorkflowStateManager):
     """Mock workflow state manager."""
 
     def __init__(self):
-        self.states = {}
+        self.states: dict[str, WorkflowState] = {}
 
     async def get_workflow_state(self, issue_id: str) -> WorkflowState:
         if issue_id not in self.states:
