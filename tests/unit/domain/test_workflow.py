@@ -549,7 +549,7 @@ class TestWorkflowQueries:
         duration = workflow.get_duration_seconds()
         assert duration is not None
         assert duration >= 0
-        assert isinstance(duration, int)
+        assert isinstance(duration, float)
 
 
 class TestEventManagement:

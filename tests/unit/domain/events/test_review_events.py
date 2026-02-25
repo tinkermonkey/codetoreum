@@ -333,13 +333,13 @@ class TestReviewStatusChangedEventImmutability:
         # ReviewStatusChangedEvent is a frozen dataclass, so attempting to modify
         # any attribute should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            object.__setattr__(event, "review_id", "pr-456")
+            event.review_id = "pr-456"  # type: ignore
 
         with pytest.raises(FrozenInstanceError):
-            object.__setattr__(event, "previous_status", "closed")
+            event.previous_status = "closed"  # type: ignore
 
         with pytest.raises(FrozenInstanceError):
-            object.__setattr__(event, "new_status", "rejected")
+            event.new_status = "rejected"  # type: ignore
 
 
 class TestReviewCommentAddedEventImmutability:
@@ -372,10 +372,10 @@ class TestReviewCommentAddedEventImmutability:
         # ReviewCommentAddedEvent is a frozen dataclass, so attempting to modify
         # any attribute should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            object.__setattr__(event, "review_id", "pr-456")
+            event.review_id = "pr-456"  # type: ignore
 
         with pytest.raises(FrozenInstanceError):
-            object.__setattr__(event, "comment", Comment("rc-2", "bob", "Different comment", now_iso()))
+            event.comment = Comment("rc-2", "bob", "Different comment", now_iso())  # type: ignore
 
     def test_review_comment_added_nested_comment_immutability(self):
         """Test that nested Comment object in ReviewCommentAddedEvent is immutable."""
@@ -406,7 +406,7 @@ class TestReviewCommentAddedEventImmutability:
         # Comment is a frozen dataclass, so attempting to modify
         # its attributes should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            object.__setattr__(event_comment, "author", "bob")
+            event_comment.author = "bob"  # type: ignore
 
         with pytest.raises(FrozenInstanceError):
-            object.__setattr__(event_comment, "body", "Different feedback")
+            event_comment.body = "Different feedback"  # type: ignore
