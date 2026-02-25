@@ -10,6 +10,12 @@ from datetime import UTC, datetime
 
 import pytest
 
+# Import FrozenInstanceError with fallback for older Python versions
+try:
+    from dataclasses import FrozenInstanceError
+except ImportError:
+    FrozenInstanceError = AttributeError  # type: ignore
+
 from codetoreum.ports.output.pipeline_queue_service import (
     IPipelineQueueService,
     QueueStatus,
@@ -468,7 +474,7 @@ class TestPipelineQueueServiceContract(ABC):
         entry = entries[0]
 
         # Attempt to modify should fail
-        with pytest.raises((AttributeError, Exception)):  # FrozenInstanceError or similar
+        with pytest.raises(FrozenInstanceError):
             entry.status = QueueStatus.ACTIVE
 
     # ===== Multi-Queue Tests =====

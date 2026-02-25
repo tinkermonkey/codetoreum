@@ -211,8 +211,10 @@ class TestWorkspaceTypeEnum:
 
     def test_workspace_type_comparison(self):
         """Test WorkspaceType enum comparison."""
-        assert WorkspaceType.ISSUE == WorkspaceType.ISSUE
-        assert WorkspaceType.ISSUE != WorkspaceType.DISCUSSION
+        issue_type = WorkspaceType.ISSUE
+        discussion_type = WorkspaceType.DISCUSSION
+        assert issue_type == WorkspaceType.ISSUE
+        assert issue_type != discussion_type
 
 
 class TestImmutability:
@@ -226,15 +228,15 @@ class TestImmutability:
             branch_name="feature/test"
         )
 
-        # Attempting to modify should raise FrozenInstanceError
+        # Attempting to modify frozen dataclass fields should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            context.branch_name = "new-branch"
+            object.__setattr__(context, "branch_name", "new-branch")
 
         with pytest.raises(FrozenInstanceError):
-            context.create_pr = False
+            object.__setattr__(context, "create_pr", False)
 
         with pytest.raises(FrozenInstanceError):
-            context.workspace_type = WorkspaceType.ISSUE
+            object.__setattr__(context, "workspace_type", WorkspaceType.ISSUE)
 
 
 class TestEquality:
