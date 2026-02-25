@@ -292,9 +292,6 @@ class TestBootstrapIntegration:
 class TestEndToEndCausalChains:
     """Tests for complete causal chains through event bus."""
 
-
-
-
     async def test_event_bus_no_circular_dependencies(
         self,
         event_bus: EventBus,
@@ -331,8 +328,6 @@ class TestEndToEndCausalChains:
                 # Callback should be a function, not an adapter instance
                 # (adapters might be methods bound to adapters, but not the adapters themselves)
                 assert callable(cb), f"Callback for {event_type} should be callable"
-
-
 
 
 if __name__ == "__main__":
