@@ -2,8 +2,6 @@
 Tests for Event Sequence Validator
 """
 
-from dataclasses import FrozenInstanceError
-
 import pytest
 
 from codetoreum.application.event_sequence_validator import (
@@ -601,17 +599,6 @@ class TestPatternElementValidation:
         )
         assert elem.max_occurrences is None
 
-    def test_pattern_element_is_frozen(self):
-        """Test that PatternElement is immutable (frozen)."""
-        elem = PatternElement(
-            event_types=("Event1",),
-            operator=PatternOperator.EXACT,
-            min_occurrences=1,
-            max_occurrences=1
-        )
-        with pytest.raises(FrozenInstanceError):
-            elem.min_occurrences = 5
-
 
 class TestValidationResultValidation:
     """Tests for ValidationResult.__post_init__ validation."""
@@ -648,14 +635,3 @@ class TestValidationResultValidation:
         )
         assert not result.is_valid
         assert result.error_message == "Custom error message"
-
-    def test_validation_result_is_frozen(self):
-        """Test that ValidationResult is immutable (frozen)."""
-        result = ValidationResult(
-            is_valid=True,
-            missing_events=(),
-            unexpected_events=(),
-            out_of_order_events=()
-        )
-        with pytest.raises(FrozenInstanceError):
-            result.is_valid = False

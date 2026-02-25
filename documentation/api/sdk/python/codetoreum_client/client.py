@@ -4,7 +4,7 @@ Main Codetoreum client class
 from typing import Any, cast
 from urllib.parse import urljoin
 
-import requests  # type: ignore[import-untyped]
+import requests
 
 from .exceptions import AuthenticationError, CodetoreumError, RateLimitError
 from .resources.agents import AgentsResource
