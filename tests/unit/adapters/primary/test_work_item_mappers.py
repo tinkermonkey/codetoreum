@@ -27,6 +27,10 @@ class TestWorkItemMapper:
             project_id="proj-123",
             title="Test Work Item",
             description="Test description",
+            labels=None,
+            priority="MEDIUM",
+            external_id=None,
+            external_url=None,
         )
 
         # Act
@@ -46,6 +50,9 @@ class TestWorkItemMapper:
         # Arrange
         dto = UpdateWorkItemRequest(
             title="Updated Title",
+            description=None,
+            labels=None,
+            priority=None,
         )
 
         # Act
