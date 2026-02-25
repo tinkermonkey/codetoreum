@@ -8,7 +8,6 @@ from typing import List, Optional
 
 from codetoreum.domain.types import BranchName, CommitHash, RemoteName, RepositoryId
 
-
 # ============================================================================
 # Data Models
 # ============================================================================

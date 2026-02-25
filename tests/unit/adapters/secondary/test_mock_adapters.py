@@ -7,30 +7,31 @@ Tests verify that:
 4. Events have correct source='mock' and ISO timestamps
 """
 
-import pytest
 import re
 from datetime import datetime
 from typing import Any
 
-from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
-from codetoreum.adapters.secondary.mock_discussion_adapter import MockDiscussionAdapter
-from codetoreum.adapters.secondary.mock_code_review_adapter import MockCodeReviewAdapter
-from codetoreum.adapters.secondary.in_memory_pipeline_lock_service import (
-    InMemoryPipelineLockService,
-)
+import pytest
+
 from codetoreum.adapters.secondary.configurable_identity_service import (
     ConfigurableIdentityService,
 )
+from codetoreum.adapters.secondary.in_memory_pipeline_lock_service import (
+    InMemoryPipelineLockService,
+)
+from codetoreum.adapters.secondary.mock_code_review_adapter import MockCodeReviewAdapter
+from codetoreum.adapters.secondary.mock_discussion_adapter import MockDiscussionAdapter
+from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
 from codetoreum.domain.events.board_events import (
-    WorkItemColumnChangedEvent,
     BoardReconciledEvent,
+    WorkItemColumnChangedEvent,
 )
 from codetoreum.domain.events.discussion_events import (
     CommentNeedsResponseEvent,
     CommentPostedEvent,
 )
-from codetoreum.domain.events.review_events import ReviewStatusChangedEvent
 from codetoreum.domain.events.lock_events import LockAcquiredEvent, LockReleasedEvent
+from codetoreum.domain.events.review_events import ReviewStatusChangedEvent
 from codetoreum.ports.output.board_service import BoardConfig
 from codetoreum.ports.output.discussion_adapter import DiscussionMonitoringConfig
 from codetoreum.ports.output.monitoring import MonitoringConfig

@@ -20,12 +20,11 @@ from codetoreum.adapters.primary.websocket_adapter import (
 )
 from codetoreum.domain.events import (
     DomainEvent,
-    ExecutionStarted,
     ExecutionCompleted,
+    ExecutionStarted,
     WorkItemCreated,
 )
 from codetoreum.infrastructure.event_bus import EventBus
-
 
 # ============================================================================
 # Fixtures

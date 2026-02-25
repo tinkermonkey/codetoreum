@@ -9,14 +9,15 @@ Comprehensive unit tests covering:
 - Enable/disable operations
 """
 
-import pytest
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from codetoreum.application.multi_project_orchestrator import MultiProjectOrchestrator
-from codetoreum.domain.value_objects import ProjectConfig
 from codetoreum.domain.events.project_events import OrchestrationCycleCompletedEvent
-from codetoreum.ports.exceptions import ResourceNotFoundError, ExternalServiceError
+from codetoreum.domain.value_objects import ProjectConfig
+from codetoreum.ports.exceptions import ExternalServiceError, ResourceNotFoundError
 from codetoreum.ports.output.multi_project_orchestrator import (
     OrchestrationCycleResult,
     ProjectOrchestrationResult,
@@ -627,6 +628,7 @@ class TestMultiProjectOrchestratorLifecycle:
         the orchestrator should log the error but continue to the poll loop.
         """
         import asyncio
+
         from codetoreum.ports.exceptions import ExternalServiceError
 
         # Setup: board service fails during initial setup

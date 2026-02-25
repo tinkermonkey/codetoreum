@@ -22,24 +22,24 @@ import threading
 from datetime import datetime, timezone
 from typing import Callable, Dict, List, Optional, Tuple
 
-from codetoreum.ports.output.pipeline_queue_service import (
-    IPipelineQueueService,
-    PipelineQueueEntry,
-    QueueStatus,
-    DuplicateQueueEntryError,
-    QueueItemNotFoundError,
-    InvalidQueueStateError,
-    QueueValidationError,
-)
-from codetoreum.ports.output.board_service import IBoardService
-from codetoreum.ports.output.event_emitter import IEventEmitter
+from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.domain.events.queue_events import (
     QueueItemAddedEvent,
     QueueItemRemovedEvent,
     QueuePositionChangedEvent,
 )
-from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.ports.output.board_service import IBoardService
+from codetoreum.ports.output.event_emitter import IEventEmitter
+from codetoreum.ports.output.pipeline_queue_service import (
+    DuplicateQueueEntryError,
+    InvalidQueueStateError,
+    IPipelineQueueService,
+    PipelineQueueEntry,
+    QueueItemNotFoundError,
+    QueueStatus,
+    QueueValidationError,
+)
 
 logger = logging.getLogger(__name__)
 

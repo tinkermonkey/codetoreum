@@ -9,9 +9,10 @@ Tests cover:
 """
 
 import asyncio
-import pytest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
+
+import pytest
 
 from codetoreum.application.workflow_run_query_service import LRUCache
 

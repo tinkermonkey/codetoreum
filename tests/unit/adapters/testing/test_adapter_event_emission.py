@@ -5,31 +5,36 @@ InMemoryStorageAdapter emit appropriate domain events for all state-changing
 operations, establishing complete event sourcing audit trail for simulation testing.
 """
 
-import pytest
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List
 
+import pytest
+
+from codetoreum.adapters.testing.capturing_mock_event_emitter import (
+    CapturingMockEventEmitter,
+)
 from codetoreum.adapters.testing.in_memory_queue_service import InMemoryQueueService
-from codetoreum.adapters.testing.in_memory_repository_adapter import InMemoryRepositoryAdapter
+from codetoreum.adapters.testing.in_memory_repository_adapter import (
+    InMemoryRepositoryAdapter,
+)
 from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
-from codetoreum.adapters.testing.capturing_mock_event_emitter import CapturingMockEventEmitter
 from codetoreum.domain.events.queue_events import (
     QueueItemAddedEvent,
     QueueItemRemovedEvent,
     QueuePositionChangedEvent,
 )
 from codetoreum.domain.events.repository_events import (
-    CommitCreatedEvent,
     BranchCreatedEvent,
+    CommitCreatedEvent,
     FilesStagedEvent,
 )
 from codetoreum.domain.events.storage_events import (
-    ArtifactUploadedEvent,
     ArtifactDeletedEvent,
+    ArtifactUploadedEvent,
 )
-from codetoreum.ports.output.pipeline_queue_service import QueueStatus
 from codetoreum.domain.types import BranchName, CommitHash
+from codetoreum.ports.output.pipeline_queue_service import QueueStatus
 
 
 class TestQueueServiceEventEmission:

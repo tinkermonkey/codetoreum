@@ -13,7 +13,7 @@ of real-time events from server to client.
 """
 
 import logging
-from typing import Any, Callable, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 try:
     from opentelemetry import trace
@@ -24,11 +24,11 @@ except ImportError:
     OPENTELEMETRY_AVAILABLE = False
     SpanKind = None
 
+from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.observability.trace_context_propagation import (
     TraceContextData,
     inject_current_trace_context_into_event,
 )
-from codetoreum.domain.events import DomainEvent
 
 if TYPE_CHECKING:
     from fastapi import WebSocket

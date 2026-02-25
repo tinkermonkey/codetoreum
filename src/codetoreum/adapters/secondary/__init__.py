@@ -9,13 +9,13 @@ from codetoreum.adapters.secondary.claude_code_adapter import (
     ClaudeCodeAdapter,
     ClaudeCodeConfig,
 )
-from codetoreum.adapters.secondary.configurable_identity_service import (
-    ConfigurableIdentityService,
-)
 from codetoreum.adapters.secondary.config_storage_factory import (
     create_cached_config_store,
     create_elasticsearch_config_storage,
     create_redis_config_cache,
+)
+from codetoreum.adapters.secondary.configurable_identity_service import (
+    ConfigurableIdentityService,
 )
 from codetoreum.adapters.secondary.docker_container_adapter import (
     DockerConfig,

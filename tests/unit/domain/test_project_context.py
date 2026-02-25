@@ -1,16 +1,17 @@
 """Unit tests for ProjectContext aggregate root."""
 
-import pytest
 from datetime import datetime, timezone
 
+import pytest
+
+from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.project_context import (
     ProjectContext,
     ProjectContextCreated,
-    ProjectTestConfigUpdated,
     ProjectDockerConfigUpdated,
+    ProjectTestConfigUpdated,
     ProjectWorkflowMappingAdded,
 )
-from codetoreum.domain.exceptions import DomainError
 
 
 class TestProjectContextCreation:

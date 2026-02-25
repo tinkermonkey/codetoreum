@@ -51,8 +51,8 @@ async def run_migrations(connection_string: str) -> bool:
     Returns:
         True if migrations succeeded, False otherwise
     """
-    from sqlalchemy.ext.asyncio import create_async_engine
     from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import create_async_engine
 
     engine = create_async_engine(connection_string, echo=False)
 
@@ -86,8 +86,8 @@ async def rollback_migrations(connection_string: str) -> bool:
     Returns:
         True if rollback succeeded, False otherwise
     """
-    from sqlalchemy.ext.asyncio import create_async_engine
     from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import create_async_engine
 
     engine = create_async_engine(connection_string, echo=False)
 
@@ -119,8 +119,8 @@ async def verify_schema(connection_string: str) -> bool:
     Returns:
         True if schema is valid, False otherwise
     """
-    from sqlalchemy.ext.asyncio import create_async_engine
     from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import create_async_engine
 
     engine = create_async_engine(connection_string, echo=False)
 

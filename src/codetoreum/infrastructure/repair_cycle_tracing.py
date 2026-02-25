@@ -11,15 +11,15 @@ Provides distributed tracing capabilities for repair cycle execution:
 import logging
 from contextlib import contextmanager
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 try:
     from opentelemetry import trace
-    from opentelemetry.sdk.trace import TracerProvider
-    from opentelemetry.sdk.trace.export import BatchSpanProcessor
     from opentelemetry.exporter.jaeger.thrift import JaegerExporter
     from opentelemetry.instrumentation.requests import RequestsInstrumentor
     from opentelemetry.instrumentation.urllib3 import URLLib3Instrumentor
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
     OTEL_AVAILABLE = True
 except ImportError:
     OTEL_AVAILABLE = False

@@ -7,6 +7,7 @@ Supports event type filtering and wildcard subscriptions.
 
 import logging
 from typing import Callable, Dict, List
+
 from codetoreum.ports.output.event_emitter import IEventEmitter
 
 logger = logging.getLogger(__name__)

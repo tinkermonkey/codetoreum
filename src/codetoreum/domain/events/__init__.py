@@ -12,6 +12,34 @@ Event Categories (Adapter Events):
 - Work Item Events: Work item creation and updates
 """
 
+# Adapter event infrastructure
+from .adapter_events import (
+    CodetoreumEvent,
+    now_iso,
+)
+
+# Board events
+from .board_events import (
+    BoardReconciledEvent,
+    WorkItemColumnChangedEvent,
+)
+
+# Container recovery events
+from .container_recovery_events import (
+    ContainerKilledEvent,
+    ContainerRecoveredEvent,
+    ContainerRecoveryCompletedEvent,
+)
+
+# Discussion events
+from .discussion_events import (
+    AgentResponsePostedEvent,
+    Comment,
+    CommentContext,
+    CommentNeedsResponseEvent,
+    CommentPostedEvent,
+)
+
 # Legacy domain events (static imports for mypy compatibility)
 from .legacy_domain_events import (
     AgentAssigned,
@@ -81,34 +109,6 @@ from .legacy_domain_events import (
     WorkItemUnderReview,
 )
 
-# Adapter event infrastructure
-from .adapter_events import (
-    CodetoreumEvent,
-    now_iso,
-)
-
-# Board events
-from .board_events import (
-    BoardReconciledEvent,
-    WorkItemColumnChangedEvent,
-)
-
-# Discussion events
-from .discussion_events import (
-    Comment,
-    CommentContext,
-    CommentNeedsResponseEvent,
-    CommentPostedEvent,
-    AgentResponsePostedEvent,
-)
-
-# Code review events
-from .review_events import (
-    CodeReviewStatus,
-    ReviewCommentAddedEvent,
-    ReviewStatusChangedEvent,
-)
-
 # Pipeline lock events
 from .lock_events import (
     LockAcquiredEvent,
@@ -119,55 +119,13 @@ from .lock_events import (
     WorkItemQueuedEvent,
 )
 
-# Work item events
-from .work_item_events import (
-    WorkItemCreatedEvent,
-    WorkItemUpdatedEvent,
-)
-
-# Repair cycle events
-from .repair_cycle_events import (
-    RepairCycleStartedEvent,
-    RepairCycleTestExecutionStartedEvent,
-    RepairCycleTestExecutionCompletedEvent,
-    RepairCycleFixCycleStartedEvent,
-    RepairCycleFileFixStartedEvent,
-    RepairCycleFileFixCompletedEvent,
-    RepairCycleWarningReviewStartedEvent,
-    RepairCycleWarningReviewCompletedEvent,
-    RepairCycleTestCycleCompletedEvent,
-    RepairCycleFastFailEvent,
-    RepairCycleResumedEvent,
-    RepairCycleCheckpointFailedEvent,
-    RepairCycleMetricsBackendFailedEvent,
-    RepairCycleCompletedEvent,
-)
-
-# Review cycle events
-from .review_cycle_events import (
-    ReviewCycleStartedEvent,
-    ReviewCycleIterationCompletedEvent,
-    ReviewCycleMakerRevisionEvent,
-    ReviewCycleEscalatedToHumanEvent,
-    ReviewCycleHumanFeedbackReceivedEvent,
-    ReviewCycleMaxIterationsReachedEvent,
-    ReviewCycleApprovedEvent,
-)
-
-# Container recovery events
-from .container_recovery_events import (
-    ContainerRecoveredEvent,
-    ContainerKilledEvent,
-    ContainerRecoveryCompletedEvent,
-)
-
 # Project management events
 from .project_events import (
+    OrchestrationCycleCompletedEvent,
     ProjectClonedEvent,
     ProjectCloneFailedEvent,
-    ProjectEnabledEvent,
     ProjectDisabledEvent,
-    OrchestrationCycleCompletedEvent,
+    ProjectEnabledEvent,
 )
 
 # Queue events
@@ -177,17 +135,59 @@ from .queue_events import (
     QueuePositionChangedEvent,
 )
 
+# Repair cycle events
+from .repair_cycle_events import (
+    RepairCycleCheckpointFailedEvent,
+    RepairCycleCompletedEvent,
+    RepairCycleFastFailEvent,
+    RepairCycleFileFixCompletedEvent,
+    RepairCycleFileFixStartedEvent,
+    RepairCycleFixCycleStartedEvent,
+    RepairCycleMetricsBackendFailedEvent,
+    RepairCycleResumedEvent,
+    RepairCycleStartedEvent,
+    RepairCycleTestCycleCompletedEvent,
+    RepairCycleTestExecutionCompletedEvent,
+    RepairCycleTestExecutionStartedEvent,
+    RepairCycleWarningReviewCompletedEvent,
+    RepairCycleWarningReviewStartedEvent,
+)
+
 # Repository events
 from .repository_events import (
-    CommitCreatedEvent,
     BranchCreatedEvent,
+    CommitCreatedEvent,
     FilesStagedEvent,
+)
+
+# Review cycle events
+from .review_cycle_events import (
+    ReviewCycleApprovedEvent,
+    ReviewCycleEscalatedToHumanEvent,
+    ReviewCycleHumanFeedbackReceivedEvent,
+    ReviewCycleIterationCompletedEvent,
+    ReviewCycleMakerRevisionEvent,
+    ReviewCycleMaxIterationsReachedEvent,
+    ReviewCycleStartedEvent,
+)
+
+# Code review events
+from .review_events import (
+    CodeReviewStatus,
+    ReviewCommentAddedEvent,
+    ReviewStatusChangedEvent,
 )
 
 # Storage events
 from .storage_events import (
-    ArtifactUploadedEvent,
     ArtifactDeletedEvent,
+    ArtifactUploadedEvent,
+)
+
+# Work item events
+from .work_item_events import (
+    WorkItemCreatedEvent,
+    WorkItemUpdatedEvent,
 )
 
 __all__ = [

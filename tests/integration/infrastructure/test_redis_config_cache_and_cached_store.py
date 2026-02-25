@@ -23,7 +23,11 @@ from codetoreum.ports.output.config_store import (
     ProjectConfig,
     WorkflowTemplate,
 )
-from tests.conftest import docker_available, ModernElasticsearchContainer, ModernRedisContainer
+from tests.conftest import (
+    ModernElasticsearchContainer,
+    ModernRedisContainer,
+    docker_available,
+)
 
 # Mark all tests in this module as requiring Docker
 pytestmark = docker_available

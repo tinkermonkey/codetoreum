@@ -10,7 +10,6 @@ from typing import Any, Dict, List, Optional, cast
 
 import requests  # type: ignore[import-untyped]
 
-
 # Configuration
 BASE_URL = "http://localhost:8000"
 API_TOKEN = "your_token_here"  # Get from server startup logs

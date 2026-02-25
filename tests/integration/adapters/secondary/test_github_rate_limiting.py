@@ -8,9 +8,10 @@ Tests verify that:
 5. Recovery after rate limit reset
 """
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from codetoreum.adapters.secondary.github_board_adapter import GitHubBoardAdapter
 from codetoreum.ports.exceptions import RateLimitError, ValidationError

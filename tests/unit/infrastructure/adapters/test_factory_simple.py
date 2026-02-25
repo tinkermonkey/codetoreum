@@ -6,23 +6,20 @@ Tests configuration-driven instantiation and registry integration.
 
 import pytest
 
-from codetoreum.infrastructure.adapters import (
-    AdapterFactory,
-    AdapterFactoryConfig
-)
-from codetoreum.infrastructure.resilience import OperationMode
-from codetoreum.ports.output.ticket_system import ITicketSystem
-from codetoreum.ports.output.llm_provider import ILLMProvider
-from codetoreum.ports.output.container import IContainer
-from codetoreum.ports.output.repository import IRepository
-from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.adapters.testing import (
+    FakeContainerAdapter,
+    InMemoryEventStore,
+    InMemoryRepositoryAdapter,
     InMemoryTicketAdapter,
     MockLLMAdapter,
-    FakeContainerAdapter,
-    InMemoryRepositoryAdapter,
-    InMemoryEventStore
 )
+from codetoreum.infrastructure.adapters import AdapterFactory, AdapterFactoryConfig
+from codetoreum.infrastructure.resilience import OperationMode
+from codetoreum.ports.output.container import IContainer
+from codetoreum.ports.output.event_store import IEventStore
+from codetoreum.ports.output.llm_provider import ILLMProvider
+from codetoreum.ports.output.repository import IRepository
+from codetoreum.ports.output.ticket_system import ITicketSystem
 
 
 class TestAdapterFactoryConfig:

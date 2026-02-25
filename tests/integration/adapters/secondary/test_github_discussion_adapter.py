@@ -21,14 +21,15 @@ from codetoreum.domain.events.discussion_events import (
     CommentNeedsResponseEvent,
     CommentPostedEvent,
 )
-from codetoreum.ports.output.discussion_adapter import DiscussionMonitoringConfig
 from codetoreum.ports.exceptions import (
     AuthenticationError,
     ExternalServiceError,
     ResourceNotFoundError,
     ValidationError,
 )
+from codetoreum.ports.output.discussion_adapter import DiscussionMonitoringConfig
 from tests.conftest import wait_for_polling_cycle
+
 from .conftest import MockIdentityService
 
 

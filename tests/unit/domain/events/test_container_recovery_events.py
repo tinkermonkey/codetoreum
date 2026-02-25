@@ -3,8 +3,8 @@
 import pytest
 
 from codetoreum.domain.events import (
-    ContainerRecoveredEvent,
     ContainerKilledEvent,
+    ContainerRecoveredEvent,
     ContainerRecoveryCompletedEvent,
     now_iso,
 )

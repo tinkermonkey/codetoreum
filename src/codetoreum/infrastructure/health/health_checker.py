@@ -7,16 +7,17 @@ import asyncio
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Callable
+from typing import Callable, Dict, List, Optional
 
+from codetoreum.infrastructure.error_ids import ErrorRegistry
+
+from ..resilience.interfaces import CircuitState, ICircuitBreaker, IRateLimiter
 from .interfaces import (
     DependencyHealth,
     HealthCheckResult,
     HealthStatus,
     IHealthCheck,
 )
-from ..resilience.interfaces import ICircuitBreaker, IRateLimiter, CircuitState
-from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 

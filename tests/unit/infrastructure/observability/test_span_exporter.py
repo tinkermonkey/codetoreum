@@ -4,9 +4,10 @@ Unit tests for _InstrumentedSpanExporter error handling.
 Tests the exception handling during span export and histogram recording failures.
 """
 
-import pytest
-from unittest import mock
 import logging
+from unittest import mock
+
+import pytest
 
 from codetoreum.infrastructure.observability.otel_setup import _InstrumentedSpanExporter
 

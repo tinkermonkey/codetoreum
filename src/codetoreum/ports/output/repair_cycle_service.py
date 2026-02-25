@@ -17,7 +17,7 @@ For each test type:
 6. Optionally review warnings after success
 """
 
-from typing import Dict, Protocol, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, Protocol, Tuple
 
 from codetoreum.domain.repair_cycle_types import (
     RepairCycleResult,

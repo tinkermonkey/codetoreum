@@ -4,8 +4,9 @@ Work items resource client
 from __future__ import annotations
 
 import builtins
-from typing import Any, Optional, List
-from ..models import WorkItem, PaginatedResponse
+from typing import Any, List, Optional
+
+from ..models import PaginatedResponse, WorkItem
 
 
 class WorkItemsResource:

@@ -6,39 +6,41 @@ Supports configurable sampling strategies, performance tuning, and granular enab
 """
 
 import logging as stdlib_logging
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from opentelemetry.sdk.resources import Resource
 
 # Try to import OpenTelemetry - it's optional
 try:
-    from opentelemetry import trace, metrics
+    from opentelemetry import metrics, trace
     from opentelemetry._logs import set_logger_provider
-    from opentelemetry.sdk.trace import TracerProvider
-    from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter
-    from opentelemetry.sdk.trace.sampling import (
-        TraceIdRatioBased,
-        StaticSampler,
-        Decision,
-        ParentBased,
-        ALWAYS_ON,
-        ALWAYS_OFF,
-    )
-    from opentelemetry.sdk.resources import (
-        Resource,
-        SERVICE_NAME,
-        DEPLOYMENT_ENVIRONMENT,
-        SERVICE_VERSION,
-    )
     from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
     from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
-    from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
+    from opentelemetry.exporter.otlp.proto.http.metric_exporter import (
+        OTLPMetricExporter,
+    )
+    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
     from opentelemetry.sdk._logs import LoggerProvider
     from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
     from opentelemetry.sdk.metrics import MeterProvider
     from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
-    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+    from opentelemetry.sdk.resources import (
+        DEPLOYMENT_ENVIRONMENT,
+        SERVICE_NAME,
+        SERVICE_VERSION,
+        Resource,
+    )
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter
+    from opentelemetry.sdk.trace.sampling import (
+        ALWAYS_OFF,
+        ALWAYS_ON,
+        Decision,
+        ParentBased,
+        StaticSampler,
+        TraceIdRatioBased,
+    )
 
     # LoggingInstrumentor is optional - not in current dependencies
     try:
@@ -57,8 +59,9 @@ except ImportError:
     set_logger_provider = None  # type: ignore
     LOGGING_INSTRUMENTATION_AVAILABLE = False
 
-from .config import ObservabilityConfig
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+
+from .config import ObservabilityConfig
 
 logger = stdlib_logging.getLogger(__name__)
 
@@ -390,7 +393,9 @@ def _setup_log_export(config: ObservabilityConfig, resource: "Resource") -> None
             )
 
         # Wire TraceContextInjector filter to root logger for trace correlation
-        from codetoreum.infrastructure.observability.logging_integration import TraceContextInjector
+        from codetoreum.infrastructure.observability.logging_integration import (
+            TraceContextInjector,
+        )
         trace_filter = TraceContextInjector()
         stdlib_logging.getLogger().addFilter(trace_filter)
 

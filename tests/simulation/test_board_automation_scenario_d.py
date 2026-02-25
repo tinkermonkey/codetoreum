@@ -40,8 +40,8 @@ from codetoreum.domain.board_workflow_template import (
 )
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.output.board_service import MovedByType
+from tests.simulation.conftest import MockAgentExecutor as BaseAgentExecutor
 from tests.simulation.conftest import (
-    MockAgentExecutor as BaseAgentExecutor,
     create_column_changed_event,
 )
 

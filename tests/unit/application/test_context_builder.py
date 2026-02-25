@@ -15,14 +15,13 @@ from codetoreum.application.context_builder import (
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
 from codetoreum.domain.project_context import ProjectContext
 from codetoreum.domain.value_objects import ExecutionContext
-from codetoreum.domain.workspace_context import WorkspaceContext, WorkspaceType
 from codetoreum.domain.work_item import (
     WorkItem,
     WorkItemPriority,
     WorkItemStatus,
 )
+from codetoreum.domain.workspace_context import WorkspaceContext, WorkspaceType
 from codetoreum.ports.output import IStorage, ITicketSystem
-
 
 # Mock Adapters
 

@@ -5,32 +5,32 @@ board structure and state in memory, and includes test helper methods
 for simulating board changes via event emission and tracking movement history.
 """
 
+import logging
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
-import threading
-import logging
 
 from codetoreum.domain.events.board_events import (
     BoardReconciledEvent,
     WorkItemColumnChangedEvent,
 )
 from codetoreum.ports.output.board_service import (
-    BoardConfig,
     BoardColumn,
+    BoardConfig,
     IBoardService,
+    MovedByType,
     ProjectBoard,
     ReconciliationResult,
     WorkItemPosition,
-    MovedByType,
 )
+from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.monitoring import (
     IMonitoredService,
     MonitoringConfig,
     MonitoringState,
     MonitoringStatus,
 )
-from codetoreum.ports.output.event_emitter import IEventEmitter
 
 logger = logging.getLogger(__name__)
 
@@ -234,8 +234,8 @@ class MockBoardAdapter(IBoardService):
         Raises:
             ValueError: Work item or column doesn't exist
         """
-        from codetoreum.ports.output.board_service import ColumnMovementResult
         from codetoreum.infrastructure.error_ids import ErrorRegistry
+        from codetoreum.ports.output.board_service import ColumnMovementResult
 
         with self._lock:
             if work_item_id not in self._item_positions:

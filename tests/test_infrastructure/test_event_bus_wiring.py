@@ -1,12 +1,15 @@
 """Unit tests for EventBusWiring."""
 
-import pytest
 import asyncio
-from unittest.mock import Mock, AsyncMock
+from unittest.mock import AsyncMock, Mock
+
+import pytest
 
 from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.infrastructure.event_bus_wiring import EventBusWiring, wire_adapters_to_event_bus
-
+from codetoreum.infrastructure.event_bus_wiring import (
+    EventBusWiring,
+    wire_adapters_to_event_bus,
+)
 
 # ====================================================================================
 # Mock Adapters

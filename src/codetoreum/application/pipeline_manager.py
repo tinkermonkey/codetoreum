@@ -7,15 +7,15 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, cast
 
 from codetoreum.domain.events import (
-    PipelineStageStarted,
-    PipelineStageCompleted,
-    PipelineStageFailed,
     PipelineCompleted,
     PipelineFailed,
+    PipelineStageCompleted,
+    PipelineStageFailed,
+    PipelineStageStarted,
 )
 from codetoreum.domain.pipeline_stage import PipelineStage, StageStatus
 from codetoreum.domain.workflow import Workflow
-from codetoreum.ports.exceptions import PortError, EventStoreError
+from codetoreum.ports.exceptions import EventStoreError, PortError
 from codetoreum.ports.output import IEventStore
 
 logger = logging.getLogger(__name__)

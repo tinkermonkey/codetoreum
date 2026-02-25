@@ -1,15 +1,15 @@
 """Negative test cases for PipelineManager."""
 
-import pytest
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 
-from codetoreum.application.pipeline_manager import PipelineManager, PipelineStatus
+import pytest
+
 from codetoreum.adapters.testing import InMemoryEventStore
+from codetoreum.application.pipeline_manager import PipelineManager, PipelineStatus
 from codetoreum.domain.pipeline_stage import PipelineStage, StageStatus, StageType
 from codetoreum.domain.workflow import Workflow
 from codetoreum.domain.workflow_template import WorkflowTemplate
-
 
 # ============================================================================
 # Fixtures

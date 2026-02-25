@@ -5,18 +5,20 @@ Tests the data structures, enums, and interface contract of the
 ITaskQueryPort without requiring implementations.
 """
 
-import pytest
 from datetime import datetime, timedelta
+
+import pytest
+
 from codetoreum.ports.input.task_query import (
-    ITaskQueryPort,
-    ExecutionStatus,
-    ExecutionStatusInfo,
-    ExecutionListItem,
-    ExecutionListResult,
     ArtifactInfo,
     ArtifactListResult,
     ExecutionHistory,
     ExecutionHistoryEntry,
+    ExecutionListItem,
+    ExecutionListResult,
+    ExecutionStatus,
+    ExecutionStatusInfo,
+    ITaskQueryPort,
 )
 
 

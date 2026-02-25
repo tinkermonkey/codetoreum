@@ -21,8 +21,8 @@ from codetoreum.ports.output.config_store import (
     WorkflowTemplate,
 )
 from tests.conftest import (
-    docker_available,
     ModernElasticsearchContainer,
+    docker_available,
     wait_for_condition,
     wait_for_elasticsearch_indexing,
 )

@@ -22,7 +22,6 @@ from codetoreum.domain.repair_cycle_types import (
 )
 from codetoreum.ports.output import IRepairCycle, RepairCycleContext
 
-
 # =============================================================================
 # RepairCycleContext Protocol Tests
 # =============================================================================

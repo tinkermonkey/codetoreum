@@ -1,8 +1,9 @@
 """Unit tests for AgentExecution entity."""
 
-import pytest
 from datetime import datetime
 from time import sleep
+
+import pytest
 
 from codetoreum.domain import (
     AgentExecution,

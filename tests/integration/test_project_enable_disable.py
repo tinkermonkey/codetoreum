@@ -4,13 +4,14 @@ Tests verify that disabling a project stops processing through the orchestrator,
 and re-enabling a project resumes orchestration.
 """
 
-import pytest
 from unittest.mock import AsyncMock
 
-from codetoreum.application.multi_project_orchestrator import MultiProjectOrchestrator
+import pytest
+
 from codetoreum.adapters.testing.mock_project_manager_adapter import (
     MockProjectManagerAdapter,
 )
+from codetoreum.application.multi_project_orchestrator import MultiProjectOrchestrator
 from codetoreum.domain.value_objects import ProjectConfig
 
 

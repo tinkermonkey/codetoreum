@@ -4,13 +4,14 @@ Verifies that GitHubWebhookAdapter webhook processing methods emit
 OpenTelemetry spans with proper GitHub-specific metadata.
 """
 
-import pytest
 from datetime import datetime, timezone
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from codetoreum.adapters.primary.github_webhook_adapter import (
     GitHubWebhookAdapter,

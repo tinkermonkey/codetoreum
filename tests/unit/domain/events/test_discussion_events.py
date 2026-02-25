@@ -1,14 +1,15 @@
 """Unit tests for discussion and comment events."""
 
-import pytest
 from dataclasses import FrozenInstanceError
 
+import pytest
+
 from codetoreum.domain.events import (
+    AgentResponsePostedEvent,
     Comment,
     CommentContext,
     CommentNeedsResponseEvent,
     CommentPostedEvent,
-    AgentResponsePostedEvent,
     now_iso,
 )
 

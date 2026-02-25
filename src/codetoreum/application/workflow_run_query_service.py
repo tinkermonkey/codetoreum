@@ -12,13 +12,18 @@ from datetime import datetime, timedelta, timezone
 from types import MappingProxyType
 from typing import Any, Dict, List, Optional
 
+from codetoreum.application.event_sequence_validator import EventSequenceValidator
+from codetoreum.application.expected_sequence_registry import ExpectedSequenceRegistry
 from codetoreum.domain.events import DomainEvent
-from codetoreum.domain.workflow import Workflow, WorkflowStatus
 from codetoreum.domain.pipeline_stage import StageStatus
-from codetoreum.ports.exceptions import ResourceNotFoundError
+from codetoreum.domain.types import WorkItemId
+from codetoreum.domain.workflow import Workflow, WorkflowStatus
+from codetoreum.ports.exceptions import ResourceNotFoundError, WorkItemNotFoundError
 from codetoreum.ports.input.workflow_run_query import (
     IWorkflowRunQueryPort,
     SortOrder,
+    WorkflowRunAuditResult,
+    WorkflowRunEventsResult,
     WorkflowRunFilters,
     WorkflowRunInfo,
     WorkflowRunListResult,
@@ -26,15 +31,9 @@ from codetoreum.ports.input.workflow_run_query import (
     WorkflowRunStageInfo,
     WorkflowRunStatus,
     WorkflowRunSummary,
-    WorkflowRunEventsResult,
-    WorkflowRunAuditResult,
 )
-from codetoreum.domain.types import WorkItemId
 from codetoreum.ports.output.event_store import IEventStore
-from codetoreum.ports.exceptions import WorkItemNotFoundError
 from codetoreum.ports.output.ticket_system import ITicketSystem
-from codetoreum.application.event_sequence_validator import EventSequenceValidator
-from codetoreum.application.expected_sequence_registry import ExpectedSequenceRegistry
 
 logger = logging.getLogger(__name__)
 

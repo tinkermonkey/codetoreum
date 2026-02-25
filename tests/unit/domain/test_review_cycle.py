@@ -5,19 +5,19 @@ from datetime import datetime, timezone
 
 import pytest
 
+from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.review_cycle import (
     ReviewCycle,
-    ReviewStatus,
+    ReviewCycleApproved,
+    ReviewCycleCreated,
+    ReviewCycleEscalated,
     ReviewDecision,
     ReviewFeedback,
-    ReviewIteration,
-    ReviewCycleCreated,
-    ReviewIterationStarted,
     ReviewFeedbackSubmitted,
-    ReviewCycleApproved,
-    ReviewCycleEscalated,
+    ReviewIteration,
+    ReviewIterationStarted,
+    ReviewStatus,
 )
-from codetoreum.domain.exceptions import DomainError
 
 
 class TestReviewCycleCreation:

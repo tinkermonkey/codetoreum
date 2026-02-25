@@ -1,6 +1,7 @@
 """Unit tests for board events."""
 
 import uuid
+
 import pytest
 
 from codetoreum.domain.events import (

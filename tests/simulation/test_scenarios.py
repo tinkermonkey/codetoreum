@@ -1,8 +1,9 @@
 """Simulation scenario tests."""
 
-import pytest
 from datetime import timedelta
 from typing import Callable
+
+import pytest
 
 from codetoreum.infrastructure.simulation import (
     SimulationConfig,
@@ -10,36 +11,38 @@ from codetoreum.infrastructure.simulation import (
     SimulationRunner,
 )
 
-# Import scenario functions
-from .scenarios.scenario_01_simple_workflow import (
-    create_config as create_simple_config,
-    run_scenario as run_simple_scenario,
-)
-from .scenarios.scenario_02_parallel_executions import (
-    create_config as create_parallel_config,
-    run_scenario as run_parallel_scenario,
-)
-from .scenarios.scenario_03_review_cycle import (
-    create_config as create_review_config,
-    run_scenario as run_review_scenario,
-)
-from .scenarios.scenario_04_execution_failure import (
-    create_config as create_failure_config,
-    run_scenario as run_failure_scenario,
-)
-from .scenarios.scenario_05_complex_workflow import (
-    create_config as create_complex_config,
-    run_scenario as run_complex_scenario,
-)
-from .scenarios.scenario_10_agent_execution import (
-    create_config as create_agent_execution_config,
-    run_scenario as run_agent_execution_scenario,
-)
-
 from .helpers import (
     AssertionHelpers,
     print_event_timeline,
     print_metrics_summary,
+)
+
+# Import scenario functions
+from .scenarios.scenario_01_simple_workflow import create_config as create_simple_config
+from .scenarios.scenario_01_simple_workflow import run_scenario as run_simple_scenario
+from .scenarios.scenario_02_parallel_executions import (
+    create_config as create_parallel_config,
+)
+from .scenarios.scenario_02_parallel_executions import (
+    run_scenario as run_parallel_scenario,
+)
+from .scenarios.scenario_03_review_cycle import create_config as create_review_config
+from .scenarios.scenario_03_review_cycle import run_scenario as run_review_scenario
+from .scenarios.scenario_04_execution_failure import (
+    create_config as create_failure_config,
+)
+from .scenarios.scenario_04_execution_failure import (
+    run_scenario as run_failure_scenario,
+)
+from .scenarios.scenario_05_complex_workflow import (
+    create_config as create_complex_config,
+)
+from .scenarios.scenario_05_complex_workflow import run_scenario as run_complex_scenario
+from .scenarios.scenario_10_agent_execution import (
+    create_config as create_agent_execution_config,
+)
+from .scenarios.scenario_10_agent_execution import (
+    run_scenario as run_agent_execution_scenario,
 )
 
 
@@ -279,7 +282,7 @@ async def test_all_scenarios_meet_performance_target() -> None:
 @pytest.mark.asyncio
 async def test_simulation_with_custom_helpers(simulation_runner):
     """Test using simulation helpers for common patterns."""
-    from .helpers import ScenarioHelpers, AssertionHelpers
+    from .helpers import AssertionHelpers, ScenarioHelpers
 
     runner = simulation_runner
 

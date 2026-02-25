@@ -1,8 +1,9 @@
 """Unit tests for InMemoryLockService event emission."""
 
-import pytest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, call
+
+import pytest
 
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,

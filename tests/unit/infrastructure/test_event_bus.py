@@ -5,8 +5,13 @@ import logging
 
 import pytest
 
-from codetoreum.domain.events import DomainEvent, WorkItemCreated, WorkItemCompleted
-from codetoreum.infrastructure.event_bus import EventBus, EventBusError, EventHandler, event_handler
+from codetoreum.domain.events import DomainEvent, WorkItemCompleted, WorkItemCreated
+from codetoreum.infrastructure.event_bus import (
+    EventBus,
+    EventBusError,
+    EventHandler,
+    event_handler,
+)
 
 
 @event_handler("WorkItemCreated")

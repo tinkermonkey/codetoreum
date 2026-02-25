@@ -8,7 +8,6 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Dict, List, Optional
 
 from codetoreum.domain.types import ExecutionId, UserId
 
-
 # ============================================================================
 # Data Models
 # ============================================================================

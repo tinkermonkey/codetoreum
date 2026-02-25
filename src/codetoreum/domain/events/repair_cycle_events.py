@@ -16,18 +16,18 @@ event sourcing audit trail integrity. Events represent immutable facts
 about test execution and repair steps—they cannot be modified after creation.
 """
 
+import warnings
 from dataclasses import dataclass
 from typing import Optional, Tuple
 from uuid import uuid4
-import warnings
 
-from .adapter_events import CodetoreumEvent
 from ..repair_cycle_types import (
-    RepairTestType,
-    RepairTestFailure,
-    RepairTestWarning,
     CycleResult,
+    RepairTestFailure,
+    RepairTestType,
+    RepairTestWarning,
 )
+from .adapter_events import CodetoreumEvent
 
 
 @dataclass(frozen=True)

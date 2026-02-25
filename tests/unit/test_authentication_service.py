@@ -1,21 +1,24 @@
 """Unit tests for authentication service."""
 
-import pytest
 from datetime import datetime, timedelta
 from uuid import uuid4
 
-from codetoreum.application.authentication_service import AuthenticationService
-from codetoreum.adapters.secondary.in_memory_user_repository import InMemoryUserRepository
+import pytest
+
 from codetoreum.adapters.secondary.in_memory_api_key_repository import (
     InMemoryAPIKeyRepository,
 )
-from codetoreum.domain.user import UserRole, Permission
+from codetoreum.adapters.secondary.in_memory_user_repository import (
+    InMemoryUserRepository,
+)
+from codetoreum.application.authentication_service import AuthenticationService
+from codetoreum.domain.user import Permission, UserRole
 from codetoreum.ports.input.authentication import (
-    CreateUserCommand,
+    AuthenticationError,
     CreateAPIKeyCommand,
+    CreateUserCommand,
     LoginCommand,
     UpdateUserCommand,
-    AuthenticationError,
     UserAlreadyExistsError,
     UserNotFoundError,
 )

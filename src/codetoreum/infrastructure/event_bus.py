@@ -17,15 +17,15 @@ from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.observability.trace_context_propagation import (
     TraceContextPropagator,
-    inject_current_trace_context_into_event,
     extract_and_activate_trace_context,
+    inject_current_trace_context_into_event,
 )
 
 logger = logging.getLogger(__name__)
 
 # Optional OpenTelemetry support for span creation
 try:
-    from opentelemetry import trace, context
+    from opentelemetry import context, trace
     from opentelemetry.trace import SpanKind
 
     OPENTELEMETRY_AVAILABLE = True

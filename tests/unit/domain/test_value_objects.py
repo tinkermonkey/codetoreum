@@ -1,8 +1,11 @@
 """Unit tests for domain value objects."""
 
-import pytest
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
+from codetoreum.domain.agent import AgentCapability
+from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.value_objects import (
     AgentId,
     ContainerConfig,
@@ -15,9 +18,6 @@ from codetoreum.domain.value_objects import (
     WorkflowId,
     WorkItemId,
 )
-from codetoreum.domain.agent import AgentCapability
-from codetoreum.domain.exceptions import DomainError
-
 
 # ============================================================================
 # Type-Safe Identifier Tests

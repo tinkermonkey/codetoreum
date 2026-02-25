@@ -11,7 +11,6 @@ from codetoreum.application.feedback_processor import (
 )
 from codetoreum.domain.review_cycle import ReviewDecision
 
-
 # Fixtures
 
 

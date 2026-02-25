@@ -1,10 +1,11 @@
 """Unit tests for BoardColumnEventHandler."""
 
 import logging
-import pytest
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, call
 from uuid import uuid4
+
+import pytest
 
 from codetoreum.application.event_handlers.board_event_handler import (
     BoardColumnEventHandler,
@@ -20,7 +21,7 @@ from codetoreum.domain.board_workflow_template import (
     ColumnType,
 )
 from codetoreum.domain.events import WorkItemColumnChanged
-from codetoreum.ports.output.board_service import WorkItemPosition, MovedByType
+from codetoreum.ports.output.board_service import MovedByType, WorkItemPosition
 
 
 @pytest.fixture

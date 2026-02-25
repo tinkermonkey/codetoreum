@@ -8,8 +8,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Callable, TypeVar, Optional, Tuple, Type
-
+from typing import Callable, Optional, Tuple, Type, TypeVar
 
 T = TypeVar('T')
 

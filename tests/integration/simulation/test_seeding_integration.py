@@ -1,12 +1,13 @@
 """Integration tests for simulation data seeding with bootstrap."""
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 from codetoreum.infrastructure.simulation import (
     SimulationApplicationBootstrap,
-    SimulationDataSeeder,
     SimulationConfig,
+    SimulationDataSeeder,
 )
 
 

@@ -1,16 +1,17 @@
 """Unit tests for simulation data seeding."""
 
-import pytest
-from pathlib import Path
 from datetime import datetime, timezone
+from pathlib import Path
 
-from codetoreum.infrastructure.simulation import (
-    SimulationApplicationBootstrap,
-    SimulationDataSeeder,
-    SimulationConfig,
-    CreatedItems,
-)
+import pytest
+
 from codetoreum.domain.work_item import WorkItemPriority, WorkItemStatus
+from codetoreum.infrastructure.simulation import (
+    CreatedItems,
+    SimulationApplicationBootstrap,
+    SimulationConfig,
+    SimulationDataSeeder,
+)
 from codetoreum.ports.exceptions import ValidationError
 
 
@@ -470,8 +471,9 @@ class TestScenarioModels:
 
     def test_scenario_model_validation_errors(self):
         """Test ScenarioModel catches validation errors."""
-        from codetoreum.infrastructure.simulation.scenario_models import ScenarioModel
         from pydantic import ValidationError
+
+        from codetoreum.infrastructure.simulation.scenario_models import ScenarioModel
 
         # Missing required 'name'
         with pytest.raises(ValidationError):
@@ -494,8 +496,11 @@ class TestScenarioModels:
 
     def test_agent_model_capability_validation(self):
         """Test agent capabilities are validated."""
-        from codetoreum.infrastructure.simulation.scenario_models import ScenarioAgentModel
         from pydantic import ValidationError
+
+        from codetoreum.infrastructure.simulation.scenario_models import (
+            ScenarioAgentModel,
+        )
 
         # Valid capabilities
         data = {
@@ -514,10 +519,11 @@ class TestScenarioModels:
 
     def test_work_item_model_priority_validation(self):
         """Test work item priority validation."""
+        from pydantic import ValidationError
+
         from codetoreum.infrastructure.simulation.scenario_models import (
             ScenarioWorkItemModel,
         )
-        from pydantic import ValidationError
 
         # Valid priority
         item = ScenarioWorkItemModel(title="Test", priority="high")
@@ -529,11 +535,12 @@ class TestScenarioModels:
 
     def test_workflow_stage_order_validation(self):
         """Test workflow stages must have sequential order."""
-        from codetoreum.infrastructure.simulation.scenario_models import (
-            ScenarioWorkflowModel,
-            ScenarioStageModel,
-        )
         from pydantic import ValidationError
+
+        from codetoreum.infrastructure.simulation.scenario_models import (
+            ScenarioStageModel,
+            ScenarioWorkflowModel,
+        )
 
         # Valid sequential order
         stages = [

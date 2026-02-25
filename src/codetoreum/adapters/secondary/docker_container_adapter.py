@@ -1028,8 +1028,8 @@ class DockerContainerAdapter(IContainer):
 
         def _copy():
             try:
-                import tarfile
                 import io
+                import tarfile
                 from pathlib import Path
 
                 container = client.containers.get(container_id)
@@ -1069,8 +1069,8 @@ class DockerContainerAdapter(IContainer):
 
         def _copy():
             try:
-                import tarfile
                 import io
+                import tarfile
 
                 container = client.containers.get(container_id)
 

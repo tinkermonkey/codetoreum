@@ -9,10 +9,11 @@ Tests cover:
 - Integration status reporting
 """
 
-import pytest
 from datetime import datetime, timedelta, timezone
 from typing import Any, AsyncIterator, Dict, List, Optional
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
+
+import pytest
 
 from codetoreum.application.metrics_service import MetricsService
 from codetoreum.domain.events import DomainEvent

@@ -1,8 +1,9 @@
 """Integration tests for BoardColumnEventHandler with mock adapters."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock
 from datetime import datetime, timezone
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from codetoreum.application.event_handlers.board_event_handler import (
     BoardColumnEventHandler,
@@ -18,8 +19,8 @@ from codetoreum.domain.board_workflow_template import (
     ColumnType,
 )
 from codetoreum.domain.events import WorkItemColumnChanged
-from codetoreum.ports.output.board_service import WorkItemPosition, MovedByType
 from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.ports.output.board_service import MovedByType, WorkItemPosition
 
 
 @pytest.fixture

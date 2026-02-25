@@ -12,7 +12,6 @@ from typing import List, Optional
 
 from codetoreum.domain.agent import Agent, AgentType
 
-
 # ============================================================================
 # Filters and Pagination
 # ============================================================================

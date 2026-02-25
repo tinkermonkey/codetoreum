@@ -13,10 +13,10 @@ from codetoreum.domain.project_context import ProjectContext
 from codetoreum.domain.services.execution_context_builder import (
     ExecutionContextBuilder as DomainContextBuilder,
 )
-from codetoreum.domain.value_objects import ExecutionContext
-from codetoreum.domain.workspace_context import WorkspaceContext, WorkspaceType
-from codetoreum.domain.work_item import WorkItem
 from codetoreum.domain.types import WorkItemId
+from codetoreum.domain.value_objects import ExecutionContext
+from codetoreum.domain.work_item import WorkItem
+from codetoreum.domain.workspace_context import WorkspaceContext, WorkspaceType
 from codetoreum.ports.exceptions import ResourceNotFoundError, TicketSystemError
 from codetoreum.ports.output import IStorage, ITicketSystem
 

@@ -25,23 +25,24 @@ Key Features Tested:
 - Comment deduplication and filtering
 """
 
+import re
 from datetime import timedelta
 from typing import List
-import re
+
 import pytest
 
+from codetoreum.adapters.secondary.configurable_identity_service import (
+    ConfigurableIdentityService,
+)
+from codetoreum.adapters.secondary.mock_discussion_adapter import MockDiscussionAdapter
 from codetoreum.domain.events.discussion_events import CommentNeedsResponseEvent
+from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation import (
     SimulationConfig,
     SimulationRunner,
 )
-from codetoreum.adapters.secondary.mock_discussion_adapter import MockDiscussionAdapter
-from codetoreum.adapters.secondary.configurable_identity_service import (
-    ConfigurableIdentityService,
-)
-from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.ports.output.identity_service import BotIdentityConfig
 from codetoreum.ports.output.discussion_adapter import DiscussionMonitoringConfig
+from codetoreum.ports.output.identity_service import BotIdentityConfig
 
 
 def create_config(

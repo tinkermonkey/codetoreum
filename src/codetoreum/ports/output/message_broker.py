@@ -5,7 +5,6 @@ from typing import Any, Callable, Dict, List
 
 from codetoreum.domain.events import DomainEvent
 
-
 # ============================================================================
 # Port Interface
 # ============================================================================

@@ -8,7 +8,6 @@ from typing import Any, Dict, List, Optional
 
 from codetoreum.domain.types import BucketName, StorageKey
 
-
 # ============================================================================
 # Data Models
 # ============================================================================

@@ -23,11 +23,11 @@ from codetoreum.adapters.secondary.docker_container_recovery_adapter import (
 from codetoreum.adapters.testing.in_memory_checkpoint_store import (
     InMemoryCheckpointStore,
 )
+from codetoreum.ports.exceptions import StorageError
 from codetoreum.ports.output.container_recovery import (
     ContainerMetadata,
     RecoveryAssessment,
 )
-from codetoreum.ports.exceptions import StorageError
 
 
 class TestGetRunningRepairCycleContainers:

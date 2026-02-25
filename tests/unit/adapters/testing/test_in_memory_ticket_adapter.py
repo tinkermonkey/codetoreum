@@ -1,7 +1,8 @@
 """Unit tests for InMemoryTicketAdapter."""
 
-import pytest
 from datetime import datetime, timezone
+
+import pytest
 
 from codetoreum.adapters.testing import InMemoryTicketAdapter
 from codetoreum.domain.types import ProjectId, UserId, WorkItemId

@@ -11,10 +11,11 @@ All spans are linked via trace context to enable complete distributed tracing.
 """
 
 import logging
-from typing import Any, Callable, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, List, Optional
 
 try:
-    from opentelemetry import trace, context as otel_context
+    from opentelemetry import context as otel_context
+    from opentelemetry import trace
     from opentelemetry.trace import SpanKind
 
     OPENTELEMETRY_AVAILABLE = True
@@ -27,8 +28,8 @@ from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.observability.trace_context_propagation import (
     TraceContextPropagator,
-    inject_current_trace_context_into_event,
     extract_and_activate_trace_context,
+    inject_current_trace_context_into_event,
 )
 
 if TYPE_CHECKING:

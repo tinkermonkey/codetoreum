@@ -1,8 +1,9 @@
 """Unit tests for conversational session state value object."""
 
-import pytest
 from dataclasses import FrozenInstanceError
 from datetime import datetime, timezone
+
+import pytest
 
 from codetoreum.domain.conversational_session import ConversationalSessionState
 

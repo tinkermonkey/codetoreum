@@ -27,7 +27,6 @@ from codetoreum.ports.input.execution_query import (
     SortOrder,
 )
 
-
 # ============================================================================
 # Mock Implementations
 # ============================================================================
@@ -739,7 +738,10 @@ class TestGetExecutionHistory:
     def test_get_execution_history_success(self, client, mock_query_port):
         """Test successful execution history retrieval."""
         # Arrange
-        from codetoreum.ports.input.execution_query import ExecutionHistory, ExecutionHistoryEntry
+        from codetoreum.ports.input.execution_query import (
+            ExecutionHistory,
+            ExecutionHistoryEntry,
+        )
 
         now = datetime.now(timezone.utc)
         mock_query_port._get_execution_history.return_value = ExecutionHistory(
@@ -780,7 +782,10 @@ class TestGetExecutionHistory:
     def test_get_execution_history_with_limit(self, client, mock_query_port):
         """Test execution history retrieval with limit."""
         # Arrange
-        from codetoreum.ports.input.execution_query import ExecutionHistory, ExecutionHistoryEntry
+        from codetoreum.ports.input.execution_query import (
+            ExecutionHistory,
+            ExecutionHistoryEntry,
+        )
 
         now = datetime.now(timezone.utc)
         mock_query_port._get_execution_history.return_value = ExecutionHistory(

@@ -8,8 +8,9 @@ Tests configuration service with in-memory adapters to verify:
 - Event emission
 """
 
-import pytest
 from datetime import datetime, timezone
+
+import pytest
 
 from codetoreum.adapters.testing.in_memory_config_store import InMemoryConfigStore
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
@@ -785,7 +786,9 @@ async def test_search_functionality(config_store, sample_project):
 @pytest.mark.asyncio
 async def test_encryption_service_integration(config_store, event_bus, sample_project):
     """Test integration with encryption service for secrets."""
-    from codetoreum.adapters.testing.simple_encryption_adapter import SimpleEncryptionAdapter
+    from codetoreum.adapters.testing.simple_encryption_adapter import (
+        SimpleEncryptionAdapter,
+    )
 
     encryption_service = SimpleEncryptionAdapter()
     config_service = ConfigurationService(

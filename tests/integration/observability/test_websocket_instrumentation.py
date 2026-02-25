@@ -12,20 +12,20 @@ from uuid import uuid4
 import pytest
 
 from codetoreum.adapters.primary.websocket_adapter import (
-    WebSocketAdapter,
-    WebSocketConfig,
     EventFilter,
     SubscriptionType,
+    WebSocketAdapter,
+    WebSocketConfig,
 )
 from codetoreum.domain.events import (
     DomainEvent,
-    ExecutionStarted,
     ExecutionCompleted,
+    ExecutionStarted,
     WorkItemCreated,
 )
 from codetoreum.infrastructure.observability.websocket_instrumentation import (
-    WebSocketSessionTracer,
     WebSocketMessageTracer,
+    WebSocketSessionTracer,
 )
 
 try:

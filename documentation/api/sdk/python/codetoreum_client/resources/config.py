@@ -1,5 +1,6 @@
 """Configuration resource client"""
-from typing import Any, Optional, TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
+
 from ..exceptions import CodetoreumError
 
 if TYPE_CHECKING:

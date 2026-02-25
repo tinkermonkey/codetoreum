@@ -3,15 +3,16 @@
 Tests validation, serialization, and deserialization of all project events.
 """
 
-import pytest
 from datetime import datetime, timezone
 
+import pytest
+
 from codetoreum.domain.events.project_events import (
+    OrchestrationCycleCompletedEvent,
     ProjectClonedEvent,
     ProjectCloneFailedEvent,
-    ProjectEnabledEvent,
     ProjectDisabledEvent,
-    OrchestrationCycleCompletedEvent,
+    ProjectEnabledEvent,
 )
 
 

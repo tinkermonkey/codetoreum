@@ -9,16 +9,19 @@ Tests the complete startup flow including:
 5. Proper lifespan handling
 """
 
-import pytest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, Mock
 
-from codetoreum.application.container_recovery_service import ContainerRecoveryService
+import pytest
+
+from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.adapters.testing.mock_container_recovery_adapter import (
     MockContainerRecoveryAdapter,
 )
-from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
-from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
+from codetoreum.application.container_recovery_service import ContainerRecoveryService
+from codetoreum.infrastructure.simulation.bootstrap import (
+    SimulationApplicationBootstrap,
+)
 from codetoreum.ports.output.container_recovery import (
     ContainerMetadata,
     RecoveryAssessment,
@@ -234,24 +237,24 @@ class TestOrchestratorStartupWithContainerRecovery:
         """Test that FastAPI lifespan includes container recovery execution."""
         from codetoreum.adapters.primary.fastapi_app import create_app
         from codetoreum.adapters.primary.input_port_adapters.mock import (
-            MockWorkItemCommandAdapter,
-            MockConfigServiceAdapter,
-            MockLoggerAdapter,
-            MockOrchestrationCommandAdapter,
-            MockExecutionCommandAdapter,
-            MockConfigQueryAdapter,
-            MockConfigCommandAdapter,
-            MockMetricsQueryAdapter,
-            MockWorkspaceQueryAdapter,
-            MockWorkflowCommandAdapter,
-            MockWorkflowQueryAdapter,
-            MockWorkflowRunQueryAdapter,
             MockAgentCommandAdapter,
             MockAgentQueryAdapter,
+            MockConfigCommandAdapter,
+            MockConfigQueryAdapter,
+            MockConfigServiceAdapter,
+            MockExecutionCommandAdapter,
             MockExecutionQueryAdapter,
-            MockWorkflowDefinitionCommandAdapter,
+            MockLoggerAdapter,
+            MockMetricsQueryAdapter,
+            MockOrchestrationCommandAdapter,
             MockTaskQueryAdapter,
+            MockWorkflowCommandAdapter,
+            MockWorkflowDefinitionCommandAdapter,
+            MockWorkflowQueryAdapter,
+            MockWorkflowRunQueryAdapter,
+            MockWorkItemCommandAdapter,
             MockWorkItemQueryAdapter,
+            MockWorkspaceQueryAdapter,
         )
         from codetoreum.adapters.testing import InMemoryEventStore
         from codetoreum.infrastructure.event_bus import EventBus

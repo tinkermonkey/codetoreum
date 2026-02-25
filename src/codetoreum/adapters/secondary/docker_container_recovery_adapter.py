@@ -21,14 +21,15 @@ from dateutil import parser as dateparser
 from codetoreum.domain.types import (
     CONTAINER_LABEL_AGENT,
     CONTAINER_LABEL_EXECUTION_ID,
-    CONTAINER_LABEL_WORKFLOW_RUN_ID,
     CONTAINER_LABEL_PROJECT,
     CONTAINER_LABEL_TASK_ID,
     CONTAINER_LABEL_TYPE,
     CONTAINER_LABEL_WORK_ITEM_ID,
+    CONTAINER_LABEL_WORKFLOW_RUN_ID,
     CONTAINER_TYPE_AGENT,
     CONTAINER_TYPE_REPAIR_CYCLE,
 )
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.observability.instrumentation import (
     instrument_async_function,
 )
@@ -38,15 +39,17 @@ from codetoreum.ports.output.container_recovery import (
     IAgentContainerRecoveryService,
     RecoveryAssessment,
 )
-from codetoreum.ports.output.repair_cycle_checkpoint_store import IRepairCycleCheckpointStore
-from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.ports.output.repair_cycle_checkpoint_store import (
+    IRepairCycleCheckpointStore,
+)
 
 # Additional label for tracking containers with timestamp parse failures
 CONTAINER_LABEL_TIMESTAMP_FALLBACK = "codetoreum.timestamp_fallback"
 
 # Import Docker SDK exceptions for proper error handling
 try:
-    from docker.errors import NotFound as DockerNotFound, DockerException
+    from docker.errors import DockerException
+    from docker.errors import NotFound as DockerNotFound
 except ImportError:
     # Provide fallback classes if docker is not installed
     class DockerNotFound(Exception):  # type: ignore

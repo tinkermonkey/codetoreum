@@ -8,18 +8,19 @@ This test suite verifies:
 4. _build_stage_info correctly maps all 6 StageStatus enum values
 """
 
-import pytest
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
-from codetoreum.ports.input.workflow_run_query import (
-    WorkflowRunEventsResult,
-    WorkflowRunAuditResult,
-    WorkflowRunSummary,
-    WorkflowRunStatus,
-)
+import pytest
+
 from codetoreum.adapters.primary.audit_dtos import AuditStageInfo
 from codetoreum.domain.pipeline_stage import StageStatus
+from codetoreum.ports.input.workflow_run_query import (
+    WorkflowRunAuditResult,
+    WorkflowRunEventsResult,
+    WorkflowRunStatus,
+    WorkflowRunSummary,
+)
 
 
 class TestDevelopmentMockReturnTypes:
@@ -107,10 +108,12 @@ class TestBuildStageInfoStatusMapping:
 
     def test_all_status_mappings(self):
         """Verify all 6 StageStatus enum values are correctly mapped."""
-        from codetoreum.application.workflow_run_query_service import WorkflowRunQueryService
-        from codetoreum.domain.workflow import Workflow
-        from codetoreum.domain.pipeline_stage import PipelineStage
         from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
+        from codetoreum.application.workflow_run_query_service import (
+            WorkflowRunQueryService,
+        )
+        from codetoreum.domain.pipeline_stage import PipelineStage
+        from codetoreum.domain.workflow import Workflow
 
         # Create a minimal mock workflow with stages in all 6 statuses
         mock_workflow = MagicMock(spec=Workflow)
@@ -155,10 +158,12 @@ class TestBuildStageInfoStatusMapping:
 
     def test_skipped_maps_to_skipped_not_pending(self):
         """Critical fix: SKIPPED should map to 'skipped', not 'pending'."""
-        from codetoreum.application.workflow_run_query_service import WorkflowRunQueryService
-        from codetoreum.domain.workflow import Workflow
-        from codetoreum.domain.pipeline_stage import PipelineStage
         from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
+        from codetoreum.application.workflow_run_query_service import (
+            WorkflowRunQueryService,
+        )
+        from codetoreum.domain.pipeline_stage import PipelineStage
+        from codetoreum.domain.workflow import Workflow
 
         # Create a mock workflow with a SKIPPED stage
         mock_stage = MagicMock(spec=PipelineStage)

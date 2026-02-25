@@ -10,9 +10,9 @@ abstractions over GitHub Projects v2, Trello, JIRA boards, etc.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 from typing import List, Optional
-from datetime import datetime
 
 from .event_emitter import IEventEmitter
 from .monitoring import IMonitoredService, MonitoringConfig

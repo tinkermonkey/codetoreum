@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 from uuid import uuid4
+
 import yaml
 
 from codetoreum.adapters.testing.in_memory_config_store import InMemoryConfigStore
@@ -25,17 +26,17 @@ from codetoreum.domain.board_workflow_template import (
 from codetoreum.domain.types import ProjectId, UserId, WorkItemId
 from codetoreum.domain.work_item import WorkItemPriority, WorkItemStatus
 from codetoreum.infrastructure.simulation.bootstrap import (
-    SimulationApplicationBootstrap,
     SimulationAdapters,
+    SimulationApplicationBootstrap,
 )
+from codetoreum.infrastructure.simulation.scenario_models import ScenarioModel
+from codetoreum.ports.exceptions import ValidationError
 from codetoreum.ports.output.config_store import (
     AgentConfig,
     PipelineConfig,
     ProjectConfig,
     WorkflowTemplate,
 )
-from codetoreum.ports.exceptions import ValidationError
-from codetoreum.infrastructure.simulation.scenario_models import ScenarioModel
 
 logger = logging.getLogger(__name__)
 
@@ -1194,7 +1195,9 @@ class SimulationDataSeeder:
         Returns:
             Self for chaining
         """
-        from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
+        from codetoreum.adapters.testing.fake_container_adapter import (
+            FakeContainerAdapter,
+        )
 
         fake_container: FakeContainerAdapter = self.adapters.container_runtime
 

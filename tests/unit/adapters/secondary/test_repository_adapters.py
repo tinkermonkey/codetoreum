@@ -9,12 +9,17 @@ Tests cover:
 - Index management
 """
 
-import pytest
 from uuid import UUID, uuid4
 
-from codetoreum.adapters.secondary.in_memory_api_key_repository import InMemoryAPIKeyRepository
-from codetoreum.adapters.secondary.in_memory_user_repository import InMemoryUserRepository
-from codetoreum.domain.user import User, APIKey
+import pytest
+
+from codetoreum.adapters.secondary.in_memory_api_key_repository import (
+    InMemoryAPIKeyRepository,
+)
+from codetoreum.adapters.secondary.in_memory_user_repository import (
+    InMemoryUserRepository,
+)
+from codetoreum.domain.user import APIKey, User
 from codetoreum.ports.input.authentication import APIKeyNotFoundError, UserNotFoundError
 
 

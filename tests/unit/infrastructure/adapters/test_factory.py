@@ -7,36 +7,33 @@ and dependency injection.
 
 import pytest
 
-from codetoreum.infrastructure.adapters import (
-    AdapterFactory,
-    AdapterFactoryConfig
-)
-from codetoreum.infrastructure.resilience import (
-    OperationMode,
-    ServiceResilienceConfig,
-    RateLimitConfig,
-    CircuitBreakerConfig,
-    RetryConfig,
-    TimeoutConfig
-)
-from codetoreum.ports.output.ticket_system import ITicketSystem
-from codetoreum.ports.output.llm_provider import ILLMProvider
-from codetoreum.ports.output.container import IContainer
-from codetoreum.ports.output.repository import IRepository
-from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.adapters.secondary import (
-    GitHubConfig,
     ClaudeCodeConfig,
     DockerConfig,
-    GitConfig
+    GitConfig,
+    GitHubConfig,
 )
 from codetoreum.adapters.testing import (
+    FakeContainerAdapter,
+    InMemoryEventStore,
+    InMemoryRepositoryAdapter,
     InMemoryTicketAdapter,
     MockLLMAdapter,
-    FakeContainerAdapter,
-    InMemoryRepositoryAdapter,
-    InMemoryEventStore
 )
+from codetoreum.infrastructure.adapters import AdapterFactory, AdapterFactoryConfig
+from codetoreum.infrastructure.resilience import (
+    CircuitBreakerConfig,
+    OperationMode,
+    RateLimitConfig,
+    RetryConfig,
+    ServiceResilienceConfig,
+    TimeoutConfig,
+)
+from codetoreum.ports.output.container import IContainer
+from codetoreum.ports.output.event_store import IEventStore
+from codetoreum.ports.output.llm_provider import ILLMProvider
+from codetoreum.ports.output.repository import IRepository
+from codetoreum.ports.output.ticket_system import ITicketSystem
 
 
 class TestAdapterFactoryConfig:

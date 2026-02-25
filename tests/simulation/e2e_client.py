@@ -26,9 +26,11 @@ from uuid import uuid4
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from codetoreum.domain.work_item import WorkItemStatus, WorkItemPriority
 from codetoreum.domain.agent_execution import ExecutionStatus
-from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
+from codetoreum.domain.work_item import WorkItemPriority, WorkItemStatus
+from codetoreum.infrastructure.simulation.bootstrap import (
+    SimulationApplicationBootstrap,
+)
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 
 logger = logging.getLogger(__name__)

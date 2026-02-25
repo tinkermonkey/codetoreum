@@ -1,13 +1,13 @@
 """Unit tests for SimulationEngine."""
 
-import pytest
 from datetime import datetime, timedelta, timezone
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
-from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
+import pytest
+
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
-
+from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
 
 # ====================================================================================
 # Fixtures

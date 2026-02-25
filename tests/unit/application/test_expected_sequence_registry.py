@@ -3,6 +3,7 @@ Tests for Expected Sequence Registry
 """
 
 import pytest
+
 from codetoreum.application.expected_sequence_registry import (
     ExpectedSequenceRegistry,
     SequencePattern,

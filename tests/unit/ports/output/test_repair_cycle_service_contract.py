@@ -21,13 +21,13 @@ from typing import Dict, Tuple
 import pytest
 
 from codetoreum.domain.repair_cycle_types import (
+    CycleResult,
     RepairCycleResult,
     RepairTestFailure,
     RepairTestResult,
     RepairTestRunConfig,
     RepairTestType,
     RepairTestWarning,
-    CycleResult,
 )
 from codetoreum.ports.output.repair_cycle_service import (
     RepairCycleContext,
@@ -568,7 +568,9 @@ class TestRepairCycleAdapterMethodContract:
     @pytest.mark.asyncio
     async def test_run_tests_method_exists_and_callable(self) -> None:
         """Verify run_tests() method exists with correct signature."""
-        from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
+        from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
+            MockRepairCycleAdapter,
+        )
 
         adapter = MockRepairCycleAdapter()
         adapter.current_project = "test-proj"
@@ -595,8 +597,12 @@ class TestRepairCycleAdapterMethodContract:
     @pytest.mark.asyncio
     async def test_fix_failures_by_file_method_exists(self) -> None:
         """Verify fix_failures_by_file() method exists with correct signature."""
-        from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
-        from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
+        from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
+            MockRepairCycleAdapter,
+        )
+        from codetoreum.infrastructure.simulation.simulation_clock import (
+            SimulationClock,
+        )
 
         clock = SimulationClock(speed_multiplier=100_000.0)
         adapter = MockRepairCycleAdapter(clock=clock)
@@ -630,8 +636,12 @@ class TestRepairCycleAdapterMethodContract:
     @pytest.mark.asyncio
     async def test_handle_warnings_method_exists(self) -> None:
         """Verify handle_warnings() method exists with correct signature."""
-        from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
-        from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
+        from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
+            MockRepairCycleAdapter,
+        )
+        from codetoreum.infrastructure.simulation.simulation_clock import (
+            SimulationClock,
+        )
 
         clock = SimulationClock(speed_multiplier=100_000.0)
         adapter = MockRepairCycleAdapter(clock=clock)
@@ -671,8 +681,12 @@ class TestRepairCycleAdapterMethodContract:
     @pytest.mark.asyncio
     async def test_checkpoint_method_exists(self) -> None:
         """Verify checkpoint() method exists with correct signature."""
-        from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
-        from codetoreum.adapters.testing.in_memory_checkpoint_store import InMemoryCheckpointStore
+        from codetoreum.adapters.testing.in_memory_checkpoint_store import (
+            InMemoryCheckpointStore,
+        )
+        from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
+            MockRepairCycleAdapter,
+        )
 
         checkpoint_store = InMemoryCheckpointStore()
         adapter = MockRepairCycleAdapter(checkpoint_store=checkpoint_store)
@@ -704,7 +718,9 @@ class TestRepairCycleAdapterMethodContract:
     @pytest.mark.asyncio
     async def test_execute_returns_repair_cycle_result(self) -> None:
         """Verify execute() method returns RepairCycleResult."""
-        from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
+        from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
+            MockRepairCycleAdapter,
+        )
 
         adapter = MockRepairCycleAdapter()
         adapter.current_project = "test-proj"

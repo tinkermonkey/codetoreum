@@ -24,13 +24,15 @@ from codetoreum.infrastructure.security import InvalidInputError, sanitize_searc
 from codetoreum.ports.input.work_item_command import IWorkItemCommandPort
 from codetoreum.ports.input.work_item_query import (
     IWorkItemQueryPort,
+)
+from codetoreum.ports.input.work_item_query import (
+    PaginationParams as DomainPaginationParams,
+)
+from codetoreum.ports.input.work_item_query import (
     SortField,
     SortOrder,
     WorkItemFilters,
     WorkItemSearchParams,
-)
-from codetoreum.ports.input.work_item_query import (
-    PaginationParams as DomainPaginationParams,
 )
 
 

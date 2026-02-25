@@ -1,15 +1,16 @@
 """Shared fixtures for GitHub discussion adapter integration tests."""
 
-import pytest
-from unittest.mock import Mock
 from typing import List, Optional
+from unittest.mock import Mock
+
+import pytest
 
 from codetoreum.adapters.secondary.github_discussion_adapter import (
-    GitHubDiscussionConfig,
     GitHubDiscussionAdapter,
+    GitHubDiscussionConfig,
 )
-from codetoreum.ports.output.discussion_adapter import DiscussionMonitoringConfig
 from codetoreum.domain.events.discussion_events import Comment
+from codetoreum.ports.output.discussion_adapter import DiscussionMonitoringConfig
 
 
 class MockIdentityService:

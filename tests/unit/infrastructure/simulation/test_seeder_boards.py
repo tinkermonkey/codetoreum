@@ -6,8 +6,8 @@ import pytest
 
 from codetoreum.infrastructure.simulation import (
     SimulationApplicationBootstrap,
-    SimulationDataSeeder,
     SimulationConfig,
+    SimulationDataSeeder,
 )
 from codetoreum.ports.exceptions import ValidationError
 

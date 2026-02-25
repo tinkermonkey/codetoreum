@@ -1,20 +1,21 @@
 """Unit tests for RepairCycleEventHandler."""
 
-import pytest
-from unittest.mock import Mock, AsyncMock, MagicMock
 from datetime import datetime, timezone
+from unittest.mock import AsyncMock, MagicMock, Mock
+
+import pytest
 
 from codetoreum.application.event_handlers.repair_cycle_event_handler import (
-    RepairCycleEventHandler,
     RepairCycleEventContext,
+    RepairCycleEventHandler,
 )
 from codetoreum.domain.events import WorkItemColumnChanged
 from codetoreum.domain.repair_cycle_types import (
+    CycleResult,
+    RepairCycleResult,
+    RepairTestResult,
     RepairTestRunConfig,
     RepairTestType,
-    RepairCycleResult,
-    CycleResult,
-    RepairTestResult,
 )
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock

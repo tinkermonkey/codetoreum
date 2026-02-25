@@ -1,7 +1,8 @@
 """Unit tests for WorkItem aggregate root."""
 
-import pytest
 from datetime import datetime
+
+import pytest
 
 from codetoreum.domain import (
     AgentAssigned,

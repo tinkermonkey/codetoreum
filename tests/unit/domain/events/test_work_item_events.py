@@ -1,6 +1,7 @@
 """Unit tests for work item events."""
 
 import uuid
+
 import pytest
 
 from codetoreum.domain.events import (

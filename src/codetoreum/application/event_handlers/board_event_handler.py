@@ -22,14 +22,14 @@ from codetoreum.domain.board_workflow_template import (
 )
 from codetoreum.domain.events import (
     DomainEvent,
-    WorkItemColumnChanged,
     WorkflowCompleted,
     WorkflowCreated,
     WorkflowFailed,
     WorkflowStageAdvanced,
     WorkflowStarted,
+    WorkItemColumnChanged,
 )
-from codetoreum.infrastructure.event_bus import EventHandler, event_handler, EventBus
+from codetoreum.infrastructure.event_bus import EventBus, EventHandler, event_handler
 from codetoreum.ports.exceptions import ExternalServiceError, ResourceNotFoundError
 from codetoreum.ports.output.agent_executor import IAgentExecutor
 from codetoreum.ports.output.board_service import IBoardService, MovedByType

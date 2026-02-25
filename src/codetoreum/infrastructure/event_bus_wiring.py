@@ -16,14 +16,14 @@ import asyncio
 import logging
 from typing import Any, Callable, Optional
 
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.event_bus_protocols import (
     IBoardService,
+    ICodeReviewService,
     IDiscussionAdapter,
     IPipelineLockService,
-    ICodeReviewService,
 )
-from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 

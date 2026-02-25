@@ -7,7 +7,6 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 from codetoreum.domain.events import DomainEvent
 from codetoreum.domain.types import CorrelationId, EventId, StreamId
 
-
 # ============================================================================
 # Port Interface
 # ============================================================================

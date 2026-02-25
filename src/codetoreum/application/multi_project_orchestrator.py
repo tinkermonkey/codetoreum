@@ -14,8 +14,11 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from codetoreum.domain.events.project_events import (
     OrchestrationCycleCompletedEvent,
 )
-from codetoreum.ports.output.project_manager_service import IProjectManagerService
-from codetoreum.ports.output.board_service import IBoardService, BoardConfig
+from codetoreum.ports.exceptions import (
+    ExternalServiceError,
+    ResourceNotFoundError,
+)
+from codetoreum.ports.output.board_service import BoardConfig, IBoardService
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.multi_project_orchestrator import (
     IMultiProjectOrchestrator,
@@ -23,10 +26,7 @@ from codetoreum.ports.output.multi_project_orchestrator import (
     ProjectOrchestrationResult,
     ProjectStatus,
 )
-from codetoreum.ports.exceptions import (
-    ResourceNotFoundError,
-    ExternalServiceError,
-)
+from codetoreum.ports.output.project_manager_service import IProjectManagerService
 
 if TYPE_CHECKING:
     from codetoreum.ports.output.workflow_orchestrator import IWorkflowOrchestrator

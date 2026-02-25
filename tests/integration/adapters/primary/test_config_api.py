@@ -5,24 +5,23 @@ Tests all configuration management endpoints including projects, pipelines, agen
 environment variables, search, versioning, and audit trail.
 """
 
-import pytest
 from datetime import datetime, timedelta, timezone
 from typing import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from fastapi import FastAPI, status
 from fastapi.testclient import TestClient
 
 from codetoreum.adapters.primary.routers.config import create_config_router
 from codetoreum.ports.input.config_command import IConfigurationCommandPort
 from codetoreum.ports.input.config_query import (
+    AgentConfigInfo,
     IConfigurationQueryPort,
     PaginationParams,
-    ProjectConfigInfo,
     PipelineConfigInfo,
-    AgentConfigInfo,
+    ProjectConfigInfo,
 )
-
 
 # ============================================================================
 # Fixtures
@@ -565,7 +564,10 @@ class TestConfigurationSearch:
     ):
         """Test searching configurations by keyword."""
         # Arrange
-        from codetoreum.ports.input.config_query import ConfigSearchResult, ConfigSearchResults
+        from codetoreum.ports.input.config_query import (
+            ConfigSearchResult,
+            ConfigSearchResults,
+        )
 
         search_result = ConfigSearchResult(
             config_id="proj-123",

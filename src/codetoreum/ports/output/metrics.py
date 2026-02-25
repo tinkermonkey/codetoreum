@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Optional
 
 from codetoreum.domain.types import MetricName
 
-
 # ============================================================================
 # Data Models
 # ============================================================================

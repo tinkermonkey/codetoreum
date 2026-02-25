@@ -10,11 +10,11 @@ for simulation testing without external infrastructure.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any, Protocol, runtime_checkable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from types import MappingProxyType
+from typing import Any, Dict, Mapping, Optional, Protocol, runtime_checkable
 
 # W3C Trace Context version constant (RFC: https://www.w3.org/TR/trace-context/)
 # Update this when W3C releases new trace context versions

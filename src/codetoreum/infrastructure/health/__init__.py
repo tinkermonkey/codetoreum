@@ -4,12 +4,6 @@ Provides liveness, readiness, and dependency health checks
 for monitoring system health and availability.
 """
 
-from .interfaces import (
-    DependencyHealth,
-    HealthCheckResult,
-    HealthStatus,
-    IHealthCheck,
-)
 from .health_checker import (
     CircuitBreakerHealthCheck,
     CompositeHealthCheck,
@@ -19,6 +13,12 @@ from .health_checker import (
     HealthChecker,
     RateLimiterHealthCheck,
     RedisHealthCheck,
+)
+from .interfaces import (
+    DependencyHealth,
+    HealthCheckResult,
+    HealthStatus,
+    IHealthCheck,
 )
 
 __all__ = [

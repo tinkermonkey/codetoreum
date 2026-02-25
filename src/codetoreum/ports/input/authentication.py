@@ -12,7 +12,6 @@ from uuid import UUID
 
 from codetoreum.domain.user import APIKey, AuthContext, User, UserRole
 
-
 # ============================================================================
 # Exceptions
 # ============================================================================

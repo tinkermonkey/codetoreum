@@ -908,8 +908,11 @@ class ElasticsearchConfigStorage(IConfigStore):
 
         try:
             # Sanitize and validate query to prevent injection attacks
-            from codetoreum.infrastructure.security import sanitize_search_query, InvalidInputError
             from codetoreum.infrastructure.error_ids import ErrorRegistry
+            from codetoreum.infrastructure.security import (
+                InvalidInputError,
+                sanitize_search_query,
+            )
 
             try:
                 sanitized_query = sanitize_search_query(query, max_length=500)

@@ -9,16 +9,17 @@ Tests the application-layer pipeline lock service including:
 - Edge cases (duplicate holder, empty queue, etc.)
 """
 
-import pytest
 from datetime import datetime, timezone
+
+import pytest
 
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
 )
 from codetoreum.application.pipeline_lock_service import (
-    LockStatus,
     LockAcquisitionResult,
     LockReleaseResult,
+    LockStatus,
 )
 
 

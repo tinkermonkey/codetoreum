@@ -1,8 +1,10 @@
 """Integration tests for AgentScheduler."""
 
-import pytest
 from datetime import datetime, timezone
 
+import pytest
+
+from codetoreum.adapters.testing import InMemoryEventStore
 from codetoreum.application.agent_scheduler import (
     AgentConfig,
     AgentScheduler,
@@ -13,10 +15,8 @@ from codetoreum.application.agent_scheduler import (
     MockSchedulingEvents,
     ScheduleAction,
 )
-from codetoreum.adapters.testing import InMemoryEventStore
-from codetoreum.domain.agent import Agent, AgentType, AgentCapability
-from codetoreum.domain.work_item import WorkItem, WorkItemStatus, WorkItemPriority
-
+from codetoreum.domain.agent import Agent, AgentCapability, AgentType
+from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
 
 # Test fixtures
 

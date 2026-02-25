@@ -1,20 +1,21 @@
 """
 Main Codetoreum client class
 """
-import requests  # type: ignore[import-untyped]
 from typing import Any, Optional, cast
 from urllib.parse import urljoin
 
-from .resources.work_items import WorkItemsResource
+import requests  # type: ignore[import-untyped]
+
+from .exceptions import AuthenticationError, CodetoreumError, RateLimitError
 from .resources.agents import AgentsResource
-from .resources.workflows import WorkflowsResource
-from .resources.orchestrator import OrchestratorResource
-from .resources.executions import ExecutionsResource
 from .resources.config import ConfigurationResource
-from .resources.metrics import MetricsResource
-from .resources.workspaces import WorkspacesResource
 from .resources.events import EventsResource
-from .exceptions import CodetoreumError, AuthenticationError, RateLimitError
+from .resources.executions import ExecutionsResource
+from .resources.metrics import MetricsResource
+from .resources.orchestrator import OrchestratorResource
+from .resources.work_items import WorkItemsResource
+from .resources.workflows import WorkflowsResource
+from .resources.workspaces import WorkspacesResource
 
 
 class CodetoreumClient:

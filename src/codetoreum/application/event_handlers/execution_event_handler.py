@@ -12,8 +12,8 @@ from codetoreum.domain.events import (
     ExecutionStarted,
     ExecutionTimeout,
 )
-from codetoreum.infrastructure.event_bus import EventHandler, event_handler
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.infrastructure.event_bus import EventHandler, event_handler
 
 logger = logging.getLogger(__name__)
 

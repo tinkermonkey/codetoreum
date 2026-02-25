@@ -5,17 +5,19 @@ Tests the data structures, enums, and interface contract of the
 IWorkflowCommandPort without requiring implementations.
 """
 
-import pytest
 from datetime import datetime
+
+import pytest
+
 from codetoreum.ports.input.workflow_command import (
+    CancelWorkflowCommand,
     IWorkflowCommandPort,
-    StartWorkflowCommand,
     PauseWorkflowCommand,
     ResumeWorkflowCommand,
-    CancelWorkflowCommand,
     RetryStageCommand,
-    WorkflowCommandResult,
+    StartWorkflowCommand,
     TriggerType,
+    WorkflowCommandResult,
 )
 
 

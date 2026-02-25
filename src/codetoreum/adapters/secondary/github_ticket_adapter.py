@@ -9,7 +9,7 @@ import httpx
 from dateutil import parser as dateparser
 
 from codetoreum.domain.comment import Comment
-from codetoreum.domain.types import ProjectId, UserId, WorkItemId, CommentId
+from codetoreum.domain.types import CommentId, ProjectId, UserId, WorkItemId
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
 from codetoreum.ports.exceptions import (
     AuthenticationError,

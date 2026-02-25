@@ -12,7 +12,6 @@ from codetoreum.adapters.primary.fastapi_app import create_development_app
 from codetoreum.domain.events import DomainEvent
 
 
-
 @pytest.fixture(scope="function")
 def client():
     """Create test client with development app (authentication disabled for testing)"""

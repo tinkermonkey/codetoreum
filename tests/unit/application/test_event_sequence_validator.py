@@ -2,8 +2,9 @@
 Tests for Event Sequence Validator
 """
 
-import pytest
 from dataclasses import FrozenInstanceError
+
+import pytest
 
 from codetoreum.application.event_sequence_validator import (
     EventSequenceValidator,

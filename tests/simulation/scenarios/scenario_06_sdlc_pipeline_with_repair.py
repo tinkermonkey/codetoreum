@@ -8,19 +8,22 @@ Comprehensive test scenarios validating the full SDLC pipeline workflow includin
 """
 
 import pytest
-from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
-from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
-from codetoreum.adapters.testing.mock_review_cycle_adapter import MockReviewCycleAdapter
+
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
+from codetoreum.adapters.testing.mock_review_cycle_adapter import MockReviewCycleAdapter
+from codetoreum.application.event_handlers.repair_cycle_event_handler import (
+    RepairCycleEventContext,
+)
 from codetoreum.domain.events import WorkItemColumnChanged
 from codetoreum.domain.repair_cycle_types import (
     RepairTestRunConfig,
     RepairTestType,
 )
-from codetoreum.ports.output.review_cycle_service import ReviewCycleRequest
-from codetoreum.application.event_handlers.repair_cycle_event_handler import (
-    RepairCycleEventContext,
+from codetoreum.infrastructure.simulation.bootstrap import (
+    SimulationApplicationBootstrap,
 )
+from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
+from codetoreum.ports.output.review_cycle_service import ReviewCycleRequest
 
 
 class TestScenario06SDLCPipelineWithRepair:
@@ -278,7 +281,9 @@ class TestScenario06SDLCPipelineWithRepair:
         2. Event handlers are registered
         3. Repair cycle handler is connected to event bus
         """
-        from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+        from codetoreum.infrastructure.simulation.simulation_config import (
+            SimulationConfig,
+        )
 
         # Create bootstrap with fast simulation config
         config = SimulationConfig.create_fast_config("test_bootstrap")

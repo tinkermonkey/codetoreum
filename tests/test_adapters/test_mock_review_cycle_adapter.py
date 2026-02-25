@@ -17,8 +17,8 @@ from codetoreum.adapters.testing.mock_review_cycle_adapter import (
     ReviewSequenceItem,
 )
 from codetoreum.domain.review_cycle import ReviewDecision
-from codetoreum.ports.output.review_cycle_service import ReviewCycleRequest
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
+from codetoreum.ports.output.review_cycle_service import ReviewCycleRequest
 
 
 @pytest.fixture

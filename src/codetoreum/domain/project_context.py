@@ -8,7 +8,6 @@ from uuid import uuid4
 from codetoreum.domain.events import DomainEvent
 from codetoreum.domain.exceptions import DomainError
 
-
 # =============================================================================
 # Project Context Events
 # =============================================================================

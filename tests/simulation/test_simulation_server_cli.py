@@ -12,9 +12,9 @@ import asyncio
 import os
 import tempfile
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import AsyncGenerator
-from contextlib import contextmanager
 
 import click
 import httpx
@@ -25,14 +25,16 @@ from fastapi.testclient import TestClient
 
 from codetoreum.cli.simulation_server import (
     bootstrap_application,
-    seed_data,
     get_scenario_file_path,
+    main,
+    seed_data,
     validate_port,
     validate_speed_multiplier,
     validate_yaml_file,
-    main,
 )
-from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
+from codetoreum.infrastructure.simulation.bootstrap import (
+    SimulationApplicationBootstrap,
+)
 
 
 class TestSimulationServerCLI:

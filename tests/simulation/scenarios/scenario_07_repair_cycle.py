@@ -14,21 +14,22 @@ Comprehensive scenarios cover:
 7. Full sequence: UNIT → INTEGRATION → E2E all passing
 """
 
-import pytest
 from dataclasses import dataclass
 from typing import Tuple
 
-from codetoreum.domain.repair_cycle_types import (
-    RepairTestType,
-    RepairTestRunConfig,
-    RepairTestResult,
-    RepairTestWarning,
-    RepairTestFailure,
-)
+import pytest
+
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
+from codetoreum.domain.repair_cycle_types import (
+    RepairTestFailure,
+    RepairTestResult,
+    RepairTestRunConfig,
+    RepairTestType,
+    RepairTestWarning,
+)
+from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 from codetoreum.infrastructure.simulation.simulation_runner import SimulationRunner
-from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 
 
 @dataclass
@@ -1047,10 +1048,11 @@ async def test_scenario_16_json_parse_retry_logic():
     """
     import time
     from unittest.mock import Mock
+
     from codetoreum.adapters.secondary.production_repair_cycle_adapter import (
+        JSONParseError,
         ProductionRepairCycleAdapter,
         RepairCycleConfig,
-        JSONParseError,
     )
 
     config = RepairCycleConfig(
@@ -1085,6 +1087,7 @@ async def test_scenario_17_json_parse_success_after_retry():
     even when surrounded by other text.
     """
     from unittest.mock import Mock
+
     from codetoreum.adapters.secondary.production_repair_cycle_adapter import (
         ProductionRepairCycleAdapter,
         RepairCycleConfig,
@@ -1122,10 +1125,11 @@ async def test_scenario_18_json_parse_malformed_structure():
     fails after all retries with clear error message.
     """
     from unittest.mock import Mock
+
     from codetoreum.adapters.secondary.production_repair_cycle_adapter import (
+        JSONParseError,
         ProductionRepairCycleAdapter,
         RepairCycleConfig,
-        JSONParseError,
     )
 
     config = RepairCycleConfig(max_json_parse_retries=2)

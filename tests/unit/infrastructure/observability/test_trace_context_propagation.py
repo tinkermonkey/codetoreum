@@ -8,13 +8,14 @@ Tests cover:
 - Integration with event bus publishing and handling
 """
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
 from uuid import uuid4
+
+import pytest
 
 # Test imports with optional OpenTelemetry
 try:
-    from opentelemetry import trace, context
+    from opentelemetry import context, trace
     from opentelemetry.trace import SpanContext, TraceFlags
 
     OTEL_AVAILABLE = True
@@ -23,11 +24,11 @@ except ImportError:
 
 from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.observability.trace_context_propagation import (
+    EventBusTraceContext,
     TraceContextData,
     TraceContextPropagator,
-    EventBusTraceContext,
-    inject_current_trace_context_into_event,
     extract_and_activate_trace_context,
+    inject_current_trace_context_into_event,
 )
 
 

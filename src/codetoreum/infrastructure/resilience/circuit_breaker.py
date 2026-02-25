@@ -3,14 +3,13 @@
 Provides circuit breaker pattern with CLOSED/OPEN/HALF_OPEN states.
 """
 
-import time
 import asyncio
+import time
 from datetime import datetime
-from typing import Optional, Callable, TypeVar, Tuple, Type
+from typing import Callable, Optional, Tuple, Type, TypeVar
 
-from .interfaces import ICircuitBreaker, CircuitState, CircuitBreakerStats
 from .exceptions import CircuitBreakerOpenError
-
+from .interfaces import CircuitBreakerStats, CircuitState, ICircuitBreaker
 
 T = TypeVar('T')
 

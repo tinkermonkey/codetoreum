@@ -14,15 +14,21 @@ simulation-agnostic - they never receive or use a clock directly.
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 
 if TYPE_CHECKING:
-    from codetoreum.adapters.testing.mock_review_cycle_adapter import MockReviewCycleAdapter
-    from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
-    from codetoreum.adapters.testing.mock_metrics_query_adapter import MockMetricsQueryAdapter
+    from codetoreum.adapters.testing.mock_metrics_query_adapter import (
+        MockMetricsQueryAdapter,
+    )
+    from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
+        MockRepairCycleAdapter,
+    )
+    from codetoreum.adapters.testing.mock_review_cycle_adapter import (
+        MockReviewCycleAdapter,
+    )
     from codetoreum.application.event_handlers import RepairCycleEventHandler
 
 logger = logging.getLogger(__name__)
@@ -233,7 +239,9 @@ class SimulationEngine:
         Returns:
             MockRepairCycleAdapter instance with clock already configured
         """
-        from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
+        from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
+            MockRepairCycleAdapter,
+        )
 
         adapter = MockRepairCycleAdapter(clock=self._clock)
         logger.debug("Created MockRepairCycleAdapter via SimulationEngine")
@@ -246,7 +254,9 @@ class SimulationEngine:
         Returns:
             MockReviewCycleAdapter instance with clock already configured
         """
-        from codetoreum.adapters.testing.mock_review_cycle_adapter import MockReviewCycleAdapter
+        from codetoreum.adapters.testing.mock_review_cycle_adapter import (
+            MockReviewCycleAdapter,
+        )
 
         adapter = MockReviewCycleAdapter(clock=self._clock)
         logger.debug("Created MockReviewCycleAdapter via SimulationEngine")
@@ -267,7 +277,9 @@ class SimulationEngine:
         Returns:
             MockMetricsQueryAdapter instance with clock already configured
         """
-        from codetoreum.adapters.primary.input_port_adapters.mock import MockMetricsQueryAdapter
+        from codetoreum.adapters.primary.input_port_adapters.mock import (
+            MockMetricsQueryAdapter,
+        )
 
         adapter = MockMetricsQueryAdapter(
             metrics_adapter=metrics_adapter,

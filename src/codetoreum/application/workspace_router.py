@@ -4,10 +4,10 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional
-from codetoreum.domain.types import BranchName
 
 from codetoreum.domain.agent import Agent
 from codetoreum.domain.project_context import ProjectContext
+from codetoreum.domain.types import BranchName
 from codetoreum.domain.work_item import WorkItem
 from codetoreum.domain.workspace_context import WorkspaceContext, WorkspaceType
 from codetoreum.ports.output import IContainer, IEventStore, IRepository

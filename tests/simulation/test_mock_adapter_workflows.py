@@ -4,22 +4,23 @@ These tests show end-to-end scenarios using mock adapters to test
 orchestrator behavior without external service dependencies.
 """
 
-import pytest
 from typing import List
 
-from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
-from codetoreum.adapters.secondary.mock_discussion_adapter import MockDiscussionAdapter
-from codetoreum.adapters.secondary.mock_code_review_adapter import MockCodeReviewAdapter
-from codetoreum.adapters.secondary.in_memory_pipeline_lock_service import (
-    InMemoryPipelineLockService,
-)
+import pytest
+
 from codetoreum.adapters.secondary.configurable_identity_service import (
     ConfigurableIdentityService,
 )
+from codetoreum.adapters.secondary.in_memory_pipeline_lock_service import (
+    InMemoryPipelineLockService,
+)
+from codetoreum.adapters.secondary.mock_code_review_adapter import MockCodeReviewAdapter
+from codetoreum.adapters.secondary.mock_discussion_adapter import MockDiscussionAdapter
+from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.domain.events.discussion_events import CommentNeedsResponseEvent
-from codetoreum.domain.events.review_events import ReviewStatusChangedEvent
 from codetoreum.domain.events.lock_events import LockAcquiredEvent, LockReleasedEvent
+from codetoreum.domain.events.review_events import ReviewStatusChangedEvent
 from codetoreum.ports.output.board_service import MovedByType
 from codetoreum.ports.output.discussion_adapter import DiscussionMonitoringConfig
 from codetoreum.ports.output.monitoring import MonitoringConfig
@@ -109,8 +110,9 @@ class TestDiscussionWorkflow:
         identity_service.set_bot_username("codetoreum-bot")
 
         # Configure bot detection
-        from codetoreum.ports.output.identity_service import BotIdentityConfig
         import re
+
+        from codetoreum.ports.output.identity_service import BotIdentityConfig
 
         config = BotIdentityConfig(
             bot_usernames=["dependabot"],

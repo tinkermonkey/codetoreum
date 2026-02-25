@@ -10,6 +10,16 @@ from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Tuple, Ty
 from codetoreum.domain.comment import Comment
 from codetoreum.domain.types import ExecutionId, ProjectId, UserId, WorkItemId
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
+from codetoreum.ports.output.board_service import (
+    BoardColumn,
+    BoardConfig,
+    IBoardService,
+    MovedByType,
+    ProjectBoard,
+    ReconciliationResult,
+    WorkItemPosition,
+)
+from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
 from codetoreum.ports.output.llm_provider import (
     ExecutionContext,
     ExecutionResult,
@@ -20,21 +30,10 @@ from codetoreum.ports.output.llm_provider import (
     ToolDefinition,
     UsageStats,
 )
-from codetoreum.ports.output.ticket_system import ITicketSystem
-from codetoreum.ports.output.board_service import (
-    IBoardService,
-    ProjectBoard,
-    BoardColumn,
-    ReconciliationResult,
-    BoardConfig,
-    WorkItemPosition,
-    MovedByType,
-)
-from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
 from codetoreum.ports.output.monitoring import MonitoringConfig, MonitoringStatus
+from codetoreum.ports.output.ticket_system import ITicketSystem
 
 from .interfaces import ICircuitBreaker, IRateLimiter, IRetryPolicy, ITimeout
-
 
 T = TypeVar('T')
 

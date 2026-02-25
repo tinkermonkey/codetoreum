@@ -15,25 +15,29 @@ Tests validate correct integration across component boundaries:
 """
 
 import asyncio
-import pytest
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 from unittest.mock import AsyncMock
 
+import pytest
+
+from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.application.conversational_loop_orchestrator import (
     ConversationalLoopOrchestrator,
 )
 from codetoreum.domain.conversational_session import ConversationalSessionState
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.domain.events.discussion_events import (
     Comment,
     CommentContext,
     CommentNeedsResponseEvent,
 )
-from codetoreum.domain.events.adapter_events import CodetoreumEvent
-from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.ports.output.discussion_adapter import DiscussionMonitoringConfig, DiscussionThread
-from codetoreum.ports.output.identity_service import IIdentityService, BotIdentityConfig
+from codetoreum.ports.output.discussion_adapter import (
+    DiscussionMonitoringConfig,
+    DiscussionThread,
+)
+from codetoreum.ports.output.identity_service import BotIdentityConfig, IIdentityService
 
 
 class MockIdentityService(IIdentityService):

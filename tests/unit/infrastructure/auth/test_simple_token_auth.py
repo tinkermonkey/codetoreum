@@ -5,11 +5,12 @@ Tests the JupyterLab-style token generation, validation, and security properties
 """
 
 import os
-import pytest
 import secrets
 from datetime import datetime, timedelta, timezone
-from jose import jwt
 from unittest.mock import patch
+
+import pytest
+from jose import jwt
 
 from codetoreum.infrastructure.auth import SimpleTokenAuthManager
 

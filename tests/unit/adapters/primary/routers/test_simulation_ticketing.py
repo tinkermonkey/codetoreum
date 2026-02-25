@@ -4,11 +4,11 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
-from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
 from codetoreum.adapters.primary.routers.simulation_ticketing import (
     create_simulation_ticketing_router,
 )
+from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
+from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
 from codetoreum.domain.work_item import WorkItemPriority
 
 

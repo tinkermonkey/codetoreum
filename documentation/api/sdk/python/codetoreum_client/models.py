@@ -2,8 +2,8 @@
 Data models for Codetoreum API resources
 """
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any, Type, TypeVar, cast
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Type, TypeVar, cast
 
 T = TypeVar("T")
 

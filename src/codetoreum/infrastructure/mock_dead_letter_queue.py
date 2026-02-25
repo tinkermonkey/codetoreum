@@ -4,14 +4,14 @@ Provides deterministic behavior for testing workflows that use DLQ.
 """
 
 import asyncio
-from typing import Any, Callable, Dict, List, Optional
 from datetime import datetime, timedelta, timezone
+from typing import Any, Callable, Dict, List, Optional
 
 from .dead_letter_queue import (
     DeadLetterQueue,
+    DeadLetterQueueStats,
     FailedEvent,
     FailureReason,
-    DeadLetterQueueStats,
 )
 
 

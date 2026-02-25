@@ -15,7 +15,9 @@ from typing import Any, Dict, Optional
 # Import TraceContextInjector for OpenTelemetry trace correlation
 # Note: Import is conditional - TraceContextInjector gracefully handles when OTel is not initialized
 try:
-    from codetoreum.infrastructure.observability.logging_integration import TraceContextInjector
+    from codetoreum.infrastructure.observability.logging_integration import (
+        TraceContextInjector,
+    )
     TRACE_CONTEXT_AVAILABLE = True
 except ImportError:
     # Observability module not available yet (e.g., during initial setup)

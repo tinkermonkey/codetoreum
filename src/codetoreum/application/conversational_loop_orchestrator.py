@@ -31,9 +31,12 @@ from codetoreum.domain.events.discussion_events import (
     CommentContext,
     CommentNeedsResponseEvent,
 )
-from codetoreum.ports.exceptions import EmptyAgentResponseError
-from codetoreum.ports.exceptions import EventStoreError
-from codetoreum.ports.exceptions import PortError
+from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.ports.exceptions import (
+    EmptyAgentResponseError,
+    EventStoreError,
+    PortError,
+)
 from codetoreum.ports.input.conversational_loop_service import (
     IConversationalLoopService,
 )
@@ -43,7 +46,6 @@ from codetoreum.ports.output import (
     ILLMProvider,
 )
 from codetoreum.ports.output.discussion_adapter import DiscussionMonitoringConfig
-from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 

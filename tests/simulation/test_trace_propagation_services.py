@@ -10,9 +10,10 @@ Tests cover:
 """
 
 import pytest
-from codetoreum.infrastructure.simulation.simulation_runner import SimulationRunner
-from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+
 from codetoreum.infrastructure.simulation.mock_tracer import SpanKind, SpanStatus
+from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+from codetoreum.infrastructure.simulation.simulation_runner import SimulationRunner
 
 
 @pytest.mark.asyncio

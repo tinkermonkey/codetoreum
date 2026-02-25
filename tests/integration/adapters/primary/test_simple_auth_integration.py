@@ -6,11 +6,11 @@ with FastAPI.
 """
 
 import pytest
-from fastapi import FastAPI, Depends
+from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
-from codetoreum.infrastructure.auth import SimpleTokenAuthManager
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
+from codetoreum.infrastructure.auth import SimpleTokenAuthManager
 
 
 @pytest.fixture

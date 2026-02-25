@@ -1,8 +1,9 @@
 """Unit tests for dead letter queue."""
 
-import pytest
 import asyncio
 from datetime import datetime, timedelta, timezone
+
+import pytest
 
 from codetoreum.infrastructure.dead_letter_queue import (
     DeadLetterQueue,

@@ -1,7 +1,8 @@
 """Unit tests for code review events."""
 
-import pytest
 from typing import cast
+
+import pytest
 
 from codetoreum.domain.events import (
     Comment,

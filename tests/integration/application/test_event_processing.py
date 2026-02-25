@@ -1,9 +1,15 @@
 """Integration tests for event processing and handlers."""
 
-import pytest
 from datetime import datetime, timezone
 from typing import List
 
+import pytest
+
+from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
+from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
+from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
+from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
+from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
 from codetoreum.application.event_bus_wiring import EventBusRegistry, setup_event_bus
 from codetoreum.application.event_handlers import (
     ExecutionEventHandler,
@@ -32,11 +38,6 @@ from codetoreum.domain.events import (
 from codetoreum.domain.review_cycle import ReviewDecision
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
 from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
-from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
-from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
-from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
-from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
 
 
 @pytest.fixture
@@ -103,10 +104,10 @@ def review_service(event_store):
 def workflow_orchestrator(event_store, ticket_system):
     """Create workflow orchestrator with mock dependencies."""
     from codetoreum.application.workflow_orchestrator import (
-        ITaskQueue,
-        IProjectConfiguration,
-        IWorkflowStateManager,
         IDecisionEvents,
+        IProjectConfiguration,
+        ITaskQueue,
+        IWorkflowStateManager,
     )
 
     # Create mock implementations for testing
@@ -121,8 +122,8 @@ def workflow_orchestrator(event_store, ticket_system):
     class MockProjectConfiguration(IProjectConfiguration):
         async def get_workflow_config(self, project, board):
             from codetoreum.application.workflow_orchestrator import (
-                WorkflowConfig,
                 ColumnConfig,
+                WorkflowConfig,
             )
 
             return WorkflowConfig(

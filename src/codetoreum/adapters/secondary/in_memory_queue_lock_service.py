@@ -26,8 +26,8 @@ from codetoreum.domain.events.lock_events import (
     PipelineLockReleasedEvent,
     WorkItemQueuedEvent,
 )
-from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.infrastructure.event_bus import EventBus
 
 logger = logging.getLogger(__name__)
 

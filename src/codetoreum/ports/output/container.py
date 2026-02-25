@@ -7,7 +7,6 @@ from typing import Any, Callable, Dict, List, Optional
 
 from codetoreum.domain.types import ContainerId, ImageId
 
-
 # ============================================================================
 # Data Models
 # ============================================================================

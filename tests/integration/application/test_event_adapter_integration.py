@@ -8,14 +8,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from codetoreum.application.workflow_orchestrator import (
-    WorkflowOrchestrator,
     ColumnConfig,
-    WorkflowConfig,
-    ITaskQueue,
-    IProjectConfiguration,
-    IWorkflowStateManager,
     IDecisionEvents,
+    IProjectConfiguration,
+    ITaskQueue,
+    IWorkflowStateManager,
     Task,
+    WorkflowConfig,
+    WorkflowOrchestrator,
 )
 from codetoreum.domain.events import DomainEvent, WorkItemCreated
 from codetoreum.domain.work_item import WorkItemPriority

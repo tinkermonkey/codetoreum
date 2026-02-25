@@ -8,7 +8,9 @@ from typing import Any, Dict, Optional
 
 from codetoreum.domain.agent import Agent
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority
-from codetoreum.infrastructure.observability.instrumentation import instrument_async_function
+from codetoreum.infrastructure.observability.instrumentation import (
+    instrument_async_function,
+)
 from codetoreum.ports.exceptions import PortError
 from codetoreum.ports.output import IEventStore
 

@@ -21,6 +21,7 @@ from codetoreum.domain.events.review_events import (
     ReviewCommentAddedEvent,
     ReviewStatusChangedEvent,
 )
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.http.github_graphql_client import (
     GitHubGraphQLClient,
 )
@@ -38,8 +39,11 @@ from codetoreum.ports.output.code_review_service import (
     ICodeReviewService,
     ReviewComment,
 )
-from codetoreum.ports.output.monitoring import MonitoringConfig, MonitoringState, MonitoringStatus
-from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.ports.output.monitoring import (
+    MonitoringConfig,
+    MonitoringState,
+    MonitoringStatus,
+)
 
 logger = logging.getLogger(__name__)
 

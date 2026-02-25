@@ -15,9 +15,9 @@ Features:
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Callable, Dict, List, Optional
-from dataclasses import dataclass
 
 import httpx
 
@@ -27,6 +27,7 @@ from codetoreum.domain.events.discussion_events import (
     CommentNeedsResponseEvent,
     CommentPostedEvent,
 )
+from codetoreum.infrastructure.http.github_graphql_client import GitHubGraphQLClient
 from codetoreum.ports.exceptions import (
     AuthenticationError,
     ExternalServiceError,
@@ -39,7 +40,6 @@ from codetoreum.ports.output.discussion_adapter import (
     IDiscussionAdapter,
 )
 from codetoreum.ports.output.identity_service import IIdentityService
-from codetoreum.infrastructure.http.github_graphql_client import GitHubGraphQLClient
 
 logger = logging.getLogger(__name__)
 

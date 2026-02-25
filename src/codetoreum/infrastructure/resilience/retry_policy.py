@@ -3,13 +3,12 @@
 Provides exponential backoff retry logic with jitter.
 """
 
-import random
 import asyncio
-from typing import Callable, TypeVar, Tuple, Type
+import random
+from typing import Callable, Tuple, Type, TypeVar
 
-from .interfaces import IRetryPolicy, RetryStats
 from .exceptions import MaxRetriesExceededError
-
+from .interfaces import IRetryPolicy, RetryStats
 
 T = TypeVar('T')
 

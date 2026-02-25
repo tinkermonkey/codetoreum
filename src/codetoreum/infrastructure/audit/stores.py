@@ -7,14 +7,14 @@ storage backends.
 
 import json
 import logging
-from collections import defaultdict, OrderedDict
+from collections import OrderedDict, defaultdict
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 import aiofiles
 
-from codetoreum.infrastructure.audit.interfaces import IAuditStore, AuditQueryFilters
+from codetoreum.infrastructure.audit.interfaces import AuditQueryFilters, IAuditStore
 
 logger = logging.getLogger(__name__)
 
@@ -513,7 +513,7 @@ class PostgreSQLAuditStore(IAuditStore):
             connection_string: PostgreSQL connection string
                               (e.g., "postgresql+asyncpg://user:pass@host/db")
         """
-        from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+        from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
         from sqlalchemy.orm import sessionmaker
 
         self.engine = create_async_engine(connection_string, echo=False)

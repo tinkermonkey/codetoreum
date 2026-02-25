@@ -31,8 +31,8 @@ from codetoreum.infrastructure.observability.instrumentation import (
 )
 from codetoreum.ports.exceptions import ContainerError, StorageError
 from codetoreum.ports.output.container_recovery import (
-    IAgentContainerRecoveryService,
     ContainerMetadata,
+    IAgentContainerRecoveryService,
     RecoveryAssessment,
     RecoveryResult,
 )

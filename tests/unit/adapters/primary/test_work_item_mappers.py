@@ -8,7 +8,9 @@ from codetoreum.adapters.primary.work_item_dtos import (
 )
 from codetoreum.adapters.primary.work_item_mappers import WorkItemMapper
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
-from codetoreum.ports.input.work_item_command import WorkItemCommandResult as DomainCommandResult
+from codetoreum.ports.input.work_item_command import (
+    WorkItemCommandResult as DomainCommandResult,
+)
 from codetoreum.ports.input.work_item_query import (
     WorkItemHistory,
     WorkItemListResult,

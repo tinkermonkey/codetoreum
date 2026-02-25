@@ -4,30 +4,31 @@ Unit tests for adapter registries.
 Tests the registration, lookup, and management of adapter implementations.
 """
 
-import pytest
 from datetime import datetime, timezone
 
-from codetoreum.infrastructure.adapters import (
-    TicketSystemRegistry,
-    LLMProviderRegistry,
-    ContainerRegistry,
-    RepositoryRegistry,
-    EventStoreRegistry,
-    StorageRegistry,
-    AdapterMetadata
-)
+import pytest
+
 from codetoreum.adapters.secondary import (
-    GitHubTicketAdapter,
     ClaudeCodeAdapter,
     DockerContainerAdapter,
-    GitRepositoryAdapter
+    GitHubTicketAdapter,
+    GitRepositoryAdapter,
 )
 from codetoreum.adapters.testing import (
+    FakeContainerAdapter,
+    InMemoryEventStore,
+    InMemoryRepositoryAdapter,
     InMemoryTicketAdapter,
     MockLLMAdapter,
-    FakeContainerAdapter,
-    InMemoryRepositoryAdapter,
-    InMemoryEventStore
+)
+from codetoreum.infrastructure.adapters import (
+    AdapterMetadata,
+    ContainerRegistry,
+    EventStoreRegistry,
+    LLMProviderRegistry,
+    RepositoryRegistry,
+    StorageRegistry,
+    TicketSystemRegistry,
 )
 
 

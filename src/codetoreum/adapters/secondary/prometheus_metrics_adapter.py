@@ -19,8 +19,8 @@ try:
 except ImportError:
     PROMETHEUS_AVAILABLE = False
 
-from codetoreum.ports.output.metrics import IMetrics, MetricData
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.ports.output.metrics import IMetrics, MetricData
 
 logger = logging.getLogger(__name__)
 

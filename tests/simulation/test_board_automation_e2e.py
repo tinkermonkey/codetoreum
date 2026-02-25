@@ -15,13 +15,12 @@ from typing import cast
 import pytest
 
 from codetoreum.infrastructure.simulation.bootstrap import (
-    SimulationApplicationBootstrap,
     SimulationAdapters,
+    SimulationApplicationBootstrap,
 )
 from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 from codetoreum.ports.output.board_service import MovedByType
-
 
 # ============================================================================
 # Helpers

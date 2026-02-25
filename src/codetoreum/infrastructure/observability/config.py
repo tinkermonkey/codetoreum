@@ -5,10 +5,10 @@ Provides comprehensive configuration for OpenTelemetry integration with Signoz.
 Supports granular control over tracing, metrics, and logging.
 """
 
-from dataclasses import dataclass
-from typing import Literal
 import logging
 import os
+from dataclasses import dataclass
+from typing import Literal
 
 logger = logging.getLogger(__name__)
 

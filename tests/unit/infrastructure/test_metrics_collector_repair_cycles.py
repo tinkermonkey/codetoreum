@@ -18,6 +18,7 @@ finalized or the metrics collector is refactored to match the events.
 import asyncio
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
+
 import pytest
 
 from codetoreum.domain.events import DomainEvent

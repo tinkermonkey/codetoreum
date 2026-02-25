@@ -16,8 +16,8 @@ from abc import ABC, abstractmethod
 from typing import Optional
 
 from codetoreum.domain.conversational_session import ConversationalSessionState
-from codetoreum.domain.events.discussion_events import CommentNeedsResponseEvent
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
+from codetoreum.domain.events.discussion_events import CommentNeedsResponseEvent
 
 
 class IConversationalLoopService(ABC):

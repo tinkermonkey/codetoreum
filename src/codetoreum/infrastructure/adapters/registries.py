@@ -11,15 +11,15 @@ Provides registries for managing implementations of:
 """
 
 import inspect
-from typing import Type, Set
+from typing import Set, Type
 
 from codetoreum.infrastructure.adapters.registry_base import AdapterRegistry
-from codetoreum.ports.output.ticket_system import ITicketSystem
-from codetoreum.ports.output.llm_provider import ILLMProvider
 from codetoreum.ports.output.container import IContainer
-from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.event_store import IEventStore
+from codetoreum.ports.output.llm_provider import ILLMProvider
+from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.storage import IStorage
+from codetoreum.ports.output.ticket_system import ITicketSystem
 
 
 def _get_interface_methods(interface_class: Type) -> Set[str]:

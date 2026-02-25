@@ -31,6 +31,7 @@ class TestProductionModeCheck:
         """Test that debug mode is always disabled in production."""
         # Re-import to pick up patched env vars
         import importlib
+
         from codetoreum.adapters.primary import error_middleware
         importlib.reload(error_middleware)
 
@@ -43,6 +44,7 @@ class TestProductionModeCheck:
         """Test that debug mode can be enabled in development."""
         # Re-import to pick up patched env vars
         import importlib
+
         from codetoreum.adapters.primary import error_middleware
         importlib.reload(error_middleware)
 
@@ -54,6 +56,7 @@ class TestProductionModeCheck:
         """Test that debug mode is off when explicitly set to false."""
         # Re-import to pick up patched env vars
         import importlib
+
         from codetoreum.adapters.primary import error_middleware
         importlib.reload(error_middleware)
 
@@ -129,6 +132,7 @@ class TestErrorMiddlewareStackTraces:
 
         # Re-import to pick up patched env vars
         import importlib
+
         from codetoreum.adapters.primary import error_middleware
         importlib.reload(error_middleware)
 
@@ -158,6 +162,7 @@ class TestErrorMiddlewareStackTraces:
 
         # Re-import to pick up patched env vars
         import importlib
+
         from codetoreum.adapters.primary import error_middleware
         importlib.reload(error_middleware)
 
@@ -185,6 +190,7 @@ class TestErrorMiddlewareStackTraces:
 
         # Re-import to pick up patched env vars
         import importlib
+
         from codetoreum.adapters.primary import error_middleware
         importlib.reload(error_middleware)
 
@@ -329,6 +335,7 @@ class TestErrorMiddlewareResponseFormat:
 
         # Re-import to pick up patched env vars
         import importlib
+
         from codetoreum.adapters.primary import error_middleware
         importlib.reload(error_middleware)
 

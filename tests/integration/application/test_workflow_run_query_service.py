@@ -5,27 +5,28 @@ Tests the real WorkflowRunQueryService implementation with an in-memory event st
 validating event sourcing, filtering, pagination, and error handling.
 """
 
-import pytest
 from datetime import datetime, timezone
 from uuid import uuid4
+
+import pytest
 
 from codetoreum.adapters.testing import InMemoryEventStore, InMemoryTicketAdapter
 from codetoreum.application.workflow_run_query_service import WorkflowRunQueryService
 from codetoreum.domain.events import (
-    WorkflowCreated,
-    WorkflowStarted,
-    WorkflowStageAdvanced,
     WorkflowCompleted,
+    WorkflowCreated,
     WorkflowFailed,
+    WorkflowStageAdvanced,
+    WorkflowStarted,
 )
-from codetoreum.domain.work_item import WorkItem, WorkItemStatus, WorkItemPriority
+from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
 from codetoreum.ports.exceptions import ResourceNotFoundError
 from codetoreum.ports.input.workflow_run_query import (
+    SortOrder,
     WorkflowRunFilters,
     WorkflowRunPaginationParams,
     WorkflowRunSortField,
     WorkflowRunStatus,
-    SortOrder,
 )
 
 
@@ -567,7 +568,9 @@ class TestStageOutputFields:
     @pytest.mark.asyncio
     async def test_stage_dto_mapping_includes_output_fields(self):
         """Test that WorkflowRunStageResponse DTO includes output fields."""
-        from codetoreum.adapters.primary.workflow_run_dtos import WorkflowRunStageResponse
+        from codetoreum.adapters.primary.workflow_run_dtos import (
+            WorkflowRunStageResponse,
+        )
 
         response = WorkflowRunStageResponse(
             name="review",
@@ -609,8 +612,8 @@ class TestStageOutputFields:
     @pytest.mark.asyncio
     async def test_mapper_preserves_output_fields(self):
         """Test that WorkflowRunMapper preserves output fields during mapping."""
-        from codetoreum.ports.input.workflow_run_query import WorkflowRunStageInfo
         from codetoreum.adapters.primary.workflow_run_mappers import WorkflowRunMapper
+        from codetoreum.ports.input.workflow_run_query import WorkflowRunStageInfo
 
         stage = WorkflowRunStageInfo(
             name="build",

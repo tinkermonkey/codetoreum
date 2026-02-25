@@ -6,13 +6,13 @@ import signal
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.redis_event_buffer import (
     RedisEventBuffer,
     RedisEventBufferError,
 )
 from codetoreum.ports.exceptions import EventStoreError
 from codetoreum.ports.output.event_store import IEventStore
-from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 

@@ -6,8 +6,8 @@ from codetoreum.domain.agent import Agent
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.project_context import ProjectContext
 from codetoreum.domain.value_objects import ExecutionContext
-from codetoreum.domain.workspace_context import WorkspaceContext, WorkspaceType
 from codetoreum.domain.work_item import WorkItem
+from codetoreum.domain.workspace_context import WorkspaceContext, WorkspaceType
 
 
 class ExecutionContextBuilder:

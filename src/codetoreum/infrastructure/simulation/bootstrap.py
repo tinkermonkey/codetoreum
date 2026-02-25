@@ -23,21 +23,58 @@ from typing import Any, Dict, Optional
 
 from fastapi import FastAPI
 
+# FastAPI app factory
+from codetoreum.adapters.primary.fastapi_app import create_app
+
+# Mock Port Adapters (these wrap application services to implement port interfaces)
+from codetoreum.adapters.primary.input_port_adapters.mock import (
+    MockAgentCommandAdapter,
+    MockAgentQueryAdapter,
+    MockConfigCommandAdapter,
+    MockConfigQueryAdapter,
+    MockConfigServiceAdapter,
+    MockExecutionCommandAdapter,
+    MockExecutionQueryAdapter,
+    MockLoggerAdapter,
+    MockMetricsQueryAdapter,
+    MockOrchestrationCommandAdapter,
+    MockTaskQueryAdapter,
+    MockWorkflowCommandAdapter,
+    MockWorkflowDefinitionCommandAdapter,
+    MockWorkflowQueryAdapter,
+    MockWorkflowRunQueryAdapter,
+    MockWorkItemCommandAdapter,
+    MockWorkItemQueryAdapter,
+    MockWorkspaceQueryAdapter,
+)
+from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
+    InMemoryLockService,
+)
+from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
+
 # Adapters
 from codetoreum.adapters.testing import (
+    FakeContainerAdapter,
     InMemoryEventStore,
+    InMemoryMetricsAdapter,
     InMemoryRepositoryAdapter,
     InMemoryTicketAdapter,
-    FakeContainerAdapter,
+    MockBoardAdapter,
     MockLLMAdapter,
-    InMemoryMetricsAdapter,
     MockNotifierAdapter,
     SimpleEncryptionAdapter,
-    MockBoardAdapter,
 )
-from codetoreum.adapters.testing.capturing_mock_event_emitter import CapturingMockEventEmitter
-# Mock tracer for trace propagation testing
-from codetoreum.infrastructure.simulation.mock_tracer import MockTracer
+from codetoreum.adapters.testing.capturing_mock_event_emitter import (
+    CapturingMockEventEmitter,
+)
+from codetoreum.adapters.testing.in_memory_config_store import InMemoryConfigStore
+from codetoreum.adapters.testing.in_memory_queue_service import InMemoryQueueService
+from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
+from codetoreum.adapters.testing.in_memory_workflow_config_service import (
+    InMemoryWorkflowConfigService,
+)
+from codetoreum.adapters.testing.mock_agent_executor import MockAgentExecutor
+
 # Lazy import to avoid circular dependency
 from codetoreum.adapters.testing.mock_container_recovery_adapter import (
     MockContainerRecoveryAdapter,
@@ -45,85 +82,54 @@ from codetoreum.adapters.testing.mock_container_recovery_adapter import (
 from codetoreum.adapters.testing.mock_project_manager_adapter import (
     MockProjectManagerAdapter,
 )
-from codetoreum.adapters.testing.mock_agent_executor import MockAgentExecutor
-from codetoreum.adapters.testing.in_memory_workflow_config_service import (
-    InMemoryWorkflowConfigService,
-)
-from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
-    InMemoryLockService,
-)
-from codetoreum.adapters.testing.in_memory_config_store import InMemoryConfigStore
-from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
-from codetoreum.adapters.testing.in_memory_queue_service import InMemoryQueueService
-from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
+from codetoreum.application.agent_scheduler import AgentScheduler
+from codetoreum.application.configuration_service import ConfigurationService
+from codetoreum.application.container_recovery_service import ContainerRecoveryService
+from codetoreum.application.execution_service import ExecutionService
+from codetoreum.application.feedback_processor import FeedbackProcessor
+from codetoreum.application.multi_project_orchestrator import MultiProjectOrchestrator
+from codetoreum.application.pipeline_manager import PipelineManager
+from codetoreum.application.review_service import ReviewService
+from codetoreum.application.work_item_service import WorkItemService
 
 # Application Services
 from codetoreum.application.workflow_orchestrator import WorkflowOrchestrator
-from codetoreum.application.execution_service import ExecutionService
-from codetoreum.application.agent_scheduler import AgentScheduler
-from codetoreum.application.pipeline_manager import PipelineManager
-from codetoreum.application.review_service import ReviewService
-from codetoreum.application.feedback_processor import FeedbackProcessor
-from codetoreum.application.workspace_router import WorkspaceRouter
-from codetoreum.application.configuration_service import ConfigurationService
-from codetoreum.application.work_item_service import WorkItemService
-from codetoreum.application.container_recovery_service import ContainerRecoveryService
-from codetoreum.application.multi_project_orchestrator import MultiProjectOrchestrator
 from codetoreum.application.workflow_run_query_service import WorkflowRunQueryService
-
-# Infrastructure
-from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
-from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
+from codetoreum.application.workspace_router import WorkspaceRouter
 from codetoreum.infrastructure.adapters.factory import (
     AdapterFactory,
     AdapterFactoryConfig,
 )
-from codetoreum.infrastructure.resilience import OperationMode
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+
+# Infrastructure
+from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.infrastructure.resilience import OperationMode
+
+# Mock tracer for trace propagation testing
+from codetoreum.infrastructure.simulation.mock_tracer import MockTracer
+from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
+from codetoreum.ports.input.agent_command import IAgentCommandPort
+from codetoreum.ports.input.agent_query import IAgentQueryPort
+from codetoreum.ports.input.config_command import IConfigurationCommandPort
+from codetoreum.ports.input.config_query import IConfigurationQueryPort
+from codetoreum.ports.input.execution_command import IExecutionCommandPort
+from codetoreum.ports.input.execution_query import IExecutionQueryPort
+from codetoreum.ports.input.metrics_query import IMetricsQueryPort
+from codetoreum.ports.input.orchestration_command import IOrchestrationCommandPort
+from codetoreum.ports.input.task_query import ITaskQueryPort
+from codetoreum.ports.input.work_item_command import IWorkItemCommandPort
+from codetoreum.ports.input.work_item_query import IWorkItemQueryPort
 
 # Ports
 from codetoreum.ports.input.workflow_command import IWorkflowCommandPort
-from codetoreum.ports.input.task_query import ITaskQueryPort
-from codetoreum.ports.input.config_command import IConfigurationCommandPort
-from codetoreum.ports.input.config_query import IConfigurationQueryPort
-from codetoreum.ports.input.metrics_query import IMetricsQueryPort
-from codetoreum.ports.input.workspace_query import IWorkspaceQueryPort
-from codetoreum.ports.input.work_item_command import IWorkItemCommandPort
-from codetoreum.ports.input.work_item_query import IWorkItemQueryPort
+from codetoreum.ports.input.workflow_definition_command import (
+    IWorkflowDefinitionCommandPort,
+)
 from codetoreum.ports.input.workflow_query import IWorkflowQueryPort
 from codetoreum.ports.input.workflow_run_query import IWorkflowRunQueryPort
-from codetoreum.ports.input.workflow_definition_command import IWorkflowDefinitionCommandPort
-from codetoreum.ports.input.orchestration_command import IOrchestrationCommandPort
-from codetoreum.ports.input.agent_command import IAgentCommandPort
-from codetoreum.ports.input.agent_query import IAgentQueryPort
-from codetoreum.ports.input.execution_command import IExecutionCommandPort
-from codetoreum.ports.input.execution_query import IExecutionQueryPort
-
-# FastAPI app factory
-from codetoreum.adapters.primary.fastapi_app import create_app
-
-# Mock Port Adapters (these wrap application services to implement port interfaces)
-from codetoreum.adapters.primary.input_port_adapters.mock import (
-    MockWorkItemCommandAdapter,
-    MockWorkItemQueryAdapter,
-    MockAgentCommandAdapter,
-    MockAgentQueryAdapter,
-    MockExecutionCommandAdapter,
-    MockExecutionQueryAdapter,
-    MockConfigQueryAdapter,
-    MockMetricsQueryAdapter,
-    MockWorkspaceQueryAdapter,
-    MockWorkflowCommandAdapter,
-    MockWorkflowQueryAdapter,
-    MockWorkflowRunQueryAdapter,
-    MockOrchestrationCommandAdapter,
-    MockWorkflowDefinitionCommandAdapter,
-    MockConfigCommandAdapter,
-    MockTaskQueryAdapter,
-    MockConfigServiceAdapter,
-    MockLoggerAdapter,
-)
+from codetoreum.ports.input.workspace_query import IWorkspaceQueryPort
 
 logger = logging.getLogger(__name__)
 
@@ -558,9 +564,9 @@ class SimulationApplicationBootstrap:
         # Import mock implementations from agent_scheduler module
         from codetoreum.application.agent_scheduler import (
             InMemoryTaskQueue,
-            MockResourceMonitor,
-            MockRateLimiter,
             MockProjectConfiguration,
+            MockRateLimiter,
+            MockResourceMonitor,
             MockSchedulingEvents,
         )
 
@@ -886,7 +892,8 @@ class SimulationApplicationBootstrap:
             return
 
         import asyncio
-        from codetoreum.domain.events import WorkItemColumnChanged, BoardReconciled
+
+        from codetoreum.domain.events import BoardReconciled, WorkItemColumnChanged
         from codetoreum.domain.work_item import WorkItemStatus
 
         event_bus = self.infrastructure.event_bus

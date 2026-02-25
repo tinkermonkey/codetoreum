@@ -12,7 +12,6 @@ from typing import List, Optional
 
 from codetoreum.domain.agent_execution import ExecutionStatus
 
-
 # ============================================================================
 # Filters and Pagination
 # ============================================================================

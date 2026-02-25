@@ -8,22 +8,23 @@ Tests verify the core orchestration logic without external dependencies:
 - Error handling and edge cases
 """
 
-import pytest
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
+
+import pytest
 
 from codetoreum.application.conversational_loop_orchestrator import (
     ConversationalLoopOrchestrator,
 )
 from codetoreum.domain.conversational_session import ConversationalSessionState
+from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.domain.events.discussion_events import (
+    AgentResponsePostedEvent,
     Comment,
     CommentContext,
     CommentNeedsResponseEvent,
-    AgentResponsePostedEvent,
 )
-from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 
 
 @pytest.fixture

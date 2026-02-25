@@ -1,22 +1,22 @@
 """Integration tests for WorkspaceRouter."""
 
-import pytest
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
-from codetoreum.application.workspace_router import (
-    WorkspaceRouter,
-    WorkspacePreparationResult,
-    WorkspaceFinalizationResult,
-)
+import pytest
+
 from codetoreum.adapters.testing import InMemoryEventStore
-from codetoreum.domain.agent import Agent, AgentType, AgentCapability
+from codetoreum.application.workspace_router import (
+    WorkspaceFinalizationResult,
+    WorkspacePreparationResult,
+    WorkspaceRouter,
+)
+from codetoreum.domain.agent import Agent, AgentCapability, AgentType
 from codetoreum.domain.project_context import ProjectContext
-from codetoreum.domain.work_item import WorkItem, WorkItemStatus, WorkItemPriority
+from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
 from codetoreum.domain.workspace_context import WorkspaceType
 from codetoreum.ports.output.repository import RepositoryStatus
-
 
 # ============================================================================
 # Fixtures

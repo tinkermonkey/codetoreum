@@ -8,54 +8,52 @@ Provides:
 - Registry integration
 """
 
-from typing import Optional, Dict, Any, TypeVar
-from dataclasses import dataclass, field
 import logging
 import threading
-
-from codetoreum.infrastructure.adapters.registries import (
-    TicketSystemRegistry,
-    LLMProviderRegistry,
-    ContainerRegistry,
-    RepositoryRegistry,
-    EventStoreRegistry
-)
-from codetoreum.infrastructure.resilience import (
-    ResilienceFactory,
-    OperationMode,
-    ServiceResilienceConfig,
-    GITHUB_RESILIENCE_CONFIG,
-    CLAUDE_RESILIENCE_CONFIG,
-    CONTAINER_RESILIENCE_CONFIG,
-    REPOSITORY_RESILIENCE_CONFIG
-)
-from codetoreum.ports.output.ticket_system import ITicketSystem
-from codetoreum.ports.output.llm_provider import ILLMProvider
-from codetoreum.ports.output.container import IContainer
-from codetoreum.ports.output.repository import IRepository
-from codetoreum.ports.output.event_store import IEventStore
+from dataclasses import dataclass, field
+from typing import Any, Dict, Optional, TypeVar
 
 # Import production adapters
 from codetoreum.adapters.secondary import (
-    GitHubTicketAdapter,
-    GitHubConfig,
     ClaudeCodeAdapter,
     ClaudeCodeConfig,
-    DockerContainerAdapter,
     DockerConfig,
+    DockerContainerAdapter,
+    GitConfig,
+    GitHubConfig,
+    GitHubTicketAdapter,
     GitRepositoryAdapter,
-    GitConfig
 )
 
 # Import testing adapters
 from codetoreum.adapters.testing import (
+    FakeContainerAdapter,
+    InMemoryEventStore,
+    InMemoryRepositoryAdapter,
     InMemoryTicketAdapter,
     MockLLMAdapter,
-    FakeContainerAdapter,
-    InMemoryRepositoryAdapter,
-    InMemoryEventStore
 )
-
+from codetoreum.infrastructure.adapters.registries import (
+    ContainerRegistry,
+    EventStoreRegistry,
+    LLMProviderRegistry,
+    RepositoryRegistry,
+    TicketSystemRegistry,
+)
+from codetoreum.infrastructure.resilience import (
+    CLAUDE_RESILIENCE_CONFIG,
+    CONTAINER_RESILIENCE_CONFIG,
+    GITHUB_RESILIENCE_CONFIG,
+    REPOSITORY_RESILIENCE_CONFIG,
+    OperationMode,
+    ResilienceFactory,
+    ServiceResilienceConfig,
+)
+from codetoreum.ports.output.container import IContainer
+from codetoreum.ports.output.event_store import IEventStore
+from codetoreum.ports.output.llm_provider import ILLMProvider
+from codetoreum.ports.output.repository import IRepository
+from codetoreum.ports.output.ticket_system import ITicketSystem
 
 logger = logging.getLogger(__name__)
 

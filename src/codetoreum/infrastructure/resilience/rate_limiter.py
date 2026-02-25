@@ -3,14 +3,14 @@
 Provides token bucket rate limiting with sliding window support.
 """
 
-import time
 import asyncio
+import time
 from collections import deque
 from datetime import datetime
 from typing import Optional
 
-from .interfaces import IRateLimiter, RateLimitStats
 from .exceptions import RateLimitExceededError
+from .interfaces import IRateLimiter, RateLimitStats
 
 
 class TokenBucketRateLimiter(IRateLimiter):

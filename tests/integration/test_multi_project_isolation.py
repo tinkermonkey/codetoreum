@@ -5,13 +5,14 @@ actual MultiProjectOrchestrator code with mock adapters. Each project maintains
 independent orchestration state without cross-project interference.
 """
 
-import pytest
 from unittest.mock import AsyncMock
 
-from codetoreum.application.multi_project_orchestrator import MultiProjectOrchestrator
+import pytest
+
 from codetoreum.adapters.testing.mock_project_manager_adapter import (
     MockProjectManagerAdapter,
 )
+from codetoreum.application.multi_project_orchestrator import MultiProjectOrchestrator
 from codetoreum.domain.value_objects import ProjectConfig
 
 

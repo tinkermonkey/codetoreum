@@ -3,25 +3,25 @@
 import pytest
 
 from codetoreum.domain.events import (
-    RepairCycleStartedEvent,
-    RepairCycleTestExecutionStartedEvent,
-    RepairCycleTestExecutionCompletedEvent,
-    RepairCycleFixCycleStartedEvent,
-    RepairCycleFileFixStartedEvent,
-    RepairCycleFileFixCompletedEvent,
-    RepairCycleWarningReviewStartedEvent,
-    RepairCycleWarningReviewCompletedEvent,
-    RepairCycleTestCycleCompletedEvent,
-    RepairCycleFastFailEvent,
     RepairCycleCompletedEvent,
+    RepairCycleFastFailEvent,
+    RepairCycleFileFixCompletedEvent,
+    RepairCycleFileFixStartedEvent,
+    RepairCycleFixCycleStartedEvent,
+    RepairCycleStartedEvent,
+    RepairCycleTestCycleCompletedEvent,
+    RepairCycleTestExecutionCompletedEvent,
+    RepairCycleTestExecutionStartedEvent,
+    RepairCycleWarningReviewCompletedEvent,
+    RepairCycleWarningReviewStartedEvent,
     now_iso,
 )
 from codetoreum.domain.repair_cycle_types import (
-    RepairTestType,
-    RepairTestFailure,
-    RepairTestWarning,
     CycleResult,
+    RepairTestFailure,
     RepairTestResult,
+    RepairTestType,
+    RepairTestWarning,
 )
 
 # For immutability tests

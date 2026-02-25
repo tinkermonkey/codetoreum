@@ -9,19 +9,25 @@ Comprehensive test suite covering concurrent access patterns:
 """
 
 import asyncio
-import pytest
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
-from codetoreum.adapters.secondary.in_memory_queue_lock_service import InMemoryLockService
-from codetoreum.application.pipeline_lock_service import LockStatus, LockAcquisitionResult
-from codetoreum.infrastructure.event_bus import EventBus
+import pytest
+
+from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
+    InMemoryLockService,
+)
+from codetoreum.application.pipeline_lock_service import (
+    LockAcquisitionResult,
+    LockStatus,
+)
 from codetoreum.domain.events.lock_events import (
+    LockStaleDetectedEvent,
     PipelineLockAcquiredEvent,
     PipelineLockReleasedEvent,
-    LockStaleDetectedEvent,
     WorkItemQueuedEvent,
 )
+from codetoreum.infrastructure.event_bus import EventBus
 
 
 @pytest.fixture

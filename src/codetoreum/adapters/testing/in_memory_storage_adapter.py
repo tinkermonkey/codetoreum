@@ -6,15 +6,15 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
+from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
+from codetoreum.domain.events.storage_events import (
+    ArtifactDeletedEvent,
+    ArtifactUploadedEvent,
+)
 from codetoreum.domain.types import BucketName, StorageKey
 from codetoreum.ports.exceptions import ResourceNotFoundError, UnsupportedFeatureError
-from codetoreum.ports.output.storage import IStorage, StorageObject
 from codetoreum.ports.output.event_emitter import IEventEmitter
-from codetoreum.domain.events.storage_events import (
-    ArtifactUploadedEvent,
-    ArtifactDeletedEvent,
-)
-from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
+from codetoreum.ports.output.storage import IStorage, StorageObject
 
 
 class InMemoryStorageAdapter(IStorage):

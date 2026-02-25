@@ -6,8 +6,8 @@ follow the contract correctly for bot identity detection and filtering.
 Note: This is a query-only interface with NO event emission.
 """
 
-from abc import ABC, abstractmethod
 import re
+from abc import ABC, abstractmethod
 
 import pytest
 

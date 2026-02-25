@@ -3,13 +3,12 @@
 Provides async timeout handling using asyncio.wait_for.
 """
 
-import time
 import asyncio
-from typing import Callable, TypeVar, List
+import time
+from typing import Callable, List, TypeVar
 
-from .interfaces import ITimeout, TimeoutStats
 from .exceptions import TimeoutError as ResilienceTimeoutError
-
+from .interfaces import ITimeout, TimeoutStats
 
 T = TypeVar('T')
 

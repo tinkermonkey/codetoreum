@@ -24,7 +24,7 @@ from typing import Optional
 
 from jose import JWTError, jwt
 
-from codetoreum.config import DEFAULT_TOKEN_EXPIRY_DAYS, DEFAULT_COOKIE_MAX_AGE_SECONDS
+from codetoreum.config import DEFAULT_COOKIE_MAX_AGE_SECONDS, DEFAULT_TOKEN_EXPIRY_DAYS
 
 logger = logging.getLogger(__name__)
 

@@ -65,8 +65,8 @@ class TestVersionControlServiceContract(ABC):
     async def test_clone_repository_creates_directory(self):
         """Cloning should create local repository directory."""
         service = await self.create_service()
-        import tempfile
         import os
+        import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
             target_path = os.path.join(tmpdir, "cloned_repo")
@@ -86,8 +86,8 @@ class TestVersionControlServiceContract(ABC):
     async def test_clone_repository_with_branch(self):
         """Should be able to clone specific branch."""
         service = await self.create_service()
-        import tempfile
         import os
+        import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
             target_path = os.path.join(tmpdir, "cloned_repo")
@@ -110,8 +110,8 @@ class TestVersionControlServiceContract(ABC):
     async def test_pull_latest_fetches_updates(self):
         """Pull latest should update local repository."""
         service = await self.create_service()
-        import tempfile
         import os
+        import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
             target_path = os.path.join(tmpdir, "cloned_repo")
@@ -131,8 +131,8 @@ class TestVersionControlServiceContract(ABC):
     async def test_checkout_branch_succeeds(self):
         """Checkout should switch to specified branch."""
         service = await self.create_service()
-        import tempfile
         import os
+        import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
             target_path = os.path.join(tmpdir, "cloned_repo")
@@ -158,8 +158,8 @@ class TestVersionControlServiceContract(ABC):
     async def test_commit_returns_sha(self):
         """Commit should return commit SHA."""
         service = await self.create_service()
-        import tempfile
         import os
+        import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
             target_path = os.path.join(tmpdir, "cloned_repo")
@@ -190,8 +190,8 @@ class TestVersionControlServiceContract(ABC):
     async def test_push_operations_interface(self):
         """Push operation should not fail when repository is up to date."""
         service = await self.create_service()
-        import tempfile
         import os
+        import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
             target_path = os.path.join(tmpdir, "cloned_repo")
@@ -224,8 +224,8 @@ class TestVersionControlServiceContract(ABC):
     async def test_invalid_branch_raises_error(self):
         """Checking out invalid branch should raise RepositoryError."""
         service = await self.create_service()
-        import tempfile
         import os
+        import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
             target_path = os.path.join(tmpdir, "cloned_repo")

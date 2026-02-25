@@ -7,14 +7,16 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from codetoreum.adapters.primary.routers.workflow_runs import create_workflow_runs_router
+from codetoreum.adapters.primary.routers.workflow_runs import (
+    create_workflow_runs_router,
+)
 from codetoreum.ports.input.workflow_run_query import (
     IWorkflowRunQueryPort,
     WorkflowRunInfo,
-    WorkflowRunSummary,
     WorkflowRunListResult,
     WorkflowRunStageInfo,
     WorkflowRunStatus,
+    WorkflowRunSummary,
 )
 
 
@@ -371,7 +373,10 @@ class TestGetWorkflowRunAudit:
     def test_get_workflow_run_audit_success(self, client, mock_query_port):
         """Test successful workflow run audit retrieval."""
         # Arrange
-        from codetoreum.ports.input.workflow_run_query import WorkflowRunSummary, WorkflowRunAuditResult
+        from codetoreum.ports.input.workflow_run_query import (
+            WorkflowRunAuditResult,
+            WorkflowRunSummary,
+        )
 
         now = datetime.now(timezone.utc)
         audit_data = WorkflowRunAuditResult(
@@ -450,7 +455,10 @@ class TestGetWorkflowRunAudit:
     def test_get_workflow_run_audit_with_pagination(self, client, mock_query_port):
         """Test workflow run audit retrieval with custom pagination."""
         # Arrange
-        from codetoreum.ports.input.workflow_run_query import WorkflowRunSummary, WorkflowRunAuditResult
+        from codetoreum.ports.input.workflow_run_query import (
+            WorkflowRunAuditResult,
+            WorkflowRunSummary,
+        )
 
         now = datetime.now(timezone.utc)
         audit_data = WorkflowRunAuditResult(
@@ -509,7 +517,10 @@ class TestGetWorkflowRunAudit:
     def test_get_workflow_run_audit_without_validation(self, client, mock_query_port):
         """Test workflow run audit retrieval without validation."""
         # Arrange
-        from codetoreum.ports.input.workflow_run_query import WorkflowRunSummary, WorkflowRunAuditResult
+        from codetoreum.ports.input.workflow_run_query import (
+            WorkflowRunAuditResult,
+            WorkflowRunSummary,
+        )
 
         now = datetime.now(timezone.utc)
         # When validation is not requested, return empty validation result

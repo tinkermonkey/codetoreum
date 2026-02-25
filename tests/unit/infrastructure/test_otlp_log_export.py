@@ -5,8 +5,9 @@ Tests the configuration and initialization of log export with trace correlation.
 """
 
 import os
-import pytest
 from unittest import mock
+
+import pytest
 
 from codetoreum.infrastructure.observability.config import (
     ObservabilityConfig,
@@ -102,10 +103,11 @@ class TestTraceCorrelationInLogs:
 
     def test_trace_context_injector_sets_defaults(self):
         """Test TraceContextInjector sets N/A when no span active."""
+        import logging
+
         from codetoreum.infrastructure.observability.logging_integration import (
             TraceContextInjector,
         )
-        import logging
 
         filter_obj = TraceContextInjector()
         record = logging.LogRecord(
@@ -128,10 +130,11 @@ class TestTraceCorrelationInLogs:
 
     def test_logging_integration_filter_in_handler(self):
         """Test TraceContextInjector can be added to logging handler."""
+        import logging
+
         from codetoreum.infrastructure.observability.logging_integration import (
             TraceContextInjector,
         )
-        import logging
 
         handler = logging.StreamHandler()
         filter_obj = TraceContextInjector()

@@ -1,9 +1,11 @@
 """Integration tests for WorkflowOrchestrator."""
 
-import pytest
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 
+import pytest
+
+from codetoreum.adapters.testing import InMemoryEventStore, InMemoryTicketAdapter
 from codetoreum.application.workflow_orchestrator import (
     AgentConfig,
     CardMovedEvent,
@@ -26,9 +28,7 @@ from codetoreum.application.workflow_orchestrator import (
     WorkflowResult,
     WorkflowState,
 )
-from codetoreum.adapters.testing import InMemoryEventStore, InMemoryTicketAdapter
 from codetoreum.domain.work_item import WorkItemPriority
-
 
 # Mock implementations for testing
 

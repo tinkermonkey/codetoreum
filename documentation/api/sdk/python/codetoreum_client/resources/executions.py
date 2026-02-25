@@ -1,7 +1,8 @@
 """
 Executions resource client
 """
-from typing import Any, Callable, List, Optional, TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, Callable, List, Optional, cast
+
 from ..models import Execution, PaginatedResponse
 
 if TYPE_CHECKING:

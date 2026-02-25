@@ -12,19 +12,19 @@ This module implements:
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Mapping
-from uuid import uuid4
 from types import MappingProxyType
+from typing import Any, Dict, List, Mapping, Optional
+from uuid import uuid4
 
 from codetoreum.infrastructure.observability.trace_context_propagation import (
-    TraceContextData,
     W3C_TRACE_CONTEXT_VERSION,
+    TraceContextData,
 )
+from codetoreum.ports.output.i_tracer import ITracer as ITracerPort
 from codetoreum.ports.output.i_tracer import (
-    ITracer as ITracerPort,
+    SpanEvent,
     SpanKind,
     SpanStatus,
-    SpanEvent,
 )
 
 logger = logging.getLogger(__name__)

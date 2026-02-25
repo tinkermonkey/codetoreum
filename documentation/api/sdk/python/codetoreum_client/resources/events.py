@@ -1,6 +1,6 @@
 """Events resource client (WebSocket)"""
 import json
-from typing import Any, AsyncIterator, Callable, Iterator, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, Iterator, Optional
 
 if TYPE_CHECKING:
     from ..client import CodetoreumClient
@@ -34,8 +34,9 @@ class EventsResource:
             an existing async context. Always use stream_async() in async code.
         """
         try:
-            import websockets
             import asyncio
+
+            import websockets
         except ImportError:
             raise ImportError(
                 "WebSocket support requires 'websockets' library. "

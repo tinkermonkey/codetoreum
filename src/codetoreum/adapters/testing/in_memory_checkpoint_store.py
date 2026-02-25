@@ -10,7 +10,9 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional, Tuple
 
 from codetoreum.domain.repair_cycle_types import RepairCycleCheckpoint
-from codetoreum.ports.output.repair_cycle_checkpoint_store import IRepairCycleCheckpointStore
+from codetoreum.ports.output.repair_cycle_checkpoint_store import (
+    IRepairCycleCheckpointStore,
+)
 
 
 class InMemoryCheckpointStore(IRepairCycleCheckpointStore):

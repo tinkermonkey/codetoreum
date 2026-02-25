@@ -9,13 +9,14 @@ Comprehensive tests for the mock repair cycle adapter, verifying:
 6. Circuit breaker functionality
 """
 
-import pytest
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional, Tuple
 
+import pytest
+
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
-    MockRepairCycleAdapter,
     CircuitBreakerTripped,
+    MockRepairCycleAdapter,
 )
 from codetoreum.domain.repair_cycle_types import (
     CycleResult,

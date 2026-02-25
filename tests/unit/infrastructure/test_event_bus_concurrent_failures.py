@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Set
 
 import pytest
 
-from codetoreum.domain.events import DomainEvent, WorkItemCreated, WorkItemCompleted
+from codetoreum.domain.events import DomainEvent, WorkItemCompleted, WorkItemCreated
 from codetoreum.infrastructure.event_bus import EventBus, EventHandler, event_handler
 
 

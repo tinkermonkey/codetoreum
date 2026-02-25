@@ -1,28 +1,28 @@
 """Integration tests for PipelineManager."""
 
-import pytest
 from datetime import datetime, timezone
-from typing import Dict, Any
+from typing import Any, Dict
 from unittest.mock import AsyncMock
 
+import pytest
+
+from codetoreum.adapters.testing import InMemoryEventStore
 from codetoreum.application.pipeline_manager import (
+    PipelineCheckpoint,
     PipelineManager,
     PipelineStatus,
-    PipelineCheckpoint,
 )
-from codetoreum.adapters.testing import InMemoryEventStore
+from codetoreum.domain.events import (
+    PipelineCompleted,
+    PipelineFailed,
+    PipelineStageCompleted,
+    PipelineStageFailed,
+    PipelineStageStarted,
+)
+from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.pipeline_stage import PipelineStage, StageStatus, StageType
 from codetoreum.domain.workflow import Workflow, WorkflowStatus
 from codetoreum.domain.workflow_template import WorkflowTemplate
-from codetoreum.domain.exceptions import DomainError
-from codetoreum.domain.events import (
-    PipelineStageStarted,
-    PipelineStageCompleted,
-    PipelineStageFailed,
-    PipelineCompleted,
-    PipelineFailed,
-)
-
 
 # ============================================================================
 # Fixtures

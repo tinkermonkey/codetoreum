@@ -285,7 +285,9 @@ class EventCLI:
                     return
 
                 # Convert to domain events
-                from codetoreum.infrastructure.event_serialization import EventSerializer
+                from codetoreum.infrastructure.event_serialization import (
+                    EventSerializer,
+                )
                 matching_events = [EventSerializer.from_dict(hit["_source"]) for hit in hits]
 
             else:

@@ -7,23 +7,23 @@ from pathlib import Path
 from typing import Dict, List, Optional
 from uuid import uuid4
 
+from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
+from codetoreum.domain.events.repository_events import (
+    BranchCreatedEvent,
+    CommitCreatedEvent,
+    FilesStagedEvent,
+)
 from codetoreum.domain.types import BranchName, CommitHash, RemoteName, RepositoryId
 from codetoreum.ports.exceptions import (
     ResourceNotFoundError,
     ValidationError,
 )
+from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.repository import (
     IRepository,
     MergeResult,
     RepositoryStatus,
 )
-from codetoreum.ports.output.event_emitter import IEventEmitter
-from codetoreum.domain.events.repository_events import (
-    CommitCreatedEvent,
-    BranchCreatedEvent,
-    FilesStagedEvent,
-)
-from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 
 
 class InMemoryRepositoryAdapter(IRepository):

@@ -1,14 +1,15 @@
 """Unit tests for PipelineStage entity."""
 
-import pytest
 from datetime import datetime, timezone
 
+import pytest
+
+from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.pipeline_stage import (
     PipelineStage,
     StageStatus,
     StageType,
 )
-from codetoreum.domain.exceptions import DomainError
 
 
 class TestPipelineStageCreation:

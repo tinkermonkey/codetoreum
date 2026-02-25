@@ -1,7 +1,8 @@
 """
 Orchestrator resource client
 """
-from typing import Any, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Optional
+
 from ..models import WorkflowRun
 
 if TYPE_CHECKING:

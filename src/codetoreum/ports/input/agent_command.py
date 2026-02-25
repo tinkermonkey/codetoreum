@@ -10,7 +10,6 @@ from typing import Dict, List, Optional
 
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
 
-
 # ============================================================================
 # Commands
 # ============================================================================

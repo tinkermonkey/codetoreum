@@ -11,16 +11,17 @@ Tests verify that:
 8. clear_movement_log() clears the audit trail
 """
 
-import pytest
 import asyncio
 from datetime import datetime
 from typing import Any
+
+import pytest
 
 from codetoreum.adapters.testing.mock_board_adapter import (
     MockBoardAdapter,
     MovementEvent,
 )
-from codetoreum.ports.output.board_service import MovedByType, BoardConfig
+from codetoreum.ports.output.board_service import BoardConfig, MovedByType
 
 
 class TestCreateBoard:

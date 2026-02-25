@@ -1,6 +1,7 @@
 """Unit tests for repository URL parsing utilities."""
 
 import pytest
+
 from codetoreum.domain.repository_url import extract_repo_name
 
 

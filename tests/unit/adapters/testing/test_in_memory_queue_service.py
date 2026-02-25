@@ -9,23 +9,24 @@ Tests cover:
 - Edge cases
 """
 
-import pytest
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from codetoreum.adapters.testing.in_memory_queue_service import InMemoryQueueService
-from codetoreum.ports.output.pipeline_queue_service import (
-    PipelineQueueEntry,
-    QueueStatus,
-    DuplicateQueueEntryError,
-    QueueItemNotFoundError,
-    InvalidQueueStateError,
-    QueueValidationError,
-)
 from codetoreum.ports.output.board_service import (
+    BoardColumn,
     IBoardService,
     ProjectBoard,
-    BoardColumn,
+)
+from codetoreum.ports.output.pipeline_queue_service import (
+    DuplicateQueueEntryError,
+    InvalidQueueStateError,
+    PipelineQueueEntry,
+    QueueItemNotFoundError,
+    QueueStatus,
+    QueueValidationError,
 )
 
 

@@ -15,7 +15,6 @@ from typing import List, Optional, Set
 
 from fastapi import HTTPException, UploadFile
 
-
 # File upload limits
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 ALLOWED_CONTENT_TYPES = {

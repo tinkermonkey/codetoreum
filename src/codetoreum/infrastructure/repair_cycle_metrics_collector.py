@@ -12,16 +12,18 @@ Supports multiple metrics backends (in-memory, Prometheus, etc.)
 """
 
 import logging
-from datetime import datetime, timezone
-from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
 from codetoreum.domain.events import DomainEvent
-from codetoreum.domain.events.repair_cycle_events import RepairCycleMetricsBackendFailedEvent
+from codetoreum.domain.events.repair_cycle_events import (
+    RepairCycleMetricsBackendFailedEvent,
+)
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.event_types import EventTypes
 from codetoreum.ports.output.metrics import IMetrics
-from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 

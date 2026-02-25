@@ -2,12 +2,12 @@
 
 import pytest
 
-from codetoreum.domain.workflow_template import (
-    WorkflowTemplate,
-    StageTemplate,
-)
-from codetoreum.domain.pipeline_stage import StageType
 from codetoreum.domain.exceptions import DomainError
+from codetoreum.domain.pipeline_stage import StageType
+from codetoreum.domain.workflow_template import (
+    StageTemplate,
+    WorkflowTemplate,
+)
 
 
 class TestWorkflowTemplateCreation:

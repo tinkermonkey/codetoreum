@@ -4,12 +4,15 @@ Tests checkpoint save/retrieve, resume from checkpoint, and circuit breaker
 integration with checkpointing.
 """
 
-import pytest
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Tuple
 
-from codetoreum.adapters.testing.in_memory_checkpoint_store import InMemoryCheckpointStore
+import pytest
+
+from codetoreum.adapters.testing.in_memory_checkpoint_store import (
+    InMemoryCheckpointStore,
+)
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
 from codetoreum.domain.repair_cycle_types import (
     RepairCycleCheckpoint,
@@ -17,8 +20,8 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestRunConfig,
     RepairTestType,
 )
-from codetoreum.ports.output.repair_cycle_service import RepairCycleContext
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
+from codetoreum.ports.output.repair_cycle_service import RepairCycleContext
 
 
 @dataclass

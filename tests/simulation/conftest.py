@@ -1,9 +1,9 @@
 """Pytest fixtures for simulation testing."""
 
-import pytest
 from datetime import datetime, timezone
 from typing import Dict, Generator, List
 
+import pytest
 from fastapi import FastAPI
 
 from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
@@ -12,21 +12,20 @@ from codetoreum.adapters.testing.in_memory_metrics_adapter import (
 )
 from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
 from codetoreum.adapters.testing.mock_notifier_adapter import MockNotifierAdapter
+from codetoreum.domain.events import WorkItemColumnChanged
 from codetoreum.infrastructure.simulation import (
     SimulationClock,
     SimulationConfig,
     SimulationRunner,
 )
 from codetoreum.infrastructure.simulation.bootstrap import (
-    SimulationApplicationBootstrap,
     SimulationAdapters,
-    SimulationServices,
-    SimulationPorts,
+    SimulationApplicationBootstrap,
     SimulationInfrastructure,
+    SimulationPorts,
+    SimulationServices,
 )
-from codetoreum.domain.events import WorkItemColumnChanged
 from codetoreum.ports.output.agent_executor import IAgentExecutor
-
 
 # ====================================================================================
 # Shared Test Utilities (Scenario Tests)

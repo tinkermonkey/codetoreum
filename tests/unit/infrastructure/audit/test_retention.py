@@ -4,14 +4,15 @@ Tests for Audit Retention Policy
 Tests the retention policy manager and cleanup functionality.
 """
 
-import pytest
 from datetime import datetime, timedelta, timezone
 
-from codetoreum.infrastructure.audit.stores import InMemoryAuditStore
+import pytest
+
 from codetoreum.infrastructure.audit.retention import (
     RetentionPolicy,
     RetentionPolicyManager,
 )
+from codetoreum.infrastructure.audit.stores import InMemoryAuditStore
 
 
 class TestRetentionPolicy:

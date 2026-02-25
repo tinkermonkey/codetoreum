@@ -21,18 +21,18 @@ Key Concepts:
 """
 
 import logging
-from typing import Dict, Optional, Tuple
 from dataclasses import dataclass
+from typing import Dict, Optional, Tuple
 
 try:
-    from opentelemetry import trace, context
+    from opentelemetry import context, trace
+    from opentelemetry.context import Context
     from opentelemetry.trace import (
         SpanContext,
         TraceFlags,
         get_current_span,
         set_span_in_context,
     )
-    from opentelemetry.context import Context
 
     OPENTELEMETRY_AVAILABLE = True
 except ImportError:

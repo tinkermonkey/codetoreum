@@ -5,7 +5,7 @@ from adapters to the orchestrator.
 """
 
 from abc import ABC, abstractmethod
-from typing import Callable, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, Optional
 
 if TYPE_CHECKING:
     from codetoreum.domain.events.adapter_events import CodetoreumEvent

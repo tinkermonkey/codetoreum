@@ -573,8 +573,8 @@ class TestDockerContainerRecoveryAction:
         )
 
         created_at = datetime.now(timezone.utc) - timedelta(hours=1)
-        from codetoreum.ports.output.container_recovery import ContainerMetadata
         from codetoreum.domain.types import CONTAINER_TYPE_REPAIR_CYCLE
+        from codetoreum.ports.output.container_recovery import ContainerMetadata
 
         metadata = ContainerMetadata(
             container_id="container-1",

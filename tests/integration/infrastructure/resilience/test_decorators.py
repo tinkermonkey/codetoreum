@@ -18,9 +18,12 @@ from codetoreum.infrastructure.resilience import (
     OperationMode,
     ResilienceFactory,
 )
-from codetoreum.ports.output.llm_provider import ExecutionContext, ExecutionResult, ILLMProvider
+from codetoreum.ports.output.llm_provider import (
+    ExecutionContext,
+    ExecutionResult,
+    ILLMProvider,
+)
 from codetoreum.ports.output.ticket_system import ITicketSystem
-
 
 # ============================================================================
 # Mock Adapters for Testing

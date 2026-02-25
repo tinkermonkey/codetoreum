@@ -20,6 +20,7 @@ from codetoreum.domain.events.board_events import (
     BoardReconciledEvent,
     WorkItemColumnChangedEvent,
 )
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.http.github_graphql_client import (
     GitHubGraphQLClient,
 )
@@ -30,16 +31,19 @@ from codetoreum.ports.exceptions import (
     ValidationError,
 )
 from codetoreum.ports.output.board_service import (
-    BoardConfig,
     BoardColumn,
+    BoardConfig,
     IBoardService,
+    MovedByType,
     ProjectBoard,
     ReconciliationResult,
     WorkItemPosition,
-    MovedByType,
 )
-from codetoreum.ports.output.monitoring import MonitoringConfig, MonitoringState, MonitoringStatus
-from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.ports.output.monitoring import (
+    MonitoringConfig,
+    MonitoringState,
+    MonitoringStatus,
+)
 
 
 class GitHubBoardAdapter(IBoardService):

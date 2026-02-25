@@ -6,17 +6,17 @@ structured event data, user context, and correlation ID support.
 """
 
 import logging
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
+from codetoreum.infrastructure.audit.interfaces import IAuditStore
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.logging import (
     get_correlation_id,
     get_logger,
 )
-from codetoreum.infrastructure.audit.interfaces import IAuditStore
-from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 
 class AuditEventType(str, Enum):

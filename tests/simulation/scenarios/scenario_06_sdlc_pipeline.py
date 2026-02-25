@@ -8,18 +8,20 @@ Comprehensive test scenarios validating the full SDLC pipeline workflow includin
 - Edge cases for multiple blocks and cycle resume
 """
 
+import time
+
 import pytest
-from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
+
 from codetoreum.adapters.testing.mock_review_cycle_adapter import (
     MockReviewCycleAdapter,
     ReviewSequenceItem,
 )
 from codetoreum.domain.review_cycle import ReviewDecision
+from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.output.review_cycle_service import (
     ReviewCycleRequest,
     ReviewFinding,
 )
-import time
 
 
 class TestScenario06SDLCPipeline:

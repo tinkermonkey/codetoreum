@@ -3,6 +3,7 @@ Unit tests for workflow run query input port types.
 """
 
 import pytest
+
 from codetoreum.ports.input.workflow_run_query import (
     WorkflowRunFilters,
     WorkflowRunPaginationParams,

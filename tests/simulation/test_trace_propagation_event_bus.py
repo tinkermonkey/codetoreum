@@ -16,10 +16,11 @@ The actual EventBus integration is tested in the integration test suite.
 """
 
 import pytest
+
 from codetoreum.domain.events import DomainEvent
-from codetoreum.infrastructure.simulation.simulation_runner import SimulationRunner
-from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 from codetoreum.infrastructure.simulation.mock_tracer import SpanKind
+from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+from codetoreum.infrastructure.simulation.simulation_runner import SimulationRunner
 
 
 @pytest.mark.asyncio

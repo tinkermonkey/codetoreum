@@ -9,17 +9,19 @@ from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
 from codetoreum.domain.events import (
+    DomainEvent,
     WorkflowStageAdvanced,
     WorkItemStageUpdated,
-    DomainEvent,
 )
-from codetoreum.domain.workflow import Workflow, WorkflowStatus
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority
+from codetoreum.domain.workflow import Workflow, WorkflowStatus
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.event_types import EventTypes
-from codetoreum.infrastructure.observability.instrumentation import instrument_async_function
+from codetoreum.infrastructure.observability.instrumentation import (
+    instrument_async_function,
+)
 from codetoreum.ports.exceptions import TimeoutError as PortTimeoutError
-from codetoreum.ports.output import IEventStore, ITicketSystem, IBoardService
+from codetoreum.ports.output import IBoardService, IEventStore, ITicketSystem
 
 logger = logging.getLogger(__name__)
 

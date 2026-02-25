@@ -18,8 +18,8 @@ from typing import Dict, Optional
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from codetoreum.ports.output import DecryptionError, EncryptionError, IEncryptionService
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.ports.output import DecryptionError, EncryptionError, IEncryptionService
 
 logger = logging.getLogger(__name__)
 

@@ -5,14 +5,15 @@ interface contract. New implementations should pass all these tests.
 """
 
 import pytest
+
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
 )
 from codetoreum.application.pipeline_lock_service import (
     IQueuedPipelineLockService,
-    LockStatus,
     LockAcquisitionResult,
     LockReleaseResult,
+    LockStatus,
     PipelineQueueState,
     QueueEntry,
 )

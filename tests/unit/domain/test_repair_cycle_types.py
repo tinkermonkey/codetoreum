@@ -5,22 +5,22 @@ domain types following the event sourcing pattern.
 """
 
 import pytest
+
 try:
     from dataclasses import FrozenInstanceError
 except ImportError:
     FrozenInstanceError = AttributeError  # type: ignore
 
 from codetoreum.domain.repair_cycle_types import (
-    RepairTestType,
-    RepairTestFailure,
-    RepairTestWarning,
-    RepairTestResult,
     CycleResult,
     RepairCycleResult,
-    RepairTestRunConfig,
     RepairCycleStageConfig,
+    RepairTestFailure,
+    RepairTestResult,
+    RepairTestRunConfig,
+    RepairTestType,
+    RepairTestWarning,
 )
-
 
 # ============================================================================
 # RepairTestType Enum Tests

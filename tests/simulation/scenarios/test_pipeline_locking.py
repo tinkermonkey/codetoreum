@@ -12,11 +12,14 @@ Comprehensive test suite covering all lock flow scenarios:
 """
 
 import asyncio
-import pytest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
-from codetoreum.adapters.secondary.in_memory_queue_lock_service import InMemoryLockService
+import pytest
+
+from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
+    InMemoryLockService,
+)
 from codetoreum.adapters.testing.in_memory_queue_service import InMemoryQueueService
 from codetoreum.application.pipeline_lock_service import LockStatus
 from codetoreum.domain.events.lock_events import (

@@ -12,11 +12,11 @@ from typing import Optional
 import click
 
 from codetoreum.infrastructure.audit.interfaces import AuditQueryFilters
-from codetoreum.infrastructure.audit.stores import InMemoryAuditStore, FileAuditStore
 from codetoreum.infrastructure.audit.retention import (
     RetentionPolicy,
     RetentionPolicyManager,
 )
+from codetoreum.infrastructure.audit.stores import FileAuditStore, InMemoryAuditStore
 
 
 @click.group()

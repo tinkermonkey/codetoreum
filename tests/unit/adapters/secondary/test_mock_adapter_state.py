@@ -8,6 +8,7 @@ Tests verify that:
 """
 
 import asyncio
+
 import pytest
 
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter

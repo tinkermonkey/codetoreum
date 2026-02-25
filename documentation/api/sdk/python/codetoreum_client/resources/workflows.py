@@ -1,8 +1,8 @@
 """Workflows resource client"""
 from typing import Any, Optional
-from ..models import Workflow, PaginatedResponse
-from ..exceptions import CodetoreumError
 
+from ..exceptions import CodetoreumError
+from ..models import PaginatedResponse, Workflow
 
 # Type aliases to avoid shadowing the list() method defined in this class
 DictAny = dict[str, Any]

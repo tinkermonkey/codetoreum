@@ -6,8 +6,9 @@ and validation for signal-specific endpoints.
 """
 
 import os
-import pytest
 from unittest import mock
+
+import pytest
 
 from codetoreum.infrastructure.observability.config import (
     ObservabilityConfig,

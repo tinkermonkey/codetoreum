@@ -1,8 +1,9 @@
 """Unit tests for BoardPollingService."""
 
 import asyncio
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from codetoreum.application.board_polling_service import (
     BoardPollingService,
@@ -10,17 +11,17 @@ from codetoreum.application.board_polling_service import (
 )
 from codetoreum.domain.events import WorkItemColumnChanged
 from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.ports.output.board_service import (
-    BoardColumn,
-    IBoardService,
-    ProjectBoard,
-    WorkItemPosition,
-)
 from codetoreum.ports.exceptions import (
     AuthenticationError,
     ExternalServiceError,
     ResourceNotFoundError,
     ValidationError,
+)
+from codetoreum.ports.output.board_service import (
+    BoardColumn,
+    IBoardService,
+    ProjectBoard,
+    WorkItemPosition,
 )
 
 

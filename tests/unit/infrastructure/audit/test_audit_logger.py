@@ -5,13 +5,14 @@ Tests the core audit logging functionality including event creation,
 storage, and retrieval.
 """
 
-import pytest
 from datetime import datetime, timezone
 
+import pytest
+
 from codetoreum.infrastructure.audit.audit_logger import (
-    AuditLogger,
     AuditEvent,
     AuditEventType,
+    AuditLogger,
 )
 from codetoreum.infrastructure.audit.stores import InMemoryAuditStore
 

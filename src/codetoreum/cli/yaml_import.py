@@ -22,19 +22,19 @@ from typing import Any, Dict, List
 import click
 import yaml
 from rich.console import Console
-from rich.table import Table
 from rich.progress import Progress
+from rich.table import Table
 
+from codetoreum.adapters.secondary.config_storage_factory import ConfigStorageFactory
 from codetoreum.adapters.secondary.elasticsearch_config_storage import (
     ElasticsearchConfigStorage,
 )
-from codetoreum.adapters.secondary.config_storage_factory import ConfigStorageFactory
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.output.config_store import (
     AgentConfig,
     PipelineConfig,
     ProjectConfig,
 )
-from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 console = Console()

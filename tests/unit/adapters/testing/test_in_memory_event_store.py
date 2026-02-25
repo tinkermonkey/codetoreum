@@ -8,11 +8,11 @@ import pytest
 
 from codetoreum.adapters.testing import InMemoryEventStore
 from codetoreum.domain.events import (
+    AgentCreated,
     DomainEvent,
+    WorkItemCompleted,
     WorkItemCreated,
     WorkItemStarted,
-    WorkItemCompleted,
-    AgentCreated,
 )
 from codetoreum.ports.exceptions import ConcurrencyConflictError, ResourceNotFoundError
 

@@ -17,18 +17,19 @@ Security references:
 import hashlib
 import hmac
 import json
-import pytest
 import time
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
+import pytest
+
 from codetoreum.adapters.primary.github_webhook_adapter import (
     GitHubWebhookAdapter,
-    WebhookVerificationError,
     InvalidPayloadError,
     UnknownProjectError,
     WebhookEvent,
+    WebhookVerificationError,
 )
 
 # Constants for timing attack resistance testing

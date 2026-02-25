@@ -13,7 +13,7 @@ we test that the decorator is applied and attributes are set correctly.
 
 import asyncio
 import logging
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from opentelemetry import trace
@@ -23,9 +23,8 @@ from codetoreum.adapters.secondary.docker_container_recovery_adapter import (
     DockerContainerRecoveryAdapter,
 )
 from codetoreum.application.container_recovery_service import ContainerRecoveryService
-from codetoreum.ports.output.container_recovery import ContainerMetadata
 from codetoreum.domain.types import ContainerId
-
+from codetoreum.ports.output.container_recovery import ContainerMetadata
 
 pytestmark = pytest.mark.integration
 

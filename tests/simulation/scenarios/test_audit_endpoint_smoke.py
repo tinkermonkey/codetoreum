@@ -21,24 +21,25 @@ Coverage:
 
 import asyncio
 import logging
-import pytest
 from typing import cast
+
+import pytest
 from fastapi.testclient import TestClient
 
-from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
-from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+from codetoreum.infrastructure.simulation.bootstrap import (
+    SimulationApplicationBootstrap,
+)
 from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
-from codetoreum.ports.output.board_service import MovedByType
+from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 from codetoreum.ports.input.workflow_run_query import (
     IWorkflowRunQueryPort,
+    SortOrder,
     WorkflowRunFilters,
     WorkflowRunPaginationParams,
     WorkflowRunSortField,
-    SortOrder,
 )
-
+from codetoreum.ports.output.board_service import MovedByType
 from tests.simulation.e2e_client import SimulationE2EClient
-
 
 # ============================================================================
 # Fixtures

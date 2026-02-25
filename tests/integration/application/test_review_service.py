@@ -1,21 +1,21 @@
 """Integration tests for ReviewService."""
 
-import pytest
 from typing import List
 
-from codetoreum.application.review_service import (
-    ReviewService,
-    ReviewCycleResult,
-    ReviewCompletionResult,
-)
+import pytest
+
 from codetoreum.adapters.testing import InMemoryEventStore
+from codetoreum.application.review_service import (
+    ReviewCompletionResult,
+    ReviewCycleResult,
+    ReviewService,
+)
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
 from codetoreum.domain.agent_execution import AgentExecution
 from codetoreum.domain.events import DomainEvent
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.review_cycle import ReviewDecision, ReviewStatus
 from codetoreum.ports.exceptions import EventStoreError
-
 
 # Fixtures
 

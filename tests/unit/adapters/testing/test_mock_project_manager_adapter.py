@@ -11,19 +11,22 @@ Tests cover:
 - Helper methods for testing
 """
 
-import pytest
 from datetime import datetime
 
+import pytest
+
+from codetoreum.adapters.testing.capturing_mock_event_emitter import (
+    CapturingMockEventEmitter,
+)
 from codetoreum.adapters.testing.mock_project_manager_adapter import (
     MockProjectManagerAdapter,
     MockProjectState,
 )
-from codetoreum.adapters.testing.capturing_mock_event_emitter import CapturingMockEventEmitter
-from codetoreum.domain.value_objects import ProjectConfig
 from codetoreum.domain.events.project_events import (
     ProjectClonedEvent,
     ProjectCloneFailedEvent,
 )
+from codetoreum.domain.value_objects import ProjectConfig
 from codetoreum.ports.exceptions import (
     ExternalServiceError,
     ResourceNotFoundError,
@@ -560,6 +563,7 @@ class TestConcurrency:
         all operations should succeed without race conditions or exceptions.
         """
         import threading
+
         from codetoreum.ports.exceptions import ResourceNotFoundError
 
         # First, add a project that we'll update concurrently

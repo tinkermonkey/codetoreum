@@ -2,14 +2,13 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, TypeVar, Generic
+from typing import TYPE_CHECKING, Any, Dict, Generic, List, Optional, TypeVar
 from uuid import uuid4
 
 if TYPE_CHECKING:
     from codetoreum.domain.agent import AgentCapability
 
 from codetoreum.domain.exceptions import DomainError
-
 
 # ============================================================================
 # Project Configuration Value Object

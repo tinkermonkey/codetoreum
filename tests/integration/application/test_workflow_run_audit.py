@@ -10,20 +10,21 @@ Tests the get_workflow_run_audit method with comprehensive coverage of:
 - Error handling
 """
 
-import pytest
 from datetime import datetime, timezone
 from uuid import uuid4
+
+import pytest
 
 from codetoreum.adapters.testing import InMemoryEventStore, InMemoryTicketAdapter
 from codetoreum.application.workflow_run_query_service import WorkflowRunQueryService
 from codetoreum.domain.events import (
-    WorkflowCreated,
-    WorkflowStarted,
-    WorkflowStageAdvanced,
     WorkflowCompleted,
+    WorkflowCreated,
     WorkflowFailed,
+    WorkflowStageAdvanced,
+    WorkflowStarted,
 )
-from codetoreum.domain.work_item import WorkItem, WorkItemStatus, WorkItemPriority
+from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
 from codetoreum.ports.exceptions import ResourceNotFoundError
 
 
@@ -544,10 +545,12 @@ async def test_audit_without_validation(query_service, workflow_with_stages):
 @pytest.mark.asyncio
 async def test_audit_stage_with_no_events(event_store, ticket_system):
     """Test audit handles stage with no matching events correctly."""
-    from codetoreum.domain.workflow import Workflow
-    from codetoreum.domain.pipeline_stage import PipelineStage, StageStatus
+    from codetoreum.application.workflow_run_query_service import (
+        WorkflowRunQueryService,
+    )
     from codetoreum.domain.agent import Agent
-    from codetoreum.application.workflow_run_query_service import WorkflowRunQueryService
+    from codetoreum.domain.pipeline_stage import PipelineStage, StageStatus
+    from codetoreum.domain.workflow import Workflow
 
     # Create a simple workflow with a stage that has no events
     workflow_id = str(uuid4())

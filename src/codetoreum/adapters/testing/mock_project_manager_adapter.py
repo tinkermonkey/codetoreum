@@ -24,12 +24,12 @@ from codetoreum.domain.events.project_events import (
 from codetoreum.domain.repository_url import extract_repo_name
 from codetoreum.domain.value_objects import ProjectConfig
 from codetoreum.domain.work_item import WorkItem
-from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.exceptions import (
     ExternalServiceError,
     ResourceNotFoundError,
     ValidationError,
 )
+from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
 
 logger = logging.getLogger(__name__)

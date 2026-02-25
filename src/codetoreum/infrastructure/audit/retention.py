@@ -194,6 +194,7 @@ class RetentionPolicyManager:
 # from codetoreum.infrastructure.audit.stores import InMemoryAuditStore
 # from codetoreum.infrastructure.audit.retention import RetentionPolicy, RetentionPolicyManager
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+
 #
 # # Create audit store
 # audit_store = InMemoryAuditStore()

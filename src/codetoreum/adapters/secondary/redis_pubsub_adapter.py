@@ -21,8 +21,8 @@ from typing import Any, Callable, Dict, List, Optional, Set
 from redis import asyncio as aioredis
 
 from codetoreum.domain.events import DomainEvent
-from codetoreum.ports.output.message_broker import IMessageBroker
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.ports.output.message_broker import IMessageBroker
 
 logger = logging.getLogger(__name__)
 
