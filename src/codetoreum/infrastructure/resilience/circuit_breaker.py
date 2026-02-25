@@ -29,7 +29,7 @@ class CircuitBreaker(ICircuitBreaker):
     def __init__(
         self,
         failure_threshold: int = 5,
-        timeout_seconds: int = 60,
+        timeout_seconds: int | float = 60,
         success_threshold: int = 2,
         expected_exceptions: tuple[type[Exception], ...] = (Exception,)
     ):
