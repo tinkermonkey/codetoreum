@@ -166,6 +166,7 @@ class TestStorageAdapterErrorHandling:
             await adapter.download(key)
 
 
+@pytest.mark.asyncio
 class TestBoardAdapterErrorHandling:
     """Tests for MockBoardAdapter error handling."""
 
@@ -176,96 +177,84 @@ class TestBoardAdapterErrorHandling:
         adapter.current_project = "proj-1"
         return adapter
 
-    def test_get_item_position_missing_item_raises_error(self, adapter):
+    async def test_get_item_position_missing_item_raises_error(self, adapter):
         """Test that getting position of non-existent item raises ResourceNotFoundError."""
         adapter.create_board("proj-1", "board-1", "Test Board", ["Backlog", "Done"])
 
         with pytest.raises(ResourceNotFoundError) as exc_info:
-            import asyncio
-            asyncio.run(adapter.get_item_position("nonexistent-item-id"))
+            await adapter.get_item_position("nonexistent-item-id")
 
         error = exc_info.value
         assert "nonexistent-item-id" in str(error)
         assert error.resource_id is not None
 
-    def test_get_item_position_error_includes_item_id(self, adapter):
+    async def test_get_item_position_error_includes_item_id(self, adapter):
         """Test that error message includes the item ID."""
         adapter.create_board("proj-1", "board-1", "Test Board", ["Backlog", "Done"])
 
         item_id = "work-item-12345"
         with pytest.raises(ResourceNotFoundError) as exc_info:
-            import asyncio
-            asyncio.run(adapter.get_item_position(item_id))
+            await adapter.get_item_position(item_id)
 
         error_message = str(exc_info.value)
         assert item_id in error_message
 
-    def test_move_item_missing_work_item_raises_error(self, adapter):
+    async def test_move_item_missing_work_item_raises_error(self, adapter):
         """Test that moving non-existent item raises ResourceNotFoundError."""
         adapter.create_board("proj-1", "board-1", "Test Board", ["Backlog", "In Progress"])
 
         with pytest.raises(ResourceNotFoundError) as exc_info:
-            import asyncio
-            asyncio.run(
-                adapter.move_item_to_column(
-                    "nonexistent-item",
-                    "In Progress",
-                    MovedByType.ORCHESTRATOR
-                )
+            await adapter.move_item_to_column(
+                "nonexistent-item",
+                "In Progress",
+                MovedByType.ORCHESTRATOR
             )
 
         error = exc_info.value
         assert "nonexistent-item" in str(error)
         assert error.resource_id is not None
 
-    def test_move_item_missing_column_raises_error(self, adapter):
+    async def test_move_item_missing_column_raises_error(self, adapter):
         """Test that moving to non-existent column raises ResourceNotFoundError."""
         adapter.create_board("proj-1", "board-1", "Test Board", ["Backlog", "Done"])
         adapter.add_item_to_column("board-1", "Backlog", "item-1")
 
         with pytest.raises(ResourceNotFoundError) as exc_info:
-            import asyncio
-            asyncio.run(
-                adapter.move_item_to_column(
-                    "item-1",
-                    "NonExistentColumn",
-                    MovedByType.ORCHESTRATOR
-                )
+            await adapter.move_item_to_column(
+                "item-1",
+                "NonExistentColumn",
+                MovedByType.ORCHESTRATOR
             )
 
         error = exc_info.value
         assert "NonExistentColumn" in str(error)
         assert error.resource_id is not None
 
-    def test_get_item_position_with_existing_item_succeeds(self, adapter):
+    async def test_get_item_position_with_existing_item_succeeds(self, adapter):
         """Test that existing item position can be retrieved."""
         adapter.create_board("proj-1", "board-1", "Test Board", ["Backlog", "Done"])
         adapter.add_item_to_column("board-1", "Backlog", "item-1")
 
-        import asyncio
-        position = asyncio.run(adapter.get_item_position("item-1"))
+        position = await adapter.get_item_position("item-1")
 
         assert position.work_item_id == "item-1"
         assert position.column_name == "Backlog"
         assert position.position == 0
 
-    def test_move_item_to_existing_column_succeeds(self, adapter):
+    async def test_move_item_to_existing_column_succeeds(self, adapter):
         """Test that item can be moved to existing column."""
         adapter.create_board("proj-1", "board-1", "Test Board", ["Backlog", "In Progress", "Done"])
         adapter.add_item_to_column("board-1", "Backlog", "item-1")
 
-        import asyncio
-        result = asyncio.run(
-            adapter.move_item_to_column(
-                "item-1",
-                "In Progress",
-                MovedByType.ORCHESTRATOR
-            )
+        result = await adapter.move_item_to_column(
+            "item-1",
+            "In Progress",
+            MovedByType.ORCHESTRATOR
         )
 
         assert result.work_item_id == "item-1"
         assert result.to_column == "In Progress"
 
         # Verify position updated
-        position = asyncio.run(adapter.get_item_position("item-1"))
+        position = await adapter.get_item_position("item-1")
         assert position.column_name == "In Progress"

@@ -211,8 +211,8 @@ class MockBoardAdapter(IBoardService):
                         )
                         for index, item_id in enumerate(column.work_item_ids)
                     ]
-        msg = f"Column not found: {column_name}"
-        raise ValueError(msg)
+        msg = "Column"
+        raise ResourceNotFoundError(msg, column_name)
 
     async def get_item_position(self, work_item_id: str) -> WorkItemPosition:
         """Get current column position of a work item.
@@ -228,10 +228,8 @@ class MockBoardAdapter(IBoardService):
         """
         with self._lock:
             if work_item_id not in self._item_positions:
-                raise ResourceNotFoundError(
-                    f"Work item not found on any board: {work_item_id}",
-                    work_item_id
-                )
+                msg = "Work item"
+                raise ResourceNotFoundError(msg, work_item_id)
             _, column_name, position = self._item_positions[work_item_id]
             return WorkItemPosition(work_item_id=work_item_id, column_name=column_name, position=position)
 
@@ -257,10 +255,8 @@ class MockBoardAdapter(IBoardService):
 
         with self._lock:
             if work_item_id not in self._item_positions:
-                raise ResourceNotFoundError(
-                    f"Work item not found: {work_item_id}",
-                    work_item_id
-                )
+                msg = "Work item"
+                raise ResourceNotFoundError(msg, work_item_id)
 
             board_id, from_column, _ = self._item_positions[work_item_id]
 
@@ -278,10 +274,8 @@ class MockBoardAdapter(IBoardService):
                     target_col = col
                     break
             if target_col is None:
-                raise ResourceNotFoundError(
-                    f"Column not found: {target_column}",
-                    target_column
-                )
+                msg = "Column"
+                raise ResourceNotFoundError(msg, target_column)
 
             # Update item positions
             if from_column != target_column:

@@ -623,10 +623,8 @@ index abc123..def456 100644
             file_key = (repo_id, file_path)
 
             if file_key not in self._files:
-                raise ResourceNotFoundError(
-                    f"File not found: {file_path} in repository {repo_id}",
-                    file_key
-                )
+                msg = f"File not found: {file_path} in repository {repo_id}"
+                raise ResourceNotFoundError("File", file_path)
 
             return self._files[file_key]
 

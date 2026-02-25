@@ -918,33 +918,29 @@ All mock adapters must raise appropriate exceptions when resources are not found
 
 **Pattern**: Use `ResourceNotFoundError` (from `codetoreum.ports.exceptions`) when a single-item retrieval fails.
 
-**Constructor**: `ResourceNotFoundError(message: str, resource_id: str)`
-- `message`: Human-readable error description including resource identifier
+**Constructor**: `ResourceNotFoundError(resource_type: str, resource_id: str)`
+- `resource_type`: Resource type label (e.g., "File", "Artifact", "Work item", "Column")
 - `resource_id`: Programmatic identifier for the missing resource
+- **Note**: The constructor formats the message as `"{resource_type} not found: {resource_id}"`
 
 **Examples**:
 
 ```python
 # File not found
 if file_key not in self._files:
-    raise ResourceNotFoundError(
-        f"File not found: {file_path} in repository {repository_id}",
-        file_key
-    )
+    raise ResourceNotFoundError("File", file_path)
 
 # Artifact not found
 if key not in self._objects:
-    raise ResourceNotFoundError(
-        f"Artifact not found: {key}",
-        key
-    )
+    raise ResourceNotFoundError("Artifact", key)
 
 # Work item not found
 if work_item_id not in self._item_positions:
-    raise ResourceNotFoundError(
-        f"Work item not found on any board: {work_item_id}",
-        work_item_id
-    )
+    raise ResourceNotFoundError("Work item", work_item_id)
+
+# Column not found
+if target_col is None:
+    raise ResourceNotFoundError("Column", target_column)
 ```
 
 ### Collection Queries Return Empty
