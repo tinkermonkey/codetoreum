@@ -30,7 +30,8 @@ class MockTaskQueue(ITaskQueue):
     async def enqueue(self, task: Task) -> str:
         """Enqueue a task."""
         self.enqueued_tasks.append(task)
-        return task.id
+        task_id: str = task.id
+        return task_id
 
 
 class MockProjectConfiguration(IProjectConfiguration):
@@ -44,7 +45,10 @@ class MockProjectConfiguration(IProjectConfiguration):
         key = f"{project}:{board}"
         if key not in self.workflows:
             raise ValueError(f"Workflow not found: {key}")
-        return self.workflows[key]
+        workflow = self.workflows[key]
+        if not isinstance(workflow, WorkflowConfig):
+            raise TypeError(f"Expected WorkflowConfig, got {type(workflow)}")
+        return workflow
 
     async def get_agent_config(self, agent_name: str):
         """Get agent configuration."""
@@ -103,7 +107,7 @@ class TestEventAdapterIntegration:
                 ColumnConfig(
                     name="Backlog",
                     position=0,
-                    agent=None,
+                    agent="",
                     auto_advance_on_approval=False,
                     discussion_category=None,
                     stage_type="backlog",
@@ -123,7 +127,7 @@ class TestEventAdapterIntegration:
                 ColumnConfig(
                     name="Review",
                     position=2,
-                    agent=None,
+                    agent="",
                     auto_advance_on_approval=True,
                     discussion_category=None,
                     stage_type="review",
@@ -133,7 +137,7 @@ class TestEventAdapterIntegration:
                 ColumnConfig(
                     name="Done",
                     position=3,
-                    agent=None,
+                    agent="",
                     auto_advance_on_approval=False,
                     discussion_category=None,
                     stage_type="done",

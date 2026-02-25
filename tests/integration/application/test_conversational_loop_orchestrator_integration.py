@@ -354,7 +354,7 @@ class TestFullLoopLifecycleIntegration:
 
         # Verify session persisted to real EventStore
         stored_session = await orchestrator.load_session_state(work_item_id)
-        assert stored_session is not None
+        assert stored_session is not None, "Session should be persisted to event store"
         assert stored_session.session_id == session.session_id
 
         # Step 2: First comment from human
@@ -388,7 +388,7 @@ class TestFullLoopLifecycleIntegration:
 
         # Verify session checkpoint updated in EventStore
         updated_session = await orchestrator.load_session_state(work_item_id)
-        assert updated_session is not None
+        assert updated_session is not None, "Session should remain in event store"
         assert updated_session.last_processed_comment_id == first_comment.id
         assert updated_session.status == "active"
 
@@ -449,6 +449,7 @@ class TestFullLoopLifecycleIntegration:
 
         # Verify session terminated in EventStore
         final_session = await orchestrator.load_session_state(work_item_id)
+        assert final_session is not None, "Session should still be in event store (marked as terminated)"
         assert final_session.status == "terminated"
 
 
@@ -515,6 +516,7 @@ class TestSessionPersistenceAcrossInstancesIntegration:
 
         # Verify checkpoint updated
         session_after_1 = await orchestrator_1.load_session_state(work_item_id)
+        assert session_after_1 is not None, "Session should be persisted after comment handling"
         assert session_after_1.last_processed_comment_id == "comment-1"
         original_session_id = session_1.session_id
 
@@ -531,7 +533,7 @@ class TestSessionPersistenceAcrossInstancesIntegration:
         session_2 = await orchestrator_2.load_session_state(work_item_id)
 
         # FR-5.3: Verify session fully recovered
-        assert session_2 is not None
+        assert session_2 is not None, "Session should be recoverable from event store after restart"
         assert session_2.session_id == original_session_id
         assert session_2.last_processed_comment_id == "comment-1"
         assert session_2.status == "active"
@@ -633,7 +635,7 @@ class TestErrorHandlingIntegration:
 
         # Session should still be active
         loaded_session = await orchestrator.load_session_state(work_item_id)
-        assert loaded_session is not None
+        assert loaded_session is not None, "Session should remain active after transient error"
         assert loaded_session.status == "active"
 
         # FR-7.1: Verify that error handling logic executes
@@ -671,6 +673,7 @@ class TestErrorHandlingIntegration:
 
         # Verify session terminated and persisted
         loaded_session = await orchestrator.load_session_state(work_item_id)
+        assert loaded_session is not None, "Session should be persisted even when terminated"
         assert loaded_session.status == "terminated"
 
         # FR-7.1: Verify that cleanup properly terminates session
@@ -767,6 +770,7 @@ class TestConcurrentSessionsWithRealEventStoreIntegration:
                 event_store=real_event_store,
             )
             updated = await orch.load_session_state(work_item_id)
+            assert updated is not None, f"Session for {work_item_id} should be persisted"
             assert updated.last_processed_comment_id == f"{work_item_id}-comment-1"
 
     async def test_session_state_isolation_across_work_items(
@@ -797,11 +801,13 @@ class TestConcurrentSessionsWithRealEventStoreIntegration:
         # Load each session and verify isolation
         for work_item_id in work_items:
             session = await orchestrator.load_session_state(work_item_id)
+            assert session is not None, f"Session for {work_item_id} should exist"
             assert session.work_item_id == work_item_id
             assert session.last_processed_comment_id == "__checkpoint_start"
 
         # Update one session
         session_1 = await orchestrator.load_session_state("item-1")
+        assert session_1 is not None, "Session for item-1 should exist"
         updated_session_1 = ConversationalSessionState(
             session_id=session_1.session_id,
             work_item_id=session_1.work_item_id,
@@ -818,10 +824,12 @@ class TestConcurrentSessionsWithRealEventStoreIntegration:
         # Verify other sessions unchanged
         for work_item_id in ["item-2", "item-3"]:
             session = await orchestrator.load_session_state(work_item_id)
+            assert session is not None, f"Session for {work_item_id} should exist"
             assert session.last_processed_comment_id == "__checkpoint_start"
 
         # Verify updated session
         updated = await orchestrator.load_session_state("item-1")
+        assert updated is not None, "Session for item-1 should be updated"
         assert updated.last_processed_comment_id == "updated-comment-id"
 
 
@@ -872,6 +880,7 @@ class TestAdapterInteractionIntegration:
 
         # Verify conversation ID persisted to EventStore
         loaded = await orchestrator.load_session_state(work_item_id)
+        assert loaded is not None, "Session should be persisted with conversation ID"
         assert loaded.llm_conversation_id == "conv-abc123"
 
         # Handle comment - should use persisted conversation ID
