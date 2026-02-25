@@ -116,7 +116,8 @@ class RedisPubSubAdapter(IMessageBroker):
                 )
 
             except Exception as e:
-                raise RedisPubSubError(f"Failed to initialize pub/sub: {e}") from e
+                msg = f"Failed to initialize pub/sub: {e}"
+                raise RedisPubSubError(msg) from e
 
     async def _listen_for_messages(self) -> None:
         """
@@ -238,7 +239,8 @@ class RedisPubSubAdapter(IMessageBroker):
 
         except Exception as e:
             self._stats["publish_errors"] += 1
-            raise RedisPubSubError(f"Failed to publish event: {e}") from e
+            msg = f"Failed to publish event: {e}"
+            raise RedisPubSubError(msg) from e
 
     async def publish_control_message(
         self, message_type: str, data: dict[str, Any]
@@ -273,7 +275,8 @@ class RedisPubSubAdapter(IMessageBroker):
 
         except Exception as e:
             self._stats["publish_errors"] += 1
-            raise RedisPubSubError(f"Failed to publish control message: {e}") from e
+            msg = f"Failed to publish control message: {e}"
+            raise RedisPubSubError(msg) from e
 
     async def subscribe(self, channel: str, callback: Callable) -> None:
         """

@@ -25,7 +25,8 @@ class UpdateProjectConfigRequest(BaseModel):
     @classmethod
     def validate_updates(cls, v):
         if not v:
-            raise ValueError("Updates cannot be empty")
+            msg = "Updates cannot be empty"
+            raise ValueError(msg)
         return v
 
 
@@ -38,7 +39,8 @@ class UpdateAgentConfigRequest(BaseModel):
     @classmethod
     def validate_updates(cls, v):
         if not v:
-            raise ValueError("Updates cannot be empty")
+            msg = "Updates cannot be empty"
+            raise ValueError(msg)
         return v
 
 
@@ -51,7 +53,8 @@ class UpdatePipelineConfigRequest(BaseModel):
     @classmethod
     def validate_updates(cls, v):
         if not v:
-            raise ValueError("Updates cannot be empty")
+            msg = "Updates cannot be empty"
+            raise ValueError(msg)
         return v
 
 
@@ -78,15 +81,19 @@ class AddEnvironmentVariableRequest(BaseModel):
         # Sanitize value - strip leading/trailing whitespace
         # Don't allow null bytes or other control characters except tabs and newlines
         if "\x00" in v:
-            raise ValueError("Variable value cannot contain null bytes")
+            msg = "Variable value cannot contain null bytes"
+            raise ValueError(msg)
 
         # Check for suspicious patterns that might indicate injection attempts
         suspicious_patterns = ["$(", "`", "${", "\r"]
         for pattern in suspicious_patterns:
             if pattern in v:
-                raise ValueError(
+                msg = (
                     f"Variable value contains potentially unsafe pattern: '{pattern}'. "
                     "If this is intentional, please escape properly."
+                )
+                raise ValueError(
+                    msg
                 )
 
         return v
@@ -103,7 +110,8 @@ class SearchConfigsRequest(BaseModel):
     @classmethod
     def validate_config_type(cls, v):
         if v and v not in ["project", "agent", "pipeline"]:
-            raise ValueError("config_type must be one of: project, agent, pipeline")
+            msg = "config_type must be one of: project, agent, pipeline"
+            raise ValueError(msg)
         return v
 
 

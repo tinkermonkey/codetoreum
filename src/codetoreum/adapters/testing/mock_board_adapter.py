@@ -164,7 +164,8 @@ class MockBoardAdapter(IBoardService):
         with self._lock:
             key = f"{project_id}:{board_id}"
             if key not in self._boards:
-                raise ValueError(f"Board not found: {board_id}")
+                msg = f"Board not found: {board_id}"
+                raise ValueError(msg)
             return self._boards[key]
 
     async def get_columns(self, board_id: str) -> list[BoardColumn]:
@@ -180,7 +181,8 @@ class MockBoardAdapter(IBoardService):
             ValueError: Board doesn't exist
         """
         if self.current_project is None:
-            raise ValueError("current_project not set")
+            msg = "current_project not set"
+            raise ValueError(msg)
         board = await self.get_board(self.current_project, board_id)
         return sorted(board.columns, key=lambda c: c.position)
 
@@ -200,7 +202,8 @@ class MockBoardAdapter(IBoardService):
             ValueError: Board or column doesn't exist
         """
         if self.current_project is None:
-            raise ValueError("current_project not set")
+            msg = "current_project not set"
+            raise ValueError(msg)
         board = await self.get_board(self.current_project, board_id)
         with self._lock:
             for column in board.columns:
@@ -213,7 +216,8 @@ class MockBoardAdapter(IBoardService):
                         )
                         for index, item_id in enumerate(column.work_item_ids)
                     ]
-        raise ValueError(f"Column not found: {column_name}")
+        msg = f"Column not found: {column_name}"
+        raise ValueError(msg)
 
     async def get_item_position(self, work_item_id: str) -> WorkItemPosition:
         """Get current column position of a work item.
@@ -229,7 +233,8 @@ class MockBoardAdapter(IBoardService):
         """
         with self._lock:
             if work_item_id not in self._item_positions:
-                raise ValueError(f"Work item not in any column: {work_item_id}")
+                msg = f"Work item not in any column: {work_item_id}"
+                raise ValueError(msg)
             _, column_name, position = self._item_positions[work_item_id]
             return WorkItemPosition(
                 work_item_id=work_item_id, column_name=column_name, position=position
@@ -257,12 +262,14 @@ class MockBoardAdapter(IBoardService):
 
         with self._lock:
             if work_item_id not in self._item_positions:
-                raise ValueError(f"Work item not found: {work_item_id}")
+                msg = f"Work item not found: {work_item_id}"
+                raise ValueError(msg)
 
             board_id, from_column, _ = self._item_positions[work_item_id]
 
             if self.current_project is None:
-                raise ValueError("current_project not set")
+                msg = "current_project not set"
+                raise ValueError(msg)
 
         board = await self.get_board(self.current_project, board_id)
 
@@ -274,7 +281,8 @@ class MockBoardAdapter(IBoardService):
                     target_col = col
                     break
             if target_col is None:
-                raise ValueError(f"Column not found: {target_column}")
+                msg = f"Column not found: {target_column}"
+                raise ValueError(msg)
 
             # Update item positions
             if from_column != target_column:
@@ -343,7 +351,8 @@ class MockBoardAdapter(IBoardService):
             ValueError: Board doesn't exist
         """
         if self.current_project is None:
-            raise ValueError("current_project not set")
+            msg = "current_project not set"
+            raise ValueError(msg)
 
         board = await self.get_board(self.current_project, board_id)
 
@@ -507,7 +516,8 @@ class MockBoardAdapter(IBoardService):
                 board = self._boards.get(key)
 
             if board is None:
-                raise ValueError(f"Board {board_id} not found in project {project_id}")
+                msg = f"Board {board_id} not found in project {project_id}"
+                raise ValueError(msg)
 
             # Find the target column
             target_column = None
@@ -517,8 +527,9 @@ class MockBoardAdapter(IBoardService):
                     break
 
             if target_column is None:
+                msg = f"Column {column_name} not found in board {board_id}"
                 raise ValueError(
-                    f"Column {column_name} not found in board {board_id}"
+                    msg
                 )
 
             # Insert work item at specified position
@@ -555,7 +566,8 @@ class MockBoardAdapter(IBoardService):
             await adapter.simulate_human_move_async("item-1", "In Progress")
         """
         if self.current_project is None:
-            raise ValueError("current_project not set")
+            msg = "current_project not set"
+            raise ValueError(msg)
 
         await self.move_item_to_column(work_item_id, target_column, MovedByType.HUMAN)
 
@@ -584,15 +596,19 @@ class MockBoardAdapter(IBoardService):
         import asyncio
 
         if self.current_project is None:
-            raise ValueError("current_project not set")
+            msg = "current_project not set"
+            raise ValueError(msg)
 
         # Check if we're in an async context
         try:
             loop = asyncio.get_running_loop()
             # We're in async context - don't allow sync call
-            raise RuntimeError(
+            msg = (
                 "Cannot call sync simulate_human_move from async context. "
                 "Use 'await simulate_human_move_async(...)' instead."
+            )
+            raise RuntimeError(
+                msg
             )
         except RuntimeError as e:
             if "no running event loop" in str(e).lower():
@@ -625,9 +641,12 @@ class MockBoardAdapter(IBoardService):
                 _, actual, _ = self._item_positions[work_item_id]
 
             if actual != expected_column:
-                raise AssertionError(
+                msg = (
                     f"Expected work item {work_item_id} in column '{expected_column}', "
                     f"found in column '{actual}'"
+                )
+                raise AssertionError(
+                    msg
                 )
 
     def get_movement_history(self, work_item_id: str) -> list[MovementEvent]:

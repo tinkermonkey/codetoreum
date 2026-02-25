@@ -66,15 +66,20 @@ class WorkItemColumnChangedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.work_item_id:
-            raise ValueError("work_item_id is required")
+            msg = "work_item_id is required"
+            raise ValueError(msg)
         if not self.project_id:
-            raise ValueError("project_id is required")
+            msg = "project_id is required"
+            raise ValueError(msg)
         if not self.board_id:
-            raise ValueError("board_id is required")
+            msg = "board_id is required"
+            raise ValueError(msg)
         if not self.from_column:
-            raise ValueError("from_column is required")
+            msg = "from_column is required"
+            raise ValueError(msg)
         if not self.to_column:
-            raise ValueError("to_column is required")
+            msg = "to_column is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -154,9 +159,11 @@ class BoardReconciledEvent(CodetoreumEvent):
         """Validate event after initialization and convert lists to tuples."""
         super().__post_init__()
         if not self.project_id:
-            raise ValueError("project_id is required")
+            msg = "project_id is required"
+            raise ValueError(msg)
         if not self.board_id:
-            raise ValueError("board_id is required")
+            msg = "board_id is required"
+            raise ValueError(msg)
         # Convert lists to tuples for immutability
         if isinstance(self.columns_added, list):
             object.__setattr__(self, "columns_added", tuple(self.columns_added))

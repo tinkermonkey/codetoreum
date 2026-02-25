@@ -48,14 +48,18 @@ class WorkflowRunFilters:
         """Validate filter fields."""
         # Validate non-empty string IDs
         if self.project_id is not None and not self.project_id.strip():
-            raise ValueError("project_id must be non-empty if provided")
+            msg = "project_id must be non-empty if provided"
+            raise ValueError(msg)
         if self.work_item_id is not None and not self.work_item_id.strip():
-            raise ValueError("work_item_id must be non-empty if provided")
+            msg = "work_item_id must be non-empty if provided"
+            raise ValueError(msg)
         if self.workflow_id is not None and not self.workflow_id.strip():
-            raise ValueError("workflow_id must be non-empty if provided")
+            msg = "workflow_id must be non-empty if provided"
+            raise ValueError(msg)
         # Validate non-empty status tuple
         if self.status is not None and len(self.status) == 0:
-            raise ValueError("status must be non-empty if provided")
+            msg = "status must be non-empty if provided"
+            raise ValueError(msg)
 
 
 @dataclass
@@ -69,11 +73,14 @@ class WorkflowRunPaginationParams:
     def __post_init__(self) -> None:
         """Validate pagination parameters."""
         if self.offset < 0:
-            raise ValueError(f"offset must be >= 0, got {self.offset}")
+            msg = f"offset must be >= 0, got {self.offset}"
+            raise ValueError(msg)
         if self.limit <= 0:
-            raise ValueError(f"limit must be > 0, got {self.limit}")
+            msg = f"limit must be > 0, got {self.limit}"
+            raise ValueError(msg)
         if self.limit > 1000:
-            raise ValueError(f"limit must be <= 1000 to prevent excessive memory usage, got {self.limit}")
+            msg = f"limit must be <= 1000 to prevent excessive memory usage, got {self.limit}"
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True)
@@ -93,13 +100,15 @@ class WorkflowRunStageInfo:
         """Initialize metadata and validate fields."""
         # Validate name is non-empty
         if not self.name or not self.name.strip():
-            raise ValueError("name must be a non-empty string")
+            msg = "name must be a non-empty string"
+            raise ValueError(msg)
 
         # Validate temporal consistency
         if self.started_at is not None and self.completed_at is not None:
             if self.completed_at < self.started_at:
+                msg = f"completedAt ({self.completed_at}) must be >= startedAt ({self.started_at})"
                 raise ValueError(
-                    f"completedAt ({self.completed_at}) must be >= startedAt ({self.started_at})"
+                    msg
                 )
 
         # Initialize metadata to empty immutable mapping if None
@@ -173,11 +182,14 @@ class WorkflowRunEventsResult:
     def __post_init__(self) -> None:
         """Validate pagination parameters."""
         if self.offset < 0:
-            raise ValueError(f"offset must be non-negative, got {self.offset}")
+            msg = f"offset must be non-negative, got {self.offset}"
+            raise ValueError(msg)
         if self.limit < 0:
-            raise ValueError(f"limit must be non-negative, got {self.limit}")
+            msg = f"limit must be non-negative, got {self.limit}"
+            raise ValueError(msg)
         if self.total_count < 0:
-            raise ValueError(f"total_count must be non-negative, got {self.total_count}")
+            msg = f"total_count must be non-negative, got {self.total_count}"
+            raise ValueError(msg)
 
 
 @dataclass
@@ -195,11 +207,14 @@ class WorkflowRunAuditResult:
     def __post_init__(self) -> None:
         """Validate pagination parameters."""
         if self.offset < 0:
-            raise ValueError(f"offset must be non-negative, got {self.offset}")
+            msg = f"offset must be non-negative, got {self.offset}"
+            raise ValueError(msg)
         if self.limit < 0:
-            raise ValueError(f"limit must be non-negative, got {self.limit}")
+            msg = f"limit must be non-negative, got {self.limit}"
+            raise ValueError(msg)
         if self.total_count < 0:
-            raise ValueError(f"total_count must be non-negative, got {self.total_count}")
+            msg = f"total_count must be non-negative, got {self.total_count}"
+            raise ValueError(msg)
 
 
 class IWorkflowRunQueryPort(ABC):

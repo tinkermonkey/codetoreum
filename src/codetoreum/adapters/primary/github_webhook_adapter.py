@@ -242,11 +242,13 @@ class GitHubWebhookAdapter:
 
             # 3. Verify signature
             if not await self.verify_signature(payload_bytes, x_hub_signature_256):
-                raise WebhookVerificationError("Invalid HMAC signature")
+                msg = "Invalid HMAC signature"
+                raise WebhookVerificationError(msg)
 
             # 4. Validate payload
             if not self._validate_payload(event):
-                raise InvalidPayloadError("Malformed payload structure")
+                msg = "Malformed payload structure"
+                raise InvalidPayloadError(msg)
 
             # 5. Process event
             result = await self._process_event(event)
@@ -400,8 +402,9 @@ class GitHubWebhookAdapter:
         # Identify project
         project = await self._identify_project(event.repository)
         if not project:
+            msg = f"Repository {event.repository} not configured"
             raise UnknownProjectError(
-                f"Repository {event.repository} not configured"
+                msg
             )
 
         # Handle event

@@ -241,7 +241,8 @@ class AdapterFactory:
         """
         with self._lock:
             if name not in self._dependencies:
-                raise KeyError(f"Dependency '{name}' is not registered")
+                message = f"Dependency '{name}' is not registered"
+                raise KeyError(message)
             return self._dependencies[name]
 
     def has_dependency(self, name: str) -> bool:
@@ -285,7 +286,8 @@ class AdapterFactory:
         if adapter_name is None:
             adapter_name = self._ticket_system_registry.get_default_name()
             if adapter_name is None:
-                raise ValueError("No default ticket system adapter configured")
+                message = "No default ticket system adapter configured"
+                raise ValueError(message)
 
         logger.info(f"Creating ticket system adapter: {adapter_name}")
 
@@ -304,9 +306,8 @@ class AdapterFactory:
                     if hasattr(resilience_config, "to_dict"):
                         service_config = resilience_config.to_dict()
                     else:
-                        raise TypeError(
-                            f"resilience_config must have to_dict() method, got {type(resilience_config)}"
-                        )
+                        message = f"resilience_config must have to_dict() method, got {type(resilience_config)}"
+                        raise TypeError(message)
                 else:
                     default_config = self._get_resilience_config(
                         "ticket_system", GITHUB_RESILIENCE_CONFIG
@@ -351,7 +352,8 @@ class AdapterFactory:
         if adapter_name is None:
             adapter_name = self._llm_provider_registry.get_default_name()
             if adapter_name is None:
-                raise ValueError("No default LLM provider adapter configured")
+                message = "No default LLM provider adapter configured"
+                raise ValueError(message)
 
         logger.info(f"Creating LLM provider adapter: {adapter_name}")
 
@@ -370,9 +372,8 @@ class AdapterFactory:
                     if hasattr(resilience_config, "to_dict"):
                         service_config = resilience_config.to_dict()
                     else:
-                        raise TypeError(
-                            f"resilience_config must have to_dict() method, got {type(resilience_config)}"
-                        )
+                        message = f"resilience_config must have to_dict() method, got {type(resilience_config)}"
+                        raise TypeError(message)
                 else:
                     default_config = self._get_resilience_config(
                         "llm_provider", CLAUDE_RESILIENCE_CONFIG
@@ -417,7 +418,8 @@ class AdapterFactory:
         if adapter_name is None:
             adapter_name = self._container_registry.get_default_name()
             if adapter_name is None:
-                raise ValueError("No default container adapter configured")
+                message = "No default container adapter configured"
+                raise ValueError(message)
 
         logger.info(f"Creating container adapter: {adapter_name}")
 
@@ -436,9 +438,8 @@ class AdapterFactory:
                     if hasattr(resilience_config, "to_dict"):
                         service_config = resilience_config.to_dict()
                     else:
-                        raise TypeError(
-                            f"resilience_config must have to_dict() method, got {type(resilience_config)}"
-                        )
+                        message = f"resilience_config must have to_dict() method, got {type(resilience_config)}"
+                        raise TypeError(message)
                 else:
                     default_config = self._get_resilience_config(
                         "container", CONTAINER_RESILIENCE_CONFIG
@@ -483,7 +484,8 @@ class AdapterFactory:
         if adapter_name is None:
             adapter_name = self._repository_registry.get_default_name()
             if adapter_name is None:
-                raise ValueError("No default repository adapter configured")
+                message = "No default repository adapter configured"
+                raise ValueError(message)
 
         logger.info(f"Creating repository adapter: {adapter_name}")
 
@@ -502,9 +504,8 @@ class AdapterFactory:
                     if hasattr(resilience_config, "to_dict"):
                         service_config = resilience_config.to_dict()
                     else:
-                        raise TypeError(
-                            f"resilience_config must have to_dict() method, got {type(resilience_config)}"
-                        )
+                        message = f"resilience_config must have to_dict() method, got {type(resilience_config)}"
+                        raise TypeError(message)
                 else:
                     default_config = self._get_resilience_config(
                         "repository", REPOSITORY_RESILIENCE_CONFIG
@@ -552,7 +553,8 @@ class AdapterFactory:
         if adapter_name is None:
             adapter_name = self._event_store_registry.get_default_name()
             if adapter_name is None:
-                raise ValueError("No default event store adapter configured")
+                message = "No default event store adapter configured"
+                raise ValueError(message)
 
         logger.info(f"Creating event store adapter: {adapter_name}")
 

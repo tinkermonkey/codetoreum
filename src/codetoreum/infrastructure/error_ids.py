@@ -241,11 +241,13 @@ def get_error_id_category(error_id: str) -> ErrorCategory:
     """
     # Extract category from error ID (e.g., ERR_VALIDATION_FAILED -> VALIDATION)
     if not error_id.startswith("ERR_"):
-        raise ValueError(f"Invalid error ID format: {error_id}")
+        message = f"Invalid error ID format: {error_id}"
+        raise ValueError(message)
 
     parts = error_id.split("_")
     if len(parts) < 2:
-        raise ValueError(f"Invalid error ID format: {error_id}")
+        message = f"Invalid error ID format: {error_id}"
+        raise ValueError(message)
 
     # Try to find matching category
     category_name = parts[1]

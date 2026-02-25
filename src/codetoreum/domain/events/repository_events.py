@@ -47,9 +47,11 @@ class FilesStagedEvent(CodetoreumEvent):
         """Validate event after initialization and convert lists to tuples."""
         super().__post_init__()
         if not self.repository_id:
-            raise ValueError("repository_id is required")
+            msg = "repository_id is required"
+            raise ValueError(msg)
         if not self.file_paths:
-            raise ValueError("file_paths cannot be empty")
+            msg = "file_paths cannot be empty"
+            raise ValueError(msg)
         # Convert lists to tuples for immutability
         if isinstance(self.file_paths, list):
             object.__setattr__(self, "file_paths", tuple(self.file_paths))
@@ -126,13 +128,17 @@ class CommitCreatedEvent(CodetoreumEvent):
         """Validate event after initialization and convert lists to tuples."""
         super().__post_init__()
         if not self.repository_id:
-            raise ValueError("repository_id is required")
+            msg = "repository_id is required"
+            raise ValueError(msg)
         if not self.commit_sha:
-            raise ValueError("commit_sha is required")
+            msg = "commit_sha is required"
+            raise ValueError(msg)
         if not self.message:
-            raise ValueError("message is required")
+            msg = "message is required"
+            raise ValueError(msg)
         if not self.author:
-            raise ValueError("author is required")
+            msg = "author is required"
+            raise ValueError(msg)
         # Convert lists to tuples for immutability
         if isinstance(self.changed_files, list):
             object.__setattr__(self, "changed_files", tuple(self.changed_files))
@@ -209,11 +215,14 @@ class BranchCreatedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.repository_id:
-            raise ValueError("repository_id is required")
+            msg = "repository_id is required"
+            raise ValueError(msg)
         if not self.branch_name:
-            raise ValueError("branch_name is required")
+            msg = "branch_name is required"
+            raise ValueError(msg)
         if not self.base_commit:
-            raise ValueError("base_commit is required")
+            msg = "base_commit is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""

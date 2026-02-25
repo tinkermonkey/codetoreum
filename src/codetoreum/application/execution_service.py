@@ -227,9 +227,8 @@ class ExecutionService:
         try:
             # Validate execution state
             if execution.status != ExecutionStatus.INITIALIZED:
-                raise DomainError(
-                    f"Execution {execution.id} is not in INITIALIZED state"
-                )
+                message = f"Execution {execution.id} is not in INITIALIZED state"
+                raise DomainError(message)
 
             # Track as active
             self._active_executions[execution.id] = execution

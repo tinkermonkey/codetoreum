@@ -98,7 +98,8 @@ class RedisEventBuffer:
             self._initialized = True
 
         except Exception as e:
-            raise RedisEventBufferError(f"Failed to initialize buffer: {e}") from e
+            message = f"Failed to initialize buffer: {e}"
+            raise RedisEventBufferError(message) from e
 
     async def buffer_event(self, event: DomainEvent) -> str:
         """
@@ -144,7 +145,8 @@ class RedisEventBuffer:
             return message_id
 
         except Exception as e:
-            raise RedisEventBufferError(f"Failed to buffer event: {e}") from e
+            message = f"Failed to buffer event: {e}"
+            raise RedisEventBufferError(message) from e
 
     async def buffer_events_batch(self, events: list[DomainEvent]) -> list[str]:
         """
@@ -194,9 +196,8 @@ class RedisEventBuffer:
             return message_ids
 
         except Exception as e:
-            raise RedisEventBufferError(
-                f"Failed to buffer events batch: {e}"
-            ) from e
+            message = f"Failed to buffer events batch: {e}"
+            raise RedisEventBufferError(message)
 
     async def read_pending_events(
         self,
@@ -263,7 +264,8 @@ class RedisEventBuffer:
             return events
 
         except Exception as e:
-            raise RedisEventBufferError(f"Failed to read events: {e}") from e
+            message = f"Failed to read events: {e}"
+            raise RedisEventBufferError(message) from e
 
     async def acknowledge_events(
         self, message_ids: list[str]
@@ -295,7 +297,8 @@ class RedisEventBuffer:
             return count
 
         except Exception as e:
-            raise RedisEventBufferError(f"Failed to acknowledge events: {e}") from e
+            message = f"Failed to acknowledge events: {e}"
+            raise RedisEventBufferError(message) from e
 
     async def get_pending_count(self, consumer_name: str | None = None) -> int:
         """
@@ -324,7 +327,8 @@ class RedisEventBuffer:
             return pending_info[0] if isinstance(pending_info, list) else 0
 
         except Exception as e:
-            raise RedisEventBufferError(f"Failed to get pending count: {e}") from e
+            message = f"Failed to get pending count: {e}"
+            raise RedisEventBufferError(message) from e
 
     async def get_stream_length(self) -> int:
         """
@@ -341,7 +345,8 @@ class RedisEventBuffer:
             return length
 
         except Exception as e:
-            raise RedisEventBufferError(f"Failed to get stream length: {e}") from e
+            message = f"Failed to get stream length: {e}"
+            raise RedisEventBufferError(message) from e
 
     async def get_buffer_stats(self) -> dict[str, Any]:
         """
@@ -387,7 +392,8 @@ class RedisEventBuffer:
             }
 
         except Exception as e:
-            raise RedisEventBufferError(f"Failed to get buffer stats: {e}") from e
+            message = f"Failed to get buffer stats: {e}"
+            raise RedisEventBufferError(message) from e
 
     async def _move_to_dead_letter(
         self, message_id: bytes, fields: dict[bytes, bytes], error: str

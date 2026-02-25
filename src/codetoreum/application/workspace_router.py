@@ -234,10 +234,8 @@ class WorkspaceRouter:
 
         # If work item needs code changes, agent must have that capability
         if not has_discussion_label and not agent.makes_code_changes:
-            raise ValueError(
-                f"Agent {agent.id} cannot make code changes but is assigned to "
-                f"code work item {work_item.id}"
-            )
+            message = f"Agent {agent.id} cannot make code changes but is assigned to " f"code work item {work_item.id}"
+            raise ValueError(message)
 
     async def prepare_workspace(
         self,

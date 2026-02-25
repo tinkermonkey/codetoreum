@@ -85,22 +85,25 @@ class YAMLConfigImporter:
 
             # Check file extension
             if resolved_path.suffix.lower() not in ALLOWED_EXTENSIONS:
-                raise SecurityError(
+                msg = (
                     f"Invalid file extension: {resolved_path.suffix}. "
                     f"Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
                 )
+                raise SecurityError(msg)
 
             # Check if it's actually a file
             if not resolved_path.is_file():
-                raise SecurityError(f"Path is not a file: {resolved_path}")
+                msg = f"Path is not a file: {resolved_path}"
+                raise SecurityError(msg)
 
             # Check file size
             file_size = resolved_path.stat().st_size
             if file_size > MAX_FILE_SIZE_BYTES:
-                raise SecurityError(
+                msg = (
                     f"File too large: {file_size} bytes "
                     f"(max: {MAX_FILE_SIZE_BYTES} bytes / {MAX_FILE_SIZE_BYTES // (1024*1024)}MB)"
                 )
+                raise SecurityError(msg)
 
             # Additional security: Ensure no path traversal by checking that
             # resolved path doesn't escape expected directories
@@ -109,7 +112,8 @@ class YAMLConfigImporter:
             return resolved_path
 
         except (OSError, RuntimeError) as e:
-            raise SecurityError(f"Invalid or inaccessible file path: {e}")
+            msg = f"Invalid or inaccessible file path: {e}"
+            raise SecurityError(msg)
 
     def _safe_load_yaml(self, file_path: Path) -> dict[str, Any]:
         """
@@ -132,10 +136,12 @@ class YAMLConfigImporter:
                 yaml_content = yaml.safe_load(f)
 
             if yaml_content is None:
-                raise ValueError("Empty YAML file")
+                msg = "Empty YAML file"
+                raise ValueError(msg)
 
             if not isinstance(yaml_content, dict):
-                raise ValueError("YAML root must be a dictionary/object")
+                msg = "YAML root must be a dictionary/object"
+                raise ValueError(msg)
 
             # Protect against YAML bombs (deeply nested structures)
             self._check_yaml_depth(yaml_content, current_depth=0)
@@ -144,7 +150,8 @@ class YAMLConfigImporter:
             return yaml_content
 
         except yaml.YAMLError as e:
-            raise ValueError(f"Invalid YAML syntax: {e}")
+            msg = f"Invalid YAML syntax: {e}"
+            raise ValueError(msg)
 
     def _check_yaml_depth(self, obj: Any, current_depth: int) -> None:
         """
@@ -158,10 +165,11 @@ class YAMLConfigImporter:
             SecurityError: If depth exceeds limit
         """
         if current_depth > MAX_YAML_DEPTH:
-            raise SecurityError(
+            msg = (
                 f"YAML depth exceeds maximum allowed ({MAX_YAML_DEPTH}). "
                 "Possible YAML bomb attack."
             )
+            raise SecurityError(msg)
 
         if isinstance(obj, dict):
             for value in obj.values():
@@ -182,11 +190,12 @@ class YAMLConfigImporter:
         """
         node_count = self._count_nodes(obj)
         if node_count > MAX_YAML_NODES:
-            raise SecurityError(
+            msg = (
                 f"YAML contains too many nodes ({node_count}). "
                 f"Maximum allowed: {MAX_YAML_NODES}. "
                 "Possible YAML bomb attack."
             )
+            raise SecurityError(msg)
 
     def _count_nodes(self, obj: Any) -> int:
         """Recursively count nodes in object tree."""

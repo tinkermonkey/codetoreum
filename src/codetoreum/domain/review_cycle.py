@@ -222,16 +222,16 @@ class ReviewCycle:
         - Current iteration cannot exceed max iterations
         """
         if self.maker_agent_id == self.reviewer_agent_id:
-            raise DomainError("Maker and reviewer must be different agents")
+            msg = "Maker and reviewer must be different agents"
+            raise DomainError(msg)
 
         if self.max_iterations <= 0:
-            raise DomainError("Max iterations must be positive")
+            msg = "Max iterations must be positive"
+            raise DomainError(msg)
 
         if self.current_iteration > self.max_iterations:
-            raise DomainError(
-                f"Current iteration ({self.current_iteration}) cannot exceed "
-                f"max iterations ({self.max_iterations})"
-            )
+            msg = f"Current iteration ({self.current_iteration}) cannot exceed " f"max iterations ({self.max_iterations})"
+            raise DomainError(msg)
 
     # Creation
     @classmethod
@@ -307,7 +307,8 @@ class ReviewCycle:
         Emits: ReviewIterationStarted event
         """
         if self.current_iteration >= self.max_iterations:
-            raise DomainError(f"Exceeded max iterations ({self.max_iterations})")
+            msg = f"Exceeded max iterations ({self.max_iterations})"
+            raise DomainError(msg)
 
         self.current_iteration += 1
         iteration = ReviewIteration(
@@ -358,11 +359,13 @@ class ReviewCycle:
         Emits: ReviewFeedbackSubmitted event
         """
         if not self.iterations:
-            raise DomainError("No iterations to review")
+            msg = "No iterations to review"
+            raise DomainError(msg)
 
         current = self.iterations[-1]
         if current.reviewer_feedback:
-            raise DomainError("Current iteration already reviewed")
+            msg = "Current iteration already reviewed"
+            raise DomainError(msg)
 
         feedback = ReviewFeedback(
             decision=decision,

@@ -184,7 +184,8 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             ValidationError: Invalid work_item_id
         """
         if not work_item_id or not work_item_id.isdigit():
-            raise ValidationError(f"Invalid work_item_id: {work_item_id}")
+            msg = f"Invalid work_item_id: {work_item_id}"
+            raise ValidationError(msg)
 
         client = await self._get_client()
         comments = []
@@ -210,14 +211,18 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
                 )
 
                 if response.status_code == 401:
-                    raise AuthenticationError("GitHub authentication failed")
+                    msg = "GitHub authentication failed"
+                    raise AuthenticationError(msg)
                 if response.status_code == 404:
-                    raise ResourceNotFoundError("Issue", work_item_id)
+                    msg = "Issue"
+                    raise ResourceNotFoundError(msg, work_item_id)
                 if response.status_code == 403:
-                    raise ExternalServiceError("GitHub", "Rate limit exceeded")
+                    msg = "GitHub"
+                    raise ExternalServiceError(msg, "Rate limit exceeded")
                 if response.status_code >= 400:
+                    msg = "GitHub"
                     raise ExternalServiceError(
-                        "GitHub", f"API error: {response.status_code}"
+                        msg, f"API error: {response.status_code}"
                     )
 
                 page_data = response.json()
@@ -250,7 +255,8 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             )
 
         except (httpx.RequestError, httpx.HTTPError) as e:
-            raise ExternalServiceError(f"GitHub API request failed: {e!s}")
+            msg = f"GitHub API request failed: {e!s}"
+            raise ExternalServiceError(msg)
 
     # Command Operations
 
@@ -279,13 +285,16 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             ExternalServiceError: API communication failure
         """
         if not work_item_id or not work_item_id.isdigit():
-            raise ValidationError(f"Invalid work_item_id: {work_item_id}")
+            msg = f"Invalid work_item_id: {work_item_id}"
+            raise ValidationError(msg)
 
         if not content or not content.strip():
-            raise ValidationError("Comment content cannot be empty")
+            msg = "Comment content cannot be empty"
+            raise ValidationError(msg)
 
         if len(content) > 65536:  # GitHub limit
-            raise ValidationError("Comment content exceeds maximum length (65536 chars)")
+            msg = "Comment content exceeds maximum length (65536 chars)"
+            raise ValidationError(msg)
 
         client = await self._get_client()
 
@@ -301,14 +310,18 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             )
 
             if response.status_code == 401:
-                raise AuthenticationError("GitHub authentication failed")
+                msg = "GitHub authentication failed"
+                raise AuthenticationError(msg)
             if response.status_code == 404:
-                raise ResourceNotFoundError("Issue", work_item_id)
+                msg = "Issue"
+                raise ResourceNotFoundError(msg, work_item_id)
             if response.status_code == 403:
-                raise ExternalServiceError("GitHub", "Rate limit exceeded")
+                msg = "GitHub"
+                raise ExternalServiceError(msg, "Rate limit exceeded")
             if response.status_code >= 400:
+                msg = "GitHub"
                 raise ExternalServiceError(
-                    "GitHub", f"API error: {response.status_code}"
+                    msg, f"API error: {response.status_code}"
                 )
 
             data = response.json()
@@ -338,7 +351,8 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             return comment
 
         except (httpx.RequestError, httpx.HTTPError) as e:
-            raise ExternalServiceError(f"GitHub API request failed: {e!s}")
+            msg = f"GitHub API request failed: {e!s}"
+            raise ExternalServiceError(msg)
 
     # Work-Item-Specific Monitoring
 
@@ -359,9 +373,11 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             ResourceNotFoundError: Work item doesn't exist
         """
         if not work_item_id:
-            raise ValidationError("work_item_id cannot be empty")
+            msg = "work_item_id cannot be empty"
+            raise ValidationError(msg)
         if not config.project_id:
-            raise ValidationError("config.project_id cannot be empty")
+            msg = "config.project_id cannot be empty"
+            raise ValidationError(msg)
 
         self._monitoring[work_item_id] = config
 
@@ -391,10 +407,12 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             ResourceNotFoundError: Not currently monitoring
         """
         if not work_item_id:
-            raise ValidationError("work_item_id cannot be empty")
+            msg = "work_item_id cannot be empty"
+            raise ValidationError(msg)
 
         if work_item_id not in self._monitoring:
-            raise ResourceNotFoundError("WorkItem", work_item_id)
+            msg = "WorkItem"
+            raise ResourceNotFoundError(msg, work_item_id)
 
         # Cancel polling task if running
         if work_item_id in self._polling_tasks:
@@ -440,7 +458,8 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
         comment_data = payload.get("comment")
 
         if not issue or not comment_data:
-            raise ValidationError("Invalid webhook payload: missing issue or comment")
+            msg = "Invalid webhook payload: missing issue or comment"
+            raise ValidationError(msg)
 
         work_item_id = str(issue.get("number", issue.get("id")))
 
@@ -620,9 +639,11 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             ValueError: Invalid parameters
         """
         if not event_type:
-            raise ValueError("event_type cannot be empty")
+            msg = "event_type cannot be empty"
+            raise ValueError(msg)
         if not callable(handler):
-            raise ValueError("handler must be callable")
+            msg = "handler must be callable"
+            raise ValueError(msg)
 
         if event_type not in self._event_handlers:
             self._event_handlers[event_type] = []
@@ -642,7 +663,8 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             ValueError: Handler not registered
         """
         if event_type not in self._event_handlers or handler not in self._event_handlers[event_type]:
-            raise ValueError(f"Handler not subscribed to event type: {event_type}")
+            msg = f"Handler not subscribed to event type: {event_type}"
+            raise ValueError(msg)
 
         self._event_handlers[event_type].remove(handler)
 
@@ -656,7 +678,8 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             ValueError: Invalid event type
         """
         if not hasattr(event, "type"):
-            raise ValueError("event must have a 'type' attribute")
+            msg = "event must have a 'type' attribute"
+            raise ValueError(msg)
 
         event_type = event.type  # type: ignore
         if event_type in self._event_handlers:

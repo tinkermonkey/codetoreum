@@ -202,14 +202,20 @@ class WorkflowRunMapper:
         for stage_dict in audit_result.stages:
             # Validate required fields with meaningful error messages
             if "name" not in stage_dict:
-                raise KeyError(
+                msg = (
                     f"Stage dictionary missing required 'name' field. "
                     f"Available keys: {list(stage_dict.keys())}"
                 )
-            if "status" not in stage_dict:
                 raise KeyError(
+                    msg
+                )
+            if "status" not in stage_dict:
+                msg = (
                     f"Stage dictionary missing required 'status' field for stage '{stage_dict.get('name', 'unknown')}'. "
                     f"Available keys: {list(stage_dict.keys())}"
+                )
+                raise KeyError(
+                    msg
                 )
 
             # Map events within each stage
@@ -236,10 +242,13 @@ class WorkflowRunMapper:
             try:
                 validation = AuditValidationResult(**audit_result.validation)
             except (TypeError, ValueError) as e:
-                raise ValueError(
+                msg = (
                     f"Failed to construct AuditValidationResult from validation data. "
                     f"Error: {e}. "
                     f"Validation data keys: {list(audit_result.validation.keys()) if isinstance(audit_result.validation, dict) else type(audit_result.validation).__name__}"
+                )
+                raise ValueError(
+                    msg
                 ) from e
 
         return WorkflowRunAuditResponse(

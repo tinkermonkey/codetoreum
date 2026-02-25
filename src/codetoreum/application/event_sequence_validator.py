@@ -41,11 +41,14 @@ class PatternElement:
     def __post_init__(self) -> None:
         """Validate pattern element after initialization."""
         if not self.event_types:
-            raise ValueError("event_types must be a non-empty tuple")
+            message = "event_types must be a non-empty tuple"
+            raise ValueError(message)
         if self.min_occurrences < 0:
-            raise ValueError("min_occurrences must be >= 0")
+            message = "min_occurrences must be >= 0"
+            raise ValueError(message)
         if self.max_occurrences is not None and self.max_occurrences < self.min_occurrences:
-            raise ValueError("max_occurrences must be >= min_occurrences")
+            message = "max_occurrences must be >= min_occurrences"
+            raise ValueError(message)
 
 
 @dataclass(frozen=True)
@@ -62,16 +65,12 @@ class ValidationResult:
         # If is_valid is True, all error lists should be empty
         if self.is_valid:
             if self.missing_events or self.unexpected_events or self.out_of_order_events:
-                raise ValueError(
-                    f"ValidationResult inconsistency: is_valid=True but errors present "
-                    f"(missing={len(self.missing_events)}, unexpected={len(self.unexpected_events)}, "
-                    f"out_of_order={len(self.out_of_order_events)})"
-                )
+                message = f"ValidationResult inconsistency: is_valid=True but errors present " f"(missing={len(self.missing_events)}, unexpected={len(self.unexpected_events)}, " f"out_of_order={len(self.out_of_order_events)})"
+                raise ValueError(message)
         # If is_valid is False, at least one error list or error_message should be present
         elif not (self.missing_events or self.unexpected_events or self.out_of_order_events or self.error_message):
-            raise ValueError(
-                "ValidationResult inconsistency: is_valid=False but no errors present"
-            )
+            message = "ValidationResult inconsistency: is_valid=False but no errors present"
+            raise ValueError(message)
 
     def __bool__(self) -> bool:
         """Allow using result in boolean context."""

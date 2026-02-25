@@ -295,9 +295,8 @@ class PipelineManager:
                     await self._cleanup_failed_pipeline(
                         pipeline_id, context, completed_stages, failed_stages
                     )
-                    raise Exception(
-                        f"Stage {stage.name} failed: {stage_result.error}"
-                    )
+                    message = f"Stage {stage.name} failed: {stage_result.error}"
+                    raise Exception(message)
 
             # All stages completed
             duration = (datetime.now(UTC) - start_time).total_seconds()

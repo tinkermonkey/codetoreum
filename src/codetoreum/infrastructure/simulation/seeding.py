@@ -95,7 +95,8 @@ class SimulationDataSeeder:
             track_items: Whether to track created items for cleanup
         """
         if not bootstrap._is_setup:
-            raise ValidationError("Bootstrap must be set up before seeding")
+            message = "Bootstrap must be set up before seeding"
+            raise ValidationError(message)
 
         self.bootstrap = bootstrap
         self.adapters: SimulationAdapters = bootstrap.adapters
@@ -200,7 +201,8 @@ class SimulationDataSeeder:
         project_id = project_id or self._current_project_id
 
         if not project_id:
-            raise ValidationError("No project context. Create a project first or provide project_id.")
+            message = "No project context. Create a project first or provide project_id."
+            raise ValidationError(message)
 
         # Default 3-stage workflow if no stages provided
         if stages is None:
@@ -281,12 +283,14 @@ class SimulationDataSeeder:
         project_id = project_id or self._current_project_id
 
         if not project_id:
-            raise ValidationError("No project context. Create a project first or provide project_id.")
+            message = "No project context. Create a project first or provide project_id."
+            raise ValidationError(message)
 
         for agent_def in agent_definitions:
             agent_name = agent_def.get("name")
             if not agent_name:
-                raise ValidationError("Agent definition must include 'name'")
+                message = "Agent definition must include 'name'"
+                raise ValidationError(message)
 
             # Capabilities are stored as list of strings
             capabilities = agent_def.get("capabilities", ["code_generation"])
@@ -355,7 +359,8 @@ class SimulationDataSeeder:
         project_id = project_id or self._current_project_id
 
         if not project_id:
-            raise ValidationError("No project context. Create a project first or provide project_id.")
+            message = "No project context. Create a project first or provide project_id."
+            raise ValidationError(message)
 
         for i in range(count):
             title = f"{title_prefix} #{i + 1}"
@@ -406,7 +411,8 @@ class SimulationDataSeeder:
         project_id = project_id or self._current_project_id
 
         if not project_id:
-            raise ValidationError("No project context. Create a project first or provide project_id.")
+            message = "No project context. Create a project first or provide project_id."
+            raise ValidationError(message)
 
         self._board_adapter.create_board(project_id, board_id, board_name, column_names)
         self._board_adapter.current_project = project_id
@@ -440,7 +446,8 @@ class SimulationDataSeeder:
         project_id = project_id or self._current_project_id
 
         if not project_id:
-            raise ValidationError("No project context. Create a project first or provide project_id.")
+            message = "No project context. Create a project first or provide project_id."
+            raise ValidationError(message)
 
         self._board_adapter.current_project = project_id
         self._board_adapter.add_item_to_column(board_id, column_name, work_item_id)
@@ -892,7 +899,8 @@ class SimulationDataSeeder:
         file_path = Path(file_path)
 
         if not file_path.exists():
-            raise FileNotFoundError(f"Scenario file not found: {file_path}")
+            message = f"Scenario file not found: {file_path}"
+            raise FileNotFoundError(message)
 
         logger.info(f"Loading scenario from {file_path}...")
 
@@ -900,13 +908,15 @@ class SimulationDataSeeder:
             yaml_data = yaml.safe_load(f)
 
         if not yaml_data:
-            raise ValidationError(f"Empty YAML file: {file_path}")
+            message = f"Empty YAML file: {file_path}"
+            raise ValidationError(message)
 
         # Validate with Pydantic model
         try:
             scenario = ScenarioModel(**yaml_data)
         except Exception as e:
-            raise ValidationError(f"Scenario validation failed: {e}")
+            message = f"Scenario validation failed: {e}"
+            raise ValidationError(message)
 
         logger.info(f"Loaded scenario: {scenario.name} (version {scenario.version})")
 

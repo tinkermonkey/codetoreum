@@ -95,7 +95,8 @@ class MockCodeReviewAdapter(MockEventEmitter, ICodeReviewService):
             ValueError: Review doesn't exist
         """
         if review_id not in self._reviews:
-            raise ValueError(f"Review not found: {review_id}")
+            msg = f"Review not found: {review_id}"
+            raise ValueError(msg)
         return self._reviews[review_id].status
 
     async def get_review_comments(self, review_id: str) -> list[ReviewComment]:
@@ -111,7 +112,8 @@ class MockCodeReviewAdapter(MockEventEmitter, ICodeReviewService):
             ValueError: Review doesn't exist
         """
         if review_id not in self._reviews:
-            raise ValueError(f"Review not found: {review_id}")
+            msg = f"Review not found: {review_id}"
+            raise ValueError(msg)
         # Simplified for mock: return empty list
         return []
 
@@ -128,7 +130,8 @@ class MockCodeReviewAdapter(MockEventEmitter, ICodeReviewService):
             ValueError: Review doesn't exist
         """
         if review_id not in self._reviews:
-            raise ValueError(f"Review not found: {review_id}")
+            msg = f"Review not found: {review_id}"
+            raise ValueError(msg)
 
         review = self._reviews[review_id]
         previous_status = review.status
@@ -159,7 +162,8 @@ class MockCodeReviewAdapter(MockEventEmitter, ICodeReviewService):
             ValueError: Review doesn't exist
         """
         if review_id not in self._reviews:
-            raise ValueError(f"Review not found: {review_id}")
+            msg = f"Review not found: {review_id}"
+            raise ValueError(msg)
 
         review = self._reviews[review_id]
         previous_status = review.status
@@ -263,7 +267,8 @@ class MockCodeReviewAdapter(MockEventEmitter, ICodeReviewService):
             ValueError: Review doesn't exist
         """
         if review_id not in self._reviews:
-            raise ValueError(f"Review not found: {review_id}")
+            msg = f"Review not found: {review_id}"
+            raise ValueError(msg)
 
         review = self._reviews[review_id]
         previous_status = review.status
@@ -305,7 +310,8 @@ class MockCodeReviewAdapter(MockEventEmitter, ICodeReviewService):
             ValueError: Review doesn't exist
         """
         if review_id not in self._reviews:
-            raise ValueError(f"Review not found: {review_id}")
+            msg = f"Review not found: {review_id}"
+            raise ValueError(msg)
 
         review = self._reviews[review_id]
         previous_status = review.status

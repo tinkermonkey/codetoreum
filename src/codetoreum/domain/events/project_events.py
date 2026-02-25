@@ -57,13 +57,17 @@ class ProjectClonedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.project_name:
-            raise ValueError("project_name is required")
+            msg = "project_name is required"
+            raise ValueError(msg)
         if not self.repo_url:
-            raise ValueError("repo_url is required")
+            msg = "repo_url is required"
+            raise ValueError(msg)
         if not self.workspace_path:
-            raise ValueError("workspace_path is required")
+            msg = "workspace_path is required"
+            raise ValueError(msg)
         if not self.branch:
-            raise ValueError("branch is required")
+            msg = "branch is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -89,10 +93,13 @@ class ProjectClonedEvent(CodetoreumEvent):
                 missing_fields.append(field)
 
         if missing_fields:
-            raise ValueError(
+            msg = (
                 f"Cannot deserialize ProjectClonedEvent: missing required field(s) "
                 f"{missing_fields}. All of project_name, repo_url, workspace_path, "
                 f"and branch are required."
+            )
+            raise ValueError(
+                msg
             )
 
         return cls(
@@ -152,11 +159,14 @@ class ProjectCloneFailedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.project_name:
-            raise ValueError("project_name is required")
+            msg = "project_name is required"
+            raise ValueError(msg)
         if not self.repo_url:
-            raise ValueError("repo_url is required")
+            msg = "repo_url is required"
+            raise ValueError(msg)
         if not self.error_message:
-            raise ValueError("error_message is required")
+            msg = "error_message is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -182,10 +192,13 @@ class ProjectCloneFailedEvent(CodetoreumEvent):
                 missing_fields.append(field)
 
         if missing_fields:
-            raise ValueError(
+            msg = (
                 f"Cannot deserialize ProjectCloneFailedEvent: missing required field(s) "
                 f"{missing_fields}. All of project_name, repo_url, and error_message "
                 f"are required."
+            )
+            raise ValueError(
+                msg
             )
 
         return cls(
@@ -233,7 +246,8 @@ class ProjectEnabledEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.project_name:
-            raise ValueError("project_name is required")
+            msg = "project_name is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -251,9 +265,12 @@ class ProjectEnabledEvent(CodetoreumEvent):
             ValueError: If required fields are missing from input dict
         """
         if not data.get("project_name"):
-            raise ValueError(
+            msg = (
                 "Cannot deserialize ProjectEnabledEvent: missing required field "
                 "'project_name'"
+            )
+            raise ValueError(
+                msg
             )
 
         return cls(
@@ -298,7 +315,8 @@ class ProjectDisabledEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.project_name:
-            raise ValueError("project_name is required")
+            msg = "project_name is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -316,9 +334,12 @@ class ProjectDisabledEvent(CodetoreumEvent):
             ValueError: If required fields are missing from input dict
         """
         if not data.get("project_name"):
-            raise ValueError(
+            msg = (
                 "Cannot deserialize ProjectDisabledEvent: missing required field "
                 "'project_name'"
+            )
+            raise ValueError(
+                msg
             )
 
         return cls(
@@ -377,13 +398,17 @@ class OrchestrationCycleCompletedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if self.projects_processed < 0:
-            raise ValueError("projects_processed must be >= 0")
+            msg = "projects_processed must be >= 0"
+            raise ValueError(msg)
         if self.boards_processed < 0:
-            raise ValueError("boards_processed must be >= 0")
+            msg = "boards_processed must be >= 0"
+            raise ValueError(msg)
         if self.total_actions < 0:
-            raise ValueError("total_actions must be >= 0")
+            msg = "total_actions must be >= 0"
+            raise ValueError(msg)
         if self.cycle_duration_ms < 0:
-            raise ValueError("cycle_duration_ms must be >= 0")
+            msg = "cycle_duration_ms must be >= 0"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""

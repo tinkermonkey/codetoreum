@@ -110,9 +110,8 @@ class RedisConfigCache:
                 logger.info("Redis configuration cache initialized")
 
             except Exception as e:
-                raise RedisConfigCacheError(
-                    f"Failed to initialize cache: {e}"
-                ) from e
+                message = f"Failed to initialize cache: {e}"
+                raise RedisConfigCacheError(message)
 
     async def _listen_for_invalidations(self) -> None:
         """Listen for cache invalidation messages."""

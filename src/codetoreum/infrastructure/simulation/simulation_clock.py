@@ -44,7 +44,8 @@ class SimulationClock:
             ValueError: If speed_multiplier is <= 0
         """
         if speed_multiplier <= 0:
-            raise ValueError("Speed multiplier must be positive")
+            message = "Speed multiplier must be positive"
+            raise ValueError(message)
 
         self._speed_multiplier = speed_multiplier
         self._auto_advance = auto_advance
@@ -101,7 +102,8 @@ class SimulationClock:
             ValueError: If delta is negative
         """
         if delta.total_seconds() < 0:
-            raise ValueError("Cannot advance time backwards")
+            message = "Cannot advance time backwards"
+            raise ValueError(message)
 
         # Calculate real-world delay
         real_delay_seconds = delta.total_seconds() / self._speed_multiplier
@@ -134,7 +136,8 @@ class SimulationClock:
 
         with self._lock:
             if target_time < self._current_time:
-                raise ValueError("Cannot advance time backwards")
+                message = "Cannot advance time backwards"
+                raise ValueError(message)
 
             delta = target_time - self._current_time
 
@@ -196,7 +199,8 @@ class SimulationClock:
             ValueError: If neither or both time parameters are provided
         """
         if (at_time is None) == (after_delta is None):
-            raise ValueError("Must provide exactly one of at_time or after_delta")
+            message = "Must provide exactly one of at_time or after_delta"
+            raise ValueError(message)
 
         with self._lock:
             if after_delta is not None:
@@ -257,7 +261,8 @@ class SimulationClock:
             ValueError: If multiplier is <= 0
         """
         if multiplier <= 0:
-            raise ValueError("Speed multiplier must be positive")
+            message = "Speed multiplier must be positive"
+            raise ValueError(message)
 
         with self._lock:
             self._speed_multiplier = multiplier

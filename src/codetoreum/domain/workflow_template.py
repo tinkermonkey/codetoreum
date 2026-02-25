@@ -202,23 +202,23 @@ class WorkflowTemplate:
         for stage in self.stage_templates:
             for dep in stage.dependencies:
                 if dep not in stage_names:
-                    raise DomainError(f"Invalid dependency: {dep} not found")
+                    msg = f"Invalid dependency: {dep} not found"
+                    raise DomainError(msg)
 
         # Check review stages
         for stage in self.stage_templates:
             if stage.stage_type == "review":
                 if not stage.maker_agent_id or not stage.reviewer_agent_id:
-                    raise DomainError(
-                        f"Review stage {stage.name} missing agents"
-                    )
+                    msg = f"Review stage {stage.name} missing agents"
+                    raise DomainError(msg)
                 if stage.maker_agent_id == stage.reviewer_agent_id:
-                    raise DomainError(
-                        f"Review stage {stage.name} has same maker and reviewer"
-                    )
+                    msg = f"Review stage {stage.name} has same maker and reviewer"
+                    raise DomainError(msg)
 
         # Check for cycles
         if self._has_cycles():
-            raise DomainError("Template has circular dependencies")
+            msg = "Template has circular dependencies"
+            raise DomainError(msg)
 
         return True
 

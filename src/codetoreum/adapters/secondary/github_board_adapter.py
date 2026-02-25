@@ -277,13 +277,15 @@ class GitHubBoardAdapter(IBoardService):
             board_node = result.get("node")
 
             if not board_node:
-                raise ResourceNotFoundError("Board", board_id)
+                msg = "Board"
+                raise ResourceNotFoundError(msg, board_id)
 
             return self._parse_board_response(project_id, board_id, board_node)
         except ExternalServiceError:
             raise
         except Exception as e:
-            raise ExternalServiceError("GitHub", f"Failed to fetch board: {e!s}")
+            msg = "GitHub"
+            raise ExternalServiceError(msg, f"Failed to fetch board: {e!s}")
 
     async def get_columns(self, board_id: str) -> list[BoardColumn]:
         """Get all columns for a board.
@@ -332,7 +334,8 @@ class GitHubBoardAdapter(IBoardService):
                     for index, item_id in enumerate(column.work_item_ids)
                 ]
 
-        raise ResourceNotFoundError("Column", column_name)
+        msg = "Column"
+        raise ResourceNotFoundError(msg, column_name)
 
     async def get_item_position(self, work_item_id: str) -> WorkItemPosition:
         """Get current column position of a work item.
@@ -349,8 +352,9 @@ class GitHubBoardAdapter(IBoardService):
         """
         # This would require querying all boards or maintaining a reverse index
         # For now, raise not implemented - clients should track this
+        msg = "get_item_position requires board context; use get_items_in_column instead"
         raise NotImplementedError(
-            "get_item_position requires board context; use get_items_in_column instead"
+            msg
         )
 
     # Command Operations
@@ -374,9 +378,12 @@ class GitHubBoardAdapter(IBoardService):
             Emits 'workitem.column_changed' event with moved_by value
         """
         if not self._current_project_id or not self._current_board_id:
-            raise ValidationError(
+            msg = (
                 "Project and board context required; "
                 "call within get_board context or set context explicitly"
+            )
+            raise ValidationError(
+                msg
             )
 
         # Get current position first
@@ -391,8 +398,9 @@ class GitHubBoardAdapter(IBoardService):
                 break
 
         if not from_column:
+            msg = "WorkItem"
             raise ResourceNotFoundError(
-                "WorkItem", work_item_id
+                msg, work_item_id
             )
 
         # Validate target column exists
@@ -403,8 +411,9 @@ class GitHubBoardAdapter(IBoardService):
                 break
 
         if not target_col:
+            msg = f"Target column '{target_column}' not found on board"
             raise ValidationError(
-                f"Target column '{target_column}' not found on board"
+                msg
             )
 
         # Execute mutation to move item
@@ -435,8 +444,9 @@ class GitHubBoardAdapter(IBoardService):
         option_id = self._find_option_id(board, status_field_id, target_column)
 
         if not status_field_id or not option_id:
+            msg = f"Cannot find field mapping for column '{target_column}'"
             raise ValidationError(
-                f"Cannot find field mapping for column '{target_column}'"
+                msg
             )
 
         try:
@@ -766,7 +776,8 @@ class GitHubBoardAdapter(IBoardService):
                     break
 
             if not status_field:
-                raise ExternalServiceError("GitHub", "Status field not found on board")
+                msg = "GitHub"
+                raise ExternalServiceError(msg, "Status field not found on board")
 
             # Build column map
             columns_by_id: dict[str, str] = {}
@@ -826,8 +837,9 @@ class GitHubBoardAdapter(IBoardService):
             )
 
         except (KeyError, TypeError) as e:
+            msg = "GitHub"
             raise ExternalServiceError(
-                "GitHub", f"Invalid board response format: {e!s}"
+                msg, f"Invalid board response format: {e!s}"
             )
 
     def _find_status_field_id(self, board: ProjectBoard) -> str | None:
@@ -842,9 +854,12 @@ class GitHubBoardAdapter(IBoardService):
         Raises:
             NotImplementedError: Feature requires enhancement to extract field IDs from GraphQL response
         """
-        raise NotImplementedError(
+        msg = (
             "Status field ID extraction requires enhancement to extract field IDs from GraphQL response. "
             "The _parse_board_response method should store field IDs and option IDs in the ProjectBoard dataclass."
+        )
+        raise NotImplementedError(
+            msg
         )
 
     def _find_option_id(
@@ -866,9 +881,12 @@ class GitHubBoardAdapter(IBoardService):
         Raises:
             NotImplementedError: Feature requires enhancement to extract option IDs from GraphQL response
         """
-        raise NotImplementedError(
+        msg = (
             "Option ID extraction requires enhancement to extract option IDs from GraphQL response. "
             "The _parse_board_response method should store option IDs in the Column dataclass."
+        )
+        raise NotImplementedError(
+            msg
         )
 
     async def _create_column(self, board_id: str, column_name: str) -> None:
@@ -882,9 +900,12 @@ class GitHubBoardAdapter(IBoardService):
             NotImplementedError: Feature requires GitHub Projects v2 mutation implementation
             ExternalServiceError: GraphQL mutation failed
         """
-        raise NotImplementedError(
+        msg = (
             "Column creation requires implementation of GitHub Projects v2 mutation to add a new option to the Status field. "
             "This requires extracting the field ID and building the proper GraphQL mutation."
+        )
+        raise NotImplementedError(
+            msg
         )
 
     def _extract_work_item_id(self, item_data: dict) -> str | None:

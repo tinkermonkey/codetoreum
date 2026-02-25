@@ -92,7 +92,8 @@ class InMemoryStorageAdapter(IStorage):
     ) -> None:
         """Upload from file."""
         if not file_path.exists():
-            raise ResourceNotFoundError(f"File not found: {file_path}")
+            msg = f"File not found: {file_path}"
+            raise ResourceNotFoundError(msg)
         # Note: File I/O is intentionally done outside the lock since reading from disk
         # should not block the storage lock. The actual state modification (storage) is locked.
         content = file_path.read_bytes()
@@ -102,7 +103,8 @@ class InMemoryStorageAdapter(IStorage):
         """Download object from memory."""
         with self._lock:
             if key not in self._objects:
-                raise ResourceNotFoundError(f"Object not found: {key}")
+                msg = f"Object not found: {key}"
+                raise ResourceNotFoundError(msg)
             return self._objects[key]
 
     async def download_to_file(self, key: str, file_path: Path) -> None:
@@ -114,7 +116,8 @@ class InMemoryStorageAdapter(IStorage):
         """Delete object from memory."""
         with self._lock:
             if key not in self._objects:
-                raise ResourceNotFoundError(f"Object not found: {key}")
+                msg = f"Object not found: {key}"
+                raise ResourceNotFoundError(msg)
             self._objects.pop(key)
             self._metadata.pop(key)
 
@@ -187,7 +190,8 @@ class InMemoryStorageAdapter(IStorage):
         """Get object metadata."""
         with self._lock:
             if key not in self._metadata:
-                raise ResourceNotFoundError(f"Object not found: {key}")
+                msg = f"Object not found: {key}"
+                raise ResourceNotFoundError(msg)
             return dict(self._metadata[key])
 
     async def update_metadata(
@@ -198,7 +202,8 @@ class InMemoryStorageAdapter(IStorage):
         """Update file metadata."""
         with self._lock:
             if key not in self._metadata:
-                raise ResourceNotFoundError(f"Object not found: {key}")
+                msg = f"Object not found: {key}"
+                raise ResourceNotFoundError(msg)
             self._metadata[key]["metadata"] = metadata
 
     async def copy(
@@ -209,7 +214,8 @@ class InMemoryStorageAdapter(IStorage):
         """Copy a file."""
         with self._lock:
             if source_key not in self._objects:
-                raise ResourceNotFoundError(f"Source not found: {source_key}")
+                msg = f"Source not found: {source_key}"
+                raise ResourceNotFoundError(msg)
             self._objects[destination_key] = self._objects[source_key]
             self._metadata[destination_key] = dict(self._metadata[source_key])
             self._metadata[destination_key]["last_modified"] = datetime.now(UTC)
@@ -246,7 +252,8 @@ class InMemoryStorageAdapter(IStorage):
         """Generate temporary access URL (not supported in memory)."""
         with self._lock:
             if key not in self._objects:
-                raise ResourceNotFoundError(f"Object not found: {key}")
+                msg = f"Object not found: {key}"
+                raise ResourceNotFoundError(msg)
             # Return fake URL for testing
             return f"memory://localhost/{key}?expires={expires_in}&method={method}"
 
@@ -254,14 +261,16 @@ class InMemoryStorageAdapter(IStorage):
         """Get file size."""
         with self._lock:
             if key not in self._metadata:
-                raise ResourceNotFoundError(f"Object not found: {key}")
+                msg = f"Object not found: {key}"
+                raise ResourceNotFoundError(msg)
             return self._metadata[key]["size"]
 
     async def get_content_type(self, key: str) -> str:
         """Get file content type."""
         with self._lock:
             if key not in self._metadata:
-                raise ResourceNotFoundError(f"Object not found: {key}")
+                msg = f"Object not found: {key}"
+                raise ResourceNotFoundError(msg)
             return self._metadata[key]["content_type"]
 
     async def list_prefixes(

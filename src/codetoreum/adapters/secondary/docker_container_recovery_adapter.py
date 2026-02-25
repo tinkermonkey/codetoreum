@@ -164,16 +164,19 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
 
                 self._docker_client = docker.from_env()
             except ImportError as e:
-                raise ContainerError(f"Docker SDK not installed: {e!s}")
+                msg = f"Docker SDK not installed: {e!s}"
+                raise ContainerError(msg)
             except DockerException as e:
-                raise ContainerError(f"Failed to connect to Docker daemon: {e!s}")
+                msg = f"Failed to connect to Docker daemon: {e!s}"
+                raise ContainerError(msg)
             except Exception as e:
                 logger.error(
                     f"UNEXPECTED error connecting to Docker: {e}",
                     exc_info=True,
                     extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR, "error_type": "unexpected"}
                 )
-                raise ContainerError(f"Unexpected error connecting to Docker: {e!s}")
+                msg = f"Unexpected error connecting to Docker: {e!s}"
+                raise ContainerError(msg)
 
         return self._docker_client
 
@@ -241,7 +244,8 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                 return metadata_list
 
             except Exception as e:
-                raise ContainerError(f"Failed to list agent containers: {e!s}")
+                msg = f"Failed to list agent containers: {e!s}"
+                raise ContainerError(msg)
 
         return await loop.run_in_executor(None, _list_containers)
 
@@ -310,8 +314,9 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                 return metadata_list
 
             except Exception as e:
+                msg = f"Failed to list repair cycle containers: {e!s}"
                 raise ContainerError(
-                    f"Failed to list repair cycle containers: {e!s}"
+                    msg
                 )
 
         return await loop.run_in_executor(None, _list_containers)
@@ -1138,7 +1143,10 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
         Raises:
             NotImplementedError: This method should be called through ContainerRecoveryService
         """
-        raise NotImplementedError(
+        msg = (
             "recover_or_cleanup_containers is orchestrated by ContainerRecoveryService. "
             "Call the service instead of invoking this method directly."
+        )
+        raise NotImplementedError(
+            msg
         )

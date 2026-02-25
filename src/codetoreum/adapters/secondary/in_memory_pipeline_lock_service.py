@@ -112,7 +112,8 @@ class InMemoryPipelineLockService(MockEventEmitter, IPipelineLockService):
             ValueError: Invalid parameters
         """
         if not project_id or not board_id or not work_item_id:
-            raise ValueError("project_id, board_id, and work_item_id are required")
+            msg = "project_id, board_id, and work_item_id are required"
+            raise ValueError(msg)
 
         key = f"{project_id}:{board_id}"
 
@@ -166,7 +167,8 @@ class InMemoryPipelineLockService(MockEventEmitter, IPipelineLockService):
             ValueError: Invalid parameters
         """
         if not project_id or not board_id or not work_item_id:
-            raise ValueError("project_id, board_id, and work_item_id are required")
+            msg = "project_id, board_id, and work_item_id are required"
+            raise ValueError(msg)
 
         key = f"{project_id}:{board_id}"
 

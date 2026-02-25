@@ -350,25 +350,32 @@ def create_app(
                 # Allow wildcard only in non-production
                 if origin == "*":
                     if is_production:
-                        raise ValueError(
+                        msg = (
                             "CORS wildcard (*) is not allowed in production. "
                             "Set CODETOREUM_ALLOWED_ORIGINS to specific origins."
+                        )
+                        raise ValueError(
+                            msg
                         )
                     validated_origins.append(origin)
                 else:
                     # Validate origin format (must be http:// or https://)
                     if not (origin.startswith("http://") or origin.startswith("https://")):
+                        msg = f"Invalid CORS origin '{origin}'. Must start with http:// or https://"
                         raise ValueError(
-                            f"Invalid CORS origin '{origin}'. Must start with http:// or https://"
+                            msg
                         )
                     validated_origins.append(origin)
 
             cors_origins = validated_origins if validated_origins else ["http://localhost:3000"]
         # No environment variable set
         elif is_production:
-            raise ValueError(
+            msg = (
                 "CODETOREUM_ALLOWED_ORIGINS must be set in production. "
                 "Example: CODETOREUM_ALLOWED_ORIGINS=https://app.example.com,https://admin.example.com"
+            )
+            raise ValueError(
+                msg
             )
         else:
             # Development default - localhost only

@@ -49,7 +49,8 @@ class AgentCapability:
     def __post_init__(self) -> None:
         """Validate proficiency range."""
         if not 0.0 <= self.proficiency <= 1.0:
-            raise DomainError("Proficiency must be between 0.0 and 1.0")
+            msg = "Proficiency must be between 0.0 and 1.0"
+            raise DomainError(msg)
 
 
 @dataclass
@@ -111,19 +112,24 @@ class Agent:
         - Model must be specified
         """
         if not self.name or not self.name.strip():
-            raise DomainError("Agent must have a non-empty name")
+            msg = "Agent must have a non-empty name"
+            raise DomainError(msg)
 
         if not self.capabilities:
-            raise DomainError("Agent must have at least one capability")
+            msg = "Agent must have at least one capability"
+            raise DomainError(msg)
 
         if self.timeout_seconds <= 0:
-            raise DomainError("Timeout must be positive")
+            msg = "Timeout must be positive"
+            raise DomainError(msg)
 
         if self.max_retries < 0:
-            raise DomainError("Max retries must be non-negative")
+            msg = "Max retries must be non-negative"
+            raise DomainError(msg)
 
         if not self.model:
-            raise DomainError("Agent must specify a model")
+            msg = "Agent must specify a model"
+            raise DomainError(msg)
 
     @classmethod
     def create(
@@ -213,7 +219,8 @@ class Agent:
         Emits: AgentCapabilityAdded event
         """
         if capability.skill in self.capabilities:
-            raise DomainError(f"Agent already has capability {capability.skill}")
+            msg = f"Agent already has capability {capability.skill}"
+            raise DomainError(msg)
 
         self.capabilities[capability.skill] = capability
         self.updated_at = datetime.now(UTC)
@@ -245,10 +252,12 @@ class Agent:
         Emits: AgentCapabilityRemoved event
         """
         if skill not in self.capabilities:
-            raise DomainError(f"Agent does not have capability {skill}")
+            msg = f"Agent does not have capability {skill}"
+            raise DomainError(msg)
 
         if len(self.capabilities) == 1:
-            raise DomainError("Cannot remove last capability")
+            msg = "Cannot remove last capability"
+            raise DomainError(msg)
 
         del self.capabilities[skill]
         self.updated_at = datetime.now(UTC)
@@ -274,10 +283,12 @@ class Agent:
         Emits: AgentCapabilityUpdated event
         """
         if skill not in self.capabilities:
-            raise DomainError(f"Agent does not have capability {skill}")
+            msg = f"Agent does not have capability {skill}"
+            raise DomainError(msg)
 
         if not 0.0 <= proficiency <= 1.0:
-            raise DomainError("Proficiency must be between 0.0 and 1.0")
+            msg = "Proficiency must be between 0.0 and 1.0"
+            raise DomainError(msg)
 
         old_proficiency = self.capabilities[skill].proficiency
         self.capabilities[skill].proficiency = proficiency
@@ -309,7 +320,8 @@ class Agent:
         Emits: AgentModelUpdated event
         """
         if not model:
-            raise DomainError("Model cannot be empty")
+            msg = "Model cannot be empty"
+            raise DomainError(msg)
 
         old_model = self.model
         self.model = model
@@ -339,7 +351,8 @@ class Agent:
         Emits: AgentTimeoutUpdated event
         """
         if timeout_seconds <= 0:
-            raise DomainError("Timeout must be positive")
+            msg = "Timeout must be positive"
+            raise DomainError(msg)
 
         old_timeout = self.timeout_seconds
         self.timeout_seconds = timeout_seconds
@@ -369,7 +382,8 @@ class Agent:
         Emits: AgentMaxRetriesUpdated event
         """
         if max_retries < 0:
-            raise DomainError("Max retries must be non-negative")
+            msg = "Max retries must be non-negative"
+            raise DomainError(msg)
 
         old_max_retries = self.max_retries
         self.max_retries = max_retries
@@ -409,13 +423,17 @@ class Agent:
         """
         # Validate types
         if requires_docker is not None and not isinstance(requires_docker, bool):
-            raise DomainError("requires_docker must be a boolean")
+            msg = "requires_docker must be a boolean"
+            raise DomainError(msg)
         if requires_dev_container is not None and not isinstance(requires_dev_container, bool):
-            raise DomainError("requires_dev_container must be a boolean")
+            msg = "requires_dev_container must be a boolean"
+            raise DomainError(msg)
         if makes_code_changes is not None and not isinstance(makes_code_changes, bool):
-            raise DomainError("makes_code_changes must be a boolean")
+            msg = "makes_code_changes must be a boolean"
+            raise DomainError(msg)
         if filesystem_write_allowed is not None and not isinstance(filesystem_write_allowed, bool):
-            raise DomainError("filesystem_write_allowed must be a boolean")
+            msg = "filesystem_write_allowed must be a boolean"
+            raise DomainError(msg)
 
         old_constraints = {
             "requires_docker": self.requires_docker,
@@ -465,7 +483,8 @@ class Agent:
         Emits: AgentMcpServerAdded event
         """
         if server_name in self.mcp_servers:
-            raise DomainError(f"MCP server {server_name} already configured")
+            msg = f"MCP server {server_name} already configured"
+            raise DomainError(msg)
 
         self.mcp_servers.append(server_name)
         self.updated_at = datetime.now(UTC)
@@ -493,7 +512,8 @@ class Agent:
         Emits: AgentMcpServerRemoved event
         """
         if server_name not in self.mcp_servers:
-            raise DomainError(f"MCP server {server_name} not configured")
+            msg = f"MCP server {server_name} not configured"
+            raise DomainError(msg)
 
         self.mcp_servers.remove(server_name)
         self.updated_at = datetime.now(UTC)

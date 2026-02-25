@@ -158,7 +158,8 @@ class MockCircuitBreaker(ICircuitBreaker):
 
         # Check state first
         if self._state == CircuitState.OPEN:
-            raise CircuitBreakerOpenError(f"Circuit open: {operation_name}")
+            message = f"Circuit open: {operation_name}"
+            raise CircuitBreakerOpenError(message)
 
         # Execute operation
         result = await operation(*args, **kwargs)
@@ -339,7 +340,8 @@ class MockTimeout(ITimeout):
                     "duration_seconds": duration,
                     "timed_out": True
                 })
-                raise ResilienceTimeoutError(f"Operation {operation_name} timed out")
+                message = f"Operation {operation_name} timed out"
+                raise ResilienceTimeoutError(message)
         else:
             # No timeout, just execute
             result = await operation(*args, **kwargs)

@@ -37,7 +37,8 @@ def extract_repo_name(repo_url: str) -> str:
         'repo'
     """
     if not repo_url or not repo_url.strip():
-        raise ValueError("repo_url cannot be empty, None, or whitespace-only")
+        msg = "repo_url cannot be empty, None, or whitespace-only"
+        raise ValueError(msg)
 
     # Remove trailing .git if present
     url = repo_url.rstrip("/")

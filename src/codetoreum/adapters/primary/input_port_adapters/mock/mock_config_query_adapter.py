@@ -124,7 +124,8 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
             return self._project_config_to_info(cfg)
         with self._lock:
             if project_id not in self._projects:
-                raise ConfigNotFoundError(f"Project with ID {project_id} not found")
+                msg = f"Project with ID {project_id} not found"
+                raise ConfigNotFoundError(msg)
             return self._projects[project_id]
 
     async def get_project_config_by_name(
@@ -136,7 +137,8 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
             return self._project_config_to_info(cfg)
         with self._lock:
             if project_name not in self._projects_by_name:
-                raise ConfigNotFoundError(f"Project with name '{project_name}' not found")
+                msg = f"Project with name '{project_name}' not found"
+                raise ConfigNotFoundError(msg)
             project_id = self._projects_by_name[project_name]
             return self._projects[project_id]
 
@@ -149,9 +151,11 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
             return self._agent_config_to_info(cfg)
         with self._lock:
             if project_id not in self._agents:
-                raise ConfigNotFoundError(f"Project with ID {project_id} not found")
+                msg = f"Project with ID {project_id} not found"
+                raise ConfigNotFoundError(msg)
             if agent_name not in self._agents[project_id]:
-                raise AgentNotFoundError(f"Agent '{agent_name}' not found in project")
+                msg = f"Agent '{agent_name}' not found in project"
+                raise AgentNotFoundError(msg)
             return self._agents[project_id][agent_name]
 
     async def get_pipeline_config(
@@ -163,10 +167,12 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
             return self._pipeline_config_to_info(cfg)
         with self._lock:
             if project_id not in self._pipelines:
-                raise PipelineNotFoundError(f"Project with ID {project_id} not found")
+                msg = f"Project with ID {project_id} not found"
+                raise PipelineNotFoundError(msg)
             if pipeline_name not in self._pipelines[project_id]:
+                msg = f"Pipeline '{pipeline_name}' not found in project"
                 raise PipelineNotFoundError(
-                    f"Pipeline '{pipeline_name}' not found in project"
+                    msg
                 )
             return self._pipelines[project_id][pipeline_name]
 
@@ -327,7 +333,8 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
                     "description": proj.description,
                     "version": version,
                 }
-            raise ConfigNotFoundError(f"Configuration with ID {config_id} not found")
+            msg = f"Configuration with ID {config_id} not found"
+            raise ConfigNotFoundError(msg)
 
     async def count_configs(
         self, config_type: str | None = None, project_id: str | None = None

@@ -100,7 +100,8 @@ class EventBusRegistry:
                 logger.info("Registered simulation clock")
 
         except Exception as e:
-            raise EventBusWiringError(f"Failed to register services: {e}") from e
+            message = f"Failed to register services: {e}"
+            raise EventBusWiringError(message) from e
 
     def register_handlers(
         self,
@@ -139,7 +140,8 @@ class EventBusRegistry:
             )
 
         except Exception as e:
-            raise EventBusWiringError(f"Failed to register handlers: {e}") from e
+            message = f"Failed to register handlers: {e}"
+            raise EventBusWiringError(message) from e
 
     def _register_workflow_handler(self) -> None:
         """Register workflow event handler."""

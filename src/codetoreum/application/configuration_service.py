@@ -114,9 +114,8 @@ class ConfigurationService:
                     command.project_name
                 )
             except ConfigNotFoundError:
-                raise ConfigNotFoundError(
-                    f"Project '{command.project_name}' not found"
-                )
+                message = f"Project '{command.project_name}' not found"
+                raise ConfigNotFoundError(message)
 
             # Validate updates
             validation = self.validator.validate_project_updates(
@@ -218,9 +217,8 @@ class ConfigurationService:
                 command.project_name
             )
         except ConfigNotFoundError:
-            raise ConfigNotFoundError(
-                f"Project '{command.project_name}' not found"
-            )
+            message = f"Project '{command.project_name}' not found"
+            raise ConfigNotFoundError(message)
 
         # Load agent config
         try:
@@ -334,9 +332,8 @@ class ConfigurationService:
                 command.project_name
             )
         except ConfigNotFoundError:
-            raise ConfigNotFoundError(
-                f"Project '{command.project_name}' not found"
-            )
+            message = f"Project '{command.project_name}' not found"
+            raise ConfigNotFoundError(message)
 
         # Load pipeline config
         try:
@@ -435,9 +432,8 @@ class ConfigurationService:
                 command.project_name
             )
         except ConfigNotFoundError:
-            raise ConfigNotFoundError(
-                f"Project '{command.project_name}' not found"
-            )
+            message = f"Project '{command.project_name}' not found"
+            raise ConfigNotFoundError(message)
 
         # Validate
         validation = self.validator.validate_environment_variable(
@@ -466,7 +462,8 @@ class ConfigurationService:
                             exc_info=True,
                             extra={"error_id": "ERR_CONFIG_ENCRYPT_ENV_VAR_FAILURE"}
                         )
-                        raise ValidationError(f"Failed to encrypt variable: {e}")
+                        message = f"Failed to encrypt variable: {e}"
+                        raise ValidationError(message)
                 else:
                     logger.warning(
                         f"No encryption service configured. Storing secret "
@@ -549,15 +546,13 @@ class ConfigurationService:
                 command.project_name
             )
         except ConfigNotFoundError:
-            raise ConfigNotFoundError(
-                f"Project '{command.project_name}' not found"
-            )
+            message = f"Project '{command.project_name}' not found"
+            raise ConfigNotFoundError(message)
 
         # Check if variable exists
         if command.variable_name not in config.environment_variables:
-            raise ValidationError(
-                f"Environment variable '{command.variable_name}' not found"
-            )
+            message = f"Environment variable '{command.variable_name}' not found"
+            raise ValidationError(message)
 
         # Remove variable
         del config.environment_variables[command.variable_name]
@@ -613,18 +608,19 @@ class ConfigurationService:
                 command.project_name
             )
         except ConfigNotFoundError:
-            raise ConfigNotFoundError(
-                f"Project '{command.project_name}' not found"
-            )
+            message = f"Project '{command.project_name}' not found"
+            raise ConfigNotFoundError(message)
 
         # Validate command file exists
         command_path = Path(command.command_path)
         if not command_path.exists():
-            raise ValidationError(f"Command file not found: {command.command_path}")
+            message = f"Command file not found: {command.command_path}"
+            raise ValidationError(message)
 
         # Validate command file format (basic check)
         if not command_path.suffix == ".md":
-            raise ValidationError("Command file must be a .md file")
+            message = "Command file must be a .md file"
+            raise ValidationError(message)
 
         # Mount command
         config.mounted_commands[command.command_name] = {
@@ -684,15 +680,13 @@ class ConfigurationService:
                 command.project_name
             )
         except ConfigNotFoundError:
-            raise ConfigNotFoundError(
-                f"Project '{command.project_name}' not found"
-            )
+            message = f"Project '{command.project_name}' not found"
+            raise ConfigNotFoundError(message)
 
         # Check if command exists
         if command.command_name not in config.mounted_commands:
-            raise ValidationError(
-                f"Command '{command.command_name}' not mounted"
-            )
+            message = f"Command '{command.command_name}' not mounted"
+            raise ValidationError(message)
 
         # Unmount command
         del config.mounted_commands[command.command_name]
@@ -746,9 +740,8 @@ class ConfigurationService:
                 command.project_name
             )
         except ConfigNotFoundError:
-            raise ConfigNotFoundError(
-                f"Project '{command.project_name}' not found"
-            )
+            message = f"Project '{command.project_name}' not found"
+            raise ConfigNotFoundError(message)
 
         # Validate sub-agent config
         validation = self.validator.validate_subagent_config(
@@ -814,15 +807,13 @@ class ConfigurationService:
                 command.project_name
             )
         except ConfigNotFoundError:
-            raise ConfigNotFoundError(
-                f"Project '{command.project_name}' not found"
-            )
+            message = f"Project '{command.project_name}' not found"
+            raise ConfigNotFoundError(message)
 
         # Check if sub-agent exists
         if command.subagent_name not in config.mounted_subagents:
-            raise ValidationError(
-                f"Sub-agent '{command.subagent_name}' not mounted"
-            )
+            message = f"Sub-agent '{command.subagent_name}' not mounted"
+            raise ValidationError(message)
 
         # Unmount sub-agent
         del config.mounted_subagents[command.subagent_name]

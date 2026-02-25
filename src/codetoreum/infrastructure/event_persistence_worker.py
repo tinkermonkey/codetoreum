@@ -93,9 +93,8 @@ class EventPersistenceWorker:
             EventPersistenceWorkerError: If worker is already running
         """
         if self._running:
-            raise EventPersistenceWorkerError(
-                f"Worker {self.worker_id} is already running"
-            )
+            message = f"Worker {self.worker_id} is already running"
+            raise EventPersistenceWorkerError(message)
 
         self._running = True
         self._stats["started_at"] = datetime.now(UTC)

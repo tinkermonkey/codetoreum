@@ -44,7 +44,8 @@ class ReviewFinding:
     def __post_init__(self) -> None:
         """Validate finding data."""
         if not self.description or not self.description.strip():
-            raise ValueError("Finding description cannot be empty")
+            msg = "Finding description cannot be empty"
+            raise ValueError(msg)
 
 
 @dataclass
@@ -112,7 +113,8 @@ class ReviewCycleRequest:
     def __post_init__(self) -> None:
         """Validate request data."""
         if self.max_iterations <= 0:
-            raise ValueError(f"max_iterations must be positive, got {self.max_iterations}")
+            msg = f"max_iterations must be positive, got {self.max_iterations}"
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True)
@@ -158,9 +160,12 @@ class ReviewCycleState:
     def __post_init__(self) -> None:
         """Validate state data."""
         if self.current_iteration > self.max_iterations:
-            raise ValueError(
+            msg = (
                 f"current_iteration ({self.current_iteration}) cannot exceed "
                 f"max_iterations ({self.max_iterations})"
+            )
+            raise ValueError(
+                msg
             )
 
 
@@ -185,7 +190,8 @@ class ReviewCycleResult:
     def __post_init__(self) -> None:
         """Validate result data."""
         if self.total_iterations <= 0:
-            raise ValueError(f"total_iterations must be positive, got {self.total_iterations}")
+            msg = f"total_iterations must be positive, got {self.total_iterations}"
+            raise ValueError(msg)
 
 
 class IReviewCycle(ABC):

@@ -78,13 +78,15 @@ class GitRepositoryAdapter(IRepository):
         for arg in args:
             # Remove null bytes and ensure arguments are strings
             if not isinstance(arg, str):
-                raise ValidationError(f"Invalid argument type: {type(arg)}")
+                msg = f"Invalid argument type: {type(arg)}"
+                raise ValidationError(msg)
 
             sanitized_arg = arg.replace("\x00", "")
 
             # Validate argument doesn't contain dangerous patterns
             if sanitized_arg.startswith("-") and ".." in sanitized_arg:
-                raise ValidationError(f"Potentially dangerous argument: {arg}")
+                msg = f"Potentially dangerous argument: {arg}"
+                raise ValidationError(msg)
 
             sanitized.append(sanitized_arg)
 
@@ -150,16 +152,22 @@ class GitRepositoryAdapter(IRepository):
                 error_text = e.stderr.lower()
 
                 if "authentication" in error_text or "permission denied" in error_text:
-                    raise AuthenticationError(f"Git authentication failed: {e.stderr}")
+                    msg = f"Git authentication failed: {e.stderr}"
+                    raise AuthenticationError(msg)
                 if "conflict" in error_text or "merge conflict" in error_text:
-                    raise MergeConflictError(f"Merge conflict detected: {e.stderr}")
+                    msg = f"Merge conflict detected: {e.stderr}"
+                    raise MergeConflictError(msg)
                 if "not found" in error_text:
-                    raise ResourceNotFoundError("Git resource", str(args))
-                raise RepositoryError(f"Git command failed: {e.stderr}")
+                    msg = "Git resource"
+                    raise ResourceNotFoundError(msg, str(args))
+                msg = f"Git command failed: {e.stderr}"
+                raise RepositoryError(msg)
             except subprocess.TimeoutExpired:
-                raise RepositoryError(f"Git command timed out after {self.config.timeout_seconds}s")
+                msg = f"Git command timed out after {self.config.timeout_seconds}s"
+                raise RepositoryError(msg)
             except FileNotFoundError:
-                raise RepositoryError(f"Git executable not found at: {self.config.git_path}")
+                msg = f"Git executable not found at: {self.config.git_path}"
+                raise RepositoryError(msg)
 
         return await loop.run_in_executor(None, _run)
 
@@ -171,10 +179,12 @@ class GitRepositoryAdapter(IRepository):
     ) -> RepositoryId:
         """Clone a repository."""
         if not url:
-            raise ValidationError("Repository URL is required")
+            msg = "Repository URL is required"
+            raise ValidationError(msg)
 
         if not destination:
-            raise ValidationError("Destination path is required")
+            msg = "Destination path is required"
+            raise ValidationError(msg)
 
         # Build clone command
         args = ["clone"]
@@ -198,7 +208,8 @@ class GitRepositoryAdapter(IRepository):
     ) -> None:
         """Checkout a branch."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         args = ["checkout"]
 
@@ -217,7 +228,8 @@ class GitRepositoryAdapter(IRepository):
     ) -> None:
         """Create a new branch."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         args = ["branch", branch_name]
 
@@ -236,10 +248,12 @@ class GitRepositoryAdapter(IRepository):
     ) -> CommitHash:
         """Create a commit."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         if not message:
-            raise ValidationError("Commit message is required")
+            msg = "Commit message is required"
+            raise ValidationError(msg)
 
         # Stage files
         if files:
@@ -275,7 +289,8 @@ class GitRepositoryAdapter(IRepository):
     ) -> None:
         """Push commits to remote."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         args = ["push"]
 
@@ -301,7 +316,8 @@ class GitRepositoryAdapter(IRepository):
     ) -> None:
         """Pull commits from remote."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         args = ["pull", remote]
 
@@ -318,7 +334,8 @@ class GitRepositoryAdapter(IRepository):
     ) -> None:
         """Fetch from remote."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         args = ["fetch", remote]
 
@@ -335,7 +352,8 @@ class GitRepositoryAdapter(IRepository):
     ) -> str:
         """Get diff between two refs."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         result = await self._run_git_command(
             ["diff", f"{base}...{target}"],
@@ -348,7 +366,8 @@ class GitRepositoryAdapter(IRepository):
     async def status(self, repo_path: Path) -> RepositoryStatus:
         """Get repository status."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         # Get current branch
         # Use check=False because this may fail if there are no commits yet
@@ -438,7 +457,8 @@ class GitRepositoryAdapter(IRepository):
     ) -> list[str]:
         """List branches."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         args = ["branch", "--list"]
 
@@ -468,10 +488,12 @@ class GitRepositoryAdapter(IRepository):
     ) -> MergeResult:
         """Merge a branch."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         if strategy not in ("merge", "rebase", "squash"):
-            raise ValidationError(f"Invalid merge strategy: {strategy}")
+            msg = f"Invalid merge strategy: {strategy}"
+            raise ValidationError(msg)
 
         try:
             if strategy == "merge":
@@ -515,7 +537,8 @@ class GitRepositoryAdapter(IRepository):
     ) -> str:
         """Get content of a file at a specific ref."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         if ref:
             # Get file from git object database
@@ -527,7 +550,8 @@ class GitRepositoryAdapter(IRepository):
         # Read from working tree
         full_path = repo_path / file_path
         if not full_path.exists():
-            raise ResourceNotFoundError("File", file_path)
+            msg = "File"
+            raise ResourceNotFoundError(msg, file_path)
 
         return full_path.read_text()
 
@@ -538,7 +562,8 @@ class GitRepositoryAdapter(IRepository):
     ) -> dict:
         """Get information about a commit."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         # Get commit info in JSON format
         result = await self._run_git_command(
@@ -553,7 +578,8 @@ class GitRepositoryAdapter(IRepository):
 
         lines = result.stdout.splitlines()
         if len(lines) < 5:
-            raise RepositoryError(f"Invalid commit info format for {commit_sha}")
+            msg = f"Invalid commit info format for {commit_sha}"
+            raise RepositoryError(msg)
 
         return {
             "sha": lines[0],
@@ -573,7 +599,8 @@ class GitRepositoryAdapter(IRepository):
     ) -> list[dict]:
         """Get commit history."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         args = [
             "log",
@@ -616,10 +643,12 @@ class GitRepositoryAdapter(IRepository):
     ) -> None:
         """Add a remote."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         if not name or not url:
-            raise ValidationError("Remote name and URL are required")
+            msg = "Remote name and URL are required"
+            raise ValidationError(msg)
 
         await self._run_git_command(["remote", "add", name, url], cwd=repo_path)
 
@@ -630,10 +659,12 @@ class GitRepositoryAdapter(IRepository):
     ) -> None:
         """Remove a remote."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         if not name:
-            raise ValidationError("Remote name is required")
+            msg = "Remote name is required"
+            raise ValidationError(msg)
 
         await self._run_git_command(["remote", "remove", name], cwd=repo_path)
 

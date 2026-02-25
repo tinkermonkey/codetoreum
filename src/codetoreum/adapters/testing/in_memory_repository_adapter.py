@@ -85,10 +85,12 @@ class InMemoryRepositoryAdapter(IRepository):
             ValidationError: If url or destination is None/empty
         """
         if not url:
-            raise ValidationError("Repository URL is required")
+            msg = "Repository URL is required"
+            raise ValidationError(msg)
 
         if not destination:
-            raise ValidationError("Destination path is required")
+            msg = "Destination path is required"
+            raise ValidationError(msg)
 
         with self._lock:
             repo_id = str(uuid4())
@@ -141,10 +143,12 @@ class InMemoryRepositoryAdapter(IRepository):
             ValidationError: If repo_path or branch is None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         if not branch:
-            raise ValidationError("Branch name is required")
+            msg = "Branch name is required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
@@ -156,7 +160,8 @@ class InMemoryRepositoryAdapter(IRepository):
                     current_commit = self._branches[(repo_id, current_branch)]
                     self._branches[(repo_id, branch)] = current_commit
                 else:
-                    raise ResourceNotFoundError("Branch", branch)
+                    msg = "Branch"
+                    raise ResourceNotFoundError(msg, branch)
 
             self._repositories[repo_id]["current_branch"] = branch
 
@@ -179,10 +184,12 @@ class InMemoryRepositoryAdapter(IRepository):
             ValidationError: If repo_path or branch_name is None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         if not branch_name:
-            raise ValidationError("Branch name is required")
+            msg = "Branch name is required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
@@ -190,7 +197,8 @@ class InMemoryRepositoryAdapter(IRepository):
             source_branch = from_branch or self._repositories[repo_id]["current_branch"]
 
             if (repo_id, source_branch) not in self._branches:
-                raise ResourceNotFoundError("Branch", source_branch)
+                msg = "Branch"
+                raise ResourceNotFoundError(msg, source_branch)
 
             # Create new branch pointing to same commit as source
             source_commit = self._branches[(repo_id, source_branch)]
@@ -236,13 +244,16 @@ class InMemoryRepositoryAdapter(IRepository):
             ValidationError: If required parameters are None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         if not message or not message.strip():
-            raise ValidationError("Commit message is required")
+            msg = "Commit message is required"
+            raise ValidationError(msg)
 
         if not author_name or not author_email:
-            raise ValidationError("Author name and email are required")
+            msg = "Author name and email are required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
@@ -323,19 +334,22 @@ class InMemoryRepositoryAdapter(IRepository):
             ValidationError: If repo_path is None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
         with self._lock:
             if (repo_id, remote) not in self._remotes:
-                raise ResourceNotFoundError("Remote", remote)
+                msg = "Remote"
+                raise ResourceNotFoundError(msg, remote)
 
             # In-memory simulation, just mark as pushed
             target_branch = branch or self._repositories[repo_id]["current_branch"]
 
             if (repo_id, target_branch) not in self._branches:
-                raise ResourceNotFoundError("Branch", target_branch)
+                msg = "Branch"
+                raise ResourceNotFoundError(msg, target_branch)
 
         # Simulate push delay
         await asyncio.sleep(0.01)
@@ -359,13 +373,15 @@ class InMemoryRepositoryAdapter(IRepository):
             ValidationError: If repo_path is None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
         with self._lock:
             if (repo_id, remote) not in self._remotes:
-                raise ResourceNotFoundError("Remote", remote)
+                msg = "Remote"
+                raise ResourceNotFoundError(msg, remote)
 
         # Simulate pull delay
         await asyncio.sleep(0.01)
@@ -389,13 +405,15 @@ class InMemoryRepositoryAdapter(IRepository):
             ValidationError: If repo_path is None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
         with self._lock:
             if (repo_id, remote) not in self._remotes:
-                raise ResourceNotFoundError("Remote", remote)
+                msg = "Remote"
+                raise ResourceNotFoundError(msg, remote)
 
         # Simulate fetch delay
         await asyncio.sleep(0.01)
@@ -422,13 +440,16 @@ class InMemoryRepositoryAdapter(IRepository):
             ValidationError: If any parameter is None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         if not base:
-            raise ValidationError("Base ref is required")
+            msg = "Base ref is required"
+            raise ValidationError(msg)
 
         if not target:
-            raise ValidationError("Target ref is required")
+            msg = "Target ref is required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
@@ -459,7 +480,8 @@ index abc123..def456 100644
             ValidationError: If repo_path is None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
@@ -496,7 +518,8 @@ index abc123..def456 100644
             ValidationError: If repo_path is None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
@@ -530,16 +553,19 @@ index abc123..def456 100644
             ValidationError: If repo_path or branch is None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         if not branch:
-            raise ValidationError("Branch name is required")
+            msg = "Branch name is required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
         with self._lock:
             if (repo_id, branch) not in self._branches:
-                raise ResourceNotFoundError("Branch", branch)
+                msg = "Branch"
+                raise ResourceNotFoundError(msg, branch)
 
             current_branch = self._repositories[repo_id]["current_branch"]
             current_commit = self._branches[(repo_id, current_branch)]
@@ -589,10 +615,12 @@ index abc123..def456 100644
             ValidationError: If repo_path or file_path is None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         if not file_path:
-            raise ValidationError("File path is required")
+            msg = "File path is required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
@@ -625,10 +653,12 @@ index abc123..def456 100644
             ValidationError: If repo_path or commit_sha is None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         if not commit_sha:
-            raise ValidationError("Commit SHA is required")
+            msg = "Commit SHA is required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
@@ -636,7 +666,8 @@ index abc123..def456 100644
             commit_key = (repo_id, commit_sha)
 
             if commit_key not in self._commits:
-                raise ResourceNotFoundError("Commit", commit_sha)
+                msg = "Commit"
+                raise ResourceNotFoundError(msg, commit_sha)
 
             commit = self._commits[commit_key]
             return {
@@ -674,7 +705,8 @@ index abc123..def456 100644
             ValidationError: If repo_path is None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
@@ -682,7 +714,8 @@ index abc123..def456 100644
             target_branch = branch or self._repositories[repo_id]["current_branch"]
 
             if (repo_id, target_branch) not in self._branches:
-                raise ResourceNotFoundError("Branch", target_branch)
+                msg = "Branch"
+                raise ResourceNotFoundError(msg, target_branch)
 
             # Get commits starting from branch HEAD
             commits = []
@@ -731,13 +764,16 @@ index abc123..def456 100644
             ValidationError: If any parameter is None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         if not name or not name.strip():
-            raise ValidationError("Remote name is required")
+            msg = "Remote name is required"
+            raise ValidationError(msg)
 
         if not url or not url.strip():
-            raise ValidationError("Remote URL is required")
+            msg = "Remote URL is required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
@@ -761,10 +797,12 @@ index abc123..def456 100644
             ValidationError: If repo_path or name is None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         if not name:
-            raise ValidationError("Remote name is required")
+            msg = "Remote name is required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
@@ -772,7 +810,8 @@ index abc123..def456 100644
             remote_key = (repo_id, name)
 
             if remote_key not in self._remotes:
-                raise ResourceNotFoundError("Remote", name)
+                msg = "Remote"
+                raise ResourceNotFoundError(msg, name)
 
             del self._remotes[remote_key]
 
@@ -798,7 +837,8 @@ index abc123..def456 100644
                 if repo_data["path"] == path_str:
                     return repo_id
 
-        raise ResourceNotFoundError("Repository", path_str)
+        msg = "Repository"
+        raise ResourceNotFoundError(msg, path_str)
 
     def set_file_content(self, repo_path: Path, file_path: str, content: str) -> None:
         """

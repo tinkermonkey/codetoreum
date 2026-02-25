@@ -161,7 +161,8 @@ class AgentExecution:
         Emits: ExecutionStarted event
         """
         if self.status != ExecutionStatus.INITIALIZED:
-            raise DomainError(f"Cannot start execution in status {self.status.value}")
+            msg = f"Cannot start execution in status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = ExecutionStatus.RUNNING
         self.started_at = datetime.now(UTC)
@@ -198,9 +199,8 @@ class AgentExecution:
         Emits: ExecutionCompleted event
         """
         if self.status != ExecutionStatus.RUNNING:
-            raise DomainError(
-                f"Cannot complete execution in status {self.status.value}"
-            )
+            msg = f"Cannot complete execution in status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = ExecutionStatus.COMPLETED
         self.completed_at = datetime.now(UTC)
@@ -243,7 +243,8 @@ class AgentExecution:
         Emits: ExecutionFailed event
         """
         if self.status not in [ExecutionStatus.INITIALIZED, ExecutionStatus.RUNNING]:
-            raise DomainError(f"Cannot fail execution in status {self.status.value}")
+            msg = f"Cannot fail execution in status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = ExecutionStatus.FAILED
         self.completed_at = datetime.now(UTC)
@@ -276,7 +277,8 @@ class AgentExecution:
         Emits: ExecutionTimeout event
         """
         if self.status != ExecutionStatus.RUNNING:
-            raise DomainError(f"Cannot timeout execution in status {self.status.value}")
+            msg = f"Cannot timeout execution in status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = ExecutionStatus.TIMEOUT
         self.completed_at = datetime.now(UTC)
@@ -314,9 +316,8 @@ class AgentExecution:
             ExecutionStatus.RUNNING,
             ExecutionStatus.PAUSED,
         ]:
-            raise DomainError(
-                f"Cannot cancel execution in status {self.status.value}"
-            )
+            msg = f"Cannot cancel execution in status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = ExecutionStatus.CANCELLED
         self.completed_at = datetime.now(UTC)
@@ -351,7 +352,8 @@ class AgentExecution:
         Emits: ExecutionPaused event
         """
         if self.status != ExecutionStatus.RUNNING:
-            raise DomainError(f"Cannot pause execution in status {self.status.value}")
+            msg = f"Cannot pause execution in status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = ExecutionStatus.PAUSED
 
@@ -374,7 +376,8 @@ class AgentExecution:
         Emits: ExecutionResumed event
         """
         if self.status != ExecutionStatus.PAUSED:
-            raise DomainError(f"Cannot resume execution in status {self.status.value}")
+            msg = f"Cannot resume execution in status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = ExecutionStatus.RUNNING
 

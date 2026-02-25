@@ -56,9 +56,11 @@ class CapturingMockEventEmitter(IEventEmitter):
             ValueError: If event_type is invalid or handler is not callable
         """
         if not event_type:
-            raise ValueError("event_type cannot be empty")
+            msg = "event_type cannot be empty"
+            raise ValueError(msg)
         if not callable(handler):
-            raise ValueError("handler must be callable")
+            msg = "handler must be callable"
+            raise ValueError(msg)
 
         if event_type == "*":
             self._wildcard_handlers.append(handler)
@@ -79,13 +81,15 @@ class CapturingMockEventEmitter(IEventEmitter):
         """
         if event_type == "*":
             if handler not in self._wildcard_handlers:
-                raise ValueError(f"Handler not subscribed to {event_type}")
+                msg = f"Handler not subscribed to {event_type}"
+                raise ValueError(msg)
             self._wildcard_handlers.remove(handler)
         else:
             if event_type not in self._handlers or handler not in self._handlers[
                 event_type
             ]:
-                raise ValueError(f"Handler not subscribed to {event_type}")
+                msg = f"Handler not subscribed to {event_type}"
+                raise ValueError(msg)
             self._handlers[event_type].remove(handler)
 
     def emit(self, event) -> None:  # type: ignore
@@ -98,7 +102,8 @@ class CapturingMockEventEmitter(IEventEmitter):
             ValueError: If event is invalid or not a CodetoreumEvent
         """
         if event is None:
-            raise ValueError("event cannot be None")
+            msg = "event cannot be None"
+            raise ValueError(msg)
 
         # Store event for later inspection
         self._events.append(event)

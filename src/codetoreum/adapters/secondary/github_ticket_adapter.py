@@ -222,7 +222,8 @@ class GitHubTicketAdapter(ITicketSystem):
 
                 # Handle authentication errors
                 if response.status_code == 401:
-                    raise AuthenticationError("Invalid GitHub token")
+                    msg = "Invalid GitHub token"
+                    raise AuthenticationError(msg)
 
                 # Handle rate limiting with intelligent backoff
                 if response.status_code == 403:
@@ -236,7 +237,8 @@ class GitHubTicketAdapter(ITicketSystem):
                             backoff_seconds = self.config.retry_delay_seconds * (2 ** attempt)
                             await asyncio.sleep(min(wait_seconds, backoff_seconds, 60))
                             continue
-                        raise ExternalServiceError("GitHub", "Rate limit exceeded")
+                        msg = "GitHub"
+                        raise ExternalServiceError(msg, "Rate limit exceeded")
 
                 return response
 
@@ -244,15 +246,18 @@ class GitHubTicketAdapter(ITicketSystem):
                 if attempt < self.config.max_retries - 1:
                     await asyncio.sleep(self.config.retry_delay_seconds * (2 ** attempt))
                     continue
-                raise ExternalServiceError("GitHub", "Request timeout")
+                msg = "GitHub"
+                raise ExternalServiceError(msg, "Request timeout")
             except httpx.RequestError as e:
                 if attempt < self.config.max_retries - 1:
                     await asyncio.sleep(self.config.retry_delay_seconds * (2 ** attempt))
                     continue
                 sanitized_error = self._sanitize_error_message(str(e))
-                raise ExternalServiceError("GitHub", f"Request failed: {sanitized_error}")
+                msg = "GitHub"
+                raise ExternalServiceError(msg, f"Request failed: {sanitized_error}")
 
-        raise ExternalServiceError("GitHub", "Max retries exceeded")
+        msg = "GitHub"
+        raise ExternalServiceError(msg, "Max retries exceeded")
 
     def _map_github_issue_to_work_item(self, issue: dict[str, Any], project_id: str) -> WorkItem:
         """
@@ -333,10 +338,12 @@ class GitHubTicketAdapter(ITicketSystem):
         response = await self._make_request("GET", path)
 
         if response.status_code == 404:
-            raise WorkItemNotFoundError(f"Work item {item_id} not found")
+            msg = f"Work item {item_id} not found"
+            raise WorkItemNotFoundError(msg)
         if response.status_code != 200:
             sanitized_error = self._sanitize_error_message(response.text)
-            raise ExternalServiceError("GitHub", f"Unexpected status {response.status_code}: {sanitized_error}")
+            msg = "GitHub"
+            raise ExternalServiceError(msg, f"Unexpected status {response.status_code}: {sanitized_error}")
 
         issue = response.json()
         # Extract project_id from repository
@@ -358,7 +365,8 @@ class GitHubTicketAdapter(ITicketSystem):
     ) -> WorkItem:
         """Create a new work item."""
         if not title:
-            raise ValidationError("Title is required")
+            msg = "Title is required"
+            raise ValidationError(msg)
 
         # Build request payload
         payload: dict[str, Any] = {
@@ -385,7 +393,8 @@ class GitHubTicketAdapter(ITicketSystem):
         response = await self._make_request("POST", path, json=payload)
 
         if response.status_code != 201:
-            raise ExternalServiceError("GitHub", f"Failed to create issue: {response.text}")
+            msg = "GitHub"
+            raise ExternalServiceError(msg, f"Failed to create issue: {response.text}")
 
         issue = response.json()
         return self._map_github_issue_to_work_item(issue, project_id)
@@ -418,9 +427,11 @@ class GitHubTicketAdapter(ITicketSystem):
         response = await self._make_request("PATCH", path, json=payload)
 
         if response.status_code == 404:
-            raise WorkItemNotFoundError(f"Work item {item_id} not found")
+            msg = f"Work item {item_id} not found"
+            raise WorkItemNotFoundError(msg)
         if response.status_code != 200:
-            raise ExternalServiceError("GitHub", f"Failed to update issue: {response.text}")
+            msg = "GitHub"
+            raise ExternalServiceError(msg, f"Failed to update issue: {response.text}")
 
         # Invalidate cache
         self._invalidate_cache(f"issue:{item_id}")
@@ -508,7 +519,8 @@ class GitHubTicketAdapter(ITicketSystem):
         response = await self._make_request("GET", path, params=params)
 
         if response.status_code != 200:
-            raise ExternalServiceError("GitHub", f"Failed to list issues: {response.text}")
+            msg = "GitHub"
+            raise ExternalServiceError(msg, f"Failed to list issues: {response.text}")
 
         issues = response.json()
         proj_id = ProjectId(f"{self.config.organization}/{self.config.repository}")
@@ -547,7 +559,8 @@ class GitHubTicketAdapter(ITicketSystem):
         response = await self._make_request("GET", "/search/issues", params=params)
 
         if response.status_code != 200:
-            raise ExternalServiceError("GitHub", f"Search failed: {response.text}")
+            msg = "GitHub"
+            raise ExternalServiceError(msg, f"Search failed: {response.text}")
 
         result = response.json()
         issues = result.get("items", [])
@@ -593,7 +606,8 @@ class GitHubTicketAdapter(ITicketSystem):
     ) -> Comment:
         """Add a comment to a work item."""
         if not body:
-            raise ValidationError("Comment body is required")
+            msg = "Comment body is required"
+            raise ValidationError(msg)
 
         payload = {"body": body}
 
@@ -601,9 +615,11 @@ class GitHubTicketAdapter(ITicketSystem):
         response = await self._make_request("POST", path, json=payload)
 
         if response.status_code == 404:
-            raise WorkItemNotFoundError(f"Work item {item_id} not found")
+            msg = f"Work item {item_id} not found"
+            raise WorkItemNotFoundError(msg)
         if response.status_code != 201:
-            raise ExternalServiceError("GitHub", f"Failed to create comment: {response.text}")
+            msg = "GitHub"
+            raise ExternalServiceError(msg, f"Failed to create comment: {response.text}")
 
         comment_data = response.json()
 
@@ -638,9 +654,11 @@ class GitHubTicketAdapter(ITicketSystem):
         response = await self._make_request("GET", path, params=params)
 
         if response.status_code == 404:
-            raise WorkItemNotFoundError(f"Work item {item_id} not found")
+            msg = f"Work item {item_id} not found"
+            raise WorkItemNotFoundError(msg)
         if response.status_code != 200:
-            raise ExternalServiceError("GitHub", f"Failed to get comments: {response.text}")
+            msg = "GitHub"
+            raise ExternalServiceError(msg, f"Failed to get comments: {response.text}")
 
         comments_data = response.json()
 
@@ -724,7 +742,8 @@ class GitHubTicketAdapter(ITicketSystem):
     ) -> str:
         """Register a webhook for events."""
         if not url:
-            raise ValidationError("Webhook URL is required")
+            msg = "Webhook URL is required"
+            raise ValidationError(msg)
 
         payload = {
             "config": {
@@ -739,7 +758,8 @@ class GitHubTicketAdapter(ITicketSystem):
         response = await self._make_request("POST", path, json=payload)
 
         if response.status_code != 201:
-            raise ExternalServiceError("GitHub", f"Failed to create webhook: {response.text}")
+            msg = "GitHub"
+            raise ExternalServiceError(msg, f"Failed to create webhook: {response.text}")
 
         webhook_data = response.json()
         return str(webhook_data["id"])
@@ -751,9 +771,11 @@ class GitHubTicketAdapter(ITicketSystem):
 
         if response.status_code == 404:
             from codetoreum.ports.exceptions import ResourceNotFoundError
-            raise ResourceNotFoundError("Webhook", webhook_id)
+            msg = "Webhook"
+            raise ResourceNotFoundError(msg, webhook_id)
         if response.status_code != 204:
-            raise ExternalServiceError("GitHub", f"Failed to delete webhook: {response.text}")
+            msg = "GitHub"
+            raise ExternalServiceError(msg, f"Failed to delete webhook: {response.text}")
 
     async def __aenter__(self):
         """Async context manager entry."""

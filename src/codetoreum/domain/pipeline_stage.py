@@ -111,9 +111,11 @@ class PipelineStage:
         # Validate review stages
         if stage_type == StageType.REVIEW:
             if not maker_agent_id or not reviewer_agent_id:
-                raise DomainError("Review stages require both maker and reviewer agents")
+                msg = "Review stages require both maker and reviewer agents"
+                raise DomainError(msg)
             if maker_agent_id == reviewer_agent_id:
-                raise DomainError("Review stages must have different maker and reviewer agents")
+                msg = "Review stages must have different maker and reviewer agents"
+                raise DomainError(msg)
 
         return cls(
             id=id or str(uuid4()),
@@ -171,7 +173,8 @@ class PipelineStage:
         """
         if self.stage_type == StageType.REVIEW:
             if not self.maker_agent_id:
-                raise DomainError(f"Review stage {self.name} is missing maker agent")
+                msg = f"Review stage {self.name} is missing maker agent"
+                raise DomainError(msg)
             return {
                 **self.agent_config,
                 "agent_id": self.maker_agent_id,
@@ -188,9 +191,8 @@ class PipelineStage:
             DomainError: If stage is not in PENDING status
         """
         if self.status != StageStatus.PENDING:
-            raise DomainError(
-                f"Cannot mark ready: stage in status {self.status.value}"
-            )
+            msg = f"Cannot mark ready: stage in status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = StageStatus.READY
 
@@ -205,9 +207,8 @@ class PipelineStage:
             DomainError: If stage is not in READY status
         """
         if self.status != StageStatus.READY:
-            raise DomainError(
-                f"Cannot start: stage not ready (status: {self.status.value})"
-            )
+            msg = f"Cannot start: stage not ready (status: {self.status.value})"
+            raise DomainError(msg)
 
         self.status = StageStatus.RUNNING
         self.execution_id = execution_id
@@ -224,7 +225,8 @@ class PipelineStage:
             DomainError: If stage is not in RUNNING status
         """
         if self.status != StageStatus.RUNNING:
-            raise DomainError("Cannot complete: stage not running")
+            msg = "Cannot complete: stage not running"
+            raise DomainError(msg)
 
         self.status = StageStatus.COMPLETED
         self.completed_at = datetime.now(UTC)
@@ -241,7 +243,8 @@ class PipelineStage:
             DomainError: If stage is not in READY or RUNNING status
         """
         if self.status not in [StageStatus.READY, StageStatus.RUNNING]:
-            raise DomainError(f"Cannot fail: invalid status {self.status.value}")
+            msg = f"Cannot fail: invalid status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = StageStatus.FAILED
         self.completed_at = datetime.now(UTC)
@@ -258,7 +261,8 @@ class PipelineStage:
             DomainError: If stage is not in PENDING status
         """
         if self.status != StageStatus.PENDING:
-            raise DomainError(f"Cannot skip: stage in status {self.status.value}")
+            msg = f"Cannot skip: stage in status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = StageStatus.SKIPPED
         self.metadata["skip_reason"] = reason

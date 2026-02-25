@@ -552,16 +552,16 @@ class TraceContextValidator:
         """Assert a span with given name exists."""
         spans = self.tracer.get_spans_by_name(name)
         if not spans:
-            raise AssertionError(f"No span found with name: {name}")
+            message = f"No span found with name: {name}"
+            raise AssertionError(message)
         return spans[0]
 
     def assert_span_kind(self, name: str, expected_kind: SpanKind) -> None:
         """Assert a span has a specific kind."""
         span = self.assert_span_exists(name)
         if span.kind != expected_kind:
-            raise AssertionError(
-                f"Span {name} has kind {span.kind.value}, expected {expected_kind.value}"
-            )
+            message = f"Span {name} has kind {span.kind.value}, expected {expected_kind.value}"
+            raise AssertionError(message)
 
     def assert_span_attribute(
         self, name: str, key: str, expected_value: Any | None = None
@@ -569,13 +569,13 @@ class TraceContextValidator:
         """Assert a span has an attribute."""
         span = self.assert_span_exists(name)
         if key not in span.attributes:
-            raise AssertionError(f"Span {name} missing attribute: {key}")
+            message = f"Span {name} missing attribute: {key}"
+            raise AssertionError(message)
 
         value = span.attributes[key]
         if expected_value is not None and value != expected_value:
-            raise AssertionError(
-                f"Span {name} attribute {key}={value}, expected {expected_value}"
-            )
+            message = f"Span {name} attribute {key}={value}, expected {expected_value}"
+            raise AssertionError(message)
         return value
 
     def assert_span_parent_child(self, parent_name: str, child_name: str) -> None:
@@ -584,22 +584,19 @@ class TraceContextValidator:
         child = self.assert_span_exists(child_name)
 
         if child.parent_span_id != parent.span_id:
-            raise AssertionError(
-                f"Span {child_name} parent is {child.parent_span_id}, "
-                f"expected {parent.span_id} ({parent_name})"
-            )
+            message = f"Span {child_name} parent is {child.parent_span_id}, " f"expected {parent.span_id} ({parent_name})"
+            raise AssertionError(message)
 
         if child.trace_id != parent.trace_id:
-            raise AssertionError(
-                f"Span {child_name} trace {child.trace_id} does not match "
-                f"parent trace {parent.trace_id}"
-            )
+            message = f"Span {child_name} trace {child.trace_id} does not match " f"parent trace {parent.trace_id}"
+            raise AssertionError(message)
 
     def assert_span_context_injected(self, span_name: str) -> None:
         """Assert trace context was injected for a span."""
         span = self.assert_span_exists(span_name)
         if not span.span_context_injected:
-            raise AssertionError(f"Span {span_name} did not inject trace context")
+            message = f"Span {span_name} did not inject trace context"
+            raise AssertionError(message)
 
     def assert_trace_chain(self, span_names: list[str]) -> None:
         """Assert a chain of parent-child spans."""
@@ -610,14 +607,12 @@ class TraceContextValidator:
         """Assert total span count."""
         actual_count = len(self.tracer.get_spans())
         if actual_count != expected_count:
-            raise AssertionError(
-                f"Expected {expected_count} spans, got {actual_count}"
-            )
+            message = f"Expected {expected_count} spans, got {actual_count}"
+            raise AssertionError(message)
 
     def assert_span_count_by_kind(self, kind: SpanKind, expected_count: int) -> None:
         """Assert span count by kind."""
         spans = self.tracer.get_spans_by_kind(kind)
         if len(spans) != expected_count:
-            raise AssertionError(
-                f"Expected {expected_count} {kind.value} spans, got {len(spans)}"
-            )
+            message = f"Expected {expected_count} {kind.value} spans, got {len(spans)}"
+            raise AssertionError(message)

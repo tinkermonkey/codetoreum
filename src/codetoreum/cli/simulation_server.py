@@ -52,9 +52,8 @@ def validate_port(port: int) -> None:
         click.BadParameter: If port is invalid
     """
     if not (MIN_PORT <= port <= MAX_PORT):
-        raise click.BadParameter(
-            f"Port must be between {MIN_PORT} and {MAX_PORT}, got {port}"
-        )
+        msg = f"Port must be between {MIN_PORT} and {MAX_PORT}, got {port}"
+        raise click.BadParameter(msg)
 
 
 def validate_speed_multiplier(speed: float) -> None:
@@ -68,9 +67,8 @@ def validate_speed_multiplier(speed: float) -> None:
         click.BadParameter: If speed multiplier is invalid
     """
     if speed <= 0:
-        raise click.BadParameter(
-            f"Speed multiplier must be positive, got {speed}"
-        )
+        msg = f"Speed multiplier must be positive, got {speed}"
+        raise click.BadParameter(msg)
 
 
 def validate_yaml_file(file_path: Path) -> None:
@@ -101,7 +99,8 @@ def validate_yaml_file(file_path: Path) -> None:
             def count_depth_and_nodes(obj, depth=0):
                 """Count depth and number of nodes in YAML structure."""
                 if depth > MAX_YAML_DEPTH:
-                    raise ValueError(f"YAML depth exceeds maximum of {MAX_YAML_DEPTH}")
+                    msg = f"YAML depth exceeds maximum of {MAX_YAML_DEPTH}"
+                    raise ValueError(msg)
 
                 node_count = 1
                 if isinstance(obj, dict):
@@ -112,7 +111,8 @@ def validate_yaml_file(file_path: Path) -> None:
                         node_count += count_depth_and_nodes(item, depth + 1)
 
                 if node_count > MAX_YAML_NODES:
-                    raise ValueError(f"YAML node count exceeds maximum of {MAX_YAML_NODES}")
+                    msg = f"YAML node count exceeds maximum of {MAX_YAML_NODES}"
+                    raise ValueError(msg)
 
                 return node_count
 
@@ -161,10 +161,11 @@ def get_scenario_file_path(scenario: str) -> Path:
     scenario_file = scenarios_dir / f"{scenario}.yaml"
 
     if not scenario_file.exists():
-        raise FileNotFoundError(
+        msg = (
             f"Scenario '{scenario}' not found at {scenario_file}. "
             f"Available scenarios: default, demo, stress_test, review_cycle, failure_recovery"
         )
+        raise FileNotFoundError(msg)
 
     return scenario_file
 
@@ -208,9 +209,11 @@ async def bootstrap_application(
                 speed_multiplier=speed_multiplier,
             )
     except PermissionError as e:
-        raise click.FileError(str(scenario_file), f"Permission denied: {e}")
+        msg = f"Permission denied: {e}"
+        raise click.FileError(str(scenario_file), msg)
     except Exception as e:
-        raise RuntimeError(f"Failed to load configuration: {e}")
+        msg = f"Failed to load configuration: {e}"
+        raise RuntimeError(msg)
 
     console.print(f"[dim]Speed multiplier: {sim_config.time.speed_multiplier}x[/dim]")
 
@@ -221,7 +224,8 @@ async def bootstrap_application(
         bootstrap = SimulationApplicationBootstrap(sim_config)
         await bootstrap.setup()
     except Exception as e:
-        raise RuntimeError(f"Bootstrap failed: {e}")
+        msg = f"Bootstrap failed: {e}"
+        raise RuntimeError(msg)
 
     console.print("[green]✓ Application bootstrapped successfully[/green]")
 
@@ -276,9 +280,11 @@ async def seed_data(
             console.print(f"Seeding from built-in scenario: {scenario}")
             await seeder.seed_from_yaml(file_path)
     except PermissionError as e:
-        raise click.FileError(str(scenario_file or scenario), f"Permission denied: {e}")
+        msg = f"Permission denied: {e}"
+        raise click.FileError(str(scenario_file or scenario), msg)
     except Exception as e:
-        raise RuntimeError(f"Seeding failed: {e}")
+        msg = f"Seeding failed: {e}"
+        raise RuntimeError(msg)
 
     # Get seeded data counts
     created = seeder.get_created_items()
@@ -396,12 +402,15 @@ async def run_server(
 
     except OSError as e:
         if "Address already in use" in str(e) or e.errno == 98:
-            raise OSError(f"Port {port} is already in use. Try a different port with --port")
+            msg = f"Port {port} is already in use. Try a different port with --port"
+            raise OSError(msg)
         if "Permission denied" in str(e) or e.errno == 13:
-            raise OSError(f"Permission denied to bind to port {port}. Try a port > 1024 or run with elevated privileges")
+            msg = f"Permission denied to bind to port {port}. Try a port > 1024 or run with elevated privileges"
+            raise OSError(msg)
         raise
     except Exception as e:
-        raise RuntimeError(f"Server failed to start: {e}")
+        msg = f"Server failed to start: {e}"
+        raise RuntimeError(msg)
 
 
 async def main_async(

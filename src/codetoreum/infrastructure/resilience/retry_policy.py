@@ -86,8 +86,9 @@ class ExponentialBackoffRetry(IRetryPolicy):
                 # Check if we've exhausted retries
                 if attempt >= self.max_retries:
                     self._total_failures += 1
+                    message = f"Max retries ({self.max_retries}) exceeded for {operation_name}"
                     raise MaxRetriesExceededError(
-                        f"Max retries ({self.max_retries}) exceeded for {operation_name}",
+                        message,
                         last_exception=e
                     ) from e
 
@@ -104,7 +105,8 @@ class ExponentialBackoffRetry(IRetryPolicy):
         # Should never reach here, but just in case
         if last_exception:
             raise last_exception
-        raise MaxRetriesExceededError(f"Unexpected error in retry loop for {operation_name}")
+        message = f"Unexpected error in retry loop for {operation_name}"
+        raise MaxRetriesExceededError(message)
 
     def should_retry(self, exception: BaseException) -> bool:
         """Determine if exception is retryable."""

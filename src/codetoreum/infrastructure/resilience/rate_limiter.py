@@ -59,9 +59,8 @@ class TokenBucketRateLimiter(IRateLimiter):
                 if self.max_wait_seconds:
                     elapsed = now - start_time
                     if elapsed > self.max_wait_seconds:
-                        raise RateLimitExceededError(
-                            f"Rate limit wait exceeded {self.max_wait_seconds}s for {operation}"
-                        )
+                        message = f"Rate limit wait exceeded {self.max_wait_seconds}s for {operation}"
+                        raise RateLimitExceededError(message)
 
                 # Remove expired entries
                 cutoff = now - self.window_seconds

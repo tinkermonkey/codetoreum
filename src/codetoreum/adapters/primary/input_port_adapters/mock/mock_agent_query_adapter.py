@@ -82,7 +82,8 @@ class MockAgentQueryAdapter(IAgentQueryPort):
         """Get agent by ID."""
         with self._lock:
             if agent_id not in self._agents:
-                raise AgentNotFoundError(f"Agent with ID {agent_id} not found")
+                msg = f"Agent with ID {agent_id} not found"
+                raise AgentNotFoundError(msg)
 
             agent_info = self._agents[agent_id]
 
@@ -115,7 +116,8 @@ class MockAgentQueryAdapter(IAgentQueryPort):
         """Get agent by name."""
         with self._lock:
             if name not in self._agents_by_name:
-                raise AgentNotFoundError(f"Agent with name '{name}' not found")
+                msg = f"Agent with name '{name}' not found"
+                raise AgentNotFoundError(msg)
 
             agent_id = self._agents_by_name[name]
             return await self.get_agent(agent_id, include_stats)

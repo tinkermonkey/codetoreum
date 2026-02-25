@@ -61,11 +61,14 @@ class ContainerExecutionCompletedEvent(CodetoreumEvent):
         """Validate event after initialization and convert lists to tuples."""
         super().__post_init__()
         if not self.container_id:
-            raise ValueError("container_id is required")
+            msg = "container_id is required"
+            raise ValueError(msg)
         if not self.command:
-            raise ValueError("command is required")
+            msg = "command is required"
+            raise ValueError(msg)
         if self.exit_code < 0:
-            raise ValueError("exit_code must be >= 0")
+            msg = "exit_code must be >= 0"
+            raise ValueError(msg)
         # Convert lists to tuples for immutability
         if isinstance(self.output_files, list):
             object.__setattr__(self, "output_files", tuple(self.output_files))

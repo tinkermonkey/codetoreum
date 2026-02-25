@@ -46,10 +46,8 @@ class EventSerializer:
         if event_type_name in cls._event_type_registry:
             existing_class = cls._event_type_registry[event_type_name]
             if existing_class != event_class:
-                raise ValueError(
-                    f"Event type '{event_type_name}' already registered "
-                    f"with different class: {existing_class}"
-                )
+                message = f"Event type '{event_type_name}' already registered " f"with different class: {existing_class}"
+                raise ValueError(message)
         else:
             cls._event_type_registry[event_type_name] = event_class
 
@@ -88,9 +86,8 @@ class EventSerializer:
             return json.dumps(data, cls=_EventJSONEncoder, ensure_ascii=False)
 
         except Exception as e:
-            raise EventSerializationError(
-                f"Failed to serialize event {event.event_type}: {e}"
-            ) from e
+            message = f"Failed to serialize event {event.event_type}: {e}"
+            raise EventSerializationError(message)
 
     @classmethod
     def deserialize(cls, json_str: str) -> DomainEvent:
@@ -112,11 +109,8 @@ class EventSerializer:
             # Check schema version for compatibility
             schema_version = data.get("schema_version", 1)
             if schema_version > cls.SCHEMA_VERSION:
-                raise EventSerializationError(
-                    f"Event schema version {schema_version} is newer than "
-                    f"supported version {cls.SCHEMA_VERSION}. "
-                    f"Please upgrade the application."
-                )
+                message = f"Event schema version {schema_version} is newer than " f"supported version {cls.SCHEMA_VERSION}. " f"Please upgrade the application."
+                raise EventSerializationError(message)
 
             # Get event type class from registry
             event_type = data["event_type"]
@@ -158,9 +152,8 @@ class EventSerializer:
         except EventSerializationError:
             raise
         except Exception as e:
-            raise EventSerializationError(
-                f"Failed to deserialize event: {e}"
-            ) from e
+            message = f"Failed to deserialize event: {e}"
+            raise EventSerializationError(message)
 
     @classmethod
     def to_dict(cls, event: DomainEvent) -> dict[str, Any]:
@@ -194,9 +187,8 @@ class EventSerializer:
             }
 
         except Exception as e:
-            raise EventSerializationError(
-                f"Failed to convert event to dict: {e}"
-            ) from e
+            message = f"Failed to convert event to dict: {e}"
+            raise EventSerializationError(message)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> DomainEvent:
@@ -245,9 +237,8 @@ class EventSerializer:
             )
 
         except Exception as e:
-            raise EventSerializationError(
-                f"Failed to reconstruct event from dict: {e}"
-            ) from e
+            message = f"Failed to reconstruct event from dict: {e}"
+            raise EventSerializationError(message)
 
 
 class _EventJSONEncoder(json.JSONEncoder):

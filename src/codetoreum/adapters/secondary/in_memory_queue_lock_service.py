@@ -89,13 +89,17 @@ class InMemoryLockService(IPipelineLockService):
         """
         # Validate inputs
         if not project_id:
-            raise ValueError("project_id cannot be empty")
+            msg = "project_id cannot be empty"
+            raise ValueError(msg)
         if not board_id:
-            raise ValueError("board_id cannot be empty")
+            msg = "board_id cannot be empty"
+            raise ValueError(msg)
         if not work_item_id:
-            raise ValueError("work_item_id cannot be empty")
+            msg = "work_item_id cannot be empty"
+            raise ValueError(msg)
         if board_position < 0:
-            raise ValueError("board_position cannot be negative")
+            msg = "board_position cannot be negative"
+            raise ValueError(msg)
 
         with self._lock:
             board_key = f"{project_id}:{board_id}"
@@ -319,19 +323,23 @@ class InMemoryLockService(IPipelineLockService):
         """
         # Validate inputs
         if not project_id:
-            raise ValueError("project_id cannot be empty")
+            msg = "project_id cannot be empty"
+            raise ValueError(msg)
         if not board_id:
-            raise ValueError("board_id cannot be empty")
+            msg = "board_id cannot be empty"
+            raise ValueError(msg)
         if not work_item_id:
-            raise ValueError("work_item_id cannot be empty")
+            msg = "work_item_id cannot be empty"
+            raise ValueError(msg)
 
         with self._lock:
             board_key = f"{project_id}:{board_id}"
             state = self._lock_state.get(board_key)
 
             if not state or state.lock_holder != work_item_id:
+                msg = f"Work item {work_item_id} does not hold lock for {board_key}"
                 raise ValueError(
-                    f"Work item {work_item_id} does not hold lock for {board_key}"
+                    msg
                 )
 
             state.lock_holder = None
@@ -427,9 +435,11 @@ class InMemoryLockService(IPipelineLockService):
         """
         # Validate inputs
         if not project_id:
-            raise ValueError("project_id cannot be empty")
+            msg = "project_id cannot be empty"
+            raise ValueError(msg)
         if not board_id:
-            raise ValueError("board_id cannot be empty")
+            msg = "board_id cannot be empty"
+            raise ValueError(msg)
 
         with self._lock:
             board_key = f"{project_id}:{board_id}"
@@ -474,9 +484,11 @@ class InMemoryLockService(IPipelineLockService):
         """
         # Validate inputs
         if not project_id:
-            raise ValueError("project_id cannot be empty")
+            msg = "project_id cannot be empty"
+            raise ValueError(msg)
         if not board_id:
-            raise ValueError("board_id cannot be empty")
+            msg = "board_id cannot be empty"
+            raise ValueError(msg)
 
         with self._lock:
             board_key = f"{project_id}:{board_id}"
@@ -534,8 +546,9 @@ class InMemoryLockService(IPipelineLockService):
             state = self._lock_state.get(board_key)
 
             if not state or state.lock_holder is None:
+                msg = f"No lock exists for {board_key}"
                 raise ValueError(
-                    f"No lock exists for {board_key}"
+                    msg
                 )
 
             # Create new state with updated timestamp (immutable pattern)

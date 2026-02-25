@@ -54,11 +54,14 @@ class LockAcquiredEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.project_id:
-            raise ValueError("project_id is required")
+            msg = "project_id is required"
+            raise ValueError(msg)
         if not self.board_id:
-            raise ValueError("board_id is required")
+            msg = "board_id is required"
+            raise ValueError(msg)
         if not self.work_item_id:
-            raise ValueError("work_item_id is required")
+            msg = "work_item_id is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -129,11 +132,14 @@ class LockReleasedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.project_id:
-            raise ValueError("project_id is required")
+            msg = "project_id is required"
+            raise ValueError(msg)
         if not self.board_id:
-            raise ValueError("board_id is required")
+            msg = "board_id is required"
+            raise ValueError(msg)
         if not self.work_item_id:
-            raise ValueError("work_item_id is required")
+            msg = "work_item_id is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -204,13 +210,17 @@ class LockStaleDetectedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.project_id:
-            raise ValueError("project_id is required")
+            msg = "project_id is required"
+            raise ValueError(msg)
         if not self.board_id:
-            raise ValueError("board_id is required")
+            msg = "board_id is required"
+            raise ValueError(msg)
         if not self.work_item_id:
-            raise ValueError("work_item_id is required")
+            msg = "work_item_id is required"
+            raise ValueError(msg)
         if not self.lock_acquired_at:
-            raise ValueError("lock_acquired_at is required")
+            msg = "lock_acquired_at is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -282,11 +292,14 @@ class PipelineLockAcquiredEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.project_id:
-            raise ValueError("project_id is required")
+            msg = "project_id is required"
+            raise ValueError(msg)
         if not self.work_item_id:
-            raise ValueError("work_item_id is required")
+            msg = "work_item_id is required"
+            raise ValueError(msg)
         if not self.board_id:
-            raise ValueError("board_id is required")
+            msg = "board_id is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -357,11 +370,14 @@ class PipelineLockReleasedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.project_id:
-            raise ValueError("project_id is required")
+            msg = "project_id is required"
+            raise ValueError(msg)
         if not self.work_item_id:
-            raise ValueError("work_item_id is required")
+            msg = "work_item_id is required"
+            raise ValueError(msg)
         if not self.board_id:
-            raise ValueError("board_id is required")
+            msg = "board_id is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -430,11 +446,14 @@ class WorkItemQueuedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.work_item_id:
-            raise ValueError("work_item_id is required")
+            msg = "work_item_id is required"
+            raise ValueError(msg)
         if not self.board_id:
-            raise ValueError("board_id is required")
+            msg = "board_id is required"
+            raise ValueError(msg)
         if self.queue_position < 0:
-            raise ValueError("queue_position must be non-negative")
+            msg = "queue_position must be non-negative"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""

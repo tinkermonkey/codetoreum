@@ -218,9 +218,12 @@ class ClaudeCodeAdapter(ILLMProvider):
         )
 
         if not api_key and not oauth_token:
-            raise AuthenticationError(
+            msg = (
                 f"No credentials found. Set {self.config.api_key_credential_name} "
                 f"or {self.config.oauth_token_credential_name} in credential provider."
+            )
+            raise AuthenticationError(
+                msg
             )
 
         if api_key:
@@ -245,14 +248,16 @@ class ClaudeCodeAdapter(ILLMProvider):
             Sanitized prompt
         """
         if not prompt:
-            raise ValidationError("Prompt cannot be empty")
+            msg = "Prompt cannot be empty"
+            raise ValidationError(msg)
 
         # Remove null bytes and control characters that could cause issues
         sanitized = prompt.replace("\x00", "").replace("\r", "\n")
 
         # Validate reasonable length
         if len(sanitized) > 1_000_000:  # 1MB limit
-            raise PromptTooLongError("Prompt exceeds maximum length of 1MB")
+            msg = "Prompt exceeds maximum length of 1MB"
+            raise PromptTooLongError(msg)
 
         return sanitized
 
@@ -403,7 +408,8 @@ class ClaudeCodeAdapter(ILLMProvider):
                         process.pid,
                         _PROCESS_TIMEOUT_AFTER_SIGKILL_SECONDS,
                     )
-                raise ExternalServiceError("Claude", "Execution timeout")
+                msg = "Claude"
+                raise ExternalServiceError(msg, "Execution timeout")
 
             # Wait for process completion with timeout to prevent hanging
             try:
@@ -425,7 +431,8 @@ class ClaudeCodeAdapter(ILLMProvider):
                         process.pid,
                         _PROCESS_TIMEOUT_AFTER_SIGKILL_SECONDS,
                     )
-                raise ExternalServiceError("Claude", "Process termination timeout")
+                msg = "Claude"
+                raise ExternalServiceError(msg, "Process termination timeout")
 
             # Check exit code
             if process.returncode != 0:
@@ -439,8 +446,10 @@ class ClaudeCodeAdapter(ILLMProvider):
                 if "rate limit" in error_text.lower():
                     raise RateLimitError()
                 if "authentication" in error_text.lower() or "invalid api key" in error_text.lower():
-                    raise AuthenticationError("Invalid API key or OAuth token")
-                raise LLMProviderError(f"Claude execution failed: {sanitized_error}")
+                    msg = "Invalid API key or OAuth token"
+                    raise AuthenticationError(msg)
+                msg = f"Claude execution failed: {sanitized_error}"
+                raise LLMProviderError(msg)
 
             # Send final chunk
             if stream_callback:
@@ -476,11 +485,13 @@ class ClaudeCodeAdapter(ILLMProvider):
             )
 
         except FileNotFoundError:
-            raise LLMProviderError(f"Claude CLI not found at: {self.config.claude_cli_path}")
+            msg = f"Claude CLI not found at: {self.config.claude_cli_path}"
+            raise LLMProviderError(msg)
         except Exception as e:
             if isinstance(e, (LLMProviderError, AuthenticationError, RateLimitError)):
                 raise
-            raise LLMProviderError(f"Execution error: {e!s}")
+            msg = f"Execution error: {e!s}"
+            raise LLMProviderError(msg)
 
     async def execute_with_tools(
         self,
@@ -513,7 +524,8 @@ class ClaudeCodeAdapter(ILLMProvider):
             UnsupportedFeatureError: If tools are disabled or MCP not configured
         """
         if not self.config.enable_tools:
-            raise UnsupportedFeatureError("Tool support is disabled in configuration")
+            msg = "Tool support is disabled in configuration"
+            raise UnsupportedFeatureError(msg)
 
         ctx = context or ExecutionContext()
 
@@ -606,13 +618,15 @@ class ClaudeCodeAdapter(ILLMProvider):
                         process.pid,
                         _PROCESS_TIMEOUT_AFTER_SIGKILL_SECONDS,
                     )
-                raise StreamingError("Streaming execution timeout")
+                msg = "Streaming execution timeout"
+                raise StreamingError(msg)
 
             if process.returncode != 0:
                 stderr = await process.stderr.read()
                 error_text = stderr.decode("utf-8")
                 sanitized_error = self._sanitize_error_message(error_text)
-                raise StreamingError(f"Stream failed: {sanitized_error}")
+                msg = f"Stream failed: {sanitized_error}"
+                raise StreamingError(msg)
 
             # Final chunk
             yield StreamChunk(
@@ -625,7 +639,8 @@ class ClaudeCodeAdapter(ILLMProvider):
             if isinstance(e, StreamingError):
                 raise
             sanitized_error = self._sanitize_error_message(str(e))
-            raise StreamingError(f"Streaming error: {sanitized_error}")
+            msg = f"Streaming error: {sanitized_error}"
+            raise StreamingError(msg)
 
     async def create_conversation(
         self,
@@ -659,7 +674,8 @@ class ClaudeCodeAdapter(ILLMProvider):
     ) -> ExecutionResult:
         """Continue an existing conversation."""
         if conversation_id not in self._conversations:
-            raise ConversationNotFoundError(f"Conversation {conversation_id} not found")
+            msg = f"Conversation {conversation_id} not found"
+            raise ConversationNotFoundError(msg)
 
         conv_data = self._conversations[conversation_id]
 
@@ -800,7 +816,8 @@ class ClaudeCodeAdapter(ILLMProvider):
             )
 
             if result.returncode != 0:
-                raise LLMProviderError("Claude CLI not working correctly")
+                msg = "Claude CLI not working correctly"
+                raise LLMProviderError(msg)
 
             # Validate credentials are available
             try:
@@ -812,19 +829,25 @@ class ClaudeCodeAdapter(ILLMProvider):
                 )
 
                 if not api_key and not oauth_token:
-                    raise LLMProviderError(
+                    msg = (
                         f"No credentials found. Set {self.config.api_key_credential_name} "
                         f"or {self.config.oauth_token_credential_name}"
                     )
+                    raise LLMProviderError(
+                        msg
+                    )
             except Exception as e:
-                raise LLMProviderError(f"Credential validation failed: {e!s}")
+                msg = f"Credential validation failed: {e!s}"
+                raise LLMProviderError(msg)
 
             return True
 
         except FileNotFoundError:
-            raise LLMProviderError(f"Claude CLI not found at: {self.config.claude_cli_path}")
+            msg = f"Claude CLI not found at: {self.config.claude_cli_path}"
+            raise LLMProviderError(msg)
         except subprocess.TimeoutExpired:
-            raise LLMProviderError("Claude CLI version check timed out")
+            msg = "Claude CLI version check timed out"
+            raise LLMProviderError(msg)
 
     async def __aenter__(self):
         """Async context manager entry."""

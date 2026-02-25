@@ -58,8 +58,9 @@ class MockWorkspaceQueryAdapter(IWorkspaceQueryPort):
         """Get workspace information by ID."""
         with self._lock:
             if workspace_id not in self._workspaces:
+                msg = f"Workspace with ID {workspace_id} not found"
                 raise WorkspaceNotFoundError(
-                    f"Workspace with ID {workspace_id} not found"
+                    msg
                 )
             return self._workspaces[workspace_id]
 
@@ -67,8 +68,9 @@ class MockWorkspaceQueryAdapter(IWorkspaceQueryPort):
         """Get workspace information by execution ID."""
         with self._lock:
             if execution_id not in self._workspaces_by_execution:
+                msg = f"Workspace for execution {execution_id} not found"
                 raise WorkspaceNotFoundError(
-                    f"Workspace for execution {execution_id} not found"
+                    msg
                 )
             workspace_id = self._workspaces_by_execution[execution_id]
             return self._workspaces[workspace_id]
@@ -221,8 +223,9 @@ class MockWorkspaceQueryAdapter(IWorkspaceQueryPort):
         """Get workspace container logs."""
         with self._lock:
             if workspace_id not in self._workspaces:
+                msg = f"Workspace with ID {workspace_id} not found"
                 raise WorkspaceNotFoundError(
-                    f"Workspace with ID {workspace_id} not found"
+                    msg
                 )
 
             logs = self._logs.get(workspace_id, [])

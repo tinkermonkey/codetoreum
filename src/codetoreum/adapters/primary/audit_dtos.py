@@ -98,15 +98,21 @@ class AuditValidationResult(BaseModel):
                 errors.append(f"outOfOrderEvents is not empty: {self.outOfOrderEvents}")
 
             if errors:
-                raise ValueError(
+                msg = (
                     f"sequenceValid is True but error lists are not empty. "
                     f"This is a contradictory validation result. Errors: {'; '.join(errors)}"
                 )
+                raise ValueError(
+                    msg
+                )
         # sequenceValid=False requires at least one error
         elif not (self.missingEvents or self.unexpectedEvents or self.outOfOrderEvents):
-            raise ValueError(
+            msg = (
                 "sequenceValid is False but all error lists are empty. "
                 "At least one of missingEvents, unexpectedEvents, or outOfOrderEvents must be non-empty."
+            )
+            raise ValueError(
+                msg
             )
 
         return self
@@ -139,8 +145,9 @@ class AuditStageInfo(BaseModel):
         """
         if self.startedAt is not None and self.completedAt is not None:
             if self.completedAt < self.startedAt:
+                msg = f"completedAt ({self.completedAt}) must be >= startedAt ({self.startedAt})"
                 raise ValueError(
-                    f"completedAt ({self.completedAt}) must be >= startedAt ({self.startedAt})"
+                    msg
                 )
         return self
 

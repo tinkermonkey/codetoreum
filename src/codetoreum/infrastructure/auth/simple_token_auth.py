@@ -70,11 +70,8 @@ class SimpleTokenAuthManager:
 
         # In production, require explicit secret key
         if is_production and (not secret_key or not secret_key.strip()):
-            raise ValueError(
-                "CODETOREUM_SECRET_KEY environment variable is required in production. "
-                "All tokens will be invalidated on server restart without a persistent secret key. "
-                "Generate one with: python -c 'import secrets; print(secrets.token_urlsafe(64))'"
-            )
+            message = "CODETOREUM_SECRET_KEY environment variable is required in production. " "All tokens will be invalidated on server restart without a persistent secret key. " "Generate one with: python -c 'import secrets; print(secrets.token_urlsafe(64))'"
+            raise ValueError(message)
 
         # In development, warn about auto-generated secret
         if not secret_key:

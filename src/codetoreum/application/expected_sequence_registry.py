@@ -29,9 +29,11 @@ class SequencePattern:
     def __post_init__(self) -> None:
         """Validate sequence pattern after initialization."""
         if not self.name or not self.name.strip():
-            raise ValueError("name must be non-empty")
+            message = "name must be non-empty"
+            raise ValueError(message)
         if not self.pattern:
-            raise ValueError("pattern must be a non-empty list")
+            message = "pattern must be a non-empty list"
+            raise ValueError(message)
 
 
 class ExpectedSequenceRegistry:

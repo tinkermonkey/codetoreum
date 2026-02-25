@@ -131,13 +131,15 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
         """
         # Validate inputs
         if not work_item_id or not project_id:
-            raise ValueError("work_item_id and project_id are required")
+            message = "work_item_id and project_id are required"
+            raise ValueError(message)
 
         agent_assignment = column_config.get("agent_assignment", "")
         column_name = column_config.get("column_name")
 
         if not agent_assignment:
-            raise ValueError("column_config must include agent_assignment")
+            message = "column_config must include agent_assignment"
+            raise ValueError(message)
 
         # Create unique session identifier
         session_id = f"conv_session_{work_item_id}_{int(datetime.now(UTC).timestamp())}"
@@ -249,7 +251,8 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
 
         # Validate event
         if not work_item_id or not project_id:
-            raise ValueError("CommentNeedsResponseEvent must have work_item_id and project_id")
+            message = "CommentNeedsResponseEvent must have work_item_id and project_id"
+            raise ValueError(message)
 
         if not event.comment or not event.comment.id:
             logger.warning(
@@ -266,7 +269,8 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 work_item_id,
                 extra={"error_id": ErrorRegistry.ERR_CONVERSATIONAL_LOOP_ERROR}
             )
-            raise ValueError("CommentNeedsResponseEvent must have context")
+            message = "CommentNeedsResponseEvent must have context"
+            raise ValueError(message)
 
         # Load active session state
         session_state = await self.load_session_state(work_item_id)
@@ -443,7 +447,8 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                     work_item_id,
                     extra={"error_id": ErrorRegistry.ERR_EXTERNAL_SERVICE_ERROR}
                 )
-                raise ValueError(f"Discussion adapter returned None comment for work item {work_item_id}")
+                message = f"Discussion adapter returned None comment for work item {work_item_id}"
+                raise ValueError(message)
 
             if not isinstance(response_comment, Comment):
                 logger.error(
@@ -452,7 +457,8 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                     work_item_id,
                     extra={"error_id": ErrorRegistry.ERR_VALIDATION_FAILED}
                 )
-                raise ValueError(f"Discussion adapter returned invalid comment type for work item {work_item_id}")
+                message = f"Discussion adapter returned invalid comment type for work item {work_item_id}"
+                raise ValueError(message)
 
             if not response_comment.id:
                 logger.error(
@@ -460,7 +466,8 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                     work_item_id,
                     extra={"error_id": ErrorRegistry.ERR_VALIDATION_FAILED}
                 )
-                raise ValueError(f"Discussion adapter returned comment with empty ID for work item {work_item_id}")
+                message = f"Discussion adapter returned comment with empty ID for work item {work_item_id}"
+                raise ValueError(message)
 
             # Update session state
             now_iso = datetime.now(UTC).isoformat()
@@ -562,7 +569,8 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
         to_column = getattr(event, "to_column", "")
 
         if not work_item_id or not project_id:
-            raise ValueError("WorkItemColumnChangedEvent must have work_item_id and project_id")
+            message = "WorkItemColumnChangedEvent must have work_item_id and project_id"
+            raise ValueError(message)
 
         logger.info(
             "Handling column change for work item %s: %s → %s",
@@ -712,7 +720,8 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
             PortError: If stopping monitoring fails (should not prevent cleanup)
         """
         if not work_item_id:
-            raise ValueError("work_item_id is required")
+            message = "work_item_id is required"
+            raise ValueError(message)
 
         logger.info(
             "Cleaning up conversational loop for work item %s, reason: %s",
@@ -821,7 +830,8 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
             EventStoreError: If storage retrieval fails
         """
         if not work_item_id:
-            raise ValueError("work_item_id is required")
+            message = "work_item_id is required"
+            raise ValueError(message)
 
         try:
             # Try to load session state from snapshot (fast path)
@@ -879,7 +889,8 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
             EventStoreError: If storage operation fails
         """
         if not state:
-            raise ValueError("state is required")
+            message = "state is required"
+            raise ValueError(message)
 
         try:
             # Save session state as a snapshot in the event store

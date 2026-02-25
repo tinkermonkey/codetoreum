@@ -51,9 +51,8 @@ class AsyncTimeout(ITimeout):
 
         except TimeoutError:
             self._total_timeouts += 1
-            raise ResilienceTimeoutError(
-                f"Operation {operation_name} exceeded timeout of {timeout_seconds}s"
-            )
+            message = f"Operation {operation_name} exceeded timeout of {timeout_seconds}s"
+            raise ResilienceTimeoutError(message)
 
     def get_stats(self) -> TimeoutStats:
         """Get timeout statistics."""

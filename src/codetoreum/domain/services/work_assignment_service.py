@@ -72,7 +72,8 @@ class WorkAssignmentService:
         ]
 
         if not capable_agents:
-            raise DomainError("No capable agents available")
+            msg = "No capable agents available"
+            raise DomainError(msg)
 
         # Calculate match scores
         best_agent = None
@@ -86,9 +87,8 @@ class WorkAssignmentService:
                 best_agent = agent
 
         if not best_agent or best_score < min_score:
-            raise DomainError(
-                f"No suitable agent found (best score: {best_score:.2f}, min required: {min_score:.2f})"
-            )
+            msg = f"No suitable agent found (best score: {best_score:.2f}, min required: {min_score:.2f})"
+            raise DomainError(msg)
 
         # Assign to work item
         reason = self._generate_assignment_reason(best_agent, best_score, requirements)

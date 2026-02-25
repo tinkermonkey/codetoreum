@@ -90,9 +90,11 @@ class RepairCycleConfig:
     def __post_init__(self) -> None:
         """Validate config after initialization."""
         if self.max_json_parse_retries < 1:
-            raise ValueError("max_json_parse_retries must be >= 1")
+            msg = "max_json_parse_retries must be >= 1"
+            raise ValueError(msg)
         if self.json_parse_retry_delay_ms < 0:
-            raise ValueError("json_parse_retry_delay_ms must be >= 0")
+            msg = "json_parse_retry_delay_ms must be >= 0"
+            raise ValueError(msg)
 
 
 class NullEventEmitter:
@@ -157,7 +159,8 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             ValueError: If test_configs is empty
         """
         if not context.test_configs:
-            raise ValueError("test_configs cannot be empty")
+            msg = "test_configs cannot be empty"
+            raise ValueError(msg)
 
         start_time = datetime.now(UTC)
         cycle_start_timestamp = start_time.isoformat()
@@ -268,8 +271,9 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         """
         # Check circuit breaker
         if self.agent_call_count >= context.max_total_agent_calls:
+            msg = f"Max agent calls ({context.max_total_agent_calls}) exceeded"
             raise CircuitBreakerTripped(
-                f"Max agent calls ({context.max_total_agent_calls}) exceeded"
+                msg
             )
 
         self.agent_call_count += 1
@@ -756,7 +760,8 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 # Try to extract JSON from response
                 json_match = re.search(r"\{.*\}", agent_response, re.DOTALL)
                 if not json_match:
-                    raise JSONParseError("No JSON found in agent response")
+                    msg = "No JSON found in agent response"
+                    raise JSONParseError(msg)
 
                 parsed = json.loads(json_match.group())
 
@@ -788,8 +793,9 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     # Wait before retry with configured delay
                     await asyncio.sleep(self.config.json_parse_retry_delay_ms / 1000.0)
 
+        msg = f"Failed to parse test output after {self.config.max_json_parse_retries} attempts: {last_error}"
         raise JSONParseError(
-            f"Failed to parse test output after {self.config.max_json_parse_retries} attempts: {last_error}"
+            msg
         )
 
     def _extract_failures(
@@ -873,11 +879,14 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR
                 }
             )
-            raise TestOutputParseError(
+            msg = (
                 f"All {len(parse_errors)} test failure entries for {test_type.value} failed to parse. "
                 f"This indicates either: (1) Test framework output changed, "
                 f"(2) Agent prompt needs updating, or (3) Agent is malfunctioning. "
-                f"First error: {parse_errors[0]['error']}",
+                f"First error: {parse_errors[0]['error']}"
+            )
+            raise TestOutputParseError(
+                msg,
                 test_type=test_type.value,
                 raw_data=test_output.get("failures", []),
             )
@@ -961,11 +970,14 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR
                 }
             )
-            raise TestOutputParseError(
+            msg = (
                 f"All {len(parse_errors)} test warning entries for {test_type.value} failed to parse. "
                 f"This indicates either: (1) Test framework output changed, "
                 f"(2) Agent prompt needs updating, or (3) Agent is malfunctioning. "
-                f"First error: {parse_errors[0]['error']}",
+                f"First error: {parse_errors[0]['error']}"
+            )
+            raise TestOutputParseError(
+                msg,
                 test_type=test_type.value,
                 raw_data=test_output.get("warnings", []),
             )

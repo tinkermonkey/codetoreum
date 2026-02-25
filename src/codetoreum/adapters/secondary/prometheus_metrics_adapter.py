@@ -42,7 +42,8 @@ class PrometheusMetricsAdapter(IMetrics):
             subsystem: Prometheus metric subsystem
         """
         if not PROMETHEUS_AVAILABLE:
-            raise RuntimeError("prometheus_client library not installed")
+            msg = "prometheus_client library not installed"
+            raise RuntimeError(msg)
 
         self.namespace = namespace
         self.subsystem = subsystem

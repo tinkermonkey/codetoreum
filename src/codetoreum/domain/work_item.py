@@ -104,16 +104,20 @@ class WorkItem:
         - Status must be valid
         """
         if not self.title or not self.title.strip():
-            raise DomainError("Work item must have a non-empty title")
+            msg = "Work item must have a non-empty title"
+            raise DomainError(msg)
 
         if not self.project_id:
-            raise DomainError("Work item must belong to a project")
+            msg = "Work item must belong to a project"
+            raise DomainError(msg)
 
         if not isinstance(self.status, WorkItemStatus):
-            raise DomainError(f"Invalid status: {self.status}")
+            msg = f"Invalid status: {self.status}"
+            raise DomainError(msg)
 
         if not isinstance(self.priority, WorkItemPriority):
-            raise DomainError(f"Invalid priority: {self.priority}")
+            msg = f"Invalid priority: {self.priority}"
+            raise DomainError(msg)
 
     # Creation
     @classmethod
@@ -199,12 +203,12 @@ class WorkItem:
         Emits: AgentAssigned event
         """
         if self.status not in [WorkItemStatus.NEW, WorkItemStatus.ASSIGNED]:
-            raise DomainError(
-                f"Cannot assign agent to work item in status {self.status.value}"
-            )
+            msg = f"Cannot assign agent to work item in status {self.status.value}"
+            raise DomainError(msg)
 
         if self.assigned_agent_id == agent_id:
-            raise DomainError(f"Agent {agent_id} is already assigned")
+            msg = f"Agent {agent_id} is already assigned"
+            raise DomainError(msg)
 
         self.assigned_agent_id = agent_id
         self.assigned_at = datetime.now(UTC)
@@ -236,10 +240,12 @@ class WorkItem:
         Emits: WorkItemStarted event
         """
         if not self.assigned_agent_id:
-            raise DomainError("Cannot start unassigned work item")
+            msg = "Cannot start unassigned work item"
+            raise DomainError(msg)
 
         if self.status != WorkItemStatus.ASSIGNED:
-            raise DomainError(f"Cannot start work item in status {self.status.value}")
+            msg = f"Cannot start work item in status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = WorkItemStatus.IN_PROGRESS
         self.updated_at = datetime.now(UTC)
@@ -267,9 +273,8 @@ class WorkItem:
         Emits: WorkItemUnderReview event
         """
         if self.status != WorkItemStatus.IN_PROGRESS:
-            raise DomainError(
-                f"Cannot review work item in status {self.status.value}"
-            )
+            msg = f"Cannot review work item in status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = WorkItemStatus.UNDER_REVIEW
         self.updated_at = datetime.now(UTC)
@@ -297,9 +302,8 @@ class WorkItem:
             WorkItemStatus.IN_PROGRESS,
             WorkItemStatus.UNDER_REVIEW,
         ]:
-            raise DomainError(
-                f"Cannot complete work item in status {self.status.value}"
-            )
+            msg = f"Cannot complete work item in status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = WorkItemStatus.COMPLETED
         self.completed_at = datetime.now(UTC)
@@ -332,9 +336,8 @@ class WorkItem:
         Emits: WorkItemFailed event
         """
         if self.status in [WorkItemStatus.COMPLETED, WorkItemStatus.FAILED]:
-            raise DomainError(
-                f"Cannot fail work item in terminal status {self.status.value}"
-            )
+            msg = f"Cannot fail work item in terminal status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = WorkItemStatus.FAILED
         self.updated_at = datetime.now(UTC)
@@ -368,9 +371,8 @@ class WorkItem:
         Emits: WorkItemBlocked event
         """
         if self.status in [WorkItemStatus.COMPLETED, WorkItemStatus.FAILED]:
-            raise DomainError(
-                f"Cannot block work item in terminal status {self.status.value}"
-            )
+            msg = f"Cannot block work item in terminal status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = WorkItemStatus.BLOCKED
         self.updated_at = datetime.now(UTC)
@@ -399,7 +401,8 @@ class WorkItem:
         Emits: WorkItemUnblocked event
         """
         if self.status != WorkItemStatus.BLOCKED:
-            raise DomainError("Cannot unblock non-blocked work item")
+            msg = "Cannot unblock non-blocked work item"
+            raise DomainError(msg)
 
         # Return to previous state (assume assigned if agent exists)
         self.status = (
@@ -433,9 +436,8 @@ class WorkItem:
         Emits: WorkflowAttached event
         """
         if self.current_workflow_id:
-            raise DomainError(
-                f"Work item already has workflow {self.current_workflow_id}"
-            )
+            msg = f"Work item already has workflow {self.current_workflow_id}"
+            raise DomainError(msg)
 
         self.current_workflow_id = workflow_id
         self.updated_at = datetime.now(UTC)
@@ -463,7 +465,8 @@ class WorkItem:
         Emits: WorkItemStageUpdated event
         """
         if not self.current_workflow_id:
-            raise DomainError("Cannot update stage without workflow")
+            msg = "Cannot update stage without workflow"
+            raise DomainError(msg)
 
         old_stage = self.current_stage
         self.current_stage = stage
@@ -495,14 +498,17 @@ class WorkItem:
         Emits: WorkItemLabelsUpdated event
         """
         if labels is None:
-            raise DomainError("Labels cannot be None")
+            msg = "Labels cannot be None"
+            raise DomainError(msg)
 
         if not isinstance(labels, list):
-            raise DomainError("Labels must be a list")
+            msg = "Labels must be a list"
+            raise DomainError(msg)
 
         # Validate all elements are strings
         if not all(isinstance(label, str) for label in labels):
-            raise DomainError("All labels must be strings")
+            msg = "All labels must be strings"
+            raise DomainError(msg)
 
         old_labels = self.labels.copy()
         self.labels = labels
@@ -619,12 +625,14 @@ class WorkItem:
             DomainError: If event stream is invalid
         """
         if not events:
-            raise DomainError("Cannot reconstruct work item from empty event stream")
+            msg = "Cannot reconstruct work item from empty event stream"
+            raise DomainError(msg)
 
         # First event must be WorkItemCreated
         first_event = events[0]
         if not isinstance(first_event, WorkItemCreated):
-            raise DomainError("First event must be WorkItemCreated")
+            msg = "First event must be WorkItemCreated"
+            raise DomainError(msg)
 
         # Create initial state from creation event
         payload = first_event.payload
@@ -633,9 +641,8 @@ class WorkItem:
         required_fields = ["project_id", "title", "description", "priority", "labels"]
         missing_fields = [f for f in required_fields if f not in payload]
         if missing_fields:
-            raise DomainError(
-                f"Missing required fields in WorkItemCreated event: {', '.join(missing_fields)}"
-            )
+            msg = f"Missing required fields in WorkItemCreated event: {', '.join(missing_fields)}"
+            raise DomainError(msg)
 
         work_item = cls(
             id=first_event.aggregate_id,

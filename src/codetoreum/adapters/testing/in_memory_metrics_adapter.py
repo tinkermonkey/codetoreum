@@ -75,7 +75,8 @@ class InMemoryMetricsAdapter(IMetrics):
             ValidationError: If name is invalid
         """
         if not name or not name.strip():
-            raise ValidationError("Metric name cannot be empty")
+            msg = "Metric name cannot be empty"
+            raise ValidationError(msg)
 
     def _validate_labels(self, labels: dict[str, str] | None) -> None:
         """
@@ -91,11 +92,13 @@ class InMemoryMetricsAdapter(IMetrics):
             return
 
         if not isinstance(labels, dict):
-            raise ValidationError("Labels must be a dictionary")
+            msg = "Labels must be a dictionary"
+            raise ValidationError(msg)
 
         for key, value in labels.items():
             if not isinstance(key, str) or not isinstance(value, str):
-                raise ValidationError("Label keys and values must be strings")
+                msg = "Label keys and values must be strings"
+                raise ValidationError(msg)
 
     def _record_metric(
         self,
@@ -146,7 +149,8 @@ class InMemoryMetricsAdapter(IMetrics):
         self._validate_labels(labels)
 
         if value < 0:
-            raise ValidationError("Counter increment value cannot be negative")
+            msg = "Counter increment value cannot be negative"
+            raise ValidationError(msg)
 
         label_key = self._get_label_key(labels)
 
@@ -240,7 +244,8 @@ class InMemoryMetricsAdapter(IMetrics):
             ValidationError: If name is empty
         """
         if not name or not name.strip():
-            raise ValidationError("Timer name cannot be empty")
+            msg = "Timer name cannot be empty"
+            raise ValidationError(msg)
 
         timer_id = str(uuid4())
 
@@ -269,7 +274,8 @@ class InMemoryMetricsAdapter(IMetrics):
         """
         with self._lock:
             if timer_id not in self._timers:
-                raise ResourceNotFoundError("Timer", timer_id)
+                msg = "Timer"
+                raise ResourceNotFoundError(msg, timer_id)
 
             timer_name, start_time = self._timers.pop(timer_id)
 
@@ -302,7 +308,8 @@ class InMemoryMetricsAdapter(IMetrics):
         self._validate_labels(labels)
 
         if duration_seconds < 0:
-            raise ValidationError("Duration cannot be negative")
+            msg = "Duration cannot be negative"
+            raise ValidationError(msg)
 
         self._record_metric(name, duration_seconds, "histogram", labels)
 
@@ -330,12 +337,14 @@ class InMemoryMetricsAdapter(IMetrics):
 
         valid_types = {"counter", "gauge", "histogram", "summary"}
         if metric_type not in valid_types:
-            raise ValidationError(f"Invalid metric type: {metric_type}. Must be one of {valid_types}")
+            msg = f"Invalid metric type: {metric_type}. Must be one of {valid_types}"
+            raise ValidationError(msg)
 
         try:
             float_value = float(value)
         except (TypeError, ValueError):
-            raise ValidationError(f"Metric value must be numeric, got {type(value)}")
+            msg = f"Metric value must be numeric, got {type(value)}"
+            raise ValidationError(msg)
 
         self._record_metric(name, float_value, metric_type, labels)
 
@@ -367,7 +376,8 @@ class InMemoryMetricsAdapter(IMetrics):
         self._validate_labels(labels)
 
         if start_time > end_time:
-            raise ValidationError("start_time must be before end_time")
+            msg = "start_time must be before end_time"
+            raise ValidationError(msg)
 
         with self._lock:
             if name not in self._metrics:
@@ -398,7 +408,8 @@ class InMemoryMetricsAdapter(IMetrics):
                 elif aggregation == "max":
                     agg_value = max(values)
                 else:
-                    raise ValidationError(f"Unknown aggregation: {aggregation}")
+                    msg = f"Unknown aggregation: {aggregation}"
+                    raise ValidationError(msg)
 
                 # Return single aggregated result
                 return [MetricData(
@@ -448,7 +459,8 @@ class InMemoryMetricsAdapter(IMetrics):
             List[str]: List of label values
         """
         if not label_name:
-            raise ValidationError("Label name cannot be empty")
+            msg = "Label name cannot be empty"
+            raise ValidationError(msg)
 
         values = set()
 
@@ -484,7 +496,8 @@ class InMemoryMetricsAdapter(IMetrics):
 
         with self._lock:
             if name not in self._metrics:
-                raise ResourceNotFoundError("Metric", name)
+                msg = "Metric"
+                raise ResourceNotFoundError(msg, name)
 
             if labels:
                 # Delete specific series
@@ -540,7 +553,8 @@ class InMemoryMetricsAdapter(IMetrics):
         metrics = await self.query_metrics(name, start_time, end_time, labels)
 
         if not metrics:
-            raise ResourceNotFoundError("Metric", name)
+            msg = "Metric"
+            raise ResourceNotFoundError(msg, name)
 
         values = [m.value for m in metrics]
 
@@ -566,15 +580,18 @@ class InMemoryMetricsAdapter(IMetrics):
             ValidationError: Invalid metric data
         """
         if not metrics:
-            raise ValidationError("Metrics list cannot be empty")
+            msg = "Metrics list cannot be empty"
+            raise ValidationError(msg)
 
         for metric_def in metrics:
             if not isinstance(metric_def, dict):
-                raise ValidationError("Each metric must be a dictionary")
+                msg = "Each metric must be a dictionary"
+                raise ValidationError(msg)
 
             required_keys = {"name", "value", "type"}
             if not required_keys.issubset(metric_def.keys()):
-                raise ValidationError(f"Metric must have keys: {required_keys}")
+                msg = f"Metric must have keys: {required_keys}"
+                raise ValidationError(msg)
 
             await self.record_custom_metric(
                 name=metric_def["name"],

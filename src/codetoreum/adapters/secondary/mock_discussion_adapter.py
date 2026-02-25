@@ -124,7 +124,8 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
             ValueError: Work item doesn't exist or has no discussion
         """
         if work_item_id not in self._threads:
-            raise ValueError(f"No discussion thread for work item: {work_item_id}")
+            msg = f"No discussion thread for work item: {work_item_id}"
+            raise ValueError(msg)
 
         return DiscussionThread(
             id=f"thread-{work_item_id}",
@@ -198,9 +199,11 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
             ValueError: If work_item_id or config is invalid
         """
         if not work_item_id:
-            raise ValueError("work_item_id cannot be empty")
+            msg = "work_item_id cannot be empty"
+            raise ValueError(msg)
         if not config.project_id:
-            raise ValueError("config.project_id cannot be empty")
+            msg = "config.project_id cannot be empty"
+            raise ValueError(msg)
 
         self._monitoring[work_item_id] = config
 
@@ -218,7 +221,8 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
             ValueError: If not currently monitoring this item
         """
         if work_item_id not in self._monitoring:
-            raise ValueError(f"Not monitoring work item: {work_item_id}")
+            msg = f"Not monitoring work item: {work_item_id}"
+            raise ValueError(msg)
         del self._monitoring[work_item_id]
 
     # Test Helper Methods
@@ -517,7 +521,8 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
             # WorkItemColumnChangedEvent is emitted
         """
         if work_item_id not in self._monitoring:
-            raise ValueError(f"Not monitoring work item: {work_item_id}")
+            msg = f"Not monitoring work item: {work_item_id}"
+            raise ValueError(msg)
 
         config = self._monitoring[work_item_id]
 
@@ -573,7 +578,8 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
             assert adapter.thread_exists("item-1")  # Thread still exists
         """
         if work_item_id not in self._monitoring:
-            raise ValueError(f"Not monitoring work item: {work_item_id}")
+            msg = f"Not monitoring work item: {work_item_id}"
+            raise ValueError(msg)
 
         del self._monitoring[work_item_id]
 

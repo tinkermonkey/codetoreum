@@ -45,22 +45,22 @@ class WorkspaceContext:
         # Validate workspace type specific requirements
         if self.workspace_type in [WorkspaceType.ISSUE, WorkspaceType.HYBRID]:
             if not self.branch_name:
-                raise ValueError(
-                    f"branch_name is required for {self.workspace_type.value} workspace"
-                )
+                msg = f"branch_name is required for {self.workspace_type.value} workspace"
+                raise ValueError(msg)
 
         if self.workspace_type in [WorkspaceType.DISCUSSION, WorkspaceType.HYBRID]:
             if not self.discussion_id:
-                raise ValueError(
-                    f"discussion_id is required for {self.workspace_type.value} workspace"
-                )
+                msg = f"discussion_id is required for {self.workspace_type.value} workspace"
+                raise ValueError(msg)
 
         # Validate project and work item IDs
         if not self.project_id or not self.project_id.strip():
-            raise ValueError("project_id cannot be empty")
+            msg = "project_id cannot be empty"
+            raise ValueError(msg)
 
         if not self.work_item_id or not self.work_item_id.strip():
-            raise ValueError("work_item_id cannot be empty")
+            msg = "work_item_id cannot be empty"
+            raise ValueError(msg)
 
     @classmethod
     def for_issue(

@@ -356,18 +356,21 @@ class SimulationConfig:
         file_path = Path(file_path)
 
         if not file_path.exists():
-            raise FileNotFoundError(f"Scenario file not found: {file_path}")
+            message = f"Scenario file not found: {file_path}"
+            raise FileNotFoundError(message)
 
         with open(file_path) as f:
             data = yaml.safe_load(f)
 
         if not data:
-            raise ValueError(f"Empty YAML file: {file_path}")
+            message = f"Empty YAML file: {file_path}"
+            raise ValueError(message)
 
         # Extract scenario name (required)
         scenario_name = data.get("name")
         if not scenario_name:
-            raise ValueError("Scenario file must contain 'name' field")
+            message = "Scenario file must contain 'name' field"
+            raise ValueError(message)
 
         # Build config using from_dict for consistency
         config_dict = {

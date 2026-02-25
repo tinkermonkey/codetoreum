@@ -49,11 +49,14 @@ class ArtifactUploadedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.key:
-            raise ValueError("key is required")
+            msg = "key is required"
+            raise ValueError(msg)
         if self.size_bytes < 0:
-            raise ValueError("size_bytes cannot be negative")
+            msg = "size_bytes cannot be negative"
+            raise ValueError(msg)
         if not self.content_type:
-            raise ValueError("content_type is required")
+            msg = "content_type is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -116,7 +119,8 @@ class ArtifactDeletedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.key:
-            raise ValueError("key is required")
+            msg = "key is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""

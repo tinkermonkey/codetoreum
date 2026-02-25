@@ -146,7 +146,8 @@ class EventReplayer:
 
         except Exception as e:
             self._stats["errors"] += 1
-            raise EventReplayerError(f"Failed to replay events: {e}") from e
+            message = f"Failed to replay events: {e}"
+            raise EventReplayerError(message) from e
 
     async def replay_stream(
         self,
@@ -210,7 +211,8 @@ class EventReplayer:
 
         except Exception as e:
             self._stats["errors"] += 1
-            raise EventReplayerError(f"Failed to replay stream: {e}") from e
+            message = f"Failed to replay stream: {e}"
+            raise EventReplayerError(message) from e
 
     async def replay_event_type(
         self,
@@ -263,7 +265,8 @@ class EventReplayer:
 
         except Exception as e:
             self._stats["errors"] += 1
-            raise EventReplayerError(f"Failed to replay event type: {e}") from e
+            message = f"Failed to replay event type: {e}"
+            raise EventReplayerError(message) from e
 
     async def stream_replay_iterator(
         self,
@@ -298,7 +301,8 @@ class EventReplayer:
 
         except Exception as e:
             self._stats["errors"] += 1
-            raise EventReplayerError(f"Failed to stream replay: {e}") from e
+            message = f"Failed to stream replay: {e}"
+            raise EventReplayerError(message) from e
 
     async def rebuild_projection(
         self,
@@ -368,7 +372,8 @@ class EventReplayer:
 
         except Exception as e:
             self._stats["errors"] += 1
-            raise EventReplayerError(f"Failed to rebuild projection: {e}") from e
+            message = f"Failed to rebuild projection: {e}"
+            raise EventReplayerError(message) from e
 
     def get_statistics(self) -> dict[str, Any]:
         """

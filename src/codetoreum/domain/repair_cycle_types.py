@@ -69,11 +69,14 @@ class RepairTestFailure:
     def __post_init__(self) -> None:
         """Validate failure after initialization."""
         if not self.file:
-            raise ValueError("file is required")
+            msg = "file is required"
+            raise ValueError(msg)
         if not self.test:
-            raise ValueError("test is required")
+            msg = "test is required"
+            raise ValueError(msg)
         if not self.message:
-            raise ValueError("message is required")
+            msg = "message is required"
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True)
@@ -97,9 +100,11 @@ class RepairTestWarning:
     def __post_init__(self) -> None:
         """Validate warning after initialization."""
         if not self.file:
-            raise ValueError("file is required")
+            msg = "file is required"
+            raise ValueError(msg)
         if not self.message:
-            raise ValueError("message is required")
+            msg = "message is required"
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True)
@@ -137,29 +142,30 @@ class RepairTestResult:
     def __post_init__(self) -> None:
         """Validate result after initialization."""
         if self.iteration < 1:
-            raise ValueError("iteration must be >= 1")
+            msg = "iteration must be >= 1"
+            raise ValueError(msg)
         if self.passed < 0:
-            raise ValueError("passed must be >= 0")
+            msg = "passed must be >= 0"
+            raise ValueError(msg)
         if self.failed < 0:
-            raise ValueError("failed must be >= 0")
+            msg = "failed must be >= 0"
+            raise ValueError(msg)
         if self.warnings < 0:
-            raise ValueError("warnings must be >= 0")
+            msg = "warnings must be >= 0"
+            raise ValueError(msg)
         if not self.timestamp:
-            raise ValueError("timestamp is required")
+            msg = "timestamp is required"
+            raise ValueError(msg)
 
         # Consistency check: failed count must match failures list length
         if len(self.failures) != self.failed:
-            raise ValueError(
-                f"failed count mismatch: {len(self.failures)} failures in list "
-                f"but failed={self.failed}"
-            )
+            msg = f"failed count mismatch: {len(self.failures)} failures in list " f"but failed={self.failed}"
+            raise ValueError(msg)
 
         # Consistency check: warnings count must match warning_list length
         if len(self.warning_list) != self.warnings:
-            raise ValueError(
-                f"warnings count mismatch: {len(self.warning_list)} warnings in list "
-                f"but warnings={self.warnings}"
-            )
+            msg = f"warnings count mismatch: {len(self.warning_list)} warnings in list " f"but warnings={self.warnings}"
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True)
@@ -194,23 +200,25 @@ class CycleResult:
     def __post_init__(self) -> None:
         """Validate cycle result after initialization."""
         if self.iterations < 0:
-            raise ValueError("iterations must be >= 0")
+            msg = "iterations must be >= 0"
+            raise ValueError(msg)
         if self.files_fixed < 0:
-            raise ValueError("files_fixed must be >= 0")
+            msg = "files_fixed must be >= 0"
+            raise ValueError(msg)
         if self.warnings_reviewed < 0:
-            raise ValueError("warnings_reviewed must be >= 0")
+            msg = "warnings_reviewed must be >= 0"
+            raise ValueError(msg)
         if self.duration_seconds < 0:
-            raise ValueError("duration_seconds must be >= 0")
+            msg = "duration_seconds must be >= 0"
+            raise ValueError(msg)
 
         # Consistency check: passed state must align with final_result/error
         if self.passed and self.final_result is None:
-            raise ValueError(
-                "passed=True but final_result is None (expected successful test result)"
-            )
+            msg = "passed=True but final_result is None (expected successful test result)"
+            raise ValueError(msg)
         if self.passed and self.error is not None:
-            raise ValueError(
-                f"passed=True but error is set: '{self.error}' (contradiction)"
-            )
+            msg = f"passed=True but error is set: '{self.error}' (contradiction)"
+            raise ValueError(msg)
 
         # Note: passed=False with final_result is allowed (failed but completed)
         # Note: passed=False with error is the expected failure case
@@ -245,26 +253,28 @@ class RepairCycleResult:
     def __post_init__(self) -> None:
         """Validate cycle result after initialization."""
         if not self.stage:
-            raise ValueError("stage is required")
+            msg = "stage is required"
+            raise ValueError(msg)
         if self.total_agent_calls < 0:
-            raise ValueError("total_agent_calls must be >= 0")
+            msg = "total_agent_calls must be >= 0"
+            raise ValueError(msg)
         if self.duration_seconds < 0:
-            raise ValueError("duration_seconds must be >= 0")
+            msg = "duration_seconds must be >= 0"
+            raise ValueError(msg)
         if not self.timestamp:
-            raise ValueError("timestamp is required")
+            msg = "timestamp is required"
+            raise ValueError(msg)
 
         # Consistency check: overall_success must match all test results
         if self.test_results:
             all_passed = all(r.passed for r in self.test_results)
             if self.overall_success and not all_passed:
                 failed_types = [r.test_type.value for r in self.test_results if not r.passed]
-                raise ValueError(
-                    f"overall_success=True but some test types failed: {failed_types}"
-                )
+                msg = f"overall_success=True but some test types failed: {failed_types}"
+                raise ValueError(msg)
             if not self.overall_success and all_passed:
-                raise ValueError(
-                    "overall_success=False but all test results passed (inconsistency)"
-                )
+                msg = "overall_success=False but all test results passed (inconsistency)"
+                raise ValueError(msg)
         # Empty test_results with overall_success=True is suspicious but may be valid
         # (e.g., no tests configured). Log warning but don't raise.
         elif self.overall_success:
@@ -300,11 +310,14 @@ class RepairTestRunConfig:
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""
         if self.timeout <= 0:
-            raise ValueError("timeout must be > 0")
+            msg = "timeout must be > 0"
+            raise ValueError(msg)
         if self.max_iterations <= 0:
-            raise ValueError("max_iterations must be > 0")
+            msg = "max_iterations must be > 0"
+            raise ValueError(msg)
         if self.max_file_iterations <= 0:
-            raise ValueError("max_file_iterations must be > 0")
+            msg = "max_file_iterations must be > 0"
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True)
@@ -341,21 +354,29 @@ class RepairCycleCheckpoint:
     def __post_init__(self) -> None:
         """Validate checkpoint fields."""
         if not self.workflow_run_id or not self.workflow_run_id.strip():
-            raise ValueError("workflow_run_id cannot be empty")
+            msg = "workflow_run_id cannot be empty"
+            raise ValueError(msg)
         if not isinstance(self.test_type, RepairTestType):
-            raise ValueError("test_type must be a RepairTestType enum")
+            msg = "test_type must be a RepairTestType enum"
+            raise ValueError(msg)
         if self.iteration < 1:
-            raise ValueError("iteration must be >= 1 (1-indexed)")
+            msg = "iteration must be >= 1 (1-indexed)"
+            raise ValueError(msg)
         if self.total_agent_calls < 0:
-            raise ValueError("total_agent_calls cannot be negative")
+            msg = "total_agent_calls cannot be negative"
+            raise ValueError(msg)
         if self.files_fixed < 0:
-            raise ValueError("files_fixed cannot be negative")
+            msg = "files_fixed cannot be negative"
+            raise ValueError(msg)
         if self.warnings_reviewed < 0:
-            raise ValueError("warnings_reviewed cannot be negative")
+            msg = "warnings_reviewed cannot be negative"
+            raise ValueError(msg)
         if self.elapsed_seconds < 0:
-            raise ValueError("elapsed_seconds cannot be negative")
+            msg = "elapsed_seconds cannot be negative"
+            raise ValueError(msg)
         if not isinstance(self.test_results, tuple):
-            raise ValueError("test_results must be a tuple (immutable)")
+            msg = "test_results must be a tuple (immutable)"
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True)
@@ -388,10 +409,14 @@ class RepairCycleStageConfig:
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""
         if not self.name:
-            raise ValueError("name is required")
+            msg = "name is required"
+            raise ValueError(msg)
         if not self.test_configs:
-            raise ValueError("test_configs must not be empty")
+            msg = "test_configs must not be empty"
+            raise ValueError(msg)
         if self.max_total_agent_calls <= 0:
-            raise ValueError("max_total_agent_calls must be > 0")
+            msg = "max_total_agent_calls must be > 0"
+            raise ValueError(msg)
         if self.checkpoint_interval <= 0:
-            raise ValueError("checkpoint_interval must be > 0")
+            msg = "checkpoint_interval must be > 0"
+            raise ValueError(msg)

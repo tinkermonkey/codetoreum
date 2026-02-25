@@ -44,7 +44,8 @@ class InMemoryCheckpointStore(IRepairCycleCheckpointStore):
     async def save_checkpoint(self, checkpoint: RepairCycleCheckpoint) -> None:
         """Save checkpoint with automatic expiration."""
         if not checkpoint:
-            raise ValueError("checkpoint cannot be None")
+            msg = "checkpoint cannot be None"
+            raise ValueError(msg)
 
         with self._lock:
             # Convert enum to string for key

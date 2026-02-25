@@ -158,6 +158,20 @@ ignore = [
 ]
 "documentation/api/examples/**/*.py" = [
     "S105",    # Hardcoded password in example code (placeholders only)
+    "S113",    # Requests without timeout (acceptable in examples)
+    "T20",     # Print statements allowed in examples
+    "TRY400",  # logging.exception style (examples use logging)
+    "TRY401",  # Redundant exception in logging (acceptable in examples)
+    "ARG",     # Unused arguments allowed in example code
+    "ANN",     # Type annotations not required in examples
+    "E501",    # Line length (examples often show API patterns)
+    "EM102",   # Exception f-strings acceptable in examples
+    "DTZ005",  # datetime.now() without tz acceptable in examples
+    "C901",    # Complexity limits relaxed for examples
+    "PLR0912", # Too many branches acceptable in examples
+    "PLR0915", # Too many statements acceptable in examples
+    "BLE001",  # Catch blind exception acceptable in examples
+    "ERA001",  # Commented-out code acceptable in examples
 ]
 "documentation/api/sdk/python/**/*.py" = [
     "ANN401",  # Dynamically typed expressions allowed in SDK (client injection pattern)

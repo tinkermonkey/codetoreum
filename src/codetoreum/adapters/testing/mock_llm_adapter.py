@@ -66,7 +66,8 @@ class MockLLMAdapter(ILLMProvider):
             max_output_tokens: Maximum output tokens
         """
         if delay_seconds < 0:
-            raise ValidationError("Delay seconds cannot be negative")
+            msg = "Delay seconds cannot be negative"
+            raise ValidationError(msg)
 
         self._default_response = default_response
         self._delay_seconds = delay_seconds
@@ -112,9 +113,11 @@ class MockLLMAdapter(ILLMProvider):
             ValidationError: If pattern or response is empty
         """
         if not pattern:
-            raise ValidationError("Pattern cannot be empty")
+            msg = "Pattern cannot be empty"
+            raise ValidationError(msg)
         if not response:
-            raise ValidationError("Response cannot be empty")
+            msg = "Response cannot be empty"
+            raise ValidationError(msg)
 
         compiled_pattern = re.compile(pattern, re.IGNORECASE | re.DOTALL)
         with self._lock:
@@ -158,11 +161,13 @@ class MockLLMAdapter(ILLMProvider):
             RateLimitError: If rate limits are simulated and exceeded
         """
         if not prompt or not prompt.strip():
-            raise ValidationError("Prompt cannot be empty")
+            msg = "Prompt cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             if self._simulate_rate_limits and self._total_requests >= 100:
-                raise RateLimitError("Mock rate limit exceeded (100 requests)")
+                msg = "Mock rate limit exceeded (100 requests)"
+                raise RateLimitError(msg)
 
         # Simulate delay
         if self._delay_seconds > 0:
@@ -230,7 +235,8 @@ class MockLLMAdapter(ILLMProvider):
             ValidationError: If prompt is empty or tools list is invalid
         """
         if not tools:
-            raise ValidationError("Tools list cannot be empty for tool execution")
+            msg = "Tools list cannot be empty for tool execution"
+            raise ValidationError(msg)
 
         # For mock, just execute normally and optionally include tool calls
         result = await self.execute(prompt, context, stream_callback)
@@ -270,7 +276,8 @@ class MockLLMAdapter(ILLMProvider):
             ValidationError: If prompt is empty
         """
         if not prompt or not prompt.strip():
-            raise ValidationError("Prompt cannot be empty")
+            msg = "Prompt cannot be empty"
+            raise ValidationError(msg)
 
         # Get response
         response = self._get_response_for_prompt(prompt)
@@ -360,12 +367,14 @@ class MockLLMAdapter(ILLMProvider):
             ValidationError: If message is empty
         """
         if not message or not message.strip():
-            raise ValidationError("Message cannot be empty")
+            msg = "Message cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             if conversation_id not in self._conversations:
                 from codetoreum.ports.exceptions import ResourceNotFoundError
-                raise ResourceNotFoundError("Conversation", conversation_id)
+                msg = "Conversation"
+                raise ResourceNotFoundError(msg, conversation_id)
 
             # Add user message
             self._conversations[conversation_id].append({
@@ -497,7 +506,8 @@ class MockLLMAdapter(ILLMProvider):
             ValidationError: If response is empty
         """
         if not response:
-            raise ValidationError("Default response cannot be empty")
+            msg = "Default response cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             self._default_response = response

@@ -43,8 +43,9 @@ class MockExecutionCommandAdapter(IExecutionCommandPort):
 
             # Check if execution is already in a terminal state
             if execution.is_terminal():
+                msg = f"Execution {command.execution_id} is already {execution.status.value}"
                 raise InvalidStateError(
-                    f"Execution {command.execution_id} is already {execution.status.value}"
+                    msg
                 )
 
             # Use domain method to cancel execution

@@ -289,7 +289,8 @@ class ElasticsearchConfigStorage(IConfigStore):
             return self._deserialize_project(result["_source"])
 
         except NotFoundError:
-            raise ConfigNotFoundError(f"Project not found: {project_id}")
+            msg = f"Project not found: {project_id}"
+            raise ConfigNotFoundError(msg)
         except Exception as e:
             logger.error(
                 f"Failed to get project config {project_id}: {e}",
@@ -325,7 +326,8 @@ class ElasticsearchConfigStorage(IConfigStore):
 
             hits = result["hits"]["hits"]
             if not hits:
-                raise ConfigNotFoundError(f"Project not found: {project_name}")
+                msg = f"Project not found: {project_name}"
+                raise ConfigNotFoundError(msg)
 
             return self._deserialize_project(hits[0]["_source"])
 
@@ -446,8 +448,9 @@ class ElasticsearchConfigStorage(IConfigStore):
             return self._deserialize_agent(result["_source"])
 
         except NotFoundError:
+            msg = f"Agent config not found: {project_id}/{agent_name}"
             raise ConfigNotFoundError(
-                f"Agent config not found: {project_id}/{agent_name}"
+                msg
             )
         except Exception as e:
             logger.error(
@@ -570,8 +573,9 @@ class ElasticsearchConfigStorage(IConfigStore):
 
             hits = result["hits"]["hits"]
             if not hits:
+                msg = f"Pipeline not found: {project_id}/{pipeline_name}"
                 raise ConfigNotFoundError(
-                    f"Pipeline not found: {project_id}/{pipeline_name}"
+                    msg
                 )
 
             return self._deserialize_pipeline(hits[0]["_source"])
@@ -689,7 +693,8 @@ class ElasticsearchConfigStorage(IConfigStore):
 
             hits = result["hits"]["hits"]
             if not hits:
-                raise ConfigNotFoundError(f"Template not found: {template_name}")
+                msg = f"Template not found: {template_name}"
+                raise ConfigNotFoundError(msg)
 
             return self._deserialize_workflow(hits[0]["_source"])
 
@@ -911,7 +916,8 @@ class ElasticsearchConfigStorage(IConfigStore):
             try:
                 sanitized_query = sanitize_search_query(query, max_length=500)
             except InvalidInputError as e:
-                raise ValueError(f"Invalid search query: {e}")
+                msg = f"Invalid search query: {e}"
+                raise ValueError(msg)
 
             if not sanitized_query:
                 return []  # Empty query returns no results
@@ -919,9 +925,12 @@ class ElasticsearchConfigStorage(IConfigStore):
             # Validate config_type to prevent injection
             valid_config_types = ["project", "agent", "pipeline", "workflow", None]
             if config_type not in valid_config_types:
-                raise ValueError(
+                msg = (
                     f"Invalid config_type '{config_type}'. "
                     f"Must be one of: {', '.join([t for t in valid_config_types if t is not None])}"
+                )
+                raise ValueError(
+                    msg
                 )
 
             # Determine which indices to search
@@ -1029,8 +1038,9 @@ class ElasticsearchConfigStorage(IConfigStore):
 
             hits = result["hits"]["hits"]
             if not hits:
+                msg = f"Config version not found: {config_id} v{version}"
                 raise ConfigNotFoundError(
-                    f"Config version not found: {config_id} v{version}"
+                    msg
                 )
 
             return hits[0]["_source"]["snapshot"]
@@ -1116,7 +1126,8 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.info(f"Deleted project config {project_id}")
 
         except NotFoundError:
-            raise ConfigNotFoundError(f"Project not found: {project_id}")
+            msg = f"Project not found: {project_id}"
+            raise ConfigNotFoundError(msg)
         except Exception as e:
             logger.error(
                 f"Failed to delete project config {project_id}: {e}",
@@ -1151,8 +1162,9 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.info(f"Deleted agent config {doc_id}")
 
         except NotFoundError:
+            msg = f"Agent config not found: {project_id}/{agent_name}"
             raise ConfigNotFoundError(
-                f"Agent config not found: {project_id}/{agent_name}"
+                msg
             )
         except Exception as e:
             logger.error(

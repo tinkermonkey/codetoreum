@@ -120,7 +120,8 @@ class ElasticsearchEventStore(IEventStore):
                     f"Elasticsearch event store initialized with prefix '{self.index_prefix}'"
                 )
             except Exception as e:
-                raise EventStoreError(f"Failed to initialize event store: {e}") from e
+                msg = f"Failed to initialize event store: {e}"
+                raise EventStoreError(msg) from e
 
     async def append(
         self,
@@ -151,9 +152,12 @@ class ElasticsearchEventStore(IEventStore):
             if expected_version is not None:
                 current_version = await self.get_stream_version(stream_id)
                 if current_version != expected_version:
-                    raise ConcurrencyConflictError(
+                    msg = (
                         f"Stream {stream_id}: expected version {expected_version}, "
                         f"but current version is {current_version}"
+                    )
+                    raise ConcurrencyConflictError(
+                        msg
                     )
 
             # Get starting version for new events
@@ -185,8 +189,9 @@ class ElasticsearchEventStore(IEventStore):
                     for item in response["items"]
                     if "error" in item.get("index", {})
                 ]
+                msg = f"Bulk insert had {len(errors)} errors: {errors[0] if errors else 'unknown'}"
                 raise EventStoreError(
-                    f"Bulk insert had {len(errors)} errors: {errors[0] if errors else 'unknown'}"
+                    msg
                 )
 
             logger.debug(
@@ -197,7 +202,8 @@ class ElasticsearchEventStore(IEventStore):
         except ConcurrencyConflictError:
             raise
         except Exception as e:
-            raise EventStoreError(f"Failed to append events: {e}") from e
+            msg = f"Failed to append events: {e}"
+            raise EventStoreError(msg) from e
 
     async def get_events(
         self,
@@ -255,7 +261,8 @@ class ElasticsearchEventStore(IEventStore):
                     # No events yet, that's ok
                     return []
                 # Stream should exist but doesn't
-                raise ResourceNotFoundError("Stream", stream_id)
+                msg = "Stream"
+                raise ResourceNotFoundError(msg, stream_id)
 
             # Convert to domain events
             events = [EventSerializer.from_dict(hit["_source"]) for hit in hits]
@@ -265,7 +272,8 @@ class ElasticsearchEventStore(IEventStore):
         except ResourceNotFoundError:
             raise
         except Exception as e:
-            raise EventStoreError(f"Failed to get events: {e}") from e
+            msg = f"Failed to get events: {e}"
+            raise EventStoreError(msg) from e
 
     async def get_events_since(
         self,
@@ -311,7 +319,8 @@ class ElasticsearchEventStore(IEventStore):
             return events
 
         except Exception as e:
-            raise EventStoreError(f"Failed to get events since: {e}") from e
+            msg = f"Failed to get events since: {e}"
+            raise EventStoreError(msg) from e
 
     async def stream_events(
         self,
@@ -349,7 +358,8 @@ class ElasticsearchEventStore(IEventStore):
                 yield event
 
         except Exception as e:
-            raise EventStoreError(f"Failed to stream events: {e}") from e
+            msg = f"Failed to stream events: {e}"
+            raise EventStoreError(msg) from e
 
     async def get_stream_version(self, stream_id: str) -> int:
         """
@@ -384,7 +394,8 @@ class ElasticsearchEventStore(IEventStore):
             return int(max_version)
 
         except Exception as e:
-            raise EventStoreError(f"Failed to get stream version: {e}") from e
+            msg = f"Failed to get stream version: {e}"
+            raise EventStoreError(msg) from e
 
     async def stream_exists(self, stream_id: str) -> bool:
         """
@@ -411,7 +422,8 @@ class ElasticsearchEventStore(IEventStore):
             return response["count"] > 0
 
         except Exception as e:
-            raise EventStoreError(f"Failed to check stream existence: {e}") from e
+            msg = f"Failed to check stream existence: {e}"
+            raise EventStoreError(msg) from e
 
     async def save_snapshot(
         self,
@@ -470,7 +482,8 @@ class ElasticsearchEventStore(IEventStore):
         try:
             # Check if stream exists
             if not await self.stream_exists(stream_id):
-                raise ResourceNotFoundError("Stream", stream_id)
+                msg = "Stream"
+                raise ResourceNotFoundError(msg, stream_id)
 
             # Delete by query
             response = await self.client.delete_by_query(
@@ -485,7 +498,8 @@ class ElasticsearchEventStore(IEventStore):
         except ResourceNotFoundError:
             raise
         except Exception as e:
-            raise EventStoreError(f"Failed to delete stream: {e}") from e
+            msg = f"Failed to delete stream: {e}"
+            raise EventStoreError(msg) from e
 
     async def get_all_stream_ids(
         self,
@@ -531,7 +545,8 @@ class ElasticsearchEventStore(IEventStore):
             return stream_ids
 
         except Exception as e:
-            raise EventStoreError(f"Failed to get stream IDs: {e}") from e
+            msg = f"Failed to get stream IDs: {e}"
+            raise EventStoreError(msg) from e
 
     async def query_streams_by_latest_event(
         self,
@@ -672,8 +687,9 @@ class ElasticsearchEventStore(IEventStore):
             return all_streams, total_count
 
         except Exception as e:
+            msg = f"Failed to query streams by latest event: {e}"
             raise EventStoreError(
-                f"Failed to query streams by latest event: {e}"
+                msg
             ) from e
 
     async def get_events_by_type(
@@ -724,7 +740,8 @@ class ElasticsearchEventStore(IEventStore):
             return events
 
         except Exception as e:
-            raise EventStoreError(f"Failed to get events by type: {e}") from e
+            msg = f"Failed to get events by type: {e}"
+            raise EventStoreError(msg) from e
 
     async def get_events_by_correlation_id(
         self,
@@ -761,7 +778,8 @@ class ElasticsearchEventStore(IEventStore):
             return events
 
         except Exception as e:
-            raise EventStoreError(f"Failed to get events by correlation ID: {e}") from e
+            msg = f"Failed to get events by correlation ID: {e}"
+            raise EventStoreError(msg) from e
 
     async def replay_events(
         self,
@@ -791,7 +809,8 @@ class ElasticsearchEventStore(IEventStore):
             events = await self.get_events(stream_id, from_version, to_version)
 
             if not events and from_version == 0:
-                raise ResourceNotFoundError("Stream", stream_id)
+                msg = "Stream"
+                raise ResourceNotFoundError(msg, stream_id)
 
             for event in events:
                 yield event
@@ -799,7 +818,8 @@ class ElasticsearchEventStore(IEventStore):
         except ResourceNotFoundError:
             raise
         except Exception as e:
-            raise EventStoreError(f"Failed to replay events: {e}") from e
+            msg = f"Failed to replay events: {e}"
+            raise EventStoreError(msg) from e
 
     async def get_statistics(self) -> dict[str, Any]:
         """
@@ -846,7 +866,8 @@ class ElasticsearchEventStore(IEventStore):
             }
 
         except Exception as e:
-            raise EventStoreError(f"Failed to get statistics: {e}") from e
+            msg = f"Failed to get statistics: {e}"
+            raise EventStoreError(msg) from e
 
     # Helper methods
 

@@ -116,4 +116,5 @@ def __getattr__(name: str) -> object:
             "SimulationDataSeeder": SimulationDataSeeder,
             "CreatedItems": CreatedItems,
         }[name]
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    message = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(message)

@@ -70,9 +70,11 @@ class FakeContainerAdapter(IContainer):
             ValidationError: If parameters are invalid
         """
         if execution_delay < 0:
-            raise ValidationError("Execution delay cannot be negative")
+            msg = "Execution delay cannot be negative"
+            raise ValidationError(msg)
         if max_containers <= 0:
-            raise ValidationError("Max containers must be positive")
+            msg = "Max containers must be positive"
+            raise ValidationError(msg)
 
         self._default_exit_code = default_exit_code
         self._default_stdout = default_stdout
@@ -117,7 +119,8 @@ class FakeContainerAdapter(IContainer):
             ValidationError: If command_pattern is empty
         """
         if not command_pattern:
-            raise ValidationError("Command pattern cannot be empty")
+            msg = "Command pattern cannot be empty"
+            raise ValidationError(msg)
 
         container_id = f"fake-{uuid4()}"
         with self._lock:
@@ -196,10 +199,12 @@ class FakeContainerAdapter(IContainer):
             ValidationError: If image or command is invalid
         """
         if not image or not image.strip():
-            raise ValidationError("Image name is required")
+            msg = "Image name is required"
+            raise ValidationError(msg)
 
         if not command or len(command) == 0:
-            raise ValidationError("Command is required")
+            msg = "Command is required"
+            raise ValidationError(msg)
 
         # Simulate execution delay
         if self._execution_delay > 0:
@@ -284,16 +289,19 @@ class FakeContainerAdapter(IContainer):
             ValidationError: If image is invalid or max containers exceeded
         """
         if not image or not image.strip():
-            raise ValidationError("Image name is required")
+            msg = "Image name is required"
+            raise ValidationError(msg)
 
         with self._lock:
             if len(self._containers) >= self._max_containers:
-                raise ValidationError(f"Maximum container limit ({self._max_containers}) reached")
+                msg = f"Maximum container limit ({self._max_containers}) reached"
+                raise ValidationError(msg)
 
             # Validate container name format if provided
             if name:
                 if not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]*$", name):
-                    raise ValidationError(f"Invalid container name format: '{name}'")
+                    msg = f"Invalid container name format: '{name}'"
+                    raise ValidationError(msg)
 
             container_id = name or f"fake-{uuid4().hex[:12]}"
 
@@ -327,11 +335,13 @@ class FakeContainerAdapter(IContainer):
             ResourceNotFoundError: If container does not exist
         """
         if not container_id:
-            raise ValidationError("Container ID cannot be empty")
+            msg = "Container ID cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             if container_id not in self._containers:
-                raise ResourceNotFoundError("Container", container_id)
+                msg = "Container"
+                raise ResourceNotFoundError(msg, container_id)
 
             container = self._containers[container_id]
             container["status"] = "running"
@@ -349,11 +359,13 @@ class FakeContainerAdapter(IContainer):
             ResourceNotFoundError: If container does not exist
         """
         if not container_id:
-            raise ValidationError("Container ID cannot be empty")
+            msg = "Container ID cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             if container_id not in self._containers:
-                raise ResourceNotFoundError("Container", container_id)
+                msg = "Container"
+                raise ResourceNotFoundError(msg, container_id)
 
             container = self._containers[container_id]
             container["status"] = "exited"
@@ -372,11 +384,13 @@ class FakeContainerAdapter(IContainer):
             ResourceNotFoundError: If container does not exist
         """
         if not container_id:
-            raise ValidationError("Container ID cannot be empty")
+            msg = "Container ID cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             if container_id not in self._containers:
-                raise ResourceNotFoundError("Container", container_id)
+                msg = "Container"
+                raise ResourceNotFoundError(msg, container_id)
 
             del self._containers[container_id]
 
@@ -392,11 +406,13 @@ class FakeContainerAdapter(IContainer):
             ResourceNotFoundError: If container does not exist
         """
         if not container_id:
-            raise ValidationError("Container ID cannot be empty")
+            msg = "Container ID cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             if container_id not in self._containers:
-                raise ResourceNotFoundError("Container", container_id)
+                msg = "Container"
+                raise ResourceNotFoundError(msg, container_id)
 
             container = self._containers[container_id]
             container["status"] = "dead"
@@ -428,11 +444,13 @@ class FakeContainerAdapter(IContainer):
             ResourceNotFoundError: If container does not exist
         """
         if not container_id:
-            raise ValidationError("Container ID cannot be empty")
+            msg = "Container ID cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             if container_id not in self._containers:
-                raise ResourceNotFoundError("Container", container_id)
+                msg = "Container"
+                raise ResourceNotFoundError(msg, container_id)
 
         # Return fake logs
         logs = f"Fake logs for container {container_id}\nLine 1\nLine 2\nLine 3"
@@ -465,11 +483,13 @@ class FakeContainerAdapter(IContainer):
             ResourceNotFoundError: If container does not exist
         """
         if not container_id:
-            raise ValidationError("Container ID cannot be empty")
+            msg = "Container ID cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             if container_id not in self._containers:
-                raise ResourceNotFoundError("Container", container_id)
+                msg = "Container"
+                raise ResourceNotFoundError(msg, container_id)
 
             container = self._containers[container_id]
 
@@ -509,18 +529,22 @@ class FakeContainerAdapter(IContainer):
             ValidationError: If command is empty
         """
         if not container_id:
-            raise ValidationError("Container ID cannot be empty")
+            msg = "Container ID cannot be empty"
+            raise ValidationError(msg)
 
         if not command:
-            raise ValidationError("Command cannot be empty")
+            msg = "Command cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             if container_id not in self._containers:
-                raise ResourceNotFoundError("Container", container_id)
+                msg = "Container"
+                raise ResourceNotFoundError(msg, container_id)
 
             container = self._containers[container_id]
             if container["status"] != "running":
-                raise ContainerError(f"Container '{container_id}' is not running")
+                msg = f"Container '{container_id}' is not running"
+                raise ContainerError(msg)
 
         # Simulate execution
         if self._execution_delay > 0:
@@ -585,7 +609,8 @@ class FakeContainerAdapter(IContainer):
             ValidationError: If image is invalid
         """
         if not image or not image.strip():
-            raise ValidationError("Image name is required")
+            msg = "Image name is required"
+            raise ValidationError(msg)
 
         # Simulate pull delay
         if self._execution_delay > 0:
@@ -622,11 +647,13 @@ class FakeContainerAdapter(IContainer):
             ResourceNotFoundError: If container does not exist
         """
         if not container_id:
-            raise ValidationError("Container ID cannot be empty")
+            msg = "Container ID cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             if container_id not in self._containers:
-                raise ResourceNotFoundError("Container", container_id)
+                msg = "Container"
+                raise ResourceNotFoundError(msg, container_id)
 
             return self._containers[container_id].copy()
 
@@ -649,11 +676,13 @@ class FakeContainerAdapter(IContainer):
             ResourceNotFoundError: If container does not exist
         """
         if not container_id:
-            raise ValidationError("Container ID cannot be empty")
+            msg = "Container ID cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             if container_id not in self._containers:
-                raise ResourceNotFoundError("Container", container_id)
+                msg = "Container"
+                raise ResourceNotFoundError(msg, container_id)
 
         # Simulate wait
         if self._execution_delay > 0:
@@ -682,15 +711,19 @@ class FakeContainerAdapter(IContainer):
             ValidationError: If paths are empty
         """
         if not container_id:
-            raise ValidationError("Container ID cannot be empty")
+            msg = "Container ID cannot be empty"
+            raise ValidationError(msg)
         if not source:
-            raise ValidationError("Source path cannot be empty")
+            msg = "Source path cannot be empty"
+            raise ValidationError(msg)
         if not destination:
-            raise ValidationError("Destination path cannot be empty")
+            msg = "Destination path cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             if container_id not in self._containers:
-                raise ResourceNotFoundError("Container", container_id)
+                msg = "Container"
+                raise ResourceNotFoundError(msg, container_id)
 
         # Simulate copy operation
         if self._execution_delay > 0:
@@ -715,15 +748,19 @@ class FakeContainerAdapter(IContainer):
             ValidationError: If paths are empty
         """
         if not container_id:
-            raise ValidationError("Container ID cannot be empty")
+            msg = "Container ID cannot be empty"
+            raise ValidationError(msg)
         if not source:
-            raise ValidationError("Source path cannot be empty")
+            msg = "Source path cannot be empty"
+            raise ValidationError(msg)
         if not destination:
-            raise ValidationError("Destination path cannot be empty")
+            msg = "Destination path cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             if container_id not in self._containers:
-                raise ResourceNotFoundError("Container", container_id)
+                msg = "Container"
+                raise ResourceNotFoundError(msg, container_id)
 
         # Simulate copy operation
         if self._execution_delay > 0:
@@ -745,7 +782,8 @@ class FakeContainerAdapter(IContainer):
         """
         with self._lock:
             if container_id not in self._virtual_filesystems:
-                raise ResourceNotFoundError("Container", container_id)
+                msg = "Container"
+                raise ResourceNotFoundError(msg, container_id)
             self._virtual_filesystems[container_id][file_path] = content
 
     def _get_output_files(self, container_id: str) -> list[str]:

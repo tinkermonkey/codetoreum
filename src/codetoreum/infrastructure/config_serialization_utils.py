@@ -30,9 +30,11 @@ def validate_id(value: str, name: str = "id") -> None:
         ValueError: If the ID is invalid
     """
     if not value or not isinstance(value, str):
-        raise ValueError(f"{name} must be a non-empty string")
+        message = f"{name} must be a non-empty string"
+        raise ValueError(message)
     if not value.strip():
-        raise ValueError(f"{name} cannot be whitespace only")
+        message = f"{name} cannot be whitespace only"
+        raise ValueError(message)
 
 
 def validate_name(value: str) -> None:
@@ -46,9 +48,11 @@ def validate_name(value: str) -> None:
         ValueError: If the name is invalid
     """
     if not value or not isinstance(value, str):
-        raise ValueError("name must be a non-empty string")
+        message = "name must be a non-empty string"
+        raise ValueError(message)
     if not value.strip():
-        raise ValueError("name cannot be whitespace only")
+        message = "name cannot be whitespace only"
+        raise ValueError(message)
 
 
 def serialize_datetime(dt: datetime | None) -> str | None:

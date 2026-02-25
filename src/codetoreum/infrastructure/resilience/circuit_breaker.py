@@ -77,9 +77,12 @@ class CircuitBreaker(ICircuitBreaker):
                     self._state = CircuitState.HALF_OPEN
                     self._success_count = 0
                 else:
-                    raise CircuitBreakerOpenError(
+                    message = (
                         f"Circuit breaker open for {operation_name}. "
-                        f"Will retry in {self._time_until_retry():.1f}s",
+                        f"Will retry in {self._time_until_retry():.1f}s"
+                    )
+                    raise CircuitBreakerOpenError(
+                        message,
                         retry_after_seconds=self._time_until_retry()
                     )
 

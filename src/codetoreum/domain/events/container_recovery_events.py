@@ -48,17 +48,23 @@ class ContainerRecoveredEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.container_id:
-            raise ValueError("container_id is required")
+            msg = "container_id is required"
+            raise ValueError(msg)
         if not self.container_name:
-            raise ValueError("container_name is required")
+            msg = "container_name is required"
+            raise ValueError(msg)
         if not self.project_id:
-            raise ValueError("project_id is required")
+            msg = "project_id is required"
+            raise ValueError(msg)
         if not self.agent_id:
-            raise ValueError("agent_id is required")
+            msg = "agent_id is required"
+            raise ValueError(msg)
         if self.uptime_seconds < 0:
-            raise ValueError("uptime_seconds must be >= 0")
+            msg = "uptime_seconds must be >= 0"
+            raise ValueError(msg)
         if self.recovery_action not in ("reconnect_with_monitoring", "reconnect_limited"):
-            raise ValueError("recovery_action must be one of: reconnect_with_monitoring, reconnect_limited")
+            msg = "recovery_action must be one of: reconnect_with_monitoring, reconnect_limited"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -154,11 +160,14 @@ class ContainerKilledEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.container_id:
-            raise ValueError("container_id is required")
+            msg = "container_id is required"
+            raise ValueError(msg)
         if not self.container_name:
-            raise ValueError("container_name is required")
+            msg = "container_name is required"
+            raise ValueError(msg)
         if self.uptime_seconds < 0:
-            raise ValueError("uptime_seconds must be >= 0")
+            msg = "uptime_seconds must be >= 0"
+            raise ValueError(msg)
         valid_reasons = (
             "container_timeout",
             "agent_mismatch",
@@ -173,7 +182,8 @@ class ContainerKilledEvent(CodetoreumEvent):
             "no_checkpoint"
         )
         if self.kill_reason not in valid_reasons:
-            raise ValueError(f"kill_reason must be one of: {', '.join(valid_reasons)}")
+            msg = f"kill_reason must be one of: {', '.join(valid_reasons)}"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -242,19 +252,26 @@ class ContainerRecoveryCompletedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if self.containers_recovered < 0:
-            raise ValueError("containers_recovered must be >= 0")
+            msg = "containers_recovered must be >= 0"
+            raise ValueError(msg)
         if self.containers_killed < 0:
-            raise ValueError("containers_killed must be >= 0")
+            msg = "containers_killed must be >= 0"
+            raise ValueError(msg)
         if self.errors_encountered < 0:
-            raise ValueError("errors_encountered must be >= 0")
+            msg = "errors_encountered must be >= 0"
+            raise ValueError(msg)
         if self.repair_cycles_processed < 0:
-            raise ValueError("repair_cycles_processed must be >= 0")
+            msg = "repair_cycles_processed must be >= 0"
+            raise ValueError(msg)
         if not self.started_at:
-            raise ValueError("started_at is required")
+            msg = "started_at is required"
+            raise ValueError(msg)
         if not self.completed_at:
-            raise ValueError("completed_at is required")
+            msg = "completed_at is required"
+            raise ValueError(msg)
         if self.duration_seconds < 0:
-            raise ValueError("duration_seconds must be >= 0")
+            msg = "duration_seconds must be >= 0"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""

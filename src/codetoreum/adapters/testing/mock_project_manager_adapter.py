@@ -150,7 +150,8 @@ class MockProjectManagerAdapter(IProjectManagerService):
         """
         with self._lock:
             if project_name not in self._projects:
-                raise ResourceNotFoundError("Project", project_name)
+                msg = "Project"
+                raise ResourceNotFoundError(msg, project_name)
             return self._projects[project_name].config
 
     async def get_project_path(self, project_name: str) -> str:
@@ -175,7 +176,8 @@ class MockProjectManagerAdapter(IProjectManagerService):
         """
         with self._lock:
             if project_name not in self._projects:
-                raise ResourceNotFoundError("Project", project_name)
+                msg = "Project"
+                raise ResourceNotFoundError(msg, project_name)
 
             config = self._projects[project_name].config
             repo_url = config.repo_url
@@ -208,7 +210,8 @@ class MockProjectManagerAdapter(IProjectManagerService):
         """
         with self._lock:
             if project_name not in self._projects:
-                raise ResourceNotFoundError("Project", project_name)
+                msg = "Project"
+                raise ResourceNotFoundError(msg, project_name)
 
             state = self._projects[project_name]
             config = state.config
@@ -228,8 +231,9 @@ class MockProjectManagerAdapter(IProjectManagerService):
                 )
                 if self._event_emitter:
                     self._event_emitter.emit(event)
+                msg = "mock_project_manager"
                 raise ExternalServiceError(
-                    "mock_project_manager",
+                    msg,
                     f"Failed to clone project '{project_name}': simulated network timeout"
                 )
 
@@ -283,7 +287,8 @@ class MockProjectManagerAdapter(IProjectManagerService):
         """
         with self._lock:
             if project_name in self._projects:
-                raise ValueError(f"Project {project_name} already exists")
+                msg = f"Project {project_name} already exists"
+                raise ValueError(msg)
             self._projects[project_name] = MockProjectState(config=config)
 
     def update_project(self, project_name: str, config: ProjectConfig) -> None:
@@ -298,7 +303,8 @@ class MockProjectManagerAdapter(IProjectManagerService):
         """
         with self._lock:
             if project_name not in self._projects:
-                raise ResourceNotFoundError("Project", project_name)
+                msg = "Project"
+                raise ResourceNotFoundError(msg, project_name)
             self._projects[project_name].config = config
 
     def remove_project(self, project_name: str) -> None:
@@ -312,7 +318,8 @@ class MockProjectManagerAdapter(IProjectManagerService):
         """
         with self._lock:
             if project_name not in self._projects:
-                raise ResourceNotFoundError("Project", project_name)
+                msg = "Project"
+                raise ResourceNotFoundError(msg, project_name)
             del self._projects[project_name]
 
     def get_project_state(self, project_name: str) -> MockProjectState | None:
@@ -367,7 +374,8 @@ class MockProjectManagerAdapter(IProjectManagerService):
         """
         with self._lock:
             if project_name not in self._projects:
-                raise ResourceNotFoundError("Project", project_name)
+                msg = "Project"
+                raise ResourceNotFoundError(msg, project_name)
             if project_name not in self._project_work_items:
                 self._project_work_items[project_name] = []
             self._project_work_items[project_name].append(work_item)
@@ -384,7 +392,8 @@ class MockProjectManagerAdapter(IProjectManagerService):
         """
         with self._lock:
             if project_name not in self._projects:
-                raise ResourceNotFoundError("Project", project_name)
+                msg = "Project"
+                raise ResourceNotFoundError(msg, project_name)
             self._project_boards[project_name] = boards
 
     def get_project_boards(self, project_name: str) -> list[str]:
@@ -401,7 +410,8 @@ class MockProjectManagerAdapter(IProjectManagerService):
         """
         with self._lock:
             if project_name not in self._projects:
-                raise ResourceNotFoundError("Project", project_name)
+                msg = "Project"
+                raise ResourceNotFoundError(msg, project_name)
             return self._project_boards.get(project_name, [])
 
     def get_project_work_items(self, project_name: str) -> list[WorkItem]:
@@ -418,7 +428,8 @@ class MockProjectManagerAdapter(IProjectManagerService):
         """
         with self._lock:
             if project_name not in self._projects:
-                raise ResourceNotFoundError("Project", project_name)
+                msg = "Project"
+                raise ResourceNotFoundError(msg, project_name)
             return self._project_work_items.get(project_name, []).copy()
 
     def get_clone_failure_count(self, project_name: str) -> int:
@@ -435,7 +446,8 @@ class MockProjectManagerAdapter(IProjectManagerService):
         """
         with self._lock:
             if project_name not in self._projects:
-                raise ResourceNotFoundError("Project", project_name)
+                msg = "Project"
+                raise ResourceNotFoundError(msg, project_name)
             return self._projects[project_name].clone_failures
 
     def set_event_emitter(self, event_emitter: IEventEmitter) -> None:

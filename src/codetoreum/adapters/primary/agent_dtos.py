@@ -90,7 +90,8 @@ class CreateAgentRequest(BaseModel):
             "devops",
         ]
         if v.lower() not in valid_types:
-            raise ValueError(f"Agent type must be one of: {', '.join(valid_types)}")
+            msg = f"Agent type must be one of: {', '.join(valid_types)}"
+            raise ValueError(msg)
         return v.lower()
 
     @field_validator("role_description")
@@ -98,9 +99,11 @@ class CreateAgentRequest(BaseModel):
     def validate_role_description(cls, v):
         """Validate role description length."""
         if len(v) > 2000:
-            raise ValueError("Role description too long (max 2000 characters)")
+            msg = "Role description too long (max 2000 characters)"
+            raise ValueError(msg)
         if len(v.strip()) == 0:
-            raise ValueError("Role description cannot be empty")
+            msg = "Role description cannot be empty"
+            raise ValueError(msg)
         return v.strip()
 
     @field_validator("capabilities")
@@ -108,9 +111,11 @@ class CreateAgentRequest(BaseModel):
     def validate_capabilities(cls, v):
         """Validate capabilities dictionary."""
         if not v:
-            raise ValueError("At least one capability is required")
+            msg = "At least one capability is required"
+            raise ValueError(msg)
         if len(v) > 50:
-            raise ValueError("Too many capabilities (max 50)")
+            msg = "Too many capabilities (max 50)"
+            raise ValueError(msg)
         return v
 
 

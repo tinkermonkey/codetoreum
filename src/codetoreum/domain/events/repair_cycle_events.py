@@ -53,11 +53,14 @@ class RepairCycleStartedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.stage_name:
-            raise ValueError("stage_name is required")
+            msg = "stage_name is required"
+            raise ValueError(msg)
         if not self.test_types:
-            raise ValueError("test_types must not be empty")
+            msg = "test_types must not be empty"
+            raise ValueError(msg)
         if not self.workflow_run_id:
-            raise ValueError("workflow_run_id is required")
+            msg = "workflow_run_id is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -127,15 +130,20 @@ class RepairCycleTestExecutionStartedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if self.test_type_index < 1:
-            raise ValueError("test_type_index must be >= 1")
+            msg = "test_type_index must be >= 1"
+            raise ValueError(msg)
         if self.test_cycle_iteration < 1:
-            raise ValueError("test_cycle_iteration must be >= 1")
+            msg = "test_cycle_iteration must be >= 1"
+            raise ValueError(msg)
         if self.max_test_cycle_iterations < 1:
-            raise ValueError("max_test_cycle_iterations must be >= 1")
+            msg = "max_test_cycle_iterations must be >= 1"
+            raise ValueError(msg)
         if self.timeout <= 0:
-            raise ValueError("timeout must be > 0")
+            msg = "timeout must be > 0"
+            raise ValueError(msg)
         if not self.workflow_run_id:
-            raise ValueError("workflow_run_id is required")
+            msg = "workflow_run_id is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -218,28 +226,36 @@ class RepairCycleTestExecutionCompletedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if self.test_type_index < 1:
-            raise ValueError("test_type_index must be >= 1")
+            msg = "test_type_index must be >= 1"
+            raise ValueError(msg)
         if self.test_cycle_iteration < 1:
-            raise ValueError("test_cycle_iteration must be >= 1")
+            msg = "test_cycle_iteration must be >= 1"
+            raise ValueError(msg)
         if self.passed < 0:
-            raise ValueError("passed must be >= 0")
+            msg = "passed must be >= 0"
+            raise ValueError(msg)
         if self.failed < 0:
-            raise ValueError("failed must be >= 0")
+            msg = "failed must be >= 0"
+            raise ValueError(msg)
         if self.warnings < 0:
-            raise ValueError("warnings must be >= 0")
+            msg = "warnings must be >= 0"
+            raise ValueError(msg)
         if not self.workflow_run_id:
-            raise ValueError("workflow_run_id is required")
+            msg = "workflow_run_id is required"
+            raise ValueError(msg)
 
         # Consistency validation: has_failures must match failed > 0
         if self.has_failures != (self.failed > 0):
+            msg = f"has_failures ({self.has_failures}) must match failed > 0 ({self.failed > 0})"
             raise ValueError(
-                f"has_failures ({self.has_failures}) must match failed > 0 ({self.failed > 0})"
+                msg
             )
 
         # Consistency validation: failed count must match failures tuple length
         if self.failed != len(self.failures):
+            msg = f"failed count ({self.failed}) must match len(failures) ({len(self.failures)})"
             raise ValueError(
-                f"failed count ({self.failed}) must match len(failures) ({len(self.failures)})"
+                msg
             )
 
     def to_dict(self) -> dict:
@@ -334,15 +350,20 @@ class RepairCycleFixCycleStartedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if self.test_type_index < 1:
-            raise ValueError("test_type_index must be >= 1")
+            msg = "test_type_index must be >= 1"
+            raise ValueError(msg)
         if self.test_cycle_iteration < 1:
-            raise ValueError("test_cycle_iteration must be >= 1")
+            msg = "test_cycle_iteration must be >= 1"
+            raise ValueError(msg)
         if self.file_count < 1:
-            raise ValueError("file_count must be >= 1")
+            msg = "file_count must be >= 1"
+            raise ValueError(msg)
         if self.total_failures < 1:
-            raise ValueError("total_failures must be >= 1")
+            msg = "total_failures must be >= 1"
+            raise ValueError(msg)
         if not self.workflow_run_id:
-            raise ValueError("workflow_run_id is required")
+            msg = "workflow_run_id is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -415,11 +436,14 @@ class RepairCycleFileFixStartedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.test_file:
-            raise ValueError("test_file is required")
+            msg = "test_file is required"
+            raise ValueError(msg)
         if self.failure_count < 1:
-            raise ValueError("failure_count must be >= 1")
+            msg = "failure_count must be >= 1"
+            raise ValueError(msg)
         if not self.workflow_run_id:
-            raise ValueError("workflow_run_id is required")
+            msg = "workflow_run_id is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -490,11 +514,14 @@ class RepairCycleFileFixCompletedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.test_file:
-            raise ValueError("test_file is required")
+            msg = "test_file is required"
+            raise ValueError(msg)
         if self.failure_count < 1:
-            raise ValueError("failure_count must be >= 1")
+            msg = "failure_count must be >= 1"
+            raise ValueError(msg)
         if not self.workflow_run_id:
-            raise ValueError("workflow_run_id is required")
+            msg = "workflow_run_id is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -567,11 +594,14 @@ class RepairCycleWarningReviewStartedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.source_file:
-            raise ValueError("source_file is required")
+            msg = "source_file is required"
+            raise ValueError(msg)
         if self.warning_count < 1:
-            raise ValueError("warning_count must be >= 1")
+            msg = "warning_count must be >= 1"
+            raise ValueError(msg)
         if not self.workflow_run_id:
-            raise ValueError("workflow_run_id is required")
+            msg = "workflow_run_id is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -654,11 +684,14 @@ class RepairCycleWarningReviewCompletedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.source_file:
-            raise ValueError("source_file is required")
+            msg = "source_file is required"
+            raise ValueError(msg)
         if self.warning_count < 1:
-            raise ValueError("warning_count must be >= 1")
+            msg = "warning_count must be >= 1"
+            raise ValueError(msg)
         if not self.workflow_run_id:
-            raise ValueError("workflow_run_id is required")
+            msg = "workflow_run_id is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -739,17 +772,23 @@ class RepairCycleTestCycleCompletedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if self.test_type_index < 1:
-            raise ValueError("test_type_index must be >= 1")
+            msg = "test_type_index must be >= 1"
+            raise ValueError(msg)
         if self.test_cycle_iterations < 1:
-            raise ValueError("test_cycle_iterations must be >= 1")
+            msg = "test_cycle_iterations must be >= 1"
+            raise ValueError(msg)
         if self.files_fixed < 0:
-            raise ValueError("files_fixed must be >= 0")
+            msg = "files_fixed must be >= 0"
+            raise ValueError(msg)
         if self.warnings_reviewed < 0:
-            raise ValueError("warnings_reviewed must be >= 0")
+            msg = "warnings_reviewed must be >= 0"
+            raise ValueError(msg)
         if self.duration_seconds < 0:
-            raise ValueError("duration_seconds must be >= 0")
+            msg = "duration_seconds must be >= 0"
+            raise ValueError(msg)
         if not self.workflow_run_id:
-            raise ValueError("workflow_run_id is required")
+            msg = "workflow_run_id is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -826,9 +865,11 @@ class RepairCycleFastFailEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.reason:
-            raise ValueError("reason is required")
+            msg = "reason is required"
+            raise ValueError(msg)
         if not self.workflow_run_id:
-            raise ValueError("workflow_run_id is required")
+            msg = "workflow_run_id is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -896,15 +937,20 @@ class RepairCycleResumedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.workflow_run_id:
-            raise ValueError("workflow_run_id is required")
+            msg = "workflow_run_id is required"
+            raise ValueError(msg)
         if not self.test_type:
-            raise ValueError("test_type is required")
+            msg = "test_type is required"
+            raise ValueError(msg)
         if self.iteration < 1:
-            raise ValueError("iteration must be >= 1")
+            msg = "iteration must be >= 1"
+            raise ValueError(msg)
         if self.elapsed_time < 0:
-            raise ValueError("elapsed_time must be >= 0")
+            msg = "elapsed_time must be >= 0"
+            raise ValueError(msg)
         if self.agent_calls_so_far < 0:
-            raise ValueError("agent_calls_so_far must be >= 0")
+            msg = "agent_calls_so_far must be >= 0"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -979,15 +1025,20 @@ class RepairCycleCheckpointFailedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.workflow_run_id:
-            raise ValueError("workflow_run_id is required")
+            msg = "workflow_run_id is required"
+            raise ValueError(msg)
         if not self.test_type:
-            raise ValueError("test_type is required")
+            msg = "test_type is required"
+            raise ValueError(msg)
         if self.iteration < 0:
-            raise ValueError("iteration must be >= 0")
+            msg = "iteration must be >= 0"
+            raise ValueError(msg)
         if not self.error_type:
-            raise ValueError("error_type is required")
+            msg = "error_type is required"
+            raise ValueError(msg)
         if not self.error_message:
-            raise ValueError("error_message is required")
+            msg = "error_message is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -1059,13 +1110,17 @@ class RepairCycleMetricsBackendFailedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.operation:
-            raise ValueError("operation is required")
+            msg = "operation is required"
+            raise ValueError(msg)
         if not self.error_type:
-            raise ValueError("error_type is required")
+            msg = "error_type is required"
+            raise ValueError(msg)
         if not self.error_message:
-            raise ValueError("error_message is required")
+            msg = "error_message is required"
+            raise ValueError(msg)
         if self.consecutive_failures < 0:
-            raise ValueError("consecutive_failures must be >= 0")
+            msg = "consecutive_failures must be >= 0"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -1135,13 +1190,17 @@ class RepairCycleCompletedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.test_results:
-            raise ValueError("test_results must not be empty")
+            msg = "test_results must not be empty"
+            raise ValueError(msg)
         if self.total_agent_calls < 0:
-            raise ValueError("total_agent_calls must be >= 0")
+            msg = "total_agent_calls must be >= 0"
+            raise ValueError(msg)
         if self.duration_seconds < 0:
-            raise ValueError("duration_seconds must be >= 0")
+            msg = "duration_seconds must be >= 0"
+            raise ValueError(msg)
         if not self.workflow_run_id:
-            raise ValueError("workflow_run_id is required")
+            msg = "workflow_run_id is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""

@@ -279,7 +279,8 @@ class SimulationApplicationBootstrap:
             RuntimeError: If already set up or if setup fails
         """
         if self._is_setup:
-            raise RuntimeError("Bootstrap already set up")
+            message = "Bootstrap already set up"
+            raise RuntimeError(message)
 
         try:
             logger.info("Starting simulation bootstrap...")
@@ -391,9 +392,11 @@ class SimulationApplicationBootstrap:
             SimulationAdapters with all 16 adapters configured
         """
         if not self._engine:
-            raise RuntimeError("SimulationEngine must be created before adapters")
+            message = "SimulationEngine must be created before adapters"
+            raise RuntimeError(message)
         if not self.infrastructure:
-            raise RuntimeError("Infrastructure (event bus) must be created before adapters")
+            message = "Infrastructure (event bus) must be created before adapters"
+            raise RuntimeError(message)
 
         # Create adapter factory in simulation mode with resilience disabled
         factory_config = AdapterFactoryConfig(
@@ -505,7 +508,8 @@ class SimulationApplicationBootstrap:
             SimulationInfrastructure with configured components
         """
         if not self._engine:
-            raise RuntimeError("SimulationEngine must be created before infrastructure")
+            message = "SimulationEngine must be created before infrastructure"
+            raise RuntimeError(message)
 
         # Create event bus
         event_bus = EventBus()
@@ -538,7 +542,8 @@ class SimulationApplicationBootstrap:
             SimulationServices with all services configured
         """
         if not self.adapters or not self.infrastructure:
-            raise RuntimeError("Adapters and infrastructure must be created first")
+            message = "Adapters and infrastructure must be created first"
+            raise RuntimeError(message)
 
         # Configuration Service
         configuration_service = ConfigurationService(
@@ -728,7 +733,8 @@ class SimulationApplicationBootstrap:
             SimulationPorts with all port implementations
         """
         if not self.adapters or not self.services:
-            raise RuntimeError("Adapters and services must be created first")
+            message = "Adapters and services must be created first"
+            raise RuntimeError(message)
 
         # Create mock port adapters, injecting Phase 1 backing stores where available
         # so query adapters read directly from the canonical data source.
@@ -745,7 +751,8 @@ class SimulationApplicationBootstrap:
         )
         # Create metrics query adapter via engine (clock is injected internally)
         if not self._engine:
-            raise RuntimeError("SimulationEngine must be created before ports")
+            message = "SimulationEngine must be created before ports"
+            raise RuntimeError(message)
         metrics_query = self._engine.create_metrics_query_adapter(
             metrics_adapter=self.adapters.metrics,
             event_store=self.adapters.event_store,
@@ -807,7 +814,8 @@ class SimulationApplicationBootstrap:
             RuntimeError: If ports, infrastructure, or services not created first
         """
         if not self.adapters or not self.ports or not self.infrastructure or not self.services:
-            raise RuntimeError("Adapters, ports, infrastructure, and services must be created first")
+            message = "Adapters, ports, infrastructure, and services must be created first"
+            raise RuntimeError(message)
 
         # Create adapter for config service (wraps application service for FastAPI interface)
         config_service_interface = MockConfigServiceAdapter(self.services.configuration_service)

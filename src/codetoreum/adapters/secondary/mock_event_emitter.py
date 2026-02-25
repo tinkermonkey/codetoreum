@@ -64,9 +64,11 @@ class MockEventEmitter(IEventEmitter):
             ValueError: If event_type is empty or handler is not callable
         """
         if not event_type:
-            raise ValueError("event_type cannot be empty")
+            msg = "event_type cannot be empty"
+            raise ValueError(msg)
         if not callable(handler):
-            raise ValueError("handler must be callable")
+            msg = "handler must be callable"
+            raise ValueError(msg)
 
         if event_type not in self._handlers:
             self._handlers[event_type] = []
@@ -86,7 +88,8 @@ class MockEventEmitter(IEventEmitter):
             ValueError: If handler was not previously subscribed to this event type
         """
         if event_type not in self._handlers or handler not in self._handlers[event_type]:
-            raise ValueError(f"Handler not subscribed to event type: {event_type}")
+            msg = f"Handler not subscribed to event type: {event_type}"
+            raise ValueError(msg)
         self._handlers[event_type].remove(handler)
 
     def emit(self, event: CodetoreumEvent) -> None:
@@ -103,7 +106,8 @@ class MockEventEmitter(IEventEmitter):
             ValueError: If event is not a CodetoreumEvent instance
         """
         if not isinstance(event, CodetoreumEvent):
-            raise ValueError("event must be a CodetoreumEvent instance")
+            msg = "event must be a CodetoreumEvent instance"
+            raise ValueError(msg)
 
         if event.type in self._handlers:
             for handler in self._handlers[event.type]:

@@ -67,20 +67,25 @@ class CodetoreumEvent:
     def __post_init__(self) -> None:
         """Validate event after initialization."""
         if not self.type or "." not in self.type:
-            raise ValueError(
+            msg = (
                 f"Event type must be in dot notation (e.g., 'workitem.created'), "
                 f"got: {self.type}"
             )
+            raise ValueError(
+                msg
+            )
 
         if not self.source:
-            raise ValueError("Event source (adapter name) is required")
+            msg = "Event source (adapter name) is required"
+            raise ValueError(msg)
 
         # Validate timestamp is ISO format
         try:
             datetime.fromisoformat(self.timestamp.replace("Z", "+00:00"))
         except (ValueError, AttributeError):
+            msg = f"Timestamp must be ISO 8601 format, got: {self.timestamp}"
             raise ValueError(
-                f"Timestamp must be ISO 8601 format, got: {self.timestamp}"
+                msg
             )
 
     def to_dict(self) -> dict:
@@ -120,7 +125,8 @@ class CodetoreumEvent:
                 event_id=data.get("event_id", str(uuid4())),
             )
         except KeyError as e:
-            raise ValueError(f"Missing required field: {e}")
+            msg = f"Missing required field: {e}"
+            raise ValueError(msg)
 
 
 def now_iso() -> str:

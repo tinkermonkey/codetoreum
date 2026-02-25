@@ -120,7 +120,8 @@ class InMemoryQueueService(IPipelineQueueService):
             QueueValidationError: Invalid work_item_id
         """
         if not work_item_id:
-            raise QueueValidationError("work_item_id cannot be empty")
+            msg = "work_item_id cannot be empty"
+            raise QueueValidationError(msg)
 
         with self._lock:
             for queue in self._queues.values():
@@ -153,13 +154,17 @@ class InMemoryQueueService(IPipelineQueueService):
             DuplicateQueueEntryError: Item already exists in queue
         """
         if not project_id:
-            raise QueueValidationError("project_id cannot be empty")
+            msg = "project_id cannot be empty"
+            raise QueueValidationError(msg)
         if not board_id:
-            raise QueueValidationError("board_id cannot be empty")
+            msg = "board_id cannot be empty"
+            raise QueueValidationError(msg)
         if not work_item_id:
-            raise QueueValidationError("work_item_id cannot be empty")
+            msg = "work_item_id cannot be empty"
+            raise QueueValidationError(msg)
         if position_in_column < 0:
-            raise QueueValidationError("position_in_column cannot be negative")
+            msg = "position_in_column cannot be negative"
+            raise QueueValidationError(msg)
 
         # Warn about suspiciously high positions
         if position_in_column > 1000:
@@ -189,8 +194,9 @@ class InMemoryQueueService(IPipelineQueueService):
 
             # Check if item already in queue
             if any(entry.work_item_id == work_item_id for entry in queue):
+                msg = f"Work item {work_item_id} already in queue for {queue_key}"
                 raise DuplicateQueueEntryError(
-                    f"Work item {work_item_id} already in queue for {queue_key}"
+                    msg
                 )
 
             # Create new queue entry (frozen dataclass)
@@ -253,7 +259,8 @@ class InMemoryQueueService(IPipelineQueueService):
             InvalidQueueStateError: Item already marked active
         """
         if not work_item_id:
-            raise QueueValidationError("work_item_id cannot be empty")
+            msg = "work_item_id cannot be empty"
+            raise QueueValidationError(msg)
 
         with self._lock:
             # Find the item across all queues
@@ -261,8 +268,9 @@ class InMemoryQueueService(IPipelineQueueService):
                 for i, entry in enumerate(queue):
                     if entry.work_item_id == work_item_id:
                         if entry.status == QueueStatus.ACTIVE:
+                            msg = f"Work item {work_item_id} is already marked active"
                             raise InvalidQueueStateError(
-                                f"Work item {work_item_id} is already marked active"
+                                msg
                             )
 
                         # Create new entry with updated status (immutable pattern)
@@ -292,7 +300,8 @@ class InMemoryQueueService(IPipelineQueueService):
                         return
 
             # Item not found in any queue
-            raise QueueItemNotFoundError(f"Work item {work_item_id} not found in any queue")
+            msg = f"Work item {work_item_id} not found in any queue"
+            raise QueueItemNotFoundError(msg)
 
     async def remove_from_queue(self, work_item_id: str) -> bool:
         """Remove a work item from the queue.
@@ -307,7 +316,8 @@ class InMemoryQueueService(IPipelineQueueService):
             QueueValidationError: Invalid work_item_id
         """
         if not work_item_id:
-            raise QueueValidationError("work_item_id cannot be empty")
+            msg = "work_item_id cannot be empty"
+            raise QueueValidationError(msg)
 
         with self._lock:
             for queue_key, queue in self._queues.items():
@@ -362,9 +372,11 @@ class InMemoryQueueService(IPipelineQueueService):
             QueueValidationError: Invalid parameters
         """
         if not project_id:
-            raise QueueValidationError("project_id cannot be empty")
+            msg = "project_id cannot be empty"
+            raise QueueValidationError(msg)
         if not board_id:
-            raise QueueValidationError("board_id cannot be empty")
+            msg = "board_id cannot be empty"
+            raise QueueValidationError(msg)
 
         with self._lock:
             queue_key = f"{project_id}:{board_id}"
@@ -400,9 +412,11 @@ class InMemoryQueueService(IPipelineQueueService):
             QueueValidationError: Invalid parameters
         """
         if not project_id:
-            raise QueueValidationError("project_id cannot be empty")
+            msg = "project_id cannot be empty"
+            raise QueueValidationError(msg)
         if not board_id:
-            raise QueueValidationError("board_id cannot be empty")
+            msg = "board_id cannot be empty"
+            raise QueueValidationError(msg)
 
         with self._lock:
             queue_key = f"{project_id}:{board_id}"
@@ -430,11 +444,14 @@ class InMemoryQueueService(IPipelineQueueService):
             QueueValidationError: Invalid parameters
         """
         if not project_id:
-            raise QueueValidationError("project_id cannot be empty")
+            msg = "project_id cannot be empty"
+            raise QueueValidationError(msg)
         if not board_id:
-            raise QueueValidationError("board_id cannot be empty")
+            msg = "board_id cannot be empty"
+            raise QueueValidationError(msg)
         if not column:
-            raise QueueValidationError("column cannot be empty")
+            msg = "column cannot be empty"
+            raise QueueValidationError(msg)
 
         if not self._board_service:
             # If no board service, we can't sync - just return
@@ -452,7 +469,8 @@ class InMemoryQueueService(IPipelineQueueService):
                     break
 
             if not target_column:
-                raise ValueError(f"Column {column} not found in board")
+                msg = f"Column {column} not found in board"
+                raise ValueError(msg)
 
             with self._lock:
                 queue_key = f"{project_id}:{board_id}"
@@ -642,11 +660,14 @@ class InMemoryQueueService(IPipelineQueueService):
             QueueValidationError: Invalid parameters
         """
         if not project_id:
-            raise QueueValidationError("project_id cannot be empty")
+            msg = "project_id cannot be empty"
+            raise QueueValidationError(msg)
         if not board_id:
-            raise QueueValidationError("board_id cannot be empty")
+            msg = "board_id cannot be empty"
+            raise QueueValidationError(msg)
         if ordered_work_items is None:
-            raise QueueValidationError("ordered_work_items cannot be None")
+            msg = "ordered_work_items cannot be None"
+            raise QueueValidationError(msg)
 
         with self._lock:
             queue_key = f"{project_id}:{board_id}"

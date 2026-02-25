@@ -51,11 +51,14 @@ class ProjectConfig:
     def __post_init__(self) -> None:
         """Validate project configuration."""
         if not self.repo_url or not self.repo_url.strip():
-            raise DomainError("ProjectConfig.repo_url cannot be empty")
+            msg = "ProjectConfig.repo_url cannot be empty"
+            raise DomainError(msg)
         if not self.branch or not self.branch.strip():
-            raise DomainError("ProjectConfig.branch cannot be empty")
+            msg = "ProjectConfig.branch cannot be empty"
+            raise DomainError(msg)
         if not self.org or not self.org.strip():
-            raise DomainError("ProjectConfig.org cannot be empty")
+            msg = "ProjectConfig.org cannot be empty"
+            raise DomainError(msg)
 
 
 # ============================================================================
@@ -76,7 +79,8 @@ class TypeSafeId(Generic[T]):
         """Validate identifier."""
         if not self.value:
             object.__setattr__(self, "_type_name", self.__class__.__name__)
-            raise DomainError(f"{self._type_name} cannot be empty")
+            msg = f"{self._type_name} cannot be empty"
+            raise DomainError(msg)
 
     @classmethod
     def generate(cls) -> Self:
@@ -133,7 +137,8 @@ class Requirement:
     def __post_init__(self) -> None:
         """Validate proficiency range."""
         if not 0.0 <= self.min_proficiency <= 1.0:
-            raise DomainError("Min proficiency must be between 0.0 and 1.0")
+            msg = "Min proficiency must be between 0.0 and 1.0"
+            raise DomainError(msg)
 
     def is_satisfied_by(self, capability: "AgentCapability") -> bool:
         """
@@ -195,11 +200,14 @@ class ExecutionResult:
     def __post_init__(self) -> None:
         """Validate execution result."""
         if self.input_tokens < 0:
-            raise DomainError("Input tokens cannot be negative")
+            msg = "Input tokens cannot be negative"
+            raise DomainError(msg)
         if self.output_tokens < 0:
-            raise DomainError("Output tokens cannot be negative")
+            msg = "Output tokens cannot be negative"
+            raise DomainError(msg)
         if self.duration_seconds < 0:
-            raise DomainError("Duration cannot be negative")
+            msg = "Duration cannot be negative"
+            raise DomainError(msg)
 
     @classmethod
     def success_result(
@@ -319,14 +327,17 @@ class ContainerConfig:
     def __post_init__(self) -> None:
         """Validate container configuration."""
         if not self.image:
-            raise DomainError("Container image cannot be empty")
+            msg = "Container image cannot be empty"
+            raise DomainError(msg)
         if self.volumes:
             for host_path, config in self.volumes.items():
                 if "bind" not in config:
-                    raise DomainError(f"Volume config for {host_path} must have 'bind'")
+                    msg = f"Volume config for {host_path} must have 'bind'"
+                    raise DomainError(msg)
                 mode = config.get("mode", "rw")
                 if mode not in ["rw", "ro"]:
-                    raise DomainError(f"Volume mode must be 'rw' or 'ro', got {mode}")
+                    msg = f"Volume mode must be 'rw' or 'ro', got {mode}"
+                    raise DomainError(msg)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -393,13 +404,17 @@ class ExecutionContext:
     def __post_init__(self) -> None:
         """Validate execution context."""
         if self.timeout_seconds <= 0:
-            raise DomainError("Timeout must be positive")
+            msg = "Timeout must be positive"
+            raise DomainError(msg)
         if not self.work_item_id:
-            raise DomainError("Work item ID cannot be empty")
+            msg = "Work item ID cannot be empty"
+            raise DomainError(msg)
         if not self.workflow_id:
-            raise DomainError("Workflow ID cannot be empty")
+            msg = "Workflow ID cannot be empty"
+            raise DomainError(msg)
         if not self.agent_id:
-            raise DomainError("Agent ID cannot be empty")
+            msg = "Agent ID cannot be empty"
+            raise DomainError(msg)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
@@ -440,7 +455,8 @@ class TimeRange:
     def __post_init__(self) -> None:
         """Validate time range."""
         if self.end < self.start:
-            raise DomainError("End time must be after start time")
+            msg = "End time must be after start time"
+            raise DomainError(msg)
 
     def duration_seconds(self) -> float:
         """Get duration in seconds."""
@@ -470,7 +486,8 @@ class TokenUsage:
     def __post_init__(self) -> None:
         """Validate token counts."""
         if self.input_tokens < 0 or self.output_tokens < 0:
-            raise DomainError("Token counts cannot be negative")
+            msg = "Token counts cannot be negative"
+            raise DomainError(msg)
 
     @property
     def total_tokens(self) -> int:

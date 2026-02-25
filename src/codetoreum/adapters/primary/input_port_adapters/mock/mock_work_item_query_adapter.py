@@ -71,7 +71,8 @@ class MockWorkItemQueryAdapter(IWorkItemQueryPort):
             return await self._ticket_adapter.get_work_item(work_item_id)
         with self._lock:
             if work_item_id not in self._work_items:
-                raise WorkItemNotFoundError(f"Work item with ID {work_item_id} not found")
+                msg = f"Work item with ID {work_item_id} not found"
+                raise WorkItemNotFoundError(msg)
             return self._work_items[work_item_id]
 
     async def list_work_items(
@@ -159,7 +160,8 @@ class MockWorkItemQueryAdapter(IWorkItemQueryPort):
         with self._lock:
             items = self._all_work_items
             if work_item_id not in items:
-                raise WorkItemNotFoundError(f"Work item with ID {work_item_id} not found")
+                msg = f"Work item with ID {work_item_id} not found"
+                raise WorkItemNotFoundError(msg)
 
             work_item = items[work_item_id]
             events = self._events.get(work_item_id, [])

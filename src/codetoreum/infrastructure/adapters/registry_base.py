@@ -90,14 +90,13 @@ class AdapterRegistry(ABC, Generic[T]):
         """
         with self._lock:
             if name in self._adapters:
-                raise ValueError(f"Adapter '{name}' is already registered")
+                message = f"Adapter '{name}' is already registered"
+                raise ValueError(message)
 
             # Verify adapter implements the port interface
             if not self._is_valid_adapter(adapter_type):
-                raise ValueError(
-                    f"Adapter {adapter_type.__name__} does not implement "
-                    f"{self._port_interface.__name__}"
-                )
+                message = f"Adapter {adapter_type.__name__} does not implement " f"{self._port_interface.__name__}"
+                raise ValueError(message)
 
             self._adapters[name] = adapter_type
             self._metadata[name] = AdapterMetadata(
@@ -128,7 +127,8 @@ class AdapterRegistry(ABC, Generic[T]):
         """
         with self._lock:
             if name not in self._adapters:
-                raise KeyError(f"Adapter '{name}' is not registered")
+                message = f"Adapter '{name}' is not registered"
+                raise KeyError(message)
 
             del self._adapters[name]
             del self._metadata[name]
@@ -154,7 +154,8 @@ class AdapterRegistry(ABC, Generic[T]):
         """
         with self._lock:
             if name not in self._adapters:
-                raise KeyError(f"Adapter '{name}' is not registered")
+                message = f"Adapter '{name}' is not registered"
+                raise KeyError(message)
             return self._adapters[name]
 
     def get_default(self) -> type[T] | None:
@@ -191,7 +192,8 @@ class AdapterRegistry(ABC, Generic[T]):
         """
         with self._lock:
             if name not in self._adapters:
-                raise KeyError(f"Adapter '{name}' is not registered")
+                message = f"Adapter '{name}' is not registered"
+                raise KeyError(message)
             self._default_adapter = name
 
     def get_metadata(self, name: str) -> AdapterMetadata:
@@ -209,7 +211,8 @@ class AdapterRegistry(ABC, Generic[T]):
         """
         with self._lock:
             if name not in self._metadata:
-                raise KeyError(f"Adapter '{name}' is not registered")
+                message = f"Adapter '{name}' is not registered"
+                raise KeyError(message)
             return self._metadata[name]
 
     def list_adapters(self) -> list[str]:
@@ -271,7 +274,8 @@ class AdapterRegistry(ABC, Generic[T]):
         """
         with self._lock:
             if name not in self._adapters:
-                raise KeyError(f"Adapter '{name}' is not registered")
+                message = f"Adapter '{name}' is not registered"
+                raise KeyError(message)
 
             if name in self._factories:
                 return self._factories[name](*args, **kwargs)

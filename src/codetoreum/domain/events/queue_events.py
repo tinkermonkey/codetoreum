@@ -50,11 +50,14 @@ class QueueItemAddedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.queue_name:
-            raise ValueError("queue_name is required")
+            msg = "queue_name is required"
+            raise ValueError(msg)
         if not self.item_id:
-            raise ValueError("item_id is required")
+            msg = "item_id is required"
+            raise ValueError(msg)
         if self.position < 0:
-            raise ValueError("position cannot be negative")
+            msg = "position cannot be negative"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -120,9 +123,11 @@ class QueueItemRemovedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.queue_name:
-            raise ValueError("queue_name is required")
+            msg = "queue_name is required"
+            raise ValueError(msg)
         if not self.item_id:
-            raise ValueError("item_id is required")
+            msg = "item_id is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -192,13 +197,17 @@ class QueuePositionChangedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.queue_name:
-            raise ValueError("queue_name is required")
+            msg = "queue_name is required"
+            raise ValueError(msg)
         if not self.item_id:
-            raise ValueError("item_id is required")
+            msg = "item_id is required"
+            raise ValueError(msg)
         if self.old_position < 0:
-            raise ValueError("old_position cannot be negative")
+            msg = "old_position cannot be negative"
+            raise ValueError(msg)
         if self.new_position < 0:
-            raise ValueError("new_position cannot be negative")
+            msg = "new_position cannot be negative"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""

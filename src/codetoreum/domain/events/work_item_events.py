@@ -54,11 +54,14 @@ class WorkItemCreatedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.work_item_id:
-            raise ValueError("work_item_id is required")
+            msg = "work_item_id is required"
+            raise ValueError(msg)
         if not self.project_id:
-            raise ValueError("project_id is required")
+            msg = "project_id is required"
+            raise ValueError(msg)
         if not self.title:
-            raise ValueError("title is required")
+            msg = "title is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -127,9 +130,11 @@ class WorkItemUpdatedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.work_item_id:
-            raise ValueError("work_item_id is required")
+            msg = "work_item_id is required"
+            raise ValueError(msg)
         if not self.project_id:
-            raise ValueError("project_id is required")
+            msg = "project_id is required"
+            raise ValueError(msg)
         # Ensure changes dict is initialized
         if self.changes is None:
             object.__setattr__(self, "changes", {})

@@ -38,13 +38,15 @@ class InMemoryConfigStore(IConfigStore):
     async def get_project_config(self, project_id: str) -> ProjectConfig:
         """Get project configuration by ID."""
         if project_id not in self.projects:
-            raise ConfigNotFoundError(f"Project with ID '{project_id}' not found")
+            msg = f"Project with ID '{project_id}' not found"
+            raise ConfigNotFoundError(msg)
         return self.projects[project_id]
 
     async def get_project_config_by_name(self, project_name: str) -> ProjectConfig:
         """Get project configuration by name."""
         if project_name not in self.projects_by_name:
-            raise ConfigNotFoundError(f"Project '{project_name}' not found")
+            msg = f"Project '{project_name}' not found"
+            raise ConfigNotFoundError(msg)
         project_id = self.projects_by_name[project_name]
         return self.projects[project_id]
 
@@ -77,12 +79,14 @@ class InMemoryConfigStore(IConfigStore):
     ) -> AgentConfig:
         """Get agent configuration for a project."""
         if project_id not in self.agents:
+            msg = f"No agents configured for project '{project_id}'"
             raise ConfigNotFoundError(
-                f"No agents configured for project '{project_id}'"
+                msg
             )
         if agent_name not in self.agents[project_id]:
+            msg = f"Agent '{agent_name}' not found in project '{project_id}'"
             raise ConfigNotFoundError(
-                f"Agent '{agent_name}' not found in project '{project_id}'"
+                msg
             )
         return self.agents[project_id][agent_name]
 
@@ -115,12 +119,14 @@ class InMemoryConfigStore(IConfigStore):
     ) -> PipelineConfig:
         """Get pipeline configuration."""
         if project_id not in self.pipelines:
+            msg = f"No pipelines configured for project '{project_id}'"
             raise ConfigNotFoundError(
-                f"No pipelines configured for project '{project_id}'"
+                msg
             )
         if pipeline_name not in self.pipelines[project_id]:
+            msg = f"Pipeline '{pipeline_name}' not found in project '{project_id}'"
             raise ConfigNotFoundError(
-                f"Pipeline '{pipeline_name}' not found in project '{project_id}'"
+                msg
             )
         return self.pipelines[project_id][pipeline_name]
 
@@ -149,7 +155,8 @@ class InMemoryConfigStore(IConfigStore):
     async def get_workflow_template(self, template_name: str) -> WorkflowTemplate:
         """Get workflow template by name."""
         if template_name not in self.workflow_templates:
-            raise ConfigNotFoundError(f"Workflow template '{template_name}' not found")
+            msg = f"Workflow template '{template_name}' not found"
+            raise ConfigNotFoundError(msg)
         return self.workflow_templates[template_name]
 
     async def save_workflow_template(self, template: WorkflowTemplate) -> None:
@@ -257,7 +264,8 @@ class InMemoryConfigStore(IConfigStore):
     ) -> dict[str, Any]:
         """Get specific version of a configuration."""
         if config_id not in self.history:
-            raise ConfigNotFoundError(f"No history found for config '{config_id}'")
+            msg = f"No history found for config '{config_id}'"
+            raise ConfigNotFoundError(msg)
 
         for v in self.history[config_id]:
             if v.version == version:
@@ -270,8 +278,9 @@ class InMemoryConfigStore(IConfigStore):
                     "reason": v.reason,
                 }
 
+        msg = f"Version {version} not found for config '{config_id}'"
         raise ConfigNotFoundError(
-            f"Version {version} not found for config '{config_id}'"
+            msg
         )
 
     async def list_config_versions(
@@ -288,7 +297,8 @@ class InMemoryConfigStore(IConfigStore):
     async def delete_project_config(self, project_id: str) -> None:
         """Delete project configuration."""
         if project_id not in self.projects:
-            raise ConfigNotFoundError(f"Project '{project_id}' not found")
+            msg = f"Project '{project_id}' not found"
+            raise ConfigNotFoundError(msg)
 
         config = self.projects[project_id]
         del self.projects[project_id]
@@ -309,12 +319,14 @@ class InMemoryConfigStore(IConfigStore):
     ) -> None:
         """Delete agent configuration."""
         if project_id not in self.agents:
+            msg = f"No agents configured for project '{project_id}'"
             raise ConfigNotFoundError(
-                f"No agents configured for project '{project_id}'"
+                msg
             )
         if agent_name not in self.agents[project_id]:
+            msg = f"Agent '{agent_name}' not found in project '{project_id}'"
             raise ConfigNotFoundError(
-                f"Agent '{agent_name}' not found in project '{project_id}'"
+                msg
             )
 
         del self.agents[project_id][agent_name]

@@ -45,7 +45,8 @@ class ScenarioStageModel(BaseModel):
     def validate_order(cls, v: int) -> int:
         """Validate stage order is positive."""
         if v < 1:
-            raise ValueError("Stage order must be >= 1")
+            message = "Stage order must be >= 1"
+            raise ValueError(message)
         return v
 
 
@@ -67,12 +68,14 @@ class ScenarioWorkflowModel(BaseModel):
 
         stage_names = [s.name for s in v]
         if len(stage_names) != len(set(stage_names)):
-            raise ValueError("Stage names must be unique")
+            message = "Stage names must be unique"
+            raise ValueError(message)
 
         stage_orders = [s.order for s in v]
         expected_orders = list(range(1, len(v) + 1))
         if sorted(stage_orders) != expected_orders:
-            raise ValueError(f"Stage orders must be sequential 1..{len(v)}")
+            message = f"Stage orders must be sequential 1..{len(v)}"
+            raise ValueError(message)
 
         return v
 
@@ -111,9 +114,8 @@ class ScenarioAgentModel(BaseModel):
         }
         for cap in v:
             if cap not in valid_capabilities:
-                raise ValueError(
-                    f"Invalid capability: {cap}. Valid: {valid_capabilities}"
-                )
+                message = f"Invalid capability: {cap}. Valid: {valid_capabilities}"
+                raise ValueError(message)
         return v
 
 
@@ -150,7 +152,8 @@ class ScenarioWorkItemModel(BaseModel):
         """Validate priority is valid."""
         valid_priorities = {"low", "medium", "high", "critical"}
         if v.lower() not in valid_priorities:
-            raise ValueError(f"Invalid priority: {v}. Valid: {valid_priorities}")
+            message = f"Invalid priority: {v}. Valid: {valid_priorities}"
+            raise ValueError(message)
         return v.lower()
 
     @field_validator("status")
@@ -167,7 +170,8 @@ class ScenarioWorkItemModel(BaseModel):
             "blocked",
         }
         if v.lower() not in valid_statuses:
-            raise ValueError(f"Invalid status: {v}. Valid: {valid_statuses}")
+            message = f"Invalid status: {v}. Valid: {valid_statuses}"
+            raise ValueError(message)
         return v.lower()
 
 
@@ -227,7 +231,8 @@ class ScenarioModel(BaseModel):
 
         project_names = [p.name for p in v]
         if len(project_names) != len(set(project_names)):
-            raise ValueError("Project names must be unique")
+            message = "Project names must be unique"
+            raise ValueError(message)
 
         return v
 
@@ -240,7 +245,8 @@ class ScenarioModel(BaseModel):
 
         workflow_names = [w.name for w in v]
         if len(workflow_names) != len(set(workflow_names)):
-            raise ValueError("Workflow names must be unique")
+            message = "Workflow names must be unique"
+            raise ValueError(message)
 
         return v
 
@@ -253,7 +259,8 @@ class ScenarioModel(BaseModel):
 
         agent_names = [a.name for a in v]
         if len(agent_names) != len(set(agent_names)):
-            raise ValueError("Agent names must be unique")
+            message = "Agent names must be unique"
+            raise ValueError(message)
 
         return v
 

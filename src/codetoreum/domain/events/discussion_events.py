@@ -54,18 +54,23 @@ class Comment:
     def __post_init__(self) -> None:
         """Validate comment after initialization."""
         if not self.id:
-            raise ValueError("Comment id is required")
+            msg = "Comment id is required"
+            raise ValueError(msg)
         if not self.author:
-            raise ValueError("Comment author is required")
+            msg = "Comment author is required"
+            raise ValueError(msg)
         if not self.body:
-            raise ValueError("Comment body is required")
+            msg = "Comment body is required"
+            raise ValueError(msg)
         if not self.created_at:
-            raise ValueError("Comment created_at is required")
+            msg = "Comment created_at is required"
+            raise ValueError(msg)
         # Validate ISO 8601 timestamp
         try:
             datetime.fromisoformat(self.created_at.replace("Z", "+00:00"))
         except (ValueError, AttributeError) as e:
-            raise ValueError(f"created_at must be ISO 8601 format: {e}")
+            msg = f"created_at must be ISO 8601 format: {e}"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -146,16 +151,22 @@ class CommentContext:
         """Validate comment context after initialization."""
         # Invariant 1: Initial requests cannot have parent comments
         if self.is_initial_request and self.parent_comment is not None:
-            raise ValueError(
+            msg = (
                 "Initial requests cannot have parent comments. "
                 "A comment cannot be both an initial request and a reply."
+            )
+            raise ValueError(
+                msg
             )
 
         # Invariant 2: Replies with parent comments must have thread_id
         if self.parent_comment is not None and not self.thread_id:
-            raise ValueError(
+            msg = (
                 "Replies with parent comments must have thread_id. "
                 "Threading context is required to track discussion relationships."
+            )
+            raise ValueError(
+                msg
             )
 
     @classmethod
@@ -234,9 +245,11 @@ class CommentContext:
             'c1'
         """
         if not thread_id:
-            raise ValueError("thread_id cannot be empty for replies")
+            msg = "thread_id cannot be empty for replies"
+            raise ValueError(msg)
         if parent_comment is None:
-            raise ValueError("parent_comment cannot be None for replies")
+            msg = "parent_comment cannot be None for replies"
+            raise ValueError(msg)
 
         return cls(
             thread_id=thread_id,
@@ -310,9 +323,11 @@ class CommentNeedsResponseEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.work_item_id:
-            raise ValueError("work_item_id is required")
+            msg = "work_item_id is required"
+            raise ValueError(msg)
         if not self.project_id:
-            raise ValueError("project_id is required")
+            msg = "project_id is required"
+            raise ValueError(msg)
         # Note: comment and context are optional and can be None
         # Do not auto-initialize them as this prevents tests from checking None handling
 
@@ -382,9 +397,11 @@ class CommentPostedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.work_item_id:
-            raise ValueError("work_item_id is required")
+            msg = "work_item_id is required"
+            raise ValueError(msg)
         if not self.project_id:
-            raise ValueError("project_id is required")
+            msg = "project_id is required"
+            raise ValueError(msg)
         # Note: comment is optional and can be None
 
     def to_dict(self) -> dict:
@@ -465,15 +482,20 @@ class AgentResponsePostedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.work_item_id:
-            raise ValueError("work_item_id is required")
+            msg = "work_item_id is required"
+            raise ValueError(msg)
         if not self.project_id:
-            raise ValueError("project_id is required")
+            msg = "project_id is required"
+            raise ValueError(msg)
         if not self.comment_id:
-            raise ValueError("comment_id is required")
+            msg = "comment_id is required"
+            raise ValueError(msg)
         if not self.response_comment_id:
-            raise ValueError("response_comment_id is required")
+            msg = "response_comment_id is required"
+            raise ValueError(msg)
         if not self.agent_name:
-            raise ValueError("agent_name is required")
+            msg = "agent_name is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""

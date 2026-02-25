@@ -61,7 +61,8 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
         """Get execution by ID."""
         with self._lock:
             if execution_id not in self._executions:
-                raise ExecutionNotFoundError(f"Execution with ID {execution_id} not found")
+                msg = f"Execution with ID {execution_id} not found"
+                raise ExecutionNotFoundError(msg)
             return self._executions[execution_id]
 
     async def list_executions(
@@ -111,7 +112,8 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
         """Get execution logs."""
         with self._lock:
             if execution_id not in self._executions:
-                raise ExecutionNotFoundError(f"Execution with ID {execution_id} not found")
+                msg = f"Execution with ID {execution_id} not found"
+                raise ExecutionNotFoundError(msg)
 
             logs = self._logs.get(execution_id, [])
 
@@ -137,7 +139,8 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
         """Get execution event history."""
         with self._lock:
             if execution_id not in self._executions:
-                raise ExecutionNotFoundError(f"Execution with ID {execution_id} not found")
+                msg = f"Execution with ID {execution_id} not found"
+                raise ExecutionNotFoundError(msg)
 
             history = self._history.get(execution_id, [])
 

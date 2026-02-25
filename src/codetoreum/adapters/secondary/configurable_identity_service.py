@@ -64,7 +64,8 @@ class ConfigurableIdentityService(IIdentityService):
             ValueError: If username is empty
         """
         if not username:
-            raise ValueError("username cannot be empty")
+            msg = "username cannot be empty"
+            raise ValueError(msg)
 
         # Check exact matches
         if username in self._bot_usernames:
@@ -89,7 +90,8 @@ class ConfigurableIdentityService(IIdentityService):
             ValueError: If no bot username configured
         """
         if not self._system_bot_username:
-            raise ValueError("No bot username configured")
+            msg = "No bot username configured"
+            raise ValueError(msg)
         return self._system_bot_username
 
     def get_human_users(self, usernames: list[str]) -> list[str]:
@@ -125,8 +127,9 @@ class ConfigurableIdentityService(IIdentityService):
                        and empty bot_patterns)
         """
         if not config.bot_usernames and not config.bot_patterns:
+            msg = "At least one of bot_usernames or bot_patterns must be provided"
             raise ValueError(
-                "At least one of bot_usernames or bot_patterns must be provided"
+                msg
             )
 
         self._bot_usernames = config.bot_usernames or []
@@ -145,5 +148,6 @@ class ConfigurableIdentityService(IIdentityService):
             ValueError: If username is empty
         """
         if not username:
-            raise ValueError("username cannot be empty")
+            msg = "username cannot be empty"
+            raise ValueError(msg)
         self._system_bot_username = username

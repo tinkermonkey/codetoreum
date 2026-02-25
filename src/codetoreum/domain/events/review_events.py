@@ -63,15 +63,19 @@ class ReviewStatusChangedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.review_id:
-            raise ValueError("review_id is required")
+            msg = "review_id is required"
+            raise ValueError(msg)
         if not self.project_id:
-            raise ValueError("project_id is required")
+            msg = "project_id is required"
+            raise ValueError(msg)
 
         valid_statuses = {"open", "approved", "changes_requested", "merged", "closed"}
         if self.previous_status not in valid_statuses:
-            raise ValueError(f"Invalid previous_status: {self.previous_status}")
+            msg = f"Invalid previous_status: {self.previous_status}"
+            raise ValueError(msg)
         if self.new_status not in valid_statuses:
-            raise ValueError(f"Invalid new_status: {self.new_status}")
+            msg = f"Invalid new_status: {self.new_status}"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -142,9 +146,11 @@ class ReviewCommentAddedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.review_id:
-            raise ValueError("review_id is required")
+            msg = "review_id is required"
+            raise ValueError(msg)
         if not self.project_id:
-            raise ValueError("project_id is required")
+            msg = "project_id is required"
+            raise ValueError(msg)
         # Note: comment is optional and can be None
         # Do not auto-initialize it as this prevents tests from checking None handling
 

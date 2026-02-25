@@ -65,7 +65,8 @@ class InMemoryEventStore(IEventStore):
             ValidationError: If stream_id is None/empty
         """
         if not stream_id:
-            raise ValidationError("Stream ID cannot be empty")
+            msg = "Stream ID cannot be empty"
+            raise ValidationError(msg)
 
         if not events:
             return
@@ -75,8 +76,9 @@ class InMemoryEventStore(IEventStore):
             if expected_version is not None:
                 current_version = len(self._streams.get(stream_id, []))
                 if current_version != expected_version:
+                    msg = f"Expected version {expected_version}, but stream is at version {current_version}"
                     raise ConcurrencyConflictError(
-                        f"Expected version {expected_version}, but stream is at version {current_version}"
+                        msg
                     )
 
             # Initialize stream if it doesn't exist
@@ -125,11 +127,13 @@ class InMemoryEventStore(IEventStore):
             ValidationError: If stream_id is None/empty
         """
         if not stream_id:
-            raise ValidationError("Stream ID cannot be empty")
+            msg = "Stream ID cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             if stream_id not in self._streams:
-                raise ResourceNotFoundError("Stream", stream_id)
+                msg = "Stream"
+                raise ResourceNotFoundError(msg, stream_id)
 
             events = self._streams[stream_id]
 
@@ -160,7 +164,8 @@ class InMemoryEventStore(IEventStore):
             ValidationError: If since is None
         """
         if not since:
-            raise ValidationError("Since timestamp cannot be None")
+            msg = "Since timestamp cannot be None"
+            raise ValidationError(msg)
 
         with self._lock:
             if stream_id:
@@ -193,7 +198,8 @@ class InMemoryEventStore(IEventStore):
         with self._lock:
             if stream_id:
                 if stream_id not in self._streams:
-                    raise ResourceNotFoundError("Stream", stream_id)
+                    msg = "Stream"
+                    raise ResourceNotFoundError(msg, stream_id)
                 events = self._streams[stream_id][from_version:].copy()
             else:
                 events = self._all_events[from_version:].copy()
@@ -216,7 +222,8 @@ class InMemoryEventStore(IEventStore):
             ValidationError: If stream_id is None/empty
         """
         if not stream_id:
-            raise ValidationError("Stream ID cannot be empty")
+            msg = "Stream ID cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             if stream_id not in self._streams:
@@ -237,7 +244,8 @@ class InMemoryEventStore(IEventStore):
             ValidationError: If stream_id is None/empty
         """
         if not stream_id:
-            raise ValidationError("Stream ID cannot be empty")
+            msg = "Stream ID cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             return stream_id in self._streams
@@ -260,10 +268,12 @@ class InMemoryEventStore(IEventStore):
             ValidationError: If stream_id or snapshot is None/empty
         """
         if not stream_id:
-            raise ValidationError("Stream ID cannot be empty")
+            msg = "Stream ID cannot be empty"
+            raise ValidationError(msg)
 
         if snapshot is None:
-            raise ValidationError("Snapshot data cannot be None")
+            msg = "Snapshot data cannot be None"
+            raise ValidationError(msg)
 
         with self._lock:
             self._snapshots[stream_id] = {
@@ -289,7 +299,8 @@ class InMemoryEventStore(IEventStore):
             ValidationError: If stream_id is None/empty
         """
         if not stream_id:
-            raise ValidationError("Stream ID cannot be empty")
+            msg = "Stream ID cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             return self._snapshots.get(stream_id)
@@ -306,11 +317,13 @@ class InMemoryEventStore(IEventStore):
             ValidationError: If stream_id is None/empty
         """
         if not stream_id:
-            raise ValidationError("Stream ID cannot be empty")
+            msg = "Stream ID cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             if stream_id not in self._streams:
-                raise ResourceNotFoundError("Stream", stream_id)
+                msg = "Stream"
+                raise ResourceNotFoundError(msg, stream_id)
 
             # Remove from streams
             events_to_remove = self._streams[stream_id]
@@ -384,7 +397,8 @@ class InMemoryEventStore(IEventStore):
             ValidationError: If event_type is None/empty
         """
         if not event_type:
-            raise ValidationError("Event type cannot be empty")
+            msg = "Event type cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             events = self._events_by_type.get(event_type, [])
@@ -411,7 +425,8 @@ class InMemoryEventStore(IEventStore):
             ValidationError: If correlation_id is None/empty
         """
         if not correlation_id:
-            raise ValidationError("Correlation ID cannot be empty")
+            msg = "Correlation ID cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             return self._events_by_correlation.get(correlation_id, []).copy()
@@ -438,11 +453,13 @@ class InMemoryEventStore(IEventStore):
             ValidationError: If stream_id is None/empty
         """
         if not stream_id:
-            raise ValidationError("Stream ID cannot be empty")
+            msg = "Stream ID cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             if stream_id not in self._streams:
-                raise ResourceNotFoundError("Stream", stream_id)
+                msg = "Stream"
+                raise ResourceNotFoundError(msg, stream_id)
 
             events = self._streams[stream_id]
 
@@ -581,7 +598,8 @@ class InMemoryEventStore(IEventStore):
             ValidationError: If parameters are invalid
         """
         if not aggregate_type:
-            raise ValidationError("Aggregate type cannot be empty")
+            msg = "Aggregate type cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             # Filter streams by aggregate type

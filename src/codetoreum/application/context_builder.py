@@ -140,7 +140,8 @@ class ContextBuilder:
                 exc_info=True,
                 extra={"error_id": "ERR_CONTEXT_BUILD_UNEXPECTED_FAILURE"}
             )
-            raise DomainError(f"Failed to build execution context: {e}")
+            message = f"Failed to build execution context: {e}"
+            raise DomainError(message)
 
     async def fetch_work_item_details(
         self, work_item_id: str

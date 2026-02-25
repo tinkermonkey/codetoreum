@@ -246,8 +246,9 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
         if (self.docker_failure_after_count is not None and
                 self.docker_failure_counter >= self.docker_failure_after_count):
             from codetoreum.ports.exceptions import ContainerError
+            msg = f"Docker daemon unavailable (simulated failure after {self.docker_failure_after_count} containers)"
             raise ContainerError(
-                f"Docker daemon unavailable (simulated failure after {self.docker_failure_after_count} containers)",
+                msg,
                 error_code="ERR_DOCKER_CONNECTION_FAILED"
             )
 
@@ -296,8 +297,9 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
         # Check if checkpoint store should fail for this container
         if metadata.container_id in self.checkpoint_store_failures:
             from codetoreum.ports.exceptions import StorageError
+            msg = f"Checkpoint store unavailable for {metadata.container_id}"
             raise StorageError(
-                f"Checkpoint store unavailable for {metadata.container_id}",
+                msg,
                 error_code="ERR_CHECKPOINT_STORE_UNAVAILABLE"
             )
 
@@ -343,8 +345,9 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
         if (self.docker_failure_after_count is not None and
                 self.docker_failure_counter > self.docker_failure_after_count):
             from codetoreum.ports.exceptions import ContainerError
+            msg = "Docker daemon unavailable (simulated failure)"
             raise ContainerError(
-                "Docker daemon unavailable (simulated failure)",
+                msg,
                 error_code="ERR_DOCKER_CONNECTION_FAILED"
             )
 
@@ -395,9 +398,12 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
         Raises:
             NotImplementedError: This method should be called through ContainerRecoveryService
         """
-        raise NotImplementedError(
+        msg = (
             "recover_or_cleanup_containers is orchestrated by ContainerRecoveryService. "
             "Call the service instead of invoking this method directly."
+        )
+        raise NotImplementedError(
+            msg
         )
 
     def reset(self) -> None:

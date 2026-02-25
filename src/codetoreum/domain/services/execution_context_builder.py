@@ -55,14 +55,16 @@ class ExecutionContextBuilder:
 
         # Validate workspace and work item match
         if workspace.work_item_id != work_item.id:
+            msg = f"Workspace work_item_id ({workspace.work_item_id}) does not match work item ID ({work_item.id})"
             raise DomainError(
-                f"Workspace work_item_id ({workspace.work_item_id}) does not match work item ID ({work_item.id})"
+                msg
             )
 
         # Validate project IDs match
         if workspace.project_id != project.id:
+            msg = f"Workspace project_id ({workspace.project_id}) does not match project ID ({project.id})"
             raise DomainError(
-                f"Workspace project_id ({workspace.project_id}) does not match project ID ({project.id})"
+                msg
             )
 
         # Determine permissions
@@ -120,10 +122,12 @@ class ExecutionContextBuilder:
             DomainError: If any validation fails
         """
         if not workflow_id or not workflow_id.strip():
-            raise DomainError("Workflow ID cannot be empty")
+            msg = "Workflow ID cannot be empty"
+            raise DomainError(msg)
 
         if not stage_name or not stage_name.strip():
-            raise DomainError("Stage name cannot be empty")
+            msg = "Stage name cannot be empty"
+            raise DomainError(msg)
 
         # Validate agent can execute in project environment
         if agent.requires_docker and not project.has_dockerfile and not project.requires_dev_container:
@@ -132,8 +136,9 @@ class ExecutionContextBuilder:
             pass
 
         if agent.requires_dev_container and not project.requires_dev_container:
+            msg = f"Agent {agent.name} requires dev container but project {project.name} does not have one configured"
             raise DomainError(
-                f"Agent {agent.name} requires dev container but project {project.name} does not have one configured"
+                msg
             )
 
     @staticmethod
@@ -240,7 +245,8 @@ class ExecutionContextBuilder:
         # Find agent
         agent = next((a for a in agents if a.id == agent_id), None)
         if not agent:
-            raise DomainError(f"Agent {agent_id} not found")
+            msg = f"Agent {agent_id} not found"
+            raise DomainError(msg)
 
         return ExecutionContextBuilder.build_context(
             work_item=work_item,

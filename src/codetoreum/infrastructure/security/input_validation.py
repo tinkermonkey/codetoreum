@@ -66,9 +66,8 @@ def safe_path_join(base_path: str, user_path: str) -> Path:
     try:
         target.relative_to(base)
     except ValueError:
-        raise PathTraversalError(
-            f"Path traversal attempt detected: '{user_path}' resolves outside base path"
-        )
+        message = f"Path traversal attempt detected: '{user_path}' resolves outside base path"
+        raise PathTraversalError(message)
 
     return target
 
@@ -158,18 +157,19 @@ def sanitize_string(
         InvalidInputError: If validation fails
     """
     if not isinstance(value, str):
-        raise InvalidInputError(f"Expected string, got {type(value).__name__}")
+        message = f"Expected string, got {type(value).__name__}"
+        raise InvalidInputError(message)
 
     if strip:
         value = value.strip()
 
     if not allow_empty and not value:
-        raise InvalidInputError("Empty string not allowed")
+        message = "Empty string not allowed"
+        raise InvalidInputError(message)
 
     if max_length and len(value) > max_length:
-        raise InvalidInputError(
-            f"String too long. Maximum length: {max_length}, got: {len(value)}"
-        )
+        message = f"String too long. Maximum length: {max_length}, got: {len(value)}"
+        raise InvalidInputError(message)
 
     return value
 
@@ -196,10 +196,8 @@ def validate_env_var_name(name: str) -> str:
     name = sanitize_string(name, max_length=255)
 
     if not SAFE_ENV_VAR_NAME_PATTERN.match(name):
-        raise InvalidInputError(
-            "Invalid environment variable name. Must start with uppercase letter "
-            "and contain only uppercase letters, digits, and underscores."
-        )
+        message = "Invalid environment variable name. Must start with uppercase letter " "and contain only uppercase letters, digits, and underscores."
+        raise InvalidInputError(message)
 
     return name
 
@@ -226,10 +224,8 @@ def validate_agent_name(name: str) -> str:
     name = sanitize_string(name, max_length=100)
 
     if not SAFE_AGENT_NAME_PATTERN.match(name):
-        raise InvalidInputError(
-            "Invalid agent name. Must start with lowercase letter "
-            "and contain only lowercase letters, digits, and underscores."
-        )
+        message = "Invalid agent name. Must start with lowercase letter " "and contain only lowercase letters, digits, and underscores."
+        raise InvalidInputError(message)
 
     return name
 
@@ -249,22 +245,20 @@ def validate_labels(labels: list[str], max_labels: int = 20) -> list[str]:
         InvalidInputError: If validation fails
     """
     if not isinstance(labels, list):
-        raise InvalidInputError(f"Expected list, got {type(labels).__name__}")
+        message = f"Expected list, got {type(labels).__name__}"
+        raise InvalidInputError(message)
 
     if len(labels) > max_labels:
-        raise InvalidInputError(
-            f"Too many labels. Maximum: {max_labels}, got: {len(labels)}"
-        )
+        message = f"Too many labels. Maximum: {max_labels}, got: {len(labels)}"
+        raise InvalidInputError(message)
 
     validated = []
     for label in labels:
         label_str = sanitize_string(label, max_length=100)
 
         if not SAFE_LABEL_PATTERN.match(label_str):
-            raise InvalidInputError(
-                f"Invalid label '{label_str}'. Only alphanumeric, "
-                "underscore, hyphen, dot, colon, and slash allowed."
-            )
+            message = f"Invalid label '{label_str}'. Only alphanumeric, " "underscore, hyphen, dot, colon, and slash allowed."
+            raise InvalidInputError(message)
 
         validated.append(label_str)
 
@@ -296,19 +290,20 @@ def validate_url(url: str, allowed_schemes: set[str] | None = None) -> str:
     try:
         parsed = urlparse(url)
     except Exception as e:
-        raise InvalidInputError(f"Invalid URL format: {e}")
+        message = f"Invalid URL format: {e}"
+        raise InvalidInputError(message)
 
     if not parsed.scheme:
-        raise InvalidInputError("URL must include scheme (http:// or https://)")
+        message = "URL must include scheme (http:// or https://)"
+        raise InvalidInputError(message)
 
     if parsed.scheme not in allowed_schemes:
-        raise InvalidInputError(
-            f"Invalid URL scheme '{parsed.scheme}'. "
-            f"Allowed: {', '.join(sorted(allowed_schemes))}"
-        )
+        message = f"Invalid URL scheme '{parsed.scheme}'. " f"Allowed: {', '.join(sorted(allowed_schemes))}"
+        raise InvalidInputError(message)
 
     if not parsed.netloc:
-        raise InvalidInputError("URL must include hostname")
+        message = "URL must include hostname"
+        raise InvalidInputError(message)
 
     return url
 
@@ -335,17 +330,16 @@ def validate_integer_range(
         InvalidInputError: If value out of range
     """
     if not isinstance(value, int):
-        raise InvalidInputError(f"{field_name}: Expected integer, got {type(value).__name__}")
+        message = f"{field_name}: Expected integer, got {type(value).__name__}"
+        raise InvalidInputError(message)
 
     if min_value is not None and value < min_value:
-        raise InvalidInputError(
-            f"{field_name}: Value {value} below minimum {min_value}"
-        )
+        message = f"{field_name}: Value {value} below minimum {min_value}"
+        raise InvalidInputError(message)
 
     if max_value is not None and value > max_value:
-        raise InvalidInputError(
-            f"{field_name}: Value {value} above maximum {max_value}"
-        )
+        message = f"{field_name}: Value {value} above maximum {max_value}"
+        raise InvalidInputError(message)
 
     return value
 
@@ -372,19 +366,18 @@ def validate_float_range(
         InvalidInputError: If value out of range
     """
     if not isinstance(value, (int, float)):
-        raise InvalidInputError(f"{field_name}: Expected number, got {type(value).__name__}")
+        message = f"{field_name}: Expected number, got {type(value).__name__}"
+        raise InvalidInputError(message)
 
     value = float(value)
 
     if min_value is not None and value < min_value:
-        raise InvalidInputError(
-            f"{field_name}: Value {value} below minimum {min_value}"
-        )
+        message = f"{field_name}: Value {value} below minimum {min_value}"
+        raise InvalidInputError(message)
 
     if max_value is not None and value > max_value:
-        raise InvalidInputError(
-            f"{field_name}: Value {value} above maximum {max_value}"
-        )
+        message = f"{field_name}: Value {value} above maximum {max_value}"
+        raise InvalidInputError(message)
 
     return value
 

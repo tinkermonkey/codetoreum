@@ -168,16 +168,20 @@ class ProjectContext:
         - If has_ci_cd is True, test_command should be set
         """
         if not self.name or not self.name.strip():
-            raise DomainError("Project context must have a non-empty name")
+            msg = "Project context must have a non-empty name"
+            raise DomainError(msg)
 
         if not self.repository_url or not self.repository_url.strip():
-            raise DomainError("Project context must have a repository URL")
+            msg = "Project context must have a repository URL"
+            raise DomainError(msg)
 
         if not self.default_branch or not self.default_branch.strip():
-            raise DomainError("Project context must have a default branch")
+            msg = "Project context must have a default branch"
+            raise DomainError(msg)
 
         if self.has_dockerfile and not self.dockerfile_path:
-            raise DomainError("Dockerfile path required when has_dockerfile is True")
+            msg = "Dockerfile path required when has_dockerfile is True"
+            raise DomainError(msg)
 
     # Creation
     @classmethod
@@ -263,7 +267,8 @@ class ProjectContext:
         Emits: ProjectTestConfigUpdated event
         """
         if not test_command or not test_command.strip():
-            raise DomainError("Test command cannot be empty")
+            msg = "Test command cannot be empty"
+            raise DomainError(msg)
 
         self.test_command = test_command
         self.test_framework = test_framework
@@ -299,7 +304,8 @@ class ProjectContext:
         Emits: ProjectDockerConfigUpdated event
         """
         if has_dockerfile and not dockerfile_path:
-            raise DomainError("Dockerfile path required when has_dockerfile is True")
+            msg = "Dockerfile path required when has_dockerfile is True"
+            raise DomainError(msg)
 
         self.has_dockerfile = has_dockerfile
         self.dockerfile_path = dockerfile_path
@@ -331,10 +337,12 @@ class ProjectContext:
         Emits: ProjectWorkflowMappingAdded event
         """
         if not label or not label.strip():
-            raise DomainError("Label cannot be empty")
+            msg = "Label cannot be empty"
+            raise DomainError(msg)
 
         if not template_id or not template_id.strip():
-            raise DomainError("Template ID cannot be empty")
+            msg = "Template ID cannot be empty"
+            raise DomainError(msg)
 
         self.custom_workflows[label] = template_id
         self.updated_at = datetime.now(UTC)

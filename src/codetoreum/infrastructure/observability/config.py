@@ -289,27 +289,18 @@ class ObservabilityConfig:
         """
         # Error: Observability enabled but no signals configured (invalid state)
         if self.enabled and not self.traces_enabled and not self.metrics_enabled and not self.logs_enabled:
-            raise ValueError(
-                "Observability enabled but no signals (traces/metrics/logs) are enabled. "
-                "Either enable at least one signal or disable observability entirely "
-                "(set OTEL_ENABLED=false)."
-            )
+            message = "Observability enabled but no signals (traces/metrics/logs) are enabled. " "Either enable at least one signal or disable observability entirely " "(set OTEL_ENABLED=false)."
+            raise ValueError(message)
 
         # Error: Signal enabled without endpoint (will definitely fail at export time)
         if self.traces_enabled and not self.traces_endpoint:
-            raise ValueError(
-                "Traces enabled but traces_endpoint is not configured. "
-                "Check OTEL_EXPORTER_OTLP_TRACES_ENDPOINT or Signoz gRPC configuration."
-            )
+            message = "Traces enabled but traces_endpoint is not configured. " "Check OTEL_EXPORTER_OTLP_TRACES_ENDPOINT or Signoz gRPC configuration."
+            raise ValueError(message)
 
         if self.logs_enabled and not self.logs_endpoint:
-            raise ValueError(
-                "Logs enabled but logs_endpoint is not configured. "
-                "Check OTEL_EXPORTER_OTLP_LOGS_ENDPOINT or Signoz HTTP configuration."
-            )
+            message = "Logs enabled but logs_endpoint is not configured. " "Check OTEL_EXPORTER_OTLP_LOGS_ENDPOINT or Signoz HTTP configuration."
+            raise ValueError(message)
 
         if self.metrics_enabled and not self.metrics_endpoint:
-            raise ValueError(
-                "Metrics enabled but metrics_endpoint is not configured. "
-                "Check OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or Signoz HTTP configuration."
-            )
+            message = "Metrics enabled but metrics_endpoint is not configured. " "Check OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or Signoz HTTP configuration."
+            raise ValueError(message)

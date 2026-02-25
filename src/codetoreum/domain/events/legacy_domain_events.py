@@ -91,9 +91,11 @@ class DomainEvent:
                 occurred_at=datetime.fromisoformat(data["occurred_at"]) if data.get("occurred_at") else None,
             )
         except KeyError as e:
-            raise ValueError(f"Missing required field: {e}")
+            msg = f"Missing required field: {e}"
+            raise ValueError(msg)
         except (ValueError, TypeError) as e:
-            raise ValueError(f"Invalid field value: {e}")
+            msg = f"Invalid field value: {e}"
+            raise ValueError(msg)
 
     def __eq__(self, other: object) -> bool:
         """

@@ -307,7 +307,8 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             CircuitBreakerTripped: If max agent calls exceeded
         """
         if not context.test_configs:
-            raise ValueError("test_configs cannot be empty")
+            msg = "test_configs cannot be empty"
+            raise ValueError(msg)
 
         # Try to resume from checkpoint
         checkpoint = await self.try_resume_from_checkpoint(context)
@@ -480,28 +481,34 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         """
         # Validate numeric fields
         if checkpoint.total_agent_calls < 0:
+            msg = f"Invalid checkpoint: total_agent_calls={checkpoint.total_agent_calls} must be >= 0"
             raise ValueError(
-                f"Invalid checkpoint: total_agent_calls={checkpoint.total_agent_calls} must be >= 0"
+                msg
             )
 
         if checkpoint.files_fixed < 0:
-            raise ValueError("Invalid checkpoint: files_fixed must be >= 0")
+            msg = "Invalid checkpoint: files_fixed must be >= 0"
+            raise ValueError(msg)
 
         if checkpoint.warnings_reviewed < 0:
-            raise ValueError("Invalid checkpoint: warnings_reviewed must be >= 0")
+            msg = "Invalid checkpoint: warnings_reviewed must be >= 0"
+            raise ValueError(msg)
 
         if checkpoint.elapsed_seconds < 0:
-            raise ValueError("Invalid checkpoint: elapsed_seconds must be >= 0")
+            msg = "Invalid checkpoint: elapsed_seconds must be >= 0"
+            raise ValueError(msg)
 
         if checkpoint.iteration < 1:
-            raise ValueError("Invalid checkpoint: iteration must be >= 1")
+            msg = "Invalid checkpoint: iteration must be >= 1"
+            raise ValueError(msg)
 
         # Validate test_type is valid enum
         try:
             RepairTestType(checkpoint.test_type)
         except ValueError as e:
+            msg = f"Invalid checkpoint: test_type '{checkpoint.test_type}' is not valid"
             raise ValueError(
-                f"Invalid checkpoint: test_type '{checkpoint.test_type}' is not valid"
+                msg
             ) from e
 
         # All validations passed, restore state atomically
@@ -916,8 +923,9 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             error_summary = "\n".join(
                 f"  - {e['event_type']}: {e['error']}" for e in errors
             )
+            msg = f"Expected no handler errors, but found {len(errors)}:\n{error_summary}"
             raise AssertionError(
-                f"Expected no handler errors, but found {len(errors)}:\n{error_summary}"
+                msg
             )
 
     # Assertion helpers (FR-12.1-12.7)
@@ -938,11 +946,15 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             None
         )
         if not event:
-            raise AssertionError(f"No completion event found for {test_type.value}")
+            msg = f"No completion event found for {test_type.value}"
+            raise AssertionError(msg)
         if event.get("iterations") != expected:
-            raise AssertionError(
+            msg = (
                 f"Expected {expected} iterations for {test_type.value}, "
                 f"got {event.get('iterations')}"
+            )
+            raise AssertionError(
+                msg
             )
 
     def assert_test_type_passed(self, test_type: RepairTestType) -> None:
@@ -960,7 +972,8 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             None
         )
         if not event or not event.get("passed"):
-            raise AssertionError(f"Expected {test_type.value} to pass")
+            msg = f"Expected {test_type.value} to pass"
+            raise AssertionError(msg)
 
     def assert_test_type_failed(self, test_type: RepairTestType) -> None:
         """Assert test type failed.
@@ -977,7 +990,8 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             None
         )
         if not event or event.get("passed"):
-            raise AssertionError(f"Expected {test_type.value} to fail")
+            msg = f"Expected {test_type.value} to fail"
+            raise AssertionError(msg)
 
     def assert_fast_fail(self, test_type: RepairTestType) -> None:
         """Assert fast-fail occurred after test type.
@@ -995,7 +1009,8 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             None
         )
         if not event:
-            raise AssertionError(f"Expected fast-fail after {test_type.value}")
+            msg = f"Expected fast-fail after {test_type.value}"
+            raise AssertionError(msg)
 
     def assert_overall_success(self) -> None:
         """Assert overall cycle succeeded.
@@ -1009,7 +1024,8 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             None
         )
         if not event or not event.get("overall_success"):
-            raise AssertionError("Expected overall success")
+            msg = "Expected overall success"
+            raise AssertionError(msg)
 
     def assert_overall_failure(self) -> None:
         """Assert overall cycle failed.
@@ -1023,7 +1039,8 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             None
         )
         if not event or event.get("overall_success"):
-            raise AssertionError("Expected overall failure")
+            msg = "Expected overall failure"
+            raise AssertionError(msg)
 
     def assert_warnings_reviewed_count(self, test_type: RepairTestType, expected: int) -> None:
         """Assert test type reviewed expected number of warnings.
@@ -1041,12 +1058,16 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             None
         )
         if not event:
-            raise AssertionError(f"No completion event found for {test_type.value}")
+            msg = f"No completion event found for {test_type.value}"
+            raise AssertionError(msg)
         actual = event.get("warnings_reviewed", 0)
         if actual != expected:
-            raise AssertionError(
+            msg = (
                 f"Expected {expected} warnings reviewed for {test_type.value}, "
                 f"got {actual}"
+            )
+            raise AssertionError(
+                msg
             )
 
     def assert_no_warning_regression(self, test_type: RepairTestType) -> None:
@@ -1067,13 +1088,17 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             None
         )
         if not event:
-            raise AssertionError(f"No completion event found for {test_type.value}")
+            msg = f"No completion event found for {test_type.value}"
+            raise AssertionError(msg)
 
         final_warnings = event.get("final_warnings", 0)
         if final_warnings > 0:
-            raise AssertionError(
+            msg = (
                 f"Expected no warning regression for {test_type.value}, "
                 f"but found {final_warnings} warnings in final execution"
+            )
+            raise AssertionError(
+                msg
             )
 
     def assert_no_warning_reappearance(
@@ -1099,7 +1124,8 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             None
         )
         if not event:
-            raise AssertionError(f"No completion event found for {test_type.value}")
+            msg = f"No completion event found for {test_type.value}"
+            raise AssertionError(msg)
 
         current_warnings = event.get("warning_list", ())
 
@@ -1123,9 +1149,12 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 reappeared.append(sig)
 
         if reappeared:
-            raise AssertionError(
+            msg = (
                 f"Expected no warning reappearance for {test_type.value}, "
                 f"but {len(reappeared)} warning(s) reappeared: {reappeared}"
+            )
+            raise AssertionError(
+                msg
             )
 
     def get_agent_call_count(self) -> int:
@@ -1229,9 +1258,12 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                     f"Simulated interruption after iteration {iteration} "
                     f"for test_type={config.test_type.value}"
                 )
-                raise InterruptedError(
+                msg = (
                     f"Simulated interruption after iteration {iteration} "
                     f"(checkpoint saved, testing resume functionality)"
+                )
+                raise InterruptedError(
+                    msg
                 )
 
         # Emit test cycle completed

@@ -65,7 +65,8 @@ class EventHandler:
         Raises:
             Exception: If handling fails
         """
-        raise NotImplementedError("Subclasses must implement handle()")
+        message = "Subclasses must implement handle()"
+        raise NotImplementedError(message)
 
     def get_event_types(self) -> list[str]:
         """
@@ -74,7 +75,8 @@ class EventHandler:
         Returns:
             List of event type names (class names)
         """
-        raise NotImplementedError("Subclasses must implement get_event_types()")
+        message = "Subclasses must implement get_event_types()"
+        raise NotImplementedError(message)
 
 
 class EventBus:
@@ -185,7 +187,8 @@ class EventBus:
                     "error_id": "ERR_HANDLER_REGISTRATION"
                 }
             )
-            raise EventBusError(f"Failed to register handler: {e}") from e
+            message = f"Failed to register handler: {e}"
+            raise EventBusError(message) from e
 
     def unregister_handler(self, handler: EventHandler) -> None:
         """
@@ -245,7 +248,8 @@ class EventBus:
                     "error_id": "ERR_CALLBACK_SUBSCRIPTION"
                 }
             )
-            raise EventBusError(f"Failed to subscribe callback: {e}") from e
+            message = f"Failed to subscribe callback: {e}"
+            raise EventBusError(message) from e
 
     def unsubscribe(
         self, event_type: str | None, callback: Callable[[DomainEvent], Any]
@@ -361,9 +365,8 @@ class EventBus:
                     "error_id": "ERR_EVENT_BUS_CONNECTION"
                 }
             )
-            raise EventBusError(
-                f"Connection error publishing event: {e}. This may be transient - please retry."
-            ) from e
+            message = f"Connection error publishing event: {e}. This may be transient - please retry."
+            raise EventBusError(message)
         except ValueError as e:
             # Validation errors - permanent issues with event data
             logger.error(
@@ -375,9 +378,8 @@ class EventBus:
                     "error_id": "ERR_EVENT_BUS_VALIDATION"
                 }
             )
-            raise EventBusError(
-                f"Invalid event data: {e}. Please check event structure."
-            ) from e
+            message = f"Invalid event data: {e}. Please check event structure."
+            raise EventBusError(message)
         except Exception as e:
             # Unexpected errors that don't fit other categories
             logger.critical(
@@ -389,7 +391,8 @@ class EventBus:
                     "error_id": "ERR_EVENT_BUS_UNEXPECTED"
                 }
             )
-            raise EventBusError(f"Unexpected error publishing event: {e}") from e
+            message = f"Unexpected error publishing event: {e}"
+            raise EventBusError(message) from e
 
     async def publish_batch(self, events: list[DomainEvent]) -> None:
         """

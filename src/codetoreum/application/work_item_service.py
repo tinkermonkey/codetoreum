@@ -80,13 +80,15 @@ class WorkItemService(IWorkItemCommandPort, IWorkItemQueryPort):
 
         # Check if stream exists
         if not await self.event_store.stream_exists(stream_id):
-            raise WorkItemNotFoundError(f"Work item not found: {work_item_id}")
+            message = f"Work item not found: {work_item_id}"
+            raise WorkItemNotFoundError(message)
 
         # Load events
         events = await self.event_store.get_events(stream_id)
 
         if not events:
-            raise WorkItemNotFoundError(f"Work item not found: {work_item_id}")
+            message = f"Work item not found: {work_item_id}"
+            raise WorkItemNotFoundError(message)
 
         # Reconstruct work item from events
         return WorkItem.from_events(events)

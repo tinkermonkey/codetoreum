@@ -172,7 +172,8 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
             sequence: List of review decisions in sequence order
         """
         if not sequence:
-            raise ValueError("Review sequence cannot be empty")
+            msg = "Review sequence cannot be empty"
+            raise ValueError(msg)
         with self._lock:
             self._review_sequences[work_item_id] = sequence
             self._sequence_indices[work_item_id] = 0
@@ -270,7 +271,8 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
             ValueError: If feedback is empty
         """
         if not feedback or not feedback.strip():
-            raise ValueError("Feedback cannot be empty")
+            msg = "Feedback cannot be empty"
+            raise ValueError(msg)
         if work_item_id not in self._human_feedback_queue:
             self._human_feedback_queue[work_item_id] = []
         self._human_feedback_queue[work_item_id].append(feedback)
@@ -875,13 +877,17 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         with self._lock:
             state = self._cycle_states.get(work_item_id)
         if not state:
+            msg = f"No cycle state found for work item {work_item_id}"
             raise AssertionError(
-                f"No cycle state found for work item {work_item_id}"
+                msg
             )
         if state.current_iteration != expected:
-            raise AssertionError(
+            msg = (
                 f"Expected {expected} iterations for {work_item_id}, "
                 f"got {state.current_iteration}"
+            )
+            raise AssertionError(
+                msg
             )
 
     def assert_final_status(
@@ -908,15 +914,19 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
                 break
 
         if not completion_event:
+            msg = f"No completion event found for work item {work_item_id}"
             raise AssertionError(
-                f"No completion event found for work item {work_item_id}"
+                msg
             )
 
         actual_status = completion_event.get("final_status")
         if actual_status != expected_status:
-            raise AssertionError(
+            msg = (
                 f"Expected status {expected_status} for {work_item_id}, "
                 f"got {actual_status}"
+            )
+            raise AssertionError(
+                msg
             )
 
     def assert_escalation_occurred(self, work_item_id: str) -> None:
@@ -934,13 +944,15 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
             if (event.get("type") == "REVIEW_CYCLE_COMPLETED" and
                 event.get("work_item_id") == work_item_id):
                 if not event.get("human_escalation"):
+                    msg = f"Expected escalation for {work_item_id}"
                     raise AssertionError(
-                        f"Expected escalation for {work_item_id}"
+                        msg
                     )
                 return
 
+        msg = f"No completion event found for work item {work_item_id}"
         raise AssertionError(
-            f"No completion event found for work item {work_item_id}"
+            msg
         )
 
     def assert_no_escalation(self, work_item_id: str) -> None:
@@ -958,13 +970,15 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
             if (event.get("type") == "REVIEW_CYCLE_COMPLETED" and
                 event.get("work_item_id") == work_item_id):
                 if event.get("human_escalation"):
+                    msg = f"Unexpected escalation for {work_item_id}"
                     raise AssertionError(
-                        f"Unexpected escalation for {work_item_id}"
+                        msg
                     )
                 return
 
+        msg = f"No completion event found for work item {work_item_id}"
         raise AssertionError(
-            f"No completion event found for work item {work_item_id}"
+            msg
         )
 
     def assert_no_handler_errors(self) -> None:
@@ -978,8 +992,9 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
             error_summary = "\n".join(
                 f"  - {e['event_type']}: {e['error']}" for e in errors
             )
+            msg = f"Expected no handler errors, but found {len(errors)}:\n{error_summary}"
             raise AssertionError(
-                f"Expected no handler errors, but found {len(errors)}:\n{error_summary}"
+                msg
             )
 
     # Helper methods
@@ -987,11 +1002,14 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
     def _validate_request(self, request: ReviewCycleRequest) -> None:
         """Validate review cycle request."""
         if not request.work_item_id:
-            raise ValueError("work_item_id is required")
+            msg = "work_item_id is required"
+            raise ValueError(msg)
         if not request.project_id:
-            raise ValueError("project_id is required")
+            msg = "project_id is required"
+            raise ValueError(msg)
         if request.max_iterations <= 0:
-            raise ValueError("max_iterations must be positive")
+            msg = "max_iterations must be positive"
+            raise ValueError(msg)
 
     def _log_event(self, event: dict[str, Any]) -> None:
         """Log event to event tracking for testing purposes.

@@ -54,7 +54,8 @@ class InMemoryTicketAdapter(ITicketSystem):
         with self._lock:
             work_item = self._work_items.get(str(item_id))
             if not work_item:
-                raise ResourceNotFoundError("WorkItem", str(item_id))
+                msg = "WorkItem"
+                raise ResourceNotFoundError(msg, str(item_id))
             return work_item
 
     async def create_work_item(
@@ -86,10 +87,12 @@ class InMemoryTicketAdapter(ITicketSystem):
             ValidationError: If required fields are missing or invalid
         """
         if not title or not title.strip():
-            raise ValidationError("Title cannot be empty")
+            msg = "Title cannot be empty"
+            raise ValidationError(msg)
 
         if not project_id:
-            raise ValidationError("Project ID cannot be empty")
+            msg = "Project ID cannot be empty"
+            raise ValidationError(msg)
 
         if not description:
             description = ""
@@ -132,10 +135,12 @@ class InMemoryTicketAdapter(ITicketSystem):
             ValidationError: If updates dictionary is None or empty
         """
         if not item_id:
-            raise ValidationError("Work item ID cannot be empty")
+            msg = "Work item ID cannot be empty"
+            raise ValidationError(msg)
 
         if updates is None:
-            raise ValidationError("Updates dictionary cannot be None")
+            msg = "Updates dictionary cannot be None"
+            raise ValidationError(msg)
 
         work_item = await self.get_work_item(item_id)
 
@@ -169,11 +174,13 @@ class InMemoryTicketAdapter(ITicketSystem):
             ValidationError: If item_id is None or empty
         """
         if not item_id:
-            raise ValidationError("Work item ID cannot be empty")
+            msg = "Work item ID cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             if str(item_id) not in self._work_items:
-                raise ResourceNotFoundError("WorkItem", str(item_id))
+                msg = "WorkItem"
+                raise ResourceNotFoundError(msg, str(item_id))
 
             del self._work_items[str(item_id)]
             if str(item_id) in self._comments:
@@ -203,10 +210,12 @@ class InMemoryTicketAdapter(ITicketSystem):
             ValidationError: If item_id or status is None/empty
         """
         if not item_id:
-            raise ValidationError("Work item ID cannot be empty")
+            msg = "Work item ID cannot be empty"
+            raise ValidationError(msg)
 
         if not status:
-            raise ValidationError("Status cannot be None")
+            msg = "Status cannot be None"
+            raise ValidationError(msg)
 
         work_item = await self.get_work_item(item_id)
 
@@ -302,7 +311,8 @@ class InMemoryTicketAdapter(ITicketSystem):
             ValidationError: If query is None or empty
         """
         if not query or not query.strip():
-            raise ValidationError("Search query cannot be empty")
+            msg = "Search query cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             results = list(self._work_items.values())
@@ -368,10 +378,12 @@ class InMemoryTicketAdapter(ITicketSystem):
             ValidationError: If item_id or body is None/empty
         """
         if not item_id:
-            raise ValidationError("Work item ID cannot be empty")
+            msg = "Work item ID cannot be empty"
+            raise ValidationError(msg)
 
         if not body or not body.strip():
-            raise ValidationError("Comment body cannot be empty")
+            msg = "Comment body cannot be empty"
+            raise ValidationError(msg)
 
         # Verify work item exists
         await self.get_work_item(item_id)
@@ -410,7 +422,8 @@ class InMemoryTicketAdapter(ITicketSystem):
             ValidationError: If item_id is None or empty
         """
         if not item_id:
-            raise ValidationError("Work item ID cannot be empty")
+            msg = "Work item ID cannot be empty"
+            raise ValidationError(msg)
 
         # Verify work item exists
         await self.get_work_item(item_id)
@@ -442,13 +455,16 @@ class InMemoryTicketAdapter(ITicketSystem):
             ValidationError: If any parameter is None or empty
         """
         if not source_id:
-            raise ValidationError("Source work item ID cannot be empty")
+            msg = "Source work item ID cannot be empty"
+            raise ValidationError(msg)
 
         if not target_id:
-            raise ValidationError("Target work item ID cannot be empty")
+            msg = "Target work item ID cannot be empty"
+            raise ValidationError(msg)
 
         if not relationship or not relationship.strip():
-            raise ValidationError("Relationship type cannot be empty")
+            msg = "Relationship type cannot be empty"
+            raise ValidationError(msg)
 
         # Verify both work items exist
         await self.get_work_item(source_id)
@@ -480,7 +496,8 @@ class InMemoryTicketAdapter(ITicketSystem):
             ValidationError: If item_id is None or empty
         """
         if not item_id:
-            raise ValidationError("Work item ID cannot be empty")
+            msg = "Work item ID cannot be empty"
+            raise ValidationError(msg)
 
         # Verify work item exists
         await self.get_work_item(item_id)
@@ -517,10 +534,12 @@ class InMemoryTicketAdapter(ITicketSystem):
             ValidationError: If url or events are invalid
         """
         if not url or not url.startswith(("http://", "https://")):
-            raise ValidationError("Invalid webhook URL")
+            msg = "Invalid webhook URL"
+            raise ValidationError(msg)
 
         if not events:
-            raise ValidationError("At least one event type is required")
+            msg = "At least one event type is required"
+            raise ValidationError(msg)
 
         with self._lock:
             webhook_id = str(uuid4())
@@ -545,11 +564,13 @@ class InMemoryTicketAdapter(ITicketSystem):
             ValidationError: If webhook_id is None or empty
         """
         if not webhook_id:
-            raise ValidationError("Webhook ID cannot be empty")
+            msg = "Webhook ID cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             if webhook_id not in self._webhooks:
-                raise ResourceNotFoundError("Webhook", webhook_id)
+                msg = "Webhook"
+                raise ResourceNotFoundError(msg, webhook_id)
 
             del self._webhooks[webhook_id]
 

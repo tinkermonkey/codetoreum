@@ -201,7 +201,8 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         events = await self.event_store.get_events(stream_id=workflow_run_id)
 
         if not events:
-            raise ResourceNotFoundError("WorkflowRun", workflow_run_id)
+            message = "WorkflowRun"
+            raise ResourceNotFoundError(message, workflow_run_id)
 
         # Reconstruct workflow from events
         workflow = Workflow.from_events(events)
@@ -356,7 +357,8 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
 
         # Verify workflow exists
         if not await self.event_store.stream_exists(workflow_run_id):
-            raise ResourceNotFoundError("WorkflowRun", workflow_run_id)
+            message = "WorkflowRun"
+            raise ResourceNotFoundError(message, workflow_run_id)
 
         # Get events from event store
         if since:
@@ -452,12 +454,14 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         else:
             # Verify workflow exists and get all events
             if not await self.event_store.stream_exists(workflow_run_id):
-                raise ResourceNotFoundError("WorkflowRun", workflow_run_id)
+                message = "WorkflowRun"
+            raise ResourceNotFoundError(message, workflow_run_id)
 
             all_events = await self.event_store.get_events(stream_id=workflow_run_id)
 
             if not all_events:
-                raise ResourceNotFoundError("WorkflowRun", workflow_run_id)
+                message = "WorkflowRun"
+            raise ResourceNotFoundError(message, workflow_run_id)
 
             # Reconstruct workflow for summary and stage info
             workflow = Workflow.from_events(all_events)
