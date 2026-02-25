@@ -16,6 +16,7 @@ from codetoreum.adapters.secondary.in_memory_pipeline_lock_service import (
 from codetoreum.adapters.secondary.mock_code_review_adapter import MockCodeReviewAdapter
 from codetoreum.adapters.secondary.mock_discussion_adapter import MockDiscussionAdapter
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.domain.events.discussion_events import CommentNeedsResponseEvent
 from codetoreum.domain.events.lock_events import LockAcquiredEvent, LockReleasedEvent
@@ -149,7 +150,9 @@ class TestDiscussionWorkflow:
 
         # Only human comments should trigger needs_response
         assert len(needs_response_events) == 2
+        assert needs_response_events[0].comment is not None
         assert needs_response_events[0].comment.author == "alice"
+        assert needs_response_events[1].comment is not None
         assert needs_response_events[1].comment.author == "bob"
 
         # Verify bot comment was not included
@@ -372,7 +375,7 @@ class TestCombinedWorkflow:
         lock = InMemoryPipelineLockService()
 
         # Collect all events
-        events = []
+        events: list[CodetoreumEvent] = []
         board.on("workitem.column_changed", events.append)
         discussion.on("comment.needs_response", events.append)
         review.on("review.status_changed", events.append)

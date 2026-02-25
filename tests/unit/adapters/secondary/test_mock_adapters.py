@@ -202,6 +202,7 @@ class TestMockDiscussionAdapter:
         assert len(events) == 1
         event = events[0]
         assert isinstance(event, CommentNeedsResponseEvent)
+        assert event.comment is not None
         assert event.comment.author == "alice"
         assert event.comment.body == "Please review this"
         assert event.source == "mock"
@@ -273,6 +274,7 @@ class TestMockDiscussionAdapter:
 
         comment = adapter.simulate_bot_comment("item-1", "Processing...")
         assert len(events) == 1
+        assert events[0].comment is not None
         assert events[0].comment.id == comment.id
         assert events[0].source == "mock"
 
