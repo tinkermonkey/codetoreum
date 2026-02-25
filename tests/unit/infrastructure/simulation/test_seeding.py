@@ -480,6 +480,7 @@ class TestScenarioModels:
         scenario = ScenarioModel(
             name="Test Scenario",
             description="Test description",
+            created_at=None,
         )
         assert scenario.name == "Test Scenario"
         assert scenario.speed_multiplier == 10.0  # Default

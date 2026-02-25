@@ -16,7 +16,7 @@ class ScenarioProjectModel(BaseModel):
     name: str = Field(..., description="Project name (must be unique)")
     description: str = Field(default="", description="Project description")
     repository_url: str | None = Field(
-        None, description="Repository URL (auto-generated if not provided)"
+        default=None, description="Repository URL (auto-generated if not provided)"
     )
     default_branch: str = Field(default="main", description="Default branch name")
     metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
