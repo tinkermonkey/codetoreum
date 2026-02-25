@@ -4,6 +4,9 @@ from unittest.mock import Mock
 
 import pytest
 
+from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
+    MockRepairCycleAdapter,
+)
 from codetoreum.application.event_bus_wiring import (
     EventBusRegistry,
     setup_event_bus,
@@ -13,24 +16,6 @@ from codetoreum.application.event_handlers.repair_cycle_event_handler import (
 )
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
-from codetoreum.ports.output.repair_cycle_service import IRepairCycle
-
-# ====================================================================================
-# Mock Services and Adapters
-# ====================================================================================
-
-
-class MockRepairCycle(IRepairCycle):
-    """Mock repair cycle adapter for testing."""
-
-    def __init__(self):
-        """Initialize mock repair cycle."""
-        self.executed = False
-
-    async def execute(self, context):
-        """Mock execute method."""
-        self.executed = True
-        return Mock()
 
 
 # ====================================================================================
@@ -51,9 +36,9 @@ def simulation_clock():
 
 
 @pytest.fixture
-def mock_repair_cycle():
+def mock_repair_cycle(simulation_clock):
     """Create a mock repair cycle adapter."""
-    return MockRepairCycle()
+    return MockRepairCycleAdapter(clock=simulation_clock)
 
 
 @pytest.fixture

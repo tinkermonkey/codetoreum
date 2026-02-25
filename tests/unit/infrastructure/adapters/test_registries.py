@@ -5,6 +5,7 @@ Tests the registration, lookup, and management of adapter implementations.
 """
 
 from datetime import UTC, datetime
+from typing import cast
 
 import pytest
 
@@ -76,15 +77,19 @@ class TestTicketSystemRegistry:
 
     def test_register_invalid_adapter_raises_error(self):
         """Test that registering invalid adapter raises error."""
+        from codetoreum.ports.output.ticket_system import ITicketSystem
+
         registry = TicketSystemRegistry()
 
         class InvalidAdapter:
             """Not a valid ITicketSystem implementation."""
 
         with pytest.raises(ValueError, match="does not implement"):
+            # Cast to valid type for type-checking purposes, but the runtime
+            # validation will catch that it doesn't actually implement ITicketSystem
             registry.register(
                 name="invalid",
-                adapter_type=InvalidAdapter,
+                adapter_type=cast(type[ITicketSystem], InvalidAdapter),
                 description="Invalid"
             )
 
