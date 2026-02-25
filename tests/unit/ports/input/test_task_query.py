@@ -287,7 +287,7 @@ class TestITaskQueryPortInterface:
     def test_interface_is_abstract(self):
         """Test that ITaskQueryPort cannot be instantiated directly"""
         with pytest.raises(TypeError):
-            ITaskQueryPort()  # type: ignore[abstract]
+            ITaskQueryPort()
 
     def test_interface_has_required_methods(self):
         """Test that interface defines all required methods"""
@@ -313,7 +313,7 @@ class TestITaskQueryPortInterface:
             # Missing: list_executions, get_artifacts, get_execution_history, get_workflow_executions
 
         with pytest.raises(TypeError):
-            IncompletePort()  # type: ignore[abstract]
+            IncompletePort()
 
     def test_complete_implementation(self):
         """Test that complete implementation can be instantiated"""

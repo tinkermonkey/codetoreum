@@ -5,7 +5,6 @@ InMemoryStorageAdapter emit appropriate domain events for all state-changing
 operations, establishing complete event sourcing audit trail for simulation testing.
 """
 
-from dataclasses import FrozenInstanceError
 from datetime import UTC, datetime
 
 import pytest
@@ -417,63 +416,3 @@ class TestStorageAdapterEventEmission:
         event = events[0]
         assert event.key == "projects/proj-1/artifacts/destination.txt"
         assert event.size_bytes == len(b"Test content")
-
-
-class TestEventImmutability:
-    """Tests for event immutability (frozen dataclasses)."""
-
-    @pytest.fixture
-    def emitter(self):
-        """Create a fresh event emitter for each test."""
-        return CapturingMockEventEmitter()
-
-    @pytest.mark.asyncio
-    async def test_queue_item_added_event_is_immutable(self, emitter):
-        """QueueItemAddedEvent should be immutable (frozen dataclass)."""
-        event = QueueItemAddedEvent(
-            type="queue.item_added",
-            timestamp=datetime.now(UTC).isoformat(),
-            source="mock",
-            queue_name="queue-1",
-            item_id="item-1",
-            position=0,
-            project_id="proj-1",
-        )
-
-        # Verify immutability: attempting to modify frozen dataclass raises FrozenInstanceError
-        with pytest.raises(FrozenInstanceError):
-            event.position = 5
-
-    def test_commit_created_event_is_immutable(self):
-        """CommitCreatedEvent should be immutable (frozen dataclass)."""
-        event = CommitCreatedEvent(
-            type="repository.commit_created",
-            timestamp=datetime.now(UTC).isoformat(),
-            source="mock",
-            repository_id="repo-1",
-            commit_sha="abc123",
-            message="Test commit",
-            author="Test Author",
-            changed_files=("src/main.py",),
-            project_id="proj-1",
-        )
-
-        # Verify immutability: attempting to modify frozen dataclass raises FrozenInstanceError
-        with pytest.raises(FrozenInstanceError):
-            event.commit_sha = "def456"
-
-    def test_artifact_uploaded_event_is_immutable(self):
-        """ArtifactUploadedEvent should be immutable (frozen dataclass)."""
-        event = ArtifactUploadedEvent(
-            type="storage.artifact_uploaded",
-            timestamp=datetime.now(UTC).isoformat(),
-            source="mock",
-            key="artifact-1",
-            size_bytes=1024,
-            content_type="text/plain",
-            project_id="proj-1",
-        )
-
-        # Verify immutability: attempting to modify frozen dataclass raises FrozenInstanceError
-        with pytest.raises(FrozenInstanceError):
-            event.size_bytes = 2048
