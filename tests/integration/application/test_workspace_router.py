@@ -11,6 +11,7 @@ from codetoreum.application.workspace_router import (
 )
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
 from codetoreum.domain.project_context import ProjectContext
+from codetoreum.domain.types import BranchName
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
 from codetoreum.domain.workspace_context import WorkspaceType
 from codetoreum.ports.output.repository import RepositoryStatus
@@ -33,7 +34,7 @@ def mock_repository():
     repo.commit = AsyncMock(return_value="abc123")
     repo.push = AsyncMock()
     repo.status = AsyncMock(return_value=RepositoryStatus(
-        current_branch="main",
+        current_branch=BranchName("main"),
         is_dirty=False,
         staged_files=[],
         unstaged_files=[],
@@ -367,7 +368,7 @@ async def test_finalize_workspace_with_changes(workspace_router, sample_work_ite
 
     # Mock repository status with changes
     mock_repository.status.return_value = RepositoryStatus(
-        current_branch=context.branch_name,
+        current_branch=BranchName(context.branch_name),
         is_dirty=True,
         staged_files=["file1.py"],
         unstaged_files=["file2.py"],
@@ -409,7 +410,7 @@ async def test_finalize_workspace_no_changes(workspace_router, sample_work_item,
 
     # Mock repository status without changes
     mock_repository.status.return_value = RepositoryStatus(
-        current_branch=context.branch_name,
+        current_branch=BranchName(context.branch_name),
         is_dirty=False,
         staged_files=[],
         unstaged_files=[],

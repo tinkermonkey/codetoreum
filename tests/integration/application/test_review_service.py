@@ -765,6 +765,7 @@ async def test_multiple_file_types_in_feedback():
     result = await processor.parse_review_output(review_output)
 
     assert result.success
+    assert result.parsed_feedback is not None
     assert len(result.parsed_feedback.issues) == 4
 
     # Check each file type was parsed
@@ -808,6 +809,7 @@ async def test_custom_severity_keywords():
     result = await processor.parse_review_output(review_output)
 
     assert result.success
+    assert result.parsed_feedback is not None
     assert len(result.parsed_feedback.issues) == 2
 
     # Check custom severity detection
