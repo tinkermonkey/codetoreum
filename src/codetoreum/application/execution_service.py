@@ -107,7 +107,7 @@ class ExecutionService:
         event_store: IEventStore,
         storage: IStorage,
         max_retries: int = 3,
-        retry_delay_seconds: int = 5,
+        retry_delay_seconds: float = 5,
     ):
         """
         Initialize ExecutionService.

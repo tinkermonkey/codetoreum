@@ -152,6 +152,9 @@ class TestSimulationApplicationBootstrap:
         await bootstrap.setup()
 
         try:
+            # Verify app is initialized
+            assert bootstrap.app is not None
+
             # Create test client with context manager
             with TestClient(bootstrap.app) as client:
                 # Test health endpoint
@@ -259,7 +262,6 @@ class TestBootstrapWithFixtures:
 
     async def test_simulation_app_fixture(self, simulation_app: FastAPI) -> None:
         """Test that simulation_app fixture provides working app."""
-        assert simulation_app is not None
         assert isinstance(simulation_app, FastAPI)
 
         # Test with client
