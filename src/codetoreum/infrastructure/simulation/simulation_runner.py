@@ -474,7 +474,7 @@ class SimulationRunner:
         self,
         span_name: str,
         attr_key: str,
-        attr_value: any | None = None,
+        attr_value: Any | None = None,
         assertion_name: str | None = None,
     ) -> None:
         """

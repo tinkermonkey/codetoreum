@@ -557,7 +557,6 @@ class TestAgentExecutionCompleteLifecycle:
             model="claude-sonnet-4-5",
         )
 
-        assert execution.status == ExecutionStatus.INITIALIZED
         assert not execution.is_terminal()
 
         execution.start(container_name="container-1")

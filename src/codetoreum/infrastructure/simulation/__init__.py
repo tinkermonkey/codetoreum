@@ -1,12 +1,4 @@
 """Simulation infrastructure for testing."""
-
-from .bootstrap import (
-    SimulationAdapters,
-    SimulationApplicationBootstrap,
-    SimulationInfrastructure,
-    SimulationPorts,
-    SimulationServices,
-)
 from .mock_tracer import (
     MockTracer,
     SpanCapture,
@@ -23,10 +15,6 @@ from .scenario_models import (
     ScenarioStageModel,
     ScenarioWorkflowModel,
     ScenarioWorkItemModel,
-)
-from .seeding import (
-    CreatedItems,
-    SimulationDataSeeder,
 )
 from .simulation_clock import (
     RealTimeClock,
@@ -76,7 +64,7 @@ __all__ = [
     "SpanKind",
     "SpanStatus",
     "TraceContextValidator",
-    # Bootstrap
+    # Bootstrap (lazy imported to avoid circular import)
     "SimulationApplicationBootstrap",
     "SimulationAdapters",
     "SimulationServices",
@@ -95,3 +83,37 @@ __all__ = [
     "ScenarioBoardModel",
     "ScenarioBoardItemPlacementModel",
 ]
+
+
+def __getattr__(name: str) -> object:
+    """Lazy import bootstrap and seeding components to avoid circular imports."""
+    if name in (
+        "SimulationApplicationBootstrap",
+        "SimulationAdapters",
+        "SimulationServices",
+        "SimulationPorts",
+        "SimulationInfrastructure",
+    ):
+        from .bootstrap import (
+            SimulationAdapters,
+            SimulationApplicationBootstrap,
+            SimulationInfrastructure,
+            SimulationPorts,
+            SimulationServices,
+        )
+
+        return {
+            "SimulationApplicationBootstrap": SimulationApplicationBootstrap,
+            "SimulationAdapters": SimulationAdapters,
+            "SimulationServices": SimulationServices,
+            "SimulationPorts": SimulationPorts,
+            "SimulationInfrastructure": SimulationInfrastructure,
+        }[name]
+    elif name in ("SimulationDataSeeder", "CreatedItems"):
+        from .seeding import CreatedItems, SimulationDataSeeder
+
+        return {
+            "SimulationDataSeeder": SimulationDataSeeder,
+            "CreatedItems": CreatedItems,
+        }[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
