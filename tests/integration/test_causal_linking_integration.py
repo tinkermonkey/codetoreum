@@ -30,8 +30,11 @@ from codetoreum.adapters.testing.in_memory_storage_adapter import (
     InMemoryStorageAdapter,
 )
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
+from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.domain.events.container_events import ContainerExecutionCompletedEvent
 from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.ports.output.board_service import MovedByType
 from codetoreum.infrastructure.simulation.bootstrap import (
     SimulationAdapters,
     SimulationApplicationBootstrap,
@@ -338,11 +341,6 @@ class TestEndToEndCausalChains:
         assert queue_entries[0].position_in_column == 0
 
         # Move item on board to position 5 (higher index = lower priority)
-        from codetoreum.ports.output.board_service import MovedByType
-
-        # Emit board change event through event bus
-        from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
-
         event = WorkItemColumnChangedEvent(
             type="workitem.column_changed",
             timestamp=datetime.now(UTC).isoformat(),
@@ -528,8 +526,6 @@ class TestEndToEndCausalChains:
         event_bus.subscribe("TestEvent", callback_2)
 
         # Create and publish test event
-        from codetoreum.domain.events.adapter_events import CodetoreumEvent
-
         test_event = CodetoreumEvent(
             type="TestEvent",
             timestamp=datetime.now(UTC).isoformat(),
@@ -537,8 +533,6 @@ class TestEndToEndCausalChains:
         )
 
         # Publish and wait for propagation
-        import asyncio
-
         await event_bus.publish(test_event)
         await asyncio.sleep(0.05)
 
