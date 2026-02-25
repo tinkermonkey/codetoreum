@@ -26,7 +26,9 @@ from codetoreum.adapters.testing.capturing_mock_event_emitter import (
 )
 from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
 from codetoreum.adapters.testing.in_memory_queue_service import InMemoryQueueService
-from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
+from codetoreum.adapters.testing.in_memory_storage_adapter import (
+    InMemoryStorageAdapter,
+)
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
 from codetoreum.domain.events.container_events import ContainerExecutionCompletedEvent
 from codetoreum.infrastructure.event_bus import EventBus
@@ -35,7 +37,6 @@ from codetoreum.infrastructure.simulation.bootstrap import (
     SimulationApplicationBootstrap,
 )
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
-
 
 # ============================================================================
 # Fixtures
@@ -55,29 +56,21 @@ def event_emitter() -> CapturingMockEventEmitter:
 
 
 @pytest.fixture
-def queue_service(
-    event_emitter: CapturingMockEventEmitter, event_bus: EventBus
-) -> InMemoryQueueService:
+def queue_service(event_emitter: CapturingMockEventEmitter, event_bus: EventBus) -> InMemoryQueueService:
     """Create queue service with event bus for causal linking."""
     return InMemoryQueueService(event_emitter=event_emitter, event_bus=event_bus)
 
 
 @pytest.fixture
-def storage_adapter(
-    event_emitter: CapturingMockEventEmitter, event_bus: EventBus
-) -> InMemoryStorageAdapter:
+def storage_adapter(event_emitter: CapturingMockEventEmitter, event_bus: EventBus) -> InMemoryStorageAdapter:
     """Create storage adapter with event bus for causal linking."""
     return InMemoryStorageAdapter(event_emitter=event_emitter, event_bus=event_bus)
 
 
 @pytest.fixture
-def container_adapter(
-    event_emitter: CapturingMockEventEmitter, event_bus: EventBus
-) -> FakeContainerAdapter:
+def container_adapter(event_emitter: CapturingMockEventEmitter, event_bus: EventBus) -> FakeContainerAdapter:
     """Create container adapter with event bus for event emission."""
-    return FakeContainerAdapter(
-        execution_delay=0.0, event_emitter=event_emitter, event_bus=event_bus
-    )
+    return FakeContainerAdapter(execution_delay=0.0, event_emitter=event_emitter, event_bus=event_bus)
 
 
 @pytest.fixture
@@ -267,16 +260,12 @@ class TestBootstrapIntegration:
 
         # Verify critical subscriptions are registered
         board_callbacks = event_bus._callbacks.get("WorkItemColumnChangedEvent", [])
-        container_callbacks = event_bus._callbacks.get(
-            "ContainerExecutionCompletedEvent", []
-        )
+        container_callbacks = event_bus._callbacks.get("ContainerExecutionCompletedEvent", [])
 
         assert len(board_callbacks) > 0, "Board event subscriptions should be configured"
         assert len(container_callbacks) > 0, "Container event subscriptions should be configured"
 
-    async def test_bootstrap_adapters_accept_event_emitter_and_bus(
-        self, bootstrap_env
-    ):
+    async def test_bootstrap_adapters_accept_event_emitter_and_bus(self, bootstrap_env):
         """Bootstrap creates adapters with event emitter and bus."""
         bootstrap = bootstrap_env
         adapters = cast("SimulationAdapters", bootstrap.adapters)
@@ -289,7 +278,6 @@ class TestBootstrapIntegration:
         # Verify adapters have event bus for subscriptions
         assert adapters.queue_service._event_bus is not None
         assert adapters.storage._event_bus is not None
-
 
 
 if __name__ == "__main__":
