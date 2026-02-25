@@ -205,8 +205,9 @@ class TestReviewCommentAddedEvent:
         )
 
         assert event.review_id == "pr-123"
-        assert event.comment is not None
-        assert event.comment.author == "alice"
+        event_comment = event.comment
+        assert event_comment is not None
+        assert event_comment.author == "alice"
 
     def test_review_comment_with_work_item(self):
         """Test review comment with work item reference."""
@@ -271,8 +272,10 @@ class TestReviewCommentAddedEvent:
         d = event.to_dict()
 
         assert d["review_id"] == "pr-123"
-        assert d["comment"]["author"] == "alice"
-        assert d["comment"]["body"] == "Looks good"
+        comment_dict = d["comment"]
+        assert comment_dict is not None
+        assert comment_dict["author"] == "alice"
+        assert comment_dict["body"] == "Looks good"
 
     def test_review_comment_roundtrip(self):
         """Test review comment added event roundtrip."""
@@ -298,8 +301,11 @@ class TestReviewCommentAddedEvent:
         restored = ReviewCommentAddedEvent.from_dict(d)
 
         assert restored.review_id == original.review_id
-        assert restored.comment is not None
-        assert restored.comment.author == original.comment.author
+        restored_comment = restored.comment
+        original_comment = original.comment
+        assert restored_comment is not None
+        assert original_comment is not None
+        assert restored_comment.author == original_comment.author
         assert restored.work_item_id == original.work_item_id
 
 
@@ -359,8 +365,9 @@ class TestReviewCommentAddedEventImmutability:
 
         # Verify the event is properly created
         assert event.review_id == "pr-123"
-        assert event.comment is not None
-        assert event.comment.author == "alice"
+        event_comment = event.comment
+        assert event_comment is not None
+        assert event_comment.author == "alice"
 
         # ReviewCommentAddedEvent is a frozen dataclass, so attempting to modify
         # any attribute should raise FrozenInstanceError
@@ -390,15 +397,16 @@ class TestReviewCommentAddedEventImmutability:
         )
 
         # Verify comment attributes are preserved
-        assert event.comment is not None
-        assert event.comment.id == "rc-1"
-        assert event.comment.body == "Great work!"
-        assert event.comment.is_bot is False
+        event_comment = event.comment
+        assert event_comment is not None
+        assert event_comment.id == "rc-1"
+        assert event_comment.body == "Great work!"
+        assert event_comment.is_bot is False
 
         # Comment is a frozen dataclass, so attempting to modify
         # its attributes should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            object.__setattr__(event.comment, "author", "bob")
+            object.__setattr__(event_comment, "author", "bob")
 
         with pytest.raises(FrozenInstanceError):
-            object.__setattr__(event.comment, "body", "Different feedback")
+            object.__setattr__(event_comment, "body", "Different feedback")

@@ -407,7 +407,7 @@ class TestCircuitBreaker:
         adapter = MockRepairCycleAdapter(clock)
         adapter.current_project = "proj-1"
 
-        result = RepairTestResult(
+        test_result = RepairTestResult(
             test_type=RepairTestType.UNIT,
             iteration=1,
             passed=7,
@@ -422,15 +422,15 @@ class TestCircuitBreaker:
             raw_output="",
             timestamp=clock.now().isoformat()
         )
-        adapter.set_test_result_sequence(RepairTestType.UNIT, [result, result, result, result])
+        adapter.set_test_result_sequence(RepairTestType.UNIT, [test_result, test_result, test_result, test_result])
 
         # Set low limit to trigger circuit breaker
         context = MockRepairCycleContext(max_total_agent_calls=3)
-        result = await adapter.execute(context)
+        cycle_result = await adapter.execute(context)
 
         # Should have hit circuit breaker before using all iterations
-        assert not result.overall_success
-        assert result.total_agent_calls >= context.max_total_agent_calls
+        assert not cycle_result.overall_success
+        assert cycle_result.total_agent_calls >= context.max_total_agent_calls
 
     @pytest.mark.asyncio
     async def test_circuit_breaker_event_emitted(self):
