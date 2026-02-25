@@ -59,7 +59,7 @@ class EventCollector(MockEventEmitter):
         Returns:
             List of events matching the given type
         """
-        return [e for e in self.events if isinstance(e, event_type)]  # type: ignore[return-value]
+        return [e for e in self.events if isinstance(e, event_type)]
 
 
 class TestContainerRecoveryWorkflowWithMocks:

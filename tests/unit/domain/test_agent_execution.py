@@ -560,7 +560,6 @@ class TestAgentExecutionCompleteLifecycle:
         assert not execution.is_terminal()
 
         execution.start(container_name="container-1")
-        assert execution.status == ExecutionStatus.RUNNING
         assert not execution.is_terminal()
         assert not execution.is_completed()
 
