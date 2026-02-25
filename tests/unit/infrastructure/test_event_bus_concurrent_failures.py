@@ -241,7 +241,7 @@ class TestEventBusConcurrentFailures:
         bus.register_handler(handler_success)
         bus.register_handler(handler_fail)
 
-        events = [
+        events: list[DomainEvent] = [
             WorkItemCreated(
                 aggregate_id=f"work-item-{i}",
                 payload={"title": f"Test {i}"},
