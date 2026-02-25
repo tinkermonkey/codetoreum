@@ -32,8 +32,10 @@ try:
 except ImportError:
     OPENTELEMETRY_AVAILABLE = False
     if TYPE_CHECKING:
+        from opentelemetry import trace
         from opentelemetry.trace import SpanKind
     else:
+        trace = None  # type: ignore[assignment,misc]
         SpanKind = None  # type: ignore[assignment,misc]
 
 
@@ -340,16 +342,17 @@ def test_message_tracer_link_to_event_trace_context():
     )
 
     # Inject trace context (simulate)
-    current_span = trace.get_current_span()
-    if current_span and current_span.get_span_context():
-        from codetoreum.infrastructure.observability.trace_context_propagation import (
-            TraceContextData,
-        )
+    if OPENTELEMETRY_AVAILABLE:
+        current_span = trace.get_current_span()
+        if current_span and current_span.get_span_context():
+            from codetoreum.infrastructure.observability.trace_context_propagation import (
+                TraceContextData,
+            )
 
-        trace_data = TraceContextData.from_span_context(
-            current_span.get_span_context()
-        )
-        event.metadata["traceparent"] = trace_data.to_traceparent()
+            trace_data = TraceContextData.from_span_context(
+                current_span.get_span_context()
+            )
+            event.metadata["traceparent"] = trace_data.to_traceparent()
 
     # Start and link message span
     message_span = message_tracer.start_event_delivery_span(
@@ -512,6 +515,8 @@ async def test_websocket_instrumentation_end_to_end():
 
     # Simulate subscription
     message_tracer = adapter._message_tracers[connection_id]
+    assert message_tracer is not None, "message_tracer should not be None after setup"
+
     sub_span = message_tracer.start_subscribe_message(
         connection_id=connection_id,
         subscription_type="all_events",

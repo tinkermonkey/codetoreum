@@ -252,7 +252,7 @@ class FakeContainerAdapter(IContainer):
                 output_files=tuple(output_files),
                 project_id=environment.get("PROJECT_ID"),
             )
-            await self._event_emitter.emit(event)
+            self._event_emitter.emit(event)
 
         return result
 
