@@ -5,7 +5,7 @@
  * Shows detailed information about unhealthy components and problematic breakers.
  */
 
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, AlertCircle } from 'lucide-react'
 import { useSystemStatusStore } from '../../store/systemStatusStore'
 import type { HealthCheck } from '../../types/system-status'
 
