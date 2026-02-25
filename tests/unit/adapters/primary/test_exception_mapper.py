@@ -217,6 +217,7 @@ class TestPortExceptionMapping:
 
         assert http_exc.status_code == status.HTTP_401_UNAUTHORIZED
         assert "Invalid token" in http_exc.detail
+        assert http_exc.headers is not None
         assert "WWW-Authenticate" in http_exc.headers
         assert http_exc.headers["WWW-Authenticate"] == "Bearer"
 
@@ -232,6 +233,7 @@ class TestPortExceptionMapping:
         http_exc = map_exception_to_http(exc)
 
         assert http_exc.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+        assert http_exc.headers is not None
         assert "Retry-After" in http_exc.headers
         assert http_exc.headers["Retry-After"] == "60"
 

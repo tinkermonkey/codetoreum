@@ -11,12 +11,14 @@ from datetime import datetime
 
 import pytest
 
+from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.adapters.testing.mock_container_recovery_adapter import (
     MockContainerRecoveryAdapter,
 )
 from codetoreum.application.container_recovery_service import (
     ContainerRecoveryService,
 )
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.domain.events.container_recovery_events import (
     ContainerKilledEvent,
     ContainerRecoveredEvent,
@@ -24,19 +26,36 @@ from codetoreum.domain.events.container_recovery_events import (
 )
 
 
-class MockEventEmitter:
-    """Mock event emitter for testing."""
+class TestEventCollector(MockEventEmitter):
+    """Event emitter that collects events for testing.
 
-    def __init__(self):
-        """Initialize mock event emitter."""
-        self.events = []
+    Extends MockEventEmitter to add event collection capability,
+    allowing tests to verify events were emitted.
+    """
 
-    def emit(self, event):
-        """Emit an event."""
+    def __init__(self) -> None:
+        """Initialize the event collector."""
+        super().__init__()
+        self.events: list[CodetoreumEvent] = []
+
+    def emit(self, event: CodetoreumEvent) -> None:
+        """Emit an event and collect it for testing.
+
+        Args:
+            event: CodetoreumEvent instance to emit
+        """
         self.events.append(event)
+        super().emit(event)
 
-    def get_events_by_type(self, event_type):
-        """Get all events of a specific type."""
+    def get_events_by_type(self, event_type: type) -> list[CodetoreumEvent]:
+        """Get all events of a specific type.
+
+        Args:
+            event_type: The event class to filter by
+
+        Returns:
+            List of events matching the given type
+        """
         return [e for e in self.events if isinstance(e, event_type)]
 
 
@@ -53,7 +72,7 @@ class TestContainerRecoveryWorkflowWithMocks:
         - 1 orphan (should kill)
         """
         # Setup event emitter
-        event_emitter = MockEventEmitter()
+        event_emitter = TestEventCollector()
 
         # Setup mock adapter
         mock_adapter = MockContainerRecoveryAdapter()
@@ -192,7 +211,7 @@ class TestContainerRecoveryWorkflowWithMocks:
     @pytest.mark.asyncio
     async def test_recovery_with_partial_failures(self):
         """Test recovery when some actions fail."""
-        event_emitter = MockEventEmitter()
+        event_emitter = TestEventCollector()
 
         mock_adapter = MockContainerRecoveryAdapter()
 
@@ -258,7 +277,7 @@ class TestContainerRecoveryWorkflowWithMocks:
     @pytest.mark.asyncio
     async def test_recovery_with_repair_cycles(self):
         """Test recovery processes orphaned repair cycle results."""
-        event_emitter = MockEventEmitter()
+        event_emitter = TestEventCollector()
 
         mock_adapter = MockContainerRecoveryAdapter()
 
@@ -286,7 +305,7 @@ class TestContainerRecoveryWorkflowWithMocks:
     @pytest.mark.asyncio
     async def test_recovery_event_timestamp_ordering(self):
         """Test that events have proper timestamps in chronological order."""
-        event_emitter = MockEventEmitter()
+        event_emitter = TestEventCollector()
 
         mock_adapter = MockContainerRecoveryAdapter()
 
