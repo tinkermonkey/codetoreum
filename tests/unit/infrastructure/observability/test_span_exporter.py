@@ -11,6 +11,7 @@ import pytest
 # Check if OpenTelemetry is available
 try:
     from codetoreum.infrastructure.observability.otel_setup import _InstrumentedSpanExporter
+
     OTEL_AVAILABLE = True
 except ImportError:
     OTEL_AVAILABLE = False

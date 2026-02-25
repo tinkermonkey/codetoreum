@@ -34,12 +34,12 @@ from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.domain.events.container_events import ContainerExecutionCompletedEvent
 from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.ports.output.board_service import MovedByType
 from codetoreum.infrastructure.simulation.bootstrap import (
     SimulationAdapters,
     SimulationApplicationBootstrap,
 )
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+from codetoreum.ports.output.board_service import MovedByType
 
 # ============================================================================
 # Fixtures
