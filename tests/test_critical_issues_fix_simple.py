@@ -71,6 +71,9 @@ class TestAuditStageInfoLiteralType:
             stage_info = AuditStageInfo(
                 name=f"test-stage-{status}",
                 status=status,
+                startedAt=None,
+                completedAt=None,
+                durationSeconds=None,
                 events=[],
                 output=None,
                 errorMessage=None,
@@ -86,6 +89,9 @@ class TestAuditStageInfoLiteralType:
             AuditStageInfo(
                 name="test-stage",
                 status="invalid_status",  # Not in Literal
+                startedAt=None,
+                completedAt=None,
+                durationSeconds=None,
                 events=[],
                 output=None,
                 errorMessage=None,

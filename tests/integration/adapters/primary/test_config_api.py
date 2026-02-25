@@ -6,6 +6,7 @@ environment variables, search, versioning, and audit trail.
 """
 
 from datetime import UTC, datetime, timedelta
+from typing import Generator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -57,7 +58,7 @@ def test_app(
 
 
 @pytest.fixture
-def client(test_app: FastAPI) -> TestClient:
+def client(test_app: FastAPI) -> Generator[TestClient, None, None]:
     """Create test client for making HTTP requests."""
     with TestClient(test_app) as test_client:
         yield test_client
