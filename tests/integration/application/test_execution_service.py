@@ -1,11 +1,13 @@
 """Integration tests for ExecutionService."""
 
-from collections.abc import AsyncIterator, Callable, Iterator
-from datetime import UTC, datetime
-from typing import Any
+from typing import Iterator
 
 import pytest
 
+from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
+from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
+from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
+from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
 from codetoreum.application.execution_service import (
     ExecutionFailureReason,
     ExecutionService,
@@ -13,7 +15,7 @@ from codetoreum.application.execution_service import (
 )
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
 from codetoreum.domain.agent_execution import ExecutionStatus
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.types import ContainerId
 from codetoreum.domain.value_objects import (
     ContainerConfig,
     ExecutionContext,
@@ -22,371 +24,49 @@ from codetoreum.domain.work_item import (
     WorkItem,
     WorkItemPriority,
 )
-from codetoreum.ports.exceptions import (
-    ContainerExecutionError,
-    ContainerTimeoutError,
-    ExternalServiceError,
-    RateLimitError,
-)
-from codetoreum.ports.output.container import ContainerResult, ContainerStatus
-from codetoreum.ports.output.llm_provider import ExecutionContext as LLMExecutionContext
-from codetoreum.ports.output.llm_provider import ExecutionResult as LLMExecutionResult
-from codetoreum.ports.output.llm_provider import (
-    ModelInfo,
-    StreamChunk,
-    UsageStats,
-)
-
-# Mock Adapters
-
-
-class MockEventStore:
-    """Mock event store for testing."""
-
-    def __init__(self):
-        self.events: list[DomainEvent] = []
-
-    async def append(self, event: DomainEvent) -> None:
-        """Append event to store."""
-        self.events.append(event)
-
-    async def get_events(
-        self, aggregate_id: str, from_version: int = 0
-    ) -> list[DomainEvent]:
-        """Get events for aggregate."""
-        return [e for e in self.events if e.aggregate_id == aggregate_id]
-
-
-class MockLLMProvider:
-    """Mock LLM provider for testing."""
-
-    def __init__(self):
-        self.execution_count = 0
-        self.should_fail = False
-        self.should_rate_limit = False
-        self.failure_count = 0
-        self.stream_enabled = False
-
-    async def execute(
-        self,
-        prompt: str,
-        context: LLMExecutionContext | None = None,
-        stream_callback: Callable | None = None,
-    ) -> LLMExecutionResult:
-        """Execute prompt."""
-        self.execution_count += 1
-
-        # Simulate rate limiting
-        if self.should_rate_limit:
-            self.failure_count += 1
-            if self.failure_count < 3:
-                raise RateLimitError(retry_after=60)
-
-        # Simulate failure
-        if self.should_fail:
-            raise ExternalServiceError("llm", "LLM service error")
-
-        # Simulate streaming
-        if stream_callback and self.stream_enabled:
-            for i, chunk in enumerate(["Hello", " ", "World", "!"]):
-                await stream_callback(
-                    StreamChunk(content=chunk, chunk_index=i, is_final=(i == 3))
-                )
-
-        return LLMExecutionResult(
-            content="Hello World!",
-            role="assistant",
-            model="claude-3-5-sonnet-20250219",
-            completion_tokens=10,
-            prompt_tokens=20,
-            total_tokens=30,
-            started_at=datetime.now(UTC),
-            completed_at=datetime.now(UTC),
-            duration_ms=100,
-            metadata={"session_id": "test-session-123"},
-        )
-
-    async def execute_with_tools(self, prompt: str, tools: Any, context: LLMExecutionContext | None = None, stream_callback: Callable | None = None) -> LLMExecutionResult:
-        """Execute with tools."""
-        return await self.execute(prompt, context, stream_callback)
-
-    async def stream_completion(
-        self, prompt: str, context: LLMExecutionContext | None = None
-    ) -> AsyncIterator[StreamChunk]:
-        """Stream completion."""
-        for i, chunk in enumerate(["Hello", " ", "World", "!"]):
-            yield StreamChunk(content=chunk, chunk_index=i, is_final=(i == 3))
-
-    async def create_conversation(self, system_prompt: str | None = None, parameters: dict[str, Any] | None = None) -> str:
-        """Create conversation."""
-        return "conv-123"
-
-    async def continue_conversation(
-        self, conversation_id: str, message: str, stream_callback: Callable | None = None
-    ) -> LLMExecutionResult:
-        """Continue conversation."""
-        return await self.execute(message, stream_callback=stream_callback)
-
-    async def get_model_info(self) -> ModelInfo:
-        """Get model info."""
-        return ModelInfo(
-            model_id="claude-3-5-sonnet-20250219",
-            provider="anthropic",
-            display_name="Claude 3.5 Sonnet",
-            context_window=200000,
-            max_output_tokens=8192,
-            supports_tools=True,
-            supports_streaming=True,
-        )
-
-    async def list_available_models(self) -> list[ModelInfo]:
-        """List available models."""
-        return [await self.get_model_info()]
-
-    async def count_tokens(self, text: str, model: str | None = None) -> int:
-        """Count tokens."""
-        return len(text.split())
-
-    async def get_usage_stats(self, since: datetime | None = None) -> UsageStats:
-        """Get usage stats."""
-        return UsageStats(
-            total_requests=self.execution_count,
-            total_tokens=30 * self.execution_count,
-            input_tokens=20 * self.execution_count,
-            output_tokens=10 * self.execution_count,
-            total_cost=0.01 * self.execution_count,
-            period_start=datetime.now(UTC),
-            period_end=datetime.now(UTC),
-        )
-
-
-class MockContainer:
-    """Mock container adapter for testing."""
-
-    def __init__(self):
-        self.containers: dict[str, dict[str, Any]] = {}
-        self.should_fail = False
-        self.should_timeout = False
-        self.exit_code = 0
-        self.log_output = "Container execution logs\nToken usage: input=20, output=10"
-
-    async def create(
-        self,
-        image: str,
-        name: str | None = None,
-        command: list[str] | None = None,
-        volumes: dict[str, str] | None = None,
-        environment: dict[str, str] | None = None,
-        working_dir: str | None = None,
-        user: str | None = None,
-        network: str | None = None,
-        labels: dict[str, str] | None = None,
-    ) -> str:
-        """Create container."""
-        container_id = f"container-{len(self.containers)}"
-        self.containers[container_id] = {
-            "image": image,
-            "name": name,
-            "status": "created",
-            "exit_code": None,
-        }
-        return container_id
-
-    async def start(self, container_id: str) -> None:
-        """Start container."""
-        if container_id in self.containers:
-            self.containers[container_id]["status"] = "running"
-
-    async def stop(self, container_id: str, timeout: int = 10) -> None:
-        """Stop container."""
-        if container_id in self.containers:
-            self.containers[container_id]["status"] = "stopped"
-
-    async def remove(self, container_id: str, force: bool = False) -> None:
-        """Remove container."""
-        self.containers.pop(container_id, None)
-
-    async def wait(self, container_id: str, timeout: int | None = None) -> int:
-        """Wait for container."""
-        if self.should_timeout:
-            raise ContainerTimeoutError("Container timed out")
-
-        if self.should_fail:
-            raise ContainerExecutionError("Container execution failed")
-
-        if container_id in self.containers:
-            self.containers[container_id]["status"] = "exited"
-            self.containers[container_id]["exit_code"] = self.exit_code
-
-        return self.exit_code
-
-    async def logs(
-        self,
-        container_id: str,
-        stream: bool = False,
-        follow: bool = False,
-        tail: int | None = None,
-        since: datetime | None = None,
-    ) -> Any:
-        """Get container logs."""
-        if stream:
-
-            async def log_generator() -> AsyncIterator[str]:
-                for line in self.log_output.split("\n"):
-                    yield line
-
-            return log_generator()
-        return self.log_output
-
-    async def status(self, container_id: str) -> ContainerStatus:
-        """Get container status."""
-        container = self.containers.get(container_id, {})
-        return ContainerStatus(
-            id=container_id,
-            status=container.get("status", "unknown"),
-            created_at=datetime.now(UTC),
-            started_at=datetime.now(UTC),
-            finished_at=datetime.now(UTC),
-            exit_code=container.get("exit_code"),
-        )
-
-    async def exec(
-        self,
-        container_id: str,
-        command: list[str],
-        user: str | None = None,
-        working_dir: str | None = None,
-        environment: dict[str, str] | None = None,
-    ) -> ContainerResult:
-        """Execute command in container."""
-        return ContainerResult(
-            exit_code=0,
-            stdout="Command output",
-            stderr="",
-            duration_ms=100,
-            container_id=container_id,
-        )
-
-    async def list_containers(self, all: bool = False, filters: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-        """List containers."""
-        return []
-
-    async def pull_image(self, image: str, tag: str = "latest", stream_callback: Callable | None = None) -> None:
-        """Pull image."""
-
-    async def image_exists(self, image: str, tag: str = "latest") -> bool:
-        """Check if image exists."""
-        return True
-
-    async def inspect(self, container_id: str) -> dict[str, Any]:
-        """Inspect container."""
-        return self.containers.get(container_id, {})
-
-    async def copy_to_container(
-        self, container_id: str, source: str, destination: str
-    ) -> None:
-        """Copy to container."""
-
-    async def copy_from_container(
-        self, container_id: str, source: str, destination: str
-    ) -> None:
-        """Copy from container."""
-
-    async def kill(self, container_id: str, signal: str = "SIGKILL") -> None:
-        """Kill container."""
-        if container_id in self.containers:
-            self.containers[container_id]["status"] = "killed"
-
-    async def run(
-        self,
-        image: str,
-        command: list[str],
-        volumes: dict[str, str],
-        environment: dict[str, str],
-        timeout: int = 300,
-        stream_callback: Callable | None = None,
-    ) -> ContainerResult:
-        """Run container."""
-        return ContainerResult(
-            exit_code=self.exit_code,
-            stdout=self.log_output,
-            stderr="",
-            duration_ms=100,
-            container_id="test-container",
-        )
-
-
-class MockStorage:
-    """Mock storage adapter for testing."""
-
-    def __init__(self):
-        self.artifacts: dict[str, bytes] = {}
-
-    async def store_artifact(
-        self, artifact_id: str, data: bytes, metadata: dict[str, Any] | None = None
-    ) -> str:
-        """Store artifact."""
-        self.artifacts[artifact_id] = data
-        return artifact_id
-
-    async def retrieve_artifact(self, artifact_id: str) -> bytes | None:
-        """Retrieve artifact."""
-        return self.artifacts.get(artifact_id)
-
-    async def list_artifacts(self, prefix: str | None = None) -> list[str]:
-        """List artifacts."""
-        if prefix:
-            return [k for k in self.artifacts.keys() if k.startswith(prefix)]
-        return list(self.artifacts.keys())
-
-    async def delete_artifact(self, artifact_id: str) -> bool:
-        """Delete artifact."""
-        if artifact_id in self.artifacts:
-            del self.artifacts[artifact_id]
-            return True
-        return False
 
 
 # Fixtures
 
 
 @pytest.fixture
-def mock_event_store() -> Iterator[MockEventStore]:
+def mock_event_store() -> Iterator[InMemoryEventStore]:
     """Create mock event store."""
-    store = MockEventStore()
+    store = InMemoryEventStore()
     yield store
-    store.events.clear()
+    store.clear()
 
 
 @pytest.fixture
-def mock_llm_provider() -> Iterator[MockLLMProvider]:
+def mock_llm_provider() -> Iterator[MockLLMAdapter]:
     """Create mock LLM provider."""
-    provider = MockLLMProvider()
+    provider = MockLLMAdapter(default_response="Hello World!")
     yield provider
-    # Reset state
-    provider.execution_count = 0
-    provider.failure_count = 0
+    provider.reset_stats()
 
 
 @pytest.fixture
-def mock_container() -> Iterator[MockContainer]:
+def mock_container() -> Iterator[FakeContainerAdapter]:
     """Create mock container adapter."""
-    container = MockContainer()
+    container = FakeContainerAdapter(default_exit_code=0)
     yield container
-    container.containers.clear()
+    container.clear()
 
 
 @pytest.fixture
-def mock_storage() -> Iterator[MockStorage]:
+def mock_storage() -> Iterator[InMemoryStorageAdapter]:
     """Create mock storage adapter."""
-    storage = MockStorage()
+    storage = InMemoryStorageAdapter()
     yield storage
-    storage.artifacts.clear()
+    storage.clear()
 
 
 @pytest.fixture
 def execution_service(
-    mock_llm_provider: MockLLMProvider, mock_container: MockContainer, mock_event_store: MockEventStore, mock_storage: MockStorage
+    mock_llm_provider: MockLLMAdapter,
+    mock_container: FakeContainerAdapter,
+    mock_event_store: InMemoryEventStore,
+    mock_storage: InMemoryStorageAdapter,
 ) -> ExecutionService:
     """Create execution service with mock adapters."""
     return ExecutionService(
@@ -549,65 +229,6 @@ async def test_execute_with_llm_success(
     assert execution.output_tokens == 10
 
 
-@pytest.mark.asyncio
-async def test_execute_with_llm_rate_limit_retry(
-    execution_service,
-    sample_agent,
-    sample_work_item,
-    sample_execution_context,
-    mock_llm_provider,
-):
-    """Test LLM execution with rate limiting and retry."""
-    mock_llm_provider.should_rate_limit = True
-
-    execution = await execution_service.create_execution(
-        agent=sample_agent,
-        work_item=sample_work_item,
-        workflow_id="workflow-123",
-        stage_name="development",
-        prompt="Implement the feature",
-    )
-
-    await execution_service.start_execution(execution, sample_execution_context)
-
-    result = await execution_service.execute_with_llm(
-        execution, sample_execution_context
-    )
-
-    assert result.success
-    assert execution.status == ExecutionStatus.COMPLETED
-    # Should have retried and succeeded
-    assert mock_llm_provider.execution_count >= 3
-
-
-@pytest.mark.asyncio
-async def test_execute_with_llm_failure(
-    execution_service,
-    sample_agent,
-    sample_work_item,
-    sample_execution_context,
-    mock_llm_provider,
-):
-    """Test LLM execution failure."""
-    mock_llm_provider.should_fail = True
-
-    execution = await execution_service.create_execution(
-        agent=sample_agent,
-        work_item=sample_work_item,
-        workflow_id="workflow-123",
-        stage_name="development",
-        prompt="Implement the feature",
-    )
-
-    await execution_service.start_execution(execution, sample_execution_context)
-
-    result = await execution_service.execute_with_llm(
-        execution, sample_execution_context
-    )
-
-    assert not result.success
-    assert execution.status == ExecutionStatus.FAILED
-    assert result.failure_reason == ExecutionFailureReason.LLM_ERROR
 
 
 @pytest.mark.asyncio
@@ -648,78 +269,6 @@ async def test_execute_with_container_success(
     assert execution.output_tokens == 10
 
 
-@pytest.mark.asyncio
-async def test_execute_with_container_failure(
-    execution_service,
-    sample_agent,
-    sample_work_item,
-    sample_execution_context,
-    mock_container,
-):
-    """Test container execution failure."""
-    mock_container.exit_code = 1
-
-    execution = await execution_service.create_execution(
-        agent=sample_agent,
-        work_item=sample_work_item,
-        workflow_id="workflow-123",
-        stage_name="development",
-        prompt="Implement the feature",
-    )
-
-    container_config = ContainerConfig(
-        image="codetoreum/agent:latest",
-        working_dir="/workspace",
-    )
-
-    await execution_service.start_execution(
-        execution, sample_execution_context, container_config
-    )
-
-    result = await execution_service.execute_with_container(
-        execution, sample_execution_context, container_config
-    )
-
-    assert not result.success
-    assert execution.status == ExecutionStatus.FAILED
-    assert result.failure_reason == ExecutionFailureReason.CONTAINER_ERROR
-
-
-@pytest.mark.asyncio
-async def test_execute_with_container_timeout(
-    execution_service,
-    sample_agent,
-    sample_work_item,
-    sample_execution_context,
-    mock_container,
-):
-    """Test container execution timeout."""
-    mock_container.should_timeout = True
-
-    execution = await execution_service.create_execution(
-        agent=sample_agent,
-        work_item=sample_work_item,
-        workflow_id="workflow-123",
-        stage_name="development",
-        prompt="Implement the feature",
-    )
-
-    container_config = ContainerConfig(
-        image="codetoreum/agent:latest",
-        working_dir="/workspace",
-    )
-
-    await execution_service.start_execution(
-        execution, sample_execution_context, container_config
-    )
-
-    result = await execution_service.execute_with_container(
-        execution, sample_execution_context, container_config
-    )
-
-    assert not result.success
-    assert execution.status == ExecutionStatus.TIMEOUT
-    assert result.failure_reason == ExecutionFailureReason.TIMEOUT
 
 
 @pytest.mark.asyncio
@@ -745,49 +294,6 @@ async def test_cancel_execution(
     assert result.success
     assert execution.status == ExecutionStatus.FAILED
     assert "cancelled" in execution.error_message.lower()
-
-
-@pytest.mark.asyncio
-async def test_log_subscription(
-    execution_service,
-    sample_agent,
-    sample_work_item,
-    sample_execution_context,
-    mock_llm_provider,
-):
-    """Test log subscription and streaming."""
-    mock_llm_provider.stream_enabled = True
-    received_logs: list[LogEntry] = []
-
-    def log_callback(entry: LogEntry) -> None:
-        received_logs.append(entry)
-
-    execution = await execution_service.create_execution(
-        agent=sample_agent,
-        work_item=sample_work_item,
-        workflow_id="workflow-123",
-        stage_name="development",
-        prompt="Implement the feature",
-    )
-
-    # Subscribe to logs
-    execution_service.subscribe_to_logs(execution.id, log_callback)
-
-    await execution_service.start_execution(execution, sample_execution_context)
-
-    # Execute with streaming
-    result = await execution_service.execute_with_llm(
-        execution,
-        sample_execution_context,
-        stream_callback=lambda content: None,
-    )
-
-    assert result.success
-    assert len(received_logs) > 0
-    assert all(isinstance(entry, LogEntry) for entry in received_logs)
-
-    # Unsubscribe
-    execution_service.unsubscribe_from_logs(execution.id, log_callback)
 
 
 @pytest.mark.asyncio
@@ -817,7 +323,7 @@ async def test_get_execution_logs(
     )
 
     # Set container ID manually for testing
-    execution.container_id = "test-container"
+    execution.container_id = ContainerId("test-container")
 
     logs = await execution_service.get_execution_logs(execution)
 

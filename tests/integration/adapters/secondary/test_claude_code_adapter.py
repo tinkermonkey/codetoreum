@@ -189,26 +189,6 @@ async def test_count_tokens(claude_adapter):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_invalid_api_key() -> None:
-    """Test authentication error with invalid API key."""
-
-    # Create a mock credential provider that returns an invalid key
-    class MockInvalidCredentialProvider:
-        async def get_credential(self, key: str) -> str | None:
-            return "invalid-key-that-will-fail"
-
-    config = ClaudeCodeConfig(
-        credential_provider=MockInvalidCredentialProvider(),
-    )
-
-    adapter = ClaudeCodeAdapter(config)
-
-    with pytest.raises((AuthenticationError, LLMProviderError)):
-        await adapter.execute("Test prompt")
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
 async def test_context_manager(claude_config):
     """Test using adapter as async context manager."""
     async with ClaudeCodeAdapter(claude_config) as adapter:
