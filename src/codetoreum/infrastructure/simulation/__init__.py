@@ -1,5 +1,5 @@
 """Simulation infrastructure for testing."""
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .mock_tracer import (
     MockTracer,
@@ -39,6 +39,16 @@ from .simulation_runner import (
     SimulationResult,
     SimulationRunner,
 )
+
+if TYPE_CHECKING:
+    from .bootstrap import (
+        SimulationAdapters,
+        SimulationApplicationBootstrap,
+        SimulationInfrastructure,
+        SimulationPorts,
+        SimulationServices,
+    )
+    from .seeding import CreatedItems, SimulationDataSeeder
 
 __all__ = [
     # Clock
@@ -87,7 +97,7 @@ __all__ = [
 ]
 
 
-def __getattr__(name: str) -> Any:
+def __getattr__(name: str) -> type[Any]:  # type: ignore[name-match]
     """Lazy import bootstrap and seeding components to avoid circular imports."""
     if name == "SimulationApplicationBootstrap":
         from .bootstrap import SimulationApplicationBootstrap

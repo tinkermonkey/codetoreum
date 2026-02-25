@@ -30,7 +30,8 @@ class TestSimulationDataSeeder:
     @pytest.fixture
     async def seeder(self, bootstrap):
         """Create seeder instance."""
-        return SimulationDataSeeder(bootstrap)
+        seeder_instance = SimulationDataSeeder(bootstrap)
+        yield seeder_instance
 
     # =========================================================================
     # Initialization Tests
