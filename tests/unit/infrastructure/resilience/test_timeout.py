@@ -78,7 +78,7 @@ class TestAsyncTimeout:
         """Test statistics across multiple operations."""
         timeout_handler = AsyncTimeout()
 
-        async def operation(delay: float):
+        async def operation(delay: float) -> str:
             await asyncio.sleep(delay)
             return "success"
 

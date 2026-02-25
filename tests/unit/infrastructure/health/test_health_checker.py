@@ -34,7 +34,7 @@ class TestHealthChecker:
         result = await checker.check_liveness()
 
         assert result.status == HealthStatus.HEALTHY
-        assert "test_app" in result.message
+        assert result.message and "test_app" in result.message
         assert result.metadata["app_name"] == "test_app"
         assert result.metadata["version"] == "1.0.0"
         assert "uptime_seconds" in result.metadata
@@ -136,7 +136,7 @@ class TestHealthChecker:
         result = await checker.check_dependency("nonexistent")
 
         assert result.status == HealthStatus.UNKNOWN
-        assert "not found" in result.message
+        assert result.message and "not found" in result.message
 
     @pytest.mark.asyncio
     async def test_check_dependency_timeout(self):
