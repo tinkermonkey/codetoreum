@@ -79,10 +79,11 @@ class TestGitHubDiscussionAdapterWebhook:
         assert len(events) == 1
         event = events[0]
         assert isinstance(event, CommentNeedsResponseEvent)
-        assert event.comment is not None
-        assert event.comment.body == "This needs review"
-        assert event.comment.author == "alice"
-        assert event.comment.is_bot is False
+        comment = event.comment
+        assert comment is not None
+        assert comment.body == "This needs review"
+        assert comment.author == "alice"
+        assert comment.is_bot is False
         assert event.work_item_id == "123"
         assert event.project_id == "proj-1"
 
@@ -256,7 +257,7 @@ class TestGitHubDiscussionAdapterPolling:
             # Should have detected all comments including charlie's
             assert len(events) >= 3
             assert all(e.comment is not None for e in events)
-            assert any(e.comment.author == "charlie" for e in events)
+            assert any(e.comment and e.comment.author == "charlie" for e in events)
 
         polling_adapter.stop_monitoring("123")
 
@@ -433,8 +434,9 @@ class TestGitHubDiscussionAdapterCommands:
             assert comment.body == "This looks good!"
             assert comment.author == "codetoreum-bot"
             assert len(events) == 1
-            assert events[0].comment is not None
-            assert events[0].comment.body == "This looks good!"
+            event_comment = events[0].comment
+            assert event_comment is not None
+            assert event_comment.body == "This looks good!"
 
     @pytest.mark.asyncio
     async def test_add_comment_validation(self, adapter):

@@ -618,7 +618,7 @@ class SimulationApplicationBootstrap:
             def __init__(self):
                 self._states = {}
 
-            async def get_workflow_state(self, issue_id: str):
+            async def get_workflow_state(self, issue_id: str) -> "WorkflowState":
                 from codetoreum.application.workflow_orchestrator import WorkflowState
 
                 if issue_id not in self._states:

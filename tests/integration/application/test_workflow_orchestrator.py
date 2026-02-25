@@ -112,13 +112,28 @@ class MockProjectConfiguration(IProjectConfiguration):
                 capabilities=["review"],
                 requires_dev_container=True,
             ),
+            "feedback_handler": AgentConfig(
+                id="feedback_handler",
+                name="Feedback Handler",
+                prompt_template="Handle user feedback",
+                capabilities=["communication"],
+                requires_dev_container=False,
+            ),
         }
 
-    async def get_workflow_config(self, project: str, board: str) -> WorkflowConfig | None:
-        return self.workflows.get((project, board))
+    async def get_workflow_config(self, project: str, board: str) -> WorkflowConfig:
+        config = self.workflows.get((project, board))
+        if config is None:
+            msg = f"Workflow config not found for {project}/{board}"
+            raise ValueError(msg)
+        return config
 
-    async def get_agent_config(self, agent_name: str) -> AgentConfig | None:
-        return self.agents.get(agent_name)
+    async def get_agent_config(self, agent_name: str) -> AgentConfig:
+        config = self.agents.get(agent_name)
+        if config is None:
+            msg = f"Agent config not found for {agent_name}"
+            raise ValueError(msg)
+        return config
 
 
 class MockWorkflowStateManager(IWorkflowStateManager):
