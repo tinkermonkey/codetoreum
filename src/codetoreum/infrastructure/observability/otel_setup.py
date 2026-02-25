@@ -170,101 +170,103 @@ def _record_trace_export_error(error: Exception, config: ObservabilityConfig) ->
     )
 
 
-class _InstrumentedSpanExporter(SpanExporter):
-    """
-    Wrapper around OTLPSpanExporter that measures export duration and records metrics.
+if OPENTELEMETRY_AVAILABLE:
 
-    This exporter wraps an actual OTLP exporter and measures the time taken
-    to export spans, recording the duration as a histogram metric.
-    """
-
-    def __init__(self, exporter):
+    class _InstrumentedSpanExporter(SpanExporter):
         """
-        Initialize with a wrapped exporter.
+        Wrapper around OTLPSpanExporter that measures export duration and records metrics.
 
-        Args:
-            exporter: The OTLPSpanExporter to wrap
+        This exporter wraps an actual OTLP exporter and measures the time taken
+        to export spans, recording the duration as a histogram metric.
         """
-        self._exporter = exporter
-        self._meter = None
-        self._duration_histogram = None
-        self._export_counter = None
-        self._failure_counter = None
 
-        try:
-            from opentelemetry import metrics
+        def __init__(self, exporter):
+            """
+            Initialize with a wrapped exporter.
 
-            self._meter = metrics.get_meter("codetoreum.observability")
+            Args:
+                exporter: The OTLPSpanExporter to wrap
+            """
+            self._exporter = exporter
+            self._meter = None
+            self._duration_histogram = None
+            self._export_counter = None
+            self._failure_counter = None
 
-            # Create histogram for export duration in milliseconds
-            self._duration_histogram = self._meter.create_histogram(
-                "otel.trace.export.duration",
-                description="Duration of OTLP trace export in milliseconds",
-                unit="ms",
-            )
+            try:
+                from opentelemetry import metrics
 
-            # Create counter for successful exports
-            self._export_counter = self._meter.create_counter(
-                "otel.trace.export.success", description="Number of successful OTLP trace exports"
-            )
+                self._meter = metrics.get_meter("codetoreum.observability")
 
-            # Create counter for failed exports
-            self._failure_counter = self._meter.create_counter(
-                "otel.trace.export.failures", description="Number of failed OTLP trace exports"
-            )
-        except Exception as e:
-            logger.debug(f"Failed to create metrics for span export: {e}", exc_info=True)
+                # Create histogram for export duration in milliseconds
+                self._duration_histogram = self._meter.create_histogram(
+                    "otel.trace.export.duration",
+                    description="Duration of OTLP trace export in milliseconds",
+                    unit="ms",
+                )
 
-    def export(self, spans):
-        """
-        Export spans and measure duration.
+                # Create counter for successful exports
+                self._export_counter = self._meter.create_counter(
+                    "otel.trace.export.success", description="Number of successful OTLP trace exports"
+                )
 
-        Args:
-            spans: List of spans to export
+                # Create counter for failed exports
+                self._failure_counter = self._meter.create_counter(
+                    "otel.trace.export.failures", description="Number of failed OTLP trace exports"
+                )
+            except Exception as e:
+                logger.debug(f"Failed to create metrics for span export: {e}", exc_info=True)
 
-        Returns:
-            Export result
-        """
-        import time
+        def export(self, spans):
+            """
+            Export spans and measure duration.
 
-        start_time = time.time()
+            Args:
+                spans: List of spans to export
 
-        try:
-            result = self._exporter.export(spans)
+            Returns:
+                Export result
+            """
+            import time
 
-            # Record duration metric
-            if self._duration_histogram:
-                duration_ms = (time.time() - start_time) * 1000
-                self._duration_histogram.record(duration_ms)
+            start_time = time.time()
 
-            # Record success count
-            if self._export_counter:
-                self._export_counter.add(1)
+            try:
+                result = self._exporter.export(spans)
 
-            return result
-        except Exception as e:
-            # Record failure metric even if spans aren't exported
-            if self._failure_counter:
-                try:
-                    self._failure_counter.add(1)
-                except Exception:
-                    pass  # Metrics failure shouldn't prevent span export error propagation
+                # Record duration metric
+                if self._duration_histogram:
+                    duration_ms = (time.time() - start_time) * 1000
+                    self._duration_histogram.record(duration_ms)
 
-            # Log at ERROR level so operators know observability is failing
-            logger.error(
-                f"Failed to export {len(spans)} spans to OTLP endpoint: {e}",
-                exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
-            )
-            raise
+                # Record success count
+                if self._export_counter:
+                    self._export_counter.add(1)
 
-    def shutdown(self):
-        """Shutdown the wrapped exporter."""
-        return self._exporter.shutdown()
+                return result
+            except Exception as e:
+                # Record failure metric even if spans aren't exported
+                if self._failure_counter:
+                    try:
+                        self._failure_counter.add(1)
+                    except Exception:
+                        pass  # Metrics failure shouldn't prevent span export error propagation
 
-    def force_flush(self, timeout_millis: int = 30000):
-        """Force flush the wrapped exporter."""
-        return self._exporter.force_flush(timeout_millis)
+                # Log at ERROR level so operators know observability is failing
+                logger.error(
+                    f"Failed to export {len(spans)} spans to OTLP endpoint: {e}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
+                )
+                raise
+
+        def shutdown(self):
+            """Shutdown the wrapped exporter."""
+            return self._exporter.shutdown()
+
+        def force_flush(self, timeout_millis: int = 30000):
+            """Force flush the wrapped exporter."""
+            return self._exporter.force_flush(timeout_millis)
 
 
 def _record_log_export_error(error: Exception, config: ObservabilityConfig) -> None:

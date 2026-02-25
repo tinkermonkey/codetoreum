@@ -8,9 +8,15 @@ from unittest import mock
 
 import pytest
 
-from codetoreum.infrastructure.observability.otel_setup import _InstrumentedSpanExporter
+# Check if OpenTelemetry is available
+try:
+    from codetoreum.infrastructure.observability.otel_setup import _InstrumentedSpanExporter
+    OTEL_AVAILABLE = True
+except ImportError:
+    OTEL_AVAILABLE = False
 
 
+@pytest.mark.skipif(not OTEL_AVAILABLE, reason="OpenTelemetry not installed")
 class TestInstrumentedSpanExporter:
     """Tests for _InstrumentedSpanExporter."""
 
