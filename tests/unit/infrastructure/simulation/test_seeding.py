@@ -437,6 +437,7 @@ class TestCreatedItems:
         assert items.agents == []
         assert items.work_items == []
         assert items.pipelines == []
+        assert items.boards == []
 
     def test_created_items_clear(self):
         """Test clearing all tracked items."""
@@ -444,12 +445,28 @@ class TestCreatedItems:
         items.projects.append("proj1")
         items.workflows.append("wf1")
         items.agents.append("agent1")
+        items.work_items.append("wi1")
+        items.pipelines.append("p1")
+        items.boards.append("b1")
 
+        # Verify all lists have items
+        assert len(items.projects) == 1
+        assert len(items.workflows) == 1
+        assert len(items.agents) == 1
+        assert len(items.work_items) == 1
+        assert len(items.pipelines) == 1
+        assert len(items.boards) == 1
+
+        # Clear all
         items.clear()
 
+        # Verify all lists are empty
         assert items.projects == []
         assert items.workflows == []
         assert items.agents == []
+        assert items.work_items == []
+        assert items.pipelines == []
+        assert items.boards == []
 
 
 class TestScenarioModels:

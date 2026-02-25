@@ -186,7 +186,7 @@ class ScenarioModel(BaseModel):
     description: str = Field(default="", description="Scenario description")
     version: str = Field(default="1.0", description="Scenario version")
     created_at: datetime | None = Field(
-        None, description="Scenario creation timestamp"
+        default=None, description="Scenario creation timestamp"
     )
 
     # Simulation config
