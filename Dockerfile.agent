@@ -54,6 +54,17 @@ RUN if [ -f requirements.txt ]; then \
 
 # Python packages are installed as root in /usr/local, no chown needed
 
+# Ensure /home/orchestrator/.gitconfig does not exist as a directory.
+# The orchestrator bind-mounts a .gitconfig FILE at runtime. If a directory
+# exists at that path (from a prior layer or build artifact), Docker will
+# fail with "cannot create subdirectories ... not a directory".
+RUN if [ -d /home/orchestrator/.gitconfig ]; then \
+        rm -rf /home/orchestrator/.gitconfig; \
+    fi && \
+    if [ -e /home/orchestrator/.gitconfig ]; then \
+        rm -f /home/orchestrator/.gitconfig; \
+    fi
+
 # ============================================================================
 # Stage 5: Switch to Runtime User
 # ============================================================================
@@ -68,6 +79,10 @@ RUN claude --version && \
     gh --version && \
     python3 --version && \
     pip --version
+
+# Verify ruff is installed and accessible (required by pre-commit hooks
+# which use 'language: system' and expect ruff in PATH)
+RUN ruff --version
 
 # ============================================================================
 # Default command

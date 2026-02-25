@@ -4,8 +4,9 @@ Tests verify that adapters properly raise ResourceNotFoundError for missing reso
 matching production adapter behavior and ensuring error handling code is tested realistically.
 """
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 from codetoreum.adapters.testing import InMemoryRepositoryAdapter
 from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
@@ -204,11 +205,7 @@ class TestBoardAdapterErrorHandling:
         adapter.create_board("proj-1", "board-1", "Test Board", ["Backlog", "In Progress"])
 
         with pytest.raises(ResourceNotFoundError) as exc_info:
-            await adapter.move_item_to_column(
-                "nonexistent-item",
-                "In Progress",
-                MovedByType.ORCHESTRATOR
-            )
+            await adapter.move_item_to_column("nonexistent-item", "In Progress", MovedByType.ORCHESTRATOR)
 
         error = exc_info.value
         assert "nonexistent-item" in str(error)
@@ -220,11 +217,7 @@ class TestBoardAdapterErrorHandling:
         adapter.add_item_to_column("board-1", "Backlog", "item-1")
 
         with pytest.raises(ResourceNotFoundError) as exc_info:
-            await adapter.move_item_to_column(
-                "item-1",
-                "NonExistentColumn",
-                MovedByType.ORCHESTRATOR
-            )
+            await adapter.move_item_to_column("item-1", "NonExistentColumn", MovedByType.ORCHESTRATOR)
 
         error = exc_info.value
         assert "NonExistentColumn" in str(error)
@@ -246,11 +239,7 @@ class TestBoardAdapterErrorHandling:
         adapter.create_board("proj-1", "board-1", "Test Board", ["Backlog", "In Progress", "Done"])
         adapter.add_item_to_column("board-1", "Backlog", "item-1")
 
-        result = await adapter.move_item_to_column(
-            "item-1",
-            "In Progress",
-            MovedByType.ORCHESTRATOR
-        )
+        result = await adapter.move_item_to_column("item-1", "In Progress", MovedByType.ORCHESTRATOR)
 
         assert result.work_item_id == "item-1"
         assert result.to_column == "In Progress"
