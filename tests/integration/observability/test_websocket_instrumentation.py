@@ -5,9 +5,6 @@ Tests session spans, message spans, and trace context propagation
 through WebSocket connections.
 """
 
-import asyncio
-from typing import Optional
-from uuid import uuid4
 
 import pytest
 
@@ -18,8 +15,6 @@ from codetoreum.adapters.primary.websocket_adapter import (
     WebSocketConfig,
 )
 from codetoreum.domain.events import (
-    DomainEvent,
-    ExecutionCompleted,
     ExecutionStarted,
     WorkItemCreated,
 )

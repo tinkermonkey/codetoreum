@@ -6,7 +6,7 @@ subscribers. Used as a base class for mock adapters to support event
 simulation testing without external service dependencies.
 """
 
-from typing import Callable, Dict, List
+from collections.abc import Callable
 
 from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.ports.output.event_emitter import IEventEmitter
@@ -48,7 +48,7 @@ class MockEventEmitter(IEventEmitter):
 
     def __init__(self) -> None:
         """Initialize the event emitter with empty handler registry."""
-        self._handlers: Dict[str, List[Callable[[CodetoreumEvent], None]]] = {}
+        self._handlers: dict[str, list[Callable[[CodetoreumEvent], None]]] = {}
 
     def on(self, event_type: str, handler: Callable[[CodetoreumEvent], None]) -> None:
         """Subscribe to events of a specific type.

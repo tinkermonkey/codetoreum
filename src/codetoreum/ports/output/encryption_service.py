@@ -5,7 +5,6 @@ Provides encryption/decryption capabilities for sensitive configuration values.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional
 
 
 class IEncryptionService(ABC):
@@ -17,7 +16,7 @@ class IEncryptionService(ABC):
     """
 
     @abstractmethod
-    async def encrypt(self, plaintext: str, key_id: Optional[str] = None) -> str:
+    async def encrypt(self, plaintext: str, key_id: str | None = None) -> str:
         """
         Encrypt a plaintext string.
 
@@ -31,7 +30,6 @@ class IEncryptionService(ABC):
         Raises:
             EncryptionError: If encryption fails
         """
-        pass
 
     @abstractmethod
     async def decrypt(self, ciphertext: str) -> str:
@@ -47,7 +45,6 @@ class IEncryptionService(ABC):
         Raises:
             DecryptionError: If decryption fails
         """
-        pass
 
     @abstractmethod
     async def rotate_key(self, old_key_id: str, new_key_id: str) -> None:
@@ -61,14 +58,11 @@ class IEncryptionService(ABC):
         Raises:
             EncryptionError: If key rotation fails
         """
-        pass
 
 
 class EncryptionError(Exception):
     """Raised when encryption operations fail."""
-    pass
 
 
 class DecryptionError(Exception):
     """Raised when decryption operations fail."""
-    pass

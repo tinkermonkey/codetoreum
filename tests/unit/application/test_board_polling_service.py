@@ -1,7 +1,6 @@
 """Unit tests for BoardPollingService."""
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 

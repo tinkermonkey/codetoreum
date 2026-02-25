@@ -4,7 +4,7 @@ Mock Orchestration Command Adapter
 In-memory implementation of IOrchestrationCommandPort for development and testing.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from threading import RLock
 from uuid import uuid4
 
@@ -38,7 +38,7 @@ class MockOrchestrationCommandAdapter(IOrchestrationCommandPort):
                 "work_item_id": command.work_item_id,
                 "workflow_id": command.workflow_id,
                 "status": "ACCEPTED",
-                "started_at": datetime.now(timezone.utc),
+                "started_at": datetime.now(UTC),
             }
 
             return OrchestrationCommandResult(
@@ -47,7 +47,7 @@ class MockOrchestrationCommandAdapter(IOrchestrationCommandPort):
                 workflow_run_id=workflow_run_id,
                 status="ACCEPTED",
                 message=f"Execution started for work item {command.work_item_id}",
-                started_at=datetime.now(timezone.utc),
+                started_at=datetime.now(UTC),
             )
 
     async def cancel_execution(self, command: CancelExecutionCommand) -> OrchestrationCommandResult:

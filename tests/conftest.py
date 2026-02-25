@@ -32,22 +32,22 @@ def is_docker_available() -> bool:
             # Properly close all resources to avoid ResourceWarnings
             import gc
             try:
-                if hasattr(client, 'api'):
+                if hasattr(client, "api"):
                     api = client.api
                     # Close the API client's session and adapter connection pools
-                    if hasattr(api, '_session') and api._session:
+                    if hasattr(api, "_session") and api._session:
                         try:
                             api._session.close()
                         except Exception:
                             pass
-                    if hasattr(api, '_adapters') and api._adapters:
+                    if hasattr(api, "_adapters") and api._adapters:
                         try:
                             for adapter in api._adapters.values():
-                                if hasattr(adapter, 'close'):
+                                if hasattr(adapter, "close"):
                                     adapter.close()
                         except Exception:
                             pass
-                    if hasattr(api, 'close'):
+                    if hasattr(api, "close"):
                         try:
                             api.close()
                         except Exception:
@@ -95,22 +95,22 @@ def docker_client() -> Generator[docker.DockerClient, None, None]:
         # Properly close all resources to avoid ResourceWarnings
         import gc
         try:
-            if hasattr(client, 'api'):
+            if hasattr(client, "api"):
                 api = client.api
                 # Close the API client's session and adapter connection pools
-                if hasattr(api, '_session') and api._session:
+                if hasattr(api, "_session") and api._session:
                     try:
                         api._session.close()
                     except Exception:
                         pass
-                if hasattr(api, '_adapters') and api._adapters:
+                if hasattr(api, "_adapters") and api._adapters:
                     try:
                         for adapter in api._adapters.values():
-                            if hasattr(adapter, 'close'):
+                            if hasattr(adapter, "close"):
                                 adapter.close()
                     except Exception:
                         pass
-                if hasattr(api, 'close'):
+                if hasattr(api, "close"):
                     try:
                         api.close()
                     except Exception:

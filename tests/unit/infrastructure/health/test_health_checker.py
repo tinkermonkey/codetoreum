@@ -1,7 +1,6 @@
 """Unit tests for health checker implementations."""
 
 import asyncio
-from datetime import datetime
 
 import pytest
 
@@ -9,7 +8,6 @@ from codetoreum.infrastructure.health import (
     CircuitBreakerHealthCheck,
     CompositeHealthCheck,
     DatabaseHealthCheck,
-    DependencyHealth,
     EventStoreHealthCheck,
     HealthChecker,
     HealthCheckResult,

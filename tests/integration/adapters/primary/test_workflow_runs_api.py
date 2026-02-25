@@ -1,6 +1,6 @@
 """Integration tests for Workflow Runs REST API endpoints."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -73,7 +73,7 @@ def client(app):
 @pytest.fixture
 def sample_workflow_run():
     """Fixture providing a sample workflow run."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return WorkflowRunInfo(
         id="wfrun-123",
         work_item_id="wi-456",
@@ -115,7 +115,7 @@ def sample_workflow_run():
 @pytest.fixture
 def sample_workflow_run_summary():
     """Fixture providing a sample workflow run summary."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return WorkflowRunSummary(
         id="wfrun-123",
         work_item_id="wi-456",
@@ -286,7 +286,7 @@ class TestGetWorkflowRunEvents:
         # Arrange
         from codetoreum.ports.input.workflow_run_query import WorkflowRunEventsResult
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         events_result = WorkflowRunEventsResult(
             events=[
                 {
@@ -378,7 +378,7 @@ class TestGetWorkflowRunAudit:
             WorkflowRunSummary,
         )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         audit_data = WorkflowRunAuditResult(
             workflow_run=WorkflowRunSummary(
                 id="wfrun-123",
@@ -460,7 +460,7 @@ class TestGetWorkflowRunAudit:
             WorkflowRunSummary,
         )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         audit_data = WorkflowRunAuditResult(
             workflow_run=WorkflowRunSummary(
                 id="wfrun-123",
@@ -522,7 +522,7 @@ class TestGetWorkflowRunAudit:
             WorkflowRunSummary,
         )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         # When validation is not requested, return empty validation result
         audit_data = WorkflowRunAuditResult(
             workflow_run=WorkflowRunSummary(

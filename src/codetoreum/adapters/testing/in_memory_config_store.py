@@ -4,8 +4,8 @@ In-Memory Configuration Store
 Mock adapter for testing configuration service without external dependencies.
 """
 
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from codetoreum.ports.output.config_store import (
     AgentConfig,
@@ -28,12 +28,12 @@ class InMemoryConfigStore(IConfigStore):
 
     def __init__(self):
         """Initialize in-memory storage."""
-        self.projects: Dict[str, ProjectConfig] = {}
-        self.projects_by_name: Dict[str, str] = {}  # name -> id mapping
-        self.agents: Dict[str, Dict[str, AgentConfig]] = {}  # project_id -> {agent_name -> config}
-        self.pipelines: Dict[str, Dict[str, PipelineConfig]] = {}  # project_id -> {pipeline_name -> config}
-        self.workflow_templates: Dict[str, WorkflowTemplate] = {}
-        self.history: Dict[str, List[ConfigVersion]] = {}  # config_id -> versions
+        self.projects: dict[str, ProjectConfig] = {}
+        self.projects_by_name: dict[str, str] = {}  # name -> id mapping
+        self.agents: dict[str, dict[str, AgentConfig]] = {}  # project_id -> {agent_name -> config}
+        self.pipelines: dict[str, dict[str, PipelineConfig]] = {}  # project_id -> {pipeline_name -> config}
+        self.workflow_templates: dict[str, WorkflowTemplate] = {}
+        self.history: dict[str, list[ConfigVersion]] = {}  # config_id -> versions
 
     async def get_project_config(self, project_id: str) -> ProjectConfig:
         """Get project configuration by ID."""
@@ -56,7 +56,7 @@ class InMemoryConfigStore(IConfigStore):
             old_config = self.projects[config.id]
             version = ConfigVersion(
                 version=config.version,
-                changed_at=config.updated_at or datetime.now(timezone.utc),
+                changed_at=config.updated_at or datetime.now(UTC),
                 changed_by=config.metadata.get("updated_by", "system"),
                 change_type="update_project",
                 changes=config.metadata.get("changes", {}),
@@ -96,7 +96,7 @@ class InMemoryConfigStore(IConfigStore):
         if config.agent_name in self.agents[config.project_id]:
             version = ConfigVersion(
                 version=config.version,
-                changed_at=config.updated_at or datetime.now(timezone.utc),
+                changed_at=config.updated_at or datetime.now(UTC),
                 changed_by=config.metadata.get("updated_by", "system"),
                 change_type="update_agent",
                 changes=config.metadata.get("changes", {}),
@@ -134,7 +134,7 @@ class InMemoryConfigStore(IConfigStore):
         if config.name in self.pipelines[config.project_id]:
             version = ConfigVersion(
                 version=config.version,
-                changed_at=config.updated_at or datetime.now(timezone.utc),
+                changed_at=config.updated_at or datetime.now(UTC),
                 changed_by=config.metadata.get("updated_by", "system"),
                 change_type="update_pipeline",
                 changes=config.metadata.get("changes", {}),
@@ -156,17 +156,17 @@ class InMemoryConfigStore(IConfigStore):
         """Save workflow template."""
         self.workflow_templates[template.name] = template
 
-    async def list_projects(self) -> List[ProjectConfig]:
+    async def list_projects(self) -> list[ProjectConfig]:
         """List all projects."""
         return list(self.projects.values())
 
-    async def list_agents(self, project_id: str) -> List[AgentConfig]:
+    async def list_agents(self, project_id: str) -> list[AgentConfig]:
         """List all agents for a project."""
         if project_id not in self.agents:
             return []
         return list(self.agents[project_id].values())
 
-    async def list_pipelines(self, project_id: str) -> List[PipelineConfig]:
+    async def list_pipelines(self, project_id: str) -> list[PipelineConfig]:
         """List all pipelines for a project."""
         if project_id not in self.pipelines:
             return []
@@ -175,8 +175,8 @@ class InMemoryConfigStore(IConfigStore):
     async def search_configs(
         self,
         query: str,
-        config_type: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+        config_type: str | None = None
+    ) -> list[dict[str, Any]]:
         """
         Search configurations using simple substring matching.
 
@@ -202,15 +202,15 @@ class InMemoryConfigStore(IConfigStore):
             """Check if config matches all search terms."""
             # Build searchable text from all fields
             searchable_fields = [
-                str(getattr(config, 'name', '')),
-                str(getattr(config, 'github_org', '')),
-                str(getattr(config, 'github_repo', '')),
-                str(getattr(config, 'agent_name', '')),
-                str(getattr(config, 'model', '')),
-                str(getattr(config, 'metadata', {})),
-                str(getattr(config, 'tech_stacks', {})),
+                str(getattr(config, "name", "")),
+                str(getattr(config, "github_org", "")),
+                str(getattr(config, "github_repo", "")),
+                str(getattr(config, "agent_name", "")),
+                str(getattr(config, "model", "")),
+                str(getattr(config, "metadata", {})),
+                str(getattr(config, "tech_stacks", {})),
             ]
-            combined_text = ' '.join(searchable_fields)
+            combined_text = " ".join(searchable_fields)
             return matches_all_terms(combined_text)
 
         # Search projects
@@ -254,7 +254,7 @@ class InMemoryConfigStore(IConfigStore):
         self,
         config_id: str,
         version: int
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get specific version of a configuration."""
         if config_id not in self.history:
             raise ConfigNotFoundError(f"No history found for config '{config_id}'")
@@ -278,7 +278,7 @@ class InMemoryConfigStore(IConfigStore):
         self,
         config_id: str,
         limit: int = 10
-    ) -> List[ConfigVersion]:
+    ) -> list[ConfigVersion]:
         """List configuration version history."""
         if config_id not in self.history:
             return []

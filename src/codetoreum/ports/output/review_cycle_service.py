@@ -13,7 +13,7 @@ feedback on, potentially requiring multiple iterations before approval.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Literal, Optional
+from typing import Literal
 
 ReviewCycleStatus = Literal[
     "initialized",
@@ -38,8 +38,8 @@ class ReviewFinding:
 
     severity: Literal["blocking", "major", "minor", "suggestion"]
     description: str
-    file: Optional[str] = None
-    line: Optional[int] = None
+    file: str | None = None
+    line: int | None = None
 
     def __post_init__(self) -> None:
         """Validate finding data."""
@@ -59,9 +59,9 @@ class ReviewResult:
     """
 
     status: ReviewStatus
-    findings: List[ReviewFinding]
+    findings: list[ReviewFinding]
     blocking_count: int
-    summary: Optional[str] = None
+    summary: str | None = None
 
 
 @dataclass
@@ -107,7 +107,7 @@ class ReviewCycleRequest:
     auto_advance_on_approval: bool
     escalate_on_blocked: bool
     previous_stage_output: str
-    workflow_run_id: Optional[str] = None
+    workflow_run_id: str | None = None
 
     def __post_init__(self) -> None:
         """Validate request data."""
@@ -144,14 +144,14 @@ class ReviewCycleState:
     maker_agent: str
     reviewer_agent: str
     max_iterations: int
-    workflow_run_id: Optional[str]
+    workflow_run_id: str | None
     current_iteration: int
-    maker_outputs: List[IterationOutput]
-    review_outputs: List[IterationOutput]
+    maker_outputs: list[IterationOutput]
+    review_outputs: list[IterationOutput]
     status: ReviewCycleStatus
-    escalation_time: Optional[str] = None
-    last_escalation_comment_id: Optional[str] = None
-    last_approved_commit: Optional[str] = None
+    escalation_time: str | None = None
+    last_escalation_comment_id: str | None = None
+    last_approved_commit: str | None = None
     created_at: str = ""
     updated_at: str = ""
 
@@ -242,7 +242,6 @@ class IReviewCycle(ABC):
             ResourceNotFoundError: If work item or agents don't exist
             ExternalServiceError: If external service communication fails
         """
-        pass
 
     @abstractmethod
     async def resume_review_cycle(
@@ -262,7 +261,6 @@ class IReviewCycle(ABC):
             InvalidStateError: If cycle is not resumable
             ExternalServiceError: If external service communication fails
         """
-        pass
 
     @abstractmethod
     async def resume_with_human_feedback(
@@ -283,12 +281,11 @@ class IReviewCycle(ABC):
             ValueError: If feedback is empty
             ExternalServiceError: If external service communication fails
         """
-        pass
 
     @abstractmethod
     async def get_cycle_state(
         self, work_item_id: str
-    ) -> Optional[ReviewCycleState]:
+    ) -> ReviewCycleState | None:
         """Retrieve current state of a review cycle.
 
         Gets the complete state of a review cycle in progress,
@@ -303,7 +300,6 @@ class IReviewCycle(ABC):
         Raises:
             ExternalServiceError: If state store communication fails
         """
-        pass
 
     @abstractmethod
     async def save_cycle_state(self, state: ReviewCycleState) -> None:
@@ -319,7 +315,6 @@ class IReviewCycle(ABC):
             ValueError: If state is invalid
             ExternalServiceError: If state store communication fails
         """
-        pass
 
     @abstractmethod
     async def remove_cycle_state(self, state: ReviewCycleState) -> None:
@@ -334,10 +329,9 @@ class IReviewCycle(ABC):
         Raises:
             ExternalServiceError: If state store communication fails
         """
-        pass
 
     @abstractmethod
-    async def load_active_cycles(self, project_id: str) -> List[ReviewCycleState]:
+    async def load_active_cycles(self, project_id: str) -> list[ReviewCycleState]:
         """Load all in-progress cycles for a project.
 
         Retrieves all review cycles currently in progress for a project,
@@ -352,7 +346,6 @@ class IReviewCycle(ABC):
         Raises:
             ExternalServiceError: If state store communication fails
         """
-        pass
 
     @abstractmethod
     def parse_review(self, review_output: str) -> ReviewResult:
@@ -374,4 +367,3 @@ class IReviewCycle(ABC):
         Raises:
             ValueError: If output cannot be parsed
         """
-        pass

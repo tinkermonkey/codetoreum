@@ -7,16 +7,16 @@ including project, agent, pipeline, environment variable, and command mounting c
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 @dataclass
 class UpdateProjectConfigCommand:
     """Command to update project configuration"""
     project_name: str
-    updates: Dict[str, Any]  # Partial updates
+    updates: dict[str, Any]  # Partial updates
     user_id: str
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 @dataclass
@@ -24,9 +24,9 @@ class UpdateAgentConfigCommand:
     """Command to update agent configuration"""
     project_name: str
     agent_name: str
-    updates: Dict[str, Any]
+    updates: dict[str, Any]
     user_id: str
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 @dataclass
@@ -34,9 +34,9 @@ class UpdatePipelineConfigCommand:
     """Command to update pipeline configuration"""
     project_name: str
     pipeline_name: str
-    updates: Dict[str, Any]
+    updates: dict[str, Any]
     user_id: str
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 @dataclass
@@ -47,7 +47,7 @@ class AddEnvironmentVariableCommand:
     variable_value: str
     user_id: str
     is_secret: bool = False  # If true, encrypt storage
-    description: Optional[str] = None
+    description: str | None = None
 
 
 @dataclass
@@ -65,7 +65,7 @@ class MountCommandCommand:
     command_name: str
     command_path: str  # Path to command file
     user_id: str
-    description: Optional[str] = None
+    description: str | None = None
 
 
 @dataclass
@@ -81,9 +81,9 @@ class MountSubAgentCommand:
     """Command to mount a sub-agent into project agent"""
     project_name: str
     subagent_name: str
-    subagent_config: Dict[str, Any]
+    subagent_config: dict[str, Any]
     user_id: str
-    description: Optional[str] = None
+    description: str | None = None
 
 
 @dataclass
@@ -100,8 +100,8 @@ class ConfigurationCommandResult:
     success: bool
     config_version: int  # New version number after update
     message: str
-    changes_applied: Dict[str, Any]  # What actually changed
-    errors: Optional[List[str]] = field(default=None)
+    changes_applied: dict[str, Any]  # What actually changed
+    errors: list[str] | None = field(default=None)
 
 
 class IConfigurationCommandPort(ABC):
@@ -139,7 +139,6 @@ class IConfigurationCommandPort(ABC):
             ValidationError: If updates invalid
             PermissionError: If user lacks permission
         """
-        pass
 
     @abstractmethod
     async def update_agent_config(
@@ -161,7 +160,6 @@ class IConfigurationCommandPort(ABC):
             ValidationError: If updates invalid
             PermissionError: If user lacks permission
         """
-        pass
 
     @abstractmethod
     async def update_pipeline_config(
@@ -183,7 +181,6 @@ class IConfigurationCommandPort(ABC):
             ValidationError: If updates invalid
             PermissionError: If user lacks permission
         """
-        pass
 
     @abstractmethod
     async def add_environment_variable(
@@ -207,7 +204,6 @@ class IConfigurationCommandPort(ABC):
             ValidationError: If variable name/value invalid
             PermissionError: If user lacks permission
         """
-        pass
 
     @abstractmethod
     async def remove_environment_variable(
@@ -228,7 +224,6 @@ class IConfigurationCommandPort(ABC):
             VariableNotFoundError: If variable doesn't exist
             PermissionError: If user lacks permission
         """
-        pass
 
     @abstractmethod
     async def mount_command(
@@ -253,7 +248,6 @@ class IConfigurationCommandPort(ABC):
             ValidationError: If command file invalid
             PermissionError: If user lacks permission
         """
-        pass
 
     @abstractmethod
     async def unmount_command(
@@ -274,7 +268,6 @@ class IConfigurationCommandPort(ABC):
             CommandNotFoundError: If command not mounted
             PermissionError: If user lacks permission
         """
-        pass
 
     @abstractmethod
     async def mount_subagent(
@@ -298,7 +291,6 @@ class IConfigurationCommandPort(ABC):
             ValidationError: If sub-agent config invalid
             PermissionError: If user lacks permission
         """
-        pass
 
     @abstractmethod
     async def unmount_subagent(
@@ -319,4 +311,3 @@ class IConfigurationCommandPort(ABC):
             SubAgentNotFoundError: If sub-agent not mounted
             PermissionError: If user lacks permission
         """
-        pass

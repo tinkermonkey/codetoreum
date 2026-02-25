@@ -2,25 +2,18 @@
 
 import asyncio
 import logging
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import (
     Any,
-    AsyncIterator,
-    Awaitable,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Tuple,
     cast,
 )
 
 from codetoreum.domain.agent import Agent
 from codetoreum.domain.agent_execution import AgentExecution, ExecutionStatus
 from codetoreum.domain.exceptions import DomainError
-from codetoreum.domain.project_context import ProjectContext
 from codetoreum.domain.types import (
     CONTAINER_LABEL_AGENT,
     CONTAINER_LABEL_EXECUTION_ID,
@@ -34,9 +27,7 @@ from codetoreum.domain.value_objects import (
     ContainerConfig,
     ExecutionContext,
 )
-from codetoreum.domain.value_objects import ExecutionResult as DomainExecutionResult
 from codetoreum.domain.work_item import WorkItem
-from codetoreum.domain.workspace_context import WorkspaceContext
 from codetoreum.infrastructure.observability.instrumentation import (
     instrument_async_function,
 )
@@ -48,7 +39,6 @@ from codetoreum.ports.exceptions import (
     LLMProviderError,
     PortError,
     RateLimitError,
-    StorageError,
 )
 from codetoreum.ports.output import IContainer, IEventStore, ILLMProvider, IStorage
 from codetoreum.ports.output.llm_provider import ExecutionContext as LLMExecutionContext
@@ -83,9 +73,9 @@ class ExecutionServiceResult:
 
     success: bool
     execution: AgentExecution
-    reason: Optional[str] = None
-    error: Optional[str] = None
-    failure_reason: Optional[ExecutionFailureReason] = None
+    reason: str | None = None
+    error: str | None = None
+    failure_reason: ExecutionFailureReason | None = None
 
 
 @dataclass
@@ -138,8 +128,8 @@ class ExecutionService:
         self.retry_delay_seconds = retry_delay_seconds
 
         # Track active executions for streaming
-        self._active_executions: Dict[str, AgentExecution] = {}
-        self._log_subscribers: Dict[str, List[Callable[[LogEntry], None]]] = {}
+        self._active_executions: dict[str, AgentExecution] = {}
+        self._log_subscribers: dict[str, list[Callable[[LogEntry], None]]] = {}
 
     @instrument_async_function(
         name="execution.create_execution",
@@ -152,7 +142,7 @@ class ExecutionService:
         workflow_id: str,
         stage_name: str,
         prompt: str,
-        previous_session_id: Optional[str] = None,
+        previous_session_id: str | None = None,
     ) -> AgentExecution:
         """
         Create new agent execution.
@@ -218,7 +208,7 @@ class ExecutionService:
         self,
         execution: AgentExecution,
         context: ExecutionContext,
-        container_config: Optional[ContainerConfig] = None,
+        container_config: ContainerConfig | None = None,
     ) -> ExecutionServiceResult:
         """
         Start agent execution.
@@ -302,7 +292,7 @@ class ExecutionService:
         self,
         execution: AgentExecution,
         context: ExecutionContext,
-        stream_callback: Optional[Callable[[str], None]] = None,
+        stream_callback: Callable[[str], None] | None = None,
     ) -> ExecutionServiceResult:
         """
         Execute agent with LLM provider.
@@ -316,7 +306,7 @@ class ExecutionService:
             ExecutionServiceResult with outcome
         """
         retry_count = 0
-        last_error: Optional[Exception] = None
+        last_error: Exception | None = None
 
         while retry_count <= self.max_retries:
             try:
@@ -433,7 +423,7 @@ class ExecutionService:
         self,
         execution: AgentExecution,
         context: ExecutionContext,
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         """
         Build Docker labels for container.
 
@@ -471,7 +461,7 @@ class ExecutionService:
         execution: AgentExecution,
         context: ExecutionContext,
         container_config: ContainerConfig,
-        stream_callback: Optional[Callable[[str], None]] = None,
+        stream_callback: Callable[[str], None] | None = None,
     ) -> ExecutionServiceResult:
         """
         Execute agent in Docker container.
@@ -496,7 +486,7 @@ class ExecutionService:
                 image=container_config.image,
                 name=execution.container_name,
                 command=container_config.command,
-                volumes=cast(Optional[Dict[str, str]], container_config.volumes),
+                volumes=cast("dict[str, str] | None", container_config.volumes),
                 environment=container_config.environment or {},
                 working_dir=container_config.working_dir,
                 user=container_config.user,
@@ -551,28 +541,27 @@ class ExecutionService:
                     execution=execution,
                     reason="Container execution completed",
                 )
-            else:
-                # Execution failed
-                error_message = f"Container exited with code {exit_code}"
-                execution.fail(error_message=error_message, exit_code=exit_code)
+            # Execution failed
+            error_message = f"Container exited with code {exit_code}"
+            execution.fail(error_message=error_message, exit_code=exit_code)
 
-                # Persist events
-                events = execution.get_pending_events()
-                for event in events:
-                    await self.event_store.append(event.aggregate_id, [event])
-                execution.clear_events()
+            # Persist events
+            events = execution.get_pending_events()
+            for event in events:
+                await self.event_store.append(event.aggregate_id, [event])
+            execution.clear_events()
 
-                logger.error(
-                    f"Container execution {execution.id} failed: {error_message}",
-                    extra={"error_id": "ERR_EXECUTION_CONTAINER_EXIT_FAILURE"}
-                )
+            logger.error(
+                f"Container execution {execution.id} failed: {error_message}",
+                extra={"error_id": "ERR_EXECUTION_CONTAINER_EXIT_FAILURE"}
+            )
 
-                return ExecutionServiceResult(
-                    success=False,
-                    execution=execution,
-                    error=error_message,
-                    failure_reason=ExecutionFailureReason.CONTAINER_ERROR,
-                )
+            return ExecutionServiceResult(
+                success=False,
+                execution=execution,
+                error=error_message,
+                failure_reason=ExecutionFailureReason.CONTAINER_ERROR,
+            )
 
         except ContainerTimeoutError as e:
             logger.error(
@@ -695,12 +684,11 @@ class ExecutionService:
                 return ExecutionServiceResult(
                     success=True, execution=execution, reason="Execution cancelled"
                 )
-            else:
-                return ExecutionServiceResult(
-                    success=False,
-                    execution=execution,
-                    error="Execution already in terminal state",
-                )
+            return ExecutionServiceResult(
+                success=False,
+                execution=execution,
+                error="Execution already in terminal state",
+            )
 
         except EventStoreError as e:
             logger.error(
@@ -722,8 +710,8 @@ class ExecutionService:
             )
 
     async def get_execution_logs(
-        self, execution: AgentExecution, tail: Optional[int] = None
-    ) -> List[LogEntry]:
+        self, execution: AgentExecution, tail: int | None = None
+    ) -> list[LogEntry]:
         """
         Get execution logs.
 
@@ -734,7 +722,7 @@ class ExecutionService:
         Returns:
             List of log entries
         """
-        logs: List[LogEntry] = []
+        logs: list[LogEntry] = []
 
         try:
             if execution.container_id:
@@ -748,7 +736,7 @@ class ExecutionService:
                     if line.strip():
                         logs.append(
                             LogEntry(
-                                timestamp=datetime.now(timezone.utc),
+                                timestamp=datetime.now(UTC),
                                 level="INFO",
                                 message=line,
                                 source="container",
@@ -795,7 +783,7 @@ class ExecutionService:
             async for log_line in log_stream:
                 if log_line.strip():
                     yield LogEntry(
-                        timestamp=datetime.now(timezone.utc),
+                        timestamp=datetime.now(UTC),
                         level="INFO",
                         message=log_line,
                         source="container",
@@ -808,7 +796,7 @@ class ExecutionService:
                 extra={"error_id": "ERR_EXECUTION_STREAM_LOGS_ERROR"}
             )
             yield LogEntry(
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 level="ERROR",
                 message=f"Log streaming error: {e}",
                 source="service",
@@ -867,7 +855,7 @@ class ExecutionService:
         )
 
     def _create_stream_callback(
-        self, execution_id: str, user_callback: Optional[Callable[[str], None]]
+        self, execution_id: str, user_callback: Callable[[str], None] | None
     ) -> Callable[[Any], Awaitable[None]]:
         """
         Create streaming callback that notifies subscribers and user callback.
@@ -886,7 +874,7 @@ class ExecutionService:
             # Notify log subscribers
             if execution_id in self._log_subscribers:
                 log_entry = LogEntry(
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                     level="INFO",
                     message=content,
                     source="llm",
@@ -944,7 +932,7 @@ class ExecutionService:
                 extra={"error_id": "ERR_EXECUTION_STREAM_CONTAINER_LOGS_ERROR"}
             )
 
-    def _extract_token_usage(self, logs: str) -> Tuple[int, int]:
+    def _extract_token_usage(self, logs: str) -> tuple[int, int]:
         """
         Extract token usage from logs.
 
@@ -1022,7 +1010,7 @@ class ExecutionService:
         return False
 
     def _classify_failure(
-        self, error: Optional[Exception]
+        self, error: Exception | None
     ) -> ExecutionFailureReason:
         """
         Classify failure reason from exception.
@@ -1038,13 +1026,12 @@ class ExecutionService:
 
         if isinstance(error, RateLimitError):
             return ExecutionFailureReason.RATE_LIMIT
-        elif isinstance(error, ContainerTimeoutError):
+        if isinstance(error, ContainerTimeoutError):
             return ExecutionFailureReason.TIMEOUT
-        elif isinstance(error, ContainerExecutionError):
+        if isinstance(error, ContainerExecutionError):
             return ExecutionFailureReason.CONTAINER_ERROR
-        elif isinstance(error, ExternalServiceError):
+        if isinstance(error, ExternalServiceError):
             return ExecutionFailureReason.LLM_ERROR
-        elif isinstance(error, (ValueError, DomainError)):
+        if isinstance(error, (ValueError, DomainError)):
             return ExecutionFailureReason.VALIDATION_ERROR
-        else:
-            return ExecutionFailureReason.UNKNOWN
+        return ExecutionFailureReason.UNKNOWN

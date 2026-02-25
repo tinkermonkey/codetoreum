@@ -17,7 +17,6 @@ class TestPipelineLockServiceContract(ABC):
     @abstractmethod
     async def create_service(self) -> IPipelineLockService:
         """Create and return an IPipelineLockService instance for testing."""
-        pass
 
     @pytest.mark.asyncio
     async def test_try_acquire_lock_returns_success_true(self):

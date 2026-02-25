@@ -3,7 +3,6 @@
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import Dict, Optional, Set
 
 from codetoreum.domain.events import WorkItemColumnChanged
 from codetoreum.infrastructure.event_bus import EventBus
@@ -14,7 +13,7 @@ from codetoreum.ports.exceptions import (
     ResourceNotFoundError,
     ValidationError,
 )
-from codetoreum.ports.output.board_service import IBoardService, MovedByType
+from codetoreum.ports.output.board_service import IBoardService
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +28,7 @@ class BoardState:
     """
 
     board_id: str
-    item_columns: Dict[str, str]  # work_item_id -> column_name
+    item_columns: dict[str, str]  # work_item_id -> column_name
 
 
 class BoardPollingService:
@@ -63,13 +62,13 @@ class BoardPollingService:
         self.poll_interval = poll_interval_seconds
 
         # Board state cache for change detection
-        self._board_states: Dict[str, BoardState] = {}
+        self._board_states: dict[str, BoardState] = {}
 
         # Boards to poll (project_id:board_id)
-        self._enabled_boards: Set[str] = set()
+        self._enabled_boards: set[str] = set()
 
         self._running = False
-        self._poll_task: Optional[asyncio.Task] = None
+        self._poll_task: asyncio.Task | None = None
 
     def enable_board(self, project_id: str, board_id: str) -> None:
         """Enable polling for a board.

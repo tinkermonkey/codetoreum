@@ -1,6 +1,5 @@
 """Unit tests for AgentExecution entity."""
 
-from datetime import datetime
 from time import sleep
 
 import pytest

@@ -390,7 +390,7 @@ class TestCommentContext:
         with pytest.raises(ValueError, match="parent_comment cannot be None"):
             CommentContext.for_reply(
                 thread_id="t1",
-                parent_comment=cast(Comment, None),
+                parent_comment=cast("Comment", None),
             )
 
 

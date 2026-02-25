@@ -1,8 +1,8 @@
 """Value objects for the domain layer."""
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, Generic, List, Optional, TypeVar
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any, Generic, Self, TypeVar
 from uuid import uuid4
 
 if TYPE_CHECKING:
@@ -79,12 +79,12 @@ class TypeSafeId(Generic[T]):
             raise DomainError(f"{self._type_name} cannot be empty")
 
     @classmethod
-    def generate(cls: type[T]) -> T:
+    def generate(cls) -> Self:
         """Generate new unique identifier."""
         return cls(value=str(uuid4()))
 
     @classmethod
-    def from_string(cls: type[T], value: str) -> T:
+    def from_string(cls, value: str) -> Self:
         """Create from string value."""
         return cls(value=value)
 
@@ -97,28 +97,24 @@ class TypeSafeId(Generic[T]):
 class WorkItemId(TypeSafeId["WorkItemId"]):
     """Type-safe identifier for work items."""
 
-    pass
 
 
 @dataclass(frozen=True)
 class WorkflowId(TypeSafeId["WorkflowId"]):
     """Type-safe identifier for workflows."""
 
-    pass
 
 
 @dataclass(frozen=True)
 class AgentId(TypeSafeId["AgentId"]):
     """Type-safe identifier for agents."""
 
-    pass
 
 
 @dataclass(frozen=True)
 class ExecutionId(TypeSafeId["ExecutionId"]):
     """Type-safe identifier for agent executions."""
 
-    pass
 
 
 # ============================================================================
@@ -149,7 +145,6 @@ class Requirement:
         Returns:
             True if capability meets requirement
         """
-        from codetoreum.domain.agent import AgentCapability
 
         return (
             capability.skill == self.skill
@@ -176,12 +171,12 @@ class ExecutionResult:
 
     # Output
     output: str
-    error_message: Optional[str]
+    error_message: str | None
 
     # Files modified (for code changes)
-    modified_files: List[str]
-    added_files: List[str]
-    deleted_files: List[str]
+    modified_files: list[str]
+    added_files: list[str]
+    deleted_files: list[str]
 
     # Metrics
     input_tokens: int
@@ -189,10 +184,10 @@ class ExecutionResult:
     duration_seconds: float
 
     # Session continuity
-    session_id: Optional[str]
+    session_id: str | None
 
     # Metadata
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
     # Timestamp
     timestamp: datetime
@@ -213,11 +208,11 @@ class ExecutionResult:
         input_tokens: int,
         output_tokens: int,
         duration_seconds: float,
-        modified_files: Optional[List[str]] = None,
-        added_files: Optional[List[str]] = None,
-        deleted_files: Optional[List[str]] = None,
-        session_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        modified_files: list[str] | None = None,
+        added_files: list[str] | None = None,
+        deleted_files: list[str] | None = None,
+        session_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> "ExecutionResult":
         """Create successful execution result."""
         return cls(
@@ -233,7 +228,7 @@ class ExecutionResult:
             duration_seconds=duration_seconds,
             session_id=session_id,
             metadata=metadata or {},
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
     @classmethod
@@ -245,7 +240,7 @@ class ExecutionResult:
         duration_seconds: float = 0.0,
         input_tokens: int = 0,
         output_tokens: int = 0,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> "ExecutionResult":
         """Create failed execution result."""
         return cls(
@@ -261,7 +256,7 @@ class ExecutionResult:
             duration_seconds=duration_seconds,
             session_id=None,
             metadata=metadata or {},
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
     def get_total_tokens(self) -> int:
@@ -272,13 +267,13 @@ class ExecutionResult:
         """Check if execution made file changes."""
         return bool(self.modified_files or self.added_files or self.deleted_files)
 
-    def get_all_affected_files(self) -> List[str]:
+    def get_all_affected_files(self) -> list[str]:
         """Get all files affected by execution."""
         return list(
             set(self.modified_files + self.added_files + self.deleted_files)
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "success": self.success,
@@ -308,14 +303,14 @@ class ContainerConfig:
     """Configuration for container creation."""
 
     image: str  # Image name:tag
-    name: Optional[str] = None  # Container name
-    command: Optional[List[str]] = None  # Command to run
-    entrypoint: Optional[List[str]] = None
+    name: str | None = None  # Container name
+    command: list[str] | None = None  # Command to run
+    entrypoint: list[str] | None = None
     working_dir: str = "/workspace"
     user: str = "1000:1000"  # UID:GID
-    environment: Optional[Dict[str, str]] = None
-    volumes: Optional[Dict[str, Dict[str, str]]] = None  # {host: {bind: path, mode}}
-    network: Optional[str] = None
+    environment: dict[str, str] | None = None
+    volumes: dict[str, dict[str, str]] | None = None  # {host: {bind: path, mode}}
+    network: str | None = None
     auto_remove: bool = False  # --rm flag
     detached: bool = False  # -d flag
     stdin_open: bool = False  # -i flag
@@ -333,7 +328,7 @@ class ContainerConfig:
                 if mode not in ["rw", "ro"]:
                     raise DomainError(f"Volume mode must be 'rw' or 'ro', got {mode}")
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "image": self.image,
@@ -373,13 +368,13 @@ class ExecutionContext:
 
     # Workspace context
     workspace_type: str
-    branch_name: Optional[str]
-    discussion_id: Optional[str]
+    branch_name: str | None
+    discussion_id: str | None
 
     # Project context
     project_id: str
     repository_url: str
-    tech_stack: List[str]
+    tech_stack: list[str]
 
     # Permissions
     filesystem_write_allowed: bool
@@ -387,13 +382,13 @@ class ExecutionContext:
     requires_docker: bool
 
     # MCP servers
-    mcp_servers: List[str]
+    mcp_servers: list[str]
 
     # Session continuity
-    previous_session_id: Optional[str]
+    previous_session_id: str | None
 
     # Metadata
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
     def __post_init__(self) -> None:
         """Validate execution context."""
@@ -406,7 +401,7 @@ class ExecutionContext:
         if not self.agent_id:
             raise DomainError("Agent ID cannot be empty")
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         return {
             "work_item_id": self.work_item_id,
@@ -489,7 +484,7 @@ class TokenUsage:
             output_tokens=self.output_tokens + other.output_tokens,
         )
 
-    def to_dict(self) -> Dict[str, int]:
+    def to_dict(self) -> dict[str, int]:
         """Serialize to dictionary."""
         return {
             "input_tokens": self.input_tokens,

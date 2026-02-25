@@ -1,9 +1,8 @@
 """Integration tests for ExecutionService."""
 
-import asyncio
-from datetime import datetime, timezone
-from typing import Any, AsyncIterator, Callable, Dict, Iterator, List, Optional
-from unittest.mock import AsyncMock, MagicMock
+from collections.abc import AsyncIterator, Callable, Iterator
+from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 
@@ -13,9 +12,8 @@ from codetoreum.application.execution_service import (
     LogEntry,
 )
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
-from codetoreum.domain.agent_execution import AgentExecution, ExecutionStatus
+from codetoreum.domain.agent_execution import ExecutionStatus
 from codetoreum.domain.events import DomainEvent
-from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.value_objects import (
     ContainerConfig,
     ExecutionContext,
@@ -23,7 +21,6 @@ from codetoreum.domain.value_objects import (
 from codetoreum.domain.work_item import (
     WorkItem,
     WorkItemPriority,
-    WorkItemStatus,
 )
 from codetoreum.ports.exceptions import (
     ContainerExecutionError,
@@ -31,7 +28,6 @@ from codetoreum.ports.exceptions import (
     ExternalServiceError,
     RateLimitError,
 )
-from codetoreum.ports.output import IContainer, IEventStore, ILLMProvider, IStorage
 from codetoreum.ports.output.container import ContainerResult, ContainerStatus
 from codetoreum.ports.output.llm_provider import ExecutionContext as LLMExecutionContext
 from codetoreum.ports.output.llm_provider import ExecutionResult as LLMExecutionResult
@@ -48,7 +44,7 @@ class MockEventStore:
     """Mock event store for testing."""
 
     def __init__(self):
-        self.events: List[DomainEvent] = []
+        self.events: list[DomainEvent] = []
 
     async def append(self, event: DomainEvent) -> None:
         """Append event to store."""
@@ -56,7 +52,7 @@ class MockEventStore:
 
     async def get_events(
         self, aggregate_id: str, from_version: int = 0
-    ) -> List[DomainEvent]:
+    ) -> list[DomainEvent]:
         """Get events for aggregate."""
         return [e for e in self.events if e.aggregate_id == aggregate_id]
 
@@ -74,8 +70,8 @@ class MockLLMProvider:
     async def execute(
         self,
         prompt: str,
-        context: Optional[LLMExecutionContext] = None,
-        stream_callback: Optional[Callable] = None,
+        context: LLMExecutionContext | None = None,
+        stream_callback: Callable | None = None,
     ) -> LLMExecutionResult:
         """Execute prompt."""
         self.execution_count += 1
@@ -104,29 +100,29 @@ class MockLLMProvider:
             completion_tokens=10,
             prompt_tokens=20,
             total_tokens=30,
-            started_at=datetime.now(timezone.utc),
-            completed_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
             duration_ms=100,
             metadata={"session_id": "test-session-123"},
         )
 
-    async def execute_with_tools(self, prompt: str, tools: Any, context: Optional[LLMExecutionContext] = None, stream_callback: Optional[Callable] = None) -> LLMExecutionResult:
+    async def execute_with_tools(self, prompt: str, tools: Any, context: LLMExecutionContext | None = None, stream_callback: Callable | None = None) -> LLMExecutionResult:
         """Execute with tools."""
         return await self.execute(prompt, context, stream_callback)
 
     async def stream_completion(
-        self, prompt: str, context: Optional[LLMExecutionContext] = None
+        self, prompt: str, context: LLMExecutionContext | None = None
     ) -> AsyncIterator[StreamChunk]:
         """Stream completion."""
         for i, chunk in enumerate(["Hello", " ", "World", "!"]):
             yield StreamChunk(content=chunk, chunk_index=i, is_final=(i == 3))
 
-    async def create_conversation(self, system_prompt: Optional[str] = None, parameters: Optional[Dict[str, Any]] = None) -> str:
+    async def create_conversation(self, system_prompt: str | None = None, parameters: dict[str, Any] | None = None) -> str:
         """Create conversation."""
         return "conv-123"
 
     async def continue_conversation(
-        self, conversation_id: str, message: str, stream_callback: Optional[Callable] = None
+        self, conversation_id: str, message: str, stream_callback: Callable | None = None
     ) -> LLMExecutionResult:
         """Continue conversation."""
         return await self.execute(message, stream_callback=stream_callback)
@@ -143,15 +139,15 @@ class MockLLMProvider:
             supports_streaming=True,
         )
 
-    async def list_available_models(self) -> List[ModelInfo]:
+    async def list_available_models(self) -> list[ModelInfo]:
         """List available models."""
         return [await self.get_model_info()]
 
-    async def count_tokens(self, text: str, model: Optional[str] = None) -> int:
+    async def count_tokens(self, text: str, model: str | None = None) -> int:
         """Count tokens."""
         return len(text.split())
 
-    async def get_usage_stats(self, since: Optional[datetime] = None) -> UsageStats:
+    async def get_usage_stats(self, since: datetime | None = None) -> UsageStats:
         """Get usage stats."""
         return UsageStats(
             total_requests=self.execution_count,
@@ -159,8 +155,8 @@ class MockLLMProvider:
             input_tokens=20 * self.execution_count,
             output_tokens=10 * self.execution_count,
             total_cost=0.01 * self.execution_count,
-            period_start=datetime.now(timezone.utc),
-            period_end=datetime.now(timezone.utc),
+            period_start=datetime.now(UTC),
+            period_end=datetime.now(UTC),
         )
 
 
@@ -168,7 +164,7 @@ class MockContainer:
     """Mock container adapter for testing."""
 
     def __init__(self):
-        self.containers: Dict[str, Dict[str, Any]] = {}
+        self.containers: dict[str, dict[str, Any]] = {}
         self.should_fail = False
         self.should_timeout = False
         self.exit_code = 0
@@ -177,14 +173,14 @@ class MockContainer:
     async def create(
         self,
         image: str,
-        name: Optional[str] = None,
-        command: Optional[List[str]] = None,
-        volumes: Optional[Dict[str, str]] = None,
-        environment: Optional[Dict[str, str]] = None,
-        working_dir: Optional[str] = None,
-        user: Optional[str] = None,
-        network: Optional[str] = None,
-        labels: Optional[Dict[str, str]] = None,
+        name: str | None = None,
+        command: list[str] | None = None,
+        volumes: dict[str, str] | None = None,
+        environment: dict[str, str] | None = None,
+        working_dir: str | None = None,
+        user: str | None = None,
+        network: str | None = None,
+        labels: dict[str, str] | None = None,
     ) -> str:
         """Create container."""
         container_id = f"container-{len(self.containers)}"
@@ -210,7 +206,7 @@ class MockContainer:
         """Remove container."""
         self.containers.pop(container_id, None)
 
-    async def wait(self, container_id: str, timeout: Optional[int] = None) -> int:
+    async def wait(self, container_id: str, timeout: int | None = None) -> int:
         """Wait for container."""
         if self.should_timeout:
             raise ContainerTimeoutError("Container timed out")
@@ -229,8 +225,8 @@ class MockContainer:
         container_id: str,
         stream: bool = False,
         follow: bool = False,
-        tail: Optional[int] = None,
-        since: Optional[datetime] = None,
+        tail: int | None = None,
+        since: datetime | None = None,
     ) -> Any:
         """Get container logs."""
         if stream:
@@ -248,19 +244,19 @@ class MockContainer:
         return ContainerStatus(
             id=container_id,
             status=container.get("status", "unknown"),
-            created_at=datetime.now(timezone.utc),
-            started_at=datetime.now(timezone.utc),
-            finished_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            started_at=datetime.now(UTC),
+            finished_at=datetime.now(UTC),
             exit_code=container.get("exit_code"),
         )
 
     async def exec(
         self,
         container_id: str,
-        command: List[str],
-        user: Optional[str] = None,
-        working_dir: Optional[str] = None,
-        environment: Optional[Dict[str, str]] = None,
+        command: list[str],
+        user: str | None = None,
+        working_dir: str | None = None,
+        environment: dict[str, str] | None = None,
     ) -> ContainerResult:
         """Execute command in container."""
         return ContainerResult(
@@ -271,19 +267,18 @@ class MockContainer:
             container_id=container_id,
         )
 
-    async def list_containers(self, all: bool = False, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    async def list_containers(self, all: bool = False, filters: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         """List containers."""
         return []
 
-    async def pull_image(self, image: str, tag: str = "latest", stream_callback: Optional[Callable] = None) -> None:
+    async def pull_image(self, image: str, tag: str = "latest", stream_callback: Callable | None = None) -> None:
         """Pull image."""
-        pass
 
     async def image_exists(self, image: str, tag: str = "latest") -> bool:
         """Check if image exists."""
         return True
 
-    async def inspect(self, container_id: str) -> Dict[str, Any]:
+    async def inspect(self, container_id: str) -> dict[str, Any]:
         """Inspect container."""
         return self.containers.get(container_id, {})
 
@@ -291,13 +286,11 @@ class MockContainer:
         self, container_id: str, source: str, destination: str
     ) -> None:
         """Copy to container."""
-        pass
 
     async def copy_from_container(
         self, container_id: str, source: str, destination: str
     ) -> None:
         """Copy from container."""
-        pass
 
     async def kill(self, container_id: str, signal: str = "SIGKILL") -> None:
         """Kill container."""
@@ -307,11 +300,11 @@ class MockContainer:
     async def run(
         self,
         image: str,
-        command: List[str],
-        volumes: Dict[str, str],
-        environment: Dict[str, str],
+        command: list[str],
+        volumes: dict[str, str],
+        environment: dict[str, str],
         timeout: int = 300,
-        stream_callback: Optional[Callable] = None,
+        stream_callback: Callable | None = None,
     ) -> ContainerResult:
         """Run container."""
         return ContainerResult(
@@ -327,20 +320,20 @@ class MockStorage:
     """Mock storage adapter for testing."""
 
     def __init__(self):
-        self.artifacts: Dict[str, bytes] = {}
+        self.artifacts: dict[str, bytes] = {}
 
     async def store_artifact(
-        self, artifact_id: str, data: bytes, metadata: Optional[Dict[str, Any]] = None
+        self, artifact_id: str, data: bytes, metadata: dict[str, Any] | None = None
     ) -> str:
         """Store artifact."""
         self.artifacts[artifact_id] = data
         return artifact_id
 
-    async def retrieve_artifact(self, artifact_id: str) -> Optional[bytes]:
+    async def retrieve_artifact(self, artifact_id: str) -> bytes | None:
         """Retrieve artifact."""
         return self.artifacts.get(artifact_id)
 
-    async def list_artifacts(self, prefix: Optional[str] = None) -> List[str]:
+    async def list_artifacts(self, prefix: str | None = None) -> list[str]:
         """List artifacts."""
         if prefix:
             return [k for k in self.artifacts.keys() if k.startswith(prefix)]
@@ -764,7 +757,7 @@ async def test_log_subscription(
 ):
     """Test log subscription and streaming."""
     mock_llm_provider.stream_enabled = True
-    received_logs: List[LogEntry] = []
+    received_logs: list[LogEntry] = []
 
     def log_callback(entry: LogEntry) -> None:
         received_logs.append(entry)

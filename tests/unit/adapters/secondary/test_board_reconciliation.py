@@ -11,7 +11,6 @@ Tests verify that:
 import pytest
 
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
-from codetoreum.domain.events import BoardReconciledEvent
 from codetoreum.ports.output.board_service import BoardConfig
 
 

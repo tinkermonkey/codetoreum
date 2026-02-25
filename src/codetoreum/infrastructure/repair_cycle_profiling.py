@@ -13,8 +13,8 @@ import time
 import tracemalloc
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import psutil
 
@@ -23,9 +23,9 @@ from codetoreum.infrastructure.error_ids import ErrorRegistry
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "PerformanceThresholdMonitor",
     "ProfileData",
     "RepairCycleProfiler",
-    "PerformanceThresholdMonitor",
     "RepairCycleProfilerContext",
     "ThresholdCheckingContext",
 ]
@@ -62,13 +62,13 @@ class ProfileData:
 
     operation: str
     start_time: float
-    end_time: Optional[float] = None
+    end_time: float | None = None
     start_memory_bytes: int = 0
     end_memory_bytes: int = 0
     peak_memory_bytes: int = 0
     cpu_percent: float = 0.0
     exceptions: int = 0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def duration_seconds(self) -> float:
@@ -82,7 +82,7 @@ class ProfileData:
         """Get memory delta in bytes."""
         return self.end_memory_bytes - self.start_memory_bytes
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "operation": self.operation,
@@ -115,10 +115,10 @@ class RepairCycleProfiler:
         self.enable_memory_tracking = enable_memory_tracking
         self.enable_cpu_tracking = enable_cpu_tracking
         self.max_profiles = max_profiles
-        self._profiles: List[ProfileData] = []
+        self._profiles: list[ProfileData] = []
         self._process = psutil.Process()
         self._memory_tracker = None
-        self._active_profiles: Dict[str, ProfileData] = {}
+        self._active_profiles: dict[str, ProfileData] = {}
 
         if self.enable_memory_tracking:
             tracemalloc.start()
@@ -128,7 +128,7 @@ class RepairCycleProfiler:
     def profile_operation(
         self,
         operation: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ):
         """
         Context manager to profile an operation.
@@ -189,18 +189,18 @@ class RepairCycleProfiler:
                 f"memory_delta={memory_delta_mb:.2f}MB, cpu={profile.cpu_percent:.1f}%"
             )
 
-    def get_profiles(self) -> List[ProfileData]:
+    def get_profiles(self) -> list[ProfileData]:
         """Get all recorded profiles."""
         return self._profiles.copy()
 
-    def get_profile_summary(self) -> Dict[str, Dict[str, float]]:
+    def get_profile_summary(self) -> dict[str, dict[str, float]]:
         """
         Get summary statistics for all profiles.
 
         Returns:
             Dict mapping operation to statistics
         """
-        summary: Dict[str, Dict[str, Any]] = {}
+        summary: dict[str, dict[str, Any]] = {}
 
         for profile in self._profiles:
             if profile.operation not in summary:
@@ -231,7 +231,7 @@ class RepairCycleProfiler:
 
         return summary
 
-    def get_slowest_operations(self, top_n: int = 10) -> List[Dict[str, Any]]:
+    def get_slowest_operations(self, top_n: int = 10) -> list[dict[str, Any]]:
         """
         Get slowest operations.
 
@@ -244,7 +244,7 @@ class RepairCycleProfiler:
         sorted_profiles = sorted(self._profiles, key=lambda p: p.duration_seconds, reverse=True)
         return [p.to_dict() for p in sorted_profiles[:top_n]]
 
-    def get_heaviest_operations(self, top_n: int = 10) -> List[Dict[str, Any]]:
+    def get_heaviest_operations(self, top_n: int = 10) -> list[dict[str, Any]]:
         """
         Get operations with highest memory delta.
 
@@ -264,7 +264,7 @@ class RepairCycleProfiler:
         )
         return [p.to_dict() for p in sorted_profiles[:top_n]]
 
-    def get_hottest_operations(self, top_n: int = 10) -> List[Dict[str, Any]]:
+    def get_hottest_operations(self, top_n: int = 10) -> list[dict[str, Any]]:
         """
         Get operations with highest CPU usage.
 
@@ -298,7 +298,7 @@ class RepairCycleProfiler:
 class PerformanceThresholdMonitor:
     """Monitor for performance threshold violations."""
 
-    def __init__(self, thresholds: Optional[Dict[str, Dict[str, float]]] = None):
+    def __init__(self, thresholds: dict[str, dict[str, float]] | None = None):
         """
         Initialize performance threshold monitor.
 
@@ -308,10 +308,10 @@ class PerformanceThresholdMonitor:
                        Example: {"test_execution": {"duration_seconds": 300.0, "memory_delta_mb": 500.0}}
         """
         self.thresholds = thresholds if thresholds is not None else self._default_thresholds()
-        self._violations: List[Dict[str, Any]] = []
+        self._violations: list[dict[str, Any]] = []
 
     @staticmethod
-    def _default_thresholds() -> Dict[str, Dict[str, float]]:
+    def _default_thresholds() -> dict[str, dict[str, float]]:
         """Get default performance thresholds."""
         return {
             "test_execution": {
@@ -332,7 +332,7 @@ class PerformanceThresholdMonitor:
             },
         }
 
-    def check_thresholds(self, profile: ProfileData) -> List[str]:
+    def check_thresholds(self, profile: ProfileData) -> list[str]:
         """
         Check profile against thresholds.
 
@@ -375,12 +375,12 @@ class PerformanceThresholdMonitor:
             self._violations.append({
                 "operation": profile.operation,
                 "violations": violations,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             })
 
         return violations
 
-    def get_violations(self) -> List[Dict[str, Any]]:
+    def get_violations(self) -> list[dict[str, Any]]:
         """Get all threshold violations."""
         return self._violations.copy()
 
@@ -397,7 +397,7 @@ class RepairCycleProfilerContext:
         enable_memory_tracking: bool = True,
         enable_cpu_tracking: bool = True,
         threshold_monitoring: bool = True,
-        custom_thresholds: Optional[Dict[str, Dict[str, float]]] = None,
+        custom_thresholds: dict[str, dict[str, float]] | None = None,
         max_profiles: int = 1000,
     ):
         """
@@ -420,16 +420,15 @@ class RepairCycleProfilerContext:
             threshold_monitor = PerformanceThresholdMonitor(thresholds=custom_thresholds)
         self.threshold_monitor = threshold_monitor
 
-    def profile(self, operation: str, metadata: Optional[Dict[str, Any]] = None):
+    def profile(self, operation: str, metadata: dict[str, Any] | None = None):
         """Profile an operation."""
         context = self.profiler.profile_operation(operation, metadata)
 
         if self.threshold_monitor:
             return ThresholdCheckingContext(context, self.threshold_monitor)
-        else:
-            return context
+        return context
 
-    def get_report(self) -> Dict[str, Any]:
+    def get_report(self) -> dict[str, Any]:
         """Get profiling report."""
         report = {
             "summary": self.profiler.get_profile_summary(),

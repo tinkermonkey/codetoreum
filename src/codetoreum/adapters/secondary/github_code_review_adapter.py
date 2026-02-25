@@ -11,8 +11,9 @@ Implements ICodeReviewService interface for GitHub pull requests, supporting:
 
 import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any
 
 from codetoreum.adapters.secondary.github_ticket_adapter import GitHubTicketAdapter
 from codetoreum.domain.events.adapter_events import now_iso
@@ -28,7 +29,6 @@ from codetoreum.infrastructure.http.github_graphql_client import (
 from codetoreum.ports.exceptions import (
     AuthenticationError,
     ExternalServiceError,
-    PermissionError,
     ResourceNotFoundError,
     ValidationError,
 )
@@ -98,19 +98,19 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
         self._webhook_enabled = webhook_enabled
 
         # Monitoring state per project
-        self._monitoring: Dict[str, MonitoringStatus] = {}
-        self._polling_tasks: Dict[str, asyncio.Task] = {}
+        self._monitoring: dict[str, MonitoringStatus] = {}
+        self._polling_tasks: dict[str, asyncio.Task] = {}
 
         # Event handlers by event type
-        self._event_handlers: Dict[str, List[Callable]] = {}
+        self._event_handlers: dict[str, list[Callable]] = {}
 
         # State tracking for polling-based change detection
-        self._last_known_status: Dict[str, CodeReviewStatus] = {}  # pr_id -> status
-        self._work_item_reviews: Dict[str, str] = {}  # work_item_id -> pr_id
+        self._last_known_status: dict[str, CodeReviewStatus] = {}  # pr_id -> status
+        self._work_item_reviews: dict[str, str] = {}  # work_item_id -> pr_id
 
         # Polling configuration
-        self._polling_intervals: Dict[str, float] = {}  # project_id -> interval
-        self._activity_counters: Dict[str, int] = {}  # project_id -> change count
+        self._polling_intervals: dict[str, float] = {}  # project_id -> interval
+        self._activity_counters: dict[str, int] = {}  # project_id -> change count
 
     # IEventEmitter implementation
 
@@ -236,7 +236,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
         self._monitoring[project_id] = MonitoringStatus(
             state=MonitoringState.ACTIVE,
             project_id=project_id,
-            started_at=datetime.now(timezone.utc).isoformat(),
+            started_at=datetime.now(UTC).isoformat(),
         )
 
         # Initialize polling configuration
@@ -316,7 +316,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
 
     async def get_review_for_work_item(
         self, work_item_id: str
-    ) -> Optional[CodeReview]:
+    ) -> CodeReview | None:
         """Find code review associated with a work item.
 
         Searches for a PR linked to the work item by:
@@ -451,7 +451,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
         except Exception as e:
             raise ExternalServiceError("github", f"Failed to fetch PR status: {e}")
 
-    async def get_review_comments(self, review_id: str) -> List[ReviewComment]:
+    async def get_review_comments(self, review_id: str) -> list[ReviewComment]:
         """Retrieve all comments on a code review.
 
         Fetches comments from all reviews on the PR, including review comments
@@ -809,7 +809,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
             )
 
     async def _handle_review_event(
-        self, payload: dict, pr_id: str, work_item_id: Optional[str], project_id: str
+        self, payload: dict, pr_id: str, work_item_id: str | None, project_id: str
     ) -> None:
         """Handle pull_request_review webhook event.
 
@@ -851,7 +851,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
         logger.info(f"PR {pr_id} review status changed: {previous_status} -> {new_status}")
 
     async def _handle_pr_state_change(
-        self, payload: dict, pr_id: str, work_item_id: Optional[str], project_id: str
+        self, payload: dict, pr_id: str, work_item_id: str | None, project_id: str
     ) -> None:
         """Handle pull_request state change webhook event.
 
@@ -1066,7 +1066,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
         except Exception as e:
             raise ExternalServiceError("github", f"Failed to fetch PR details: {e}")
 
-    async def _get_open_prs(self, project_id: str) -> List[Dict[str, Any]]:
+    async def _get_open_prs(self, project_id: str) -> list[dict[str, Any]]:
         """Query all open PRs for a project.
 
         Args:
@@ -1118,7 +1118,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
         except Exception as e:
             raise ExternalServiceError("github", f"Failed to fetch open PRs: {e}")
 
-    def _compute_review_status(self, pr_node: Dict[str, Any]) -> CodeReviewStatus:
+    def _compute_review_status(self, pr_node: dict[str, Any]) -> CodeReviewStatus:
         """Compute overall review status from PR node.
 
         Maps GitHub PR state and reviews to vendor-agnostic status:
@@ -1154,7 +1154,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
         return "open"
 
     def _map_github_review_state(
-        self, github_state: Optional[str]
+        self, github_state: str | None
     ) -> CodeReviewStatus:
         """Map GitHub review state to vendor-agnostic status.
 
@@ -1173,7 +1173,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
         return mapping.get(github_state, "open")  # type: ignore
 
     def _parse_code_review(
-        self, pr_node: Dict[str, Any], work_item_id: Optional[str] = None
+        self, pr_node: dict[str, Any], work_item_id: str | None = None
     ) -> CodeReview:
         """Parse PR node into CodeReview object.
 
@@ -1212,7 +1212,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
             work_item_id=work_item_id,
         )
 
-    def _extract_work_item_id(self, pr_data: Dict[str, Any]) -> Optional[str]:
+    def _extract_work_item_id(self, pr_data: dict[str, Any]) -> str | None:
         """Extract work item ID from PR.
 
         Looks for work item ID in PR body or branch name.
@@ -1241,7 +1241,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
 
         return None
 
-    def _get_work_item_for_review(self, review_id: str) -> Optional[str]:
+    def _get_work_item_for_review(self, review_id: str) -> str | None:
         """Get work item ID for a review (from cache).
 
         Args:

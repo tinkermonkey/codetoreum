@@ -1,6 +1,6 @@
 """Unit tests for domain events."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import pytest
@@ -8,21 +8,13 @@ import pytest
 from codetoreum.domain.events import (
     AgentAssigned,
     AgentCapabilityAdded,
-    AgentCapabilityRemoved,
-    AgentCapabilityUpdated,
-    AgentConstraintsUpdated,
     AgentCreated,
-    AgentMaxRetriesUpdated,
-    AgentMcpServerAdded,
-    AgentMcpServerRemoved,
     AgentModelUpdated,
-    AgentTimeoutUpdated,
     DomainEvent,
     ExecutionCompleted,
     ExecutionFailed,
     ExecutionInitialized,
     ExecutionStarted,
-    ExecutionTimeout,
     ProjectContextCreated,
     ProjectDockerConfigUpdated,
     ProjectTestConfigUpdated,
@@ -30,29 +22,17 @@ from codetoreum.domain.events import (
     ReviewCycleApproved,
     ReviewCycleCreated,
     ReviewCycleEscalated,
-    ReviewCycleRejected,
     ReviewFeedbackSubmitted,
     ReviewIterationStarted,
-    WorkflowAttached,
-    WorkflowCancelled,
     WorkflowCompleted,
     WorkflowCreated,
-    WorkflowFailed,
-    WorkflowPaused,
-    WorkflowResumed,
     WorkflowStageAdvanced,
-    WorkflowStageStatusUpdated,
-    WorkflowStarted,
     WorkItemBlocked,
     WorkItemCompleted,
     WorkItemCreated,
     WorkItemFailed,
     WorkItemLabelsUpdated,
-    WorkItemPriorityUpdated,
-    WorkItemStageUpdated,
     WorkItemStarted,
-    WorkItemUnblocked,
-    WorkItemUnderReview,
 )
 
 # =============================================================================
@@ -88,7 +68,7 @@ class TestDomainEvent:
         event_id = uuid4()
         correlation_id = uuid4()
         causation_id = uuid4()
-        occurred_at = datetime.now(timezone.utc)
+        occurred_at = datetime.now(UTC)
 
         event = DomainEvent(
             aggregate_id="test-123",
@@ -112,7 +92,7 @@ class TestDomainEvent:
         event_id = uuid4()
         correlation_id = uuid4()
         causation_id = uuid4()
-        occurred_at = datetime.now(timezone.utc)
+        occurred_at = datetime.now(UTC)
 
         event = DomainEvent(
             aggregate_id="test-123",
@@ -158,7 +138,7 @@ class TestDomainEvent:
         event_id = str(uuid4())
         correlation_id = str(uuid4())
         causation_id = str(uuid4())
-        occurred_at = datetime.now(timezone.utc).isoformat()
+        occurred_at = datetime.now(UTC).isoformat()
 
         event_dict = {
             "event_id": event_id,
@@ -190,7 +170,7 @@ class TestDomainEvent:
         event_dict = {
             "aggregate_id": "test-123",
             "aggregate_type": "TestAggregate",
-            "occurred_at": datetime.now(timezone.utc).isoformat(),
+            "occurred_at": datetime.now(UTC).isoformat(),
         }
 
         event = DomainEvent.from_dict(event_dict)
@@ -383,7 +363,7 @@ class TestWorkItemEvents:
         payload = {
             "agent_id": "agent-123",
             "reason": "Best match for task",
-            "assigned_at": datetime.now(timezone.utc).isoformat(),
+            "assigned_at": datetime.now(UTC).isoformat(),
         }
 
         event = AgentAssigned(
@@ -398,7 +378,7 @@ class TestWorkItemEvents:
     def test_work_item_started(self):
         """Test WorkItemStarted event."""
         payload = {
-            "started_at": datetime.now(timezone.utc).isoformat(),
+            "started_at": datetime.now(UTC).isoformat(),
             "agent_id": "agent-123",
         }
 
@@ -413,7 +393,7 @@ class TestWorkItemEvents:
     def test_work_item_completed(self):
         """Test WorkItemCompleted event."""
         payload = {
-            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "completed_at": datetime.now(UTC).isoformat(),
             "agent_id": "agent-123",
         }
 
@@ -428,7 +408,7 @@ class TestWorkItemEvents:
     def test_work_item_failed(self):
         """Test WorkItemFailed event."""
         payload = {
-            "failed_at": datetime.now(timezone.utc).isoformat(),
+            "failed_at": datetime.now(UTC).isoformat(),
             "reason": "Timeout exceeded",
             "error_details": {"code": "TIMEOUT", "message": "Agent timed out"},
             "agent_id": "agent-123",
@@ -445,7 +425,7 @@ class TestWorkItemEvents:
     def test_work_item_blocked(self):
         """Test WorkItemBlocked event."""
         payload = {
-            "blocked_at": datetime.now(timezone.utc).isoformat(),
+            "blocked_at": datetime.now(UTC).isoformat(),
             "reason": "Dependency not met",
             "blocking_issue_id": "issue-456",
         }
@@ -463,7 +443,7 @@ class TestWorkItemEvents:
         payload = {
             "old_labels": ["bug"],
             "new_labels": ["bug", "high-priority"],
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
         }
 
         event = WorkItemLabelsUpdated(
@@ -507,7 +487,7 @@ class TestAgentEvents:
         payload = {
             "skill": "rust",
             "proficiency": 0.8,
-            "added_at": datetime.now(timezone.utc).isoformat(),
+            "added_at": datetime.now(UTC).isoformat(),
         }
 
         event = AgentCapabilityAdded(
@@ -523,7 +503,7 @@ class TestAgentEvents:
         payload = {
             "old_model": "claude-3-sonnet",
             "new_model": "claude-3-opus",
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
         }
 
         event = AgentModelUpdated(
@@ -564,7 +544,7 @@ class TestExecutionEvents:
     def test_execution_started(self):
         """Test ExecutionStarted event."""
         payload = {
-            "started_at": datetime.now(timezone.utc).isoformat(),
+            "started_at": datetime.now(UTC).isoformat(),
             "container_name": "container-123",
         }
 
@@ -578,7 +558,7 @@ class TestExecutionEvents:
     def test_execution_completed(self):
         """Test ExecutionCompleted event."""
         payload = {
-            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "completed_at": datetime.now(UTC).isoformat(),
             "input_tokens": 1000,
             "output_tokens": 500,
             "duration_seconds": 45.5,
@@ -595,7 +575,7 @@ class TestExecutionEvents:
     def test_execution_failed(self):
         """Test ExecutionFailed event."""
         payload = {
-            "failed_at": datetime.now(timezone.utc).isoformat(),
+            "failed_at": datetime.now(UTC).isoformat(),
             "error_message": "Container crashed",
             "exit_code": 1,
             "duration_seconds": 10.5,
@@ -641,7 +621,7 @@ class TestWorkflowEvents:
             "from_stage": "implementation",
             "to_stage": "testing",
             "stage_index": 1,
-            "advanced_at": datetime.now(timezone.utc).isoformat(),
+            "advanced_at": datetime.now(UTC).isoformat(),
         }
 
         event = WorkflowStageAdvanced(
@@ -655,7 +635,7 @@ class TestWorkflowEvents:
     def test_workflow_completed(self):
         """Test WorkflowCompleted event."""
         payload = {
-            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "completed_at": datetime.now(UTC).isoformat(),
             "work_item_id": "work-123",
             "duration_seconds": 300.5,
         }
@@ -701,7 +681,7 @@ class TestReviewCycleEvents:
         """Test ReviewIterationStarted event."""
         payload = {
             "iteration_number": 1,
-            "started_at": datetime.now(timezone.utc).isoformat(),
+            "started_at": datetime.now(UTC).isoformat(),
             "reviewer_agent_id": "agent-456",
         }
 
@@ -717,7 +697,7 @@ class TestReviewCycleEvents:
         """Test ReviewFeedbackSubmitted event."""
         payload = {
             "iteration_number": 1,
-            "submitted_at": datetime.now(timezone.utc).isoformat(),
+            "submitted_at": datetime.now(UTC).isoformat(),
             "feedback": "Please fix the error handling",
             "decision": "needs_changes",
             "reviewer_id": "agent-456",
@@ -735,7 +715,7 @@ class TestReviewCycleEvents:
     def test_review_cycle_approved(self):
         """Test ReviewCycleApproved event."""
         payload = {
-            "approved_at": datetime.now(timezone.utc).isoformat(),
+            "approved_at": datetime.now(UTC).isoformat(),
             "final_iteration": 2,
             "reviewer_id": "agent-456",
             "approval_notes": "All issues resolved",
@@ -752,7 +732,7 @@ class TestReviewCycleEvents:
     def test_review_cycle_escalated(self):
         """Test ReviewCycleEscalated event."""
         payload = {
-            "escalated_at": datetime.now(timezone.utc).isoformat(),
+            "escalated_at": datetime.now(UTC).isoformat(),
             "reason": "Maximum iterations exceeded",
             "iteration_count": 3,
             "escalated_to": "human-reviewer",
@@ -798,7 +778,7 @@ class TestProjectContextEvents:
     def test_project_test_config_updated(self):
         """Test ProjectTestConfigUpdated event."""
         payload = {
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
             "test_command": "pytest",
             "test_directory": "tests/",
             "coverage_threshold": 80.0,
@@ -815,7 +795,7 @@ class TestProjectContextEvents:
     def test_project_docker_config_updated(self):
         """Test ProjectDockerConfigUpdated event."""
         payload = {
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
             "base_image": "python:3.11-slim",
             "build_args": {"BUILD_ENV": "production"},
             "environment_vars": {"APP_ENV": "production"},
@@ -832,7 +812,7 @@ class TestProjectContextEvents:
     def test_project_workflow_mapping_added(self):
         """Test ProjectWorkflowMappingAdded event."""
         payload = {
-            "added_at": datetime.now(timezone.utc).isoformat(),
+            "added_at": datetime.now(UTC).isoformat(),
             "label_pattern": "bug.*",
             "workflow_template_id": "template-123",
             "priority": 10,

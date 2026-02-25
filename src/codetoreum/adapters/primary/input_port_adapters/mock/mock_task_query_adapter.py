@@ -4,7 +4,7 @@ Mock Task Query Adapter
 In-memory implementation of ITaskQueryPort for development and testing.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from threading import RLock
 
 from codetoreum.ports.input.task_query import (
@@ -39,8 +39,8 @@ class MockTaskQueryAdapter(ITaskQueryPort):
             stage_name="test-stage",
             agent_name="test-agent",
             status=ExecutionStatus.COMPLETED,
-            started_at=datetime.now(timezone.utc),
-            completed_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
             duration_seconds=10.5,
         )
 

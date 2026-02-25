@@ -7,7 +7,7 @@ These tests verify:
 - Reset functionality
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -58,7 +58,7 @@ class TestMockContainerRecoveryAdapterSetup:
         """Should add container with specified creation time."""
         adapter = MockContainerRecoveryAdapter()
 
-        created_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        created_at = datetime.now(UTC) - timedelta(hours=1)
         metadata = adapter.add_container(
             container_id="abc123",
             container_name="test-container",
@@ -74,7 +74,7 @@ class TestMockContainerRecoveryAdapterSetup:
         """Should add container with age calculated in hours."""
         adapter = MockContainerRecoveryAdapter()
 
-        before = datetime.now(timezone.utc)
+        before = datetime.now(UTC)
         metadata = adapter.add_container(
             container_id="abc123",
             container_name="test-container",
@@ -83,7 +83,7 @@ class TestMockContainerRecoveryAdapterSetup:
             task_id="task-1",
             age_hours=2.5,
         )
-        after = datetime.now(timezone.utc)
+        after = datetime.now(UTC)
 
         # Created at should be approximately 2.5 hours ago
         expected_created = before - timedelta(hours=2.5)

@@ -12,7 +12,7 @@ Comprehensive test suite covering all lock flow scenarios:
 """
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
 import pytest
@@ -22,12 +22,6 @@ from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
 )
 from codetoreum.adapters.testing.in_memory_queue_service import InMemoryQueueService
 from codetoreum.application.pipeline_lock_service import LockStatus
-from codetoreum.domain.events.lock_events import (
-    LockAcquiredEvent,
-    LockReleasedEvent,
-    LockStaleDetectedEvent,
-    WorkItemQueuedEvent,
-)
 
 
 @pytest.fixture
@@ -142,7 +136,7 @@ class TestPipelineLockingSimulation:
         await lock_service.try_acquire_lock(project_id, board_id, "#100", board_position=0)
 
         # Simulate lock acquired 3 hours ago (use timezone-aware datetime)
-        three_hours_ago = datetime.now(timezone.utc) - timedelta(hours=3)
+        three_hours_ago = datetime.now(UTC) - timedelta(hours=3)
         lock_service.set_lock_acquired_at(project_id, board_id, three_hours_ago)
 
         # Step 2-4: #101 attempts acquisition → stale recovery
@@ -323,7 +317,7 @@ class TestPipelineLockingSimulation:
 
         # Test 1h59m: NOT stale
         await lock_service.try_acquire_lock(project_id, board_id, "#100", board_position=0)
-        almost_stale = datetime.now(timezone.utc) - timedelta(hours=1, minutes=59)
+        almost_stale = datetime.now(UTC) - timedelta(hours=1, minutes=59)
         lock_service.set_lock_acquired_at(project_id, board_id, almost_stale)
 
         result = await lock_service.try_acquire_lock(
@@ -336,7 +330,7 @@ class TestPipelineLockingSimulation:
         await lock_service.release_lock(project_id, board_id, "#100")
 
         await lock_service.try_acquire_lock(project_id, board_id, "#103", board_position=0)
-        definitely_stale = datetime.now(timezone.utc) - timedelta(hours=2, minutes=1)
+        definitely_stale = datetime.now(UTC) - timedelta(hours=2, minutes=1)
         lock_service.set_lock_acquired_at(project_id, board_id, definitely_stale)
 
         result = await lock_service.try_acquire_lock(

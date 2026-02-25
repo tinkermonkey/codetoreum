@@ -5,8 +5,8 @@ integration with checkpointing.
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Tuple
+from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 
@@ -16,12 +16,10 @@ from codetoreum.adapters.testing.in_memory_checkpoint_store import (
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
 from codetoreum.domain.repair_cycle_types import (
     RepairCycleCheckpoint,
-    RepairTestFailure,
     RepairTestRunConfig,
     RepairTestType,
 )
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
-from codetoreum.ports.output.repair_cycle_service import RepairCycleContext
 
 
 @dataclass
@@ -29,7 +27,7 @@ class _RepairCycleContextImpl:
     """Concrete implementation of RepairCycleContext Protocol for testing."""
     stage_name: str
     workflow_run_id: str
-    test_configs: Tuple[RepairTestRunConfig, ...]
+    test_configs: tuple[RepairTestRunConfig, ...]
     agent_name: str
     max_total_agent_calls: int
     checkpoint_interval: int
@@ -61,7 +59,7 @@ class TestCheckpointStorage:
     @pytest.fixture
     def checkpoint(self):
         """Create a valid checkpoint."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return RepairCycleCheckpoint(
             workflow_run_id="run-123",
             test_type=RepairTestType.UNIT,
@@ -109,7 +107,7 @@ class TestCheckpointStorage:
 
     async def test_delete_checkpoint_all_for_pipeline(self, store):
         """Test deleting all checkpoints for pipeline run."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Create checkpoints for multiple test types
         for test_type in [RepairTestType.UNIT, RepairTestType.INTEGRATION, RepairTestType.E2E]:
@@ -142,7 +140,7 @@ class TestCheckpointStorage:
 
     async def test_multiple_checkpoints_different_pipeline_runs(self, store):
         """Test storing checkpoints for different pipeline runs."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Create checkpoints for different runs
         for i in range(1, 4):
@@ -178,8 +176,8 @@ class TestCheckpointStorage:
                 warnings_reviewed=0,
                 elapsed_seconds=0.0,
                 test_results=(),
-                timestamp=datetime.now(timezone.utc).isoformat(),
-                expires_at=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
+                expires_at=datetime.now(UTC).isoformat(),
             )
 
 
@@ -289,7 +287,7 @@ class TestRepairCycleResume:
     async def test_resume_from_checkpoint(self, adapter, context, store):
         """Test resuming execution from checkpoint."""
         # Save checkpoint with state
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         checkpoint = RepairCycleCheckpoint(
             workflow_run_id="run-123",
             test_type=RepairTestType.UNIT,
@@ -313,7 +311,7 @@ class TestRepairCycleResume:
 
     async def test_resume_restores_state(self, adapter, context, store):
         """Test that resume restores internal state."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         checkpoint = RepairCycleCheckpoint(
             workflow_run_id="run-123",
             test_type=RepairTestType.UNIT,

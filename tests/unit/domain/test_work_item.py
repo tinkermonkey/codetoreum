@@ -1,6 +1,5 @@
 """Unit tests for WorkItem aggregate root."""
 
-from datetime import datetime
 
 import pytest
 

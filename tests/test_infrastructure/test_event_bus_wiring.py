@@ -86,7 +86,6 @@ class MockCodeReviewService:
 
 class AdapterWithoutEventMethod:
     """Adapter that doesn't implement on() method."""
-    pass
 
 
 # ====================================================================================

@@ -7,8 +7,9 @@ board column via BoardColumnEventHandler.handle_agent_completion().
 
 import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Callable, Coroutine, Dict, List, Optional
+from collections.abc import Callable, Coroutine
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from codetoreum.domain.agent_execution import ExecutionStatus
@@ -40,13 +41,11 @@ class MockAgentExecutor(IAgentExecutor):
 
     def __init__(self, execution_delay_seconds: float = 3.0):
         self._execution_delay = execution_delay_seconds
-        self._completion_callback: Optional[
-            Callable[[str, str, bool], Coroutine[Any, Any, None]]
-        ] = None
+        self._completion_callback: Callable[[str, str, bool], Coroutine[Any, Any, None]] | None = None
         self._default_board_id = "board-1"
-        self._executions: List[Dict[str, Any]] = []
+        self._executions: list[dict[str, Any]] = []
         self._pending_tasks: set[asyncio.Task] = set()
-        self._execution_query: Optional["MockExecutionQueryAdapter"] = None
+        self._execution_query: MockExecutionQueryAdapter | None = None
 
     def set_completion_handler(
         self,
@@ -87,7 +86,7 @@ class MockAgentExecutor(IAgentExecutor):
             agent_id: ID of the agent to execute
         """
         execution_id = str(uuid4())
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         self._executions.append({
             "work_item_id": work_item_id,
             "agent_id": agent_id,
@@ -189,12 +188,12 @@ class MockAgentExecutor(IAgentExecutor):
         work_item_id: str,
         started_at: datetime,
         status: ExecutionStatus,
-        error_message: Optional[str] = None,
+        error_message: str | None = None,
     ) -> None:
         """Replace execution record with final status in the query adapter."""
         if not self._execution_query:
             return
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         duration = (now - started_at).total_seconds()
         info = ExecutionInfo(
             id=execution_id,
@@ -220,6 +219,6 @@ class MockAgentExecutor(IAgentExecutor):
         self._execution_query.add_execution(info)
 
     @property
-    def executions(self) -> List[Dict[str, Any]]:
+    def executions(self) -> list[dict[str, Any]]:
         """Return recorded executions for test assertions."""
         return list(self._executions)

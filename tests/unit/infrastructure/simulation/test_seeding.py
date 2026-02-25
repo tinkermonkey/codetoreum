@@ -1,11 +1,11 @@
 """Unit tests for simulation data seeding."""
 
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 import pytest
 
-from codetoreum.domain.work_item import WorkItemPriority, WorkItemStatus
+from codetoreum.domain.work_item import WorkItemPriority
 from codetoreum.infrastructure.simulation import (
     CreatedItems,
     SimulationApplicationBootstrap,

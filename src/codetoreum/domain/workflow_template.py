@@ -1,8 +1,8 @@
 """Workflow Template entity and value objects."""
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 if TYPE_CHECKING:
@@ -19,12 +19,12 @@ class StageTemplate:
     name: str
     agent_id: str
     stage_type: str  # "sequential", "parallel", "review"
-    dependencies: List[str]
+    dependencies: list[str]
     is_parallel: bool
-    maker_agent_id: Optional[str]
-    reviewer_agent_id: Optional[str]
+    maker_agent_id: str | None
+    reviewer_agent_id: str | None
     max_review_iterations: int
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -42,15 +42,15 @@ class WorkflowTemplate:
     description: str
 
     # Template definition
-    stage_templates: List[StageTemplate]
+    stage_templates: list[StageTemplate]
 
     # Configuration
     version: int
     is_default: bool
-    applicable_labels: List[str]  # Which work item labels trigger this template
+    applicable_labels: list[str]  # Which work item labels trigger this template
 
     # Metadata
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
     # Timestamps
     created_at: datetime
@@ -86,8 +86,8 @@ class WorkflowTemplate:
             is_default=is_default,
             applicable_labels=[],
             metadata={},
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
 
     def add_stage(
@@ -95,10 +95,10 @@ class WorkflowTemplate:
         name: str,
         agent_id: str,
         stage_type: str = "sequential",
-        dependencies: Optional[List[str]] = None,
+        dependencies: list[str] | None = None,
         is_parallel: bool = False,
-        maker_agent_id: Optional[str] = None,
-        reviewer_agent_id: Optional[str] = None,
+        maker_agent_id: str | None = None,
+        reviewer_agent_id: str | None = None,
     ) -> StageTemplate:
         """
         Add stage to template.
@@ -128,7 +128,7 @@ class WorkflowTemplate:
         )
 
         self.stage_templates.append(stage)
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
 
         return stage
 
@@ -155,7 +155,7 @@ class WorkflowTemplate:
             project_id=project_id,
         )
 
-    def build_stages(self) -> List[PipelineStage]:
+    def build_stages(self) -> list[PipelineStage]:
         """
         Build concrete pipeline stages from template.
 

@@ -1,7 +1,6 @@
 """Unit tests for RepairCycleEventHandler."""
 
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -20,7 +19,6 @@ from codetoreum.domain.repair_cycle_types import (
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.output.repair_cycle_service import (
-    IRepairCycle,
     RepairCycleContext,
 )
 
@@ -111,7 +109,6 @@ class MockRepairCycleAdapter:
         context: RepairCycleContext,
     ) -> None:
         """Checkpoint (stub for protocol compliance)."""
-        pass
 
 
 # ====================================================================================

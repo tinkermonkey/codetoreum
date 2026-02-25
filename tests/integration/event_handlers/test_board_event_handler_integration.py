@@ -1,7 +1,6 @@
 """Integration tests for BoardColumnEventHandler with mock adapters."""
 
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -442,7 +441,6 @@ class TestErrorRecovery:
         )
 
         # Reset position for second item
-        from codetoreum.ports.output.board_service import WorkItemPosition
         mock_agent_executor.execute.return_value = None
 
         await event_bus.publish(event2)
@@ -499,7 +497,7 @@ class TestMultipleBoardsAndProjects:
         def get_workflow(board_id):
             if board_id == "board-1":
                 return sdlc_workflow
-            elif board_id == "board-2":
+            if board_id == "board-2":
                 return simple_workflow
             return None
 

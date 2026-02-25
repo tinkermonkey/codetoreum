@@ -10,10 +10,11 @@ This module implements:
 """
 
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import MappingProxyType
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any
 from uuid import uuid4
 
 from codetoreum.infrastructure.observability.trace_context_propagation import (
@@ -36,18 +37,18 @@ class SpanCapture:
 
     span_id: str
     trace_id: str
-    parent_span_id: Optional[str]
+    parent_span_id: str | None
     name: str
     kind: SpanKind
     status: SpanStatus
     start_time: datetime
-    end_time: Optional[datetime]
+    end_time: datetime | None
     attributes: Mapping[str, Any] = field(default_factory=dict)
     events: tuple = field(default_factory=tuple)  # Tuple of SpanEvent instead of list
     span_context_injected: bool = False
 
     @property
-    def duration_ms(self) -> Optional[float]:
+    def duration_ms(self) -> float | None:
         """Calculate span duration in milliseconds."""
         if self.end_time is None:
             return None
@@ -58,7 +59,7 @@ class SpanCapture:
         """Get W3C traceparent format for this span."""
         return f"{W3C_TRACE_CONTEXT_VERSION}-{self.trace_id}-{self.span_id}-01"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
             "span_id": self.span_id,
@@ -91,7 +92,7 @@ class MockSpan:
         name: str,
         span_id: str,
         trace_id: str,
-        parent_span_id: Optional[str] = None,
+        parent_span_id: str | None = None,
         kind: SpanKind = SpanKind.INTERNAL,
     ):
         self.name = name
@@ -100,22 +101,22 @@ class MockSpan:
         self.parent_span_id = parent_span_id
         self.kind = kind
         self.status = SpanStatus.UNSET
-        self.start_time = datetime.now(timezone.utc)
-        self.end_time: Optional[datetime] = None
-        self.attributes: Dict[str, Any] = {}
-        self.events: List[SpanEvent] = []
+        self.start_time = datetime.now(UTC)
+        self.end_time: datetime | None = None
+        self.attributes: dict[str, Any] = {}
+        self.events: list[SpanEvent] = []
         self.span_context_injected = False
 
     def set_attribute(self, key: str, value: Any) -> None:
         """Set an attribute on the span."""
         self.attributes[key] = value
 
-    def add_event(self, name: str, attributes: Optional[Dict[str, Any]] = None) -> None:
+    def add_event(self, name: str, attributes: dict[str, Any] | None = None) -> None:
         """Add an event to the span."""
         self.events.append(
             SpanEvent(
                 name=name,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 attributes=attributes or {},
             )
         )
@@ -126,14 +127,14 @@ class MockSpan:
 
     def end(self) -> None:
         """End the span."""
-        self.end_time = datetime.now(timezone.utc)
+        self.end_time = datetime.now(UTC)
 
     def mark_context_injected(self) -> None:
         """Mark that trace context was injected into an event."""
         self.span_context_injected = True
 
     @property
-    def duration_ms(self) -> Optional[float]:
+    def duration_ms(self) -> float | None:
         """Get span duration in milliseconds."""
         if self.end_time is None:
             return None
@@ -196,10 +197,10 @@ class MockTracer(ITracerPort):
 
     def __init__(self, service_name: str = "simulation"):
         self.service_name = service_name
-        self.spans: List[SpanCapture] = []
-        self.active_span: Optional[MockSpan] = None
-        self.span_stack: List[MockSpan] = []  # Stack for nested span tracking
-        self.root_trace_id: Optional[str] = None
+        self.spans: list[SpanCapture] = []
+        self.active_span: MockSpan | None = None
+        self.span_stack: list[MockSpan] = []  # Stack for nested span tracking
+        self.root_trace_id: str | None = None
         self.span_counter = 0
         self.trace_counter = 0  # Counter for generating unique trace IDs
 
@@ -207,8 +208,8 @@ class MockTracer(ITracerPort):
         self,
         name: str,
         kind: SpanKind = SpanKind.INTERNAL,
-        parent_context: Optional[str] = None,
-        attributes: Optional[Dict[str, Any]] = None,
+        parent_context: str | None = None,
+        attributes: dict[str, Any] | None = None,
     ) -> MockSpan:
         """
         Start a new span (ITracer protocol).
@@ -237,9 +238,9 @@ class MockTracer(ITracerPort):
         self,
         name: str,
         kind: SpanKind = SpanKind.INTERNAL,
-        parent_span_id: Optional[str] = None,
-        trace_id: Optional[str] = None,
-        attributes: Optional[Dict[str, Any]] = None,
+        parent_span_id: str | None = None,
+        trace_id: str | None = None,
+        attributes: dict[str, Any] | None = None,
     ) -> MockSpan:
         """
         Internal span creation (used by both async and sync methods).
@@ -303,7 +304,7 @@ class MockTracer(ITracerPort):
         self,
         span: MockSpan,
         name: str,
-        attributes: Optional[Dict[str, Any]] = None,
+        attributes: dict[str, Any] | None = None,
     ) -> None:
         """
         Add an event to a span (ITracer protocol).
@@ -352,7 +353,7 @@ class MockTracer(ITracerPort):
             },
         )
 
-    async def extract_context(self, carrier: Dict[str, str]) -> Optional[str]:
+    async def extract_context(self, carrier: dict[str, str]) -> str | None:
         """
         Extract trace context from a carrier (ITracer protocol).
 
@@ -372,7 +373,7 @@ class MockTracer(ITracerPort):
     async def inject_context(
         self,
         span: MockSpan,
-        carrier: Dict[str, str],
+        carrier: dict[str, str],
     ) -> None:
         """
         Inject trace context into a carrier (ITracer protocol).
@@ -412,11 +413,11 @@ class MockTracer(ITracerPort):
         self.active_span = None
         logger.debug("Started new trace (trace context reset)")
 
-    def get_current_span(self) -> Optional[MockSpan]:
+    def get_current_span(self) -> MockSpan | None:
         """Get the currently active span."""
         return self.active_span
 
-    def get_current_trace_context(self) -> Optional[TraceContextData]:
+    def get_current_trace_context(self) -> TraceContextData | None:
         """Get trace context for the current span."""
         if self.active_span is None:
             return None
@@ -428,25 +429,25 @@ class MockTracer(ITracerPort):
             trace_flags="01",
         )
 
-    def get_spans(self) -> List[SpanCapture]:
+    def get_spans(self) -> list[SpanCapture]:
         """Get all recorded spans."""
         return self.spans.copy()
 
-    def get_spans_by_name(self, name: str) -> List[SpanCapture]:
+    def get_spans_by_name(self, name: str) -> list[SpanCapture]:
         """Get spans matching a name."""
         return [s for s in self.spans if s.name == name]
 
-    def get_spans_by_kind(self, kind: SpanKind) -> List[SpanCapture]:
+    def get_spans_by_kind(self, kind: SpanKind) -> list[SpanCapture]:
         """Get spans matching a kind."""
         return [s for s in self.spans if s.kind == kind]
 
-    def get_spans_by_trace_id(self, trace_id: str) -> List[SpanCapture]:
+    def get_spans_by_trace_id(self, trace_id: str) -> list[SpanCapture]:
         """Get spans in a specific trace."""
         return [s for s in self.spans if s.trace_id == trace_id]
 
-    def get_span_hierarchy(self) -> Dict[Optional[str], List[SpanCapture]]:
+    def get_span_hierarchy(self) -> dict[str | None, list[SpanCapture]]:
         """Get spans organized by parent span ID."""
-        hierarchy: Dict[Optional[str], List[SpanCapture]] = {}
+        hierarchy: dict[str | None, list[SpanCapture]] = {}
         for span in self.spans:
             parent_id = span.parent_span_id
             if parent_id not in hierarchy:
@@ -458,9 +459,9 @@ class MockTracer(ITracerPort):
         self,
         name: str,
         kind: SpanKind = SpanKind.INTERNAL,
-        parent_context: Optional[str] = None,
-        parent_span_id: Optional[str] = None,
-        trace_id: Optional[str] = None,
+        parent_context: str | None = None,
+        parent_span_id: str | None = None,
+        trace_id: str | None = None,
     ) -> MockSpan:
         """
         Start a new span (synchronous version).
@@ -563,7 +564,7 @@ class TraceContextValidator:
             )
 
     def assert_span_attribute(
-        self, name: str, key: str, expected_value: Optional[Any] = None
+        self, name: str, key: str, expected_value: Any | None = None
     ) -> Any:
         """Assert a span has an attribute."""
         span = self.assert_span_exists(name)
@@ -600,7 +601,7 @@ class TraceContextValidator:
         if not span.span_context_injected:
             raise AssertionError(f"Span {span_name} did not inject trace context")
 
-    def assert_trace_chain(self, span_names: List[str]) -> None:
+    def assert_trace_chain(self, span_names: list[str]) -> None:
         """Assert a chain of parent-child spans."""
         for i in range(len(span_names) - 1):
             self.assert_span_parent_child(span_names[i], span_names[i + 1])

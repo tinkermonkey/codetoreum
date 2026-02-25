@@ -15,9 +15,9 @@ Features:
 
 import asyncio
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Callable, Dict, List, Optional
+from datetime import UTC, datetime
 
 import httpx
 
@@ -64,7 +64,7 @@ class GitHubDiscussionConfig:
     organization: str
     repository: str
     api_base_url: str = "https://api.github.com"
-    graphql_client: Optional[GitHubGraphQLClient] = None
+    graphql_client: GitHubGraphQLClient | None = None
     webhook_enabled: bool = True
     polling_interval_seconds: int = 30
     api_version: str = "2022-11-28"
@@ -117,21 +117,21 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
         """
         self._config = config
         self._identity_service = identity_service
-        self._http_client: Optional[httpx.AsyncClient] = None
+        self._http_client: httpx.AsyncClient | None = None
         self._graphql_client = config.graphql_client
         self._webhook_enabled = config.webhook_enabled
 
         # Event emitter state
-        self._event_handlers: Dict[str, List[Callable]] = {}
+        self._event_handlers: dict[str, list[Callable]] = {}
 
         # Monitoring state: work_item_id -> config
-        self._monitoring: Dict[str, DiscussionMonitoringConfig] = {}
+        self._monitoring: dict[str, DiscussionMonitoringConfig] = {}
 
         # Polling state: work_item_id -> last_comment_id
-        self._last_processed: Dict[str, Optional[str]] = {}
+        self._last_processed: dict[str, str | None] = {}
 
         # Polling tasks: work_item_id -> asyncio.Task
-        self._polling_tasks: Dict[str, asyncio.Task] = {}
+        self._polling_tasks: dict[str, asyncio.Task] = {}
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client for GitHub REST API."""
@@ -250,7 +250,7 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             )
 
         except (httpx.RequestError, httpx.HTTPError) as e:
-            raise ExternalServiceError(f"GitHub API request failed: {str(e)}")
+            raise ExternalServiceError(f"GitHub API request failed: {e!s}")
 
     # Command Operations
 
@@ -258,7 +258,7 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
         self,
         work_item_id: str,
         content: str,
-        parent_id: Optional[str] = None,
+        parent_id: str | None = None,
     ) -> Comment:
         """Post a comment to a work item (GitHub issue).
 
@@ -338,7 +338,7 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             return comment
 
         except (httpx.RequestError, httpx.HTTPError) as e:
-            raise ExternalServiceError(f"GitHub API request failed: {str(e)}")
+            raise ExternalServiceError(f"GitHub API request failed: {e!s}")
 
     # Work-Item-Specific Monitoring
 
@@ -524,8 +524,8 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
                 continue
 
     def _filter_new_comments(
-        self, comments: List[Comment], last_id: Optional[str]
-    ) -> List[Comment]:
+        self, comments: list[Comment], last_id: str | None
+    ) -> list[Comment]:
         """Filter comments to only new ones.
 
         Returns all comments after the last_id, or all comments if last_id is None.
@@ -668,4 +668,4 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
     @staticmethod
     def _get_iso_timestamp() -> str:
         """Get current time as ISO 8601 timestamp."""
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()

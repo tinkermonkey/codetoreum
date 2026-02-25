@@ -4,11 +4,10 @@ Verifies that GitHubWebhookAdapter webhook processing methods emit
 OpenTelemetry spans with proper GitHub-specific metadata.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
@@ -33,7 +32,7 @@ def tracer_provider():
     provider.add_span_processor(processor)
 
     # Monkeypatch trace module to return our provider
-    with patch('opentelemetry.trace.get_tracer_provider', return_value=provider):
+    with patch("opentelemetry.trace.get_tracer_provider", return_value=provider):
         yield exporter
 
     provider.force_flush()
@@ -123,7 +122,7 @@ async def test_github_webhook_process_event_project_card(
             "changes": {"column_id": {"from": 789}},
         },
         signature="sha256=test",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         repository="org/repo",
     )
 
@@ -207,7 +206,7 @@ async def test_github_webhook_complete_trace_chain(
             "changes": {"column_id": {"from": 456}},
         },
         signature="sha256=comprehensive",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         repository="acme/platform",
     )
 

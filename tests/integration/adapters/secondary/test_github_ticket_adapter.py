@@ -5,7 +5,6 @@ They require a GitHub token to run.
 """
 
 import os
-from datetime import datetime, timezone
 
 import pytest
 

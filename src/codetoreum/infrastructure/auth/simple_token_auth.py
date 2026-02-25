@@ -19,8 +19,7 @@ dependency) will remain similar, making the migration straightforward.
 import logging
 import os
 import secrets
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 from jose import JWTError, jwt
 
@@ -44,8 +43,8 @@ class SimpleTokenAuthManager:
 
     def __init__(
         self,
-        secret_key: Optional[str] = None,
-        token_expiry_days: Optional[int] = None,
+        secret_key: str | None = None,
+        token_expiry_days: int | None = None,
     ):
         """
         Initialize the authentication manager.
@@ -94,7 +93,7 @@ class SimpleTokenAuthManager:
             )
 
         # Generate the server token
-        self.server_start_time = datetime.now(timezone.utc)
+        self.server_start_time = datetime.now(UTC)
         self.token_expiry_days = token_expiry_days
         self.server_token = self._generate_server_token()
 
@@ -163,7 +162,7 @@ class SimpleTokenAuthManager:
 
         return {"Set-Cookie": cookie_value}
 
-    def validate_token(self, token: Optional[str]) -> bool:
+    def validate_token(self, token: str | None) -> bool:
         """
         Validate a provided token.
 

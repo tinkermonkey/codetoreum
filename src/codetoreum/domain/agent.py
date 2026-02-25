@@ -1,9 +1,9 @@
 """Agent entity and value objects."""
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import uuid4
 
 from codetoreum.domain.events import (
@@ -44,7 +44,7 @@ class AgentCapability:
 
     skill: str
     proficiency: float  # 0.0 to 1.0
-    description: Optional[str] = None
+    description: str | None = None
 
     def __post_init__(self) -> None:
         """Validate proficiency range."""
@@ -67,7 +67,7 @@ class Agent:
     agent_type: AgentType
 
     # Capabilities
-    capabilities: Dict[str, AgentCapability]
+    capabilities: dict[str, AgentCapability]
     role_description: str
 
     # Configuration
@@ -82,17 +82,17 @@ class Agent:
     filesystem_write_allowed: bool
 
     # MCP servers
-    mcp_servers: List[str]
+    mcp_servers: list[str]
 
     # Metadata
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
     # Timestamps
     created_at: datetime
     updated_at: datetime
 
     # Event tracking
-    _events: List[DomainEvent] = field(default_factory=list, init=False, repr=False)
+    _events: list[DomainEvent] = field(default_factory=list, init=False, repr=False)
     _version: int = field(default=0, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -133,14 +133,14 @@ class Agent:
         agent_type: AgentType,
         role_description: str,
         model: str,
-        capabilities: Dict[str, AgentCapability],
+        capabilities: dict[str, AgentCapability],
         timeout_seconds: int = 300,
         max_retries: int = 3,
         requires_docker: bool = True,
         requires_dev_container: bool = False,
         makes_code_changes: bool = False,
         filesystem_write_allowed: bool = True,
-        mcp_servers: Optional[List[str]] = None,
+        mcp_servers: list[str] | None = None,
     ) -> "Agent":
         """
         Factory method to create a new agent.
@@ -181,8 +181,8 @@ class Agent:
             filesystem_write_allowed=filesystem_write_allowed,
             mcp_servers=mcp_servers or [],
             metadata={},
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
 
         event = AgentCreated(
@@ -216,7 +216,7 @@ class Agent:
             raise DomainError(f"Agent already has capability {capability.skill}")
 
         self.capabilities[capability.skill] = capability
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = AgentCapabilityAdded(
@@ -251,7 +251,7 @@ class Agent:
             raise DomainError("Cannot remove last capability")
 
         del self.capabilities[skill]
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = AgentCapabilityRemoved(
@@ -281,7 +281,7 @@ class Agent:
 
         old_proficiency = self.capabilities[skill].proficiency
         self.capabilities[skill].proficiency = proficiency
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = AgentCapabilityUpdated(
@@ -313,7 +313,7 @@ class Agent:
 
         old_model = self.model
         self.model = model
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = AgentModelUpdated(
@@ -343,7 +343,7 @@ class Agent:
 
         old_timeout = self.timeout_seconds
         self.timeout_seconds = timeout_seconds
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = AgentTimeoutUpdated(
@@ -373,7 +373,7 @@ class Agent:
 
         old_max_retries = self.max_retries
         self.max_retries = max_retries
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = AgentMaxRetriesUpdated(
@@ -388,10 +388,10 @@ class Agent:
 
     def update_constraints(
         self,
-        requires_docker: Optional[bool] = None,
-        requires_dev_container: Optional[bool] = None,
-        makes_code_changes: Optional[bool] = None,
-        filesystem_write_allowed: Optional[bool] = None,
+        requires_docker: bool | None = None,
+        requires_dev_container: bool | None = None,
+        makes_code_changes: bool | None = None,
+        filesystem_write_allowed: bool | None = None,
     ) -> None:
         """
         Update agent constraints.
@@ -433,7 +433,7 @@ class Agent:
         if filesystem_write_allowed is not None:
             self.filesystem_write_allowed = filesystem_write_allowed
 
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = AgentConstraintsUpdated(
@@ -468,7 +468,7 @@ class Agent:
             raise DomainError(f"MCP server {server_name} already configured")
 
         self.mcp_servers.append(server_name)
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = AgentMcpServerAdded(
@@ -496,7 +496,7 @@ class Agent:
             raise DomainError(f"MCP server {server_name} not configured")
 
         self.mcp_servers.remove(server_name)
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = AgentMcpServerRemoved(
@@ -585,7 +585,7 @@ class Agent:
         """
         self._events.append(event)
 
-    def get_pending_events(self) -> List[DomainEvent]:
+    def get_pending_events(self) -> list[DomainEvent]:
         """
         Get all pending events.
 

@@ -5,7 +5,6 @@ including board workflow templates that define column-based orchestration logic.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional
 
 from codetoreum.domain.board_workflow_template import BoardWorkflowTemplate
 
@@ -33,7 +32,7 @@ class IWorkflowConfigService(ABC):
     @abstractmethod
     async def get_board_workflow_template(
         self, board_id: str
-    ) -> Optional[BoardWorkflowTemplate]:
+    ) -> BoardWorkflowTemplate | None:
         """Get workflow template for a board.
 
         Args:
@@ -45,4 +44,3 @@ class IWorkflowConfigService(ABC):
         Raises:
             ExternalServiceError: Service communication failure
         """
-        pass

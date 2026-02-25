@@ -311,7 +311,7 @@ class TestScenario06SDLCPipelineWithRepair:
             # Verify the clock is shared between repair cycle and engine
             assert bootstrap.adapters.repair_cycle._clock == bootstrap.engine.get_clock_for_testing()
 
-            logger = __import__('logging').getLogger(__name__)
+            logger = __import__("logging").getLogger(__name__)
             logger.info("Bootstrap integration test passed")
 
         finally:

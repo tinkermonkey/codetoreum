@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import yaml
 
@@ -18,9 +18,9 @@ class AgentBehaviorConfig:
     # Success rate (0.0 to 1.0)
     success_rate: float = 1.0
     # Response templates based on context patterns
-    response_patterns: Dict[str, str] = field(default_factory=dict)
+    response_patterns: dict[str, str] = field(default_factory=dict)
     # Simulated token usage
-    token_usage: Dict[str, int] = field(default_factory=lambda: {
+    token_usage: dict[str, int] = field(default_factory=lambda: {
         "input": 100,
         "output": 50,
     })
@@ -35,9 +35,9 @@ class ContainerBehaviorConfig:
     # Execution delay in seconds
     execution_delay: float = 0.1
     # Command-specific exit codes
-    command_exit_codes: Dict[str, int] = field(default_factory=dict)
+    command_exit_codes: dict[str, int] = field(default_factory=dict)
     # Command-specific outputs
-    command_outputs: Dict[str, Dict[str, str]] = field(default_factory=dict)
+    command_outputs: dict[str, dict[str, str]] = field(default_factory=dict)
 
 
 @dataclass
@@ -59,7 +59,7 @@ class MetricsConfig:
     # Whether to collect metrics
     enabled: bool = True
     # Metrics to track
-    tracked_metrics: List[str] = field(default_factory=lambda: [
+    tracked_metrics: list[str] = field(default_factory=lambda: [
         "workflow.stage.duration",
         "agent.execution.count",
         "agent.execution.duration",
@@ -74,7 +74,7 @@ class TimeConfig:
     # Speed multiplier (how much faster than real time)
     speed_multiplier: float = 10.0
     # Starting time for simulation
-    start_time: Optional[datetime] = None
+    start_time: datetime | None = None
     # Auto-advance clock
     auto_advance: bool = False
 
@@ -95,7 +95,7 @@ class SimulationConfig:
     time: TimeConfig = field(default_factory=TimeConfig)
 
     # Agent configurations by agent ID
-    agents: Dict[str, AgentBehaviorConfig] = field(default_factory=dict)
+    agents: dict[str, AgentBehaviorConfig] = field(default_factory=dict)
 
     # Container configuration
     container: ContainerBehaviorConfig = field(default_factory=ContainerBehaviorConfig)
@@ -107,7 +107,7 @@ class SimulationConfig:
     metrics: MetricsConfig = field(default_factory=MetricsConfig)
 
     # Additional metadata
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def get_agent_config(self, agent_id: str) -> AgentBehaviorConfig:
         """
@@ -226,7 +226,7 @@ class SimulationConfig:
             ),
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """
         Convert configuration to dictionary.
 
@@ -269,7 +269,7 @@ class SimulationConfig:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "SimulationConfig":
+    def from_dict(cls, data: dict[str, Any]) -> "SimulationConfig":
         """
         Create configuration from dictionary.
 
@@ -333,7 +333,7 @@ class SimulationConfig:
         )
 
     @classmethod
-    def from_yaml(cls, file_path: Union[str, Path]) -> "SimulationConfig":
+    def from_yaml(cls, file_path: str | Path) -> "SimulationConfig":
         """
         Load simulation configuration from YAML file.
 
@@ -358,7 +358,7 @@ class SimulationConfig:
         if not file_path.exists():
             raise FileNotFoundError(f"Scenario file not found: {file_path}")
 
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             data = yaml.safe_load(f)
 
         if not data:

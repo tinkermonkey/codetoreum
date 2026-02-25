@@ -1,7 +1,7 @@
 """Unit tests for ReviewCycle aggregate root."""
 
 from dataclasses import FrozenInstanceError
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -14,7 +14,6 @@ from codetoreum.domain.review_cycle import (
     ReviewDecision,
     ReviewFeedback,
     ReviewFeedbackSubmitted,
-    ReviewIteration,
     ReviewIterationStarted,
     ReviewStatus,
 )
@@ -604,7 +603,7 @@ class TestReviewFeedbackValueObject:
             comment="Good",
             issues=[],
             suggestions=[],
-            timestamp=datetime.now(timezone.utc)
+            timestamp=datetime.now(UTC)
         )
 
         with pytest.raises(FrozenInstanceError):

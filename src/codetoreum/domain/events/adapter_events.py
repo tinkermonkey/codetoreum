@@ -16,9 +16,8 @@ Terminology mapping:
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Optional
-from uuid import UUID, uuid4
+from datetime import UTC, datetime
+from uuid import uuid4
 
 
 @dataclass(frozen=True)
@@ -62,7 +61,7 @@ class CodetoreumEvent:
     type: str
     timestamp: str
     source: str
-    correlation_id: Optional[str] = None
+    correlation_id: str | None = None
     event_id: str = field(default_factory=lambda: str(uuid4()))
 
     def __post_init__(self) -> None:
@@ -130,4 +129,4 @@ def now_iso() -> str:
     Returns:
         ISO 8601 formatted timestamp (UTC).
     """
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()

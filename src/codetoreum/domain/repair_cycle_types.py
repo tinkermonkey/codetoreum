@@ -27,7 +27,6 @@ Reference: review_events.py for event sourcing immutability patterns
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -130,8 +129,8 @@ class RepairTestResult:
     passed: int
     failed: int
     warnings: int
-    failures: Tuple[RepairTestFailure, ...]  # Immutable tuple
-    warning_list: Tuple[RepairTestWarning, ...]  # Immutable tuple
+    failures: tuple[RepairTestFailure, ...]  # Immutable tuple
+    warning_list: tuple[RepairTestWarning, ...]  # Immutable tuple
     raw_output: str
     timestamp: str
 
@@ -186,8 +185,8 @@ class CycleResult:
     test_type: RepairTestType
     passed: bool
     iterations: int
-    final_result: Optional[RepairTestResult]
-    error: Optional[str]
+    final_result: RepairTestResult | None
+    error: str | None
     files_fixed: int
     warnings_reviewed: int
     duration_seconds: float
@@ -237,7 +236,7 @@ class RepairCycleResult:
     """
 
     stage: str
-    test_results: Tuple[CycleResult, ...]  # Immutable tuple
+    test_results: tuple[CycleResult, ...]  # Immutable tuple
     overall_success: bool
     total_agent_calls: int
     duration_seconds: float
@@ -266,14 +265,13 @@ class RepairCycleResult:
                 raise ValueError(
                     "overall_success=False but all test results passed (inconsistency)"
                 )
-        else:
-            # Empty test_results with overall_success=True is suspicious but may be valid
-            # (e.g., no tests configured). Log warning but don't raise.
-            if self.overall_success:
-                logger.warning(
-                    "overall_success=True but test_results is empty",
-                    extra={"stage": self.stage}
-                )
+        # Empty test_results with overall_success=True is suspicious but may be valid
+        # (e.g., no tests configured). Log warning but don't raise.
+        elif self.overall_success:
+            logger.warning(
+                "overall_success=True but test_results is empty",
+                extra={"stage": self.stage}
+            )
 
 
 @dataclass(frozen=True)
@@ -336,7 +334,7 @@ class RepairCycleCheckpoint:
     files_fixed: int
     warnings_reviewed: int
     elapsed_seconds: float
-    test_results: Tuple[CycleResult, ...]
+    test_results: tuple[CycleResult, ...]
     timestamp: str
     expires_at: str
 
@@ -382,7 +380,7 @@ class RepairCycleStageConfig:
     """
 
     name: str
-    test_configs: Tuple[RepairTestRunConfig, ...]  # Sequential test types
+    test_configs: tuple[RepairTestRunConfig, ...]  # Sequential test types
     agent_name: str = "senior_software_engineer"
     max_total_agent_calls: int = 100  # Circuit breaker
     checkpoint_interval: int = 5  # Save state every N iterations

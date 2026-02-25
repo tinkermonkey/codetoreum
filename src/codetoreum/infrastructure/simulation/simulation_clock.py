@@ -3,9 +3,8 @@
 import asyncio
 import logging
 import threading
-import traceback
-from datetime import datetime, timedelta, timezone
-from typing import Callable, List, Optional, Tuple, Union
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -51,16 +50,16 @@ class SimulationClock:
         self._auto_advance = auto_advance
 
         # Current simulated time
-        self._current_time: datetime = datetime.now(timezone.utc)
+        self._current_time: datetime = datetime.now(UTC)
 
         # Callbacks scheduled for specific times
-        self._scheduled_callbacks: List[Tuple[datetime, Callable]] = []
+        self._scheduled_callbacks: list[tuple[datetime, Callable]] = []
 
         # Thread safety
         self._lock = threading.RLock()
 
         # Auto-advance task
-        self._auto_advance_task: Optional[asyncio.Task] = None
+        self._auto_advance_task: asyncio.Task | None = None
         self._running = False
 
     def start_at(self, start_time: datetime) -> None:
@@ -71,9 +70,9 @@ class SimulationClock:
             start_time: Starting datetime (will be converted to UTC)
         """
         if start_time.tzinfo is None:
-            start_time = start_time.replace(tzinfo=timezone.utc)
-        elif start_time.tzinfo != timezone.utc:
-            start_time = start_time.astimezone(timezone.utc)
+            start_time = start_time.replace(tzinfo=UTC)
+        elif start_time.tzinfo != UTC:
+            start_time = start_time.astimezone(UTC)
 
         with self._lock:
             self._current_time = start_time
@@ -129,9 +128,9 @@ class SimulationClock:
             ValueError: If target_time is before current time
         """
         if target_time.tzinfo is None:
-            target_time = target_time.replace(tzinfo=timezone.utc)
-        elif target_time.tzinfo != timezone.utc:
-            target_time = target_time.astimezone(timezone.utc)
+            target_time = target_time.replace(tzinfo=UTC)
+        elif target_time.tzinfo != UTC:
+            target_time = target_time.astimezone(UTC)
 
         with self._lock:
             if target_time < self._current_time:
@@ -182,8 +181,8 @@ class SimulationClock:
     def schedule_callback(
         self,
         callback: Callable,
-        at_time: Optional[datetime] = None,
-        after_delta: Optional[timedelta] = None,
+        at_time: datetime | None = None,
+        after_delta: timedelta | None = None,
     ) -> None:
         """
         Schedule a callback to be triggered at a specific time.
@@ -205,14 +204,14 @@ class SimulationClock:
             else:
                 trigger_time = at_time
                 if trigger_time.tzinfo is None:
-                    trigger_time = trigger_time.replace(tzinfo=timezone.utc)
-                elif trigger_time.tzinfo != timezone.utc:
-                    trigger_time = trigger_time.astimezone(timezone.utc)
+                    trigger_time = trigger_time.replace(tzinfo=UTC)
+                elif trigger_time.tzinfo != UTC:
+                    trigger_time = trigger_time.astimezone(UTC)
 
             self._scheduled_callbacks.append((trigger_time, callback))
             self._scheduled_callbacks.sort(key=lambda x: x[0])
 
-    def get_scheduled_callbacks(self) -> List[Tuple[datetime, Callable]]:
+    def get_scheduled_callbacks(self) -> list[tuple[datetime, Callable]]:
         """
         Get all scheduled callbacks.
 
@@ -315,7 +314,7 @@ class SimulationClock:
     def reset(self) -> None:
         """Reset clock to current real time and clear all callbacks."""
         with self._lock:
-            self._current_time = datetime.now(timezone.utc)
+            self._current_time = datetime.now(UTC)
             self._scheduled_callbacks.clear()
 
     def __repr__(self) -> str:
@@ -341,7 +340,7 @@ class RealTimeClock:
         Returns:
             Current datetime in UTC
         """
-        return datetime.now(timezone.utc)
+        return datetime.now(UTC)
 
     async def sleep(self, seconds: float) -> None:
         """
@@ -363,10 +362,10 @@ class RealTimeClock:
 
 
 # Global clock instance that can be swapped for testing
-_global_clock: Optional[Union[SimulationClock, RealTimeClock]] = None
+_global_clock: SimulationClock | RealTimeClock | None = None
 
 
-def get_clock() -> Union[SimulationClock, RealTimeClock]:
+def get_clock() -> SimulationClock | RealTimeClock:
     """
     Get the global clock instance.
 
@@ -379,7 +378,7 @@ def get_clock() -> Union[SimulationClock, RealTimeClock]:
     return _global_clock
 
 
-def set_clock(clock: Union[SimulationClock, RealTimeClock]) -> None:
+def set_clock(clock: SimulationClock | RealTimeClock) -> None:
     """
     Set the global clock instance.
 

@@ -6,8 +6,7 @@ Tests the complete flow of:
 3. Trace context carried through event chains
 """
 
-import asyncio
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import patch
 
 import pytest
 

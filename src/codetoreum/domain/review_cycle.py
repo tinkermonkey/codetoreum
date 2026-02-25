@@ -1,9 +1,9 @@
 """Review Cycle aggregate root."""
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import uuid4
 
 from codetoreum.domain.events import DomainEvent
@@ -17,7 +17,7 @@ from codetoreum.domain.exceptions import DomainError
 class ReviewCycleCreated(DomainEvent):
     """Emitted when review cycle is created."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ReviewCycleCreated event.
 
@@ -39,7 +39,7 @@ class ReviewCycleCreated(DomainEvent):
 class ReviewIterationStarted(DomainEvent):
     """Emitted when new iteration begins."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ReviewIterationStarted event.
 
@@ -58,7 +58,7 @@ class ReviewIterationStarted(DomainEvent):
 class ReviewFeedbackSubmitted(DomainEvent):
     """Emitted when reviewer provides feedback."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ReviewFeedbackSubmitted event.
 
@@ -79,7 +79,7 @@ class ReviewFeedbackSubmitted(DomainEvent):
 class ReviewCycleApproved(DomainEvent):
     """Emitted when review cycle is approved."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ReviewCycleApproved event.
 
@@ -98,7 +98,7 @@ class ReviewCycleApproved(DomainEvent):
 class ReviewCycleEscalated(DomainEvent):
     """Emitted when review cycle is escalated to human."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ReviewCycleEscalated event.
 
@@ -145,8 +145,8 @@ class ReviewFeedback:
     """
     decision: ReviewDecision
     comment: str
-    issues: List[str]
-    suggestions: List[str]
+    issues: list[str]
+    suggestions: list[str]
     timestamp: datetime
 
 
@@ -160,10 +160,10 @@ class ReviewIteration:
     iteration_number: int
     maker_output: str
     maker_execution_id: str
-    reviewer_feedback: Optional[ReviewFeedback]
-    reviewer_execution_id: Optional[str]
+    reviewer_feedback: ReviewFeedback | None
+    reviewer_execution_id: str | None
     started_at: datetime
-    completed_at: Optional[datetime]
+    completed_at: datetime | None
 
 
 @dataclass
@@ -193,19 +193,19 @@ class ReviewCycle:
     current_iteration: int
 
     # Iterations
-    iterations: List[ReviewIteration]
+    iterations: list[ReviewIteration]
 
     # Final decision
-    final_decision: Optional[ReviewDecision]
-    escalation_reason: Optional[str]
+    final_decision: ReviewDecision | None
+    escalation_reason: str | None
 
     # Timestamps
     created_at: datetime
     updated_at: datetime
-    completed_at: Optional[datetime]
+    completed_at: datetime | None
 
     # Event tracking
-    _events: List[DomainEvent] = field(default_factory=list, init=False, repr=False)
+    _events: list[DomainEvent] = field(default_factory=list, init=False, repr=False)
     _version: int = field(default=0, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -273,8 +273,8 @@ class ReviewCycle:
             iterations=[],
             final_decision=None,
             escalation_reason=None,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
             completed_at=None
         )
 
@@ -316,13 +316,13 @@ class ReviewCycle:
             maker_execution_id=maker_execution_id,
             reviewer_feedback=None,
             reviewer_execution_id=None,
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
             completed_at=None
         )
 
         self.iterations.append(iteration)
         self.status = ReviewStatus.IN_PROGRESS
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = ReviewIterationStarted(
@@ -339,8 +339,8 @@ class ReviewCycle:
         decision: ReviewDecision,
         comment: str,
         reviewer_execution_id: str,
-        issues: Optional[List[str]] = None,
-        suggestions: Optional[List[str]] = None
+        issues: list[str] | None = None,
+        suggestions: list[str] | None = None
     ) -> None:
         """
         Submit reviewer's feedback.
@@ -369,13 +369,13 @@ class ReviewCycle:
             comment=comment,
             issues=issues or [],
             suggestions=suggestions or [],
-            timestamp=datetime.now(timezone.utc)
+            timestamp=datetime.now(UTC)
         )
 
         current.reviewer_feedback = feedback
         current.reviewer_execution_id = reviewer_execution_id
-        current.completed_at = datetime.now(timezone.utc)
-        self.updated_at = datetime.now(timezone.utc)
+        current.completed_at = datetime.now(UTC)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         # Add feedback event first
@@ -408,7 +408,7 @@ class ReviewCycle:
         """
         self.status = ReviewStatus.APPROVED
         self.final_decision = ReviewDecision.APPROVE
-        self.completed_at = datetime.now(timezone.utc)
+        self.completed_at = datetime.now(UTC)
         self.updated_at = self.completed_at
         self._version += 1
 
@@ -433,7 +433,7 @@ class ReviewCycle:
             return
 
         self.status = ReviewStatus.CHANGES_REQUESTED
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
     def escalate(self, reason: str) -> None:
@@ -448,7 +448,7 @@ class ReviewCycle:
         self.status = ReviewStatus.ESCALATED
         self.final_decision = ReviewDecision.ESCALATE
         self.escalation_reason = reason
-        self.completed_at = datetime.now(timezone.utc)
+        self.completed_at = datetime.now(UTC)
         self.updated_at = self.completed_at
         self._version += 1
 
@@ -481,7 +481,7 @@ class ReviewCycle:
         """
         return self.status == ReviewStatus.CHANGES_REQUESTED
 
-    def get_latest_feedback(self) -> Optional[ReviewFeedback]:
+    def get_latest_feedback(self) -> ReviewFeedback | None:
         """
         Get latest reviewer feedback.
 
@@ -502,7 +502,7 @@ class ReviewCycle:
         """
         self._events.append(event)
 
-    def get_pending_events(self) -> List[DomainEvent]:
+    def get_pending_events(self) -> list[DomainEvent]:
         """
         Get all pending events.
 

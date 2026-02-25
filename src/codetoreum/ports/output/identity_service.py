@@ -11,7 +11,6 @@ with no event emission.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from re import Pattern
-from typing import List, Optional
 
 
 @dataclass
@@ -25,8 +24,8 @@ class BotIdentityConfig:
                      (e.g., [re.compile("^bot-.*"), re.compile(".*-bot$")])
     """
 
-    bot_usernames: List[str]
-    bot_patterns: List[Pattern]
+    bot_usernames: list[str]
+    bot_patterns: list[Pattern]
 
 
 class IIdentityService(ABC):
@@ -86,7 +85,6 @@ class IIdentityService(ABC):
         Returns:
             bool: True if username is identified as a bot, False if human
         """
-        pass
 
     @abstractmethod
     def get_bot_username(self) -> str:
@@ -101,10 +99,9 @@ class IIdentityService(ABC):
         Raises:
             ConfigurationError: No bot username configured
         """
-        pass
 
     @abstractmethod
-    def get_human_users(self, usernames: List[str]) -> List[str]:
+    def get_human_users(self, usernames: list[str]) -> list[str]:
         """Filter list to only human users.
 
         Removes any bots from the provided list of usernames.
@@ -120,7 +117,6 @@ class IIdentityService(ABC):
             humans = service.get_human_users(all_users)
             # Returns: ["alice", "bob"]
         """
-        pass
 
     @abstractmethod
     def configure(self, config: BotIdentityConfig) -> None:
@@ -136,4 +132,3 @@ class IIdentityService(ABC):
             ValidationError: Invalid configuration (empty bot_usernames
                             and bot_patterns, etc.)
         """
-        pass

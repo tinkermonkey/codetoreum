@@ -1,13 +1,13 @@
 """Execution context builder service for building execution contexts."""
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from codetoreum.domain.agent import Agent
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.project_context import ProjectContext
 from codetoreum.domain.value_objects import ExecutionContext
 from codetoreum.domain.work_item import WorkItem
-from codetoreum.domain.workspace_context import WorkspaceContext, WorkspaceType
+from codetoreum.domain.workspace_context import WorkspaceContext
 
 
 class ExecutionContextBuilder:
@@ -26,8 +26,8 @@ class ExecutionContextBuilder:
         agent: Agent,
         project: ProjectContext,
         workspace: WorkspaceContext,
-        previous_session_id: Optional[str] = None,
-        additional_metadata: Optional[Dict[str, Any]] = None,
+        previous_session_id: str | None = None,
+        additional_metadata: dict[str, Any] | None = None,
     ) -> ExecutionContext:
         """
         Build complete execution context from components.
@@ -142,8 +142,8 @@ class ExecutionContextBuilder:
         agent: Agent,
         project: ProjectContext,
         workspace: WorkspaceContext,
-        additional_metadata: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        additional_metadata: dict[str, Any],
+    ) -> dict[str, Any]:
         """
         Build metadata dictionary for execution context.
 
@@ -181,7 +181,7 @@ class ExecutionContextBuilder:
         return metadata
 
     @staticmethod
-    def _merge_mcp_servers(agent: Agent, project: ProjectContext) -> List[str]:
+    def _merge_mcp_servers(agent: Agent, project: ProjectContext) -> list[str]:
         """
         Merge MCP servers from agent and project.
 
@@ -210,11 +210,11 @@ class ExecutionContextBuilder:
         work_item: WorkItem,
         workflow_id: str,
         stage_name: str,
-        agents: List[Agent],
+        agents: list[Agent],
         agent_id: str,
         project: ProjectContext,
         workspace: WorkspaceContext,
-        previous_session_id: Optional[str] = None,
+        previous_session_id: str | None = None,
     ) -> ExecutionContext:
         """
         Build execution context for a specific stage.

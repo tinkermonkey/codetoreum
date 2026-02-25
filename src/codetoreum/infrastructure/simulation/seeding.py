@@ -8,9 +8,9 @@ declarative configuration.
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 from uuid import uuid4
 
 import yaml
@@ -23,7 +23,6 @@ from codetoreum.domain.board_workflow_template import (
     ColumnTemplate,
     ColumnType,
 )
-from codetoreum.domain.types import ProjectId, UserId, WorkItemId
 from codetoreum.domain.work_item import WorkItemPriority, WorkItemStatus
 from codetoreum.infrastructure.simulation.bootstrap import (
     SimulationAdapters,
@@ -35,7 +34,6 @@ from codetoreum.ports.output.config_store import (
     AgentConfig,
     PipelineConfig,
     ProjectConfig,
-    WorkflowTemplate,
 )
 
 logger = logging.getLogger(__name__)
@@ -45,12 +43,12 @@ logger = logging.getLogger(__name__)
 class CreatedItems:
     """Tracks all items created during seeding for cleanup."""
 
-    projects: List[str] = field(default_factory=list)
-    workflows: List[str] = field(default_factory=list)
-    agents: List[str] = field(default_factory=list)
-    work_items: List[str] = field(default_factory=list)
-    pipelines: List[str] = field(default_factory=list)
-    boards: List[str] = field(default_factory=list)
+    projects: list[str] = field(default_factory=list)
+    workflows: list[str] = field(default_factory=list)
+    agents: list[str] = field(default_factory=list)
+    work_items: list[str] = field(default_factory=list)
+    pipelines: list[str] = field(default_factory=list)
+    boards: list[str] = field(default_factory=list)
 
     def clear(self) -> None:
         """Clear all tracking."""
@@ -110,8 +108,8 @@ class SimulationDataSeeder:
         self._board_adapter: MockBoardAdapter = self.adapters.board
 
         # Defaults
-        self._current_project_id: Optional[str] = None
-        self._current_workflow_id: Optional[str] = None
+        self._current_project_id: str | None = None
+        self._current_workflow_id: str | None = None
 
     # =========================================================================
     # Core Data Creation Methods
@@ -121,9 +119,9 @@ class SimulationDataSeeder:
         self,
         name: str,
         description: str = "",
-        repository_url: Optional[str] = None,
+        repository_url: str | None = None,
         default_branch: str = "main",
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> "SimulationDataSeeder":
         """
         Create a project configuration.
@@ -163,8 +161,8 @@ class SimulationDataSeeder:
             github_org=github_org,
             github_repo=github_repo,
             version=1,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
             metadata=meta,
         )
 
@@ -183,8 +181,8 @@ class SimulationDataSeeder:
         self,
         name: str,
         description: str = "",
-        stages: Optional[List[Dict[str, Any]]] = None,
-        project_id: Optional[str] = None,
+        stages: list[dict[str, Any]] | None = None,
+        project_id: str | None = None,
     ) -> "SimulationDataSeeder":
         """
         Create a workflow template.
@@ -249,8 +247,8 @@ class SimulationDataSeeder:
             name=name,
             stages=stage_configs,
             version=1,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
             metadata={"description": description},
         )
 
@@ -267,8 +265,8 @@ class SimulationDataSeeder:
 
     async def create_agents(
         self,
-        agent_definitions: List[Dict[str, Any]],
-        project_id: Optional[str] = None,
+        agent_definitions: list[dict[str, Any]],
+        project_id: str | None = None,
     ) -> "SimulationDataSeeder":
         """
         Create agent configurations.
@@ -314,8 +312,8 @@ class SimulationDataSeeder:
                 makes_code_changes=agent_def.get("makes_code_changes", True),
                 capabilities=capabilities,
                 version=1,
-                created_at=datetime.now(timezone.utc),
-                updated_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
                 metadata=metadata,
             )
 
@@ -333,11 +331,11 @@ class SimulationDataSeeder:
         self,
         count: int = 1,
         title_prefix: str = "Test Issue",
-        project_id: Optional[str] = None,
-        labels: Optional[List[str]] = None,
+        project_id: str | None = None,
+        labels: list[str] | None = None,
         priority: WorkItemPriority = WorkItemPriority.MEDIUM,
         status: WorkItemStatus = WorkItemStatus.NEW,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> "SimulationDataSeeder":
         """
         Create work items.
@@ -390,8 +388,8 @@ class SimulationDataSeeder:
         self,
         board_id: str,
         board_name: str,
-        column_names: List[str],
-        project_id: Optional[str] = None,
+        column_names: list[str],
+        project_id: str | None = None,
     ) -> "SimulationDataSeeder":
         """
         Create a board with specified columns.
@@ -425,7 +423,7 @@ class SimulationDataSeeder:
         board_id: str,
         column_name: str,
         work_item_id: str,
-        project_id: Optional[str] = None,
+        project_id: str | None = None,
     ) -> "SimulationDataSeeder":
         """
         Place a work item on a board column.
@@ -453,8 +451,8 @@ class SimulationDataSeeder:
     def register_workflow_template(
         self,
         board_id: str,
-        column_names: List[str],
-        agent_types: List[str],
+        column_names: list[str],
+        agent_types: list[str],
     ) -> "SimulationDataSeeder":
         """Build and register a BoardWorkflowTemplate for board automation.
 
@@ -472,7 +470,7 @@ class SimulationDataSeeder:
         Returns:
             Self for chaining
         """
-        columns: List[ColumnTemplate] = []
+        columns: list[ColumnTemplate] = []
         agent_index = 0
 
         for pos, col_name in enumerate(column_names):
@@ -876,7 +874,7 @@ class SimulationDataSeeder:
     # YAML Scenario Loading
     # =========================================================================
 
-    async def seed_from_yaml(self, file_path: Union[str, Path]) -> "SimulationDataSeeder":
+    async def seed_from_yaml(self, file_path: str | Path) -> "SimulationDataSeeder":
         """
         Seed data from YAML scenario file.
 
@@ -898,7 +896,7 @@ class SimulationDataSeeder:
 
         logger.info(f"Loading scenario from {file_path}...")
 
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             yaml_data = yaml.safe_load(f)
 
         if not yaml_data:
@@ -1000,7 +998,7 @@ class SimulationDataSeeder:
 
         # Seed boards and register workflow templates for board automation
         # Extract agent types from workflow stages (ordered by stage order)
-        agent_types: List[str] = []
+        agent_types: list[str] = []
         for workflow_model in scenario.workflows:
             sorted_stages = sorted(workflow_model.stages, key=lambda s: s.order)
             agent_types = [stage.agent_type for stage in sorted_stages]
@@ -1061,7 +1059,7 @@ class SimulationDataSeeder:
     def configure_agent_behavior(
         self,
         agent_name: str,
-        response: Optional[str] = None,
+        response: str | None = None,
         delay_seconds: float = 0.0,
         exit_code: int = 0,
     ) -> "SimulationDataSeeder":
@@ -1096,7 +1094,7 @@ class SimulationDataSeeder:
         agent_name: str,
         failure_mode: str = "timeout",
         failure_count: int = 1,
-        error_message: Optional[str] = None,
+        error_message: str | None = None,
     ) -> "SimulationDataSeeder":
         """
         Configure agent to fail in specific ways.
@@ -1134,7 +1132,7 @@ class SimulationDataSeeder:
         self,
         reviewer_name: str,
         approval_rate: float = 0.8,
-        feedback_template: Optional[str] = None,
+        feedback_template: str | None = None,
     ) -> "SimulationDataSeeder":
         """
         Configure mock review behavior for reviewer agents.
@@ -1168,8 +1166,7 @@ class SimulationDataSeeder:
         def review_response_fn():
             if random.random() < approval_rate:
                 return f"APPROVED: Code review passed by {reviewer_name}"
-            else:
-                return feedback_template.format(reviewer=reviewer_name)
+            return feedback_template.format(reviewer=reviewer_name)
 
         mock_llm.set_agent_response_fn(reviewer_name, review_response_fn)
 
@@ -1181,8 +1178,8 @@ class SimulationDataSeeder:
     def configure_container_output(
         self,
         exit_code: int = 0,
-        stdout: Optional[str] = None,
-        stderr: Optional[str] = None,
+        stdout: str | None = None,
+        stderr: str | None = None,
     ) -> "SimulationDataSeeder":
         """
         Configure mock container execution output.

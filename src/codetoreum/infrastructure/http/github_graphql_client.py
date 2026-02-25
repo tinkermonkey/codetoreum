@@ -5,7 +5,7 @@ error handling, and rate limit tracking for Projects v2 operations.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any
 
 import httpx
 
@@ -38,9 +38,9 @@ class GitHubGraphQLClient:
             config: GitHub GraphQL configuration
         """
         self.config = config
-        self._http_client: Optional[httpx.AsyncClient] = None
-        self._rate_limit_remaining: Optional[int] = None
-        self._rate_limit_reset: Optional[int] = None
+        self._http_client: httpx.AsyncClient | None = None
+        self._rate_limit_remaining: int | None = None
+        self._rate_limit_reset: int | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
@@ -66,8 +66,8 @@ class GitHubGraphQLClient:
     async def execute(
         self,
         query: str,
-        variables: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        variables: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Execute GraphQL query or mutation.
 
         Args:
@@ -125,7 +125,7 @@ class GitHubGraphQLClient:
             data = response.json()
 
             # Check for GraphQL errors in response
-            if "errors" in data and data["errors"]:
+            if data.get("errors"):
                 error_messages = [
                     str(e.get("message", "Unknown error"))
                     for e in data["errors"]
@@ -138,9 +138,9 @@ class GitHubGraphQLClient:
             return data.get("data", {})
 
         except httpx.RequestError as e:
-            raise ExternalServiceError("GitHub", f"GitHub API request failed: {str(e)}")
+            raise ExternalServiceError("GitHub", f"GitHub API request failed: {e!s}")
 
-    def get_rate_limit_status(self) -> Dict[str, Optional[int]]:
+    def get_rate_limit_status(self) -> dict[str, int | None]:
         """Get current rate limit status.
 
         Returns:

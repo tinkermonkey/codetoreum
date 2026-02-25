@@ -1,7 +1,6 @@
 """Integration tests for WorkflowOrchestrator."""
 
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock
+from datetime import UTC, datetime
 
 import pytest
 
@@ -25,7 +24,6 @@ from codetoreum.application.workflow_orchestrator import (
     WorkflowAction,
     WorkflowConfig,
     WorkflowOrchestrator,
-    WorkflowResult,
     WorkflowState,
 )
 from codetoreum.domain.work_item import WorkItemPriority
@@ -185,7 +183,7 @@ def mock_task_queue():
 @pytest.fixture
 def mock_config():
     config = MockProjectConfiguration()
-    yield config
+    return config
 
 
 @pytest.fixture
@@ -264,10 +262,10 @@ async def test_handle_card_movement_success(orchestrator, mock_task_queue, mock_
             body="Test description",
             labels=["enhancement"],
             state="open",
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         ),
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     result = await orchestrator.handle_card_movement(event)
@@ -305,10 +303,10 @@ async def test_handle_card_movement_duplicate_work(
             body="Test description",
             labels=[],
             state="open",
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         ),
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     result1 = await orchestrator.handle_card_movement(event1)
@@ -338,10 +336,10 @@ async def test_handle_card_movement_invalid_column(orchestrator, mock_task_queue
             body="Test description",
             labels=[],
             state="open",
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         ),
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     result = await orchestrator.handle_card_movement(event)
@@ -365,7 +363,7 @@ async def test_handle_stage_completion_with_review(
         success=True,
         output="Implementation complete",
         context={"board": "Development"},
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     result = await orchestrator.handle_stage_completion(event)
@@ -395,7 +393,7 @@ async def test_handle_stage_completion_with_auto_advance(
         success=True,
         output="Requirements analyzed",
         context={"board": "Development"},
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     result = await orchestrator.handle_stage_completion(event)
@@ -433,7 +431,7 @@ async def test_handle_stage_completion_failure(
         success=False,
         output="Implementation failed",
         context={"board": "Development"},
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     result = await orchestrator.handle_stage_completion(event)
@@ -458,7 +456,7 @@ async def test_handle_review_cycle_completion_approved(
         maker_agent="developer",
         reviewer_agent="code_reviewer",
         feedback=None,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         context={"board": "Development"},
     )
 
@@ -482,7 +480,7 @@ async def test_handle_review_cycle_completion_rejected(
         maker_agent="developer",
         reviewer_agent="code_reviewer",
         feedback="Please fix issues",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         context={"board": "Development", "max_iterations": 3},
     )
 
@@ -513,7 +511,7 @@ async def test_handle_review_cycle_completion_max_iterations(
         maker_agent="developer",
         reviewer_agent="code_reviewer",
         feedback="Still has issues",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         context={"board": "Development", "max_iterations": 3},
     )
 
@@ -542,7 +540,7 @@ async def test_handle_feedback(orchestrator, mock_task_queue):
         author="user123",
         content="Can you explain this?",
         reply_to_comment_id="comment-456",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     result = await orchestrator.handle_feedback(event)
@@ -575,10 +573,10 @@ async def test_workflow_state_persistence(orchestrator, mock_workflow_state):
             body="Test description",
             labels=[],
             state="open",
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         ),
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     await orchestrator.handle_card_movement(event)
@@ -601,7 +599,7 @@ async def test_handle_stage_completion_context_none(orchestrator):
         success=True,
         output="Implementation complete",
         context=None,  # Type violation: context should be Dict[str, Any]
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     # Should raise AttributeError since None doesn't have .get() method
@@ -622,7 +620,7 @@ async def test_handle_stage_completion_with_extra_context_keys(
         success=True,
         output="Implementation complete",
         context={"board": "Development", "extra_key": "extra_value", "another": 123},
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     # Should ignore extra keys and use board="Development"
@@ -645,7 +643,7 @@ async def test_handle_review_cycle_completion_context_none(orchestrator):
         reviewer_agent="code_reviewer",
         feedback=None,
         context=None,  # Type violation: context should be Dict[str, Any]
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     # Should raise AttributeError since None doesn't have .get() method
@@ -667,7 +665,7 @@ async def test_handle_review_cycle_completion_with_extra_context_keys(
         reviewer_agent="code_reviewer",
         feedback=None,
         context={"board": "Development", "extra": "value", "other": 456},
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     # Should ignore extra keys and use board="Development"
@@ -691,7 +689,7 @@ async def test_handle_review_cycle_completion_missing_max_iterations(
         reviewer_agent="code_reviewer",
         feedback="Please fix",
         context={"board": "Development"},  # No max_iterations key
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     result = await orchestrator.handle_review_cycle_completion(event)
@@ -720,7 +718,7 @@ async def test_handle_review_cycle_completion_max_iterations_exceeded(
         reviewer_agent="code_reviewer",
         feedback="Still not good",
         context={"board": "Development"},  # max_iterations defaults to 3
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     result = await orchestrator.handle_review_cycle_completion(event)

@@ -1,7 +1,6 @@
 """Event handler for workflow-related events."""
 
 import logging
-from typing import List
 
 from codetoreum.application.workflow_orchestrator import WorkflowOrchestrator
 from codetoreum.domain.events import (

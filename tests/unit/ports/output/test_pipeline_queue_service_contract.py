@@ -6,7 +6,7 @@ to test via create_service().
 """
 
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -35,7 +35,6 @@ class TestPipelineQueueServiceContract(ABC):
     @abstractmethod
     async def create_service(self) -> IPipelineQueueService:
         """Create and return an IPipelineQueueService instance for testing."""
-        pass
 
     # ===== is_item_in_queue Tests =====
 
@@ -50,7 +49,7 @@ class TestPipelineQueueServiceContract(ABC):
     async def test_is_item_in_queue_returns_true_when_enqueued(self):
         """is_item_in_queue should return True after enqueuing item."""
         service = await self.create_service()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         await service.enqueue_item(
             "proj-1", "board-1", "item-123", position_in_column=0, timestamp=now
@@ -63,7 +62,7 @@ class TestPipelineQueueServiceContract(ABC):
     async def test_is_item_in_queue_returns_false_after_removal(self):
         """is_item_in_queue should return False after removing item."""
         service = await self.create_service()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         await service.enqueue_item(
             "proj-1", "board-1", "item-123", position_in_column=0, timestamp=now
@@ -87,7 +86,7 @@ class TestPipelineQueueServiceContract(ABC):
     async def test_enqueue_item_creates_waiting_entry(self):
         """Enqueuing item should create entry with status='waiting'."""
         service = await self.create_service()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         await service.enqueue_item(
             "proj-1", "board-1", "item-123", position_in_column=0, timestamp=now
@@ -103,7 +102,7 @@ class TestPipelineQueueServiceContract(ABC):
     async def test_enqueue_item_preserves_position(self):
         """Enqueuing item should preserve position_in_column."""
         service = await self.create_service()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         await service.enqueue_item(
             "proj-1", "board-1", "item-123", position_in_column=5, timestamp=now
@@ -116,7 +115,7 @@ class TestPipelineQueueServiceContract(ABC):
     async def test_enqueue_item_duplicate_raises_error(self):
         """Enqueuing same item twice should raise error."""
         service = await self.create_service()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         await service.enqueue_item(
             "proj-1", "board-1", "item-123", position_in_column=0, timestamp=now
@@ -131,7 +130,7 @@ class TestPipelineQueueServiceContract(ABC):
     async def test_enqueue_item_validates_project_id(self):
         """enqueue_item should validate non-empty project_id."""
         service = await self.create_service()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         with pytest.raises(QueueValidationError):
             await service.enqueue_item(
@@ -142,7 +141,7 @@ class TestPipelineQueueServiceContract(ABC):
     async def test_enqueue_item_validates_board_id(self):
         """enqueue_item should validate non-empty board_id."""
         service = await self.create_service()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         with pytest.raises(QueueValidationError):
             await service.enqueue_item(
@@ -153,7 +152,7 @@ class TestPipelineQueueServiceContract(ABC):
     async def test_enqueue_item_validates_work_item_id(self):
         """enqueue_item should validate non-empty work_item_id."""
         service = await self.create_service()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         with pytest.raises(QueueValidationError):
             await service.enqueue_item(
@@ -164,7 +163,7 @@ class TestPipelineQueueServiceContract(ABC):
     async def test_enqueue_item_validates_position(self):
         """enqueue_item should validate non-negative position."""
         service = await self.create_service()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         with pytest.raises(QueueValidationError):
             await service.enqueue_item(
@@ -177,7 +176,7 @@ class TestPipelineQueueServiceContract(ABC):
     async def test_mark_item_active_changes_status(self):
         """mark_item_active should change status to 'active'."""
         service = await self.create_service()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         await service.enqueue_item(
             "proj-1", "board-1", "item-123", position_in_column=0, timestamp=now
@@ -199,7 +198,7 @@ class TestPipelineQueueServiceContract(ABC):
     async def test_mark_item_active_idempotent_or_raises_error(self):
         """mark_item_active should either be idempotent or raise on double-mark."""
         service = await self.create_service()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         await service.enqueue_item(
             "proj-1", "board-1", "item-123", position_in_column=0, timestamp=now
@@ -226,7 +225,7 @@ class TestPipelineQueueServiceContract(ABC):
     async def test_remove_from_queue_success_returns_true(self):
         """Removing existing item should return True."""
         service = await self.create_service()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         await service.enqueue_item(
             "proj-1", "board-1", "item-123", position_in_column=0, timestamp=now
@@ -255,7 +254,7 @@ class TestPipelineQueueServiceContract(ABC):
     async def test_remove_from_queue_actually_removes_item(self):
         """Item should not be in queue after removal."""
         service = await self.create_service()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         await service.enqueue_item(
             "proj-1", "board-1", "item-123", position_in_column=0, timestamp=now
@@ -278,7 +277,7 @@ class TestPipelineQueueServiceContract(ABC):
     async def test_get_next_waiting_item_returns_single_item(self):
         """get_next_waiting_item should return single waiting item."""
         service = await self.create_service()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         await service.enqueue_item(
             "proj-1", "board-1", "item-123", position_in_column=0, timestamp=now
@@ -294,7 +293,7 @@ class TestPipelineQueueServiceContract(ABC):
     async def test_get_next_waiting_item_returns_highest_priority(self):
         """get_next_waiting_item should return lowest position (highest priority)."""
         service = await self.create_service()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Enqueue out of order
         await service.enqueue_item(
@@ -316,7 +315,7 @@ class TestPipelineQueueServiceContract(ABC):
     async def test_get_next_waiting_item_skips_active_items(self):
         """get_next_waiting_item should skip active items."""
         service = await self.create_service()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         await service.enqueue_item(
             "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
@@ -362,7 +361,7 @@ class TestPipelineQueueServiceContract(ABC):
     async def test_get_queue_entries_returns_all_entries(self):
         """get_queue_entries should return all queue entries."""
         service = await self.create_service()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         await service.enqueue_item(
             "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
@@ -378,7 +377,7 @@ class TestPipelineQueueServiceContract(ABC):
     async def test_get_queue_entries_sorted_by_position(self):
         """get_queue_entries should return entries sorted by position."""
         service = await self.create_service()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Enqueue out of order
         await service.enqueue_item(
@@ -400,7 +399,7 @@ class TestPipelineQueueServiceContract(ABC):
     async def test_get_queue_entries_includes_active_items(self):
         """get_queue_entries should include both waiting and active items."""
         service = await self.create_service()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         await service.enqueue_item(
             "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
@@ -459,7 +458,7 @@ class TestPipelineQueueServiceContract(ABC):
     async def test_queue_entries_are_immutable(self):
         """Queue entries should be immutable (frozen dataclasses)."""
         service = await self.create_service()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         await service.enqueue_item(
             "proj-1", "board-1", "item-123", position_in_column=0, timestamp=now
@@ -478,7 +477,7 @@ class TestPipelineQueueServiceContract(ABC):
     async def test_independent_queues_per_project(self):
         """Different projects should have independent queues."""
         service = await self.create_service()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         await service.enqueue_item(
             "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
@@ -499,7 +498,7 @@ class TestPipelineQueueServiceContract(ABC):
     async def test_independent_queues_per_board(self):
         """Different boards should have independent queues."""
         service = await self.create_service()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         await service.enqueue_item(
             "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now

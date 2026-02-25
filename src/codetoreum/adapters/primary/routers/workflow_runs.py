@@ -113,7 +113,7 @@ def create_workflow_runs_router(
                 except ValueError as e:
                     raise HTTPException(
                         status_code=http_status.HTTP_400_BAD_REQUEST,
-                        detail=f"Invalid status value: {str(e)}",
+                        detail=f"Invalid status value: {e!s}",
                     )
 
             # Parse filters

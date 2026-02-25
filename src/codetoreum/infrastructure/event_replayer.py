@@ -2,8 +2,9 @@
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Any, AsyncIterator, Callable, Dict, List, Optional
+from collections.abc import AsyncIterator, Callable
+from datetime import UTC, datetime
+from typing import Any
 
 from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.event_bus import EventBus
@@ -15,7 +16,6 @@ logger = logging.getLogger(__name__)
 class EventReplayerError(Exception):
     """Raised when event replay operations fail."""
 
-    pass
 
 
 class EventReplayer:
@@ -41,7 +41,7 @@ class EventReplayer:
     def __init__(
         self,
         event_store: IEventStore,
-        event_bus: Optional[EventBus] = None,
+        event_bus: EventBus | None = None,
     ):
         """
         Initialize event replayer.
@@ -63,13 +63,13 @@ class EventReplayer:
     async def replay_from_timestamp(
         self,
         since: datetime,
-        until: Optional[datetime] = None,
-        stream_id: Optional[str] = None,
-        event_types: Optional[List[str]] = None,
+        until: datetime | None = None,
+        stream_id: str | None = None,
+        event_types: list[str] | None = None,
         speed_multiplier: float = 1.0,
         dry_run: bool = False,
-        progress_callback: Optional[Callable[[int, int], None]] = None,
-    ) -> Dict[str, Any]:
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> dict[str, Any]:
         """
         Replay events from a specific timestamp.
 
@@ -89,7 +89,7 @@ class EventReplayer:
             EventReplayerError: If replay fails
         """
         self._reset_stats()
-        self._stats["started_at"] = datetime.now(timezone.utc)
+        self._stats["started_at"] = datetime.now(UTC)
 
         try:
             # Get events from event store
@@ -138,7 +138,7 @@ class EventReplayer:
                         sleep_time = min(sleep_time, 1.0)
                         await asyncio.sleep(sleep_time)
 
-            self._stats["completed_at"] = datetime.now(timezone.utc)
+            self._stats["completed_at"] = datetime.now(UTC)
 
             logger.info(f"Replay completed: {self._stats['events_replayed']} events")
 
@@ -152,10 +152,10 @@ class EventReplayer:
         self,
         stream_id: str,
         from_version: int = 0,
-        to_version: Optional[int] = None,
+        to_version: int | None = None,
         dry_run: bool = False,
-        progress_callback: Optional[Callable[[int, int], None]] = None,
-    ) -> Dict[str, Any]:
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> dict[str, Any]:
         """
         Replay events for a specific stream (aggregate).
 
@@ -173,7 +173,7 @@ class EventReplayer:
             EventReplayerError: If replay fails
         """
         self._reset_stats()
-        self._stats["started_at"] = datetime.now(timezone.utc)
+        self._stats["started_at"] = datetime.now(UTC)
 
         try:
             # Get events from event store
@@ -202,7 +202,7 @@ class EventReplayer:
                 if progress_callback:
                     progress_callback(i + 1, total_events)
 
-            self._stats["completed_at"] = datetime.now(timezone.utc)
+            self._stats["completed_at"] = datetime.now(UTC)
 
             logger.info(f"Stream replay completed: {self._stats['events_replayed']} events")
 
@@ -215,10 +215,10 @@ class EventReplayer:
     async def replay_event_type(
         self,
         event_type: str,
-        since: Optional[datetime] = None,
+        since: datetime | None = None,
         limit: int = 1000,
         dry_run: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Replay all events of a specific type.
 
@@ -235,7 +235,7 @@ class EventReplayer:
             EventReplayerError: If replay fails
         """
         self._reset_stats()
-        self._stats["started_at"] = datetime.now(timezone.utc)
+        self._stats["started_at"] = datetime.now(UTC)
 
         try:
             # Get events from event store
@@ -255,7 +255,7 @@ class EventReplayer:
 
                 self._stats["events_replayed"] += 1
 
-            self._stats["completed_at"] = datetime.now(timezone.utc)
+            self._stats["completed_at"] = datetime.now(UTC)
 
             logger.info(f"Event type replay completed: {self._stats['events_replayed']} events")
 
@@ -269,7 +269,7 @@ class EventReplayer:
         self,
         stream_id: str,
         from_version: int = 0,
-        to_version: Optional[int] = None,
+        to_version: int | None = None,
     ) -> AsyncIterator[DomainEvent]:
         """
         Stream events for replay (iterator pattern).
@@ -303,10 +303,10 @@ class EventReplayer:
     async def rebuild_projection(
         self,
         projection_handler: Any,
-        since: Optional[datetime] = None,
-        stream_id: Optional[str] = None,
-        progress_callback: Optional[Callable[[int, int], None]] = None,
-    ) -> Dict[str, Any]:
+        since: datetime | None = None,
+        stream_id: str | None = None,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> dict[str, Any]:
         """
         Rebuild a projection by replaying events.
 
@@ -323,7 +323,7 @@ class EventReplayer:
             EventReplayerError: If rebuild fails
         """
         self._reset_stats()
-        self._stats["started_at"] = datetime.now(timezone.utc)
+        self._stats["started_at"] = datetime.now(UTC)
 
         try:
             # Get events
@@ -360,7 +360,7 @@ class EventReplayer:
                 if progress_callback:
                     progress_callback(i + 1, total_events)
 
-            self._stats["completed_at"] = datetime.now(timezone.utc)
+            self._stats["completed_at"] = datetime.now(UTC)
 
             logger.info(f"Projection rebuild completed: {self._stats['events_replayed']} events")
 
@@ -370,7 +370,7 @@ class EventReplayer:
             self._stats["errors"] += 1
             raise EventReplayerError(f"Failed to rebuild projection: {e}") from e
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """
         Get replay statistics.
 
@@ -418,7 +418,7 @@ class TimeManipulationReplayer(EventReplayer):
         stream_id: str,
         target_timestamp: datetime,
         speed_multiplier: float = 100.0,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Replay events up to a target timestamp in fast-forward mode.
 
@@ -446,7 +446,7 @@ class TimeManipulationReplayer(EventReplayer):
 
         # Replay with time manipulation
         return await self.replay_from_timestamp(
-            since=events[0].occurred_at if events else datetime.now(timezone.utc),
+            since=events[0].occurred_at if events else datetime.now(UTC),
             until=target_timestamp,
             stream_id=stream_id,
             speed_multiplier=speed_multiplier,

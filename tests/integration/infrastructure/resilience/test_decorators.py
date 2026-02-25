@@ -3,9 +3,9 @@
 Tests the full integration of resilience patterns with adapters.
 """
 
-import asyncio
-from datetime import datetime, timezone
-from typing import Any, AsyncIterator, Dict, List, Optional
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 
@@ -55,65 +55,65 @@ class FlakyTicketSystem(ITicketSystem):
             assigned_at=None,
             current_workflow_id=None,
             current_stage=None,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
             completed_at=None
         )
 
     # Stub implementations for other required methods
     async def create_work_item(self, title: str, description: str, project_id: ProjectId,
-                                labels: Optional[List[str]] = None, assignee: Optional[UserId] = None,
-                                priority: Optional[WorkItemPriority] = None,
-                                metadata: Optional[Dict[str, Any]] = None) -> WorkItem:
-        raise NotImplementedError()
+                                labels: list[str] | None = None, assignee: UserId | None = None,
+                                priority: WorkItemPriority | None = None,
+                                metadata: dict[str, Any] | None = None) -> WorkItem:
+        raise NotImplementedError
 
-    async def update_work_item(self, item_id: WorkItemId, updates: Dict[str, Any]) -> WorkItem:
-        raise NotImplementedError()
+    async def update_work_item(self, item_id: WorkItemId, updates: dict[str, Any]) -> WorkItem:
+        raise NotImplementedError
 
     async def delete_work_item(self, item_id: WorkItemId) -> None:
-        raise NotImplementedError()
+        raise NotImplementedError
 
     async def update_status(self, item_id: WorkItemId, status: WorkItemStatus,
-                           reason: Optional[str] = None) -> WorkItem:
-        raise NotImplementedError()
+                           reason: str | None = None) -> WorkItem:
+        raise NotImplementedError
 
-    async def list_work_items(self, project_id: Optional[ProjectId] = None,
-                             status: Optional[WorkItemStatus] = None, assignee: Optional[UserId] = None,
-                             labels: Optional[List[str]] = None, created_after: Optional[datetime] = None,
-                             updated_after: Optional[datetime] = None, limit: int = 100,
-                             offset: int = 0) -> List[WorkItem]:
-        raise NotImplementedError()
+    async def list_work_items(self, project_id: ProjectId | None = None,
+                             status: WorkItemStatus | None = None, assignee: UserId | None = None,
+                             labels: list[str] | None = None, created_after: datetime | None = None,
+                             updated_after: datetime | None = None, limit: int = 100,
+                             offset: int = 0) -> list[WorkItem]:
+        raise NotImplementedError
 
-    async def search_work_items(self, query: str, project_id: Optional[ProjectId] = None,
-                                limit: int = 100) -> List[WorkItem]:
-        raise NotImplementedError()
+    async def search_work_items(self, query: str, project_id: ProjectId | None = None,
+                                limit: int = 100) -> list[WorkItem]:
+        raise NotImplementedError
 
-    async def get_work_item_stream(self, project_id: Optional[ProjectId] = None,
-                                   since: Optional[datetime] = None) -> AsyncIterator[WorkItem]:
-        raise NotImplementedError()
+    async def get_work_item_stream(self, project_id: ProjectId | None = None,
+                                   since: datetime | None = None) -> AsyncIterator[WorkItem]:
+        raise NotImplementedError
 
-    async def add_comment(self, item_id: WorkItemId, body: str, author: Optional[UserId] = None,
-                         metadata: Optional[Dict[str, Any]] = None) -> Comment:
-        raise NotImplementedError()
+    async def add_comment(self, item_id: WorkItemId, body: str, author: UserId | None = None,
+                         metadata: dict[str, Any] | None = None) -> Comment:
+        raise NotImplementedError
 
-    async def get_comments(self, item_id: WorkItemId, since: Optional[datetime] = None,
-                          limit: int = 100) -> List[Comment]:
-        raise NotImplementedError()
+    async def get_comments(self, item_id: WorkItemId, since: datetime | None = None,
+                          limit: int = 100) -> list[Comment]:
+        raise NotImplementedError
 
     async def link_work_items(self, source_id: WorkItemId, target_id: WorkItemId,
                              relationship: str) -> None:
-        raise NotImplementedError()
+        raise NotImplementedError
 
     async def get_related_items(self, item_id: WorkItemId,
-                               relationship: Optional[str] = None) -> List[WorkItem]:
-        raise NotImplementedError()
+                               relationship: str | None = None) -> list[WorkItem]:
+        raise NotImplementedError
 
-    async def register_webhook(self, url: str, events: List[str],
-                              project_id: Optional[ProjectId] = None) -> str:
-        raise NotImplementedError()
+    async def register_webhook(self, url: str, events: list[str],
+                              project_id: ProjectId | None = None) -> str:
+        raise NotImplementedError
 
     async def unregister_webhook(self, webhook_id: str) -> None:
-        raise NotImplementedError()
+        raise NotImplementedError
 
 
 class FlakyLLMProvider(ILLMProvider):
@@ -123,7 +123,7 @@ class FlakyLLMProvider(ILLMProvider):
         self.fail_count = fail_count
         self.call_count = 0
 
-    async def execute(self, prompt: str, context: Optional[ExecutionContext] = None,
+    async def execute(self, prompt: str, context: ExecutionContext | None = None,
                      stream_callback=None) -> ExecutionResult:
         self.call_count += 1
         if self.call_count <= self.fail_count:
@@ -139,28 +139,28 @@ class FlakyLLMProvider(ILLMProvider):
 
     # Stub implementations
     async def execute_with_tools(self, prompt: str, tools, context=None, stream_callback=None):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     async def stream_completion(self, prompt: str, context=None):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     async def create_conversation(self, system_prompt=None, parameters=None) -> str:
-        raise NotImplementedError()
+        raise NotImplementedError
 
     async def continue_conversation(self, conversation_id: str, message: str, stream_callback=None):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     async def get_model_info(self):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     async def list_available_models(self):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     async def count_tokens(self, text: str, model=None) -> int:
-        raise NotImplementedError()
+        raise NotImplementedError
 
     async def get_usage_stats(self, since=None):
-        raise NotImplementedError()
+        raise NotImplementedError
 
 
 # ============================================================================

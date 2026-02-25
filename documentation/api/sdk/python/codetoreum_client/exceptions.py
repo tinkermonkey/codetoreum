@@ -13,7 +13,7 @@ class CodetoreumError(Exception):
     def __init__(
         self,
         message: str,
-        status_code: Optional[int] = None,
+        status_code: int | None = None,
         response: Optional["requests.Response"] = None,
     ) -> None:
         super().__init__(message)
@@ -39,7 +39,7 @@ class NotFoundError(CodetoreumError):
 class ValidationError(CodetoreumError):
     """Raised when request validation fails (422)."""
 
-    def __init__(self, message: str = "Validation error", errors: Optional[list[str]] = None) -> None:
+    def __init__(self, message: str = "Validation error", errors: list[str] | None = None) -> None:
         super().__init__(message, status_code=422)
         self.errors = errors or []
 

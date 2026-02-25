@@ -6,8 +6,8 @@ Provides concrete health check implementations for various system components.
 import asyncio
 import logging
 import time
-from datetime import datetime, timezone
-from typing import Callable, Dict, List, Optional
+from collections.abc import Callable
+from datetime import UTC, datetime
 
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 
@@ -32,7 +32,7 @@ class HealthChecker(IHealthCheck):
 
     def __init__(
         self,
-        dependencies: Optional[Dict[str, IHealthCheck]] = None,
+        dependencies: dict[str, IHealthCheck] | None = None,
         app_name: str = "codetoreum",
         version: str = "unknown",
         check_timeout: float = 5.0
@@ -97,8 +97,8 @@ class HealthChecker(IHealthCheck):
                 processed_results.append(DependencyHealth(
                     name="unknown",
                     status=HealthStatus.UNHEALTHY,
-                    message=f"Health check failed with exception: {str(result)}",
-                    last_check=datetime.now(timezone.utc)
+                    message=f"Health check failed with exception: {result!s}",
+                    last_check=datetime.now(UTC)
                 ))
             else:
                 processed_results.append(result)
@@ -110,7 +110,7 @@ class HealthChecker(IHealthCheck):
             if dep.status == HealthStatus.UNHEALTHY:
                 overall_status = HealthStatus.UNHEALTHY
                 break
-            elif dep.status == HealthStatus.DEGRADED and overall_status == HealthStatus.HEALTHY:
+            if dep.status == HealthStatus.DEGRADED and overall_status == HealthStatus.HEALTHY:
                 overall_status = HealthStatus.DEGRADED
 
         message = self._generate_readiness_message(overall_status, dependency_results)
@@ -159,25 +159,25 @@ class HealthChecker(IHealthCheck):
                 metadata=result.metadata
             )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return DependencyHealth(
                 name=name,
                 status=HealthStatus.UNHEALTHY,
                 message=f"Health check timed out after {self.check_timeout} seconds",
-                last_check=datetime.now(timezone.utc)
+                last_check=datetime.now(UTC)
             )
         except Exception as e:
             return DependencyHealth(
                 name=name,
                 status=HealthStatus.UNHEALTHY,
-                message=f"Health check failed: {str(e)}",
-                last_check=datetime.now(timezone.utc)
+                message=f"Health check failed: {e!s}",
+                last_check=datetime.now(UTC)
             )
 
     def _generate_readiness_message(
         self,
         status: HealthStatus,
-        dependencies: List[DependencyHealth]
+        dependencies: list[DependencyHealth]
     ) -> str:
         """Generate readiness message based on status and dependencies."""
         if status == HealthStatus.HEALTHY:
@@ -188,7 +188,7 @@ class HealthChecker(IHealthCheck):
 
         if unhealthy:
             return f"{self.app_name} is not ready. Unhealthy dependencies: {', '.join(unhealthy)}"
-        elif degraded:
+        if degraded:
             return f"{self.app_name} is degraded. Degraded dependencies: {', '.join(degraded)}"
 
         return f"{self.app_name} status: {status.value}"
@@ -209,7 +209,7 @@ class CompositeHealthCheck(IHealthCheck):
     Useful for grouping related health checks.
     """
 
-    def __init__(self, checks: Optional[List[IHealthCheck]] = None):
+    def __init__(self, checks: list[IHealthCheck] | None = None):
         """
         Initialize composite health check.
 
@@ -233,7 +233,7 @@ class CompositeHealthCheck(IHealthCheck):
                 )
                 overall_status = HealthStatus.UNHEALTHY
                 break
-            elif result.status != HealthStatus.HEALTHY:
+            if result.status != HealthStatus.HEALTHY:
                 overall_status = HealthStatus.UNHEALTHY
                 break
 
@@ -257,10 +257,10 @@ class CompositeHealthCheck(IHealthCheck):
                 )
                 overall_status = HealthStatus.UNHEALTHY
                 break
-            elif result.status == HealthStatus.UNHEALTHY:
+            if result.status == HealthStatus.UNHEALTHY:
                 overall_status = HealthStatus.UNHEALTHY
                 break
-            elif result.status == HealthStatus.DEGRADED:
+            if result.status == HealthStatus.DEGRADED:
                 overall_status = HealthStatus.DEGRADED
 
         return HealthCheckResult(
@@ -318,16 +318,15 @@ class ConnectionHealthCheck(IHealthCheck):
                     message=f"{self.resource_name} is reachable",
                     metadata={"response_time_ms": response_time, "resource_type": self.resource_type}
                 )
-            else:
-                return HealthCheckResult(
-                    status=HealthStatus.UNHEALTHY,
-                    message=f"{self.resource_name} is not healthy"
-                )
+            return HealthCheckResult(
+                status=HealthStatus.UNHEALTHY,
+                message=f"{self.resource_name} is not healthy"
+            )
 
         except Exception as e:
             return HealthCheckResult(
                 status=HealthStatus.UNHEALTHY,
-                message=f"{self.resource_name} check failed: {str(e)}"
+                message=f"{self.resource_name} check failed: {e!s}"
             )
 
     async def check_dependency(self, dependency_name: str) -> DependencyHealth:

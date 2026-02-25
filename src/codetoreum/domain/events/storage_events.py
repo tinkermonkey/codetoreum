@@ -4,7 +4,6 @@ Events track changes to storage including artifact uploads and deletions.
 """
 
 from dataclasses import dataclass
-from typing import Optional
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
@@ -44,7 +43,7 @@ class ArtifactUploadedEvent(CodetoreumEvent):
     key: str = ""
     size_bytes: int = 0
     content_type: str = ""
-    project_id: Optional[str] = None
+    project_id: str | None = None
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""
@@ -111,7 +110,7 @@ class ArtifactDeletedEvent(CodetoreumEvent):
     """
 
     key: str = ""
-    project_id: Optional[str] = None
+    project_id: str | None = None
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""

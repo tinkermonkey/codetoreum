@@ -10,17 +10,13 @@ Provides:
 
 import logging
 import threading
-from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, TypeVar
+from dataclasses import dataclass
+from typing import Any, TypeVar
 
 # Import production adapters
 from codetoreum.adapters.secondary import (
     ClaudeCodeAdapter,
-    ClaudeCodeConfig,
-    DockerConfig,
     DockerContainerAdapter,
-    GitConfig,
-    GitHubConfig,
     GitHubTicketAdapter,
     GitRepositoryAdapter,
 )
@@ -58,7 +54,7 @@ from codetoreum.ports.output.ticket_system import ITicketSystem
 logger = logging.getLogger(__name__)
 
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 @dataclass
@@ -67,7 +63,7 @@ class AdapterFactoryConfig:
 
     operation_mode: OperationMode = OperationMode.PRODUCTION
     enable_resilience: bool = True
-    custom_resilience_configs: Optional[Dict[str, ServiceResilienceConfig]] = None
+    custom_resilience_configs: dict[str, ServiceResilienceConfig] | None = None
 
 
 class AdapterFactory:
@@ -83,7 +79,7 @@ class AdapterFactory:
     Thread-safe for concurrent adapter creation and configuration changes.
     """
 
-    def __init__(self, config: Optional[AdapterFactoryConfig] = None):
+    def __init__(self, config: AdapterFactoryConfig | None = None):
         """
         Initialize the adapter factory.
 
@@ -104,7 +100,7 @@ class AdapterFactory:
         self._event_store_registry = EventStoreRegistry()
 
         # Dependency injection container
-        self._dependencies: Dict[str, Any] = {}
+        self._dependencies: dict[str, Any] = {}
 
         # Register default adapters
         self._register_default_adapters()
@@ -265,9 +261,9 @@ class AdapterFactory:
 
     def create_ticket_system(
         self,
-        adapter_name: Optional[str] = None,
-        adapter_config: Optional[Any] = None,
-        resilience_config: Optional[ServiceResilienceConfig] = None,
+        adapter_name: str | None = None,
+        adapter_config: Any | None = None,
+        resilience_config: ServiceResilienceConfig | None = None,
         **kwargs
     ) -> ITicketSystem:
         """
@@ -295,7 +291,7 @@ class AdapterFactory:
 
         # Create base adapter instance
         if adapter_config is not None:
-            kwargs['config'] = adapter_config
+            kwargs["config"] = adapter_config
 
         adapter = self._ticket_system_registry.create_instance(adapter_name, **kwargs)
 
@@ -305,7 +301,7 @@ class AdapterFactory:
             service_config = None
             try:
                 if resilience_config:
-                    if hasattr(resilience_config, 'to_dict'):
+                    if hasattr(resilience_config, "to_dict"):
                         service_config = resilience_config.to_dict()
                     else:
                         raise TypeError(
@@ -315,7 +311,7 @@ class AdapterFactory:
                     default_config = self._get_resilience_config(
                         "ticket_system", GITHUB_RESILIENCE_CONFIG
                     )
-                    if hasattr(default_config, 'to_dict'):
+                    if hasattr(default_config, "to_dict"):
                         service_config = default_config.to_dict()
                     else:
                         service_config = None
@@ -331,9 +327,9 @@ class AdapterFactory:
 
     def create_llm_provider(
         self,
-        adapter_name: Optional[str] = None,
-        adapter_config: Optional[Any] = None,
-        resilience_config: Optional[ServiceResilienceConfig] = None,
+        adapter_name: str | None = None,
+        adapter_config: Any | None = None,
+        resilience_config: ServiceResilienceConfig | None = None,
         **kwargs
     ) -> ILLMProvider:
         """
@@ -361,7 +357,7 @@ class AdapterFactory:
 
         # Create base adapter instance
         if adapter_config is not None:
-            kwargs['config'] = adapter_config
+            kwargs["config"] = adapter_config
 
         adapter = self._llm_provider_registry.create_instance(adapter_name, **kwargs)
 
@@ -371,7 +367,7 @@ class AdapterFactory:
             service_config = None
             try:
                 if resilience_config:
-                    if hasattr(resilience_config, 'to_dict'):
+                    if hasattr(resilience_config, "to_dict"):
                         service_config = resilience_config.to_dict()
                     else:
                         raise TypeError(
@@ -381,7 +377,7 @@ class AdapterFactory:
                     default_config = self._get_resilience_config(
                         "llm_provider", CLAUDE_RESILIENCE_CONFIG
                     )
-                    if hasattr(default_config, 'to_dict'):
+                    if hasattr(default_config, "to_dict"):
                         service_config = default_config.to_dict()
                     else:
                         service_config = None
@@ -397,9 +393,9 @@ class AdapterFactory:
 
     def create_container(
         self,
-        adapter_name: Optional[str] = None,
-        adapter_config: Optional[Any] = None,
-        resilience_config: Optional[ServiceResilienceConfig] = None,
+        adapter_name: str | None = None,
+        adapter_config: Any | None = None,
+        resilience_config: ServiceResilienceConfig | None = None,
         **kwargs
     ) -> IContainer:
         """
@@ -427,7 +423,7 @@ class AdapterFactory:
 
         # Create base adapter instance
         if adapter_config is not None:
-            kwargs['config'] = adapter_config
+            kwargs["config"] = adapter_config
 
         adapter = self._container_registry.create_instance(adapter_name, **kwargs)
 
@@ -437,7 +433,7 @@ class AdapterFactory:
             service_config = None
             try:
                 if resilience_config:
-                    if hasattr(resilience_config, 'to_dict'):
+                    if hasattr(resilience_config, "to_dict"):
                         service_config = resilience_config.to_dict()
                     else:
                         raise TypeError(
@@ -447,7 +443,7 @@ class AdapterFactory:
                     default_config = self._get_resilience_config(
                         "container", CONTAINER_RESILIENCE_CONFIG
                     )
-                    if hasattr(default_config, 'to_dict'):
+                    if hasattr(default_config, "to_dict"):
                         service_config = default_config.to_dict()
                     else:
                         service_config = None
@@ -463,9 +459,9 @@ class AdapterFactory:
 
     def create_repository(
         self,
-        adapter_name: Optional[str] = None,
-        adapter_config: Optional[Any] = None,
-        resilience_config: Optional[ServiceResilienceConfig] = None,
+        adapter_name: str | None = None,
+        adapter_config: Any | None = None,
+        resilience_config: ServiceResilienceConfig | None = None,
         **kwargs
     ) -> IRepository:
         """
@@ -493,7 +489,7 @@ class AdapterFactory:
 
         # Create base adapter instance
         if adapter_config is not None:
-            kwargs['config'] = adapter_config
+            kwargs["config"] = adapter_config
 
         adapter = self._repository_registry.create_instance(adapter_name, **kwargs)
 
@@ -503,7 +499,7 @@ class AdapterFactory:
             service_config = None
             try:
                 if resilience_config:
-                    if hasattr(resilience_config, 'to_dict'):
+                    if hasattr(resilience_config, "to_dict"):
                         service_config = resilience_config.to_dict()
                     else:
                         raise TypeError(
@@ -513,7 +509,7 @@ class AdapterFactory:
                     default_config = self._get_resilience_config(
                         "repository", REPOSITORY_RESILIENCE_CONFIG
                     )
-                    if hasattr(default_config, 'to_dict'):
+                    if hasattr(default_config, "to_dict"):
                         service_config = default_config.to_dict()
                     else:
                         service_config = None
@@ -529,7 +525,7 @@ class AdapterFactory:
 
     def create_event_store(
         self,
-        adapter_name: Optional[str] = None,
+        adapter_name: str | None = None,
         **kwargs
     ) -> IEventStore:
         """

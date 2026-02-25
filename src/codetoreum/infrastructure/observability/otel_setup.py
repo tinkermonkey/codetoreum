@@ -6,7 +6,7 @@ Supports configurable sampling strategies, performance tuning, and granular enab
 """
 
 import logging as stdlib_logging
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from opentelemetry.sdk.resources import Resource
@@ -133,17 +133,16 @@ def _get_sampler(config: ObservabilityConfig):
 
     if sampler_type == "always_on":
         return ALWAYS_ON
-    elif sampler_type == "always_off":
+    if sampler_type == "always_off":
         return ALWAYS_OFF
-    elif sampler_type == "traceidratio":
+    if sampler_type == "traceidratio":
         return TraceIdRatioBased(config.sampler_arg)
-    elif sampler_type == "parentbased_always_on":
+    if sampler_type == "parentbased_always_on":
         return ParentBased(root=ALWAYS_ON)
-    else:
-        logger.warning(
-            f"Unknown sampler type '{sampler_type}', defaulting to ALWAYS_ON"
-        )
-        return ALWAYS_ON
+    logger.warning(
+        f"Unknown sampler type '{sampler_type}', defaulting to ALWAYS_ON"
+    )
+    return ALWAYS_ON
 
 
 def _record_trace_export_error(error: Exception, config: ObservabilityConfig) -> None:

@@ -182,7 +182,7 @@ async def test_audit_endpoint_basic_smoke(e2e_client, simulation_env):
     """
     seeder = simulation_env["seeder"]
     board = simulation_env["bootstrap"].adapters.board
-    query_service = cast(IWorkflowRunQueryPort, simulation_env["bootstrap"].ports.workflow_run_query)
+    query_service = cast("IWorkflowRunQueryPort", simulation_env["bootstrap"].ports.workflow_run_query)
 
     # Get first work item from seeded data
     work_item_id = seeder.created_items.work_items[0]
@@ -255,7 +255,7 @@ async def test_audit_endpoint_pagination(e2e_client, simulation_env):
     """
     seeder = simulation_env["seeder"]
     board = simulation_env["bootstrap"].adapters.board
-    query_service = cast(IWorkflowRunQueryPort, simulation_env["bootstrap"].ports.workflow_run_query)
+    query_service = cast("IWorkflowRunQueryPort", simulation_env["bootstrap"].ports.workflow_run_query)
 
     # Get first work item
     work_item_id = seeder.created_items.work_items[0]
@@ -322,7 +322,7 @@ async def test_audit_endpoint_validation_structure(e2e_client, simulation_env):
     """
     seeder = simulation_env["seeder"]
     board = simulation_env["bootstrap"].adapters.board
-    query_service = cast(IWorkflowRunQueryPort, simulation_env["bootstrap"].ports.workflow_run_query)
+    query_service = cast("IWorkflowRunQueryPort", simulation_env["bootstrap"].ports.workflow_run_query)
 
     # Get first work item
     work_item_id = seeder.created_items.work_items[0]
@@ -377,7 +377,7 @@ async def test_audit_endpoint_stage_grouping(e2e_client, simulation_env):
     """
     seeder = simulation_env["seeder"]
     board = simulation_env["bootstrap"].adapters.board
-    query_service = cast(IWorkflowRunQueryPort, simulation_env["bootstrap"].ports.workflow_run_query)
+    query_service = cast("IWorkflowRunQueryPort", simulation_env["bootstrap"].ports.workflow_run_query)
 
     # Get first work item
     work_item_id = seeder.created_items.work_items[0]
@@ -426,7 +426,7 @@ async def test_audit_endpoint_detects_failed_workflow(e2e_client, simulation_env
     """
     seeder = simulation_env["seeder"]
     board = simulation_env["bootstrap"].adapters.board
-    query_service = cast(IWorkflowRunQueryPort, simulation_env["bootstrap"].ports.workflow_run_query)
+    query_service = cast("IWorkflowRunQueryPort", simulation_env["bootstrap"].ports.workflow_run_query)
     agent_executor = simulation_env["bootstrap"].adapters.agent_executor
 
     # Get first work item
@@ -503,7 +503,7 @@ async def test_audit_endpoint_validation_disabled(e2e_client, simulation_env):
     """
     seeder = simulation_env["seeder"]
     board = simulation_env["bootstrap"].adapters.board
-    query_service = cast(IWorkflowRunQueryPort, simulation_env["bootstrap"].ports.workflow_run_query)
+    query_service = cast("IWorkflowRunQueryPort", simulation_env["bootstrap"].ports.workflow_run_query)
 
     # Get first work item
     work_item_id = seeder.created_items.work_items[0]

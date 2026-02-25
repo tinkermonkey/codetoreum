@@ -17,7 +17,6 @@ Example:
 """
 
 from dataclasses import dataclass
-from typing import List
 
 
 @dataclass
@@ -25,7 +24,7 @@ class SequencePattern:
     """Pattern for expected event sequences."""
 
     name: str
-    pattern: List[str]
+    pattern: list[str]
 
     def __post_init__(self) -> None:
         """Validate sequence pattern after initialization."""
@@ -81,7 +80,7 @@ class ExpectedSequenceRegistry:
     ]
 
     @classmethod
-    def get_expected_sequence(cls, workflow_type: str = "default") -> List[str]:
+    def get_expected_sequence(cls, workflow_type: str = "default") -> list[str]:
         """
         Get expected sequence for workflow type.
 
@@ -103,7 +102,7 @@ class ExpectedSequenceRegistry:
         return cls.WORKFLOW_LIFECYCLE
 
     @classmethod
-    def get_stage_execution_sequence(cls) -> List[str]:
+    def get_stage_execution_sequence(cls) -> list[str]:
         """
         Get expected sequence for stage execution.
 
@@ -113,7 +112,7 @@ class ExpectedSequenceRegistry:
         return cls.STAGE_EXECUTION
 
     @classmethod
-    def get_review_cycle_sequence(cls) -> List[str]:
+    def get_review_cycle_sequence(cls) -> list[str]:
         """
         Get expected sequence for review cycles.
 
@@ -123,7 +122,7 @@ class ExpectedSequenceRegistry:
         return cls.REVIEW_CYCLE
 
     @classmethod
-    def get_repair_cycle_sequence(cls) -> List[str]:
+    def get_repair_cycle_sequence(cls) -> list[str]:
         """
         Get expected sequence for repair cycles.
 
@@ -133,7 +132,7 @@ class ExpectedSequenceRegistry:
         return cls.REPAIR_CYCLE
 
     @classmethod
-    def get_all_patterns(cls) -> List[SequencePattern]:
+    def get_all_patterns(cls) -> list[SequencePattern]:
         """
         Get all available sequence patterns.
 

@@ -4,7 +4,6 @@ These tests use testcontainers to spin up a real Elasticsearch instance.
 """
 
 import asyncio
-from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest

@@ -9,8 +9,7 @@ Tests cover:
 """
 
 import logging
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -332,9 +331,8 @@ class TestRepairCycleLogging:
             agent_name="test_agent",
         )
 
-        with caplog.at_level(logging.INFO):
-            with RepairCycleLoggingContext(context) as ctx:
-                ctx.logger.info("Test operation")
+        with caplog.at_level(logging.INFO), RepairCycleLoggingContext(context) as ctx:
+            ctx.logger.info("Test operation")
 
         assert "repair_cycle_context_started" in caplog.text
         assert "Test operation" in caplog.text
@@ -439,9 +437,8 @@ class TestRepairCycleProfiler:
         """Test profiler handles exceptions."""
         profiler = RepairCycleProfiler()
 
-        with pytest.raises(ValueError):
-            with profiler.profile_operation("failing_op"):
-                raise ValueError("Test error")
+        with pytest.raises(ValueError), profiler.profile_operation("failing_op"):
+            raise ValueError("Test error")
 
         profiles = profiler.get_profiles()
         assert profiles[0].exceptions == 1

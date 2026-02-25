@@ -14,7 +14,6 @@ Benefits:
 """
 
 from enum import Enum
-from typing import Dict, Set
 
 
 class ErrorCategory(str, Enum):
@@ -213,7 +212,7 @@ class ErrorRegistry:
     ERR_COMMENT_ERROR = "ERR_COMMENT_ERROR"
 
     @classmethod
-    def get_all_error_ids(cls) -> Set[str]:
+    def get_all_error_ids(cls) -> set[str]:
         """Get all registered error IDs."""
         return {
             value

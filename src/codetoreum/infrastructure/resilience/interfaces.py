@@ -5,12 +5,13 @@ retry policies, and timeout handling.
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Callable, Optional, Tuple, Type, TypeVar
+from typing import TypeVar
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 # ============================================================================
@@ -23,10 +24,10 @@ class RateLimitStats:
     requests_in_window: int
     tokens_in_window: int
     max_requests: int
-    max_tokens: Optional[int]
+    max_tokens: int | None
     window_seconds: int
     utilization: float  # 0.0 to 1.0
-    next_available: Optional[datetime]
+    next_available: datetime | None
 
 
 class IRateLimiter(ABC):
@@ -49,7 +50,6 @@ class IRateLimiter(ABC):
         Raises:
             RateLimitExceededError: If limit exceeded and wait would be too long
         """
-        pass
 
     @abstractmethod
     def try_acquire(self, operation: str, cost: int = 1) -> bool:
@@ -59,17 +59,14 @@ class IRateLimiter(ABC):
         Returns:
             True if acquired, False if would exceed limit
         """
-        pass
 
     @abstractmethod
     def get_stats(self) -> RateLimitStats:
         """Get current rate limit statistics."""
-        pass
 
     @abstractmethod
     def reset(self) -> None:
         """Reset rate limiter state (for testing)."""
-        pass
 
 
 # ============================================================================
@@ -89,8 +86,8 @@ class CircuitBreakerStats:
     state: CircuitState
     failure_count: int
     success_count: int
-    last_failure_time: Optional[datetime]
-    last_success_time: Optional[datetime]
+    last_failure_time: datetime | None
+    last_success_time: datetime | None
     total_calls: int
     total_failures: int
     total_successes: int
@@ -127,32 +124,26 @@ class ICircuitBreaker(ABC):
             CircuitBreakerOpenError: If circuit is open
             Original exception: If operation fails
         """
-        pass
 
     @abstractmethod
     def get_state(self) -> CircuitState:
         """Get current circuit state."""
-        pass
 
     @abstractmethod
     def get_stats(self) -> CircuitBreakerStats:
         """Get circuit breaker statistics."""
-        pass
 
     @abstractmethod
     def reset(self) -> None:
         """Reset circuit breaker (for testing)."""
-        pass
 
     @abstractmethod
     def force_open(self) -> None:
         """Manually open circuit (for maintenance)."""
-        pass
 
     @abstractmethod
     def force_close(self) -> None:
         """Manually close circuit (for recovery)."""
-        pass
 
 
 # ============================================================================
@@ -199,7 +190,6 @@ class IRetryPolicy(ABC):
             MaxRetriesExceededError: If all retries exhausted
             Original exception: From last retry attempt
         """
-        pass
 
     @abstractmethod
     def should_retry(self, exception: Exception) -> bool:
@@ -212,17 +202,14 @@ class IRetryPolicy(ABC):
         Returns:
             True if should retry, False otherwise
         """
-        pass
 
     @abstractmethod
     def get_stats(self) -> RetryStats:
         """Get retry statistics."""
-        pass
 
     @abstractmethod
     def reset(self) -> None:
         """Reset retry statistics (for testing)."""
-        pass
 
 
 # ============================================================================
@@ -269,9 +256,7 @@ class ITimeout(ABC):
         Raises:
             TimeoutError: If operation exceeds timeout
         """
-        pass
 
     @abstractmethod
     def get_stats(self) -> TimeoutStats:
         """Get timeout statistics."""
-        pass

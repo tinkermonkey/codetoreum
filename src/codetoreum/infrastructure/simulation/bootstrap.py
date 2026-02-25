@@ -19,7 +19,7 @@ dependency injection.
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any
 
 from fastapi import FastAPI
 
@@ -36,13 +36,11 @@ from codetoreum.adapters.primary.input_port_adapters.mock import (
     MockExecutionCommandAdapter,
     MockExecutionQueryAdapter,
     MockLoggerAdapter,
-    MockMetricsQueryAdapter,
     MockOrchestrationCommandAdapter,
     MockTaskQueryAdapter,
     MockWorkflowCommandAdapter,
     MockWorkflowDefinitionCommandAdapter,
     MockWorkflowQueryAdapter,
-    MockWorkflowRunQueryAdapter,
     MockWorkItemCommandAdapter,
     MockWorkItemQueryAdapter,
     MockWorkspaceQueryAdapter,
@@ -172,8 +170,8 @@ class SimulationServices:
     workspace_router: WorkspaceRouter
     configuration_service: ConfigurationService
     work_item_service: WorkItemService
-    multi_project_orchestrator: Optional[Any] = None  # MultiProjectOrchestrator
-    container_recovery_service: Optional[Any] = None
+    multi_project_orchestrator: Any | None = None  # MultiProjectOrchestrator
+    container_recovery_service: Any | None = None
 
 
 @dataclass
@@ -233,7 +231,7 @@ class SimulationApplicationBootstrap:
         await bootstrap.teardown()
     """
 
-    def __init__(self, config: Optional[SimulationConfig] = None):
+    def __init__(self, config: SimulationConfig | None = None):
         """
         Initialize bootstrap with simulation configuration.
 
@@ -246,16 +244,16 @@ class SimulationApplicationBootstrap:
         self.config = config or SimulationConfig.create_fast_config("default")
 
         # Components (initialized by setup())
-        self.adapters: Optional[SimulationAdapters] = None
-        self.infrastructure: Optional[SimulationInfrastructure] = None
-        self.services: Optional[SimulationServices] = None
-        self.ports: Optional[SimulationPorts] = None
-        self.app: Optional[FastAPI] = None
+        self.adapters: SimulationAdapters | None = None
+        self.infrastructure: SimulationInfrastructure | None = None
+        self.services: SimulationServices | None = None
+        self.ports: SimulationPorts | None = None
+        self.app: FastAPI | None = None
 
         # Internal state
         self._is_setup = False
-        self._adapter_factory: Optional[AdapterFactory] = None
-        self._engine: Optional[SimulationEngine] = None
+        self._adapter_factory: AdapterFactory | None = None
+        self._engine: SimulationEngine | None = None
 
     async def setup(self) -> FastAPI:
         """
@@ -1027,8 +1025,8 @@ class SimulationApplicationBootstrap:
                     payload={
                         "board_id": event.board_id,
                         "project_id": event.project_id,
-                        "columns_added": list(event.columns_added) if hasattr(event, 'columns_added') else [],
-                        "columns_removed": list(event.columns_removed) if hasattr(event, 'columns_removed') else [],
+                        "columns_added": list(event.columns_added) if hasattr(event, "columns_added") else [],
+                        "columns_removed": list(event.columns_removed) if hasattr(event, "columns_removed") else [],
                         "orphaned_items": [],
                     },
                 )
@@ -1078,7 +1076,7 @@ class SimulationApplicationBootstrap:
     # =========================================================================
 
     @property
-    def engine(self) -> Optional[SimulationEngine]:
+    def engine(self) -> SimulationEngine | None:
         """
         Get the SimulationEngine instance.
 

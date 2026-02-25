@@ -9,7 +9,7 @@ Terminology (vendor-agnostic):
 """
 
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Literal
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
@@ -123,7 +123,7 @@ class LockReleasedEvent(CodetoreumEvent):
     board_id: str = ""
     work_item_id: str = ""
     reason: Literal["completed", "exit_column", "timeout", "manual"] = "completed"
-    next_in_queue: Optional[str] = None
+    next_in_queue: str | None = None
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""
@@ -351,7 +351,7 @@ class PipelineLockReleasedEvent(CodetoreumEvent):
     project_id: str = ""
     work_item_id: str = ""
     board_id: str = ""
-    next_work_item_id: Optional[str] = None
+    next_work_item_id: str | None = None
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""

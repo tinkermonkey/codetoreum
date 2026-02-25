@@ -11,7 +11,7 @@ The session state captures all information needed for:
 """
 
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Literal
 
 
 @dataclass(frozen=True)
@@ -82,8 +82,8 @@ class ConversationalSessionState:
     work_item_id: str
     project_id: str
     agent_assignment: str
-    column_name: Optional[str]
-    llm_conversation_id: Optional[str]
+    column_name: str | None
+    llm_conversation_id: str | None
     last_processed_comment_id: str
     last_interaction_timestamp: str
     status: Literal["active", "suspended", "terminated"]

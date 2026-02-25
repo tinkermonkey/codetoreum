@@ -4,9 +4,7 @@ Tests webhook handling, polling, event emission, and GitHub API integration.
 Uses mock HTTP responses for deterministic testing without external services.
 """
 
-import asyncio
-from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -23,7 +21,6 @@ from codetoreum.domain.events.discussion_events import (
 )
 from codetoreum.ports.exceptions import (
     AuthenticationError,
-    ExternalServiceError,
     ResourceNotFoundError,
     ValidationError,
 )
@@ -60,7 +57,7 @@ class TestGitHubDiscussionAdapterWebhook:
         """Webhook for comment.created emits comment.needs_response for human comments."""
         # Setup
         adapter.start_monitoring("123", monitoring_config)
-        events: List[CommentNeedsResponseEvent] = []
+        events: list[CommentNeedsResponseEvent] = []
         adapter.on("comment.needs_response", events.append)
 
         # Payload for human comment
@@ -93,7 +90,7 @@ class TestGitHubDiscussionAdapterWebhook:
         """Webhook for bot comments does not emit events."""
         # Setup
         adapter.start_monitoring("123", monitoring_config)
-        events: List[CommentNeedsResponseEvent] = []
+        events: list[CommentNeedsResponseEvent] = []
         adapter.on("comment.needs_response", events.append)
 
         # Payload for bot comment
@@ -117,7 +114,7 @@ class TestGitHubDiscussionAdapterWebhook:
     @pytest.mark.asyncio
     async def test_webhook_ignores_unmonitored_issues(self, adapter):
         """Webhook for unmonitored issues is ignored."""
-        events: List[CommentNeedsResponseEvent] = []
+        events: list[CommentNeedsResponseEvent] = []
         adapter.on("comment.needs_response", events.append)
 
         payload = {
@@ -139,7 +136,7 @@ class TestGitHubDiscussionAdapterWebhook:
     async def test_webhook_ignores_deleted_action(self, adapter, monitoring_config):
         """Webhook for deleted/modified comments is ignored."""
         adapter.start_monitoring("123", monitoring_config)
-        events: List[CommentNeedsResponseEvent] = []
+        events: list[CommentNeedsResponseEvent] = []
         adapter.on("comment.needs_response", events.append)
 
         payload = {
@@ -248,7 +245,7 @@ class TestGitHubDiscussionAdapterPolling:
         polling_adapter.get_thread = mock_get_thread
 
         # Subscribe to events
-        events: List[CommentNeedsResponseEvent] = []
+        events: list[CommentNeedsResponseEvent] = []
         polling_adapter.on("comment.needs_response", events.append)
 
         # Wait for 3 events total: alice, bob (first cycle) + charlie (second cycle)
@@ -278,12 +275,12 @@ class TestGitHubDiscussionAdapterPolling:
         adapter.start_monitoring("123", monitoring_config)
 
         call_times = []
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         async def mock_get_thread(work_item_id: str):
             from codetoreum.ports.output.discussion_adapter import DiscussionThread
 
-            call_times.append(datetime.now(timezone.utc))
+            call_times.append(datetime.now(UTC))
             return DiscussionThread(
                 id=f"thread-{work_item_id}",
                 work_item_id=work_item_id,
@@ -423,7 +420,7 @@ class TestGitHubDiscussionAdapterCommands:
             ),
         )
 
-        events: List[CommentPostedEvent] = []
+        events: list[CommentPostedEvent] = []
         adapter.on("comment.posted", events.append)
 
         with patch.object(adapter, "_get_client") as mock_get_client:

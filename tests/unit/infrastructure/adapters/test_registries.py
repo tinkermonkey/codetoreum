@@ -4,7 +4,7 @@ Unit tests for adapter registries.
 Tests the registration, lookup, and management of adapter implementations.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -80,7 +80,6 @@ class TestTicketSystemRegistry:
 
         class InvalidAdapter:
             """Not a valid ITicketSystem implementation."""
-            pass
 
         with pytest.raises(ValueError, match="does not implement"):
             registry.register(
@@ -427,7 +426,7 @@ class TestAdapterMetadata:
             description="Test",
             version="1.0.0",
             tags=["production", "github", "issues"],
-            registered_at=datetime.now(timezone.utc)
+            registered_at=datetime.now(UTC)
         )
 
         assert metadata.matches_tags(["production"])

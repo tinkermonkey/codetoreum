@@ -11,7 +11,7 @@ from abc import ABC, abstractmethod
 
 import pytest
 
-from codetoreum.ports.exceptions import RepositoryError, ValidationError
+from codetoreum.ports.exceptions import RepositoryError
 from codetoreum.ports.output.version_control_service import (
     IVersionControlService,
     Repository,
@@ -28,17 +28,14 @@ class TestVersionControlServiceContract(ABC):
     @abstractmethod
     async def create_service(self) -> IVersionControlService:
         """Create and return an IVersionControlService instance for testing."""
-        pass
 
     @abstractmethod
     def get_test_repo_url(self) -> str:
         """Return a valid test repository URL."""
-        pass
 
     @abstractmethod
     async def cleanup_repo_path(self, repo_path: str) -> None:
         """Clean up temporary repository path after test."""
-        pass
 
     # Repository Metadata Tests
 

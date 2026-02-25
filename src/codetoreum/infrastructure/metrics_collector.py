@@ -1,7 +1,7 @@
 """Metrics collector for adapter events."""
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.event_bus import EventBus
@@ -23,7 +23,7 @@ class MetricsCollector:
     Metrics are aggregated and can be exposed via Prometheus or other systems.
     """
 
-    def __init__(self, event_bus: Optional[EventBus] = None):
+    def __init__(self, event_bus: EventBus | None = None):
         """
         Initialize metrics collector.
 
@@ -33,7 +33,7 @@ class MetricsCollector:
         self.event_bus = event_bus
 
         # Metrics
-        self._metrics: Dict[str, Any] = {
+        self._metrics: dict[str, Any] = {
             "column_changes": {},  # {column_name: count}
             "lock_acquisitions": 0,
             "lock_releases": 0,
@@ -148,7 +148,7 @@ class MetricsCollector:
             return getattr(event, attribute, default)
 
         # Try as payload dict entry
-        if hasattr(event, 'payload') and isinstance(event.payload, dict):
+        if hasattr(event, "payload") and isinstance(event.payload, dict):
             return event.payload.get(attribute, default)
 
         return default
@@ -305,7 +305,7 @@ class MetricsCollector:
         try:
             # Also counts as agent trigger
             self._metrics["agents_triggered"] += 1
-            logger.debug(f"Recorded comment requiring response")
+            logger.debug("Recorded comment requiring response")
 
         except Exception as e:
             logger.error(
@@ -488,7 +488,7 @@ class MetricsCollector:
             )
             self._metrics["errors"] += 1
 
-    def get_metrics(self) -> Dict[str, Any]:
+    def get_metrics(self) -> dict[str, Any]:
         """
         Get collected metrics.
 

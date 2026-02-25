@@ -5,12 +5,13 @@ Provides exponential backoff retry logic with jitter.
 
 import asyncio
 import random
-from typing import Callable, Tuple, Type, TypeVar
+from collections.abc import Callable
+from typing import TypeVar
 
 from .exceptions import MaxRetriesExceededError
 from .interfaces import IRetryPolicy, RetryStats
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class ExponentialBackoffRetry(IRetryPolicy):
@@ -30,7 +31,7 @@ class ExponentialBackoffRetry(IRetryPolicy):
         max_delay: float = 60.0,
         exponential_base: float = 2.0,
         jitter: bool = True,
-        retryable_exceptions: Tuple[Type[Exception], ...] = (Exception,)
+        retryable_exceptions: tuple[type[Exception], ...] = (Exception,)
     ):
         """
         Initialize retry policy.

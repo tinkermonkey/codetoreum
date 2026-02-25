@@ -4,7 +4,7 @@ Tests for Audit Retention Policy
 Tests the retention policy manager and cleanup functionality.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -64,7 +64,7 @@ class TestRetentionPolicyManager:
         manager = RetentionPolicyManager(store, policy)
 
         # Add old events
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         old_date = now - timedelta(days=100)
 
         for i in range(5):
@@ -115,7 +115,7 @@ class TestRetentionPolicyManager:
         manager = RetentionPolicyManager(store, policy)
 
         # Add old events
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         old_date = now - timedelta(days=100)
 
         for i in range(5):
@@ -168,7 +168,7 @@ class TestRetentionPolicyManager:
         manager = RetentionPolicyManager(store, policy)
 
         # Add only recent events
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         for i in range(3):
             await store.store_event(
                 timestamp=now,
@@ -205,7 +205,7 @@ class TestRetentionPolicyManager:
         )
 
         # Add events at different ages
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         date_40_days_ago = now - timedelta(days=40)
         date_100_days_ago = now - timedelta(days=100)
 

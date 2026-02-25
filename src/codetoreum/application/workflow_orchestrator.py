@@ -1,20 +1,16 @@
 """Workflow Orchestrator application service."""
 
-import asyncio
 import logging
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 from codetoreum.domain.events import (
     DomainEvent,
-    WorkflowStageAdvanced,
-    WorkItemStageUpdated,
 )
-from codetoreum.domain.work_item import WorkItem, WorkItemPriority
-from codetoreum.domain.workflow import Workflow, WorkflowStatus
+from codetoreum.domain.work_item import WorkItemPriority
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.event_types import EventTypes
 from codetoreum.infrastructure.observability.instrumentation import (
@@ -41,12 +37,12 @@ class WorkflowResult:
     """Result of workflow orchestration action."""
 
     success: bool
-    task_id: Optional[str]
-    agent_name: Optional[str]
+    task_id: str | None
+    agent_name: str | None
     action: WorkflowAction
-    next_column: Optional[str]
+    next_column: str | None
     reason: str
-    error: Optional[str] = None
+    error: str | None = None
 
 
 @dataclass
@@ -56,7 +52,7 @@ class CardMovedEvent:
     project: str
     board: str
     issue_number: int
-    from_column: Optional[str]
+    from_column: str | None
     to_column: str
     issue_data: "IssueData"
     timestamp: datetime
@@ -69,7 +65,7 @@ class IssueData:
     number: int
     title: str
     body: str
-    labels: List[str]
+    labels: list[str]
     state: str
     created_at: datetime
     updated_at: datetime
@@ -85,7 +81,7 @@ class StageCompletedEvent:
     agent_name: str
     success: bool
     output: str
-    context: Dict[str, Any]
+    context: dict[str, Any]
     timestamp: datetime
 
 
@@ -99,9 +95,9 @@ class ReviewCycleCompletedEvent:
     iteration: int
     maker_agent: str
     reviewer_agent: str
-    feedback: Optional[str]
+    feedback: str | None
     timestamp: datetime
-    context: Dict[str, Any]
+    context: dict[str, Any]
 
 
 @dataclass
@@ -113,7 +109,7 @@ class FeedbackEvent:
     feedback_type: str
     author: str
     content: str
-    reply_to_comment_id: Optional[str]
+    reply_to_comment_id: str | None
     timestamp: datetime
 
 
@@ -125,7 +121,7 @@ class Task:
     agent: str
     project: str
     priority: WorkItemPriority
-    context: Dict[str, Any]
+    context: dict[str, Any]
     created_at: datetime
 
 
@@ -134,7 +130,7 @@ class WorkflowConfig:
     """Workflow configuration from config system."""
 
     name: str
-    columns: List["ColumnConfig"]
+    columns: list["ColumnConfig"]
     workspace_type: str
 
 
@@ -146,10 +142,10 @@ class ColumnConfig:
     position: int
     agent: str
     auto_advance_on_approval: bool
-    discussion_category: Optional[str]
+    discussion_category: str | None
     stage_type: str
     review_required: bool
-    reviewer_agent: Optional[str]
+    reviewer_agent: str | None
 
 
 @dataclass
@@ -159,7 +155,7 @@ class AgentConfig:
     id: str
     name: str
     prompt_template: str
-    capabilities: List[str]
+    capabilities: list[str]
     requires_dev_container: bool
 
 
@@ -173,7 +169,7 @@ class RoutingDecision:
     column: str
     selected_agent: str
     reason: str
-    alternatives: List[str]
+    alternatives: list[str]
     workspace_type: str
     timestamp: datetime
 
@@ -185,7 +181,7 @@ class ProgressionDecision:
     project: str
     issue_number: int
     from_stage: str
-    to_stage: Optional[str]
+    to_stage: str | None
     action: WorkflowAction
     reason: str
     timestamp: datetime
@@ -204,9 +200,9 @@ class ValidationResult:
 class WorkflowState:
     """State of workflow execution."""
 
-    in_progress_tasks: Dict[str, Dict[str, bool]]  # {column: {agent: bool}}
-    current_column: Optional[str]
-    current_agent: Optional[str]
+    in_progress_tasks: dict[str, dict[str, bool]]  # {column: {agent: bool}}
+    current_column: str | None
+    current_agent: str | None
 
     def is_in_progress(self, column: str, agent: str) -> bool:
         """Check if work is in progress for column and agent."""
@@ -255,7 +251,7 @@ class IWorkflowStateManager:
         """Update workflow state."""
         raise NotImplementedError
 
-    async def get_item_position(self, work_item_id: str) -> Optional[Dict[str, Any]]:
+    async def get_item_position(self, work_item_id: str) -> dict[str, Any] | None:
         """Get current position information for a work item."""
         raise NotImplementedError
 
@@ -308,9 +304,9 @@ class WorkflowOrchestrator:
         decision_events: IDecisionEvents,
         event_store: IEventStore,
         ticket_system: ITicketSystem,
-        event_bus: Optional[EventBus] = None,
-        projects_api: Optional[IProjectsAPI] = None,
-        board_service: Optional[IBoardService] = None,
+        event_bus: EventBus | None = None,
+        projects_api: IProjectsAPI | None = None,
+        board_service: IBoardService | None = None,
     ):
         """
         Initialize workflow orchestrator.
@@ -476,7 +472,7 @@ class WorkflowOrchestrator:
             project=event.project,
             priority=WorkItemPriority.MEDIUM,
             context=task_context,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
 
         # Enqueue task
@@ -520,7 +516,7 @@ class WorkflowOrchestrator:
                 reason=f"Agent {column_config.agent} configured for column {event.to_column}",
                 alternatives=[],
                 workspace_type=workflow_config.workspace_type,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
         )
 
@@ -590,7 +586,7 @@ class WorkflowOrchestrator:
                     to_stage=None,
                     action=WorkflowAction.ESCALATE,
                     reason=f"Stage {event.stage_name} failed",
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                 )
             )
             return WorkflowResult(
@@ -625,7 +621,7 @@ class WorkflowOrchestrator:
                         to_stage=next_column.name,
                         action=WorkflowAction.AUTO_ADVANCE,
                         reason="Auto-advance on stage completion",
-                        timestamp=datetime.now(timezone.utc),
+                        timestamp=datetime.now(UTC),
                     )
                 )
 
@@ -711,36 +707,35 @@ class WorkflowOrchestrator:
                 next_column=None,
                 reason="Review approved, waiting for manual progression",
             )
-        else:
-            # Check if max iterations reached
-            max_iterations = event.context.get("max_iterations", 3)
-            if event.iteration >= max_iterations:
-                # Escalate to human
-                if self.projects_api:
-                    await self.projects_api.add_label(
-                        event.project, event.issue_number, "needs-human-review"
-                    )
-
-                return WorkflowResult(
-                    success=True,
-                    action=WorkflowAction.ESCALATE,
-                    task_id=None,
-                    agent_name=None,
-                    next_column=None,
-                    reason=f"Max review iterations ({event.iteration}) reached, escalated",
+        # Check if max iterations reached
+        max_iterations = event.context.get("max_iterations", 3)
+        if event.iteration >= max_iterations:
+            # Escalate to human
+            if self.projects_api:
+                await self.projects_api.add_label(
+                    event.project, event.issue_number, "needs-human-review"
                 )
-
-            # Queue revision task
-            task_id = await self._queue_revision_task(event)
 
             return WorkflowResult(
                 success=True,
-                action=WorkflowAction.TASK_QUEUED,
-                task_id=task_id,
-                agent_name=event.maker_agent,
+                action=WorkflowAction.ESCALATE,
+                task_id=None,
+                agent_name=None,
                 next_column=None,
-                reason=f"Changes requested, queued revision (iteration {event.iteration + 1})",
+                reason=f"Max review iterations ({event.iteration}) reached, escalated",
             )
+
+        # Queue revision task
+        task_id = await self._queue_revision_task(event)
+
+        return WorkflowResult(
+            success=True,
+            action=WorkflowAction.TASK_QUEUED,
+            task_id=task_id,
+            agent_name=event.maker_agent,
+            next_column=None,
+            reason=f"Changes requested, queued revision (iteration {event.iteration + 1})",
+        )
 
     @instrument_async_function(
         name="workflow.handle_feedback",
@@ -773,7 +768,7 @@ class WorkflowOrchestrator:
                 "author": event.author,
                 "reply_to": event.reply_to_comment_id,
             },
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
 
         task_id = await self.task_queue.enqueue(task)
@@ -791,7 +786,7 @@ class WorkflowOrchestrator:
 
     def _find_column_config(
         self, workflow: WorkflowConfig, column_name: str
-    ) -> Optional[ColumnConfig]:
+    ) -> ColumnConfig | None:
         """Find column configuration by name."""
         for col in workflow.columns:
             if col.name == column_name:
@@ -800,7 +795,7 @@ class WorkflowOrchestrator:
 
     def _find_column_by_agent(
         self, workflow: WorkflowConfig, agent_name: str
-    ) -> Optional[ColumnConfig]:
+    ) -> ColumnConfig | None:
         """Find column configuration by agent name."""
         for col in workflow.columns:
             if col.agent == agent_name:
@@ -809,7 +804,7 @@ class WorkflowOrchestrator:
 
     def _get_next_column(
         self, workflow: WorkflowConfig, current: ColumnConfig
-    ) -> Optional[ColumnConfig]:
+    ) -> ColumnConfig | None:
         """Get next column in workflow sequence."""
         sorted_columns = sorted(workflow.columns, key=lambda c: c.position)
         for i, col in enumerate(sorted_columns):
@@ -839,7 +834,7 @@ class WorkflowOrchestrator:
         event: CardMovedEvent,
         column_config: ColumnConfig,
         workflow_config: WorkflowConfig,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build task context from card movement event."""
         return {
             "issue_number": event.issue_number,
@@ -879,7 +874,7 @@ class WorkflowOrchestrator:
                 "maker_output": event.output,
                 **event.context,
             },
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
 
         task_id = await self.task_queue.enqueue(task)
@@ -909,7 +904,7 @@ class WorkflowOrchestrator:
                 "reviewer_agent": event.reviewer_agent,
                 **event.context,
             },
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
 
         return await self.task_queue.enqueue(task)
@@ -988,7 +983,7 @@ class WorkflowOrchestrator:
 
         if not all([work_item_id, project_id, board_id, to_column]):
             logger.warning(
-                f"Column change event has empty required fields",
+                "Column change event has empty required fields",
                 extra={
                     "error_id": "ERR_ORCHESTRATOR_COLUMN_CHANGE_VALIDATION_FAILURE",
                     "event_payload": event.payload
@@ -1044,7 +1039,7 @@ class WorkflowOrchestrator:
                     project=project_id,
                     priority=WorkItemPriority.MEDIUM,
                     context=task_context,
-                    created_at=datetime.now(timezone.utc),
+                    created_at=datetime.now(UTC),
                 )
 
                 try:
@@ -1070,7 +1065,7 @@ class WorkflowOrchestrator:
                     )
 
             # Case 2: Exit column - log for reference
-            if getattr(target_column_config, 'exit_column', False):
+            if getattr(target_column_config, "exit_column", False):
                 logger.debug(f"Column '{to_column}' is exit column")
                 # Lock release is handled by BoardEventHandler when item moves to exit column.
                 # This ensures all lock cleanup and next-item queue processing happens
@@ -1078,7 +1073,7 @@ class WorkflowOrchestrator:
                 # events via _handle_lock_released().
 
             # Case 3: Conversational column - start monitoring (if implemented)
-            if getattr(target_column_config, 'discussion_category', None):
+            if getattr(target_column_config, "discussion_category", None):
                 logger.debug(
                     f"Column '{to_column}' has discussion, "
                     f"would start monitoring (implementation pending)"
@@ -1087,7 +1082,7 @@ class WorkflowOrchestrator:
             # Case 4: Leaving conversational column - stop monitoring
             if from_column:
                 from_column_config = self._find_column_config(workflow_config, from_column)
-                if from_column_config and getattr(from_column_config, 'discussion_category', None):
+                if from_column_config and getattr(from_column_config, "discussion_category", None):
                     logger.debug(
                         f"Leaving discussion column '{from_column}', "
                         f"would stop monitoring (implementation pending)"
@@ -1128,7 +1123,7 @@ class WorkflowOrchestrator:
 
         if not all([work_item_id, project_id, agent_name]):
             logger.warning(
-                f"Comment event has empty required fields",
+                "Comment event has empty required fields",
                 extra={
                     "error_id": "ERR_ORCHESTRATOR_COMMENT_EVENT_VALIDATION_FAILURE",
                     "event_payload": event.payload
@@ -1152,7 +1147,7 @@ class WorkflowOrchestrator:
                 "comment": comment_text,
                 "project_id": project_id,
             },
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
 
         try:
@@ -1208,7 +1203,7 @@ class WorkflowOrchestrator:
 
         if not all([project_id, board_id]):
             logger.warning(
-                f"Lock event has empty required fields",
+                "Lock event has empty required fields",
                 extra={
                     "error_id": "ERR_ORCHESTRATOR_LOCK_EVENT_VALIDATION_FAILURE",
                     "event_payload": event.payload
@@ -1277,7 +1272,7 @@ class WorkflowOrchestrator:
                             "column": current_column_name,
                             "queued_item": True,
                         },
-                        created_at=datetime.now(timezone.utc),
+                        created_at=datetime.now(UTC),
                     )
                     await self.task_queue.enqueue(task)
                 else:

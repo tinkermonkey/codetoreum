@@ -8,9 +8,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
 
-from codetoreum.domain.agent import Agent, AgentType
+from codetoreum.domain.agent import AgentType
 
 # ============================================================================
 # Filters and Pagination
@@ -21,10 +20,10 @@ from codetoreum.domain.agent import Agent, AgentType
 class AgentFilters:
     """Filters for agent queries."""
 
-    capability: Optional[str] = None
-    agent_type: Optional[AgentType] = None
-    requires_docker: Optional[bool] = None
-    makes_code_changes: Optional[bool] = None
+    capability: str | None = None
+    agent_type: AgentType | None = None
+    requires_docker: bool | None = None
+    makes_code_changes: bool | None = None
 
 
 class AgentSortField(Enum):
@@ -67,8 +66,8 @@ class AgentExecutionStats:
     successful_executions: int
     failed_executions: int
     timeout_executions: int
-    average_duration_seconds: Optional[float]
-    last_execution_at: Optional[datetime]
+    average_duration_seconds: float | None
+    last_execution_at: datetime | None
 
 
 @dataclass
@@ -88,7 +87,7 @@ class AgentInfo:
     requires_dev_container: bool
     makes_code_changes: bool
     filesystem_write_allowed: bool
-    mcp_servers: List[str]
+    mcp_servers: list[str]
     created_at: datetime
     updated_at: datetime
 
@@ -96,17 +95,17 @@ class AgentInfo:
     capabilities: dict  # Dict[str, float]
 
     # Environment variables (optional)
-    environment_variables: Optional[dict] = None  # Dict[str, str]
+    environment_variables: dict | None = None  # Dict[str, str]
 
     # Execution stats (optional - may not be loaded for list queries)
-    execution_stats: Optional[AgentExecutionStats] = None
+    execution_stats: AgentExecutionStats | None = None
 
 
 @dataclass
 class AgentListResult:
     """Result for agent list queries."""
 
-    agents: List[AgentInfo]
+    agents: list[AgentInfo]
     total_count: int
     offset: int
     limit: int
@@ -140,7 +139,6 @@ class IAgentQueryPort(ABC):
         Raises:
             AgentNotFoundError: If agent doesn't exist
         """
-        pass
 
     @abstractmethod
     async def get_agent_by_name(
@@ -159,11 +157,10 @@ class IAgentQueryPort(ABC):
         Raises:
             AgentNotFoundError: If agent doesn't exist
         """
-        pass
 
     @abstractmethod
     async def list_agents(
-        self, filters: Optional[AgentFilters] = None, pagination: Optional[AgentPaginationParams] = None
+        self, filters: AgentFilters | None = None, pagination: AgentPaginationParams | None = None
     ) -> AgentListResult:
         """
         List agents with optional filtering and pagination.
@@ -175,14 +172,13 @@ class IAgentQueryPort(ABC):
         Returns:
             AgentListResult with matching agents
         """
-        pass
 
     @abstractmethod
     async def list_agents_by_capability(
         self,
         capability: str,
         min_proficiency: float = 0.0,
-        pagination: Optional[AgentPaginationParams] = None,
+        pagination: AgentPaginationParams | None = None,
     ) -> AgentListResult:
         """
         List agents that have a specific capability.
@@ -195,10 +191,9 @@ class IAgentQueryPort(ABC):
         Returns:
             AgentListResult with matching agents sorted by proficiency (descending)
         """
-        pass
 
     @abstractmethod
-    async def count_agents(self, filters: Optional[AgentFilters] = None) -> int:
+    async def count_agents(self, filters: AgentFilters | None = None) -> int:
         """
         Count agents matching filters.
 
@@ -208,4 +203,3 @@ class IAgentQueryPort(ABC):
         Returns:
             Count of matching agents
         """
-        pass

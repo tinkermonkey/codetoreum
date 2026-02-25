@@ -1,7 +1,7 @@
 """Unit tests for SimulationEngine."""
 
-from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, Mock, patch
+from datetime import UTC, datetime, timedelta
+from unittest.mock import Mock
 
 import pytest
 
@@ -70,7 +70,7 @@ class TestSimulationEngineInitialization:
     def test_engine_create_sets_start_time_if_configured(self):
         """Test engine creation sets start time if configured."""
         config = SimulationConfig.create_fast_config("test")
-        start_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        start_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
         config.time.start_time = start_time
 
         engine = SimulationEngine.create(config)
@@ -97,26 +97,26 @@ class TestSimulationEngineTimeOperations:
     def test_now_returns_utc_time(self, simulation_engine):
         """Test now() returns UTC time."""
         current_time = simulation_engine.now()
-        assert current_time.tzinfo == timezone.utc or current_time.tzinfo is not None
+        assert current_time.tzinfo == UTC or current_time.tzinfo is not None
 
     def test_advance_method_exists(self, simulation_engine):
         """Test advance() method exists and is callable."""
-        assert hasattr(simulation_engine, 'advance')
+        assert hasattr(simulation_engine, "advance")
         assert callable(simulation_engine.advance)
 
     def test_advance_to_method_exists(self, simulation_engine):
         """Test advance_to() method exists and is callable."""
-        assert hasattr(simulation_engine, 'advance_to')
+        assert hasattr(simulation_engine, "advance_to")
         assert callable(simulation_engine.advance_to)
 
     def test_wait_for_method_exists(self, simulation_engine):
         """Test wait_for() method exists and is callable."""
-        assert hasattr(simulation_engine, 'wait_for')
+        assert hasattr(simulation_engine, "wait_for")
         assert callable(simulation_engine.wait_for)
 
     def test_sleep_method_exists(self, simulation_engine):
         """Test sleep() method exists and is callable."""
-        assert hasattr(simulation_engine, 'sleep')
+        assert hasattr(simulation_engine, "sleep")
         assert callable(simulation_engine.sleep)
 
     @pytest.mark.asyncio

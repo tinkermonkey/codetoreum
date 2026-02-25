@@ -1,6 +1,6 @@
 """Unit tests for simulation data seeder board operations."""
 
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import pytest
 
@@ -31,7 +31,7 @@ class TestSeederBoardOperations:
         """Create seeder instance with a project."""
         seeder = SimulationDataSeeder(bootstrap)
         await seeder.create_project(name="test-project", description="Test")
-        yield seeder
+        return seeder
 
     # =========================================================================
     # Board Creation Tests

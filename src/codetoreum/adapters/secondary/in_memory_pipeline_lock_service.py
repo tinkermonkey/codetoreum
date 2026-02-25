@@ -5,8 +5,7 @@ that manages locks on work items and includes test helper methods for
 simulating lock operations via event emission.
 """
 
-from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple
+from datetime import UTC, datetime
 
 from codetoreum.domain.events.lock_events import LockAcquiredEvent, LockReleasedEvent
 from codetoreum.ports.output.pipeline_lock_service import (
@@ -56,8 +55,8 @@ class InMemoryPipelineLockService(MockEventEmitter, IPipelineLockService):
     def __init__(self) -> None:
         """Initialize the pipeline lock service."""
         super().__init__()
-        self._locks: Dict[str, PipelineLock] = {}  # key: "project_id:board_id" -> lock
-        self._queue: Dict[str, List[str]] = {}  # key: "project_id:board_id" -> work_item_ids
+        self._locks: dict[str, PipelineLock] = {}  # key: "project_id:board_id" -> lock
+        self._queue: dict[str, list[str]] = {}  # key: "project_id:board_id" -> work_item_ids
 
     # Query Operations
 
@@ -65,7 +64,7 @@ class InMemoryPipelineLockService(MockEventEmitter, IPipelineLockService):
         self,
         project_id: str,
         board_id: str
-    ) -> Optional[PipelineLock]:
+    ) -> PipelineLock | None:
         """Query current lock state for a project's board.
 
         Args:
@@ -81,7 +80,7 @@ class InMemoryPipelineLockService(MockEventEmitter, IPipelineLockService):
         key = f"{project_id}:{board_id}"
         return self._locks.get(key)
 
-    async def get_all_locks(self) -> List[PipelineLock]:
+    async def get_all_locks(self) -> list[PipelineLock]:
         """Retrieve all active locks across all projects and boards.
 
         Returns:
@@ -96,7 +95,7 @@ class InMemoryPipelineLockService(MockEventEmitter, IPipelineLockService):
         project_id: str,
         board_id: str,
         work_item_id: str
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         """Attempt to acquire lock for exclusive work item access.
 
         Args:
@@ -118,7 +117,7 @@ class InMemoryPipelineLockService(MockEventEmitter, IPipelineLockService):
         key = f"{project_id}:{board_id}"
 
         # Check if lock is already held
-        if key in self._locks and self._locks[key].lock_status == 'locked':
+        if key in self._locks and self._locks[key].lock_status == "locked":
             # Add to queue
             if key not in self._queue:
                 self._queue[key] = []
@@ -132,17 +131,17 @@ class InMemoryPipelineLockService(MockEventEmitter, IPipelineLockService):
             work_item_id=work_item_id,
             locked_by_work_item=work_item_id,
             lock_acquired_at=self._get_iso_timestamp(),
-            lock_status='locked'
+            lock_status="locked"
         )
 
         self.emit(LockAcquiredEvent(
-            type='lock.acquired',
+            type="lock.acquired",
             project_id=project_id,
             board_id=board_id,
             work_item_id=work_item_id,
-            acquisition_method='normal',
+            acquisition_method="normal",
             timestamp=self._get_iso_timestamp(),
-            source='mock'
+            source="mock"
         ))
 
         return (True, "lock acquired")
@@ -181,14 +180,14 @@ class InMemoryPipelineLockService(MockEventEmitter, IPipelineLockService):
         del self._locks[key]
 
         self.emit(LockReleasedEvent(
-            type='lock.released',
+            type="lock.released",
             project_id=project_id,
             board_id=board_id,
             work_item_id=work_item_id,
-            reason='completed',
+            reason="completed",
             next_in_queue=next_in_queue,
             timestamp=self._get_iso_timestamp(),
-            source='mock'
+            source="mock"
         ))
 
         return True
@@ -200,7 +199,7 @@ class InMemoryPipelineLockService(MockEventEmitter, IPipelineLockService):
         project_id: str,
         board_id: str,
         work_item_id: str,
-        acquisition_method: str = 'normal'
+        acquisition_method: str = "normal"
     ) -> None:
         """Test helper: Simulate lock acquisition event.
 
@@ -213,13 +212,13 @@ class InMemoryPipelineLockService(MockEventEmitter, IPipelineLockService):
             acquisition_method: 'normal' or 'stale_recovery'
         """
         self.emit(LockAcquiredEvent(
-            type='lock.acquired',
+            type="lock.acquired",
             project_id=project_id,
             board_id=board_id,
             work_item_id=work_item_id,
             acquisition_method=acquisition_method,  # type: ignore
             timestamp=self._get_iso_timestamp(),
-            source='mock'
+            source="mock"
         ))
 
     def simulate_lock_released(
@@ -227,8 +226,8 @@ class InMemoryPipelineLockService(MockEventEmitter, IPipelineLockService):
         project_id: str,
         board_id: str,
         work_item_id: str,
-        reason: str = 'completed',
-        next_in_queue: Optional[str] = None
+        reason: str = "completed",
+        next_in_queue: str | None = None
     ) -> None:
         """Test helper: Simulate lock release event.
 
@@ -242,14 +241,14 @@ class InMemoryPipelineLockService(MockEventEmitter, IPipelineLockService):
             next_in_queue: Optional next work item in queue
         """
         self.emit(LockReleasedEvent(
-            type='lock.released',
+            type="lock.released",
             project_id=project_id,
             board_id=board_id,
             work_item_id=work_item_id,
             reason=reason,  # type: ignore
             next_in_queue=next_in_queue,
             timestamp=self._get_iso_timestamp(),
-            source='mock'
+            source="mock"
         ))
 
     # Helper Methods
@@ -257,4 +256,4 @@ class InMemoryPipelineLockService(MockEventEmitter, IPipelineLockService):
     @staticmethod
     def _get_iso_timestamp() -> str:
         """Get current time as ISO 8601 timestamp."""
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()

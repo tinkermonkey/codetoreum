@@ -7,11 +7,8 @@ Tests the configuration and initialization of log export with trace correlation.
 import os
 from unittest import mock
 
-import pytest
-
 from codetoreum.infrastructure.observability.config import (
     ObservabilityConfig,
-    SignozConfig,
 )
 
 

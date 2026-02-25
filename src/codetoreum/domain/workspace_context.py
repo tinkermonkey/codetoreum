@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 
 class WorkspaceType(Enum):
@@ -30,11 +29,11 @@ class WorkspaceContext:
     work_item_id: str
 
     # Issue workspace
-    branch_name: Optional[str]
+    branch_name: str | None
     create_pr: bool
 
     # Discussion workspace
-    discussion_id: Optional[str]
+    discussion_id: str | None
 
     # Configuration
     allow_code_changes: bool

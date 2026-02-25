@@ -27,7 +27,6 @@ Key Features Tested:
 
 import re
 from datetime import timedelta
-from typing import List
 
 import pytest
 
@@ -157,7 +156,7 @@ async def scenario_a_normal_event_flow(runner: SimulationRunner):
     """
     discussion_adapter = create_discussion_adapter()
     event_bus = EventBus()
-    captured_events: List[CommentNeedsResponseEvent] = []
+    captured_events: list[CommentNeedsResponseEvent] = []
 
     # Setup event capture
     def capture_event(event):
@@ -261,7 +260,7 @@ async def scenario_b_restart_recovery(runner: SimulationRunner):
     - Only new comments trigger events
     """
     discussion_adapter = create_discussion_adapter()
-    captured_events: List[CommentNeedsResponseEvent] = []
+    captured_events: list[CommentNeedsResponseEvent] = []
 
     def capture_event(event):
         captured_events.append(event)
@@ -330,7 +329,7 @@ async def edge_case_c_event_ordering(runner: SimulationRunner):
     - No out-of-order processing
     """
     discussion_adapter = create_discussion_adapter()
-    captured_events: List[CommentNeedsResponseEvent] = []
+    captured_events: list[CommentNeedsResponseEvent] = []
 
     def capture_event(event):
         captured_events.append(event)
@@ -380,7 +379,7 @@ async def edge_case_d_bot_comment_filtering(runner: SimulationRunner):
     - Human comments still trigger events
     """
     discussion_adapter = create_discussion_adapter()
-    captured_events: List[CommentNeedsResponseEvent] = []
+    captured_events: list[CommentNeedsResponseEvent] = []
 
     def capture_event(event):
         captured_events.append(event)
@@ -446,7 +445,7 @@ async def edge_case_e_threaded_context(runner: SimulationRunner):
     - Conversation flow maintained
     """
     discussion_adapter = create_discussion_adapter()
-    captured_events: List[CommentNeedsResponseEvent] = []
+    captured_events: list[CommentNeedsResponseEvent] = []
 
     def capture_event(event):
         captured_events.append(event)
@@ -512,7 +511,7 @@ async def edge_case_f_column_change_during_processing(runner: SimulationRunner):
     - No further event processing
     """
     discussion_adapter = create_discussion_adapter()
-    captured_events: List[CommentNeedsResponseEvent] = []
+    captured_events: list[CommentNeedsResponseEvent] = []
 
     def capture_event(event):
         captured_events.append(event)
@@ -697,7 +696,7 @@ async def edge_case_j_duplicate_prevention(runner: SimulationRunner):
     - Same comment never triggers event twice
     """
     discussion_adapter = create_discussion_adapter()
-    captured_events: List[CommentNeedsResponseEvent] = []
+    captured_events: list[CommentNeedsResponseEvent] = []
 
     def capture_event(event):
         captured_events.append(event)

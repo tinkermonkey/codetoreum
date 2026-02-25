@@ -9,7 +9,7 @@ When no backing store is provided (unit tests), the adapter uses its own interna
 dictionaries.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from threading import RLock
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -66,8 +66,8 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
             github_org=cfg.github_org,
             github_repo=cfg.github_repo,
             version=cfg.version,
-            created_at=cfg.created_at or datetime.now(timezone.utc),
-            updated_at=cfg.updated_at or datetime.now(timezone.utc),
+            created_at=cfg.created_at or datetime.now(UTC),
+            updated_at=cfg.updated_at or datetime.now(UTC),
             environment_variables={k: v for k, v in cfg.environment_variables.items()} if cfg.environment_variables else {},
             mounted_commands=list(cfg.mounted_commands.values()) if isinstance(cfg.mounted_commands, dict) else cfg.mounted_commands,
             mounted_subagents=list(cfg.mounted_subagents.values()) if isinstance(cfg.mounted_subagents, dict) else cfg.mounted_subagents,
@@ -89,8 +89,8 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
             makes_code_changes=cfg.makes_code_changes,
             filesystem_write_allowed=True,
             version=cfg.version,
-            created_at=cfg.created_at or datetime.now(timezone.utc),
-            updated_at=cfg.updated_at or datetime.now(timezone.utc),
+            created_at=cfg.created_at or datetime.now(UTC),
+            updated_at=cfg.updated_at or datetime.now(UTC),
             mcp_servers=[{"name": s} for s in cfg.mcp_servers] if cfg.mcp_servers else [],
             capabilities={"capabilities": cfg.capabilities} if cfg.capabilities else {},
             metadata=cfg.metadata,
@@ -106,8 +106,8 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
             description=cfg.metadata.get("description", ""),
             version=cfg.version,
             stages=cfg.stages,
-            created_at=cfg.created_at or datetime.now(timezone.utc),
-            updated_at=cfg.updated_at or datetime.now(timezone.utc),
+            created_at=cfg.created_at or datetime.now(UTC),
+            updated_at=cfg.updated_at or datetime.now(UTC),
             metadata=cfg.metadata,
         )
 

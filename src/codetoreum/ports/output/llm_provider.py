@@ -1,10 +1,11 @@
 """ILLMProvider output port interface."""
 
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, AsyncIterator, Awaitable, Callable, Dict, List, Optional
+from typing import Any
 
 from codetoreum.domain.types import ExecutionId, UserId
 
@@ -18,17 +19,17 @@ class ExecutionContext:
     """Context for LLM execution."""
 
     # Model configuration
-    model: Optional[str] = None
+    model: str | None = None
     temperature: float = 0.7
-    max_tokens: Optional[int] = None
+    max_tokens: int | None = None
     top_p: float = 1.0
     frequency_penalty: float = 0.0
     presence_penalty: float = 0.0
 
     # Conversation context
-    conversation_id: Optional[str] = None
-    message_history: List[Dict[str, Any]] = field(default_factory=list)
-    system_prompt: Optional[str] = None
+    conversation_id: str | None = None
+    message_history: list[dict[str, Any]] = field(default_factory=list)
+    system_prompt: str | None = None
 
     # Execution options
     timeout_seconds: int = 300
@@ -36,19 +37,19 @@ class ExecutionContext:
     cache_response: bool = False
 
     # Workspace context (for containerized execution)
-    working_directory: Optional[Path] = None
-    mounted_context_files: Dict[str, Path] = field(default_factory=dict)
-    available_files: List[str] = field(default_factory=list)
-    environment_variables: Dict[str, str] = field(default_factory=dict)
+    working_directory: Path | None = None
+    mounted_context_files: dict[str, Path] = field(default_factory=dict)
+    available_files: list[str] = field(default_factory=list)
+    environment_variables: dict[str, str] = field(default_factory=dict)
 
     # MCP Server configuration
-    mcp_servers: List[Dict[str, Any]] = field(default_factory=list)
+    mcp_servers: list[dict[str, Any]] = field(default_factory=list)
 
     # Metadata
-    user_id: Optional[UserId] = None
-    session_id: Optional[str] = None
-    execution_id: Optional[ExecutionId] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    user_id: UserId | None = None
+    session_id: str | None = None
+    execution_id: ExecutionId | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -57,8 +58,8 @@ class ToolDefinition:
 
     name: str
     description: str
-    parameters: Dict[str, Any]
-    required: List[str] = field(default_factory=list)
+    parameters: dict[str, Any]
+    required: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -66,7 +67,7 @@ class ToolCall:
     """Represents a tool call made by the LLM."""
 
     tool_name: str
-    arguments: Dict[str, Any]
+    arguments: dict[str, Any]
     call_id: str
 
 
@@ -75,7 +76,7 @@ class ToolCallDelta:
     """Incremental update to a tool call (for streaming)."""
 
     call_id: str
-    delta: Dict[str, Any]
+    delta: dict[str, Any]
 
 
 @dataclass
@@ -87,11 +88,11 @@ class StreamChunk:
     is_final: bool = False
 
     # Tool calls in progress
-    tool_call_delta: Optional[ToolCallDelta] = None
+    tool_call_delta: ToolCallDelta | None = None
 
     # Metadata
     timestamp: datetime = field(default_factory=datetime.utcnow)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -103,10 +104,10 @@ class ExecutionResult:
     role: str = "assistant"
 
     # Tool calls (if any)
-    tool_calls: List[ToolCall] = field(default_factory=list)
+    tool_calls: list[ToolCall] = field(default_factory=list)
 
     # Metadata
-    model: Optional[str] = None
+    model: str | None = None
     completion_tokens: int = 0
     prompt_tokens: int = 0
     total_tokens: int = 0
@@ -118,9 +119,9 @@ class ExecutionResult:
 
     # Additional data
     finish_reason: str = "stop"
-    conversation_id: Optional[str] = None
+    conversation_id: str | None = None
     cached: bool = False
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def total_cost(self) -> float:
@@ -141,7 +142,7 @@ class ModelInfo:
     supports_streaming: bool = False
     cost_per_input_token: float = 0.0
     cost_per_output_token: float = 0.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -155,7 +156,7 @@ class UsageStats:
     total_cost: float
     period_start: datetime
     period_end: datetime
-    by_model: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    by_model: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 # Type alias for stream callback
@@ -182,8 +183,8 @@ class ILLMProvider(ABC):
     async def execute(
         self,
         prompt: str,
-        context: Optional[ExecutionContext] = None,
-        stream_callback: Optional[StreamCallback] = None,
+        context: ExecutionContext | None = None,
+        stream_callback: StreamCallback | None = None,
     ) -> ExecutionResult:
         """
         Execute a prompt with the LLM.
@@ -202,15 +203,14 @@ class ILLMProvider(ABC):
             AuthenticationError: Invalid credentials
             ExternalServiceError: Provider service error
         """
-        pass
 
     @abstractmethod
     async def execute_with_tools(
         self,
         prompt: str,
-        tools: List[ToolDefinition],
-        context: Optional[ExecutionContext] = None,
-        stream_callback: Optional[StreamCallback] = None,
+        tools: list[ToolDefinition],
+        context: ExecutionContext | None = None,
+        stream_callback: StreamCallback | None = None,
     ) -> ExecutionResult:
         """
         Execute prompt with tool/function calling capabilities.
@@ -231,7 +231,6 @@ class ILLMProvider(ABC):
             RateLimitError: Provider rate limit exceeded
             ExternalServiceError: Provider service error
         """
-        pass
 
     # Streaming
 
@@ -239,7 +238,7 @@ class ILLMProvider(ABC):
     async def stream_completion(
         self,
         prompt: str,
-        context: Optional[ExecutionContext] = None,
+        context: ExecutionContext | None = None,
     ) -> AsyncIterator[StreamChunk]:
         """
         Stream completion tokens as they're generated.
@@ -257,15 +256,14 @@ class ILLMProvider(ABC):
             PromptTooLongError: Prompt exceeds token limit
             RateLimitError: Provider rate limit exceeded
         """
-        pass
 
     # Conversation Management
 
     @abstractmethod
     async def create_conversation(
         self,
-        system_prompt: Optional[str] = None,
-        parameters: Optional[ExecutionContext] = None,
+        system_prompt: str | None = None,
+        parameters: ExecutionContext | None = None,
     ) -> str:
         """
         Create a new conversation session.
@@ -280,14 +278,13 @@ class ILLMProvider(ABC):
         Raises:
             ExternalServiceError: Provider service error
         """
-        pass
 
     @abstractmethod
     async def continue_conversation(
         self,
         conversation_id: str,
         message: str,
-        stream_callback: Optional[StreamCallback] = None,
+        stream_callback: StreamCallback | None = None,
     ) -> ExecutionResult:
         """
         Continue an existing conversation.
@@ -305,7 +302,6 @@ class ILLMProvider(ABC):
             ConversationExpiredError: Conversation has expired
             RateLimitError: Provider rate limit exceeded
         """
-        pass
 
     # Model Information
 
@@ -320,10 +316,9 @@ class ILLMProvider(ABC):
         Raises:
             ExternalServiceError: Provider service error
         """
-        pass
 
     @abstractmethod
-    async def list_available_models(self) -> List[ModelInfo]:
+    async def list_available_models(self) -> list[ModelInfo]:
         """
         List all available models from this provider.
 
@@ -333,7 +328,6 @@ class ILLMProvider(ABC):
         Raises:
             ExternalServiceError: Provider service error
         """
-        pass
 
     # Token Management
 
@@ -341,7 +335,7 @@ class ILLMProvider(ABC):
     async def count_tokens(
         self,
         text: str,
-        model: Optional[str] = None,
+        model: str | None = None,
     ) -> int:
         """
         Count tokens in text.
@@ -356,12 +350,11 @@ class ILLMProvider(ABC):
         Raises:
             ExternalServiceError: Provider service error
         """
-        pass
 
     @abstractmethod
     async def get_usage_stats(
         self,
-        since: Optional[datetime] = None,
+        since: datetime | None = None,
     ) -> UsageStats:
         """
         Get usage statistics (token usage and costs).
@@ -375,4 +368,3 @@ class ILLMProvider(ABC):
         Raises:
             ExternalServiceError: Provider service error
         """
-        pass

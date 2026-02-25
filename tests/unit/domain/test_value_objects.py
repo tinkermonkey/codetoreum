@@ -1,6 +1,6 @@
 """Unit tests for domain value objects."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -473,8 +473,8 @@ class TestTimeRange:
 
     def test_create_time_range(self):
         """Test creating time range."""
-        start = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        end = datetime(2025, 1, 1, 13, 0, 0, tzinfo=timezone.utc)
+        start = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
+        end = datetime(2025, 1, 1, 13, 0, 0, tzinfo=UTC)
         time_range = TimeRange(start=start, end=end)
 
         assert time_range.start == start
@@ -482,28 +482,28 @@ class TestTimeRange:
 
     def test_invalid_range_raises_error(self):
         """Test that invalid range raises error."""
-        start = datetime(2025, 1, 1, 13, 0, 0, tzinfo=timezone.utc)
-        end = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        start = datetime(2025, 1, 1, 13, 0, 0, tzinfo=UTC)
+        end = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
 
         with pytest.raises(DomainError, match="End time must be after start time"):
             TimeRange(start=start, end=end)
 
     def test_duration_seconds(self):
         """Test calculating duration in seconds."""
-        start = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        end = datetime(2025, 1, 1, 13, 30, 0, tzinfo=timezone.utc)
+        start = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
+        end = datetime(2025, 1, 1, 13, 30, 0, tzinfo=UTC)
         time_range = TimeRange(start=start, end=end)
 
         assert time_range.duration_seconds() == 5400  # 90 minutes
 
     def test_contains(self):
         """Test checking if timestamp is within range."""
-        start = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        end = datetime(2025, 1, 1, 13, 0, 0, tzinfo=timezone.utc)
+        start = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
+        end = datetime(2025, 1, 1, 13, 0, 0, tzinfo=UTC)
         time_range = TimeRange(start=start, end=end)
 
-        inside = datetime(2025, 1, 1, 12, 30, 0, tzinfo=timezone.utc)
-        outside = datetime(2025, 1, 1, 14, 0, 0, tzinfo=timezone.utc)
+        inside = datetime(2025, 1, 1, 12, 30, 0, tzinfo=UTC)
+        outside = datetime(2025, 1, 1, 14, 0, 0, tzinfo=UTC)
 
         assert time_range.contains(inside)
         assert not time_range.contains(outside)
@@ -511,16 +511,16 @@ class TestTimeRange:
     def test_overlaps(self):
         """Test checking if ranges overlap."""
         range1 = TimeRange(
-            start=datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
-            end=datetime(2025, 1, 1, 13, 0, 0, tzinfo=timezone.utc),
+            start=datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC),
+            end=datetime(2025, 1, 1, 13, 0, 0, tzinfo=UTC),
         )
         range2 = TimeRange(
-            start=datetime(2025, 1, 1, 12, 30, 0, tzinfo=timezone.utc),
-            end=datetime(2025, 1, 1, 13, 30, 0, tzinfo=timezone.utc),
+            start=datetime(2025, 1, 1, 12, 30, 0, tzinfo=UTC),
+            end=datetime(2025, 1, 1, 13, 30, 0, tzinfo=UTC),
         )
         range3 = TimeRange(
-            start=datetime(2025, 1, 1, 14, 0, 0, tzinfo=timezone.utc),
-            end=datetime(2025, 1, 1, 15, 0, 0, tzinfo=timezone.utc),
+            start=datetime(2025, 1, 1, 14, 0, 0, tzinfo=UTC),
+            end=datetime(2025, 1, 1, 15, 0, 0, tzinfo=UTC),
         )
 
         assert range1.overlaps(range2)

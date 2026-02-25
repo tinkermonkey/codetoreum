@@ -90,7 +90,7 @@ def register_environment_endpoints(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to add environment variable: {str(e)}",
+                detail=f"Failed to add environment variable: {e!s}",
             )
 
     @router.delete(
@@ -149,5 +149,5 @@ def register_environment_endpoints(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to remove environment variable: {str(e)}",
+                detail=f"Failed to remove environment variable: {e!s}",
             )

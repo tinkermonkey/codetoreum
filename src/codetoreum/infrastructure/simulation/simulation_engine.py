@@ -13,8 +13,8 @@ simulation-agnostic - they never receive or use a clock directly.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Optional
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
@@ -81,7 +81,7 @@ class SimulationEngine:
         logger.debug("SimulationEngine initialized")
 
     @staticmethod
-    def create(config: Optional[SimulationConfig] = None) -> "SimulationEngine":
+    def create(config: SimulationConfig | None = None) -> "SimulationEngine":
         """
         Create a new simulation engine with configured clock.
 
@@ -188,8 +188,8 @@ class SimulationEngine:
     def schedule_callback(
         self,
         callback,
-        at_time: Optional[datetime] = None,
-        after_delta: Optional[timedelta] = None,
+        at_time: datetime | None = None,
+        after_delta: timedelta | None = None,
     ) -> None:
         """
         Schedule a callback to be triggered at a specific time.
@@ -264,8 +264,8 @@ class SimulationEngine:
 
     def create_metrics_query_adapter(
         self,
-        metrics_adapter: Optional[object] = None,
-        event_store: Optional[object] = None,
+        metrics_adapter: object | None = None,
+        event_store: object | None = None,
     ) -> "MockMetricsQueryAdapter":
         """
         Create mock metrics query adapter with injected clock.
@@ -341,5 +341,5 @@ class SimulationEngine:
         Clears scheduled callbacks and resets time to current instant.
         """
         self._clock.clear_scheduled_callbacks()
-        self._clock.start_at(datetime.now(timezone.utc))
+        self._clock.start_at(datetime.now(UTC))
         logger.debug("SimulationEngine reset")

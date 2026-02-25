@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import builtins
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from ..models import Agent, PaginatedResponse
 
@@ -47,8 +47,8 @@ class AgentsResource:
         name: str,
         description: str,
         agent_type: str,
-        capabilities: Optional[builtins.list[str]] = None,
-        config: Optional[dict[str, Any]] = None,
+        capabilities: builtins.list[str] | None = None,
+        config: dict[str, Any] | None = None,
         **kwargs: Any
     ) -> Agent:
         """
@@ -103,8 +103,8 @@ class AgentsResource:
 
     def list(
         self,
-        agent_type: Optional[str] = None,
-        status: Optional[str] = None,
+        agent_type: str | None = None,
+        status: str | None = None,
         limit: int = 100,
         offset: int = 0,
         **filters: Any
@@ -170,11 +170,11 @@ class AgentsResource:
     def update(
         self,
         agent_id: str,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        capabilities: Optional[builtins.list[str]] = None,
-        config: Optional[dict[str, Any]] = None,
-        status: Optional[str] = None,
+        name: str | None = None,
+        description: str | None = None,
+        capabilities: builtins.list[str] | None = None,
+        config: dict[str, Any] | None = None,
+        status: str | None = None,
         **updates: Any
     ) -> Agent:
         """
@@ -268,7 +268,7 @@ class AgentsResource:
     def get_executions(
         self,
         agent_id: str,
-        status: Optional[str] = None,
+        status: str | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> PaginatedResponse:

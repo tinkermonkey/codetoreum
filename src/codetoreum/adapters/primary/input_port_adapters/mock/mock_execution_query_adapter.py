@@ -4,7 +4,7 @@ Mock Execution Query Adapter
 In-memory implementation of IExecutionQueryPort for development and testing.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from threading import RLock
 
 from codetoreum.domain.exceptions import ExecutionNotFoundError
@@ -208,12 +208,12 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
             executions.sort(key=lambda e: e.initialized_at, reverse=reverse)
         elif pagination.sort_by == ExecutionSortField.STARTED_AT:
             executions.sort(
-                key=lambda e: e.started_at or datetime.min.replace(tzinfo=timezone.utc),
+                key=lambda e: e.started_at or datetime.min.replace(tzinfo=UTC),
                 reverse=reverse,
             )
         elif pagination.sort_by == ExecutionSortField.COMPLETED_AT:
             executions.sort(
-                key=lambda e: e.completed_at or datetime.min.replace(tzinfo=timezone.utc),
+                key=lambda e: e.completed_at or datetime.min.replace(tzinfo=UTC),
                 reverse=reverse,
             )
         elif pagination.sort_by == ExecutionSortField.DURATION:

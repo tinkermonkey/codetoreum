@@ -11,9 +11,9 @@ to discussion updates.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Literal, Optional
+from typing import Literal
 
-from codetoreum.domain.events import Comment, CommentContext
+from codetoreum.domain.events import Comment
 
 from .event_emitter import IEventEmitter
 
@@ -36,7 +36,7 @@ class DiscussionMonitoringConfig:
     """
 
     project_id: str
-    last_processed_comment_id: Optional[str] = None
+    last_processed_comment_id: str | None = None
 
 
 @dataclass
@@ -52,7 +52,7 @@ class DiscussionThread:
 
     id: str
     work_item_id: str
-    comments: List[Comment]
+    comments: list[Comment]
     thread_type: Literal["flat", "nested"]
 
 
@@ -116,7 +116,6 @@ class IDiscussionAdapter(IEventEmitter, ABC):
             ResourceNotFoundError: Work item doesn't exist or has no discussion
             ExternalServiceError: Service communication failure
         """
-        pass
 
     # Command Operations
 
@@ -125,7 +124,7 @@ class IDiscussionAdapter(IEventEmitter, ABC):
         self,
         work_item_id: str,
         content: str,
-        parent_id: Optional[str] = None,
+        parent_id: str | None = None,
     ) -> Comment:
         """Post a comment to a work item.
 
@@ -148,7 +147,6 @@ class IDiscussionAdapter(IEventEmitter, ABC):
         Events:
             Emits 'comment.posted' event with new comment
         """
-        pass
 
     # Work-Item-Specific Monitoring
 
@@ -174,7 +172,6 @@ class IDiscussionAdapter(IEventEmitter, ABC):
             ResourceNotFoundError: Work item doesn't exist
             ExternalServiceError: If unable to start monitoring
         """
-        pass
 
     @abstractmethod
     def stop_monitoring(self, work_item_id: str) -> None:
@@ -190,4 +187,3 @@ class IDiscussionAdapter(IEventEmitter, ABC):
             ValidationError: If work_item_id is invalid
             ResourceNotFoundError: If not currently monitoring this item
         """
-        pass

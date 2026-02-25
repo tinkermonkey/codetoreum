@@ -131,7 +131,7 @@ def create_orchestrator_router(
             # Invalid enum values or validation errors
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid request: {str(e)}",
+                detail=f"Invalid request: {e!s}",
             )
         except Exception as e:
             # Domain errors
@@ -141,10 +141,10 @@ def create_orchestrator_router(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=str(e),
                 )
-            elif "entry condition" in error_msg or "condition not met" in error_msg:
+            if "entry condition" in error_msg or "condition not met" in error_msg:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Entry conditions not met: {str(e)}",
+                    detail=f"Entry conditions not met: {e!s}",
                 )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -291,10 +291,10 @@ def create_orchestrator_router(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=str(e),
                 )
-            elif "not active" in error_msg or "not pausable" in error_msg:
+            if "not active" in error_msg or "not pausable" in error_msg:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Workflow not in pausable state: {str(e)}",
+                    detail=f"Workflow not in pausable state: {e!s}",
                 )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -366,10 +366,10 @@ def create_orchestrator_router(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=str(e),
                 )
-            elif "not paused" in error_msg:
+            if "not paused" in error_msg:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Workflow not in paused state: {str(e)}",
+                    detail=f"Workflow not in paused state: {e!s}",
                 )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

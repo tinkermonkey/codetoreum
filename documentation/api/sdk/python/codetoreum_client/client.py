@@ -1,7 +1,7 @@
 """
 Main Codetoreum client class
 """
-from typing import Any, Optional, cast
+from typing import Any, cast
 from urllib.parse import urljoin
 
 import requests  # type: ignore[import-untyped]
@@ -56,7 +56,7 @@ class CodetoreumClient:
         self.session.headers.update({
             "Authorization": f"Bearer {api_token}",
             "Content-Type": "application/json",
-            "User-Agent": f"codetoreum-python-sdk/2.0.0",
+            "User-Agent": "codetoreum-python-sdk/2.0.0",
         })
         self.session.verify = verify_ssl
 
@@ -79,9 +79,9 @@ class CodetoreumClient:
         self,
         method: str,
         path: str,
-        params: Optional[dict[str, Any]] = None,
-        json: Optional[dict[str, Any]] = None,
-        timeout: Optional[int] = None,
+        params: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
+        timeout: int | None = None,
     ) -> requests.Response:
         """
         Make HTTP request to API.
@@ -116,9 +116,9 @@ class CodetoreumClient:
             # Handle errors
             if response.status_code == 401:
                 raise AuthenticationError("Invalid or expired authentication token")
-            elif response.status_code == 429:
+            if response.status_code == 429:
                 raise RateLimitError("Rate limit exceeded")
-            elif response.status_code >= 400:
+            if response.status_code >= 400:
                 try:
                     error_data = response.json()
                     error_message = error_data.get("detail", response.text)
@@ -135,36 +135,36 @@ class CodetoreumClient:
             return response
 
         except requests.exceptions.Timeout as e:
-            raise CodetoreumError(f"Request timeout after {timeout}s: {str(e)}") from e
+            raise CodetoreumError(f"Request timeout after {timeout}s: {e!s}") from e
         except requests.exceptions.ConnectionError as e:
-            raise CodetoreumError(f"Connection failed: {str(e)}") from e
+            raise CodetoreumError(f"Connection failed: {e!s}") from e
         except requests.exceptions.RequestException as e:
-            raise CodetoreumError(f"Request failed: {str(e)}") from e
+            raise CodetoreumError(f"Request failed: {e!s}") from e
 
-    def get(self, path: str, params: Optional[dict[str, Any]] = None, **kwargs: Any) -> dict[str, Any]:
+    def get(self, path: str, params: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
         """Make GET request and return JSON response."""
         response = self._request("GET", path, params=params, **kwargs)
-        return cast(dict[str, Any], response.json())
+        return cast("dict[str, Any]", response.json())
 
-    def post(self, path: str, json: Optional[dict[str, Any]] = None, **kwargs: Any) -> dict[str, Any]:
+    def post(self, path: str, json: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
         """Make POST request and return JSON response."""
         response = self._request("POST", path, json=json, **kwargs)
-        return cast(dict[str, Any], response.json() if response.text else {})
+        return cast("dict[str, Any]", response.json() if response.text else {})
 
-    def put(self, path: str, json: Optional[dict[str, Any]] = None, **kwargs: Any) -> dict[str, Any]:
+    def put(self, path: str, json: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
         """Make PUT request and return JSON response."""
         response = self._request("PUT", path, json=json, **kwargs)
-        return cast(dict[str, Any], response.json())
+        return cast("dict[str, Any]", response.json())
 
-    def patch(self, path: str, json: Optional[dict[str, Any]] = None, **kwargs: Any) -> dict[str, Any]:
+    def patch(self, path: str, json: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
         """Make PATCH request and return JSON response."""
         response = self._request("PATCH", path, json=json, **kwargs)
-        return cast(dict[str, Any], response.json())
+        return cast("dict[str, Any]", response.json())
 
     def delete(self, path: str, **kwargs: Any) -> dict[str, Any]:
         """Make DELETE request and return JSON response."""
         response = self._request("DELETE", path, **kwargs)
-        return cast(dict[str, Any], response.json() if response.text else {})
+        return cast("dict[str, Any]", response.json() if response.text else {})
 
     def health_check(self) -> dict[str, Any]:
         """

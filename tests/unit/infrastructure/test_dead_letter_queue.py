@@ -1,7 +1,7 @@
 """Unit tests for dead letter queue."""
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -23,7 +23,7 @@ class TestFailedEvent:
             event_data={},
             failure_reason=FailureReason.TRANSIENT_ERROR,
             error_message="Test error",
-            failed_at=datetime.now(timezone.utc),
+            failed_at=datetime.now(UTC),
             retry_count=2,
             max_retries=3
         )
@@ -38,7 +38,7 @@ class TestFailedEvent:
             event_data={},
             failure_reason=FailureReason.TRANSIENT_ERROR,
             error_message="Test error",
-            failed_at=datetime.now(timezone.utc),
+            failed_at=datetime.now(UTC),
             retry_count=3,
             max_retries=3
         )
@@ -53,7 +53,7 @@ class TestFailedEvent:
             event_data={},
             failure_reason=FailureReason.VALIDATION_ERROR,
             error_message="Validation failed",
-            failed_at=datetime.now(timezone.utc),
+            failed_at=datetime.now(UTC),
             retry_count=0,
             max_retries=3
         )
@@ -68,10 +68,10 @@ class TestFailedEvent:
             event_data={},
             failure_reason=FailureReason.TRANSIENT_ERROR,
             error_message="Test error",
-            failed_at=datetime.now(timezone.utc),
+            failed_at=datetime.now(UTC),
             retry_count=0,
             max_retries=3,
-            next_retry_at=datetime.now(timezone.utc) + timedelta(hours=1)
+            next_retry_at=datetime.now(UTC) + timedelta(hours=1)
         )
 
         assert event.can_retry() is True  # Has retries left
@@ -85,7 +85,7 @@ class TestFailedEvent:
             event_data={},
             failure_reason=FailureReason.TRANSIENT_ERROR,
             error_message="Test error",
-            failed_at=datetime.now(timezone.utc),
+            failed_at=datetime.now(UTC),
             retry_count=0,
             max_retries=3
         )
@@ -93,14 +93,14 @@ class TestFailedEvent:
         next_retry = event.calculate_next_retry(base_delay=10.0, exponential_base=2.0)
 
         # First retry: 10 * (2^0) = 10 seconds
-        expected = datetime.now(timezone.utc) + timedelta(seconds=10)
+        expected = datetime.now(UTC) + timedelta(seconds=10)
         assert (next_retry - expected).total_seconds() < 1  # Within 1 second
 
         event.retry_count = 2
         next_retry = event.calculate_next_retry(base_delay=10.0, exponential_base=2.0)
 
         # Third retry: 10 * (2^2) = 40 seconds
-        expected = datetime.now(timezone.utc) + timedelta(seconds=40)
+        expected = datetime.now(UTC) + timedelta(seconds=40)
         assert (next_retry - expected).total_seconds() < 1
 
     def test_calculate_next_retry_caps_at_max(self):
@@ -111,7 +111,7 @@ class TestFailedEvent:
             event_data={},
             failure_reason=FailureReason.TRANSIENT_ERROR,
             error_message="Test error",
-            failed_at=datetime.now(timezone.utc),
+            failed_at=datetime.now(UTC),
             retry_count=10,  # Would be 10 * (2^10) = 10,240 seconds
             max_retries=20
         )
@@ -119,7 +119,7 @@ class TestFailedEvent:
         next_retry = event.calculate_next_retry(base_delay=10.0, exponential_base=2.0)
 
         # Should be capped at 1 hour (3600 seconds)
-        expected_max = datetime.now(timezone.utc) + timedelta(seconds=3600)
+        expected_max = datetime.now(UTC) + timedelta(seconds=3600)
         assert (next_retry - expected_max).total_seconds() < 1
 
 
@@ -429,7 +429,7 @@ class TestDeadLetterQueue:
         )
         old_event = dlq.get_event(old_event_id)
         assert old_event is not None
-        old_event.failed_at = datetime.now(timezone.utc) - timedelta(days=10)
+        old_event.failed_at = datetime.now(UTC) - timedelta(days=10)
 
         # Add recent event
         await dlq.add_failed_event(
@@ -487,7 +487,7 @@ class TestDeadLetterQueue:
         # Set next retry to now (past)
         event = dlq.get_event(event_id)
         assert event is not None
-        event.next_retry_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+        event.next_retry_at = datetime.now(UTC) - timedelta(seconds=1)
 
         # Wait for retry processor to process it
         await asyncio.sleep(0.3)

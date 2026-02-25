@@ -7,21 +7,21 @@ Defines the abstract interface for audit log storage backends.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 @dataclass
 class AuditQueryFilters:
     """Filters for querying audit logs."""
 
-    event_type: Optional[str] = None
-    resource_type: Optional[str] = None
-    resource_id: Optional[str] = None
-    user_id: Optional[str] = None
-    action: Optional[str] = None
-    success: Optional[bool] = None
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
+    event_type: str | None = None
+    resource_type: str | None = None
+    resource_id: str | None = None
+    user_id: str | None = None
+    action: str | None = None
+    success: bool | None = None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
     limit: int = 100
     offset: int = 0
 
@@ -46,10 +46,10 @@ class IAuditStore(ABC):
         resource_id: str,
         action: str,
         user_id: str,
-        correlation_id: Optional[str],
-        metadata: Dict[str, Any],
+        correlation_id: str | None,
+        metadata: dict[str, Any],
         success: bool,
-        error_message: Optional[str] = None,
+        error_message: str | None = None,
     ) -> str:
         """
         Store an audit event.
@@ -69,12 +69,11 @@ class IAuditStore(ABC):
         Returns:
             ID of the stored audit event
         """
-        pass
 
     @abstractmethod
     async def query_events(
         self, filters: AuditQueryFilters
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Query audit events with filters.
 
@@ -84,7 +83,6 @@ class IAuditStore(ABC):
         Returns:
             List of matching audit events
         """
-        pass
 
     @abstractmethod
     async def count_events(self, filters: AuditQueryFilters) -> int:
@@ -97,7 +95,6 @@ class IAuditStore(ABC):
         Returns:
             Number of matching events
         """
-        pass
 
     @abstractmethod
     async def cleanup_old_events(
@@ -112,10 +109,9 @@ class IAuditStore(ABC):
         Returns:
             Number of events deleted
         """
-        pass
 
     @abstractmethod
-    async def get_event_by_id(self, event_id: str) -> Optional[Dict[str, Any]]:
+    async def get_event_by_id(self, event_id: str) -> dict[str, Any] | None:
         """
         Retrieve a specific audit event by ID.
 
@@ -125,4 +121,3 @@ class IAuditStore(ABC):
         Returns:
             Event data or None if not found
         """
-        pass

@@ -8,19 +8,12 @@ This test suite verifies:
 4. _build_stage_info correctly maps all 6 StageStatus enum values
 """
 
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
 from codetoreum.adapters.primary.audit_dtos import AuditStageInfo
 from codetoreum.domain.pipeline_stage import StageStatus
-from codetoreum.ports.input.workflow_run_query import (
-    WorkflowRunAuditResult,
-    WorkflowRunEventsResult,
-    WorkflowRunStatus,
-    WorkflowRunSummary,
-)
 
 
 class TestDevelopmentMockReturnTypes:
@@ -29,15 +22,15 @@ class TestDevelopmentMockReturnTypes:
     def test_get_workflow_run_events_source_code(self):
         """Verify get_workflow_run_events source code returns WorkflowRunEventsResult."""
         # Read the source code and verify it returns the correct dataclass
-        with open("/workspace/src/codetoreum/adapters/primary/fastapi_app.py", "r") as f:
+        with open("/workspace/src/codetoreum/adapters/primary/fastapi_app.py") as f:
             content = f.read()
 
         # Verify the method returns WorkflowRunEventsResult, not a dict
         assert "return WorkflowRunEventsResult(" in content, \
             "get_workflow_run_events should return WorkflowRunEventsResult dataclass"
-        assert 'total_count=1' in content, \
+        assert "total_count=1" in content, \
             "Should use snake_case total_count, not camelCase totalCount"
-        assert 'has_next=False' in content, \
+        assert "has_next=False" in content, \
             "Should use snake_case has_next, not camelCase hasNext"
 
         # Verify old broken code is gone
@@ -49,7 +42,7 @@ class TestDevelopmentMockReturnTypes:
     def test_get_workflow_run_audit_source_code(self):
         """Verify get_workflow_run_audit source code returns WorkflowRunAuditResult."""
         # Read the source code and verify it returns the correct dataclass
-        with open("/workspace/src/codetoreum/adapters/primary/fastapi_app.py", "r") as f:
+        with open("/workspace/src/codetoreum/adapters/primary/fastapi_app.py") as f:
             content = f.read()
 
         # Verify the method returns WorkflowRunAuditResult, not a dict

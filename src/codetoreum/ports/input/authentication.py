@@ -7,7 +7,6 @@ import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
 from uuid import UUID
 
 from codetoreum.domain.user import APIKey, AuthContext, User, UserRole
@@ -20,31 +19,26 @@ from codetoreum.domain.user import APIKey, AuthContext, User, UserRole
 class AuthenticationError(Exception):
     """Raised when authentication fails."""
 
-    pass
 
 
 class UserAlreadyExistsError(Exception):
     """Raised when trying to create a user that already exists."""
 
-    pass
 
 
 class UserNotFoundError(Exception):
     """Raised when a user is not found."""
 
-    pass
 
 
 class APIKeyNotFoundError(Exception):
     """Raised when an API key is not found."""
 
-    pass
 
 
 class ValidationError(Exception):
     """Raised when validation fails."""
 
-    pass
 
 
 # ============================================================================
@@ -126,10 +120,10 @@ class UpdateUserCommand:
     """Command to update a user."""
 
     user_id: UUID
-    email: Optional[str] = None
-    password: Optional[str] = None
-    roles: Optional[set[UserRole]] = None
-    is_active: Optional[bool] = None
+    email: str | None = None
+    password: str | None = None
+    roles: set[UserRole] | None = None
+    is_active: bool | None = None
     metadata: dict | None = None
 
 
@@ -140,7 +134,7 @@ class CreateAPIKeyCommand:
     name: str
     user_id: UUID
     roles: set[UserRole]
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
     metadata: dict | None = None
 
 
@@ -159,8 +153,8 @@ class LoginResult:
     access_token: str
     token_type: str = "bearer"
     expires_in: int = 3600  # seconds
-    refresh_token: Optional[str] = None
-    user: Optional[User] = None
+    refresh_token: str | None = None
+    user: User | None = None
 
 
 class IAuthenticationPort(ABC):
@@ -184,7 +178,6 @@ class IAuthenticationPort(ABC):
             UserAlreadyExistsError: If username or email already exists
             ValidationError: If user data is invalid
         """
-        pass
 
     @abstractmethod
     async def update_user(self, command: UpdateUserCommand) -> User:
@@ -200,7 +193,6 @@ class IAuthenticationPort(ABC):
             UserNotFoundError: If user does not exist
             ValidationError: If update data is invalid
         """
-        pass
 
     @abstractmethod
     async def get_user(self, user_id: UUID) -> User:
@@ -215,7 +207,6 @@ class IAuthenticationPort(ABC):
         Raises:
             UserNotFoundError: If user does not exist
         """
-        pass
 
     @abstractmethod
     async def get_user_by_username(self, username: str) -> User:
@@ -230,7 +221,6 @@ class IAuthenticationPort(ABC):
         Raises:
             UserNotFoundError: If user does not exist
         """
-        pass
 
     @abstractmethod
     async def delete_user(self, user_id: UUID) -> None:
@@ -242,7 +232,6 @@ class IAuthenticationPort(ABC):
         Raises:
             UserNotFoundError: If user does not exist
         """
-        pass
 
     @abstractmethod
     async def login(self, command: LoginCommand) -> LoginResult:
@@ -257,7 +246,6 @@ class IAuthenticationPort(ABC):
         Raises:
             AuthenticationError: If credentials are invalid
         """
-        pass
 
     @abstractmethod
     async def validate_token(self, token: str) -> AuthContext:
@@ -272,7 +260,6 @@ class IAuthenticationPort(ABC):
         Raises:
             AuthenticationError: If token is invalid or expired
         """
-        pass
 
     @abstractmethod
     async def refresh_token(self, refresh_token: str) -> LoginResult:
@@ -287,7 +274,6 @@ class IAuthenticationPort(ABC):
         Raises:
             AuthenticationError: If refresh token is invalid
         """
-        pass
 
     @abstractmethod
     async def create_api_key(self, command: CreateAPIKeyCommand) -> tuple[APIKey, str]:
@@ -304,7 +290,6 @@ class IAuthenticationPort(ABC):
             UserNotFoundError: If user does not exist
             ValidationError: If API key data is invalid
         """
-        pass
 
     @abstractmethod
     async def validate_api_key(self, key: str) -> AuthContext:
@@ -319,7 +304,6 @@ class IAuthenticationPort(ABC):
         Raises:
             AuthenticationError: If API key is invalid or expired
         """
-        pass
 
     @abstractmethod
     async def revoke_api_key(self, key_id: UUID) -> None:
@@ -331,7 +315,6 @@ class IAuthenticationPort(ABC):
         Raises:
             APIKeyNotFoundError: If API key does not exist
         """
-        pass
 
     @abstractmethod
     async def list_api_keys(self, user_id: UUID) -> list[APIKey]:
@@ -346,7 +329,6 @@ class IAuthenticationPort(ABC):
         Raises:
             UserNotFoundError: If user does not exist
         """
-        pass
 
     @abstractmethod
     async def check_permission(self, auth_context: AuthContext, permission: str) -> bool:
@@ -359,4 +341,3 @@ class IAuthenticationPort(ABC):
         Returns:
             True if permission granted, False otherwise
         """
-        pass

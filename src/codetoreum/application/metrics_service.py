@@ -6,8 +6,8 @@ health status, and performance statistics.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from codetoreum.ports.exceptions import ComponentNotFoundError, MetricNotFoundError
 from codetoreum.ports.input.metrics_query import (
@@ -16,7 +16,6 @@ from codetoreum.ports.input.metrics_query import (
     IMetricsQueryPort,
     IntegrationStatus,
     MetricTimeSeries,
-    MetricTimeSeriesPoint,
     PerformanceMetrics,
     ResilienceMetrics,
     SimulationModeInfo,
@@ -59,7 +58,7 @@ class MetricsService(IMetricsQueryPort):
         """
         self.event_store = event_store
         # Normalize start_time to UTC-aware datetime
-        self.start_time = start_time if start_time.tzinfo is not None else start_time.replace(tzinfo=timezone.utc)
+        self.start_time = start_time if start_time.tzinfo is not None else start_time.replace(tzinfo=UTC)
         self.version = version
 
     async def get_system_health(self) -> SystemHealthInfo:
@@ -72,7 +71,7 @@ class MetricsService(IMetricsQueryPort):
         logger.debug("Getting system health")
 
         # Check components
-        components: List[ComponentHealthInfo] = []
+        components: list[ComponentHealthInfo] = []
 
         # Event store health
         event_store_health = await self._check_event_store_health()
@@ -87,12 +86,12 @@ class MetricsService(IMetricsQueryPort):
             overall_status = ComponentHealth.DEGRADED
 
         # Calculate uptime
-        uptime_seconds = (datetime.now(timezone.utc) - self.start_time).total_seconds()
+        uptime_seconds = (datetime.now(UTC) - self.start_time).total_seconds()
 
         return SystemHealthInfo(
             status=overall_status,
             components=components,
-            checked_at=datetime.now(timezone.utc),
+            checked_at=datetime.now(UTC),
             uptime_seconds=uptime_seconds,
             version=self.version,
         )
@@ -112,8 +111,7 @@ class MetricsService(IMetricsQueryPort):
         """
         if component_name == "event_store":
             return await self._check_event_store_health()
-        else:
-            raise ComponentNotFoundError(component_name)
+        raise ComponentNotFoundError(component_name)
 
     async def get_performance_metrics(
         self,
@@ -229,9 +227,9 @@ class MetricsService(IMetricsQueryPort):
         event_store_connected = True
         event_store_latency = None
         try:
-            check_start = datetime.now(timezone.utc)
+            check_start = datetime.now(UTC)
             await self.event_store.get_statistics()
-            event_store_latency = (datetime.now(timezone.utc) - check_start).total_seconds() * 1000
+            event_store_latency = (datetime.now(UTC) - check_start).total_seconds() * 1000
         except Exception as e:
             logger.warning(
                 f"Event store health check failed: {e}",
@@ -252,7 +250,7 @@ class MetricsService(IMetricsQueryPort):
             event_store_latency_ms=event_store_latency,
             config_store_connected=False,  # TODO: Check config store connection
             config_store_latency_ms=None,
-            checked_at=datetime.now(timezone.utc),
+            checked_at=datetime.now(UTC),
         )
 
     async def get_simulation_mode_info(self) -> SimulationModeInfo:
@@ -278,8 +276,8 @@ class MetricsService(IMetricsQueryPort):
         metric_name: str,
         start_time: datetime,
         end_time: datetime,
-        labels: Optional[Dict[str, str]] = None,
-        aggregation: Optional[str] = None,
+        labels: dict[str, str] | None = None,
+        aggregation: str | None = None,
     ) -> MetricTimeSeries:
         """
         Get time series data for a specific metric.
@@ -300,7 +298,7 @@ class MetricsService(IMetricsQueryPort):
         # TODO: Integrate with time series database (Prometheus, InfluxDB, etc.)
         raise MetricNotFoundError(metric_name)
 
-    async def list_metric_names(self, prefix: Optional[str] = None) -> List[str]:
+    async def list_metric_names(self, prefix: str | None = None) -> list[str]:
         """
         List available metric names.
 
@@ -315,10 +313,10 @@ class MetricsService(IMetricsQueryPort):
 
     async def get_api_endpoint_metrics(
         self,
-        endpoint_path: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-    ) -> Dict[str, Any]:
+        endpoint_path: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+    ) -> dict[str, Any]:
         """
         Get per-endpoint API metrics.
 
@@ -335,10 +333,10 @@ class MetricsService(IMetricsQueryPort):
 
     async def get_agent_execution_metrics(
         self,
-        agent_name: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-    ) -> Dict[str, Any]:
+        agent_name: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+    ) -> dict[str, Any]:
         """
         Get agent execution metrics.
 
@@ -351,9 +349,9 @@ class MetricsService(IMetricsQueryPort):
             Dict with execution counts, success rates, duration stats per agent
         """
         if start_time is None:
-            start_time = datetime.now(timezone.utc) - timedelta(hours=1)
+            start_time = datetime.now(UTC) - timedelta(hours=1)
         if end_time is None:
-            end_time = datetime.now(timezone.utc)
+            end_time = datetime.now(UTC)
 
         logger.debug(
             f"Getting agent execution metrics for {agent_name or 'all agents'} "
@@ -426,7 +424,7 @@ class MetricsService(IMetricsQueryPort):
             "end_time": end_time.isoformat(),
         }
 
-    async def get_active_agents(self) -> Dict[str, Any]:
+    async def get_active_agents(self) -> dict[str, Any]:
         """
         Get currently active agent executions.
 
@@ -436,7 +434,7 @@ class MetricsService(IMetricsQueryPort):
         logger.debug("Getting active agents")
 
         # Query for recent execution started events
-        recent_time = datetime.now(timezone.utc) - timedelta(hours=24)
+        recent_time = datetime.now(UTC) - timedelta(hours=24)
         execution_events = await self.event_store.get_events_by_type(
             event_type="AgentExecutionStarted",
             since=recent_time,
@@ -468,24 +466,24 @@ class MetricsService(IMetricsQueryPort):
             execution_id = event.payload.get("execution_id")
             if execution_id and execution_id not in finished_ids:
                 # Normalize event.occurred_at to aware datetime if needed
-                occurred_at = event.occurred_at if event.occurred_at.tzinfo is not None else event.occurred_at.replace(tzinfo=timezone.utc)
+                occurred_at = event.occurred_at if event.occurred_at.tzinfo is not None else event.occurred_at.replace(tzinfo=UTC)
                 active_agents.append(
                     {
                         "execution_id": execution_id,
                         "agent_name": event.payload.get("agent_name"),
                         "work_item_id": event.payload.get("work_item_id"),
                         "started_at": occurred_at.isoformat(),
-                        "duration_seconds": (datetime.now(timezone.utc) - occurred_at).total_seconds(),
+                        "duration_seconds": (datetime.now(UTC) - occurred_at).total_seconds(),
                     }
                 )
 
         return {
             "count": len(active_agents),
             "agents": active_agents,
-            "checked_at": datetime.now(timezone.utc).isoformat(),
+            "checked_at": datetime.now(UTC).isoformat(),
         }
 
-    async def get_api_usage(self) -> Dict[str, Any]:
+    async def get_api_usage(self) -> dict[str, Any]:
         """
         Get API usage and quota information.
 
@@ -499,7 +497,7 @@ class MetricsService(IMetricsQueryPort):
         # or from a dedicated usage tracking service
 
         # Query for recent LLM API calls from events
-        recent_time = datetime.now(timezone.utc) - timedelta(days=1)
+        recent_time = datetime.now(UTC) - timedelta(days=1)
 
         # For now, return placeholder data
         return {
@@ -516,15 +514,15 @@ class MetricsService(IMetricsQueryPort):
                 "quota_limit": None,
                 "quota_reset_time": None,
             },
-            "checked_at": datetime.now(timezone.utc).isoformat(),
+            "checked_at": datetime.now(UTC).isoformat(),
         }
 
     async def get_repair_cycle_metrics(
         self,
-        agent_name: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None
-    ) -> Dict[str, Any]:
+        agent_name: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None
+    ) -> dict[str, Any]:
         """
         Get repair cycle metrics.
 
@@ -537,9 +535,9 @@ class MetricsService(IMetricsQueryPort):
             Dict with repair cycle statistics
         """
         if start_time is None:
-            start_time = datetime.now(timezone.utc) - timedelta(hours=1)
+            start_time = datetime.now(UTC) - timedelta(hours=1)
         if end_time is None:
-            end_time = datetime.now(timezone.utc)
+            end_time = datetime.now(UTC)
 
         logger.debug(
             f"Getting repair cycle metrics for {agent_name or 'all agents'} "
@@ -617,7 +615,7 @@ class MetricsService(IMetricsQueryPort):
                 agent_calls.append(agent_calls_count)
 
         # Calculate per-test-type metrics
-        test_types: Dict[str, Dict[str, int]] = {}
+        test_types: dict[str, dict[str, int]] = {}
         for event in test_execution_events:
             test_type = event.payload.get("test_type", "unknown")
             if test_type not in test_types:
@@ -634,7 +632,7 @@ class MetricsService(IMetricsQueryPort):
                     test_types[test_type]["iterations"] += iterations_per_type
 
         # Calculate file fix metrics
-        files_fixed: Dict[str, int] = {}
+        files_fixed: dict[str, int] = {}
         files_fixed_total = 0
         for event in file_fix_events:
             if event.payload.get("fixed"):
@@ -649,7 +647,7 @@ class MetricsService(IMetricsQueryPort):
         )
 
         # Calculate per-agent metrics
-        agents: Dict[str, Dict[str, int]] = {}
+        agents: dict[str, dict[str, int]] = {}
         for event in started_events:
             agent = event.payload.get("agent_name", "unknown")
             if agent not in agents:
@@ -703,31 +701,31 @@ class MetricsService(IMetricsQueryPort):
         Returns:
             Component health info for event store
         """
-        check_start = datetime.now(timezone.utc)
+        check_start = datetime.now(UTC)
 
         try:
             # Attempt to get stats from event store
             stats = await self.event_store.get_statistics()
 
-            response_time_ms = (datetime.now(timezone.utc) - check_start).total_seconds() * 1000
+            response_time_ms = (datetime.now(UTC) - check_start).total_seconds() * 1000
 
             return ComponentHealthInfo(
                 component_name="event_store",
                 status=ComponentHealth.HEALTHY,
                 message="Event store is operational",
-                last_check=datetime.now(timezone.utc),
+                last_check=datetime.now(UTC),
                 response_time_ms=response_time_ms,
                 details=stats,
             )
 
         except Exception as e:
-            response_time_ms = (datetime.now(timezone.utc) - check_start).total_seconds() * 1000
+            response_time_ms = (datetime.now(UTC) - check_start).total_seconds() * 1000
 
             return ComponentHealthInfo(
                 component_name="event_store",
                 status=ComponentHealth.UNHEALTHY,
                 message=f"Event store health check failed: {e}",
-                last_check=datetime.now(timezone.utc),
+                last_check=datetime.now(UTC),
                 response_time_ms=response_time_ms,
                 details={"error": str(e)},
             )

@@ -8,8 +8,7 @@ audit trail integrity and enable observability integration.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Literal, Optional
+from typing import Literal
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
@@ -40,8 +39,8 @@ class ContainerRecoveredEvent(CodetoreumEvent):
     container_name: str = ""
     project_id: str = ""
     agent_id: str = ""
-    work_item_id: Optional[str] = None
-    execution_id: Optional[str] = None
+    work_item_id: str | None = None
+    execution_id: str | None = None
     uptime_seconds: float = 0.0
     recovery_action: Literal["reconnect_with_monitoring", "reconnect_limited"] = "reconnect_with_monitoring"
 
@@ -132,9 +131,9 @@ class ContainerKilledEvent(CodetoreumEvent):
 
     container_id: str = ""
     container_name: str = ""
-    project_id: Optional[str] = None
-    agent_id: Optional[str] = None
-    work_item_id: Optional[str] = None
+    project_id: str | None = None
+    agent_id: str | None = None
+    work_item_id: str | None = None
     kill_reason: Literal[
         "container_timeout",
         "agent_mismatch",

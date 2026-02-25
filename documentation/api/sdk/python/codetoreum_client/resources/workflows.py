@@ -1,7 +1,6 @@
 """Workflows resource client"""
-from typing import Any, Optional
+from typing import Any
 
-from ..exceptions import CodetoreumError
 from ..models import PaginatedResponse, Workflow
 
 # Type aliases to avoid shadowing the list() method defined in this class
@@ -96,7 +95,7 @@ class WorkflowsResource:
 
     def list(
         self,
-        enabled: Optional[bool] = None,
+        enabled: bool | None = None,
         limit: int = 100,
         offset: int = 0,
         **filters: Any
@@ -157,10 +156,10 @@ class WorkflowsResource:
     def update(
         self,
         workflow_id: str,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        stages: Optional[ListDictAny] = None,
-        enabled: Optional[bool] = None,
+        name: str | None = None,
+        description: str | None = None,
+        stages: ListDictAny | None = None,
+        enabled: bool | None = None,
         **updates: Any
     ) -> Workflow:
         """
@@ -248,7 +247,7 @@ class WorkflowsResource:
     def get_runs(
         self,
         workflow_id: str,
-        status: Optional[str] = None,
+        status: str | None = None,
         limit: int = 100,
         offset: int = 0
     ) -> PaginatedResponse:

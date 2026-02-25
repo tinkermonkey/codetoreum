@@ -13,8 +13,7 @@ The service coordinates with:
 
 import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import List, Optional, Tuple, cast
+from datetime import UTC, datetime
 
 from codetoreum.domain.events.container_recovery_events import (
     ContainerKilledEvent,
@@ -33,7 +32,6 @@ from codetoreum.ports.exceptions import ContainerError, StorageError
 from codetoreum.ports.output.container_recovery import (
     ContainerMetadata,
     IAgentContainerRecoveryService,
-    RecoveryAssessment,
     RecoveryResult,
 )
 from codetoreum.ports.output.event_emitter import IEventEmitter
@@ -110,7 +108,7 @@ class ContainerRecoveryService:
             ContainerError: If Docker API operations fail
             StorageError: If storage operations fail
         """
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
         recovered_count = 0
         killed_count = 0
         error_count = 0
@@ -153,7 +151,7 @@ class ContainerRecoveryService:
             # Step 4: Assess and execute recovery with bounded parallelism
             semaphore = asyncio.Semaphore(self.BATCH_SIZE)
 
-            async def process_container(metadata: ContainerMetadata) -> Tuple[str, bool]:
+            async def process_container(metadata: ContainerMetadata) -> tuple[str, bool]:
                 """Process a single container with semaphore-bounded parallelism."""
                 async with semaphore:
                     try:
@@ -180,7 +178,7 @@ class ContainerRecoveryService:
                                 # Emit recovery event
                                 event = ContainerRecoveredEvent(
                                     type="container_recovery.recovered",
-                                    timestamp=datetime.now(timezone.utc).isoformat(),
+                                    timestamp=datetime.now(UTC).isoformat(),
                                     source="container_recovery_service",
                                     container_id=metadata.container_id,
                                     container_name=metadata.container_name,
@@ -211,50 +209,49 @@ class ContainerRecoveryService:
                                     )
                                     # Continue - recovery succeeded even if event emission failed
                                 return ("reconnect", True)
-                            else:  # kill
-                                # Emit kill event
-                                # Note: execution_marked_failed indicates whether marking *should* be attempted
-                                # (true if work_item_id is present). The actual mark_execution_failed() call
-                                # happens in execute_recovery_action if the tracker supports it.
-                                execution_marked_failed = bool(metadata.work_item_id)
-                                killed_event = ContainerKilledEvent(
-                                    type="container_recovery.killed",
-                                    timestamp=datetime.now(timezone.utc).isoformat(),
-                                    source="container_recovery_service",
-                                    container_id=metadata.container_id,
-                                    container_name=metadata.container_name,
-                                    project_id=metadata.project_id,
-                                    agent_id=metadata.agent_id,
-                                    work_item_id=metadata.work_item_id,
-                                    kill_reason=assessment.reason,  # type: ignore[arg-type]
-                                    uptime_seconds=self._calculate_uptime_seconds(
-                                        metadata.created_at
-                                    ),
-                                    execution_marked_failed=execution_marked_failed,
-                                )
-                                try:
-                                    self.event_emitter.emit(killed_event)
-                                except Exception as e:
-                                    logger.error(
-                                        f"Failed to emit ContainerKilledEvent for {metadata.container_id}: {e}",
-                                        exc_info=True,
-                                        extra={
-                                            "error_id": ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR,
-                                            "container_id": metadata.container_id,
-                                            "event_type": "container_killed",
-                                        },
-                                    )
-                                    # Continue - recovery action succeeded even if event emission failed
-                                return ("kill", True)
-                        else:
-                            logger.error(
-                                f"Failed to execute recovery action for container {metadata.container_id}",
-                                extra={
-                                    "error_id": ErrorRegistry.ERR_CONTAINER_ERROR,
-                                    "container_id": metadata.container_id,
-                                }
+                            # kill
+                            # Emit kill event
+                            # Note: execution_marked_failed indicates whether marking *should* be attempted
+                            # (true if work_item_id is present). The actual mark_execution_failed() call
+                            # happens in execute_recovery_action if the tracker supports it.
+                            execution_marked_failed = bool(metadata.work_item_id)
+                            killed_event = ContainerKilledEvent(
+                                type="container_recovery.killed",
+                                timestamp=datetime.now(UTC).isoformat(),
+                                source="container_recovery_service",
+                                container_id=metadata.container_id,
+                                container_name=metadata.container_name,
+                                project_id=metadata.project_id,
+                                agent_id=metadata.agent_id,
+                                work_item_id=metadata.work_item_id,
+                                kill_reason=assessment.reason,  # type: ignore[arg-type]
+                                uptime_seconds=self._calculate_uptime_seconds(
+                                    metadata.created_at
+                                ),
+                                execution_marked_failed=execution_marked_failed,
                             )
-                            return ("error", False)
+                            try:
+                                self.event_emitter.emit(killed_event)
+                            except Exception as e:
+                                logger.error(
+                                    f"Failed to emit ContainerKilledEvent for {metadata.container_id}: {e}",
+                                    exc_info=True,
+                                    extra={
+                                        "error_id": ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR,
+                                        "container_id": metadata.container_id,
+                                        "event_type": "container_killed",
+                                    },
+                                )
+                                # Continue - recovery action succeeded even if event emission failed
+                            return ("kill", True)
+                        logger.error(
+                            f"Failed to execute recovery action for container {metadata.container_id}",
+                            extra={
+                                "error_id": ErrorRegistry.ERR_CONTAINER_ERROR,
+                                "container_id": metadata.container_id,
+                            }
+                        )
+                        return ("error", False)
 
                     except (ContainerError, StorageError) as e:
                         logger.error(
@@ -274,7 +271,7 @@ class ContainerRecoveryService:
             )
 
             # Handle any exceptions returned from gather
-            processed_results: List[Tuple[str, bool]] = []
+            processed_results: list[tuple[str, bool]] = []
             for result in gather_results:
                 if isinstance(result, (Exception, BaseException)):
                     logger.error(
@@ -296,12 +293,12 @@ class ContainerRecoveryService:
                     error_count += 1
 
             # Step 5: Emit completion event
-            end_time = datetime.now(timezone.utc)
+            end_time = datetime.now(UTC)
             duration_seconds = (end_time - start_time).total_seconds()
 
             completion_event = ContainerRecoveryCompletedEvent(
                 type="container_recovery.completed",
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 source="container_recovery_service",
                 containers_recovered=recovered_count,
                 containers_killed=killed_count,
@@ -351,13 +348,13 @@ class ContainerRecoveryService:
                 killed=killed_count,
                 errors=error_count + 1,
                 repair_cycles_processed=repair_cycles_processed,
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
             )
 
 
     @staticmethod
     def _calculate_uptime_seconds(created_at: datetime) -> float:
         """Calculate container uptime in seconds."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         delta = now - created_at
         return delta.total_seconds()

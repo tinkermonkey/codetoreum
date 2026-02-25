@@ -1,12 +1,11 @@
 """Cached configuration store combining Elasticsearch storage with Redis caching."""
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from codetoreum.infrastructure.redis_config_cache import RedisConfigCache
 from codetoreum.ports.output.config_store import (
     AgentConfig,
-    ConfigNotFoundError,
     ConfigVersion,
     IConfigStore,
     PipelineConfig,
@@ -263,7 +262,7 @@ class CachedConfigStore(IConfigStore):
 
         logger.debug(f"Saved workflow template to storage and cache: {template.name}")
 
-    async def list_projects(self) -> List[ProjectConfig]:
+    async def list_projects(self) -> list[ProjectConfig]:
         """
         List all projects (storage-only, no caching for lists).
 
@@ -273,7 +272,7 @@ class CachedConfigStore(IConfigStore):
         # Lists are not cached (too complex to invalidate correctly)
         return await self.storage.list_projects()
 
-    async def list_agents(self, project_id: str) -> List[AgentConfig]:
+    async def list_agents(self, project_id: str) -> list[AgentConfig]:
         """
         List all agents for a project (storage-only, no caching for lists).
 
@@ -286,7 +285,7 @@ class CachedConfigStore(IConfigStore):
         # Lists are not cached (too complex to invalidate correctly)
         return await self.storage.list_agents(project_id)
 
-    async def list_pipelines(self, project_id: str) -> List[PipelineConfig]:
+    async def list_pipelines(self, project_id: str) -> list[PipelineConfig]:
         """
         List all pipelines for a project (storage-only, no caching for lists).
 
@@ -300,8 +299,8 @@ class CachedConfigStore(IConfigStore):
         return await self.storage.list_pipelines(project_id)
 
     async def search_configs(
-        self, query: str, config_type: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+        self, query: str, config_type: str | None = None
+    ) -> list[dict[str, Any]]:
         """
         Search configurations (storage-only, no caching for searches).
 
@@ -317,7 +316,7 @@ class CachedConfigStore(IConfigStore):
 
     async def get_config_version(
         self, config_id: str, version: int
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Get specific version of a configuration (storage-only).
 
@@ -336,7 +335,7 @@ class CachedConfigStore(IConfigStore):
 
     async def list_config_versions(
         self, config_id: str, limit: int = 10
-    ) -> List[ConfigVersion]:
+    ) -> list[ConfigVersion]:
         """
         List configuration version history (storage-only).
 

@@ -26,7 +26,8 @@ The trade-off (direct import from infrastructure) is acceptable because:
 
 import functools
 import logging
-from typing import Any, Callable, Dict, Optional
+from collections.abc import Callable
+from typing import Any
 
 # Try to import OpenTelemetry - it's optional
 try:
@@ -50,11 +51,11 @@ logger = logging.getLogger(__name__)
 
 
 def instrument_function(
-    name: Optional[str] = None,
-    attributes: Optional[Dict[str, Any]] = None,
+    name: str | None = None,
+    attributes: dict[str, Any] | None = None,
     capture_args: bool = False,
     capture_result: bool = False,
-    business_context_fields: Optional[list[str]] = None,
+    business_context_fields: list[str] | None = None,
 ) -> Callable:
     """
     Decorator to instrument synchronous functions with OpenTelemetry spans.
@@ -135,11 +136,11 @@ def instrument_function(
 
 
 def instrument_async_function(
-    name: Optional[str] = None,
-    attributes: Optional[Dict[str, Any]] = None,
+    name: str | None = None,
+    attributes: dict[str, Any] | None = None,
     capture_args: bool = False,
     capture_result: bool = False,
-    business_context_fields: Optional[list[str]] = None,
+    business_context_fields: list[str] | None = None,
 ) -> Callable:
     """
     Decorator to instrument asynchronous functions with OpenTelemetry spans.
@@ -219,7 +220,7 @@ def instrument_async_function(
     return decorator
 
 
-def instrument_class(attributes: Optional[Dict[str, Any]] = None) -> Callable:
+def instrument_class(attributes: dict[str, Any] | None = None) -> Callable:
     """
     Class decorator to automatically instrument all public methods.
 
@@ -294,7 +295,7 @@ def add_span_attributes(**attributes: Any) -> None:
             span.set_attribute(key, value)
 
 
-def add_span_event(name: str, attributes: Optional[Dict[str, Any]] = None) -> None:
+def add_span_event(name: str, attributes: dict[str, Any] | None = None) -> None:
     """
     Add an event to the current active span.
 

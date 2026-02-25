@@ -8,8 +8,7 @@ for simulating board changes via event emission and tracking movement history.
 import logging
 import threading
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple
+from datetime import UTC, datetime
 
 from codetoreum.domain.events.board_events import (
     BoardReconciledEvent,
@@ -24,9 +23,7 @@ from codetoreum.ports.output.board_service import (
     ReconciliationResult,
     WorkItemPosition,
 )
-from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.monitoring import (
-    IMonitoredService,
     MonitoringConfig,
     MonitoringState,
     MonitoringStatus,
@@ -48,7 +45,7 @@ class MovementEvent:
     """
 
     work_item_id: str
-    from_column: Optional[str]
+    from_column: str | None
     to_column: str
     moved_by: MovedByType
     timestamp: datetime
@@ -93,14 +90,14 @@ class MockBoardAdapter(IBoardService):
 
     def __init__(self) -> None:
         """Initialize the board adapter."""
-        self._boards: Dict[str, ProjectBoard] = {}  # key: "project_id:board_id"
-        self._item_positions: Dict[str, Tuple[str, str, int]] = {}  # item_id -> (board_id, column_name, position)
-        self._monitoring: Dict[str, MonitoringStatus] = {}  # project_id -> status
-        self._movement_log: List[MovementEvent] = []  # Audit trail of all movements
+        self._boards: dict[str, ProjectBoard] = {}  # key: "project_id:board_id"
+        self._item_positions: dict[str, tuple[str, str, int]] = {}  # item_id -> (board_id, column_name, position)
+        self._monitoring: dict[str, MonitoringStatus] = {}  # project_id -> status
+        self._movement_log: list[MovementEvent] = []  # Audit trail of all movements
         self._lock = threading.Lock()  # Thread safety for concurrent operations
-        self._event_listeners: Dict[str, List] = {}  # Event type -> list of handlers
-        self.current_project: Optional[str] = None
-        self.current_board: Optional[str] = None
+        self._event_listeners: dict[str, list] = {}  # Event type -> list of handlers
+        self.current_project: str | None = None
+        self.current_board: str | None = None
 
     # ===== Event Emitter Implementation =====
 
@@ -119,7 +116,7 @@ class MockBoardAdapter(IBoardService):
 
     def emit(self, event) -> None:
         """Emit event to all registered listeners."""
-        event_type = getattr(event, 'type', event.__class__.__name__)
+        event_type = getattr(event, "type", event.__class__.__name__)
         if event_type in self._event_listeners:
             for handler in self._event_listeners[event_type]:
                 try:
@@ -148,7 +145,7 @@ class MockBoardAdapter(IBoardService):
                 raise ValueError(f"Board not found: {board_id}")
             return self._boards[key]
 
-    async def get_columns(self, board_id: str) -> List[BoardColumn]:
+    async def get_columns(self, board_id: str) -> list[BoardColumn]:
         """Get all columns for a board.
 
         Args:
@@ -167,7 +164,7 @@ class MockBoardAdapter(IBoardService):
 
     async def get_items_in_column(
         self, board_id: str, column_name: str
-    ) -> List[WorkItemPosition]:
+    ) -> list[WorkItemPosition]:
         """Get all work items in a specific column ordered by position.
 
         Args:
@@ -234,7 +231,6 @@ class MockBoardAdapter(IBoardService):
         Raises:
             ValueError: Work item or column doesn't exist
         """
-        from codetoreum.infrastructure.error_ids import ErrorRegistry
         from codetoreum.ports.output.board_service import ColumnMovementResult
 
         with self._lock:
@@ -427,7 +423,7 @@ class MockBoardAdapter(IBoardService):
         project_id: str,
         board_id: str,
         board_name: str,
-        column_names: List[str],
+        column_names: list[str],
     ) -> None:
         """Test helper: Create a board with specified columns.
 
@@ -464,7 +460,7 @@ class MockBoardAdapter(IBoardService):
         board_id: str,
         column_name: str,
         work_item_id: str,
-        position: Optional[int] = None,
+        position: int | None = None,
     ) -> None:
         """Test helper: Place work item in column at specific position.
 
@@ -612,7 +608,7 @@ class MockBoardAdapter(IBoardService):
                     f"found in column '{actual}'"
                 )
 
-    def get_movement_history(self, work_item_id: str) -> List[MovementEvent]:
+    def get_movement_history(self, work_item_id: str) -> list[MovementEvent]:
         """Test helper: Get movement audit trail for work item.
 
         Returns all movements of this work item in chronological order.
@@ -652,9 +648,9 @@ class MockBoardAdapter(IBoardService):
     @staticmethod
     def _get_iso_timestamp() -> str:
         """Get current time as ISO 8601 timestamp."""
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()
 
     @staticmethod
     def _get_utc_datetime() -> datetime:
         """Get current time as UTC datetime."""
-        return datetime.now(timezone.utc)
+        return datetime.now(UTC)

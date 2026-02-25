@@ -1,15 +1,12 @@
 """Integration tests for WorkspaceRouter."""
 
-from datetime import datetime, timezone
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 
 import pytest
 
 from codetoreum.adapters.testing import InMemoryEventStore
 from codetoreum.application.workspace_router import (
-    WorkspaceFinalizationResult,
-    WorkspacePreparationResult,
     WorkspaceRouter,
 )
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
@@ -90,8 +87,8 @@ def sample_work_item():
         assigned_at=None,
         current_workflow_id=None,
         current_stage=None,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
         completed_at=None,
     )
 
@@ -113,8 +110,8 @@ def discussion_work_item():
         assigned_at=None,
         current_workflow_id=None,
         current_stage=None,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
         completed_at=None,
     )
 
@@ -140,8 +137,8 @@ def sample_agent():
         filesystem_write_allowed=True,
         mcp_servers=[],
         metadata={},
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
 
@@ -166,8 +163,8 @@ def analyst_agent():
         filesystem_write_allowed=False,
         mcp_servers=[],
         metadata={},
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
 
@@ -198,8 +195,8 @@ def sample_project():
         secrets=[],
         mcp_servers=[],
         metadata={},
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
 

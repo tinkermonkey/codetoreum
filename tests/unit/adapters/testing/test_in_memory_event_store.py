@@ -1,7 +1,7 @@
 """Unit tests for InMemoryEventStore."""
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -70,7 +70,7 @@ class TestInMemoryEventStore:
             WorkItemStarted(
                 aggregate_id=stream_id,
                 payload={
-                    "started_at": datetime.now(timezone.utc).isoformat(),
+                    "started_at": datetime.now(UTC).isoformat(),
                     "agent_id": "agent-1",
                 },
             ),
@@ -94,7 +94,7 @@ class TestInMemoryEventStore:
         new_event = WorkItemStarted(
             aggregate_id=stream_id,
             payload={
-                "started_at": datetime.now(timezone.utc).isoformat(),
+                "started_at": datetime.now(UTC).isoformat(),
                 "agent_id": "agent-1",
             },
         )
@@ -112,7 +112,7 @@ class TestInMemoryEventStore:
         new_event = WorkItemStarted(
             aggregate_id=stream_id,
             payload={
-                "started_at": datetime.now(timezone.utc).isoformat(),
+                "started_at": datetime.now(UTC).isoformat(),
                 "agent_id": "agent-1",
             },
         )
@@ -202,7 +202,7 @@ class TestInMemoryEventStore:
         await store.append(stream_id, [old_event])
 
         # Mark the time
-        cutoff_time = datetime.now(timezone.utc)
+        cutoff_time = datetime.now(UTC)
         await asyncio.sleep(0.01)
 
         # Create new events
@@ -210,14 +210,14 @@ class TestInMemoryEventStore:
             WorkItemStarted(
                 aggregate_id=stream_id,
                 payload={
-                    "started_at": datetime.now(timezone.utc).isoformat(),
+                    "started_at": datetime.now(UTC).isoformat(),
                     "agent_id": "agent-1",
                 },
             ),
             WorkItemCompleted(
                 aggregate_id=stream_id,
                 payload={
-                    "completed_at": datetime.now(timezone.utc).isoformat(),
+                    "completed_at": datetime.now(UTC).isoformat(),
                     "agent_id": "agent-1",
                 },
             ),
@@ -249,7 +249,7 @@ class TestInMemoryEventStore:
 
         await store.append(stream1, [event1])
 
-        cutoff_time = datetime.now(timezone.utc)
+        cutoff_time = datetime.now(UTC)
         await asyncio.sleep(0.01)
 
         event2 = WorkItemCreated(
@@ -424,7 +424,7 @@ class TestInMemoryEventStore:
             WorkItemStarted(
                 aggregate_id=stream_id,
                 payload={
-                    "started_at": datetime.now(timezone.utc).isoformat(),
+                    "started_at": datetime.now(UTC).isoformat(),
                     "agent_id": "agent-1",
                 },
             ),
@@ -529,14 +529,14 @@ class TestInMemoryEventStore:
             WorkItemStarted(
                 aggregate_id=stream_id,
                 payload={
-                    "started_at": datetime.now(timezone.utc).isoformat(),
+                    "started_at": datetime.now(UTC).isoformat(),
                     "agent_id": "agent-1",
                 },
             ),
             WorkItemCompleted(
                 aggregate_id=stream_id,
                 payload={
-                    "completed_at": datetime.now(timezone.utc).isoformat(),
+                    "completed_at": datetime.now(UTC).isoformat(),
                     "agent_id": "agent-1",
                 },
             ),
@@ -557,20 +557,20 @@ class TestInMemoryEventStore:
         old_event = WorkItemStarted(
             aggregate_id=stream_id,
             payload={
-                "started_at": datetime.now(timezone.utc).isoformat(),
+                "started_at": datetime.now(UTC).isoformat(),
                 "agent_id": "agent-1",
             },
         )
         await store.append(stream_id, [old_event])
 
-        cutoff_time = datetime.now(timezone.utc)
+        cutoff_time = datetime.now(UTC)
         await asyncio.sleep(0.01)
 
         # New event
         new_event = WorkItemStarted(
             aggregate_id=stream_id,
             payload={
-                "started_at": datetime.now(timezone.utc).isoformat(),
+                "started_at": datetime.now(UTC).isoformat(),
                 "agent_id": "agent-2",
             },
         )
@@ -592,7 +592,7 @@ class TestInMemoryEventStore:
             WorkItemStarted(
                 aggregate_id=stream_id,
                 payload={
-                    "started_at": datetime.now(timezone.utc).isoformat(),
+                    "started_at": datetime.now(UTC).isoformat(),
                     "agent_id": f"agent-{i}",
                 },
             )
@@ -626,7 +626,7 @@ class TestInMemoryEventStore:
             WorkItemStarted(
                 aggregate_id=stream_id,
                 payload={
-                    "started_at": datetime.now(timezone.utc).isoformat(),
+                    "started_at": datetime.now(UTC).isoformat(),
                     "agent_id": "agent-1",
                 },
                 correlation_id=correlation_id,
@@ -639,7 +639,7 @@ class TestInMemoryEventStore:
         other_event = WorkItemCompleted(
             aggregate_id=stream_id,
             payload={
-                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(UTC).isoformat(),
                 "agent_id": "agent-1",
             },
             correlation_id=uuid4(),
@@ -737,7 +737,7 @@ class TestInMemoryEventStore:
             WorkItemStarted(
                 aggregate_id=stream1,
                 payload={
-                    "started_at": datetime.now(timezone.utc).isoformat(),
+                    "started_at": datetime.now(UTC).isoformat(),
                     "agent_id": "agent-1",
                 },
             ),
@@ -846,7 +846,7 @@ class TestInMemoryEventStore:
         event1 = WorkItemStarted(
             aggregate_id=stream_id,
             payload={
-                "started_at": datetime.now(timezone.utc).isoformat(),
+                "started_at": datetime.now(UTC).isoformat(),
                 "agent_id": "agent-1",
             },
         )
@@ -854,7 +854,7 @@ class TestInMemoryEventStore:
         event2 = WorkItemCompleted(
             aggregate_id=stream_id,
             payload={
-                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(UTC).isoformat(),
                 "agent_id": "agent-1",
             },
         )
@@ -886,7 +886,7 @@ class TestInMemoryEventStore:
             WorkItemStarted(
                 aggregate_id="work-item-1",
                 payload={
-                    "started_at": datetime.now(timezone.utc).isoformat(),
+                    "started_at": datetime.now(UTC).isoformat(),
                     "agent_id": "agent-1",
                 },
                 correlation_id=corr_id_1,

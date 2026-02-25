@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def setup_library_instrumentation(config: 'ObservabilityConfig') -> None:
+def setup_library_instrumentation(config: "ObservabilityConfig") -> None:
     """
     Set up automatic instrumentation for third-party libraries.
 
@@ -128,7 +128,7 @@ def _instrument_http_clients() -> None:
         logger.warning(f"Failed to instrument httpx: {e}", exc_info=True)
 
 
-def instrument_sqlalchemy_engine(engine, config: Optional['ObservabilityConfig'] = None) -> None:
+def instrument_sqlalchemy_engine(engine, config: Optional["ObservabilityConfig"] = None) -> None:
     """
     Instrument a specific SQLAlchemy engine.
 

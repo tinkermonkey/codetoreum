@@ -110,7 +110,7 @@ def register_list_endpoints(
             if start_date_dt and end_date_dt and start_date_dt >= end_date_dt:
                 raise HTTPException(
                     status_code=http_status.HTTP_400_BAD_REQUEST,
-                    detail=f"Invalid date range: start_date must be before end_date",
+                    detail="Invalid date range: start_date must be before end_date",
                 )
 
             # Parse filters
@@ -165,5 +165,5 @@ def register_list_endpoints(
         except (ValueError, KeyError, AttributeError) as e:
             raise HTTPException(
                 status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to list executions: {str(e)}",
+                detail=f"Failed to list executions: {e!s}",
             )

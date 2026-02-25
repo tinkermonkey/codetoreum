@@ -3,7 +3,6 @@
 Tests validation, serialization, and deserialization of all project events.
 """
 
-from datetime import datetime, timezone
 
 import pytest
 

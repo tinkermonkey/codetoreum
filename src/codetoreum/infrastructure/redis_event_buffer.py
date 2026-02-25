@@ -1,10 +1,8 @@
 """Redis event buffer for high-throughput event writes."""
 
-import asyncio
-import json
 import logging
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from redis import asyncio as aioredis
 
@@ -19,7 +17,6 @@ logger = logging.getLogger(__name__)
 class RedisEventBufferError(Exception):
     """Raised when Redis event buffer operations fail."""
 
-    pass
 
 
 class RedisEventBuffer:
@@ -149,7 +146,7 @@ class RedisEventBuffer:
         except Exception as e:
             raise RedisEventBufferError(f"Failed to buffer event: {e}") from e
 
-    async def buffer_events_batch(self, events: List[DomainEvent]) -> List[str]:
+    async def buffer_events_batch(self, events: list[DomainEvent]) -> list[str]:
         """
         Buffer multiple events efficiently using pipeline.
 
@@ -206,7 +203,7 @@ class RedisEventBuffer:
         consumer_name: str,
         count: int = 100,
         block_ms: int = 1000,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Read pending events from stream (for background workers).
 
@@ -269,7 +266,7 @@ class RedisEventBuffer:
             raise RedisEventBufferError(f"Failed to read events: {e}") from e
 
     async def acknowledge_events(
-        self, message_ids: List[str]
+        self, message_ids: list[str]
     ) -> int:
         """
         Acknowledge successful processing of events (XACK).
@@ -300,7 +297,7 @@ class RedisEventBuffer:
         except Exception as e:
             raise RedisEventBufferError(f"Failed to acknowledge events: {e}") from e
 
-    async def get_pending_count(self, consumer_name: Optional[str] = None) -> int:
+    async def get_pending_count(self, consumer_name: str | None = None) -> int:
         """
         Get count of pending (unacknowledged) events.
 
@@ -346,7 +343,7 @@ class RedisEventBuffer:
         except Exception as e:
             raise RedisEventBufferError(f"Failed to get stream length: {e}") from e
 
-    async def get_buffer_stats(self) -> Dict[str, Any]:
+    async def get_buffer_stats(self) -> dict[str, Any]:
         """
         Get buffer statistics for monitoring.
 
@@ -393,7 +390,7 @@ class RedisEventBuffer:
             raise RedisEventBufferError(f"Failed to get buffer stats: {e}") from e
 
     async def _move_to_dead_letter(
-        self, message_id: bytes, fields: Dict[bytes, bytes], error: str
+        self, message_id: bytes, fields: dict[bytes, bytes], error: str
     ) -> None:
         """
         Move a failed event to the dead letter queue.
@@ -410,7 +407,7 @@ class RedisEventBuffer:
                     **fields,
                     b"original_message_id": message_id,
                     b"error": error.encode("utf-8"),
-                    b"moved_at": datetime.now(timezone.utc).isoformat().encode("utf-8"),
+                    b"moved_at": datetime.now(UTC).isoformat().encode("utf-8"),
                 },
             )
 

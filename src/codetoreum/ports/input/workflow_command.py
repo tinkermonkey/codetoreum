@@ -8,7 +8,7 @@ including starting, pausing, resuming, canceling, and retrying workflows.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class TriggerType(Enum):
@@ -26,9 +26,9 @@ class StartWorkflowCommand:
     project_name: str
     work_item_id: str  # Issue number, discussion ID, etc.
     pipeline_name: str
-    stage_name: Optional[str] = None  # If None, start from first stage
+    stage_name: str | None = None  # If None, start from first stage
     trigger: TriggerType = TriggerType.MANUAL
-    context: Optional[Dict[str, Any]] = None
+    context: dict[str, Any] | None = None
     priority: str = "MEDIUM"  # LOW, MEDIUM, HIGH, CRITICAL
 
 
@@ -44,7 +44,7 @@ class PauseWorkflowCommand:
 class ResumeWorkflowCommand:
     """Command to resume a paused workflow"""
     workflow_run_id: str
-    from_stage: Optional[str] = None  # If None, resume from paused point
+    from_stage: str | None = None  # If None, resume from paused point
 
 
 @dataclass
@@ -70,7 +70,7 @@ class WorkflowCommandResult:
     workflow_run_id: str
     message: str
     state: str  # STARTED, PAUSED, RESUMED, CANCELLED, COMPLETED
-    errors: Optional[List[str]] = field(default=None)
+    errors: list[str] | None = field(default=None)
 
 
 class IWorkflowCommandPort(ABC):
@@ -107,7 +107,6 @@ class IWorkflowCommandPort(ABC):
             WorkItemNotFoundError: If work item doesn't exist
             ValidationError: If command parameters invalid
         """
-        pass
 
     @abstractmethod
     async def pause_workflow(
@@ -127,7 +126,6 @@ class IWorkflowCommandPort(ABC):
             WorkflowNotFoundError: If workflow doesn't exist
             WorkflowNotActiveError: If workflow not in active state
         """
-        pass
 
     @abstractmethod
     async def resume_workflow(
@@ -147,7 +145,6 @@ class IWorkflowCommandPort(ABC):
             WorkflowNotFoundError: If workflow doesn't exist
             WorkflowNotPausedError: If workflow not in paused state
         """
-        pass
 
     @abstractmethod
     async def cancel_workflow(
@@ -166,7 +163,6 @@ class IWorkflowCommandPort(ABC):
         Raises:
             WorkflowNotFoundError: If workflow doesn't exist
         """
-        pass
 
     @abstractmethod
     async def retry_stage(
@@ -186,4 +182,3 @@ class IWorkflowCommandPort(ABC):
             WorkflowNotFoundError: If workflow doesn't exist
             StageNotFoundError: If stage doesn't exist
         """
-        pass

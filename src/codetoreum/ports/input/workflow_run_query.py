@@ -6,11 +6,12 @@ including retrieving workflow execution runs, their status, and events.
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from types import MappingProxyType
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any
 
 
 class WorkflowRunStatus(Enum):
@@ -38,10 +39,10 @@ class SortOrder(Enum):
 @dataclass(frozen=True)
 class WorkflowRunFilters:
     """Filters for listing workflow runs"""
-    status: Optional[Tuple[WorkflowRunStatus, ...]] = None  # Filter by status (comma-separated)
-    project_id: Optional[str] = None  # Filter by project
-    work_item_id: Optional[str] = None  # Filter by work item
-    workflow_id: Optional[str] = None  # Filter by workflow template
+    status: tuple[WorkflowRunStatus, ...] | None = None  # Filter by status (comma-separated)
+    project_id: str | None = None  # Filter by project
+    work_item_id: str | None = None  # Filter by work item
+    workflow_id: str | None = None  # Filter by workflow template
 
     def __post_init__(self) -> None:
         """Validate filter fields."""
@@ -81,12 +82,12 @@ class WorkflowRunStageInfo:
     name: str
     agent_name: str
     status: str  # pending, running, completed, failed
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
-    execution_id: Optional[str]
-    output: Optional[str] = None
-    error_message: Optional[str] = None
-    metadata: Optional[Mapping[str, Any]] = None
+    started_at: datetime | None
+    completed_at: datetime | None
+    execution_id: str | None
+    output: str | None = None
+    error_message: str | None = None
+    metadata: Mapping[str, Any] | None = None
 
     def __post_init__(self) -> None:
         """Initialize metadata and validate fields."""
@@ -105,7 +106,7 @@ class WorkflowRunStageInfo:
         if self.metadata is None:
             # Use object.__setattr__ since this is a frozen dataclass
             # Use MappingProxyType for true immutability
-            object.__setattr__(self, 'metadata', MappingProxyType({}))
+            object.__setattr__(self, "metadata", MappingProxyType({}))
 
 
 @dataclass
@@ -117,17 +118,17 @@ class WorkflowRunInfo:
     project_id: str
     status: WorkflowRunStatus
     current_stage_index: int
-    current_stage_name: Optional[str]
-    stages: List[WorkflowRunStageInfo]
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
-    duration: Optional[float]  # Duration in seconds
-    issue_title: Optional[str]
-    issue_number: Optional[int]
-    project: Optional[str]
-    triggered_by: Optional[str]
-    priority: Optional[str]
-    metadata: Dict[str, Any]
+    current_stage_name: str | None
+    stages: list[WorkflowRunStageInfo]
+    started_at: datetime | None
+    completed_at: datetime | None
+    duration: float | None  # Duration in seconds
+    issue_title: str | None
+    issue_number: int | None
+    project: str | None
+    triggered_by: str | None
+    priority: str | None
+    metadata: dict[str, Any]
 
 
 @dataclass
@@ -139,21 +140,21 @@ class WorkflowRunSummary:
     project_id: str
     status: WorkflowRunStatus
     current_stage_index: int
-    current_stage_name: Optional[str]
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
-    duration: Optional[float]
-    issue_title: Optional[str]
-    issue_number: Optional[int]
-    project: Optional[str]
-    triggered_by: Optional[str]
-    priority: Optional[str]
+    current_stage_name: str | None
+    started_at: datetime | None
+    completed_at: datetime | None
+    duration: float | None
+    issue_title: str | None
+    issue_number: int | None
+    project: str | None
+    triggered_by: str | None
+    priority: str | None
 
 
 @dataclass
 class WorkflowRunListResult:
     """Result of listing workflow runs"""
-    runs: List[WorkflowRunSummary]
+    runs: list[WorkflowRunSummary]
     total_count: int
     offset: int
     limit: int
@@ -163,7 +164,7 @@ class WorkflowRunListResult:
 @dataclass
 class WorkflowRunEventsResult:
     """Result of querying workflow run events"""
-    events: List[Dict[str, Any]]  # List of event dictionaries
+    events: list[dict[str, Any]]  # List of event dictionaries
     total_count: int
     offset: int
     limit: int
@@ -183,9 +184,9 @@ class WorkflowRunEventsResult:
 class WorkflowRunAuditResult:
     """Result of querying workflow run audit information"""
     workflow_run: WorkflowRunSummary
-    events: List[Dict[str, Any]]  # List of event dictionaries
-    stages: List[Dict[str, Any]]  # List of stage information dictionaries
-    validation: Optional[Dict[str, Any]]  # Validation result dictionary (None if not requested)
+    events: list[dict[str, Any]]  # List of event dictionaries
+    stages: list[dict[str, Any]]  # List of stage information dictionaries
+    validation: dict[str, Any] | None  # Validation result dictionary (None if not requested)
     total_count: int
     offset: int
     limit: int
@@ -232,13 +233,12 @@ class IWorkflowRunQueryPort(ABC):
         Raises:
             WorkflowRunNotFoundError: If workflow run doesn't exist
         """
-        pass
 
     @abstractmethod
     async def list_workflow_runs(
         self,
-        filters: Optional[WorkflowRunFilters] = None,
-        pagination: Optional[WorkflowRunPaginationParams] = None
+        filters: WorkflowRunFilters | None = None,
+        pagination: WorkflowRunPaginationParams | None = None
     ) -> WorkflowRunListResult:
         """
         Lists workflow runs matching the specified criteria.
@@ -253,7 +253,6 @@ class IWorkflowRunQueryPort(ABC):
         Raises:
             ValidationError: If parameters are invalid
         """
-        pass
 
     @abstractmethod
     async def get_workflow_run_events(
@@ -261,8 +260,8 @@ class IWorkflowRunQueryPort(ABC):
         workflow_run_id: str,
         offset: int = 0,
         limit: int = 50,
-        event_types: Optional[List[str]] = None,
-        since: Optional[datetime] = None
+        event_types: list[str] | None = None,
+        since: datetime | None = None
     ) -> WorkflowRunEventsResult:
         """
         Retrieves events for a specific workflow run.
@@ -280,7 +279,6 @@ class IWorkflowRunQueryPort(ABC):
         Raises:
             WorkflowRunNotFoundError: If workflow run doesn't exist
         """
-        pass
 
     @abstractmethod
     async def get_workflow_run_audit(
@@ -319,4 +317,3 @@ class IWorkflowRunQueryPort(ABC):
         Raises:
             WorkflowRunNotFoundError: If workflow run doesn't exist
         """
-        pass

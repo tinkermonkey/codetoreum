@@ -4,9 +4,10 @@ import asyncio
 import gc
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from dateutil import parser as dateparser
 
@@ -40,19 +41,19 @@ class DockerConfig:
     """Configuration for Docker adapter."""
 
     # Docker connection
-    docker_host: Optional[str] = None  # Defaults to local socket
+    docker_host: str | None = None  # Defaults to local socket
     tls_verify: bool = False
-    cert_path: Optional[str] = None
+    cert_path: str | None = None
 
     # Container defaults
     default_timeout: int = 300  # 5 minutes
     remove_on_completion: bool = True
-    default_user: Optional[str] = None
+    default_user: str | None = None
     default_network: str = "bridge"
 
     # Resource limits
-    memory_limit: Optional[str] = None  # e.g., "512m"
-    cpu_limit: Optional[float] = None  # e.g., 1.0 for 1 CPU
+    memory_limit: str | None = None  # e.g., "512m"
+    cpu_limit: float | None = None  # e.g., 1.0 for 1 CPU
 
     # Logging
     log_driver: str = "json-file"
@@ -91,11 +92,11 @@ class DockerContainerAdapter(IContainer):
                     self._docker_client = docker.from_env()
 
             except Exception as e:
-                raise ContainerError(f"Failed to connect to Docker: {str(e)}")
+                raise ContainerError(f"Failed to connect to Docker: {e!s}")
 
         return self._docker_client
 
-    def _parse_volume_spec(self, volumes: Dict[str, str]) -> Dict[str, Dict[str, str]]:
+    def _parse_volume_spec(self, volumes: dict[str, str]) -> dict[str, dict[str, str]]:
         """
         Parse volume specification with path traversal protection.
 
@@ -169,11 +170,11 @@ class DockerContainerAdapter(IContainer):
     async def run(
         self,
         image: str,
-        command: List[str],
-        volumes: Dict[str, str],
-        environment: Dict[str, str],
+        command: list[str],
+        volumes: dict[str, str],
+        environment: dict[str, str],
         timeout: int = 300,
-        stream_callback: Optional[Callable] = None,
+        stream_callback: Callable | None = None,
     ) -> ContainerResult:
         """Run a command in a container.
 
@@ -326,10 +327,9 @@ class DockerContainerAdapter(IContainer):
 
                 if "timeout" in str(e).lower():
                     raise ContainerTimeoutError(f"Container execution timed out after {timeout}s")
-                elif "not found" in str(e).lower() and "image" in str(e).lower():
+                if "not found" in str(e).lower() and "image" in str(e).lower():
                     raise ImageNotFoundError(f"Image not found: {image}")
-                else:
-                    raise ContainerExecutionError(f"Container execution failed: {str(e)}")
+                raise ContainerExecutionError(f"Container execution failed: {e!s}")
 
         try:
             # Create executor task for cancellation support
@@ -358,7 +358,7 @@ class DockerContainerAdapter(IContainer):
         except (ContainerError, ValidationError, ImageNotFoundError):
             raise
         except Exception as e:
-            raise ContainerExecutionError(f"Unexpected error: {str(e)}")
+            raise ContainerExecutionError(f"Unexpected error: {e!s}")
 
     @instrument_async_function(
         name="container.create",
@@ -372,14 +372,14 @@ class DockerContainerAdapter(IContainer):
     async def create(
         self,
         image: str,
-        name: Optional[str] = None,
-        command: Optional[List[str]] = None,
-        volumes: Optional[Dict[str, str]] = None,
-        environment: Optional[Dict[str, str]] = None,
-        working_dir: Optional[str] = None,
-        user: Optional[str] = None,
-        network: Optional[str] = None,
-        labels: Optional[Dict[str, str]] = None,
+        name: str | None = None,
+        command: list[str] | None = None,
+        volumes: dict[str, str] | None = None,
+        environment: dict[str, str] | None = None,
+        working_dir: str | None = None,
+        user: str | None = None,
+        network: str | None = None,
+        labels: dict[str, str] | None = None,
     ) -> str:
         """Create a container without starting it.
 
@@ -436,7 +436,7 @@ class DockerContainerAdapter(IContainer):
             except Exception as e:
                 if "not found" in str(e).lower() and "image" in str(e).lower():
                     raise ImageNotFoundError(f"Image not found: {image}")
-                raise ContainerError(f"Failed to create container: {str(e)}")
+                raise ContainerError(f"Failed to create container: {e!s}")
 
         container_id = await loop.run_in_executor(None, _create)
 
@@ -489,7 +489,7 @@ class DockerContainerAdapter(IContainer):
             except Exception as e:
                 if "not found" in str(e).lower():
                     raise ResourceNotFoundError("Container", container_id)
-                raise ContainerError(f"Failed to start container: {str(e)}")
+                raise ContainerError(f"Failed to start container: {e!s}")
 
         await loop.run_in_executor(None, _start)
 
@@ -521,7 +521,7 @@ class DockerContainerAdapter(IContainer):
             except Exception as e:
                 if "not found" in str(e).lower():
                     raise ResourceNotFoundError("Container", container_id)
-                raise ContainerError(f"Failed to stop container: {str(e)}")
+                raise ContainerError(f"Failed to stop container: {e!s}")
 
         await loop.run_in_executor(None, _stop)
 
@@ -554,7 +554,7 @@ class DockerContainerAdapter(IContainer):
                 if "not found" in str(e).lower():
                     # Container already removed - still success
                     raise ResourceNotFoundError("Container", container_id)
-                raise ContainerError(f"Failed to remove container: {str(e)}")
+                raise ContainerError(f"Failed to remove container: {e!s}")
 
         try:
             await loop.run_in_executor(None, _remove)
@@ -597,7 +597,7 @@ class DockerContainerAdapter(IContainer):
             except Exception as e:
                 if "not found" in str(e).lower():
                     raise ResourceNotFoundError("Container", container_id)
-                raise ContainerError(f"Failed to kill container: {str(e)}")
+                raise ContainerError(f"Failed to kill container: {e!s}")
 
         await loop.run_in_executor(None, _kill)
 
@@ -615,8 +615,8 @@ class DockerContainerAdapter(IContainer):
         container_id: str,
         stream: bool = False,
         follow: bool = False,
-        tail: Optional[int] = None,
-        since: Optional[datetime] = None,
+        tail: int | None = None,
+        since: datetime | None = None,
     ) -> Any:
         """Get container logs."""
         client = self._get_client()
@@ -646,13 +646,12 @@ class DockerContainerAdapter(IContainer):
                             yield line.decode("utf-8", errors="replace")
 
                     return log_generator()
-                else:
-                    return logs.decode("utf-8", errors="replace")
+                return logs.decode("utf-8", errors="replace")
 
             except Exception as e:
                 if "not found" in str(e).lower():
                     raise ResourceNotFoundError("Container", container_id)
-                raise ContainerError(f"Failed to get logs: {str(e)}")
+                raise ContainerError(f"Failed to get logs: {e!s}")
 
         return await loop.run_in_executor(None, _get_logs)
 
@@ -710,7 +709,7 @@ class DockerContainerAdapter(IContainer):
                 try:
                     created_at = dateparser.isoparse(attrs["Created"])
                 except Exception:
-                    created_at = datetime.now(timezone.utc)  # Fallback
+                    created_at = datetime.now(UTC)  # Fallback
 
                 return ContainerStatus(
                     id=ContainerId(container_id),
@@ -724,7 +723,7 @@ class DockerContainerAdapter(IContainer):
             except Exception as e:
                 if "not found" in str(e).lower():
                     raise ResourceNotFoundError("Container", container_id)
-                raise ContainerError(f"Failed to get status: {str(e)}")
+                raise ContainerError(f"Failed to get status: {e!s}")
 
         return await loop.run_in_executor(None, _get_status)
 
@@ -740,10 +739,10 @@ class DockerContainerAdapter(IContainer):
     async def exec(
         self,
         container_id: str,
-        command: List[str],
-        user: Optional[str] = None,
-        working_dir: Optional[str] = None,
-        environment: Optional[Dict[str, str]] = None,
+        command: list[str],
+        user: str | None = None,
+        working_dir: str | None = None,
+        environment: dict[str, str] | None = None,
     ) -> ContainerResult:
         """Execute a command in a running container."""
         client = self._get_client()
@@ -785,7 +784,7 @@ class DockerContainerAdapter(IContainer):
             except Exception as e:
                 if "not found" in str(e).lower():
                     raise ResourceNotFoundError("Container", container_id)
-                raise ContainerError(f"Failed to execute command: {str(e)}")
+                raise ContainerError(f"Failed to execute command: {e!s}")
 
         return await loop.run_in_executor(None, _exec)
 
@@ -801,8 +800,8 @@ class DockerContainerAdapter(IContainer):
     async def list_containers(
         self,
         all: bool = False,
-        filters: Optional[Dict[str, Any]] = None,
-    ) -> List[ContainerStatus]:
+        filters: dict[str, Any] | None = None,
+    ) -> list[ContainerStatus]:
         """List containers."""
         client = self._get_client()
         loop = asyncio.get_event_loop()
@@ -856,7 +855,7 @@ class DockerContainerAdapter(IContainer):
                                 "date_value": attrs.get("Created")
                             }
                         )
-                        created_at = datetime.now(timezone.utc)  # Fallback
+                        created_at = datetime.now(UTC)  # Fallback
 
                     statuses.append(
                         ContainerStatus(
@@ -872,7 +871,7 @@ class DockerContainerAdapter(IContainer):
                 return statuses
 
             except Exception as e:
-                raise ContainerError(f"Failed to list containers: {str(e)}")
+                raise ContainerError(f"Failed to list containers: {e!s}")
 
         return await loop.run_in_executor(None, _list)
 
@@ -888,7 +887,7 @@ class DockerContainerAdapter(IContainer):
         self,
         image: str,
         tag: str = "latest",
-        stream_callback: Optional[Callable] = None,
+        stream_callback: Callable | None = None,
     ) -> None:
         """Pull a container image."""
         client = self._get_client()
@@ -907,9 +906,9 @@ class DockerContainerAdapter(IContainer):
             except Exception as e:
                 if "not found" in str(e).lower():
                     raise ImageNotFoundError(f"Image not found: {image}:{tag}")
-                elif "unauthorized" in str(e).lower() or "authentication" in str(e).lower():
+                if "unauthorized" in str(e).lower() or "authentication" in str(e).lower():
                     raise AuthenticationError(f"Authentication failed for image: {image}:{tag}")
-                raise ContainerError(f"Failed to pull image: {str(e)}")
+                raise ContainerError(f"Failed to pull image: {e!s}")
 
         await loop.run_in_executor(None, _pull)
 
@@ -946,7 +945,7 @@ class DockerContainerAdapter(IContainer):
         capture_args=True,
         capture_result=False,
     )
-    async def inspect(self, container_id: str) -> Dict[str, Any]:
+    async def inspect(self, container_id: str) -> dict[str, Any]:
         """Get detailed container information."""
         client = self._get_client()
         loop = asyncio.get_event_loop()
@@ -958,7 +957,7 @@ class DockerContainerAdapter(IContainer):
             except Exception as e:
                 if "not found" in str(e).lower():
                     raise ResourceNotFoundError("Container", container_id)
-                raise ContainerError(f"Failed to inspect container: {str(e)}")
+                raise ContainerError(f"Failed to inspect container: {e!s}")
 
         return await loop.run_in_executor(None, _inspect)
 
@@ -974,7 +973,7 @@ class DockerContainerAdapter(IContainer):
     async def wait(
         self,
         container_id: str,
-        timeout: Optional[int] = None,
+        timeout: int | None = None,
     ) -> int:
         """Wait for a container to stop."""
         client = self._get_client()
@@ -990,9 +989,9 @@ class DockerContainerAdapter(IContainer):
             except Exception as e:
                 if "not found" in str(e).lower():
                     raise ResourceNotFoundError("Container", container_id)
-                elif "timeout" in str(e).lower():
+                if "timeout" in str(e).lower():
                     raise ContainerTimeoutError(f"Wait timed out after {timeout}s")
-                raise ContainerError(f"Failed to wait for container: {str(e)}")
+                raise ContainerError(f"Failed to wait for container: {e!s}")
 
         exit_code = await loop.run_in_executor(None, _wait)
         duration_seconds = time.time() - start_time
@@ -1045,7 +1044,7 @@ class DockerContainerAdapter(IContainer):
             except Exception as e:
                 if "not found" in str(e).lower() and "container" in str(e).lower():
                     raise ResourceNotFoundError("Container", container_id)
-                raise ContainerError(f"Failed to copy to container: {str(e)}")
+                raise ContainerError(f"Failed to copy to container: {e!s}")
 
         await loop.run_in_executor(None, _copy)
 
@@ -1089,7 +1088,7 @@ class DockerContainerAdapter(IContainer):
             except Exception as e:
                 if "not found" in str(e).lower() and "container" in str(e).lower():
                     raise ResourceNotFoundError("Container", container_id)
-                raise ContainerError(f"Failed to copy from container: {str(e)}")
+                raise ContainerError(f"Failed to copy from container: {e!s}")
 
         await loop.run_in_executor(None, _copy)
 
@@ -1098,10 +1097,10 @@ class DockerContainerAdapter(IContainer):
         if self._docker_client is not None:
             try:
                 # Close the API client's session and adapter connection pools
-                if hasattr(self._docker_client, 'api'):
+                if hasattr(self._docker_client, "api"):
                     api = self._docker_client.api
                     # Close HTTP session
-                    if hasattr(api, '_session') and api._session:
+                    if hasattr(api, "_session") and api._session:
                         try:
                             api._session.close()
                         except Exception as e:
@@ -1113,10 +1112,10 @@ class DockerContainerAdapter(IContainer):
                                 }
                             )
                     # Close adapters (which hold socket connections)
-                    if hasattr(api, '_adapters') and api._adapters:
+                    if hasattr(api, "_adapters") and api._adapters:
                         try:
                             for adapter in api._adapters.values():
-                                if hasattr(adapter, 'close'):
+                                if hasattr(adapter, "close"):
                                     adapter.close()
                         except Exception as e:
                             logger.warning(
@@ -1126,7 +1125,7 @@ class DockerContainerAdapter(IContainer):
                                     "error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR
                                 }
                             )
-                    if hasattr(api, 'close'):
+                    if hasattr(api, "close"):
                         try:
                             api.close()
                         except Exception as e:

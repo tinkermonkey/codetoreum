@@ -18,8 +18,6 @@ from codetoreum.application.execution_service import (
 from codetoreum.application.metrics_service import MetricsService
 from codetoreum.application.pipeline_lock_service import (
     IPipelineLockService,  # Backward compatibility alias
-)
-from codetoreum.application.pipeline_lock_service import (
     IQueuedPipelineLockService,
     LockAcquisitionResult,
     LockReleaseResult,
@@ -44,32 +42,32 @@ from codetoreum.application.workspace_router import (
 )
 
 __all__ = [
-    "WorkflowOrchestrator",
-    "WorkflowRunQueryService",
-    "MetricsService",
     "AgentScheduler",
     "ContextBuilder",
     "ContextFile",
-    "WorkspaceContextResult",
     "ConversationalLoopOrchestrator",
+    "ExecutionFailureReason",
     "ExecutionService",
     "ExecutionServiceResult",
-    "ExecutionFailureReason",
-    "LogEntry",
-    "IQueuedPipelineLockService",
     "IPipelineLockService",  # Backward compatibility alias
-    "LockStatus",
+    "IQueuedPipelineLockService",
     "LockAcquisitionResult",
     "LockReleaseResult",
-    "QueueEntry",
-    "PipelineQueueState",
+    "LockStatus",
+    "LogEntry",
+    "MetricsService",
     "PipelineManager",
+    "PipelineQueueState",
     "PipelineResult",
     "PipelineStatus",
+    "QueueEntry",
     "StageOutput",
     "StageResult",
+    "WorkflowOrchestrator",
+    "WorkflowRunQueryService",
+    "WorkspaceContextResult",
+    "WorkspaceFinalizationResult",
+    "WorkspacePreparationResult",
     "WorkspaceRouter",
     "WorkspaceRouterConfig",
-    "WorkspacePreparationResult",
-    "WorkspaceFinalizationResult",
 ]

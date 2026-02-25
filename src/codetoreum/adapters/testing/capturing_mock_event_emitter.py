@@ -6,7 +6,7 @@ Supports event type filtering and wildcard subscriptions.
 """
 
 import logging
-from typing import Callable, Dict, List
+from collections.abc import Callable
 
 from codetoreum.ports.output.event_emitter import IEventEmitter
 
@@ -41,9 +41,9 @@ class CapturingMockEventEmitter(IEventEmitter):
 
     def __init__(self) -> None:
         """Initialize the mock event emitter."""
-        self._events: List = []  # All emitted events
-        self._handlers: Dict[str, List[Callable]] = {}  # Event type -> handlers
-        self._wildcard_handlers: List[Callable] = []  # Handlers for all events
+        self._events: list = []  # All emitted events
+        self._handlers: dict[str, list[Callable]] = {}  # Event type -> handlers
+        self._wildcard_handlers: list[Callable] = []  # Handlers for all events
 
     def on(self, event_type: str, handler: Callable) -> None:
         """Subscribe to events of a specific type.
@@ -123,7 +123,7 @@ class CapturingMockEventEmitter(IEventEmitter):
     # Test Helper Methods
     # =========================================================================
 
-    def get_events(self) -> List:
+    def get_events(self) -> list:
         """Get all emitted events.
 
         Returns:
@@ -131,7 +131,7 @@ class CapturingMockEventEmitter(IEventEmitter):
         """
         return self._events.copy()
 
-    def get_events_by_type(self, event_type: str) -> List:
+    def get_events_by_type(self, event_type: str) -> list:
         """Get all emitted events of a specific type.
 
         Args:

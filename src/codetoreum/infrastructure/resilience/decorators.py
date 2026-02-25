@@ -3,12 +3,12 @@
 Provides decorators that wrap port interfaces with resilience patterns.
 """
 
-import time
+from collections.abc import AsyncIterator, Callable
 from datetime import datetime
-from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Tuple, TypeVar
+from typing import Any, TypeVar
 
 from codetoreum.domain.comment import Comment
-from codetoreum.domain.types import ExecutionId, ProjectId, UserId, WorkItemId
+from codetoreum.domain.types import ProjectId, UserId, WorkItemId
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
 from codetoreum.ports.output.board_service import (
     BoardColumn,
@@ -35,7 +35,7 @@ from codetoreum.ports.output.ticket_system import ITicketSystem
 
 from .interfaces import ICircuitBreaker, IRateLimiter, IRetryPolicy, ITimeout
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 # ============================================================================
@@ -53,10 +53,10 @@ class ResilientTicketSystemDecorator(ITicketSystem):
     def __init__(
         self,
         wrapped: ITicketSystem,
-        rate_limiter: Optional[IRateLimiter] = None,
-        circuit_breaker: Optional[ICircuitBreaker] = None,
-        retry_policy: Optional[IRetryPolicy] = None,
-        timeout: Optional[ITimeout] = None,
+        rate_limiter: IRateLimiter | None = None,
+        circuit_breaker: ICircuitBreaker | None = None,
+        retry_policy: IRetryPolicy | None = None,
+        timeout: ITimeout | None = None,
         default_timeout_seconds: float = 30.0
     ):
         """
@@ -90,10 +90,10 @@ class ResilientTicketSystemDecorator(ITicketSystem):
         title: str,
         description: str,
         project_id: ProjectId,
-        labels: Optional[List[str]] = None,
-        assignee: Optional[UserId] = None,
-        priority: Optional[WorkItemPriority] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        labels: list[str] | None = None,
+        assignee: UserId | None = None,
+        priority: WorkItemPriority | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> WorkItem:
         """Create work item with resilience."""
         return await self._execute_resilient(
@@ -105,7 +105,7 @@ class ResilientTicketSystemDecorator(ITicketSystem):
         )
 
     async def update_work_item(
-        self, item_id: WorkItemId, updates: Dict[str, Any]
+        self, item_id: WorkItemId, updates: dict[str, Any]
     ) -> WorkItem:
         """Update work item with resilience."""
         return await self._execute_resilient(
@@ -126,7 +126,7 @@ class ResilientTicketSystemDecorator(ITicketSystem):
         self,
         item_id: WorkItemId,
         status: WorkItemStatus,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> WorkItem:
         """Update status with resilience."""
         return await self._execute_resilient(
@@ -137,15 +137,15 @@ class ResilientTicketSystemDecorator(ITicketSystem):
 
     async def list_work_items(
         self,
-        project_id: Optional[ProjectId] = None,
-        status: Optional[WorkItemStatus] = None,
-        assignee: Optional[UserId] = None,
-        labels: Optional[List[str]] = None,
-        created_after: Optional[datetime] = None,
-        updated_after: Optional[datetime] = None,
+        project_id: ProjectId | None = None,
+        status: WorkItemStatus | None = None,
+        assignee: UserId | None = None,
+        labels: list[str] | None = None,
+        created_after: datetime | None = None,
+        updated_after: datetime | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[WorkItem]:
+    ) -> list[WorkItem]:
         """List work items with resilience."""
         return await self._execute_resilient(
             operation=lambda: self._wrapped.list_work_items(
@@ -158,9 +158,9 @@ class ResilientTicketSystemDecorator(ITicketSystem):
     async def search_work_items(
         self,
         query: str,
-        project_id: Optional[ProjectId] = None,
+        project_id: ProjectId | None = None,
         limit: int = 100,
-    ) -> List[WorkItem]:
+    ) -> list[WorkItem]:
         """Search work items with resilience."""
         return await self._execute_resilient(
             operation=lambda: self._wrapped.search_work_items(query, project_id, limit),
@@ -170,8 +170,8 @@ class ResilientTicketSystemDecorator(ITicketSystem):
 
     async def get_work_item_stream(
         self,
-        project_id: Optional[ProjectId] = None,
-        since: Optional[datetime] = None,
+        project_id: ProjectId | None = None,
+        since: datetime | None = None,
     ) -> AsyncIterator[WorkItem]:
         """Stream work items (streaming doesn't work well with retries)."""
         # Streaming operations don't benefit from retries
@@ -186,15 +186,14 @@ class ResilientTicketSystemDecorator(ITicketSystem):
                 stream_operation,
                 "get_work_item_stream"
             )
-        else:
-            return self._wrapped.get_work_item_stream(project_id, since)
+        return self._wrapped.get_work_item_stream(project_id, since)
 
     async def add_comment(
         self,
         item_id: WorkItemId,
         body: str,
-        author: Optional[UserId] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        author: UserId | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> Comment:
         """Add comment with resilience."""
         return await self._execute_resilient(
@@ -206,9 +205,9 @@ class ResilientTicketSystemDecorator(ITicketSystem):
     async def get_comments(
         self,
         item_id: WorkItemId,
-        since: Optional[datetime] = None,
+        since: datetime | None = None,
         limit: int = 100,
-    ) -> List[Comment]:
+    ) -> list[Comment]:
         """Get comments with resilience."""
         return await self._execute_resilient(
             operation=lambda: self._wrapped.get_comments(item_id, since, limit),
@@ -232,8 +231,8 @@ class ResilientTicketSystemDecorator(ITicketSystem):
     async def get_related_items(
         self,
         item_id: WorkItemId,
-        relationship: Optional[str] = None,
-    ) -> List[WorkItem]:
+        relationship: str | None = None,
+    ) -> list[WorkItem]:
         """Get related items with resilience."""
         return await self._execute_resilient(
             operation=lambda: self._wrapped.get_related_items(item_id, relationship),
@@ -244,8 +243,8 @@ class ResilientTicketSystemDecorator(ITicketSystem):
     async def register_webhook(
         self,
         url: str,
-        events: List[str],
-        project_id: Optional[ProjectId] = None,
+        events: list[str],
+        project_id: ProjectId | None = None,
     ) -> str:
         """Register webhook with resilience."""
         return await self._execute_resilient(
@@ -267,7 +266,7 @@ class ResilientTicketSystemDecorator(ITicketSystem):
         operation: Callable[[], T],
         operation_name: str,
         rate_limit_cost: int = 1,
-        timeout_seconds: Optional[float] = None
+        timeout_seconds: float | None = None
     ) -> T:
         """
         Execute operation with all resilience patterns.
@@ -291,12 +290,11 @@ class ResilientTicketSystemDecorator(ITicketSystem):
                 operation_name,
                 timeout_seconds or self._default_timeout
             )
-        else:
-            return await self._execute_with_timeout_and_retry(
-                operation,
-                operation_name,
-                timeout_seconds or self._default_timeout
-            )
+        return await self._execute_with_timeout_and_retry(
+            operation,
+            operation_name,
+            timeout_seconds or self._default_timeout
+        )
 
     async def _execute_with_timeout_and_retry(
         self,
@@ -313,8 +311,7 @@ class ResilientTicketSystemDecorator(ITicketSystem):
                     timeout_seconds,
                     operation_name
                 )
-            else:
-                return await operation()
+            return await operation()
 
         # 4. Retry wraps timeout
         if self._retry_policy:
@@ -322,8 +319,7 @@ class ResilientTicketSystemDecorator(ITicketSystem):
                 timed_operation,
                 operation_name
             )
-        else:
-            return await timed_operation()
+        return await timed_operation()
 
 
 # ============================================================================
@@ -343,10 +339,10 @@ class ResilientLLMProviderDecorator(ILLMProvider):
     def __init__(
         self,
         wrapped: ILLMProvider,
-        rate_limiter: Optional[IRateLimiter] = None,
-        circuit_breaker: Optional[ICircuitBreaker] = None,
-        retry_policy: Optional[IRetryPolicy] = None,
-        timeout: Optional[ITimeout] = None,
+        rate_limiter: IRateLimiter | None = None,
+        circuit_breaker: ICircuitBreaker | None = None,
+        retry_policy: IRetryPolicy | None = None,
+        timeout: ITimeout | None = None,
         default_timeout_seconds: float = 300.0  # 5 minutes for LLM
     ):
         self._wrapped = wrapped
@@ -359,8 +355,8 @@ class ResilientLLMProviderDecorator(ILLMProvider):
     async def execute(
         self,
         prompt: str,
-        context: Optional[ExecutionContext] = None,
-        stream_callback: Optional[StreamCallback] = None,
+        context: ExecutionContext | None = None,
+        stream_callback: StreamCallback | None = None,
     ) -> ExecutionResult:
         """Execute with resilience."""
         # Estimate token cost for rate limiting
@@ -375,9 +371,9 @@ class ResilientLLMProviderDecorator(ILLMProvider):
     async def execute_with_tools(
         self,
         prompt: str,
-        tools: List[ToolDefinition],
-        context: Optional[ExecutionContext] = None,
-        stream_callback: Optional[StreamCallback] = None,
+        tools: list[ToolDefinition],
+        context: ExecutionContext | None = None,
+        stream_callback: StreamCallback | None = None,
     ) -> ExecutionResult:
         """Execute with tools and resilience."""
         estimated_tokens = self._estimate_tokens(prompt)
@@ -391,7 +387,7 @@ class ResilientLLMProviderDecorator(ILLMProvider):
     async def stream_completion(
         self,
         prompt: str,
-        context: Optional[ExecutionContext] = None,
+        context: ExecutionContext | None = None,
     ) -> AsyncIterator[StreamChunk]:
         """Stream completion (less resilience for streaming)."""
         # Streaming doesn't work well with retries
@@ -406,13 +402,12 @@ class ResilientLLMProviderDecorator(ILLMProvider):
                 stream_operation,
                 "stream_completion"
             )
-        else:
-            return self._wrapped.stream_completion(prompt, context)
+        return self._wrapped.stream_completion(prompt, context)
 
     async def create_conversation(
         self,
-        system_prompt: Optional[str] = None,
-        parameters: Optional[ExecutionContext] = None,
+        system_prompt: str | None = None,
+        parameters: ExecutionContext | None = None,
     ) -> str:
         """Create conversation with resilience."""
         return await self._execute_resilient(
@@ -425,7 +420,7 @@ class ResilientLLMProviderDecorator(ILLMProvider):
         self,
         conversation_id: str,
         message: str,
-        stream_callback: Optional[StreamCallback] = None,
+        stream_callback: StreamCallback | None = None,
     ) -> ExecutionResult:
         """Continue conversation with resilience."""
         estimated_tokens = self._estimate_tokens(message)
@@ -444,7 +439,7 @@ class ResilientLLMProviderDecorator(ILLMProvider):
             rate_limit_cost=1
         )
 
-    async def list_available_models(self) -> List[ModelInfo]:
+    async def list_available_models(self) -> list[ModelInfo]:
         """List models with resilience."""
         return await self._execute_resilient(
             operation=lambda: self._wrapped.list_available_models(),
@@ -455,7 +450,7 @@ class ResilientLLMProviderDecorator(ILLMProvider):
     async def count_tokens(
         self,
         text: str,
-        model: Optional[str] = None,
+        model: str | None = None,
     ) -> int:
         """Count tokens with resilience."""
         return await self._execute_resilient(
@@ -466,7 +461,7 @@ class ResilientLLMProviderDecorator(ILLMProvider):
 
     async def get_usage_stats(
         self,
-        since: Optional[datetime] = None,
+        since: datetime | None = None,
     ) -> UsageStats:
         """Get usage stats with resilience."""
         return await self._execute_resilient(
@@ -494,11 +489,10 @@ class ResilientLLMProviderDecorator(ILLMProvider):
                 operation,
                 operation_name
             )
-        else:
-            return await self._execute_with_timeout_and_retry(
-                operation,
-                operation_name
-            )
+        return await self._execute_with_timeout_and_retry(
+            operation,
+            operation_name
+        )
 
     async def _execute_with_timeout_and_retry(
         self,
@@ -513,13 +507,11 @@ class ResilientLLMProviderDecorator(ILLMProvider):
                     self._default_timeout,
                     operation_name
                 )
-            else:
-                return await operation()
+            return await operation()
 
         if self._retry_policy:
             return await self._retry_policy.execute(timed_operation, operation_name)
-        else:
-            return await timed_operation()
+        return await timed_operation()
 
     def _estimate_tokens(self, text: str) -> int:
         """Rough token estimation (4 chars per token)."""
@@ -541,10 +533,10 @@ class ResilientBoardServiceDecorator(IBoardService):
     def __init__(
         self,
         wrapped: IBoardService,
-        rate_limiter: Optional[IRateLimiter] = None,
-        circuit_breaker: Optional[ICircuitBreaker] = None,
-        retry_policy: Optional[IRetryPolicy] = None,
-        timeout: Optional[ITimeout] = None,
+        rate_limiter: IRateLimiter | None = None,
+        circuit_breaker: ICircuitBreaker | None = None,
+        retry_policy: IRetryPolicy | None = None,
+        timeout: ITimeout | None = None,
         default_timeout_seconds: float = 30.0
     ):
         """
@@ -613,7 +605,7 @@ class ResilientBoardServiceDecorator(IBoardService):
             rate_limit_cost=1
         )
 
-    async def get_columns(self, board_id: str) -> List[BoardColumn]:
+    async def get_columns(self, board_id: str) -> list[BoardColumn]:
         """Get columns with resilience (1 GraphQL credit)."""
         return await self._execute_resilient(
             operation=lambda: self._wrapped.get_columns(board_id),
@@ -673,7 +665,7 @@ class ResilientBoardServiceDecorator(IBoardService):
         operation: Callable[[], T],
         operation_name: str,
         rate_limit_cost: int = 1,
-        timeout_seconds: Optional[float] = None
+        timeout_seconds: float | None = None
     ) -> T:
         """
         Execute operation with all resilience patterns.
@@ -697,12 +689,11 @@ class ResilientBoardServiceDecorator(IBoardService):
                 operation_name,
                 timeout_seconds or self._default_timeout
             )
-        else:
-            return await self._execute_with_timeout_and_retry(
-                operation,
-                operation_name,
-                timeout_seconds or self._default_timeout
-            )
+        return await self._execute_with_timeout_and_retry(
+            operation,
+            operation_name,
+            timeout_seconds or self._default_timeout
+        )
 
     async def _execute_with_timeout_and_retry(
         self,
@@ -719,8 +710,7 @@ class ResilientBoardServiceDecorator(IBoardService):
                     timeout_seconds,
                     operation_name
                 )
-            else:
-                return await operation()
+            return await operation()
 
         # 4. Retry wraps timeout
         if self._retry_policy:
@@ -728,8 +718,7 @@ class ResilientBoardServiceDecorator(IBoardService):
                 timed_operation,
                 operation_name
             )
-        else:
-            return await timed_operation()
+        return await timed_operation()
 
 
 # ============================================================================
@@ -747,10 +736,10 @@ class ResilientDiscussionAdapterDecorator(IDiscussionAdapter):
     def __init__(
         self,
         wrapped,
-        rate_limiter: Optional[IRateLimiter] = None,
-        circuit_breaker: Optional[ICircuitBreaker] = None,
-        retry_policy: Optional[IRetryPolicy] = None,
-        timeout: Optional[ITimeout] = None,
+        rate_limiter: IRateLimiter | None = None,
+        circuit_breaker: ICircuitBreaker | None = None,
+        retry_policy: IRetryPolicy | None = None,
+        timeout: ITimeout | None = None,
         default_timeout_seconds: float = 30.0
     ):
         """
@@ -783,7 +772,7 @@ class ResilientDiscussionAdapterDecorator(IDiscussionAdapter):
         self,
         work_item_id: str,
         content: str,
-        parent_id: Optional[str] = None,
+        parent_id: str | None = None,
     ):
         """Add comment with resilience."""
         return await self._execute_resilient(
@@ -838,7 +827,7 @@ class ResilientDiscussionAdapterDecorator(IDiscussionAdapter):
         operation: Callable[[], T],
         operation_name: str,
         rate_limit_cost: int = 1,
-        timeout_seconds: Optional[float] = None
+        timeout_seconds: float | None = None
     ) -> T:
         """
         Execute operation with all resilience patterns.
@@ -862,12 +851,11 @@ class ResilientDiscussionAdapterDecorator(IDiscussionAdapter):
                 operation_name,
                 timeout_seconds or self._default_timeout
             )
-        else:
-            return await self._execute_with_timeout_and_retry(
-                operation,
-                operation_name,
-                timeout_seconds or self._default_timeout
-            )
+        return await self._execute_with_timeout_and_retry(
+            operation,
+            operation_name,
+            timeout_seconds or self._default_timeout
+        )
 
     async def _execute_with_timeout_and_retry(
         self,
@@ -884,8 +872,7 @@ class ResilientDiscussionAdapterDecorator(IDiscussionAdapter):
                     timeout_seconds,
                     operation_name
                 )
-            else:
-                return await operation()
+            return await operation()
 
         # 4. Retry wraps timeout
         if self._retry_policy:
@@ -893,5 +880,4 @@ class ResilientDiscussionAdapterDecorator(IDiscussionAdapter):
                 timed_operation,
                 operation_name
             )
-        else:
-            return await timed_operation()
+        return await timed_operation()

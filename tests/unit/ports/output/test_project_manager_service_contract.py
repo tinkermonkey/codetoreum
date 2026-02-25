@@ -13,7 +13,7 @@ from codetoreum.adapters.testing.mock_project_manager_adapter import (
     MockProjectManagerAdapter,
 )
 from codetoreum.domain.value_objects import ProjectConfig
-from codetoreum.ports.exceptions import ResourceNotFoundError, ValidationError
+from codetoreum.ports.exceptions import ResourceNotFoundError
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
 
 
@@ -27,7 +27,6 @@ class IProjectManagerServiceContractTests(ABC):
     @abstractmethod
     async def create_service(self) -> IProjectManagerService:
         """Create and return an IProjectManagerService instance for testing."""
-        pass
 
     @pytest.mark.asyncio
     async def test_get_enabled_projects_filters_disabled(self):

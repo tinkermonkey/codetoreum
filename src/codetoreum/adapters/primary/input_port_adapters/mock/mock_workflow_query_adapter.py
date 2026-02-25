@@ -4,7 +4,7 @@ Mock Workflow Query Adapter
 In-memory implementation of IWorkflowQueryPort for development and testing.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from threading import RLock
 
 from codetoreum.ports.input.workflow_query import (
@@ -52,8 +52,8 @@ class MockWorkflowQueryAdapter(IWorkflowQueryPort):
             work_item_types=["issue"],
             is_template=False,
             is_active=True,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
             metadata={},
         )
 
@@ -71,8 +71,8 @@ class MockWorkflowQueryAdapter(IWorkflowQueryPort):
             work_item_types=["issue"],
             is_template=False,
             is_active=True,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
 
         return WorkflowListResult(
@@ -92,7 +92,7 @@ class MockWorkflowQueryAdapter(IWorkflowQueryPort):
             versions=[
                 WorkflowVersionInfo(
                     version=1,
-                    created_at=datetime.now(timezone.utc),
+                    created_at=datetime.now(UTC),
                     created_by=None,
                     changes_summary="Initial version",
                 )

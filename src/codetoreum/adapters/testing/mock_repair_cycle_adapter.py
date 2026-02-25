@@ -15,9 +15,8 @@ The mock adapter:
 
 import logging
 import threading
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import timedelta
+from typing import Any
 
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.domain.events.repair_cycle_events import (
@@ -63,7 +62,6 @@ logger = logging.getLogger(__name__)
 
 class CircuitBreakerTripped(Exception):
     """Raised when max agent calls exceeded during repair cycle."""
-    pass
 
 
 class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
@@ -103,8 +101,8 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
     def __init__(
         self,
-        clock: Optional[SimulationClock] = None,
-        checkpoint_store: Optional[IRepairCycleCheckpointStore] = None,
+        clock: SimulationClock | None = None,
+        checkpoint_store: IRepairCycleCheckpointStore | None = None,
     ) -> None:
         """Initialize the repair cycle adapter with SimulationClock.
 
@@ -115,32 +113,32 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         super().__init__()
         self._clock = clock or SimulationClock()
         self._checkpoint_store = checkpoint_store
-        self._current_project: Optional[str] = None
-        self._repair_state: Dict[str, Any] = {}
-        self._test_type_index: Dict[str, int] = {}
+        self._current_project: str | None = None
+        self._repair_state: dict[str, Any] = {}
+        self._test_type_index: dict[str, int] = {}
         self.agent_call_count = 0
         self.max_total_agent_calls = 100
-        self.event_log: List[Dict[str, Any]] = []
-        self.test_results: Dict[RepairTestType, List[RepairTestResult]] = {}
+        self.event_log: list[dict[str, Any]] = []
+        self.test_results: dict[RepairTestType, list[RepairTestResult]] = {}
         self.default_total_tests = 10  # Default total test count for generated results
 
         # State tracking for checkpoint/resume
         self.total_agent_calls = 0
         self.total_iterations = 0
-        self._cycle_results: List[CycleResult] = []  # Accumulated test results
+        self._cycle_results: list[CycleResult] = []  # Accumulated test results
         self._elapsed_time = 0.0  # Total elapsed time
         self._files_fixed = 0  # Accumulated files fixed
         self._warnings_reviewed = 0  # Accumulated warnings reviewed
 
         # Interrupt simulation for testing checkpoint/resume
-        self._interrupt_after_iteration: Optional[int] = None
-        self._interrupt_test_type: Optional[RepairTestType] = None
+        self._interrupt_after_iteration: int | None = None
+        self._interrupt_test_type: RepairTestType | None = None
 
         # Event system
-        self._events: List[dict] = []
-        self._event_handlers: Dict[str, List] = {}
-        self._monitoring: Dict[str, MonitoringStatus] = {}
-        self._handler_errors: List[Dict[str, Any]] = []
+        self._events: list[dict] = []
+        self._event_handlers: dict[str, list] = {}
+        self._monitoring: dict[str, MonitoringStatus] = {}
+        self._handler_errors: list[dict[str, Any]] = []
         self._lock = threading.Lock()
 
     @property
@@ -157,7 +155,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
     def set_test_result_sequence(
         self,
         test_type: RepairTestType,
-        results: List[RepairTestResult]
+        results: list[RepairTestResult]
     ) -> None:
         """Configure exact test result sequence for a test type (FR-11.2).
 
@@ -170,7 +168,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
     def set_interrupt_after_iteration(
         self,
         iteration: int,
-        test_type: Optional[RepairTestType] = None
+        test_type: RepairTestType | None = None
     ) -> None:
         """Configure adapter to simulate interruption after specified iteration.
 
@@ -280,12 +278,12 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         self._checkpoint_store = store
 
     @property
-    def current_project(self) -> Optional[str]:
+    def current_project(self) -> str | None:
         """Get current project ID."""
         return self._current_project
 
     @current_project.setter
-    def current_project(self, project_id: Optional[str]) -> None:
+    def current_project(self, project_id: str | None) -> None:
         """Set current project ID for event emission."""
         self._current_project = project_id
 
@@ -364,7 +362,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                     "stage_name": context.stage_name,
                 })
 
-        cycle_results: List[CycleResult] = list(self._cycle_results)
+        cycle_results: list[CycleResult] = list(self._cycle_results)
 
         # Execute each test type in order
         try:
@@ -445,7 +443,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
     async def try_resume_from_checkpoint(
         self,
         context: RepairCycleContext,
-    ) -> Optional[RepairCycleCheckpoint]:
+    ) -> RepairCycleCheckpoint | None:
         """Try to resume from an existing checkpoint.
 
         Returns:
@@ -487,16 +485,16 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             )
 
         if checkpoint.files_fixed < 0:
-            raise ValueError(f"Invalid checkpoint: files_fixed must be >= 0")
+            raise ValueError("Invalid checkpoint: files_fixed must be >= 0")
 
         if checkpoint.warnings_reviewed < 0:
-            raise ValueError(f"Invalid checkpoint: warnings_reviewed must be >= 0")
+            raise ValueError("Invalid checkpoint: warnings_reviewed must be >= 0")
 
         if checkpoint.elapsed_seconds < 0:
-            raise ValueError(f"Invalid checkpoint: elapsed_seconds must be >= 0")
+            raise ValueError("Invalid checkpoint: elapsed_seconds must be >= 0")
 
         if checkpoint.iteration < 1:
-            raise ValueError(f"Invalid checkpoint: iteration must be >= 1")
+            raise ValueError("Invalid checkpoint: iteration must be >= 1")
 
         # Validate test_type is valid enum
         try:
@@ -541,7 +539,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 except Exception as e:
                     error_record = {
                         "event_type": event_type,
-                        "handler": handler.__name__ if hasattr(handler, '__name__') else str(handler),
+                        "handler": handler.__name__ if hasattr(handler, "__name__") else str(handler),
                         "error": str(e),
                         "timestamp": self.clock.now().isoformat(),
                     }
@@ -616,7 +614,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 ),
             )
 
-    def get_all_events(self) -> List[dict]:
+    def get_all_events(self) -> list[dict]:
         """Get all emitted events."""
         with self._lock:
             return list(self._events)
@@ -703,7 +701,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
     async def fix_failures_by_file(
         self,
-        grouped_failures: Dict[str, Tuple[RepairTestFailure, ...]],
+        grouped_failures: dict[str, tuple[RepairTestFailure, ...]],
         config: RepairTestRunConfig,
         context: RepairCycleContext,
     ) -> int:
@@ -883,7 +881,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
     # Event log retrieval (FR-11.10)
 
-    def get_all_events_log(self) -> List[Dict[str, Any]]:
+    def get_all_events_log(self) -> list[dict[str, Any]]:
         """Return all logged events.
 
         Returns:
@@ -891,7 +889,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         """
         return list(self.event_log)
 
-    def get_events_by_type(self, event_type: str) -> List[Dict[str, Any]]:
+    def get_events_by_type(self, event_type: str) -> list[dict[str, Any]]:
         """Return events of specific type.
 
         Args:
@@ -902,7 +900,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         """
         return [e for e in self.event_log if e.get("type") == event_type]
 
-    def get_handler_errors(self) -> List[Dict[str, Any]]:
+    def get_handler_errors(self) -> list[dict[str, Any]]:
         """Get all handler errors that occurred during repair cycle."""
         with self._lock:
             return list(self._handler_errors)
@@ -1081,7 +1079,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
     def assert_no_warning_reappearance(
         self,
         test_type: RepairTestType,
-        original_warnings: Tuple[RepairTestWarning, ...]
+        original_warnings: tuple[RepairTestWarning, ...]
     ) -> None:
         """Assert previously fixed warnings didn't reappear.
 
@@ -1286,10 +1284,10 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
     def _group_failures_by_file(
         self,
-        failures: Tuple[RepairTestFailure, ...]
-    ) -> Dict[str, Tuple[RepairTestFailure, ...]]:
+        failures: tuple[RepairTestFailure, ...]
+    ) -> dict[str, tuple[RepairTestFailure, ...]]:
         """Group test failures by file."""
-        grouped: Dict[str, List[RepairTestFailure]] = {}
+        grouped: dict[str, list[RepairTestFailure]] = {}
         for failure in failures:
             if failure.file not in grouped:
                 grouped[failure.file] = []
@@ -1304,7 +1302,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         self._repair_state[key] = current + 1
         return current + 1
 
-    def _log_event(self, event: Dict[str, Any]) -> None:
+    def _log_event(self, event: dict[str, Any]) -> None:
         """Log event with timestamp (FR-11.9)."""
         event["timestamp"] = self.clock.now().isoformat()
         self.event_log.append(event)

@@ -134,7 +134,7 @@ def register_list_endpoints(router: APIRouter, query_port: IAgentQueryPort) -> N
             # Known validation or attribute errors
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to list agents: {str(e)}",
+                detail=f"Failed to list agents: {e!s}",
             )
 
     @router.get(
@@ -188,9 +188,9 @@ def register_list_endpoints(router: APIRouter, query_port: IAgentQueryPort) -> N
             if "not found" in str(e).lower():
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Agent not found: {str(e)}",
+                    detail=f"Agent not found: {e!s}",
                 )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to get agent: {str(e)}",
+                detail=f"Failed to get agent: {e!s}",
             )

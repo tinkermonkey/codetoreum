@@ -6,7 +6,6 @@ agent execution.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict
 
 from codetoreum.domain.value_objects import ProjectConfig
 
@@ -48,4 +47,3 @@ class IWorkflowOrchestrator(ABC):
         Raises:
             ExternalServiceError: External service communication failure
         """
-        pass

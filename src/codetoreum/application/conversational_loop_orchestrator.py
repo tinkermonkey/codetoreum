@@ -19,9 +19,7 @@ Architecture:
 
 import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import Optional
-from uuid import uuid4
+from datetime import UTC, datetime
 
 from codetoreum.domain.conversational_session import ConversationalSessionState
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
@@ -142,10 +140,10 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
             raise ValueError("column_config must include agent_assignment")
 
         # Create unique session identifier
-        session_id = f"conv_session_{work_item_id}_{int(datetime.now(timezone.utc).timestamp())}"
+        session_id = f"conv_session_{work_item_id}_{int(datetime.now(UTC).timestamp())}"
 
         # Initialize session state
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = datetime.now(UTC).isoformat()
         session_state = ConversationalSessionState(
             session_id=session_id,
             work_item_id=work_item_id,
@@ -399,7 +397,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                     ),
                     timeout=_LLM_PROVIDER_TIMEOUT_SECONDS
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.error(
                     "[%s] LLM provider timeout for work item %s after %d seconds",
                     "ERR_CONVERSATIONAL_LLM_TIMEOUT",
@@ -465,7 +463,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 raise ValueError(f"Discussion adapter returned comment with empty ID for work item {work_item_id}")
 
             # Update session state
-            now_iso = datetime.now(timezone.utc).isoformat()
+            now_iso = datetime.now(UTC).isoformat()
             updated_session = ConversationalSessionState(
                 session_id=session_state.session_id,
                 work_item_id=session_state.work_item_id,
@@ -600,7 +598,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 )
 
             # Mark session as terminated
-            now_iso = datetime.now(timezone.utc).isoformat()
+            now_iso = datetime.now(UTC).isoformat()
             terminated_session = ConversationalSessionState(
                 session_id=session_state.session_id,
                 work_item_id=session_state.work_item_id,
@@ -660,7 +658,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                     error_comment = (
                         f"❌ **Conversational Mode Failed to Initialize**\n\n"
                         f"The AI agent failed to start monitoring this work item for conversational feedback.\n\n"
-                        f"**Error Details**: {str(e)}\n\n"
+                        f"**Error Details**: {e!s}\n\n"
                         f"**Next Steps**:\n"
                         f"1. Move the work item to a different column\n"
                         f"2. Contact support if the issue persists\n\n"
@@ -756,7 +754,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
 
             # Mark session as terminated if not already
             if session_state.status != "terminated":
-                now_iso = datetime.now(timezone.utc).isoformat()
+                now_iso = datetime.now(UTC).isoformat()
                 terminated_session = ConversationalSessionState(
                     session_id=session_state.session_id,
                     work_item_id=session_state.work_item_id,
@@ -809,7 +807,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
     async def load_session_state(
         self,
         work_item_id: str,
-    ) -> Optional[ConversationalSessionState]:
+    ) -> ConversationalSessionState | None:
         """Load persisted session state from storage.
 
         Args:

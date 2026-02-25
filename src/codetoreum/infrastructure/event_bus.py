@@ -11,12 +11,12 @@ This enables complete trace correlation across async event handlers.
 
 import asyncio
 import logging
-from typing import Any, Callable, Dict, List, Optional, Set, Type
+from collections.abc import Callable
+from typing import Any
 
 from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.observability.trace_context_propagation import (
-    TraceContextPropagator,
     extract_and_activate_trace_context,
     inject_current_trace_context_into_event,
 )
@@ -45,7 +45,6 @@ except ImportError:
 class EventBusError(Exception):
     """Raised when event bus operations fail."""
 
-    pass
 
 
 class EventHandler:
@@ -68,7 +67,7 @@ class EventHandler:
         """
         raise NotImplementedError("Subclasses must implement handle()")
 
-    def get_event_types(self) -> List[str]:
+    def get_event_types(self) -> list[str]:
         """
         Get list of event types this handler processes.
 
@@ -110,7 +109,7 @@ class EventBus:
         self,
         max_retries: int = 3,
         retry_delay_seconds: float = 1.0,
-        redis_client: Optional[Any] = None,
+        redis_client: Any | None = None,
         redis_stream_prefix: str = "events",
     ):
         """
@@ -128,14 +127,14 @@ class EventBus:
         self.redis_stream_prefix = redis_stream_prefix
 
         # Handler registry: event_type -> list of handlers
-        self._handlers: Dict[str, List[EventHandler]] = {}
+        self._handlers: dict[str, list[EventHandler]] = {}
 
         # Callback registry: event_type -> list of callbacks
-        self._callbacks: Dict[str, List[Callable]] = {}
+        self._callbacks: dict[str, list[Callable]] = {}
 
         # Wildcard handlers (receive all events)
-        self._wildcard_handlers: List[EventHandler] = []
-        self._wildcard_callbacks: List[Callable] = []
+        self._wildcard_handlers: list[EventHandler] = []
+        self._wildcard_callbacks: list[Callable] = []
 
         # Statistics
         self._stats = {
@@ -211,7 +210,7 @@ class EventBus:
         logger.info(f"Unregistered handler: {handler.__class__.__name__}")
 
     def subscribe(
-        self, event_type: Optional[str], callback: Callable[[DomainEvent], Any]
+        self, event_type: str | None, callback: Callable[[DomainEvent], Any]
     ) -> None:
         """
         Subscribe to events with a callback function.
@@ -227,7 +226,7 @@ class EventBus:
             if event_type is None:
                 # Wildcard subscription
                 self._wildcard_callbacks.append(callback)
-                logger.info(f"Subscribed callback to all events")
+                logger.info("Subscribed callback to all events")
             else:
                 if event_type not in self._callbacks:
                     self._callbacks[event_type] = []
@@ -242,14 +241,14 @@ class EventBus:
                 exc_info=True,
                 extra={
                     "event_type": event_type,
-                    "callback": callback.__name__ if hasattr(callback, '__name__') else str(callback),
+                    "callback": callback.__name__ if hasattr(callback, "__name__") else str(callback),
                     "error_id": "ERR_CALLBACK_SUBSCRIPTION"
                 }
             )
             raise EventBusError(f"Failed to subscribe callback: {e}") from e
 
     def unsubscribe(
-        self, event_type: Optional[str], callback: Callable[[DomainEvent], Any]
+        self, event_type: str | None, callback: Callable[[DomainEvent], Any]
     ) -> None:
         """
         Unsubscribe a callback.
@@ -261,14 +260,13 @@ class EventBus:
         if event_type is None:
             if callback in self._wildcard_callbacks:
                 self._wildcard_callbacks.remove(callback)
-        else:
-            if event_type in self._callbacks:
-                if callback in self._callbacks[event_type]:
-                    self._callbacks[event_type].remove(callback)
+        elif event_type in self._callbacks:
+            if callback in self._callbacks[event_type]:
+                self._callbacks[event_type].remove(callback)
 
-                # Clean up empty lists
-                if not self._callbacks[event_type]:
-                    del self._callbacks[event_type]
+            # Clean up empty lists
+            if not self._callbacks[event_type]:
+                del self._callbacks[event_type]
 
         logger.info(f"Unsubscribed callback from event type: {event_type}")
 
@@ -393,7 +391,7 @@ class EventBus:
             )
             raise EventBusError(f"Unexpected error publishing event: {e}") from e
 
-    async def publish_batch(self, events: List[DomainEvent]) -> None:
+    async def publish_batch(self, events: list[DomainEvent]) -> None:
         """
         Publish multiple events.
 
@@ -406,7 +404,7 @@ class EventBus:
         for event in events:
             await self.publish(event)
 
-    def _get_handlers_for_event(self, event: DomainEvent) -> List[EventHandler]:
+    def _get_handlers_for_event(self, event: DomainEvent) -> list[EventHandler]:
         """Get all handlers for a given event."""
         handlers = []
 
@@ -420,7 +418,7 @@ class EventBus:
 
         return handlers
 
-    def _get_callbacks_for_event(self, event: DomainEvent) -> List[Callable]:
+    def _get_callbacks_for_event(self, event: DomainEvent) -> list[Callable]:
         """Get all callbacks for a given event."""
         callbacks = []
 
@@ -621,7 +619,7 @@ class EventBus:
             )
             # Don't raise - persistence failure shouldn't block event handling
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """
         Get event bus statistics.
 
@@ -671,9 +669,9 @@ def event_handler(*event_types: str):
         *event_types: Event types to handle (class names)
     """
 
-    def decorator(cls: Type[EventHandler]) -> Type[EventHandler]:
+    def decorator(cls: type[EventHandler]) -> type[EventHandler]:
         # Store event types on the class
-        def get_event_types(self) -> List[str]:
+        def get_event_types(self) -> list[str]:
             return list(event_types)
 
         cls.get_event_types = get_event_types

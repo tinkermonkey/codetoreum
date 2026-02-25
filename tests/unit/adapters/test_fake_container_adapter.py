@@ -1,6 +1,5 @@
 """Tests for FakeContainerAdapter."""
 
-from datetime import datetime
 
 import pytest
 

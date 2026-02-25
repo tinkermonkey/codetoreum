@@ -9,15 +9,14 @@ Tests cover:
 - Integration status reporting
 """
 
-from datetime import datetime, timedelta, timezone
-from typing import Any, AsyncIterator, Dict, List, Optional
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 
 from codetoreum.application.metrics_service import MetricsService
 from codetoreum.domain.events import DomainEvent
-from codetoreum.ports.exceptions import ComponentNotFoundError, MetricNotFoundError
+from codetoreum.ports.exceptions import ComponentNotFoundError
 from codetoreum.ports.input.metrics_query import ComponentHealth
 from codetoreum.ports.output.event_store import IEventStore
 
@@ -25,15 +24,15 @@ from codetoreum.ports.output.event_store import IEventStore
 class MockEvent(DomainEvent):
     """Mock domain event for testing."""
 
-    def __init__(self, event_type: str, payload: Dict[str, Any], occurred_at: Optional[datetime] = None):
+    def __init__(self, event_type: str, payload: dict[str, Any], occurred_at: datetime | None = None):
         self.event_type = event_type
         self.event_id = "test-event-id"
         self.aggregate_id = "test-aggregate-id"
         self.aggregate_type = "TestAggregate"
-        self.occurred_at = occurred_at or datetime.now(timezone.utc)
+        self.occurred_at = occurred_at or datetime.now(UTC)
         self.payload = payload
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "event_type": self.event_type,
             "event_id": self.event_id,
@@ -48,15 +47,15 @@ class MockEventStore(IEventStore):
     """Mock event store for testing."""
 
     def __init__(self):
-        self.events: List[DomainEvent] = []
+        self.events: list[DomainEvent] = []
         self.should_fail = False
-        self.fail_on_type: Optional[str] = None
+        self.fail_on_type: str | None = None
 
     async def append(
         self,
         stream_id: str,
-        events: List[DomainEvent],
-        expected_version: Optional[int] = None,
+        events: list[DomainEvent],
+        expected_version: int | None = None,
     ) -> None:
         if self.should_fail:
             raise Exception("Event store failure")
@@ -66,23 +65,23 @@ class MockEventStore(IEventStore):
         self,
         stream_id: str,
         from_version: int = 0,
-        to_version: Optional[int] = None,
-    ) -> List[DomainEvent]:
+        to_version: int | None = None,
+    ) -> list[DomainEvent]:
         return self.events
 
     async def get_events_since(
         self,
         since: datetime,
-        stream_id: Optional[str] = None,
-    ) -> List[DomainEvent]:
+        stream_id: str | None = None,
+    ) -> list[DomainEvent]:
         # Handle both naive and aware datetimes
         if since.tzinfo is None:
-            since = since.replace(tzinfo=timezone.utc)
+            since = since.replace(tzinfo=UTC)
         return [e for e in self.events if e.occurred_at >= since]
 
     async def stream_events(
         self,
-        stream_id: Optional[str] = None,
+        stream_id: str | None = None,
         from_version: int = 0,
     ):
         for event in self.events:
@@ -98,14 +97,14 @@ class MockEventStore(IEventStore):
         self,
         stream_id: str,
         version: int,
-        snapshot: Dict[str, Any],
+        snapshot: dict[str, Any],
     ) -> None:
         pass
 
     async def get_latest_snapshot(
         self,
         stream_id: str,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         return None
 
     async def delete_stream(self, stream_id: str) -> None:
@@ -113,13 +112,13 @@ class MockEventStore(IEventStore):
 
     async def get_all_stream_ids(
         self,
-        aggregate_type: Optional[str] = None,
-    ) -> List[str]:
+        aggregate_type: str | None = None,
+    ) -> list[str]:
         return ["test-stream"]
 
     async def get_events_by_type(
-        self, event_type: str, since: Optional[datetime] = None, limit: int = 1000
-    ) -> List[DomainEvent]:
+        self, event_type: str, since: datetime | None = None, limit: int = 1000
+    ) -> list[DomainEvent]:
         events = [e for e in self.events if e.event_type == event_type]
 
         if since:
@@ -141,19 +140,19 @@ class MockEventStore(IEventStore):
     async def get_events_by_correlation_id(
         self,
         correlation_id: str,
-    ) -> List[DomainEvent]:
+    ) -> list[DomainEvent]:
         return []
 
     async def replay_events(
         self,
         stream_id: str,
         from_version: int = 0,
-        to_version: Optional[int] = None,
+        to_version: int | None = None,
     ):
         for event in self.events:
             yield event
 
-    async def get_statistics(self) -> Dict[str, Any]:
+    async def get_statistics(self) -> dict[str, Any]:
         if self.should_fail:
             raise Exception("Failed to get statistics")
         return {
@@ -211,7 +210,7 @@ class TestMetricsServiceHealthCheck:
     async def test_get_component_health_event_store(self):
         """Test getting health for specific component."""
         event_store = MockEventStore()
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
         metrics_service = MetricsService(
             event_store=event_store,
             start_time=start_time,
@@ -230,7 +229,7 @@ class TestMetricsServiceHealthCheck:
         event_store = MockEventStore()
         metrics_service = MetricsService(
             event_store=event_store,
-            start_time=datetime.now(timezone.utc),
+            start_time=datetime.now(UTC),
             version="1.0.0"
         )
 
@@ -263,12 +262,12 @@ class TestMetricsServicePerformance:
         event_store = MockEventStore()
         metrics_service = MetricsService(
             event_store=event_store,
-            start_time=datetime.now(timezone.utc),
+            start_time=datetime.now(UTC),
             version="1.0.0"
         )
 
-        start = datetime.now(timezone.utc) - timedelta(hours=1)
-        end = datetime.now(timezone.utc)
+        start = datetime.now(UTC) - timedelta(hours=1)
+        end = datetime.now(UTC)
 
         metrics = await metrics_service.get_performance_metrics(start, end)
 
@@ -283,12 +282,12 @@ class TestMetricsServicePerformance:
         event_store = MockEventStore()
         metrics_service = MetricsService(
             event_store=event_store,
-            start_time=datetime.now(timezone.utc),
+            start_time=datetime.now(UTC),
             version="1.0.0"
         )
 
         # Create test events
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         started_event = MockEvent("AgentExecutionStarted", {"agent_name": "test_agent"}, now)
         completed_event = MockEvent(
             "AgentExecutionCompleted",
@@ -313,11 +312,11 @@ class TestMetricsServicePerformance:
         event_store = MockEventStore()
         metrics_service = MetricsService(
             event_store=event_store,
-            start_time=datetime.now(timezone.utc),
+            start_time=datetime.now(UTC),
             version="1.0.0"
         )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # 3 started, 1 completed, 1 failed = 1 active
         await event_store.append("stream-1", [MockEvent("AgentExecutionStarted", {"agent_name": "a1"}, now)])
@@ -343,11 +342,11 @@ class TestMetricsServiceAgentMetrics:
         event_store = MockEventStore()
         metrics_service = MetricsService(
             event_store=event_store,
-            start_time=datetime.now(timezone.utc),
+            start_time=datetime.now(UTC),
             version="1.0.0"
         )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Create test events
         await event_store.append("stream-1", [MockEvent("AgentExecutionStarted", {"agent_name": "agent_a"}, now)])
@@ -376,11 +375,11 @@ class TestMetricsServiceAgentMetrics:
         event_store = MockEventStore()
         metrics_service = MetricsService(
             event_store=event_store,
-            start_time=datetime.now(timezone.utc),
+            start_time=datetime.now(UTC),
             version="1.0.0"
         )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Create test events
         await event_store.append("stream-1", [MockEvent("AgentExecutionStarted", {"agent_name": "agent_a"}, now)])
@@ -405,11 +404,11 @@ class TestMetricsServiceAgentMetrics:
         event_store = MockEventStore()
         metrics_service = MetricsService(
             event_store=event_store,
-            start_time=datetime.now(timezone.utc),
+            start_time=datetime.now(UTC),
             version="1.0.0"
         )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Create multiple executions with different durations
         for i in range(3):
@@ -445,7 +444,7 @@ class TestMetricsServiceActiveAgents:
         event_store = MockEventStore()
         metrics_service = MetricsService(
             event_store=event_store,
-            start_time=datetime.now(timezone.utc),
+            start_time=datetime.now(UTC),
             version="1.0.0"
         )
 
@@ -507,7 +506,7 @@ class TestMetricsServiceIntegrationStatus:
         event_store = MockEventStore()
         metrics_service = MetricsService(
             event_store=event_store,
-            start_time=datetime.now(timezone.utc),
+            start_time=datetime.now(UTC),
             version="1.0.0"
         )
 
@@ -525,7 +524,7 @@ class TestMetricsServiceIntegrationStatus:
 
         metrics_service = MetricsService(
             event_store=event_store,
-            start_time=datetime.now(timezone.utc),
+            start_time=datetime.now(UTC),
             version="1.0.0"
         )
 
@@ -544,11 +543,11 @@ class TestMetricsServiceErrorHandling:
         event_store = MockEventStore()
         metrics_service = MetricsService(
             event_store=event_store,
-            start_time=datetime.now(timezone.utc),
+            start_time=datetime.now(UTC),
             version="1.0.0"
         )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Event missing duration_seconds field
         incomplete_event = MockEvent(
@@ -577,11 +576,11 @@ class TestMetricsServiceEdgeCases:
         event_store = MockEventStore()
         metrics_service = MetricsService(
             event_store=event_store,
-            start_time=datetime.now(timezone.utc),
+            start_time=datetime.now(UTC),
             version="1.0.0"
         )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         await event_store.append("stream-1", [
             MockEvent("AgentExecutionCompleted", {"duration_seconds": 0.0}, now)
         ])

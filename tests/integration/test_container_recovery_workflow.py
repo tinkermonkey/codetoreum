@@ -7,7 +7,7 @@ These tests verify:
 - Integration with event store and event emitter
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 import pytest
 

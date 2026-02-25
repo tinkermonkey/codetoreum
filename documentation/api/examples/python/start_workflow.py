@@ -234,14 +234,14 @@ def main() -> None:
         # Check entry conditions (optional)
         print("\n=== Checking Entry Conditions ===\n")
         try:
-            conditions = check_entry_conditions(work_item['id'], "development")
+            conditions = check_entry_conditions(work_item["id"], "development")
             print(f"Conditions met: {conditions['conditions_met']}")
         except requests.exceptions.HTTPError as e:
             print(f"Warning: Could not check entry conditions (HTTP {e.response.status_code})")
 
         # Start workflow
         print("\n=== Starting Workflow ===\n")
-        workflow_run = start_workflow(work_item['id'])
+        workflow_run = start_workflow(work_item["id"])
 
         print(f"\nWorkflow Run ID: {workflow_run['workflow_run_id']}")
         print(f"Workflow: {workflow_run.get('workflow_name', 'auto-selected')}")
@@ -280,13 +280,13 @@ def main() -> None:
         print(f"\n✗ Connection Error: Unable to connect to {BASE_URL}")
         print("  Ensure the API server is running")
     except requests.exceptions.Timeout:
-        print(f"\n✗ Timeout Error: Request took too long")
+        print("\n✗ Timeout Error: Request took too long")
     except requests.exceptions.RequestException as e:
-        print(f"\n✗ Request Error: {str(e)}")
+        print(f"\n✗ Request Error: {e!s}")
     except KeyError as e:
         print(f"\n✗ Data Error: Missing expected field {e} in API response")
     except Exception as e:
-        print(f"\n✗ Unexpected Error: {type(e).__name__}: {str(e)}")
+        print(f"\n✗ Unexpected Error: {type(e).__name__}: {e!s}")
 
 
 if __name__ == "__main__":

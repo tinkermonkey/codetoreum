@@ -1,8 +1,7 @@
 """Integration tests for Work Items REST API endpoints."""
 
-from datetime import datetime, timezone
-from typing import Optional
-from unittest.mock import AsyncMock, MagicMock
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import FastAPI
@@ -18,7 +17,6 @@ from codetoreum.ports.input.work_item_command import (
 )
 from codetoreum.ports.input.work_item_query import (
     IWorkItemQueryPort,
-    WorkItemFilters,
     WorkItemHistory,
     WorkItemListResult,
 )
@@ -126,7 +124,7 @@ def client(app):
 @pytest.fixture
 def sample_work_item():
     """Fixture providing a sample work item."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return WorkItem(
         id="wi-123",
         project_id="proj-123",

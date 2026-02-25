@@ -18,7 +18,7 @@ import hashlib
 import hmac
 import json
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -26,10 +26,7 @@ import pytest
 
 from codetoreum.adapters.primary.github_webhook_adapter import (
     GitHubWebhookAdapter,
-    InvalidPayloadError,
-    UnknownProjectError,
     WebhookEvent,
-    WebhookVerificationError,
 )
 
 # Constants for timing attack resistance testing
@@ -137,7 +134,7 @@ class TestWebhookPayloadValidation:
                 # Missing "issue" field
             },
             signature="sha256=test",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             repository="test-org/test-repo",
         )
 
@@ -163,7 +160,7 @@ class TestWebhookPayloadValidation:
                 "repository": {"full_name": "test-org/test-repo"},
             },
             signature="sha256=test",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             repository="test-org/test-repo",
         )
 
@@ -178,7 +175,7 @@ class TestWebhookPayloadValidation:
             event_type="issues",
             payload={},
             signature="sha256=test",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             repository="test-org/test-repo",
         )
 
@@ -201,7 +198,7 @@ class TestWebhookPayloadValidation:
                 "repository": {"full_name": "test-org/test-repo"},
             },
             signature="sha256=test",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             repository="test-org/test-repo",
         )
 
@@ -228,7 +225,7 @@ class TestWebhookSignatureValidation:
                 "full_name": "test-org/test-repo"
             }
         }
-        payload_bytes = json.dumps(payload).encode('utf-8')
+        payload_bytes = json.dumps(payload).encode("utf-8")
 
         # Generate valid signature
         signature = create_webhook_signature(payload_bytes, webhook_secret)
@@ -243,7 +240,7 @@ class TestWebhookSignatureValidation:
             "action": "opened",
             "issue": {"id": 123, "title": "Test", "body": "Test"}
         }
-        payload_bytes = json.dumps(payload).encode('utf-8')
+        payload_bytes = json.dumps(payload).encode("utf-8")
 
         # Use invalid signature
         invalid_signature = "sha256=invalid_signature_12345abcdef"
@@ -328,7 +325,7 @@ class TestWebhookSignatureValidation:
             "action": "opened",
             "issue": {"id": 123, "title": "Original"}
         }
-        original_bytes = json.dumps(original_payload).encode('utf-8')
+        original_bytes = json.dumps(original_payload).encode("utf-8")
 
         # Create signature for original payload
         signature = create_webhook_signature(original_bytes, webhook_secret)
@@ -338,7 +335,7 @@ class TestWebhookSignatureValidation:
             "action": "opened",
             "issue": {"id": 999, "title": "Tampered"}  # Changed
         }
-        tampered_bytes = json.dumps(tampered_payload).encode('utf-8')
+        tampered_bytes = json.dumps(tampered_payload).encode("utf-8")
 
         # Signature should fail for tampered payload
         result = await webhook_adapter.verify_signature(tampered_bytes, signature)
@@ -349,7 +346,7 @@ class TestWebhookSignatureValidation:
         delivery_id = str(uuid4())
 
         # Verify adapter has delivery tracking
-        assert hasattr(webhook_adapter, '_processed_deliveries')
+        assert hasattr(webhook_adapter, "_processed_deliveries")
         assert isinstance(webhook_adapter._processed_deliveries, dict)
 
         # Mock a processed delivery
@@ -363,7 +360,7 @@ class TestWebhookSignatureValidation:
 
     async def test_webhook_signature_with_empty_payload(self, webhook_adapter, webhook_secret):
         """Test signature validation with empty payload."""
-        empty_payload = b'{}'
+        empty_payload = b"{}"
 
         # Generate valid signature for empty payload
         signature = create_webhook_signature(empty_payload, webhook_secret)
@@ -418,7 +415,7 @@ class TestWebhookSignatureValidation:
             }
         }
         # JSON encode with proper UTF-8 handling
-        payload_bytes = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+        payload_bytes = json.dumps(payload, ensure_ascii=False).encode("utf-8")
 
         # Generate valid signature
         signature = create_webhook_signature(payload_bytes, webhook_secret)
@@ -439,7 +436,7 @@ class TestWebhookSignatureValidation:
                 "repository": {"full_name": "test-org/test-repo"}
             }
         }
-        payload_bytes = json.dumps(payload).encode('utf-8')
+        payload_bytes = json.dumps(payload).encode("utf-8")
 
         # Generate valid signature
         signature = create_webhook_signature(payload_bytes, webhook_secret)

@@ -1,7 +1,9 @@
 """
 Executions resource client
 """
-from typing import TYPE_CHECKING, Any, Callable, List, Optional, cast
+import builtins
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, cast
 
 from ..models import Execution, PaginatedResponse
 
@@ -15,12 +17,12 @@ class ExecutionsResource:
     def __init__(self, client: "CodetoreumClient") -> None:
         self.client = client
 
-    def list(  # noqa: A003
+    def list(
         self,
-        status: Optional[str] = None,
-        work_item_id: Optional[str] = None,
-        agent_id: Optional[str] = None,
-        workflow_run_id: Optional[str] = None,
+        status: str | None = None,
+        work_item_id: str | None = None,
+        agent_id: str | None = None,
+        workflow_run_id: str | None = None,
         offset: int = 0,
         limit: int = 50,
         sort_by: str = "started_at",
@@ -86,8 +88,8 @@ class ExecutionsResource:
     def get_logs(
         self,
         execution_id: str,
-        tail: Optional[int] = None,
-    ) -> List[str]:
+        tail: int | None = None,
+    ) -> builtins.list[str]:
         """
         Get execution logs.
 
@@ -108,9 +110,9 @@ class ExecutionsResource:
             params["tail"] = tail
 
         data: dict[str, Any] = self.client.get(f"/api/v2/executions/{execution_id}/logs", params=params)
-        return cast(List[str], data.get("logs", []))
+        return cast("list[str]", data.get("logs", []))
 
-    def get_history(self, execution_id: str) -> List[dict[str, Any]]:
+    def get_history(self, execution_id: str) -> builtins.list[dict[str, Any]]:
         """
         Get execution event history.
 
@@ -124,7 +126,7 @@ class ExecutionsResource:
             >>> history = client.executions.get_history("exec_abc123")
         """
         data: dict[str, Any] = self.client.get(f"/api/v2/executions/{execution_id}/history")
-        return cast(List[dict[str, Any]], data.get("events", []))
+        return cast("list[dict[str, Any]]", data.get("events", []))
 
     def terminate(self, execution_id: str) -> Execution:
         """
@@ -179,7 +181,7 @@ class ExecutionsResource:
         execution_id: str,
         check_interval: int = 5,
         timeout: int = 3600,
-        callback: Optional[Callable[[Execution], None]] = None,
+        callback: Callable[[Execution], None] | None = None,
     ) -> Execution:
         """
         Wait for an execution to complete.

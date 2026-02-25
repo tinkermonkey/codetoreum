@@ -564,7 +564,6 @@ class TestConcurrency:
         """
         import threading
 
-        from codetoreum.ports.exceptions import ResourceNotFoundError
 
         # First, add a project that we'll update concurrently
         adapter.add_project("test-project", config_1)

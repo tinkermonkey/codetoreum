@@ -1,6 +1,6 @@
 """Integration tests for Agents REST API endpoints."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -21,9 +21,7 @@ from codetoreum.ports.input.agent_command import (
 )
 from codetoreum.ports.input.agent_query import (
     AgentExecutionStats,
-    AgentFilters,
     AgentInfo,
-    AgentPaginationParams,
     AgentSortField,
     IAgentQueryPort,
     SortOrder,
@@ -141,7 +139,7 @@ def client(app):
 @pytest.fixture
 def sample_agent():
     """Fixture providing a sample agent."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return Agent(
         id="agent-123",
         name="test_agent",
@@ -177,7 +175,7 @@ def sample_agent():
 @pytest.fixture
 def sample_agent_info(sample_agent):
     """Fixture providing a sample agent info."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return AgentInfo(
         id=sample_agent.id,
         name=sample_agent.name,

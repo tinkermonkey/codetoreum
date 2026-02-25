@@ -5,7 +5,7 @@ Tests the data structures, enums, and interface contract of the
 ITaskQueryPort without requiring implementations.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pytest
 
@@ -292,11 +292,11 @@ class TestITaskQueryPortInterface:
     def test_interface_has_required_methods(self):
         """Test that interface defines all required methods"""
         required_methods = [
-            'get_execution_status',
-            'list_executions',
-            'get_artifacts',
-            'get_execution_history',
-            'get_workflow_executions'
+            "get_execution_status",
+            "list_executions",
+            "get_artifacts",
+            "get_execution_history",
+            "get_workflow_executions"
         ]
 
         for method_name in required_methods:

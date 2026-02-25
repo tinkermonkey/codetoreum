@@ -19,8 +19,8 @@ Intended for:
 
 import logging
 import threading
-from datetime import datetime, timezone
-from typing import Callable, Dict, List, Optional, Tuple
+from collections.abc import Callable
+from datetime import UTC, datetime
 
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.domain.events.queue_events import (
@@ -69,9 +69,9 @@ class InMemoryQueueService(IPipelineQueueService):
 
     def __init__(
         self,
-        board_service: Optional[IBoardService] = None,
-        time_source: Optional[Callable[[], datetime]] = None,
-        event_emitter: Optional[IEventEmitter] = None,
+        board_service: IBoardService | None = None,
+        time_source: Callable[[], datetime] | None = None,
+        event_emitter: IEventEmitter | None = None,
     ) -> None:
         """Initialize empty queue service.
 
@@ -81,12 +81,12 @@ class InMemoryQueueService(IPipelineQueueService):
                         manipulation in simulation testing. Defaults to datetime.now(timezone.utc)
             event_emitter: Optional IEventEmitter for emitting domain events. Defaults to MockEventEmitter
         """
-        self._queues: Dict[str, List[PipelineQueueEntry]] = {}
-        self._board_positions: Dict[str, List[str]] = {}  # For set_board_order test helper
-        self._operations_log: List[Dict] = []  # Audit log for test verification
+        self._queues: dict[str, list[PipelineQueueEntry]] = {}
+        self._board_positions: dict[str, list[str]] = {}  # For set_board_order test helper
+        self._operations_log: list[dict] = []  # Audit log for test verification
         self._lock = threading.Lock()
         self._board_service = board_service
-        self._time_source = time_source or (lambda: datetime.now(timezone.utc))
+        self._time_source = time_source or (lambda: datetime.now(UTC))
         self._event_emitter = event_emitter or MockEventEmitter()
 
     async def is_item_in_queue(self, work_item_id: str) -> bool:
@@ -216,7 +216,7 @@ class InMemoryQueueService(IPipelineQueueService):
             self._event_emitter.emit(
                 QueueItemAddedEvent(
                     type="queue.item_added",
-                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    timestamp=datetime.now(UTC).isoformat(),
                     source="mock",
                     queue_name=queue_key,
                     item_id=work_item_id,
@@ -318,7 +318,7 @@ class InMemoryQueueService(IPipelineQueueService):
                         self._event_emitter.emit(
                             QueueItemRemovedEvent(
                                 type="queue.item_removed",
-                                timestamp=datetime.now(timezone.utc).isoformat(),
+                                timestamp=datetime.now(UTC).isoformat(),
                                 source="mock",
                                 queue_name=queue_key,
                                 item_id=work_item_id,
@@ -330,7 +330,7 @@ class InMemoryQueueService(IPipelineQueueService):
 
     async def get_next_waiting_item(
         self, project_id: str, board_id: str
-    ) -> Optional[PipelineQueueEntry]:
+    ) -> PipelineQueueEntry | None:
         """Get the next waiting item from the queue based on board position.
 
         Before selecting the next item, syncs with board state to ensure queue
@@ -369,7 +369,7 @@ class InMemoryQueueService(IPipelineQueueService):
 
     async def get_queue_entries(
         self, project_id: str, board_id: str
-    ) -> List[PipelineQueueEntry]:
+    ) -> list[PipelineQueueEntry]:
         """Get all queue entries for a pipeline.
 
         Returns all queue entries (both WAITING and ACTIVE) for the specified
@@ -505,7 +505,7 @@ class InMemoryQueueService(IPipelineQueueService):
                                 self._event_emitter.emit(
                                     QueuePositionChangedEvent(
                                         type="queue.position_changed",
-                                        timestamp=datetime.now(timezone.utc).isoformat(),
+                                        timestamp=datetime.now(UTC).isoformat(),
                                         source="mock",
                                         queue_name=queue_key,
                                         item_id=work_item_id,
@@ -552,7 +552,7 @@ class InMemoryQueueService(IPipelineQueueService):
     # ===== Test Helper Methods =====
 
     def set_board_order(
-        self, project_id: str, board_id: str, ordered_work_items: List[str]
+        self, project_id: str, board_id: str, ordered_work_items: list[str]
     ) -> None:
         """Test helper to set simulated board order for queue position simulation.
 
@@ -591,7 +591,7 @@ class InMemoryQueueService(IPipelineQueueService):
                 }
             )
 
-    def get_operations_log(self) -> List[Dict]:
+    def get_operations_log(self) -> list[dict]:
         """Test helper to retrieve audit log of all operations.
 
         Returns a copy of the operations log containing records of all queue operations
@@ -606,7 +606,7 @@ class InMemoryQueueService(IPipelineQueueService):
 
     def get_queue_state_for_testing(
         self, project_id: str, board_id: str
-    ) -> Tuple[int, List[PipelineQueueEntry]]:
+    ) -> tuple[int, list[PipelineQueueEntry]]:
         """Test helper to get complete queue state.
 
         Returns queue length and all entries for inspection/assertions.

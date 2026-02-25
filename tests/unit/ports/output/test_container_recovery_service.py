@@ -7,9 +7,8 @@ These tests verify:
 - Required label enforcement
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import MappingProxyType
-from typing import Dict, List
 
 import pytest
 
@@ -48,7 +47,7 @@ class TestContainerMetadataImmutability:
             project_id="proj-1",
             agent_id="agent-1",
             task_id="task-1",
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
             labels=MappingProxyType({
                 CONTAINER_LABEL_TYPE: "agent",
                 CONTAINER_LABEL_PROJECT: "proj-1",
@@ -67,7 +66,7 @@ class TestContainerMetadataImmutability:
 
     def test_container_metadata_preserves_all_fields(self):
         """ContainerMetadata should preserve all fields exactly as provided."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         labels = MappingProxyType({
             CONTAINER_LABEL_TYPE: "agent",
             CONTAINER_LABEL_PROJECT: "proj-1",
@@ -437,7 +436,7 @@ class TestContainerNameIsNotParsed:
             project_id="proj-1",  # Comes from label, not name
             agent_id="agent-1",   # Comes from label, not name
             task_id="task-1",     # Comes from label, not name
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
             labels=MappingProxyType({
                 CONTAINER_LABEL_TYPE: "agent",
                 CONTAINER_LABEL_PROJECT: "proj-1",
@@ -467,7 +466,7 @@ class TestContainerNameIsNotParsed:
                 project_id="proj-1",  # Must come from label
                 agent_id="agent-1",   # Must come from label
                 task_id="task-1",     # Must come from label
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
                 labels=MappingProxyType({
                     CONTAINER_LABEL_TYPE: "agent",
                     CONTAINER_LABEL_PROJECT: "proj-1",
@@ -509,7 +508,7 @@ class TestContainerTypeConstants:
             project_id="proj-1",
             agent_id="agent-1",
             task_id="task-1",
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
             labels=MappingProxyType({
                 CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
                 CONTAINER_LABEL_PROJECT: "proj-1",
@@ -535,7 +534,7 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
                 labels=MappingProxyType({
                 CONTAINER_LABEL_TYPE: "agent",
                 CONTAINER_LABEL_PROJECT: "proj-1",
@@ -552,7 +551,7 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
                 labels=MappingProxyType({
                 CONTAINER_LABEL_TYPE: "agent",
                 CONTAINER_LABEL_PROJECT: "proj-1",
@@ -569,7 +568,7 @@ class TestContainerMetadataValidation:
                 project_id="",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
                 labels=MappingProxyType({
                 CONTAINER_LABEL_TYPE: "agent",
                 CONTAINER_LABEL_PROJECT: "proj-1",
@@ -586,7 +585,7 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
                 labels=MappingProxyType({
                 CONTAINER_LABEL_TYPE: "agent",
                 CONTAINER_LABEL_PROJECT: "proj-1",
@@ -603,7 +602,7 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="",
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
                 labels=MappingProxyType({
                 CONTAINER_LABEL_TYPE: "agent",
                 CONTAINER_LABEL_PROJECT: "proj-1",
@@ -637,7 +636,7 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
                 labels={"key": "value"},  # type: ignore
             )
 
@@ -650,7 +649,7 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
                 labels=MappingProxyType({
                 CONTAINER_LABEL_TYPE: "agent",
                 CONTAINER_LABEL_PROJECT: "proj-1",
@@ -668,7 +667,7 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
                 labels=MappingProxyType({
                 CONTAINER_LABEL_TYPE: "agent",
                 CONTAINER_LABEL_PROJECT: "proj-1",
@@ -686,7 +685,7 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
                 labels=MappingProxyType({
                 CONTAINER_LABEL_TYPE: "agent",
                 CONTAINER_LABEL_PROJECT: "proj-1",
@@ -703,7 +702,7 @@ class TestContainerMetadataValidation:
             project_id="proj-1",
             agent_id="agent-1",
             task_id="task-1",
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
             labels=MappingProxyType({
                 CONTAINER_LABEL_TYPE: "agent",
                 CONTAINER_LABEL_PROJECT: "proj-1",
@@ -727,7 +726,7 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
                 labels=MappingProxyType({
                 CONTAINER_LABEL_TYPE: "agent",
                 CONTAINER_LABEL_PROJECT: "proj-1",
@@ -744,7 +743,7 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
                 labels=MappingProxyType({
                 CONTAINER_LABEL_TYPE: "agent",
                 CONTAINER_LABEL_PROJECT: "proj-1",
@@ -761,7 +760,7 @@ class TestContainerMetadataValidation:
                 project_id="   ",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
                 labels=MappingProxyType({
                 CONTAINER_LABEL_TYPE: "agent",
                 CONTAINER_LABEL_PROJECT: "proj-1",
@@ -778,7 +777,7 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="   ",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
                 labels=MappingProxyType({
                 CONTAINER_LABEL_TYPE: "agent",
                 CONTAINER_LABEL_PROJECT: "proj-1",
@@ -795,7 +794,7 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="   ",
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
                 labels=MappingProxyType({
                 CONTAINER_LABEL_TYPE: "agent",
                 CONTAINER_LABEL_PROJECT: "proj-1",
@@ -812,7 +811,7 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
                 labels=MappingProxyType({
                 CONTAINER_LABEL_TYPE: "agent",
                 CONTAINER_LABEL_PROJECT: "proj-1",
@@ -830,7 +829,7 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
                 labels=MappingProxyType({
                 CONTAINER_LABEL_TYPE: "agent",
                 CONTAINER_LABEL_PROJECT: "proj-1",
@@ -848,7 +847,7 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
                 labels=MappingProxyType({
                 CONTAINER_LABEL_TYPE: "agent",
                 CONTAINER_LABEL_PROJECT: "proj-1",
@@ -860,7 +859,7 @@ class TestContainerMetadataValidation:
     def test_created_at_cannot_be_future(self):
         """created_at cannot be in the future."""
         from datetime import timedelta
-        future_time = datetime.now(timezone.utc) + timedelta(hours=1)
+        future_time = datetime.now(UTC) + timedelta(hours=1)
 
         with pytest.raises(ValueError, match="created_at cannot be in the future"):
             ContainerMetadata(
@@ -892,7 +891,7 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
                 labels=incomplete_labels,
             )
 
@@ -910,7 +909,7 @@ class TestContainerMetadataValidation:
             project_id="proj-1",
             agent_id="agent-1",
             task_id="task-1",
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
             labels=complete_labels,
         )
 
@@ -920,7 +919,7 @@ class TestContainerMetadataValidation:
 
     def test_all_required_fields_valid(self):
         """Valid metadata with all required fields."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         labels = MappingProxyType({
             CONTAINER_LABEL_TYPE: "agent",
             CONTAINER_LABEL_PROJECT: "proj-1",
@@ -973,7 +972,7 @@ class TestRecoveryAssessmentValidation:
 
     def test_action_must_be_valid(self):
         """action must be one of: reconnect, kill."""
-        with pytest.raises(ValueError, match='action must be one of'):
+        with pytest.raises(ValueError, match="action must be one of"):
             RecoveryAssessment(
                 container_id="abc123",
                 action="invalid",  # type: ignore
@@ -1189,7 +1188,7 @@ class TestRecoveryResultValidation:
     def test_timestamp_cannot_be_far_in_future(self):
         """timestamp cannot be more than 1 minute in the future."""
         from datetime import timedelta
-        future_time = datetime.now(timezone.utc) + timedelta(minutes=5)
+        future_time = datetime.now(UTC) + timedelta(minutes=5)
 
         with pytest.raises(ValueError, match="timestamp cannot be more than 1 minute in the future"):
             RecoveryResult(
@@ -1203,7 +1202,7 @@ class TestRecoveryResultValidation:
     def test_timestamp_cannot_be_far_in_past(self):
         """timestamp cannot be more than 1 year in the past."""
         from datetime import timedelta
-        past_time = datetime.now(timezone.utc) - timedelta(days=400)
+        past_time = datetime.now(UTC) - timedelta(days=400)
 
         with pytest.raises(ValueError, match="timestamp cannot be more than 1 year in the past"):
             RecoveryResult(
@@ -1217,7 +1216,7 @@ class TestRecoveryResultValidation:
     def test_timestamp_slightly_future_allowed(self):
         """timestamp slightly in the future (within 1 minute) is allowed for clock skew."""
         from datetime import timedelta
-        slightly_future = datetime.now(timezone.utc) + timedelta(seconds=30)
+        slightly_future = datetime.now(UTC) + timedelta(seconds=30)
 
         result = RecoveryResult(
             recovered=5,
@@ -1232,7 +1231,7 @@ class TestRecoveryResultValidation:
     def test_timestamp_slightly_past_allowed(self):
         """timestamp slightly in the past is allowed."""
         from datetime import timedelta
-        slightly_past = datetime.now(timezone.utc) - timedelta(seconds=30)
+        slightly_past = datetime.now(UTC) - timedelta(seconds=30)
 
         result = RecoveryResult(
             recovered=5,

@@ -8,9 +8,8 @@ Tests verify the core orchestration logic without external dependencies:
 - Error handling and edge cases
 """
 
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -78,7 +77,7 @@ def sample_session_state():
         column_name="In Review",
         llm_conversation_id="conv-abc123",
         last_processed_comment_id="comment-10",
-        last_interaction_timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        last_interaction_timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         status="active",
     )
 
@@ -90,7 +89,7 @@ def sample_comment():
         id="comment-11",
         author="user123",
         body="Can you explain section 2 in more detail?",
-        created_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        created_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         parent_id=None,
         is_bot=False,
     )
@@ -232,7 +231,7 @@ class TestHandleCommentEvent:
             id="comment-12",
             author="codetoreum-bot",
             body="This is the agent's response.",
-            created_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            created_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             parent_id=None,
             is_bot=True
         )
@@ -241,7 +240,7 @@ class TestHandleCommentEvent:
         # Create event with comment
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -314,7 +313,7 @@ class TestHandleCommentEvent:
         # Create event with comment
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -350,7 +349,7 @@ class TestHandleCommentEvent:
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -392,7 +391,7 @@ class TestHandleCommentEvent:
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -412,7 +411,7 @@ class TestHandleCommentEvent:
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -457,7 +456,7 @@ class TestHandleCommentEvent:
         # Create event with same comment ID
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -504,7 +503,7 @@ class TestHandleCommentEvent:
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -546,7 +545,7 @@ class TestHandleCommentEvent:
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -591,7 +590,7 @@ class TestHandleCommentEvent:
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -648,7 +647,7 @@ class TestHandleCommentEvent:
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -725,7 +724,7 @@ class TestHandleCommentEvent:
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -785,7 +784,7 @@ class TestHandleCommentEvent:
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -828,7 +827,7 @@ class TestHandleColumnChangeEvent:
 
         event = WorkItemColumnChangedEvent(
             type="workitem.column_changed",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -851,7 +850,7 @@ class TestHandleColumnChangeEvent:
 
         event = WorkItemColumnChangedEvent(
             type="workitem.column_changed",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -871,7 +870,7 @@ class TestHandleColumnChangeEvent:
         with pytest.raises(ValueError, match="work_item_id is required"):
             WorkItemColumnChangedEvent(
                 type="workitem.column_changed",
-                timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
                 source="github",
                 work_item_id="",  # Missing - caught at event creation
                 project_id="proj-1",
@@ -1029,7 +1028,7 @@ class TestBuildThreadMessage:
         """Test building thread message with full context (discussion thread context only)."""
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -1053,7 +1052,7 @@ class TestBuildThreadMessage:
         """Test building thread message without context."""
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -1070,7 +1069,7 @@ class TestBuildThreadMessage:
         """Test building thread message with optional context fields (now all optional)."""
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -1096,12 +1095,12 @@ class TestBuildThreadMessage:
             id="comment-10",
             author="alice",
             body="What's your approach to this?",
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -1135,7 +1134,7 @@ class TestHandleCommentEventContextValidation:
         """Test handle_comment_event raises ValueError when context is None."""
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",

@@ -7,11 +7,12 @@ Thread-safe for concurrent registration and lookup operations.
 
 import threading
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Callable, Dict, Generic, List, Optional, Type, TypeVar, Union
+from datetime import UTC, datetime
+from typing import Any, Generic, TypeVar
 
-T = TypeVar('T')  # Port interface type
+T = TypeVar("T")  # Port interface type
 
 
 @dataclass
@@ -19,14 +20,14 @@ class AdapterMetadata:
     """Metadata about a registered adapter."""
 
     name: str
-    adapter_type: Type
+    adapter_type: type
     description: str
     version: str
-    tags: List[str]
+    tags: list[str]
     registered_at: datetime
-    config_schema: Optional[Dict[str, Any]] = None
+    config_schema: dict[str, Any] | None = None
 
-    def matches_tags(self, tags: List[str]) -> bool:
+    def matches_tags(self, tags: list[str]) -> bool:
         """Check if adapter has all specified tags."""
         return all(tag in self.tags for tag in tags)
 
@@ -41,34 +42,34 @@ class AdapterRegistry(ABC, Generic[T]):
     Type parameter T represents the port interface type (e.g., ITicketSystem).
     """
 
-    def __init__(self, port_interface: Type[T]):
+    def __init__(self, port_interface: type[T]):
         """
         Initialize the adapter registry.
 
         Args:
             port_interface: The port interface class this registry manages
         """
-        self._port_interface: Type[T] = port_interface
-        self._adapters: Dict[str, Type[T]] = {}
-        self._metadata: Dict[str, AdapterMetadata] = {}
-        self._factories: Dict[str, Callable[..., T]] = {}
+        self._port_interface: type[T] = port_interface
+        self._adapters: dict[str, type[T]] = {}
+        self._metadata: dict[str, AdapterMetadata] = {}
+        self._factories: dict[str, Callable[..., T]] = {}
         self._lock: threading.RLock = threading.RLock()
-        self._default_adapter: Optional[str] = None
+        self._default_adapter: str | None = None
 
     @property
-    def port_interface(self) -> Type[T]:
+    def port_interface(self) -> type[T]:
         """Get the port interface this registry manages."""
         return self._port_interface
 
     def register(
         self,
         name: str,
-        adapter_type: Type[T],
+        adapter_type: type[T],
         description: str = "",
         version: str = "1.0.0",
-        tags: Optional[List[str]] = None,
-        config_schema: Optional[Dict[str, Any]] = None,
-        factory: Optional[Callable[..., T]] = None,
+        tags: list[str] | None = None,
+        config_schema: dict[str, Any] | None = None,
+        factory: Callable[..., T] | None = None,
         set_as_default: bool = False
     ) -> None:
         """
@@ -105,7 +106,7 @@ class AdapterRegistry(ABC, Generic[T]):
                 description=description,
                 version=version,
                 tags=tags or [],
-                registered_at=datetime.now(timezone.utc),
+                registered_at=datetime.now(UTC),
                 config_schema=config_schema
             )
 
@@ -138,7 +139,7 @@ class AdapterRegistry(ABC, Generic[T]):
             if self._default_adapter == name:
                 self._default_adapter = None
 
-    def get(self, name: str) -> Type[T]:
+    def get(self, name: str) -> type[T]:
         """
         Get a registered adapter class by name.
 
@@ -156,7 +157,7 @@ class AdapterRegistry(ABC, Generic[T]):
                 raise KeyError(f"Adapter '{name}' is not registered")
             return self._adapters[name]
 
-    def get_default(self) -> Optional[Type[T]]:
+    def get_default(self) -> type[T] | None:
         """
         Get the default adapter class.
 
@@ -168,7 +169,7 @@ class AdapterRegistry(ABC, Generic[T]):
                 return None
             return self._adapters.get(self._default_adapter)
 
-    def get_default_name(self) -> Optional[str]:
+    def get_default_name(self) -> str | None:
         """
         Get the name of the default adapter.
 
@@ -211,7 +212,7 @@ class AdapterRegistry(ABC, Generic[T]):
                 raise KeyError(f"Adapter '{name}' is not registered")
             return self._metadata[name]
 
-    def list_adapters(self) -> List[str]:
+    def list_adapters(self) -> list[str]:
         """
         List all registered adapter names.
 
@@ -221,7 +222,7 @@ class AdapterRegistry(ABC, Generic[T]):
         with self._lock:
             return list(self._adapters.keys())
 
-    def list_by_tags(self, tags: List[str]) -> List[str]:
+    def list_by_tags(self, tags: list[str]) -> list[str]:
         """
         List adapters that match all specified tags.
 
@@ -274,8 +275,7 @@ class AdapterRegistry(ABC, Generic[T]):
 
             if name in self._factories:
                 return self._factories[name](*args, **kwargs)
-            else:
-                return self._adapters[name](*args, **kwargs)
+            return self._adapters[name](*args, **kwargs)
 
     def clear(self) -> None:
         """Clear all registered adapters."""
@@ -286,7 +286,7 @@ class AdapterRegistry(ABC, Generic[T]):
             self._default_adapter = None
 
     @abstractmethod
-    def _is_valid_adapter(self, adapter_type: Type[T]) -> bool:
+    def _is_valid_adapter(self, adapter_type: type[T]) -> bool:
         """
         Validate that an adapter implements the port interface.
 
@@ -296,7 +296,6 @@ class AdapterRegistry(ABC, Generic[T]):
         Returns:
             True if adapter is valid
         """
-        pass
 
     def __len__(self) -> int:
         """Get the number of registered adapters."""

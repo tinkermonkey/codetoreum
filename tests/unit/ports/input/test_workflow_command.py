@@ -5,7 +5,6 @@ Tests the data structures, enums, and interface contract of the
 IWorkflowCommandPort without requiring implementations.
 """
 
-from datetime import datetime
 
 import pytest
 
@@ -87,9 +86,9 @@ class TestStartWorkflowCommand:
         )
 
         # Dataclasses are mutable by default, just verify field access
-        assert hasattr(cmd, 'project_name')
-        assert hasattr(cmd, 'work_item_id')
-        assert hasattr(cmd, 'pipeline_name')
+        assert hasattr(cmd, "project_name")
+        assert hasattr(cmd, "work_item_id")
+        assert hasattr(cmd, "pipeline_name")
 
 
 class TestPauseWorkflowCommand:
@@ -228,11 +227,11 @@ class TestIWorkflowCommandPortInterface:
     def test_interface_has_required_methods(self):
         """Test that interface defines all required methods"""
         required_methods = [
-            'start_workflow',
-            'pause_workflow',
-            'resume_workflow',
-            'cancel_workflow',
-            'retry_stage'
+            "start_workflow",
+            "pause_workflow",
+            "resume_workflow",
+            "cancel_workflow",
+            "retry_stage"
         ]
 
         for method_name in required_methods:

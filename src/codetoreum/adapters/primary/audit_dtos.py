@@ -72,8 +72,8 @@ class AuditValidationResult(BaseModel):
         }
     )
 
-    @model_validator(mode='after')
-    def validate_consistency(self) -> 'AuditValidationResult':
+    @model_validator(mode="after")
+    def validate_consistency(self) -> "AuditValidationResult":
         """
         Validate consistency between sequenceValid and error lists.
 
@@ -102,13 +102,12 @@ class AuditValidationResult(BaseModel):
                     f"sequenceValid is True but error lists are not empty. "
                     f"This is a contradictory validation result. Errors: {'; '.join(errors)}"
                 )
-        else:
-            # sequenceValid=False requires at least one error
-            if not (self.missingEvents or self.unexpectedEvents or self.outOfOrderEvents):
-                raise ValueError(
-                    "sequenceValid is False but all error lists are empty. "
-                    "At least one of missingEvents, unexpectedEvents, or outOfOrderEvents must be non-empty."
-                )
+        # sequenceValid=False requires at least one error
+        elif not (self.missingEvents or self.unexpectedEvents or self.outOfOrderEvents):
+            raise ValueError(
+                "sequenceValid is False but all error lists are empty. "
+                "At least one of missingEvents, unexpectedEvents, or outOfOrderEvents must be non-empty."
+            )
 
         return self
 

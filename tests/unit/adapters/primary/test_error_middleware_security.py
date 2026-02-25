@@ -9,16 +9,13 @@ Tests the security improvements:
 """
 
 import os
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import Request, status
 from pydantic import ValidationError as PydanticValidationError
 
 from codetoreum.adapters.primary.error_middleware import (
-    DEBUG_MODE,
-    ENV,
-    IS_PRODUCTION,
     error_handling_middleware,
 )
 
@@ -167,7 +164,7 @@ class TestErrorMiddlewareStackTraces:
         importlib.reload(error_middleware)
 
         # Patch the logger after reload
-        with patch.object(error_middleware, 'logger') as mock_logger:
+        with patch.object(error_middleware, "logger") as mock_logger:
             await error_middleware.error_handling_middleware(request, call_next)
 
             # Verify that logger.error was called with exc_info=True

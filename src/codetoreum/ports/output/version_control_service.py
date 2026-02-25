@@ -12,7 +12,6 @@ services fit into the adapter architecture.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -77,7 +76,7 @@ class IVersionControlService(ABC):
 
     @abstractmethod
     async def clone_repository(
-        self, url: str, target_path: str, branch: Optional[str] = None
+        self, url: str, target_path: str, branch: str | None = None
     ) -> None:
         """Clone a repository to local path.
 
@@ -90,7 +89,6 @@ class IVersionControlService(ABC):
             ValidationError: Invalid URL or target path
             RepositoryError: Clone operation failed (network, auth, etc.)
         """
-        pass
 
     @abstractmethod
     async def pull_latest(self, repo_path: str) -> None:
@@ -106,7 +104,6 @@ class IVersionControlService(ABC):
             ValidationError: Invalid repo path
             RepositoryError: Pull operation failed (conflicts, network, etc.)
         """
-        pass
 
     @abstractmethod
     async def checkout(self, repo_path: str, branch: str) -> None:
@@ -122,7 +119,6 @@ class IVersionControlService(ABC):
             ValidationError: Invalid repo path or branch name
             RepositoryError: Checkout failed (branch doesn't exist, etc.)
         """
-        pass
 
     @abstractmethod
     async def commit(self, repo_path: str, message: str) -> str:
@@ -141,7 +137,6 @@ class IVersionControlService(ABC):
             ValidationError: Invalid repo path or message
             RepositoryError: Commit failed (no changes staged, etc.)
         """
-        pass
 
     @abstractmethod
     async def push(self, repo_path: str, branch: str) -> None:
@@ -158,7 +153,6 @@ class IVersionControlService(ABC):
             ValidationError: Invalid repo path or branch name
             RepositoryError: Push failed (auth, rejected, etc.)
         """
-        pass
 
     @abstractmethod
     async def get_repository(self, identifier: str) -> Repository:
@@ -178,4 +172,3 @@ class IVersionControlService(ABC):
             ResourceNotFoundError: Repository not found
             ExternalServiceError: Service communication failure
         """
-        pass

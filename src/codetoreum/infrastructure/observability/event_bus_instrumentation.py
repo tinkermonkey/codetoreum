@@ -11,7 +11,8 @@ All spans are linked via trace context to enable complete distributed tracing.
 """
 
 import logging
-from typing import TYPE_CHECKING, Any, Callable, List, Optional
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 try:
     from opentelemetry import context as otel_context
@@ -129,7 +130,7 @@ class InstrumentedEventBus:
             if token:
                 otel_context.detach(token)
 
-    async def publish_batch(self, events: List[DomainEvent]) -> None:
+    async def publish_batch(self, events: list[DomainEvent]) -> None:
         """
         Publish multiple events.
 
@@ -192,7 +193,7 @@ class InstrumentedEventBus:
                 return
 
     def subscribe(
-        self, event_type: Optional[str], callback: Callable[[DomainEvent], Any]
+        self, event_type: str | None, callback: Callable[[DomainEvent], Any]
     ) -> None:
         """
         Subscribe to events with a callback function.
@@ -209,7 +210,7 @@ class InstrumentedEventBus:
         self._event_bus.subscribe(event_type, wrapped_callback)
 
     def unsubscribe(
-        self, event_type: Optional[str], callback: Callable[[DomainEvent], Any]
+        self, event_type: str | None, callback: Callable[[DomainEvent], Any]
     ) -> None:
         """
         Unsubscribe a callback.
@@ -306,7 +307,7 @@ class InstrumentedEventHandler:
     """
 
     def __init__(
-        self, handler: "EventHandler", tracer: Optional[Any] = None
+        self, handler: "EventHandler", tracer: Any | None = None
     ):
         """
         Initialize instrumented event handler.
@@ -373,7 +374,7 @@ class InstrumentedEventHandler:
                 )
                 raise
 
-    def get_event_types(self) -> List[str]:
+    def get_event_types(self) -> list[str]:
         """
         Get event types handled by wrapped handler.
 

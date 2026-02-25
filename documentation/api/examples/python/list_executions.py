@@ -6,7 +6,7 @@ and retrieve execution logs.
 """
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, cast
 
 import requests  # type: ignore[import-untyped]
 
@@ -16,15 +16,15 @@ API_TOKEN = "your_token_here"  # Get from server startup logs
 
 
 def list_executions(
-    status: Optional[str] = None,
-    work_item_id: Optional[str] = None,
-    agent_id: Optional[str] = None,
-    workflow_run_id: Optional[str] = None,
+    status: str | None = None,
+    work_item_id: str | None = None,
+    agent_id: str | None = None,
+    workflow_run_id: str | None = None,
     offset: int = 0,
     limit: int = 50,
     sort_by: str = "started_at",
     sort_order: str = "desc"
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     List agent executions with filtering and pagination.
 
@@ -70,10 +70,10 @@ def list_executions(
     response = requests.get(url, headers=headers, params=params)
     response.raise_for_status()
 
-    return cast(Dict[str, Any], response.json())
+    return cast("dict[str, Any]", response.json())
 
 
-def get_execution_details(execution_id: str) -> Dict[str, Any]:
+def get_execution_details(execution_id: str) -> dict[str, Any]:
     """
     Get detailed information about a specific execution.
 
@@ -92,14 +92,14 @@ def get_execution_details(execution_id: str) -> Dict[str, Any]:
     response = requests.get(url, headers=headers)
     response.raise_for_status()
 
-    return cast(Dict[str, Any], response.json())
+    return cast("dict[str, Any]", response.json())
 
 
 def get_execution_logs(
     execution_id: str,
-    tail: Optional[int] = None,
+    tail: int | None = None,
     follow: bool = False
-) -> List[str]:
+) -> list[str]:
     """
     Get execution logs.
 
@@ -124,8 +124,8 @@ def get_execution_logs(
     response = requests.get(url, headers=headers, params=params)
     response.raise_for_status()
 
-    data = cast(Dict[str, Any], response.json())
-    return cast(List[str], data.get("logs", []))
+    data = cast("dict[str, Any]", response.json())
+    return cast("list[str]", data.get("logs", []))
 
 
 def wait_for_execution(
@@ -133,7 +133,7 @@ def wait_for_execution(
     check_interval: int = 5,
     timeout: int = 3600,
     print_logs: bool = True
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Wait for an execution to complete.
 
@@ -244,7 +244,7 @@ def main() -> None:
 
             # Get last 10 lines of logs
             try:
-                logs = get_execution_logs(execution['id'], tail=10)
+                logs = get_execution_logs(execution["id"], tail=10)
                 if logs:
                     print("  Last logs:")
                     for log in logs[-5:]:  # Show last 5 lines
@@ -263,13 +263,13 @@ def main() -> None:
         print(f"\n✗ Connection Error: Unable to connect to {BASE_URL}")
         print("  Ensure the API server is running")
     except requests.exceptions.Timeout:
-        print(f"\n✗ Timeout Error: Request took too long")
+        print("\n✗ Timeout Error: Request took too long")
     except requests.exceptions.RequestException as e:
-        print(f"\n✗ Request Error: {str(e)}")
+        print(f"\n✗ Request Error: {e!s}")
     except KeyError as e:
         print(f"\n✗ Data Error: Missing expected field {e} in API response")
     except Exception as e:
-        print(f"\n✗ Unexpected Error: {type(e).__name__}: {str(e)}")
+        print(f"\n✗ Unexpected Error: {type(e).__name__}: {e!s}")
 
 
 if __name__ == "__main__":

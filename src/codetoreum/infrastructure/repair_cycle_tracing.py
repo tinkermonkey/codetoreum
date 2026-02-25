@@ -10,8 +10,7 @@ Provides distributed tracing capabilities for repair cycle execution:
 
 import logging
 from contextlib import contextmanager
-from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 
 try:
     from opentelemetry import trace
@@ -27,10 +26,10 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    "RepairCycleTracer",
-    "NullRepairCycleTracer",
-    "get_repair_cycle_tracer",
     "OTEL_AVAILABLE",
+    "NullRepairCycleTracer",
+    "RepairCycleTracer",
+    "get_repair_cycle_tracer",
 ]
 
 # Track if instrumentation has been applied to prevent double instrumentation
@@ -43,7 +42,7 @@ class RepairCycleTracer:
     def __init__(
         self,
         service_name: str = "codetoreum",
-        jaeger_host: Optional[str] = None,
+        jaeger_host: str | None = None,
         jaeger_port: int = 6831,
         enabled: bool = True,
     ):
@@ -63,16 +62,15 @@ class RepairCycleTracer:
 
         if self.enabled:
             self._init_tracer(service_name, jaeger_host, jaeger_port)
+        elif not OTEL_AVAILABLE:
+            logger.warning("OpenTelemetry not available - tracing disabled")
         else:
-            if not OTEL_AVAILABLE:
-                logger.warning("OpenTelemetry not available - tracing disabled")
-            else:
-                logger.info("Repair cycle tracing disabled")
+            logger.info("Repair cycle tracing disabled")
 
     def _init_tracer(
         self,
         service_name: str,
-        jaeger_host: Optional[str] = None,
+        jaeger_host: str | None = None,
         jaeger_port: int = 6831,
     ) -> None:
         """Initialize OpenTelemetry tracer."""
@@ -110,7 +108,7 @@ class RepairCycleTracer:
     def trace_cycle(
         self,
         cycle_name: str,
-        attributes: Optional[Dict[str, Any]] = None,
+        attributes: dict[str, Any] | None = None,
     ):
         """
         Context manager to trace repair cycle execution.
@@ -150,7 +148,7 @@ class RepairCycleTracer:
     def trace_stage(
         self,
         stage_name: str,
-        attributes: Optional[Dict[str, Any]] = None,
+        attributes: dict[str, Any] | None = None,
     ):
         """
         Context manager to trace repair cycle stage.
@@ -189,7 +187,7 @@ class RepairCycleTracer:
         self,
         test_type: str,
         iteration: int = 0,
-        attributes: Optional[Dict[str, Any]] = None,
+        attributes: dict[str, Any] | None = None,
     ):
         """
         Context manager to trace test execution.
@@ -229,7 +227,7 @@ class RepairCycleTracer:
     def trace_file_fix(
         self,
         file_path: str,
-        attributes: Optional[Dict[str, Any]] = None,
+        attributes: dict[str, Any] | None = None,
     ):
         """
         Context manager to trace file fix operation.
@@ -242,10 +240,10 @@ class RepairCycleTracer:
             yield
             return
 
-        span_name = f"file_fix.{file_path.split('/')[-1]}"
+        span_name = f"file_fix.{file_path.rsplit('/', maxsplit=1)[-1]}"
         span_attributes = {
             "file.path": file_path,
-            "file.extension": file_path.split(".")[-1] if "." in file_path else "unknown",
+            "file.extension": file_path.rsplit(".", maxsplit=1)[-1] if "." in file_path else "unknown",
         }
 
         if attributes:
@@ -268,7 +266,7 @@ class RepairCycleTracer:
     def trace_agent_call(
         self,
         agent_name: str,
-        attributes: Optional[Dict[str, Any]] = None,
+        attributes: dict[str, Any] | None = None,
     ):
         """
         Context manager to trace LLM agent call.
@@ -314,7 +312,7 @@ class RepairCycleTracer:
     def add_span_event(
         self,
         name: str,
-        attributes: Optional[Dict[str, Any]] = None,
+        attributes: dict[str, Any] | None = None,
     ) -> None:
         """
         Add event to current span.
@@ -350,12 +348,12 @@ class NullRepairCycleTracer:
     """Null object pattern tracer for when tracing is disabled."""
 
     @contextmanager
-    def trace_cycle(self, cycle_name: str, attributes: Optional[Dict[str, Any]] = None):
+    def trace_cycle(self, cycle_name: str, attributes: dict[str, Any] | None = None):
         """No-op trace_cycle."""
         yield
 
     @contextmanager
-    def trace_stage(self, stage_name: str, attributes: Optional[Dict[str, Any]] = None):
+    def trace_stage(self, stage_name: str, attributes: dict[str, Any] | None = None):
         """No-op trace_stage."""
         yield
 
@@ -364,37 +362,35 @@ class NullRepairCycleTracer:
         self,
         test_type: str,
         iteration: int = 0,
-        attributes: Optional[Dict[str, Any]] = None,
+        attributes: dict[str, Any] | None = None,
     ):
         """No-op trace_test_execution."""
         yield
 
     @contextmanager
-    def trace_file_fix(self, file_path: str, attributes: Optional[Dict[str, Any]] = None):
+    def trace_file_fix(self, file_path: str, attributes: dict[str, Any] | None = None):
         """No-op trace_file_fix."""
         yield
 
     @contextmanager
-    def trace_agent_call(self, agent_name: str, attributes: Optional[Dict[str, Any]] = None):
+    def trace_agent_call(self, agent_name: str, attributes: dict[str, Any] | None = None):
         """No-op trace_agent_call."""
         yield
 
     def add_span_event(
         self,
         name: str,
-        attributes: Optional[Dict[str, Any]] = None,
+        attributes: dict[str, Any] | None = None,
     ) -> None:
         """No-op add_span_event."""
-        pass
 
     def shutdown(self) -> None:
         """No-op shutdown."""
-        pass
 
 
 def get_repair_cycle_tracer(
     service_name: str = "codetoreum",
-    jaeger_host: Optional[str] = None,
+    jaeger_host: str | None = None,
     jaeger_port: int = 6831,
     enabled: bool = True,
 ) -> RepairCycleTracer:

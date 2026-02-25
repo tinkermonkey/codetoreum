@@ -1,9 +1,9 @@
 """Work Item aggregate root."""
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import uuid4
 
 from codetoreum.domain.events import (
@@ -68,25 +68,25 @@ class WorkItem:
     priority: WorkItemPriority
 
     # Metadata
-    labels: List[str]
-    external_id: Optional[str]  # ID in external system (GitHub issue #, etc.)
-    external_url: Optional[str]
+    labels: list[str]
+    external_id: str | None  # ID in external system (GitHub issue #, etc.)
+    external_url: str | None
 
     # Assignment
-    assigned_agent_id: Optional[str]
-    assigned_at: Optional[datetime]
+    assigned_agent_id: str | None
+    assigned_at: datetime | None
 
     # Workflow tracking
-    current_workflow_id: Optional[str]
-    current_stage: Optional[str]
+    current_workflow_id: str | None
+    current_stage: str | None
 
     # Timestamps
     created_at: datetime
     updated_at: datetime
-    completed_at: Optional[datetime]
+    completed_at: datetime | None
 
     # Event tracking
-    _events: List[DomainEvent] = field(default_factory=list, init=False, repr=False)
+    _events: list[DomainEvent] = field(default_factory=list, init=False, repr=False)
     _version: int = field(default=0, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -122,10 +122,10 @@ class WorkItem:
         title: str,
         description: str,
         project_id: str,
-        labels: Optional[List[str]] = None,
+        labels: list[str] | None = None,
         priority: WorkItemPriority = WorkItemPriority.MEDIUM,
-        external_id: Optional[str] = None,
-        external_url: Optional[str] = None,
+        external_id: str | None = None,
+        external_url: str | None = None,
     ) -> "WorkItem":
         """
         Factory method to create a new work item.
@@ -158,8 +158,8 @@ class WorkItem:
             assigned_at=None,
             current_workflow_id=None,
             current_stage=None,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
             completed_at=None,
         )
 
@@ -207,9 +207,9 @@ class WorkItem:
             raise DomainError(f"Agent {agent_id} is already assigned")
 
         self.assigned_agent_id = agent_id
-        self.assigned_at = datetime.now(timezone.utc)
+        self.assigned_at = datetime.now(UTC)
         self.status = WorkItemStatus.ASSIGNED
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = AgentAssigned(
@@ -242,7 +242,7 @@ class WorkItem:
             raise DomainError(f"Cannot start work item in status {self.status.value}")
 
         self.status = WorkItemStatus.IN_PROGRESS
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = WorkItemStarted(
@@ -272,7 +272,7 @@ class WorkItem:
             )
 
         self.status = WorkItemStatus.UNDER_REVIEW
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = WorkItemUnderReview(
@@ -302,7 +302,7 @@ class WorkItem:
             )
 
         self.status = WorkItemStatus.COMPLETED
-        self.completed_at = datetime.now(timezone.utc)
+        self.completed_at = datetime.now(UTC)
         self.updated_at = self.completed_at
         self._version += 1
 
@@ -315,7 +315,7 @@ class WorkItem:
         )
         self._add_event(event)
 
-    def fail(self, reason: str, error_details: Optional[Dict[str, Any]] = None) -> None:
+    def fail(self, reason: str, error_details: dict[str, Any] | None = None) -> None:
         """
         Mark work item as failed.
 
@@ -337,7 +337,7 @@ class WorkItem:
             )
 
         self.status = WorkItemStatus.FAILED
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = WorkItemFailed(
@@ -351,7 +351,7 @@ class WorkItem:
         )
         self._add_event(event)
 
-    def block(self, reason: str, blocking_issue_id: Optional[str] = None) -> None:
+    def block(self, reason: str, blocking_issue_id: str | None = None) -> None:
         """
         Block work item.
 
@@ -373,7 +373,7 @@ class WorkItem:
             )
 
         self.status = WorkItemStatus.BLOCKED
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = WorkItemBlocked(
@@ -407,7 +407,7 @@ class WorkItem:
             if self.assigned_agent_id
             else WorkItemStatus.NEW
         )
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = WorkItemUnblocked(
@@ -438,7 +438,7 @@ class WorkItem:
             )
 
         self.current_workflow_id = workflow_id
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = WorkflowAttached(
@@ -467,7 +467,7 @@ class WorkItem:
 
         old_stage = self.current_stage
         self.current_stage = stage
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = WorkItemStageUpdated(
@@ -482,7 +482,7 @@ class WorkItem:
         self._add_event(event)
 
     # Metadata
-    def update_labels(self, labels: List[str]) -> None:
+    def update_labels(self, labels: list[str]) -> None:
         """
         Update work item labels.
 
@@ -506,7 +506,7 @@ class WorkItem:
 
         old_labels = self.labels.copy()
         self.labels = labels
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = WorkItemLabelsUpdated(
@@ -530,7 +530,7 @@ class WorkItem:
         """
         old_priority = self.priority
         self.priority = priority
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = WorkItemPriorityUpdated(
@@ -587,7 +587,7 @@ class WorkItem:
         """
         self._events.append(event)
 
-    def get_pending_events(self) -> List[DomainEvent]:
+    def get_pending_events(self) -> list[DomainEvent]:
         """
         Get all pending events.
 
@@ -603,7 +603,7 @@ class WorkItem:
 
     # Reconstruction from events
     @classmethod
-    def from_events(cls, events: List[DomainEvent]) -> "WorkItem":
+    def from_events(cls, events: list[DomainEvent]) -> "WorkItem":
         """
         Reconstruct work item from event stream.
 

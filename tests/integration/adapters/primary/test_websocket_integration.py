@@ -5,21 +5,15 @@ Tests real-time event streaming, filtering, authentication, and backpressure han
 """
 
 import asyncio
-import json
-from datetime import datetime, timezone
-from typing import List
-from uuid import uuid4
+from datetime import UTC, datetime
 
 import pytest
-from fastapi import WebSocket
-from fastapi.testclient import TestClient
 
 from codetoreum.adapters.primary.websocket_adapter import (
     WebSocketAdapter,
     WebSocketConfig,
 )
 from codetoreum.domain.events import (
-    DomainEvent,
     ExecutionCompleted,
     ExecutionStarted,
     WorkItemCreated,
@@ -196,7 +190,7 @@ async def test_subscribe_with_work_item_filter(websocket_adapter):
 async def test_broadcast_event_to_subscribers(websocket_adapter):
     """Test event broadcasting to subscribed connections."""
     connection_id = "test-conn-1"
-    received_messages: List[dict] = []
+    received_messages: list[dict] = []
 
     class MockWebSocket:
         async def accept(self):
@@ -221,7 +215,7 @@ async def test_broadcast_event_to_subscribers(websocket_adapter):
     event = ExecutionStarted(
         aggregate_id="exec-123",
         payload={
-            "started_at": datetime.now(timezone.utc).isoformat(),
+            "started_at": datetime.now(UTC).isoformat(),
             "container_name": "test-container",
         },
     )
@@ -238,7 +232,7 @@ async def test_broadcast_event_to_subscribers(websocket_adapter):
 async def test_event_filtering_by_type(websocket_adapter):
     """Test that events are filtered by type."""
     connection_id = "test-conn-1"
-    received_messages: List[dict] = []
+    received_messages: list[dict] = []
 
     class MockWebSocket:
         async def accept(self):
@@ -263,7 +257,7 @@ async def test_event_filtering_by_type(websocket_adapter):
     # Broadcast ExecutionStarted event
     event1 = ExecutionStarted(
         aggregate_id="exec-123",
-        payload={"started_at": datetime.now(timezone.utc).isoformat()},
+        payload={"started_at": datetime.now(UTC).isoformat()},
     )
     await websocket_adapter.broadcast_event(event1)
 
@@ -271,7 +265,7 @@ async def test_event_filtering_by_type(websocket_adapter):
     event2 = ExecutionCompleted(
         aggregate_id="exec-123",
         payload={
-            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "completed_at": datetime.now(UTC).isoformat(),
             "input_tokens": 100,
             "output_tokens": 200,
         },
@@ -293,7 +287,7 @@ async def test_event_filtering_by_type(websocket_adapter):
 async def test_backpressure_flow_control_warning(websocket_adapter):
     """Test that flow control warning is sent when buffer threshold reached."""
     connection_id = "test-conn-1"
-    received_messages: List[dict] = []
+    received_messages: list[dict] = []
 
     class MockWebSocket:
         async def accept(self):
@@ -381,7 +375,7 @@ async def test_integration_with_event_bus():
 
     # Connect mock client
     connection_id = "test-conn-1"
-    received_messages: List[dict] = []
+    received_messages: list[dict] = []
 
     class MockWebSocket:
         async def accept(self):

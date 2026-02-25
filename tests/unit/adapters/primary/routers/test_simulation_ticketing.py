@@ -9,7 +9,6 @@ from codetoreum.adapters.primary.routers.simulation_ticketing import (
 )
 from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
-from codetoreum.domain.work_item import WorkItemPriority
 
 
 @pytest.fixture

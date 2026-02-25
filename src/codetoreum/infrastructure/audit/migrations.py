@@ -5,7 +5,6 @@ Provides migration scripts for setting up audit event storage in PostgreSQL.
 """
 
 import logging
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 

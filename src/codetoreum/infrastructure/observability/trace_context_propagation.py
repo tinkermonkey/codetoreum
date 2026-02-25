@@ -22,7 +22,7 @@ Key Concepts:
 
 import logging
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
+from typing import Optional
 
 try:
     from opentelemetry import context, trace
@@ -212,7 +212,7 @@ class TraceContextPropagator:
             )
 
     @staticmethod
-    def extract_trace_context(event: DomainEvent) -> Optional[TraceContextData]:
+    def extract_trace_context(event: DomainEvent) -> TraceContextData | None:
         """
         Extract trace context from event metadata.
 
@@ -275,7 +275,6 @@ class TraceContextPropagator:
             return None
 
         try:
-            from opentelemetry import context as otel_context
             from opentelemetry.trace import NonRecordingSpan
 
             # Parse trace IDs from hex strings
@@ -330,7 +329,7 @@ class EventBusTraceContext:
             handler.handle(event)
     """
 
-    def __init__(self, trace_data: Optional[TraceContextData] = None):
+    def __init__(self, trace_data: TraceContextData | None = None):
         """
         Initialize event bus trace context.
 
@@ -338,7 +337,7 @@ class EventBusTraceContext:
             trace_data: Optional W3C Trace Context data
         """
         self.trace_data = trace_data
-        self.context: Optional["Context"] = None
+        self.context: Context | None = None
 
     @classmethod
     def from_event(cls, event: DomainEvent) -> "EventBusTraceContext":
@@ -371,7 +370,7 @@ class EventBusTraceContext:
         """Check if trace context is available."""
         return self.trace_data is not None
 
-    def get_traceparent(self) -> Optional[str]:
+    def get_traceparent(self) -> str | None:
         """Get W3C traceparent header value."""
         if self.trace_data:
             return self.trace_data.to_traceparent()

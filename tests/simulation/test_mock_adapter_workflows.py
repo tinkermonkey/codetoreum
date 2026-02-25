@@ -4,7 +4,6 @@ These tests show end-to-end scenarios using mock adapters to test
 orchestrator behavior without external service dependencies.
 """
 
-from typing import List
 
 import pytest
 
@@ -23,7 +22,6 @@ from codetoreum.domain.events.lock_events import LockAcquiredEvent, LockReleased
 from codetoreum.domain.events.review_events import ReviewStatusChangedEvent
 from codetoreum.ports.output.board_service import MovedByType
 from codetoreum.ports.output.discussion_adapter import DiscussionMonitoringConfig
-from codetoreum.ports.output.monitoring import MonitoringConfig
 
 
 class TestBoardWorkflow:
@@ -47,7 +45,7 @@ class TestBoardWorkflow:
         as it moves through the development workflow.
         """
         # Setup: Track all events
-        events: List[WorkItemColumnChangedEvent] = []
+        events: list[WorkItemColumnChangedEvent] = []
         board_adapter.on("workitem.column_changed", events.append)
 
         # Add work item to backlog
@@ -81,7 +79,7 @@ class TestBoardWorkflow:
         Demonstrates: tracking multiple concurrent work items and ensuring
         events are properly associated with their items.
         """
-        events: List[WorkItemColumnChangedEvent] = []
+        events: list[WorkItemColumnChangedEvent] = []
         board_adapter.on("workitem.column_changed", events.append)
 
         # Create multiple work items
@@ -135,7 +133,7 @@ class TestDiscussionWorkflow:
         discussion_adapter.start_monitoring("PROJ-100", config)
 
         # Track needs_response events
-        needs_response_events: List[CommentNeedsResponseEvent] = []
+        needs_response_events: list[CommentNeedsResponseEvent] = []
         discussion_adapter.on("comment.needs_response", needs_response_events.append)
 
         # Simulate comments from different users
@@ -213,7 +211,7 @@ class TestCodeReviewWorkflow:
         review_adapter.add_review("PR-789", "PROJ-50", status="open")
 
         # Track status changes
-        status_events: List[ReviewStatusChangedEvent] = []
+        status_events: list[ReviewStatusChangedEvent] = []
         review_adapter.on("review.status_changed", status_events.append)
 
         # Simulate review progression
@@ -243,7 +241,7 @@ class TestCodeReviewWorkflow:
         review_adapter.add_review("PR-101", "PROJ-101")
         review_adapter.add_review("PR-102", "PROJ-102")
 
-        status_events: List[ReviewStatusChangedEvent] = []
+        status_events: list[ReviewStatusChangedEvent] = []
         review_adapter.on("review.status_changed", status_events.append)
 
         # Progress reviews differently
@@ -272,8 +270,8 @@ class TestPipelineLockWorkflow:
         Demonstrates: acquiring lock, holding it, and releasing it,
         with proper event emission.
         """
-        acquired_events: List[LockAcquiredEvent] = []
-        released_events: List[LockReleasedEvent] = []
+        acquired_events: list[LockAcquiredEvent] = []
+        released_events: list[LockReleasedEvent] = []
 
         lock_service.on("lock.acquired", acquired_events.append)
         lock_service.on("lock.released", released_events.append)
@@ -304,7 +302,7 @@ class TestPipelineLockWorkflow:
 
         Demonstrates: lock contention detection, queueing, and fairness.
         """
-        acquired_events: List[LockAcquiredEvent] = []
+        acquired_events: list[LockAcquiredEvent] = []
         lock_service.on("lock.acquired", acquired_events.append)
 
         # First item acquires lock
@@ -336,7 +334,7 @@ class TestPipelineLockWorkflow:
         Demonstrates: emitting stale lock recovery events when
         detecting and resolving stale locks.
         """
-        acquired_events: List[LockAcquiredEvent] = []
+        acquired_events: list[LockAcquiredEvent] = []
         lock_service.on("lock.acquired", acquired_events.append)
 
         # Simulate stale lock recovery
@@ -430,7 +428,7 @@ class TestCombinedWorkflow:
 
         # All events should have mock source for simulation
         for event in events:
-            if hasattr(event, 'source'):
+            if hasattr(event, "source"):
                 assert event.source == "mock"
 
 

@@ -9,7 +9,7 @@ Comprehensive test suite covering concurrent access patterns:
 """
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -18,14 +18,7 @@ from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
 )
 from codetoreum.application.pipeline_lock_service import (
-    LockAcquisitionResult,
     LockStatus,
-)
-from codetoreum.domain.events.lock_events import (
-    LockStaleDetectedEvent,
-    PipelineLockAcquiredEvent,
-    PipelineLockReleasedEvent,
-    WorkItemQueuedEvent,
 )
 from codetoreum.infrastructure.event_bus import EventBus
 
@@ -181,9 +174,9 @@ class TestPipelineLockingConcurrency:
         # Manually age the lock beyond stale threshold
         state_key = f"{project_id}:{board_id}"
         if state_key in lock_service._lock_state:
-            old_time = datetime.now(timezone.utc).timestamp() - 7300  # > 2 hours old
+            old_time = datetime.now(UTC).timestamp() - 7300  # > 2 hours old
             lock_service._lock_state[state_key].lock_acquired_at = datetime.fromtimestamp(
-                old_time, tz=timezone.utc
+                old_time, tz=UTC
             )
 
         # Try to acquire - should detect stale and recover

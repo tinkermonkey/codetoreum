@@ -13,9 +13,9 @@ Design Principles:
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
-from typing import List, Literal, Optional
+from typing import Literal
 
 from codetoreum.domain.types import (
     CONTAINER_LABEL_AGENT,
@@ -67,9 +67,9 @@ class ContainerMetadata:
     task_id: str
     created_at: datetime
     labels: MappingProxyType
-    work_item_id: Optional[str] = None
-    workflow_run_id: Optional[str] = None
-    execution_id: Optional[str] = None
+    work_item_id: str | None = None
+    workflow_run_id: str | None = None
+    execution_id: str | None = None
 
     def __post_init__(self) -> None:
         """Validate container metadata after initialization."""
@@ -85,7 +85,7 @@ class ContainerMetadata:
             raise ValueError("task_id is required and must be non-empty")
         if not isinstance(self.created_at, datetime):
             raise ValueError("created_at must be a valid datetime object")
-        if self.created_at > datetime.now(timezone.utc):
+        if self.created_at > datetime.now(UTC):
             raise ValueError("created_at cannot be in the future")
         if not isinstance(self.labels, MappingProxyType):
             raise ValueError("labels must be a MappingProxyType (immutable mapping)")
@@ -139,7 +139,7 @@ class RecoveryAssessment:
     action: Literal["reconnect", "kill"]
     reason: str
     with_monitoring: bool
-    execution_id: Optional[str] = None
+    execution_id: str | None = None
 
     def __post_init__(self) -> None:
         """Validate recovery assessment after initialization."""
@@ -215,7 +215,7 @@ class RecoveryResult:
             ) from e
 
         # Validate timestamp is within reasonable bounds
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         # Allow 1 minute grace for clock skew
         if parsed_dt > now.replace(microsecond=0) + timedelta(minutes=1):
             raise ValueError("timestamp cannot be more than 1 minute in the future")
@@ -271,10 +271,9 @@ class IAgentContainerRecoveryService(ABC):
             ContainerError: If Docker API operations fail
             StorageError: If storage operations fail
         """
-        pass
 
     @abstractmethod
-    async def get_running_agent_containers(self) -> List[ContainerMetadata]:
+    async def get_running_agent_containers(self) -> list[ContainerMetadata]:
         """List running containers with Codetoreum labels.
 
         Uses Docker label filtering to ONLY return containers with the
@@ -290,7 +289,6 @@ class IAgentContainerRecoveryService(ABC):
         Raises:
             ContainerError: If Docker API list operation fails
         """
-        pass
 
     @abstractmethod
     async def assess_container(
@@ -316,7 +314,6 @@ class IAgentContainerRecoveryService(ABC):
             ContainerError: If container inspection fails
             StorageError: If execution state lookup fails
         """
-        pass
 
     @abstractmethod
     async def execute_recovery_action(
@@ -339,10 +336,9 @@ class IAgentContainerRecoveryService(ABC):
         Raises:
             ContainerError: If Docker API operations fail
         """
-        pass
 
     @abstractmethod
-    async def get_running_repair_cycle_containers(self) -> List[ContainerMetadata]:
+    async def get_running_repair_cycle_containers(self) -> list[ContainerMetadata]:
         """List running repair cycle containers using label filtering.
 
         Uses Docker label filtering to ONLY return containers with the
@@ -356,7 +352,6 @@ class IAgentContainerRecoveryService(ABC):
         Raises:
             ContainerError: If Docker API list operation fails
         """
-        pass
 
     @abstractmethod
     async def assess_repair_cycle_container(
@@ -383,7 +378,6 @@ class IAgentContainerRecoveryService(ABC):
             ContainerError: If container inspection fails
             StorageError: If storage/checkpoint lookup fails
         """
-        pass
 
     @abstractmethod
     async def process_orphaned_repair_results(self) -> int:
@@ -399,4 +393,3 @@ class IAgentContainerRecoveryService(ABC):
         Raises:
             StorageError: If storage operations fail
         """
-        pass

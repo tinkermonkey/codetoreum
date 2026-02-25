@@ -8,8 +8,8 @@ storage backends.
 import json
 import logging
 from collections import OrderedDict, defaultdict
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import uuid4
 
 import aiofiles
@@ -45,10 +45,10 @@ class InMemoryAuditStore(IAuditStore):
                        Default: 10000 events
         """
         self.max_events = max_events
-        self._events: OrderedDict[str, Dict[str, Any]] = OrderedDict()
-        self._index_by_type: Dict[str, List[str]] = defaultdict(list)
-        self._index_by_resource: Dict[str, List[str]] = defaultdict(list)
-        self._index_by_user: Dict[str, List[str]] = defaultdict(list)
+        self._events: OrderedDict[str, dict[str, Any]] = OrderedDict()
+        self._index_by_type: dict[str, list[str]] = defaultdict(list)
+        self._index_by_resource: dict[str, list[str]] = defaultdict(list)
+        self._index_by_user: dict[str, list[str]] = defaultdict(list)
 
     async def store_event(
         self,
@@ -58,10 +58,10 @@ class InMemoryAuditStore(IAuditStore):
         resource_id: str,
         action: str,
         user_id: str,
-        correlation_id: Optional[str],
-        metadata: Dict[str, Any],
+        correlation_id: str | None,
+        metadata: dict[str, Any],
         success: bool,
-        error_message: Optional[str] = None,
+        error_message: str | None = None,
     ) -> str:
         """Store an audit event in memory with LRU eviction."""
         event_id = str(uuid4())
@@ -99,7 +99,7 @@ class InMemoryAuditStore(IAuditStore):
 
         return event_id
 
-    def _remove_from_indexes(self, event_id: str, event: Dict[str, Any]) -> None:
+    def _remove_from_indexes(self, event_id: str, event: dict[str, Any]) -> None:
         """Remove event from all indexes."""
         event_type = event["event_type"]
         if event_id in self._index_by_type[event_type]:
@@ -115,7 +115,7 @@ class InMemoryAuditStore(IAuditStore):
 
     async def query_events(
         self, filters: AuditQueryFilters
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Query audit events with filters."""
         # Start with all events
         matching_events = list(self._events.values())
@@ -191,7 +191,7 @@ class InMemoryAuditStore(IAuditStore):
 
     async def cleanup_old_events(self, retention_days: int) -> int:
         """Delete audit events older than retention period."""
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=retention_days)
+        cutoff_date = datetime.now(UTC) - timedelta(days=retention_days)
 
         # Find old events
         old_event_ids = [
@@ -210,7 +210,7 @@ class InMemoryAuditStore(IAuditStore):
         logger.info(f"Cleaned up {deleted_count} old audit events")
         return deleted_count
 
-    async def get_event_by_id(self, event_id: str) -> Optional[Dict[str, Any]]:
+    async def get_event_by_id(self, event_id: str) -> dict[str, Any] | None:
         """Retrieve a specific audit event by ID."""
         return self._events.get(event_id)
 
@@ -221,7 +221,7 @@ class InMemoryAuditStore(IAuditStore):
         self._index_by_resource.clear()
         self._index_by_user.clear()
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get statistics about stored events."""
         return {
             "total_events": len(self._events),
@@ -276,10 +276,10 @@ class FileAuditStore(IAuditStore):
         resource_id: str,
         action: str,
         user_id: str,
-        correlation_id: Optional[str],
-        metadata: Dict[str, Any],
+        correlation_id: str | None,
+        metadata: dict[str, Any],
         success: bool,
-        error_message: Optional[str] = None,
+        error_message: str | None = None,
     ) -> str:
         """Store an audit event to file using async I/O."""
         await self._ensure_file_exists()
@@ -315,7 +315,7 @@ class FileAuditStore(IAuditStore):
 
     async def query_events(
         self, filters: AuditQueryFilters
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Query audit events from file using async I/O.
 
@@ -325,7 +325,7 @@ class FileAuditStore(IAuditStore):
         matching_events = []
 
         try:
-            async with aiofiles.open(self.file_path, "r") as f:
+            async with aiofiles.open(self.file_path) as f:
                 async for line in f:
                     if not line.strip():
                         continue
@@ -408,13 +408,13 @@ class FileAuditStore(IAuditStore):
         Note: This rewrites the entire file. For production,
         use a database backend with efficient deletion.
         """
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=retention_days)
+        cutoff_date = datetime.now(UTC) - timedelta(days=retention_days)
         kept_events = []
         deleted_count = 0
 
         try:
             # Read all events
-            async with aiofiles.open(self.file_path, "r") as f:
+            async with aiofiles.open(self.file_path) as f:
                 async for line in f:
                     if not line.strip():
                         continue
@@ -443,10 +443,10 @@ class FileAuditStore(IAuditStore):
 
         return deleted_count
 
-    async def get_event_by_id(self, event_id: str) -> Optional[Dict[str, Any]]:
+    async def get_event_by_id(self, event_id: str) -> dict[str, Any] | None:
         """Retrieve a specific audit event by ID using async I/O."""
         try:
-            async with aiofiles.open(self.file_path, "r") as f:
+            async with aiofiles.open(self.file_path) as f:
                 async for line in f:
                     if not line.strip():
                         continue
@@ -529,10 +529,10 @@ class PostgreSQLAuditStore(IAuditStore):
         resource_id: str,
         action: str,
         user_id: str,
-        correlation_id: Optional[str],
-        metadata: Dict[str, Any],
+        correlation_id: str | None,
+        metadata: dict[str, Any],
         success: bool,
-        error_message: Optional[str] = None,
+        error_message: str | None = None,
     ) -> str:
         """Store an audit event in PostgreSQL."""
         from sqlalchemy import text
@@ -581,7 +581,7 @@ class PostgreSQLAuditStore(IAuditStore):
 
     async def query_events(
         self, filters: AuditQueryFilters
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Query audit events from PostgreSQL with efficient indexed lookups."""
         from sqlalchemy import text
 
@@ -730,7 +730,7 @@ class PostgreSQLAuditStore(IAuditStore):
         """Delete audit events older than retention period efficiently."""
         from sqlalchemy import text
 
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=retention_days)
+        cutoff_date = datetime.now(UTC) - timedelta(days=retention_days)
 
         async with self.async_session() as session:
             try:
@@ -753,7 +753,7 @@ class PostgreSQLAuditStore(IAuditStore):
                 await session.rollback()
                 return 0
 
-    async def get_event_by_id(self, event_id: str) -> Optional[Dict[str, Any]]:
+    async def get_event_by_id(self, event_id: str) -> dict[str, Any] | None:
         """Retrieve a specific audit event by ID."""
         from sqlalchemy import text
 

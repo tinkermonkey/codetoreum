@@ -81,11 +81,9 @@ from codetoreum.ports.output.pipeline_lock_service import (
     PipelineLock,
 )
 from codetoreum.ports.output.pipeline_queue_service import (
-    QueueEntry,  # Backward compatibility alias
-)
-from codetoreum.ports.output.pipeline_queue_service import (
     IPipelineQueueService,
     PipelineQueueEntry,
+    QueueEntry,  # Backward compatibility alias
 )
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
 from codetoreum.ports.output.repair_cycle_checkpoint_store import (

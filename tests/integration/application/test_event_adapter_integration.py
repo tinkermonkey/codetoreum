@@ -1,9 +1,7 @@
 """Integration tests for adapter event integration with workflow orchestrator."""
 
 import asyncio
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -17,8 +15,7 @@ from codetoreum.application.workflow_orchestrator import (
     WorkflowConfig,
     WorkflowOrchestrator,
 )
-from codetoreum.domain.events import DomainEvent, WorkItemCreated
-from codetoreum.domain.work_item import WorkItemPriority
+from codetoreum.domain.events import WorkItemCreated
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.metrics_collector import MetricsCollector
 from codetoreum.ports.output import IEventStore, ITicketSystem
@@ -68,7 +65,6 @@ class MockWorkflowStateManager(IWorkflowStateManager):
 
     async def update_workflow_state(self, issue_id: str, state):
         """Update workflow state."""
-        pass
 
 
 class MockDecisionEvents(IDecisionEvents):
@@ -76,11 +72,9 @@ class MockDecisionEvents(IDecisionEvents):
 
     async def emit_routing_decision(self, decision):
         """Emit routing decision."""
-        pass
 
     async def emit_progression_decision(self, decision):
         """Emit progression decision."""
-        pass
 
 
 @pytest.mark.asyncio

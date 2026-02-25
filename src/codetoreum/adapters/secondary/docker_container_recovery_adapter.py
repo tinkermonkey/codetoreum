@@ -12,9 +12,9 @@ It handles:
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Protocol
 
 from dateutil import parser as dateparser
 
@@ -54,10 +54,8 @@ except ImportError:
     # Provide fallback classes if docker is not installed
     class DockerNotFound(Exception):  # type: ignore
         """Fallback DockerNotFound when docker SDK is not available."""
-        pass
     class DockerException(Exception):  # type: ignore
         """Fallback DockerException when docker SDK is not available."""
-        pass
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +68,7 @@ REPAIR_CYCLE_AGE_THRESHOLD = timedelta(hours=2)  # 2 hours
 class IWorkExecutionStateTracker(Protocol):
     """Protocol for execution state tracking."""
 
-    async def load_state(self, project: str, work_item_id: str) -> Optional[Dict[str, Any]]:
+    async def load_state(self, project: str, work_item_id: str) -> dict[str, Any] | None:
         """Load execution state from storage."""
         ...
 
@@ -84,11 +82,11 @@ class IWorkExecutionStateTracker(Protocol):
 class IStorage(Protocol):
     """Protocol for storage operations."""
 
-    async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
+    async def set(self, key: str, value: Any, ttl: int | None = None) -> None:
         """Store a value with optional TTL."""
         ...
 
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Any | None:
         """Retrieve a stored value."""
         ...
 
@@ -137,8 +135,8 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
         self,
         execution_tracker: IWorkExecutionStateTracker,
         tracking_storage: IStorage,
-        docker_runner: Optional[IDockerRunner] = None,
-        checkpoint_store: Optional[IRepairCycleCheckpointStore] = None,
+        docker_runner: IDockerRunner | None = None,
+        checkpoint_store: IRepairCycleCheckpointStore | None = None,
         container_timeout_hours: int = 2,
     ):
         """
@@ -166,16 +164,16 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
 
                 self._docker_client = docker.from_env()
             except ImportError as e:
-                raise ContainerError(f"Docker SDK not installed: {str(e)}")
+                raise ContainerError(f"Docker SDK not installed: {e!s}")
             except DockerException as e:
-                raise ContainerError(f"Failed to connect to Docker daemon: {str(e)}")
+                raise ContainerError(f"Failed to connect to Docker daemon: {e!s}")
             except Exception as e:
                 logger.error(
                     f"UNEXPECTED error connecting to Docker: {e}",
                     exc_info=True,
                     extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR, "error_type": "unexpected"}
                 )
-                raise ContainerError(f"Unexpected error connecting to Docker: {str(e)}")
+                raise ContainerError(f"Unexpected error connecting to Docker: {e!s}")
 
         return self._docker_client
 
@@ -187,7 +185,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
         },
         capture_result=False,
     )
-    async def get_running_agent_containers(self) -> List[ContainerMetadata]:
+    async def get_running_agent_containers(self) -> list[ContainerMetadata]:
         """
         List running agent containers with Codetoreum labels.
 
@@ -243,7 +241,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                 return metadata_list
 
             except Exception as e:
-                raise ContainerError(f"Failed to list agent containers: {str(e)}")
+                raise ContainerError(f"Failed to list agent containers: {e!s}")
 
         return await loop.run_in_executor(None, _list_containers)
 
@@ -257,7 +255,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
     )
     async def get_running_repair_cycle_containers(
         self,
-    ) -> List[ContainerMetadata]:
+    ) -> list[ContainerMetadata]:
         """
         List running repair cycle containers using label filtering.
 
@@ -313,12 +311,12 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
 
             except Exception as e:
                 raise ContainerError(
-                    f"Failed to list repair cycle containers: {str(e)}"
+                    f"Failed to list repair cycle containers: {e!s}"
                 )
 
         return await loop.run_in_executor(None, _list_containers)
 
-    def _extract_metadata(self, container) -> Optional[ContainerMetadata]:
+    def _extract_metadata(self, container) -> ContainerMetadata | None:
         """
         Extract metadata from container labels.
 
@@ -391,7 +389,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
         finally:
             # Use current time as fallback if parsing failed
             if created_at is None:
-                created_at = datetime.now(timezone.utc)
+                created_at = datetime.now(UTC)
                 # Log container for operator visibility and priority cleanup
                 # Note: Docker doesn't support updating labels on running containers,
                 # so operators must manually verify container age if it persists
@@ -470,7 +468,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
             )
 
         # Step 2: Age check - containers >2 hours old are killed regardless
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         age_seconds = (now - metadata.created_at).total_seconds()
         age_hours = age_seconds / 3600
 
@@ -632,7 +630,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                     with_monitoring=False,
                     execution_id=None,
                 )
-        except StorageError as e:
+        except StorageError:
             # Storage failures during recovery assessment are serious - they could mean:
             # 1. Completed repair work is invisible and may be lost/redone
             # 2. Container may be killed when it should be kept
@@ -658,7 +656,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
             # Note: In the future, this should emit a metric or alert for operator visibility
 
         # Step 2: Check container age
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         age = now - metadata.created_at
 
         if age > REPAIR_CYCLE_AGE_THRESHOLD:
@@ -741,45 +739,42 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                         with_monitoring=False,
                         execution_id=None,
                     )
-                else:
-                    # Fresh checkpoint despite old container age → reconnect with monitoring
-                    logger.info(
-                        f"Repair cycle container {metadata.container_id} has fresh checkpoint, "
-                        f"reconnecting with monitoring"
-                    )
-                    return RecoveryAssessment(
-                        container_id=metadata.container_id,
-                        action="reconnect",
-                        reason="valid_repair_cycle",
-                        with_monitoring=True,
-                        execution_id=metadata.execution_id,
-                    )
-            else:
-                # No checkpoint and old container → kill
+                # Fresh checkpoint despite old container age → reconnect with monitoring
                 logger.info(
-                    f"Repair cycle container {metadata.container_id} has no checkpoint "
-                    f"and container age {age.total_seconds():.0f}s"
+                    f"Repair cycle container {metadata.container_id} has fresh checkpoint, "
+                    f"reconnecting with monitoring"
                 )
                 return RecoveryAssessment(
                     container_id=metadata.container_id,
-                    action="kill",
-                    reason="no_checkpoint",
-                    with_monitoring=False,
-                    execution_id=None,
+                    action="reconnect",
+                    reason="valid_repair_cycle",
+                    with_monitoring=True,
+                    execution_id=metadata.execution_id,
                 )
-        else:
-            # Container is recent (<2 hours) → assume it's making progress, reconnect
+            # No checkpoint and old container → kill
             logger.info(
-                f"Repair cycle container {metadata.container_id} is recent "
-                f"(age {age.total_seconds():.0f}s), reconnecting"
+                f"Repair cycle container {metadata.container_id} has no checkpoint "
+                f"and container age {age.total_seconds():.0f}s"
             )
             return RecoveryAssessment(
                 container_id=metadata.container_id,
-                action="reconnect",
-                reason="valid_repair_cycle",
-                with_monitoring=True,
-                execution_id=metadata.execution_id,
+                action="kill",
+                reason="no_checkpoint",
+                with_monitoring=False,
+                execution_id=None,
             )
+        # Container is recent (<2 hours) → assume it's making progress, reconnect
+        logger.info(
+            f"Repair cycle container {metadata.container_id} is recent "
+            f"(age {age.total_seconds():.0f}s), reconnecting"
+        )
+        return RecoveryAssessment(
+            container_id=metadata.container_id,
+            action="reconnect",
+            reason="valid_repair_cycle",
+            with_monitoring=True,
+            execution_id=metadata.execution_id,
+        )
 
     @instrument_async_function(
         name="container_recovery.execute_recovery_action",
@@ -847,7 +842,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                     "agent": container.labels.get(CONTAINER_LABEL_AGENT),
                     "project": container.labels.get(CONTAINER_LABEL_PROJECT),
                     "taskId": container.labels.get(CONTAINER_LABEL_TASK_ID),
-                    "startedAt": datetime.now(timezone.utc).isoformat(),
+                    "startedAt": datetime.now(UTC).isoformat(),
                     "recovered": "true",
                 }
 
@@ -867,7 +862,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                 # It will be picked up by monitoring system
                 return True
 
-            elif assessment.action == "kill":
+            if assessment.action == "kill":
                 logger.info(
                     f"Killing container {assessment.container_id} "
                     f"(reason: {assessment.reason})"
@@ -1094,23 +1089,23 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
         if self._docker_client is not None:
             try:
                 # Close the API client's session and adapter connection pools
-                if hasattr(self._docker_client, 'api'):
+                if hasattr(self._docker_client, "api"):
                     api = self._docker_client.api
                     # Close HTTP session
-                    if hasattr(api, '_session') and api._session:
+                    if hasattr(api, "_session") and api._session:
                         try:
                             api._session.close()
                         except Exception:
                             logger.debug("Error closing Docker API session", exc_info=True)
                     # Close adapters (which hold socket connections)
-                    if hasattr(api, '_adapters') and api._adapters:
+                    if hasattr(api, "_adapters") and api._adapters:
                         try:
                             for adapter in api._adapters.values():
-                                if hasattr(adapter, 'close'):
+                                if hasattr(adapter, "close"):
                                     adapter.close()
                         except Exception:
                             logger.debug("Error closing Docker API adapters", exc_info=True)
-                    if hasattr(api, 'close'):
+                    if hasattr(api, "close"):
                         try:
                             api.close()
                         except Exception:

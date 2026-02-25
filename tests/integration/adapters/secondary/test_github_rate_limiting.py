@@ -8,13 +8,9 @@ Tests verify that:
 5. Recovery after rate limit reset
 """
 
-from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime, timedelta
 
 import pytest
-
-from codetoreum.adapters.secondary.github_board_adapter import GitHubBoardAdapter
-from codetoreum.ports.exceptions import RateLimitError, ValidationError
 
 
 class MockGitHubAPI:
@@ -120,7 +116,7 @@ class TestGitHubRateLimiting:
     async def test_rate_limit_reset_calculation(self):
         """Test calculation of when rate limit resets."""
         # Mock current time and reset time
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(UTC)
         reset_timestamp = int((current_time + timedelta(seconds=300)).timestamp())
 
         # Calculate wait time
@@ -133,7 +129,7 @@ class TestGitHubRateLimiting:
         response_headers = {
             "X-RateLimit-Limit": "5000",
             "X-RateLimit-Remaining": "4999",
-            "X-RateLimit-Reset": str(int(datetime.now(timezone.utc).timestamp()) + 3600),
+            "X-RateLimit-Reset": str(int(datetime.now(UTC).timestamp()) + 3600),
             "Retry-After": "3600",
         }
 

@@ -1,7 +1,6 @@
 """Negative test cases for WorkspaceRouter."""
 
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -65,8 +64,8 @@ def code_work_item():
         assigned_at=None,
         current_workflow_id=None,
         current_stage=None,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
         completed_at=None,
     )
 
@@ -88,8 +87,8 @@ def discussion_work_item():
         assigned_at=None,
         current_workflow_id=None,
         current_stage=None,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
         completed_at=None,
     )
 
@@ -115,8 +114,8 @@ def analyst_agent():
         filesystem_write_allowed=False,
         mcp_servers=[],
         metadata={},
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
 
@@ -141,8 +140,8 @@ def developer_agent():
         filesystem_write_allowed=True,
         mcp_servers=[],
         metadata={},
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
 
@@ -170,8 +169,8 @@ def sample_project():
         secrets=[],
         mcp_servers=[],
         metadata={},
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
 

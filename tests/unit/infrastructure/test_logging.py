@@ -7,8 +7,6 @@ import logging
 import os
 from unittest.mock import patch
 
-import pytest
-
 from codetoreum.infrastructure.logging import (
     CorrelationIdFilter,
     JSONFormatter,
@@ -294,7 +292,7 @@ class TestSensitiveDataFilter:
         import re
 
         custom_patterns = [
-            (re.compile(r'customer_id=(\d+)'), r'customer_id=***'),
+            (re.compile(r"customer_id=(\d+)"), r"customer_id=***"),
         ]
         filter_obj = SensitiveDataFilter(custom_patterns=custom_patterns)
         record = logging.LogRecord(

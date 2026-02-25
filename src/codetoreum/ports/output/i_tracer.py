@@ -10,11 +10,12 @@ for simulation testing without external infrastructure.
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from types import MappingProxyType
-from typing import Any, Dict, Mapping, Optional, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 # W3C Trace Context version constant (RFC: https://www.w3.org/TR/trace-context/)
 # Update this when W3C releases new trace context versions
@@ -61,7 +62,7 @@ class SpanEvent:
     def __post_init__(self) -> None:
         """Convert attributes to immutable MappingProxyType."""
         if not isinstance(self.attributes, MappingProxyType):
-            object.__setattr__(self, 'attributes', MappingProxyType(self.attributes))
+            object.__setattr__(self, "attributes", MappingProxyType(self.attributes))
 
 
 @runtime_checkable
@@ -70,17 +71,17 @@ class SpanProtocol(Protocol):
 
     span_id: str
     trace_id: str
-    parent_span_id: Optional[str]
+    parent_span_id: str | None
     name: str
     kind: SpanKind
     status: SpanStatus
     start_time: datetime
-    end_time: Optional[datetime]
-    attributes: Dict[str, Any]
+    end_time: datetime | None
+    attributes: dict[str, Any]
     events: list[SpanEvent]
 
     @property
-    def duration_ms(self) -> Optional[float]:
+    def duration_ms(self) -> float | None:
         """Calculate span duration in milliseconds."""
         ...
 
@@ -94,7 +95,7 @@ class SpanProtocol(Protocol):
         ...
 
     def add_event(
-        self, name: str, attributes: Optional[Dict[str, Any]] = None
+        self, name: str, attributes: dict[str, Any] | None = None
     ) -> None:
         """Add an event to the span."""
         ...
@@ -114,13 +115,13 @@ class Span:
 
     span_id: str
     trace_id: str
-    parent_span_id: Optional[str]
+    parent_span_id: str | None
     name: str
     kind: SpanKind
     status: SpanStatus
     start_time: datetime
-    end_time: Optional[datetime]
-    attributes: Dict[str, Any]
+    end_time: datetime | None
+    attributes: dict[str, Any]
     events: list[SpanEvent]
 
     def __post_init__(self) -> None:
@@ -154,10 +155,10 @@ class Span:
             return False
         if len(trace_id) != 32:
             return False
-        if not all(c in '0123456789abcdef' for c in trace_id.lower()):
+        if not all(c in "0123456789abcdef" for c in trace_id.lower()):
             return False
         # Reject all-zeros trace IDs
-        if trace_id == '0' * 32:
+        if trace_id == "0" * 32:
             return False
         return True
 
@@ -168,15 +169,15 @@ class Span:
             return False
         if len(span_id) != 16:
             return False
-        if not all(c in '0123456789abcdef' for c in span_id.lower()):
+        if not all(c in "0123456789abcdef" for c in span_id.lower()):
             return False
         # Reject all-zeros span IDs
-        if span_id == '0' * 16:
+        if span_id == "0" * 16:
             return False
         return True
 
     @property
-    def duration_ms(self) -> Optional[float]:
+    def duration_ms(self) -> float | None:
         """Calculate span duration in milliseconds."""
         if self.end_time is None:
             return None
@@ -192,7 +193,7 @@ class Span:
         self.attributes[key] = value
 
     def add_event(
-        self, name: str, attributes: Optional[Dict[str, Any]] = None
+        self, name: str, attributes: dict[str, Any] | None = None
     ) -> None:
         """
         Add an event to the span.
@@ -207,7 +208,7 @@ class Span:
         self.events.append(
             SpanEvent(
                 name=name,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 attributes=attributes or {},
             )
         )
@@ -244,8 +245,8 @@ class ITracer(ABC):
         self,
         name: str,
         kind: SpanKind = SpanKind.INTERNAL,
-        parent_context: Optional[str] = None,
-        attributes: Optional[Dict[str, Any]] = None,
+        parent_context: str | None = None,
+        attributes: dict[str, Any] | None = None,
     ) -> SpanProtocol:
         """
         Start a new span.
@@ -266,7 +267,6 @@ class ITracer(ABC):
                 attributes={"agent_id": "123"}
             )
         """
-        pass
 
     @abstractmethod
     async def end_span(self, span: SpanProtocol) -> None:
@@ -278,14 +278,13 @@ class ITracer(ABC):
         Args:
             span: Span to end
         """
-        pass
 
     @abstractmethod
     async def add_event(
         self,
         span: SpanProtocol,
         name: str,
-        attributes: Optional[Dict[str, Any]] = None,
+        attributes: dict[str, Any] | None = None,
     ) -> None:
         """
         Add an event to a span.
@@ -297,7 +296,6 @@ class ITracer(ABC):
             name: Event name
             attributes: Event attributes
         """
-        pass
 
     @abstractmethod
     async def set_attribute(
@@ -316,7 +314,6 @@ class ITracer(ABC):
             key: Attribute key
             value: Attribute value
         """
-        pass
 
     @abstractmethod
     async def record_exception(
@@ -333,10 +330,9 @@ class ITracer(ABC):
             span: Span to record exception in
             exception: Exception that occurred
         """
-        pass
 
     @abstractmethod
-    async def extract_context(self, carrier: Dict[str, str]) -> Optional[str]:
+    async def extract_context(self, carrier: dict[str, str]) -> str | None:
         """
         Extract trace context from a carrier.
 
@@ -348,13 +344,12 @@ class ITracer(ABC):
         Returns:
             Parent context string or None if no context found
         """
-        pass
 
     @abstractmethod
     async def inject_context(
         self,
         span: SpanProtocol,
-        carrier: Dict[str, str],
+        carrier: dict[str, str],
     ) -> None:
         """
         Inject trace context into a carrier.
@@ -365,4 +360,3 @@ class ITracer(ABC):
             span: Span to inject context from
             carrier: Dictionary to inject context into
         """
-        pass

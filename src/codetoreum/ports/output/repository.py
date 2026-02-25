@@ -4,9 +4,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
 
-from codetoreum.domain.types import BranchName, CommitHash, RemoteName, RepositoryId
+from codetoreum.domain.types import BranchName, CommitHash, RepositoryId
 
 # ============================================================================
 # Data Models
@@ -19,9 +18,9 @@ class RepositoryStatus:
 
     current_branch: BranchName
     is_dirty: bool
-    staged_files: List[str]
-    unstaged_files: List[str]
-    untracked_files: List[str]
+    staged_files: list[str]
+    unstaged_files: list[str]
+    untracked_files: list[str]
     ahead_count: int
     behind_count: int
 
@@ -31,8 +30,8 @@ class MergeResult:
     """Result of merge operation."""
 
     success: bool
-    conflicts: List[str]
-    merge_commit: Optional[CommitHash]
+    conflicts: list[str]
+    merge_commit: CommitHash | None
 
 
 # ============================================================================
@@ -48,7 +47,7 @@ class IRepository(ABC):
         self,
         url: str,
         destination: Path,
-        branch: Optional[BranchName] = None,
+        branch: BranchName | None = None,
     ) -> RepositoryId:
         """
         Clone a repository.
@@ -65,7 +64,6 @@ class IRepository(ABC):
             RepositoryError: Clone operation failed
             ValidationError: Invalid URL or destination
         """
-        pass
 
     @abstractmethod
     async def checkout(
@@ -86,14 +84,13 @@ class IRepository(ABC):
             RepositoryError: Checkout failed
             ResourceNotFoundError: Branch doesn't exist and create=False
         """
-        pass
 
     @abstractmethod
     async def create_branch(
         self,
         repo_path: Path,
         branch_name: BranchName,
-        from_branch: Optional[BranchName] = None,
+        from_branch: BranchName | None = None,
     ) -> None:
         """
         Create a new branch.
@@ -107,7 +104,6 @@ class IRepository(ABC):
             RepositoryError: Branch creation failed
             ValidationError: Invalid branch name
         """
-        pass
 
     @abstractmethod
     async def commit(
@@ -116,7 +112,7 @@ class IRepository(ABC):
         message: str,
         author_name: str,
         author_email: str,
-        files: Optional[List[str]] = None,
+        files: list[str] | None = None,
     ) -> CommitHash:
         """
         Create a commit.
@@ -135,14 +131,13 @@ class IRepository(ABC):
             RepositoryError: Commit failed
             ValidationError: Invalid author information
         """
-        pass
 
     @abstractmethod
     async def push(
         self,
         repo_path: Path,
         remote: str = "origin",
-        branch: Optional[str] = None,
+        branch: str | None = None,
         force: bool = False,
     ) -> None:
         """
@@ -158,14 +153,13 @@ class IRepository(ABC):
             RepositoryError: Push failed
             AuthenticationError: Invalid credentials
         """
-        pass
 
     @abstractmethod
     async def pull(
         self,
         repo_path: Path,
         remote: str = "origin",
-        branch: Optional[str] = None,
+        branch: str | None = None,
     ) -> None:
         """
         Pull commits from remote.
@@ -179,7 +173,6 @@ class IRepository(ABC):
             RepositoryError: Pull failed
             MergeConflictError: Merge conflicts detected
         """
-        pass
 
     @abstractmethod
     async def fetch(
@@ -199,7 +192,6 @@ class IRepository(ABC):
         Raises:
             RepositoryError: Fetch failed
         """
-        pass
 
     @abstractmethod
     async def diff(
@@ -223,7 +215,6 @@ class IRepository(ABC):
             RepositoryError: Diff failed
             ResourceNotFoundError: Ref doesn't exist
         """
-        pass
 
     @abstractmethod
     async def status(self, repo_path: Path) -> RepositoryStatus:
@@ -239,14 +230,13 @@ class IRepository(ABC):
         Raises:
             RepositoryError: Status check failed
         """
-        pass
 
     @abstractmethod
     async def list_branches(
         self,
         repo_path: Path,
         remote: bool = False,
-    ) -> List[str]:
+    ) -> list[str]:
         """
         List branches.
 
@@ -260,7 +250,6 @@ class IRepository(ABC):
         Raises:
             RepositoryError: List operation failed
         """
-        pass
 
     @abstractmethod
     async def merge(
@@ -284,14 +273,13 @@ class IRepository(ABC):
             RepositoryError: Merge failed
             MergeConflictError: Conflicts detected
         """
-        pass
 
     @abstractmethod
     async def get_file_content(
         self,
         repo_path: Path,
         file_path: str,
-        ref: Optional[str] = None,
+        ref: str | None = None,
     ) -> str:
         """
         Get content of a file at a specific ref.
@@ -308,7 +296,6 @@ class IRepository(ABC):
             ResourceNotFoundError: File or ref doesn't exist
             RepositoryError: Read operation failed
         """
-        pass
 
     @abstractmethod
     async def get_commit_info(
@@ -330,16 +317,15 @@ class IRepository(ABC):
             ResourceNotFoundError: Commit doesn't exist
             RepositoryError: Query failed
         """
-        pass
 
     @abstractmethod
     async def get_commit_history(
         self,
         repo_path: Path,
-        branch: Optional[str] = None,
+        branch: str | None = None,
         limit: int = 100,
-        since: Optional[datetime] = None,
-    ) -> List[dict]:
+        since: datetime | None = None,
+    ) -> list[dict]:
         """
         Get commit history.
 
@@ -355,7 +341,6 @@ class IRepository(ABC):
         Raises:
             RepositoryError: Query failed
         """
-        pass
 
     @abstractmethod
     async def add_remote(
@@ -376,7 +361,6 @@ class IRepository(ABC):
             RepositoryError: Add remote failed
             ValidationError: Invalid remote configuration
         """
-        pass
 
     @abstractmethod
     async def remove_remote(
@@ -395,4 +379,3 @@ class IRepository(ABC):
             ResourceNotFoundError: Remote doesn't exist
             RepositoryError: Remove remote failed
         """
-        pass

@@ -29,7 +29,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
 
 
 class LockStatus(Enum):
@@ -70,7 +69,7 @@ class LockAcquisitionResult:
     """
     status: LockStatus
     work_item_id: str
-    queue_position: Optional[int] = None
+    queue_position: int | None = None
     queue_length: int = 0
 
 
@@ -84,7 +83,7 @@ class LockReleaseResult:
         queue_length_after_release: Items remaining in queue
     """
     released_work_item_id: str
-    next_work_item_id: Optional[str]
+    next_work_item_id: str | None
     queue_length_after_release: int
 
 
@@ -101,9 +100,9 @@ class PipelineQueueState:
     """
     board_id: str
     project_id: str
-    lock_holder: Optional[str]
-    lock_acquired_at: Optional[datetime]
-    queue: List[QueueEntry]
+    lock_holder: str | None
+    lock_acquired_at: datetime | None
+    queue: list[QueueEntry]
 
 
 class IQueuedPipelineLockService(ABC):
@@ -170,7 +169,6 @@ class IQueuedPipelineLockService(ABC):
         Raises:
             ValueError: Invalid parameters
         """
-        pass
 
     @abstractmethod
     async def release_lock(
@@ -196,7 +194,6 @@ class IQueuedPipelineLockService(ABC):
         Raises:
             ValueError: Invalid parameters or not lock holder
         """
-        pass
 
     @abstractmethod
     async def get_queue_state(
@@ -213,7 +210,6 @@ class IQueuedPipelineLockService(ABC):
         Returns:
             PipelineQueueState with lock holder, acquisition time, and queue
         """
-        pass
 
     @abstractmethod
     async def update_queue_positions(
@@ -232,7 +228,6 @@ class IQueuedPipelineLockService(ABC):
             board_id: Board ID
             updated_positions: Dict of work_item_id -> new_board_position
         """
-        pass
 
 
 # Backward compatibility alias

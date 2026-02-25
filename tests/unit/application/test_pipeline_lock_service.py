@@ -9,7 +9,7 @@ Tests the application-layer pipeline lock service including:
 - Edge cases (duplicate holder, empty queue, etc.)
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -17,8 +17,6 @@ from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
 )
 from codetoreum.application.pipeline_lock_service import (
-    LockAcquisitionResult,
-    LockReleaseResult,
     LockStatus,
 )
 
@@ -589,14 +587,14 @@ class TestQueueStateQueries:
         """Get queue state should return lock holder info."""
         service = InMemoryLockService()
 
-        before = datetime.now(timezone.utc)
+        before = datetime.now(UTC)
         await service.try_acquire_lock(
             project_id="proj-1",
             board_id="board-1",
             work_item_id="item-1",
             board_position=0
         )
-        after = datetime.now(timezone.utc)
+        after = datetime.now(UTC)
 
         state = await service.get_queue_state("proj-1", "board-1")
 

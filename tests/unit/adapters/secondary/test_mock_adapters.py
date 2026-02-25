@@ -28,9 +28,8 @@ from codetoreum.domain.events.board_events import (
 )
 from codetoreum.domain.events.discussion_events import (
     CommentNeedsResponseEvent,
-    CommentPostedEvent,
 )
-from codetoreum.domain.events.lock_events import LockAcquiredEvent, LockReleasedEvent
+from codetoreum.domain.events.lock_events import LockAcquiredEvent
 from codetoreum.domain.events.review_events import ReviewStatusChangedEvent
 from codetoreum.ports.output.board_service import BoardConfig
 from codetoreum.ports.output.discussion_adapter import DiscussionMonitoringConfig
@@ -370,10 +369,10 @@ class TestMockDiscussionAdapter:
         """Test get_thread_info helper."""
         # Non-existent thread
         info = adapter.get_thread_info("item-1")
-        assert info['exists'] is False
-        assert info['comment_count'] == 0
-        assert info['is_monitored'] is False
-        assert info['authors'] == []
+        assert info["exists"] is False
+        assert info["comment_count"] == 0
+        assert info["is_monitored"] is False
+        assert info["authors"] == []
 
         # Create thread with multiple comments
         adapter.create_thread("item-1", "First", author="alice")
@@ -381,10 +380,10 @@ class TestMockDiscussionAdapter:
         adapter.simulate_comment("item-1", "alice", "Third")
 
         info = adapter.get_thread_info("item-1")
-        assert info['exists'] is True
-        assert info['comment_count'] == 3
-        assert info['is_monitored'] is False
-        assert set(info['authors']) == {"alice", "bob"}
+        assert info["exists"] is True
+        assert info["comment_count"] == 3
+        assert info["is_monitored"] is False
+        assert set(info["authors"]) == {"alice", "bob"}
 
     async def test_get_thread_info_with_monitoring(self, adapter):
         """Test get_thread_info shows monitoring state."""
@@ -395,7 +394,7 @@ class TestMockDiscussionAdapter:
         adapter.start_monitoring("item-1", config)
 
         info = adapter.get_thread_info("item-1")
-        assert info['is_monitored'] is True
+        assert info["is_monitored"] is True
 
     async def test_helper_methods_integration(self, adapter):
         """Test multiple helper methods working together."""
@@ -413,8 +412,8 @@ class TestMockDiscussionAdapter:
 
         # Verify with helpers
         info = adapter.get_thread_info("item-1")
-        assert info['comment_count'] == 3
-        assert info['is_monitored'] is True
+        assert info["comment_count"] == 3
+        assert info["is_monitored"] is True
 
         reviewer_comments = adapter.get_comments_by_author("item-1", "reviewer")
         assert len(reviewer_comments) == 1

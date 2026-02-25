@@ -85,5 +85,5 @@ def register_search_endpoints(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Search failed: {str(e)}",
+                detail=f"Search failed: {e!s}",
             )

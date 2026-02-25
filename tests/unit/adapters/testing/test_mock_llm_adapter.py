@@ -4,7 +4,7 @@ import pytest
 
 from codetoreum.adapters.testing import MockLLMAdapter
 from codetoreum.ports.exceptions import ValidationError
-from codetoreum.ports.output.llm_provider import ExecutionContext, ToolDefinition
+from codetoreum.ports.output.llm_provider import ToolDefinition
 
 
 @pytest.mark.asyncio

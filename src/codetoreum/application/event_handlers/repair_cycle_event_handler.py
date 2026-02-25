@@ -8,7 +8,6 @@ Subscribes to workitem.column_changed events and orchestrates:
 
 import logging
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
 
 from codetoreum.domain.events import DomainEvent, WorkItemColumnChanged
 from codetoreum.domain.repair_cycle_types import (
@@ -21,7 +20,6 @@ from codetoreum.infrastructure.observability.instrumentation import (
     instrument_async_function,
 )
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
-from codetoreum.ports.exceptions import ExternalServiceError
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle
 
 logger = logging.getLogger(__name__)
@@ -33,7 +31,7 @@ class RepairCycleEventContext:
 
     stage_name: str
     workflow_run_id: str
-    test_configs: Tuple[RepairTestRunConfig, ...]
+    test_configs: tuple[RepairTestRunConfig, ...]
     agent_name: str
     max_total_agent_calls: int
     checkpoint_interval: int
@@ -73,8 +71,8 @@ class RepairCycleEventHandler(EventHandler):
     def __init__(
         self,
         repair_cycle: IRepairCycle,
-        clock: Optional[SimulationClock] = None,
-        event_bus: Optional[EventBus] = None,
+        clock: SimulationClock | None = None,
+        event_bus: EventBus | None = None,
     ):
         """
         Initialize repair cycle event handler.
@@ -94,16 +92,16 @@ class RepairCycleEventHandler(EventHandler):
         return self._repair_cycle
 
     @property
-    def clock(self) -> Optional[SimulationClock]:
+    def clock(self) -> SimulationClock | None:
         """Get the simulation clock if configured."""
         return self._clock
 
     @property
-    def event_bus(self) -> Optional[EventBus]:
+    def event_bus(self) -> EventBus | None:
         """Get the event bus if configured."""
         return self._event_bus
 
-    def get_event_types(self) -> List[str]:
+    def get_event_types(self) -> list[str]:
         """Get list of event types this handler processes.
 
         Returns:

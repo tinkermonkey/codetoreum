@@ -5,7 +5,7 @@ In-memory implementation of IMetricsQueryPort for development and testing.
 Integrates with InMemoryMetricsAdapter for actual metrics storage.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from threading import RLock
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -62,7 +62,7 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
         self._integration_status: IntegrationStatus | None = None
         self._simulation_mode: SimulationModeInfo | None = None
         self._lock = RLock()
-        self._start_time = datetime.now(timezone.utc)
+        self._start_time = datetime.now(UTC)
 
     @property
     def clock(self) -> Optional["SimulationClock"]:
@@ -86,12 +86,12 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
             else:
                 overall_status = ComponentHealth.HEALTHY
 
-            uptime = (datetime.now(timezone.utc) - self._start_time).total_seconds()
+            uptime = (datetime.now(UTC) - self._start_time).total_seconds()
 
             return SystemHealthInfo(
                 status=overall_status,
                 components=components,
-                checked_at=datetime.now(timezone.utc),
+                checked_at=datetime.now(UTC),
                 uptime_seconds=uptime,
                 version="1.0.0-dev",
             )
@@ -107,7 +107,7 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
                 component_name=component_name,
                 status=ComponentHealth.HEALTHY,
                 message=None,
-                last_check=datetime.now(timezone.utc),
+                last_check=datetime.now(UTC),
                 response_time_ms=10.0,
                 details={},
             )
@@ -172,7 +172,7 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
         return IntegrationStatus(
             github_connected=True,
             github_api_calls_remaining=4500,
-            github_rate_limit_reset=datetime.now(timezone.utc) + timedelta(hours=1),
+            github_rate_limit_reset=datetime.now(UTC) + timedelta(hours=1),
             github_webhook_health=ComponentHealth.HEALTHY,
             docker_connected=True,
             docker_version="20.10.0",
@@ -181,7 +181,7 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
             event_store_latency_ms=5.0,
             config_store_connected=True,
             config_store_latency_ms=3.0,
-            checked_at=datetime.now(timezone.utc),
+            checked_at=datetime.now(UTC),
         )
 
     async def get_simulation_mode_info(self) -> SimulationModeInfo:
@@ -458,7 +458,7 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
 
     def _default_components(self) -> list[ComponentHealthInfo]:
         """Return default component health info."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return [
             ComponentHealthInfo(
                 component_name="event_store",

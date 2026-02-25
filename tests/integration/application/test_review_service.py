@@ -1,13 +1,10 @@
 """Integration tests for ReviewService."""
 
-from typing import List
 
 import pytest
 
 from codetoreum.adapters.testing import InMemoryEventStore
 from codetoreum.application.review_service import (
-    ReviewCompletionResult,
-    ReviewCycleResult,
     ReviewService,
 )
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
@@ -554,7 +551,7 @@ class FailingEventStore(InMemoryEventStore):
         self.fail_on_call = fail_on_call
 
     async def append(
-        self, stream_id: str, events: List[DomainEvent], expected_version=None
+        self, stream_id: str, events: list[DomainEvent], expected_version=None
     ) -> None:
         """Append event to store, failing on specified call."""
         self.call_count += 1

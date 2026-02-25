@@ -2,9 +2,9 @@
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any
 
 from codetoreum.domain.agent import Agent
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority
@@ -32,9 +32,9 @@ class ScheduleResult:
 
     success: bool
     action: ScheduleAction
-    task_id: Optional[str]
+    task_id: str | None
     reason: str
-    retry_after: Optional[int] = None  # Seconds to wait before retry
+    retry_after: int | None = None  # Seconds to wait before retry
 
 
 @dataclass
@@ -45,7 +45,7 @@ class Task:
     agent: str
     project: str
     priority: WorkItemPriority
-    context: Dict[str, Any]
+    context: dict[str, Any]
     created_at: datetime
 
 
@@ -57,7 +57,7 @@ class AgentConfig:
     name: str
     max_concurrent: int
     requires_dev_container: bool
-    rate_limit_rpm: Optional[int]  # Requests per minute
+    rate_limit_rpm: int | None  # Requests per minute
 
 
 # Port interfaces
@@ -97,7 +97,7 @@ class IRateLimiter:
         """
         raise NotImplementedError
 
-    async def get_retry_after(self, agent: str) -> Optional[int]:
+    async def get_retry_after(self, agent: str) -> int | None:
         """Get seconds to wait before retry."""
         raise NotImplementedError
 
@@ -267,7 +267,7 @@ class AgentScheduler:
 
         # Create task
         task = Task(
-            id=f"{work_item.project_id}_{work_item.id}_{agent.id}_{int(datetime.now(timezone.utc).timestamp())}",
+            id=f"{work_item.project_id}_{work_item.id}_{agent.id}_{int(datetime.now(UTC).timestamp())}",
             agent=agent.id,
             project=work_item.project_id,
             priority=priority,
@@ -279,7 +279,7 @@ class AgentScheduler:
                 "current_stage": work_item.current_stage,
                 "workflow_id": work_item.current_workflow_id,
             },
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
 
         # Enqueue task
@@ -406,8 +406,8 @@ class InMemoryTaskQueue(ITaskQueue):
     """In-memory task queue for testing."""
 
     def __init__(self) -> None:
-        self.tasks: Dict[str, Task] = {}
-        self.queue_by_agent: Dict[str, int] = {}
+        self.tasks: dict[str, Task] = {}
+        self.queue_by_agent: dict[str, int] = {}
 
     async def enqueue(self, task: Task) -> str:
         """Enqueue a task."""
@@ -427,8 +427,8 @@ class MockResourceMonitor(IResourceMonitor):
 
     def __init__(
         self,
-        dev_containers_available: Optional[Dict[str, bool]] = None,
-        running_agents: Optional[Dict[str, int]] = None,
+        dev_containers_available: dict[str, bool] | None = None,
+        running_agents: dict[str, int] | None = None,
     ):
         self.dev_containers_available = dev_containers_available or {}
         self.running_agents = running_agents or {}
@@ -445,7 +445,7 @@ class MockResourceMonitor(IResourceMonitor):
 class MockRateLimiter(IRateLimiter):
     """Mock rate limiter for testing."""
 
-    def __init__(self, rate_limited_agents: Optional[Dict[str, bool]] = None):
+    def __init__(self, rate_limited_agents: dict[str, bool] | None = None):
         self.rate_limited_agents = rate_limited_agents or {}
         self.retry_after_seconds = 60
 
@@ -453,7 +453,7 @@ class MockRateLimiter(IRateLimiter):
         """Try to acquire tokens."""
         return not self.rate_limited_agents.get(agent, False)
 
-    async def get_retry_after(self, agent: str) -> Optional[int]:
+    async def get_retry_after(self, agent: str) -> int | None:
         """Get retry after seconds."""
         if self.rate_limited_agents.get(agent, False):
             return self.retry_after_seconds
@@ -463,7 +463,7 @@ class MockRateLimiter(IRateLimiter):
 class MockProjectConfiguration(IProjectConfiguration):
     """Mock project configuration for testing."""
 
-    def __init__(self, agents: Optional[Dict[str, AgentConfig]] = None):
+    def __init__(self, agents: dict[str, AgentConfig] | None = None):
         self.agents = agents or {}
 
     async def get_agent_config(self, agent_name: str) -> AgentConfig:

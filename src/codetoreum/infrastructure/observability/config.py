@@ -55,7 +55,7 @@ class SignozConfig:
         return f"{self.http_endpoint}/v1/metrics"
 
     @classmethod
-    def from_env(cls) -> 'SignozConfig':
+    def from_env(cls) -> "SignozConfig":
         """
         Load configuration from environment variables.
 
@@ -112,7 +112,7 @@ class ObservabilityConfig:
     signoz: SignozConfig
 
     # Sampling configuration
-    sampler_type: Literal['always_on', 'always_off', 'traceidratio', 'parentbased_always_on']
+    sampler_type: Literal["always_on", "always_off", "traceidratio", "parentbased_always_on"]
     sampler_arg: float
 
     # Auto-instrumentation toggles
@@ -182,7 +182,7 @@ class ObservabilityConfig:
         return self.signoz.metrics_endpoint
 
     @classmethod
-    def from_env(cls) -> 'ObservabilityConfig':
+    def from_env(cls) -> "ObservabilityConfig":
         """
         Load configuration from environment variables.
 
@@ -267,13 +267,13 @@ class ObservabilityConfig:
         Returns:
             Valid sampler type or 'always_on' if invalid
         """
-        valid_samplers = {'always_on', 'always_off', 'traceidratio', 'parentbased_always_on'}
+        valid_samplers = {"always_on", "always_off", "traceidratio", "parentbased_always_on"}
         if sampler_value not in valid_samplers:
             logger.warning(
                 f"Invalid sampler_type '{sampler_value}'. "
                 f"Valid options: {valid_samplers}. Defaulting to 'always_on'."
             )
-            return 'always_on'
+            return "always_on"
         return sampler_value
 
     def validate(self) -> None:

@@ -9,18 +9,14 @@ Comprehensive tests for the mock repair cycle adapter, verifying:
 6. Circuit breaker functionality
 """
 
-from datetime import datetime, timedelta, timezone
-from typing import Dict, Optional, Tuple
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
-    CircuitBreakerTripped,
     MockRepairCycleAdapter,
 )
 from codetoreum.domain.repair_cycle_types import (
-    CycleResult,
-    RepairCycleResult,
     RepairTestFailure,
     RepairTestResult,
     RepairTestRunConfig,
@@ -37,7 +33,7 @@ class MockRepairCycleContext:
         self,
         stage_name: str = "fix_failures",
         workflow_run_id: str = "pipeline_123",
-        test_configs: Optional[tuple] = None,
+        test_configs: tuple | None = None,
         agent_name: str = "senior_software_engineer",
         max_total_agent_calls: int = 100,
         checkpoint_interval: int = 5,
@@ -72,7 +68,7 @@ class TestSimulationClockIntegration:
     async def test_clock_time_advancement_on_test_run(self):
         """Verify clock advances 30 seconds per test (FR-11.6)."""
         clock = SimulationClock(speed_multiplier=100.0)
-        start_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        start_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
         clock.start_at(start_time)
 
         adapter = MockRepairCycleAdapter(clock)
@@ -102,14 +98,14 @@ class TestSimulationClockIntegration:
     async def test_clock_time_advancement_on_fix(self):
         """Verify clock advances 2 minutes per file fix (FR-11.7)."""
         clock = SimulationClock(speed_multiplier=100.0)
-        start_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        start_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
         clock.start_at(start_time)
 
         adapter = MockRepairCycleAdapter(clock)
         adapter.current_project = "proj-1"
 
         context = MockRepairCycleContext()
-        failures: Dict[str, Tuple[RepairTestFailure, ...]] = {
+        failures: dict[str, tuple[RepairTestFailure, ...]] = {
             "test_file.py": (
                 RepairTestFailure(file="test_file.py", test="test_1", message="Failed"),
             )
@@ -126,7 +122,7 @@ class TestSimulationClockIntegration:
     async def test_clock_time_advancement_on_warning_review(self):
         """Verify clock advances 1 minute per warning review (FR-11.8)."""
         clock = SimulationClock(speed_multiplier=100.0)
-        start_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        start_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
         clock.start_at(start_time)
 
         adapter = MockRepairCycleAdapter(clock)

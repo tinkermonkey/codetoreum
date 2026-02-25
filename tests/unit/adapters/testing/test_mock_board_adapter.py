@@ -12,7 +12,6 @@ Tests verify that:
 """
 
 import asyncio
-from datetime import datetime
 from typing import Any
 
 import pytest
@@ -21,7 +20,7 @@ from codetoreum.adapters.testing.mock_board_adapter import (
     MockBoardAdapter,
     MovementEvent,
 )
-from codetoreum.ports.output.board_service import BoardConfig, MovedByType
+from codetoreum.ports.output.board_service import MovedByType
 
 
 class TestCreateBoard:
@@ -514,7 +513,6 @@ class TestThreadSafety:
 
     def test_concurrent_movements_thread_safe(self):
         """Test concurrent move_item_to_column() operations are thread-safe."""
-        import threading
 
         adapter = MockBoardAdapter()
         adapter.current_project = "proj-1"

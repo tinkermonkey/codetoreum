@@ -11,7 +11,6 @@ Provides registries for managing implementations of:
 """
 
 import inspect
-from typing import Set, Type
 
 from codetoreum.infrastructure.adapters.registry_base import AdapterRegistry
 from codetoreum.ports.output.container import IContainer
@@ -22,7 +21,7 @@ from codetoreum.ports.output.storage import IStorage
 from codetoreum.ports.output.ticket_system import ITicketSystem
 
 
-def _get_interface_methods(interface_class: Type) -> Set[str]:
+def _get_interface_methods(interface_class: type) -> set[str]:
     """
     Extract all abstract method names from a port interface.
 
@@ -35,16 +34,16 @@ def _get_interface_methods(interface_class: Type) -> Set[str]:
     methods = set()
     for name, method in inspect.getmembers(interface_class, predicate=inspect.isfunction):
         # Skip private methods and special methods
-        if not name.startswith('_'):
+        if not name.startswith("_"):
             # Check if it's an abstract method
-            if hasattr(method, '__isabstractmethod__') and method.__isabstractmethod__:
+            if hasattr(method, "__isabstractmethod__") and method.__isabstractmethod__:
                 methods.add(name)
     return methods
 
 
 def _validate_adapter_implements_interface(
-    adapter_type: Type,
-    interface_class: Type
+    adapter_type: type,
+    interface_class: type
 ) -> bool:
     """
     Validate that an adapter implements all required methods from interface.
@@ -64,7 +63,7 @@ def _validate_adapter_implements_interface(
     # Get methods implemented by adapter
     adapter_methods = {
         name for name, _ in inspect.getmembers(adapter_type, predicate=inspect.isfunction)
-        if not name.startswith('_')
+        if not name.startswith("_")
     }
 
     # Check that all required methods are implemented
@@ -78,7 +77,7 @@ class TicketSystemRegistry(AdapterRegistry[ITicketSystem]):
         """Initialize the ticket system registry."""
         super().__init__(ITicketSystem)
 
-    def _is_valid_adapter(self, adapter_type: Type[ITicketSystem]) -> bool:
+    def _is_valid_adapter(self, adapter_type: type[ITicketSystem]) -> bool:
         """
         Validate that an adapter implements ITicketSystem.
 
@@ -101,7 +100,7 @@ class LLMProviderRegistry(AdapterRegistry[ILLMProvider]):
         """Initialize the LLM provider registry."""
         super().__init__(ILLMProvider)
 
-    def _is_valid_adapter(self, adapter_type: Type[ILLMProvider]) -> bool:
+    def _is_valid_adapter(self, adapter_type: type[ILLMProvider]) -> bool:
         """
         Validate that an adapter implements ILLMProvider.
 
@@ -124,7 +123,7 @@ class ContainerRegistry(AdapterRegistry[IContainer]):
         """Initialize the container registry."""
         super().__init__(IContainer)
 
-    def _is_valid_adapter(self, adapter_type: Type[IContainer]) -> bool:
+    def _is_valid_adapter(self, adapter_type: type[IContainer]) -> bool:
         """
         Validate that an adapter implements IContainer.
 
@@ -147,7 +146,7 @@ class RepositoryRegistry(AdapterRegistry[IRepository]):
         """Initialize the repository registry."""
         super().__init__(IRepository)
 
-    def _is_valid_adapter(self, adapter_type: Type[IRepository]) -> bool:
+    def _is_valid_adapter(self, adapter_type: type[IRepository]) -> bool:
         """
         Validate that an adapter implements IRepository.
 
@@ -170,7 +169,7 @@ class EventStoreRegistry(AdapterRegistry[IEventStore]):
         """Initialize the event store registry."""
         super().__init__(IEventStore)
 
-    def _is_valid_adapter(self, adapter_type: Type[IEventStore]) -> bool:
+    def _is_valid_adapter(self, adapter_type: type[IEventStore]) -> bool:
         """
         Validate that an adapter implements IEventStore.
 
@@ -193,7 +192,7 @@ class StorageRegistry(AdapterRegistry[IStorage]):
         """Initialize the storage registry."""
         super().__init__(IStorage)
 
-    def _is_valid_adapter(self, adapter_type: Type[IStorage]) -> bool:
+    def _is_valid_adapter(self, adapter_type: type[IStorage]) -> bool:
         """
         Validate that an adapter implements IStorage.
 

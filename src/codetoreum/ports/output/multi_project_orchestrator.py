@@ -9,7 +9,6 @@ cross-project state management.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional
 
 
 @dataclass(frozen=True)
@@ -53,7 +52,7 @@ class OrchestrationCycleResult:
     total_errors: int
     cycle_duration_ms: int
     timestamp: datetime
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
 
 @dataclass(frozen=True)
@@ -135,7 +134,6 @@ class IMultiProjectOrchestrator(ABC):
         Raises:
             ExternalServiceError: Critical infrastructure failure
         """
-        pass
 
     @abstractmethod
     async def orchestrate_project(
@@ -159,7 +157,6 @@ class IMultiProjectOrchestrator(ABC):
             ResourceNotFoundError: Project configuration doesn't exist
             ExternalServiceError: Repository clone/orchestration failed
         """
-        pass
 
     @abstractmethod
     async def get_project_status(self, project_name: str) -> ProjectStatus:
@@ -181,10 +178,9 @@ class IMultiProjectOrchestrator(ABC):
         Raises:
             ResourceNotFoundError: Project doesn't exist
         """
-        pass
 
     @abstractmethod
-    async def list_enabled_projects(self) -> List[str]:
+    async def list_enabled_projects(self) -> list[str]:
         """Get list of all enabled projects.
 
         Returns project names that are configured and enabled.
@@ -195,4 +191,3 @@ class IMultiProjectOrchestrator(ABC):
         Raises:
             ExternalServiceError: Configuration service failure
         """
-        pass

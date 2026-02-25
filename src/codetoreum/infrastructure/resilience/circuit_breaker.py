@@ -5,13 +5,14 @@ Provides circuit breaker pattern with CLOSED/OPEN/HALF_OPEN states.
 
 import asyncio
 import time
+from collections.abc import Callable
 from datetime import datetime
-from typing import Callable, Optional, Tuple, Type, TypeVar
+from typing import TypeVar
 
 from .exceptions import CircuitBreakerOpenError
 from .interfaces import CircuitBreakerStats, CircuitState, ICircuitBreaker
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class CircuitBreaker(ICircuitBreaker):
@@ -30,7 +31,7 @@ class CircuitBreaker(ICircuitBreaker):
         failure_threshold: int = 5,
         timeout_seconds: int = 60,
         success_threshold: int = 2,
-        expected_exceptions: Tuple[Type[Exception], ...] = (Exception,)
+        expected_exceptions: tuple[type[Exception], ...] = (Exception,)
     ):
         """
         Initialize circuit breaker.
@@ -49,8 +50,8 @@ class CircuitBreaker(ICircuitBreaker):
         self._state = CircuitState.CLOSED
         self._failure_count = 0
         self._success_count = 0
-        self._last_failure_time: Optional[float] = None
-        self._last_success_time: Optional[float] = None
+        self._last_failure_time: float | None = None
+        self._last_success_time: float | None = None
 
         # Statistics
         self._total_calls = 0
@@ -92,7 +93,7 @@ class CircuitBreaker(ICircuitBreaker):
 
             return result
 
-        except self.expected_exceptions as e:
+        except self.expected_exceptions:
             # Handle failure
             async with self._lock:
                 self._on_failure()

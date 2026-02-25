@@ -9,7 +9,7 @@ Tests cover:
 - Index management
 """
 
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 
@@ -474,7 +474,7 @@ class TestRepositoryIntegration:
         assert len(all_users) == 100
 
         # Delete half of them
-        for i in range(0, 50):
+        for i in range(50):
             await repo.delete(user_ids[i])
 
         # Verify 50 remain

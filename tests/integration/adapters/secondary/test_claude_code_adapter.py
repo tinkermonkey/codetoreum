@@ -6,7 +6,6 @@ These tests interact with the actual Claude Code CLI and require:
 """
 
 import os
-from pathlib import Path
 
 import pytest
 
@@ -192,11 +191,10 @@ async def test_count_tokens(claude_adapter):
 @pytest.mark.asyncio
 async def test_invalid_api_key() -> None:
     """Test authentication error with invalid API key."""
-    from typing import Optional
 
     # Create a mock credential provider that returns an invalid key
     class MockInvalidCredentialProvider:
-        async def get_credential(self, key: str) -> Optional[str]:
+        async def get_credential(self, key: str) -> str | None:
             return "invalid-key-that-will-fail"
 
     config = ClaudeCodeConfig(

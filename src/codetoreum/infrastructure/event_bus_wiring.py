@@ -14,7 +14,8 @@ All adapters emit their events to the event bus via handlers registered here.
 
 import asyncio
 import logging
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventBus
@@ -125,10 +126,10 @@ class EventBusWiring:
 
     def wire_all_adapters(
         self,
-        board_service: Optional[IBoardService] = None,
-        discussion_adapter: Optional[IDiscussionAdapter] = None,
-        lock_service: Optional[IPipelineLockService] = None,
-        review_service: Optional[ICodeReviewService] = None,
+        board_service: IBoardService | None = None,
+        discussion_adapter: IDiscussionAdapter | None = None,
+        lock_service: IPipelineLockService | None = None,
+        review_service: ICodeReviewService | None = None,
     ) -> None:
         """
         Wire all provided adapters to the event bus.
@@ -172,7 +173,7 @@ class EventBusWiring:
         Returns:
             True if adapter has on() method
         """
-        return hasattr(adapter, "on") and callable(getattr(adapter, "on"))
+        return hasattr(adapter, "on") and callable(adapter.on)
 
     def _create_event_publisher(self) -> Callable:
         """
@@ -213,10 +214,10 @@ class EventBusWiring:
 
 def wire_adapters_to_event_bus(
     event_bus: EventBus,
-    board_service: Optional[IBoardService] = None,
-    discussion_adapter: Optional[IDiscussionAdapter] = None,
-    lock_service: Optional[IPipelineLockService] = None,
-    review_service: Optional[ICodeReviewService] = None,
+    board_service: IBoardService | None = None,
+    discussion_adapter: IDiscussionAdapter | None = None,
+    lock_service: IPipelineLockService | None = None,
+    review_service: ICodeReviewService | None = None,
 ) -> EventBusWiring:
     """
     Wire adapter event emitters to the central event bus.

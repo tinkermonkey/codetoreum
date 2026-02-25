@@ -1,6 +1,6 @@
 """Integration tests for Metrics REST API endpoints."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -65,7 +65,7 @@ class MockMetricsQueryPort(IMetricsQueryPort):
         return await self._get_api_usage()
 
     async def get_repair_cycle_metrics(self, agent_name=None, start_time=None, end_time=None):
-        if not hasattr(self, '_get_repair_cycle_metrics'):
+        if not hasattr(self, "_get_repair_cycle_metrics"):
             self._get_repair_cycle_metrics = AsyncMock()
         return await self._get_repair_cycle_metrics(agent_name, start_time, end_time)
 
@@ -104,7 +104,7 @@ class TestActiveAgents:
     def test_get_active_agents_success(self, client, mock_query_port):
         """Test successful active agents retrieval."""
         # Arrange
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         active_agents = {
             "agents": [
                 {

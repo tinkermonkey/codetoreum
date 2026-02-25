@@ -3,9 +3,10 @@
 import asyncio
 import logging
 import traceback
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Dict, List, Optional, TypeVar
+from datetime import UTC, datetime, timedelta
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +43,8 @@ class SimulationResult:
     assertions_passed: int
     assertions_failed: int
     spans_captured: int = 0
-    errors: List[str] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    errors: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def speed_multiplier(self) -> float:
@@ -52,7 +53,7 @@ class SimulationResult:
             return 0.0
         return self.simulated_duration_seconds / self.duration_seconds
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "scenario_name": self.scenario_name,
@@ -95,7 +96,7 @@ class SimulationRunner:
         >>> assert result.success
     """
 
-    def __init__(self, config: SimulationConfig, engine: Optional[SimulationEngine] = None):
+    def __init__(self, config: SimulationConfig, engine: SimulationEngine | None = None):
         """
         Initialize simulation runner.
 
@@ -153,21 +154,20 @@ class SimulationRunner:
         self._configure_adapters()
 
         # Captured events
-        self.captured_events: List[DomainEvent] = []
+        self.captured_events: list[DomainEvent] = []
 
         # Assertions
-        self.assertions: List[AssertionResult] = []
+        self.assertions: list[AssertionResult] = []
 
         # Start and end times
-        self._start_time: Optional[datetime] = None
-        self._end_time: Optional[datetime] = None
+        self._start_time: datetime | None = None
+        self._end_time: datetime | None = None
 
     def _get_clock_now(self) -> datetime:
         """Get current simulated time from engine or clock."""
         if self.engine:
             return self.engine.now()
-        else:
-            return self.clock.now()
+        return self.clock.now()
 
     def _configure_adapters(self) -> None:
         """Configure adapters based on simulation config."""
@@ -200,7 +200,7 @@ class SimulationRunner:
         Returns:
             SimulationResult with outcome and statistics
         """
-        self._start_time = datetime.now(timezone.utc)
+        self._start_time = datetime.now(UTC)
         simulated_start_time = self._get_clock_now()
 
         errors = []
@@ -213,12 +213,12 @@ class SimulationRunner:
                 scenario_func(self)
 
         except Exception as e:
-            error_msg = f"Scenario execution failed: {str(e)}"
+            error_msg = f"Scenario execution failed: {e!s}"
             error_traceback = traceback.format_exc()
             errors.append(f"{error_msg}\n{error_traceback}")
             logger.error(error_msg, exc_info=True)
 
-        self._end_time = datetime.now(timezone.utc)
+        self._end_time = datetime.now(UTC)
         simulated_end_time = self._get_clock_now()
 
         # Calculate durations
@@ -321,8 +321,8 @@ class SimulationRunner:
     def assert_event_occurred(
         self,
         event_type: str,
-        aggregate_id: Optional[str] = None,
-        assertion_name: Optional[str] = None,
+        aggregate_id: str | None = None,
+        assertion_name: str | None = None,
     ) -> None:
         """
         Assert an event of a specific type occurred.
@@ -350,7 +350,7 @@ class SimulationRunner:
         self,
         event_type: str,
         expected_count: int,
-        assertion_name: Optional[str] = None,
+        assertion_name: str | None = None,
     ) -> None:
         """
         Assert the number of events of a specific type.
@@ -374,7 +374,7 @@ class SimulationRunner:
     def assert_metric_recorded(
         self,
         metric_name: str,
-        assertion_name: Optional[str] = None,
+        assertion_name: str | None = None,
     ) -> None:
         """
         Assert a metric was recorded.
@@ -396,8 +396,8 @@ class SimulationRunner:
     def assert_notification_sent(
         self,
         recipient: str,
-        subject_contains: Optional[str] = None,
-        assertion_name: Optional[str] = None,
+        subject_contains: str | None = None,
+        assertion_name: str | None = None,
     ) -> None:
         """
         Assert a notification was sent.
@@ -423,7 +423,7 @@ class SimulationRunner:
     def assert_span_exists(
         self,
         span_name: str,
-        assertion_name: Optional[str] = None,
+        assertion_name: str | None = None,
     ) -> None:
         """
         Assert a span with given name exists.
@@ -445,7 +445,7 @@ class SimulationRunner:
         self,
         span_name: str,
         expected_kind: SpanKind,
-        assertion_name: Optional[str] = None,
+        assertion_name: str | None = None,
     ) -> None:
         """
         Assert a span has a specific kind.
@@ -474,8 +474,8 @@ class SimulationRunner:
         self,
         span_name: str,
         attr_key: str,
-        attr_value: Optional[any] = None,
-        assertion_name: Optional[str] = None,
+        attr_value: any | None = None,
+        assertion_name: str | None = None,
     ) -> None:
         """
         Assert a span has an attribute.
@@ -513,7 +513,7 @@ class SimulationRunner:
     def assert_span_context_injected(
         self,
         span_name: str,
-        assertion_name: Optional[str] = None,
+        assertion_name: str | None = None,
     ) -> None:
         """
         Assert trace context was injected for a span.
@@ -539,7 +539,7 @@ class SimulationRunner:
     def assert_span_count(
         self,
         expected_count: int,
-        assertion_name: Optional[str] = None,
+        assertion_name: str | None = None,
     ) -> None:
         """
         Assert total span count.
@@ -582,7 +582,7 @@ class SimulationRunner:
         else:
             await self.clock.advance_to(target_time)
 
-    def get_events_by_type(self, event_type: str) -> List[DomainEvent]:
+    def get_events_by_type(self, event_type: str) -> list[DomainEvent]:
         """
         Get all captured events of a specific type.
 
@@ -594,7 +594,7 @@ class SimulationRunner:
         """
         return [e for e in self.captured_events if e.event_type == event_type]
 
-    def get_events_by_aggregate(self, aggregate_id: str) -> List[DomainEvent]:
+    def get_events_by_aggregate(self, aggregate_id: str) -> list[DomainEvent]:
         """
         Get all captured events for a specific aggregate.
 

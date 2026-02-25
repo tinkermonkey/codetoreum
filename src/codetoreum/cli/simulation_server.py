@@ -15,7 +15,6 @@ import logging
 import signal
 import sys
 from pathlib import Path
-from typing import Optional
 
 import click
 import uvicorn
@@ -94,7 +93,7 @@ def validate_yaml_file(file_path: Path) -> None:
 
     # Validate YAML structure
     try:
-        with open(file_path, 'r') as f:
+        with open(file_path) as f:
             # Use safe_load with limits
             yaml_content = yaml.safe_load(f)
 
@@ -172,7 +171,7 @@ def get_scenario_file_path(scenario: str) -> Path:
 
 async def bootstrap_application(
     scenario: str,
-    scenario_file: Optional[Path],
+    scenario_file: Path | None,
     speed_multiplier: float,
 ) -> SimulationApplicationBootstrap:
     """
@@ -232,7 +231,7 @@ async def bootstrap_application(
 async def seed_data(
     bootstrap: SimulationApplicationBootstrap,
     scenario: str,
-    scenario_file: Optional[Path],
+    scenario_file: Path | None,
     no_seed: bool,
 ) -> dict:
     """
@@ -290,7 +289,7 @@ async def seed_data(
         "work_items": len(created.work_items),
     }
 
-    console.print(f"[green]✓ Data seeded successfully[/green]")
+    console.print("[green]✓ Data seeded successfully[/green]")
     console.print(f"[dim]  Projects: {counts['projects']}, "
                   f"Workflows: {counts['workflows']}, "
                   f"Agents: {counts['agents']}, "
@@ -303,7 +302,7 @@ def display_startup_info(
     host: str,
     port: int,
     scenario: str,
-    scenario_file: Optional[Path],
+    scenario_file: Path | None,
     speed_multiplier: float,
     debug: bool,
     seeded_data: dict,
@@ -398,10 +397,9 @@ async def run_server(
     except OSError as e:
         if "Address already in use" in str(e) or e.errno == 98:
             raise OSError(f"Port {port} is already in use. Try a different port with --port")
-        elif "Permission denied" in str(e) or e.errno == 13:
+        if "Permission denied" in str(e) or e.errno == 13:
             raise OSError(f"Permission denied to bind to port {port}. Try a port > 1024 or run with elevated privileges")
-        else:
-            raise
+        raise
     except Exception as e:
         raise RuntimeError(f"Server failed to start: {e}")
 
@@ -410,7 +408,7 @@ async def main_async(
     host: str,
     port: int,
     scenario: str,
-    scenario_file: Optional[Path],
+    scenario_file: Path | None,
     speed_multiplier: float,
     no_seed: bool,
     debug: bool,
@@ -536,7 +534,7 @@ def main(
     host: str,
     port: int,
     scenario: str,
-    scenario_file: Optional[Path],
+    scenario_file: Path | None,
     speed_multiplier: float,
     no_seed: bool,
     debug: bool,

@@ -24,15 +24,13 @@ from codetoreum.infrastructure.security import InvalidInputError, sanitize_searc
 from codetoreum.ports.input.work_item_command import IWorkItemCommandPort
 from codetoreum.ports.input.work_item_query import (
     IWorkItemQueryPort,
-)
-from codetoreum.ports.input.work_item_query import (
-    PaginationParams as DomainPaginationParams,
-)
-from codetoreum.ports.input.work_item_query import (
     SortField,
     SortOrder,
     WorkItemFilters,
     WorkItemSearchParams,
+)
+from codetoreum.ports.input.work_item_query import (
+    PaginationParams as DomainPaginationParams,
 )
 
 
@@ -119,7 +117,7 @@ def create_work_items_router(
             # Invalid enum values or validation errors
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid request: {str(e)}",
+                detail=f"Invalid request: {e!s}",
             )
         except Exception as e:
             # Domain errors (project not found, etc.)
@@ -188,7 +186,7 @@ def create_work_items_router(
                 except InvalidInputError as e:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Invalid search query: {str(e)}"
+                        detail=f"Invalid search query: {e!s}"
                     )
 
             # Validate sort_by field to prevent injection
@@ -249,7 +247,7 @@ def create_work_items_router(
             # Invalid enum values
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid filter parameter: {str(e)}",
+                detail=f"Invalid filter parameter: {e!s}",
             )
         except Exception as e:
             raise HTTPException(
@@ -299,7 +297,7 @@ def create_work_items_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Work item not found: {str(e)}",
+                detail=f"Work item not found: {e!s}",
             )
 
     # ========================================================================
@@ -352,7 +350,7 @@ def create_work_items_router(
             # Invalid enum values or validation errors
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid request: {str(e)}",
+                detail=f"Invalid request: {e!s}",
             )
         except Exception as e:
             # Domain errors (work item not found, etc.)

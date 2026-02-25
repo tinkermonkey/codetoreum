@@ -9,7 +9,7 @@ Terminology (vendor-agnostic):
 """
 
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Literal
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
@@ -53,11 +53,11 @@ class ReviewStatusChangedEvent(CodetoreumEvent):
     """
 
     review_id: str = ""
-    work_item_id: Optional[str] = None
+    work_item_id: str | None = None
     project_id: str = ""
     previous_status: CodeReviewStatus = "open"
     new_status: CodeReviewStatus = "open"
-    reviewer: Optional[str] = None
+    reviewer: str | None = None
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""
@@ -134,9 +134,9 @@ class ReviewCommentAddedEvent(CodetoreumEvent):
     """
 
     review_id: str = ""
-    work_item_id: Optional[str] = None
+    work_item_id: str | None = None
     project_id: str = ""
-    comment: Optional[Comment] = None
+    comment: Comment | None = None
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""

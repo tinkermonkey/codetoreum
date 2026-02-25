@@ -4,7 +4,6 @@ These tests use testcontainers to spin up real Redis and Elasticsearch instances
 """
 
 import asyncio
-from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
@@ -19,9 +18,7 @@ from codetoreum.infrastructure.redis_config_cache import RedisConfigCache
 from codetoreum.ports.output.config_store import (
     AgentConfig,
     ConfigNotFoundError,
-    PipelineConfig,
     ProjectConfig,
-    WorkflowTemplate,
 )
 from tests.conftest import (
     ModernElasticsearchContainer,

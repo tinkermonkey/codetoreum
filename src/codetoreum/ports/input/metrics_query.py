@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class ComponentHealth(str, Enum):
@@ -25,17 +25,17 @@ class ComponentHealthInfo:
     """Health information for a system component"""
     component_name: str
     status: ComponentHealth
-    message: Optional[str]
+    message: str | None
     last_check: datetime
-    response_time_ms: Optional[float]
-    details: Dict[str, Any]
+    response_time_ms: float | None
+    details: dict[str, Any]
 
 
 @dataclass
 class SystemHealthInfo:
     """Overall system health"""
     status: ComponentHealth
-    components: List[ComponentHealthInfo]
+    components: list[ComponentHealthInfo]
     checked_at: datetime
     uptime_seconds: float
     version: str
@@ -77,10 +77,10 @@ class PerformanceMetrics:
 class ResilienceMetrics:
     """Resilience infrastructure metrics"""
     # Circuit breaker stats
-    circuit_breakers: Dict[str, Dict[str, Any]]  # {service_name: {state, failure_count, ...}}
+    circuit_breakers: dict[str, dict[str, Any]]  # {service_name: {state, failure_count, ...}}
 
     # Rate limiter stats
-    rate_limiters: Dict[str, Dict[str, Any]]  # {resource_name: {requests, limit, utilization}}
+    rate_limiters: dict[str, dict[str, Any]]  # {resource_name: {requests, limit, utilization}}
 
     # Retry stats
     retry_attempts_total: int
@@ -101,22 +101,22 @@ class IntegrationStatus:
     """Status of external system integrations"""
     # GitHub integration
     github_connected: bool
-    github_api_calls_remaining: Optional[int]
-    github_rate_limit_reset: Optional[datetime]
+    github_api_calls_remaining: int | None
+    github_rate_limit_reset: datetime | None
     github_webhook_health: ComponentHealth
 
     # Docker integration
     docker_connected: bool
-    docker_version: Optional[str]
+    docker_version: str | None
     docker_containers_running: int
 
     # Event store integration
     event_store_connected: bool
-    event_store_latency_ms: Optional[float]
+    event_store_latency_ms: float | None
 
     # Config store integration
     config_store_connected: bool
-    config_store_latency_ms: Optional[float]
+    config_store_latency_ms: float | None
 
     checked_at: datetime
 
@@ -129,8 +129,8 @@ class SimulationModeInfo:
     deterministic_responses: bool
     mock_external_services: bool
     event_replay_enabled: bool
-    current_simulation_time: Optional[datetime]
-    started_at: Optional[datetime]
+    current_simulation_time: datetime | None
+    started_at: datetime | None
 
 
 @dataclass
@@ -138,15 +138,15 @@ class MetricTimeSeriesPoint:
     """Single data point in a time series"""
     timestamp: datetime
     value: float
-    labels: Dict[str, str]
+    labels: dict[str, str]
 
 
 @dataclass
 class MetricTimeSeries:
     """Time series data for a metric"""
     metric_name: str
-    data_points: List[MetricTimeSeriesPoint]
-    aggregation: Optional[str]  # sum, avg, min, max, p95, p99
+    data_points: list[MetricTimeSeriesPoint]
+    aggregation: str | None  # sum, avg, min, max, p95, p99
     start_time: datetime
     end_time: datetime
 
@@ -174,7 +174,6 @@ class IMetricsQueryPort(ABC):
         Returns:
             System health information
         """
-        pass
 
     @abstractmethod
     async def get_component_health(
@@ -193,7 +192,6 @@ class IMetricsQueryPort(ABC):
         Raises:
             ComponentNotFoundError: If component doesn't exist
         """
-        pass
 
     @abstractmethod
     async def get_performance_metrics(
@@ -213,7 +211,6 @@ class IMetricsQueryPort(ABC):
         Returns:
             Aggregated performance metrics
         """
-        pass
 
     @abstractmethod
     async def get_resilience_metrics(
@@ -234,7 +231,6 @@ class IMetricsQueryPort(ABC):
         Returns:
             Resilience metrics
         """
-        pass
 
     @abstractmethod
     async def get_integration_status(self) -> IntegrationStatus:
@@ -250,7 +246,6 @@ class IMetricsQueryPort(ABC):
         Returns:
             Integration status information
         """
-        pass
 
     @abstractmethod
     async def get_simulation_mode_info(self) -> SimulationModeInfo:
@@ -260,7 +255,6 @@ class IMetricsQueryPort(ABC):
         Returns:
             Simulation mode information
         """
-        pass
 
     @abstractmethod
     async def get_metric_time_series(
@@ -268,8 +262,8 @@ class IMetricsQueryPort(ABC):
         metric_name: str,
         start_time: datetime,
         end_time: datetime,
-        labels: Optional[Dict[str, str]] = None,
-        aggregation: Optional[str] = None
+        labels: dict[str, str] | None = None,
+        aggregation: str | None = None
     ) -> MetricTimeSeries:
         """
         Get time series data for a specific metric.
@@ -287,13 +281,12 @@ class IMetricsQueryPort(ABC):
         Raises:
             MetricNotFoundError: If metric doesn't exist
         """
-        pass
 
     @abstractmethod
     async def list_metric_names(
         self,
-        prefix: Optional[str] = None
-    ) -> List[str]:
+        prefix: str | None = None
+    ) -> list[str]:
         """
         List available metric names.
 
@@ -303,15 +296,14 @@ class IMetricsQueryPort(ABC):
         Returns:
             List of metric names
         """
-        pass
 
     @abstractmethod
     async def get_api_endpoint_metrics(
         self,
-        endpoint_path: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None
-    ) -> Dict[str, Any]:
+        endpoint_path: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None
+    ) -> dict[str, Any]:
         """
         Get per-endpoint API metrics.
 
@@ -323,15 +315,14 @@ class IMetricsQueryPort(ABC):
         Returns:
             Dict mapping endpoint paths to metrics (request count, error rate, latency percentiles)
         """
-        pass
 
     @abstractmethod
     async def get_agent_execution_metrics(
         self,
-        agent_name: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None
-    ) -> Dict[str, Any]:
+        agent_name: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None
+    ) -> dict[str, Any]:
         """
         Get agent execution metrics.
 
@@ -343,35 +334,32 @@ class IMetricsQueryPort(ABC):
         Returns:
             Dict with execution counts, success rates, duration stats per agent
         """
-        pass
 
     @abstractmethod
-    async def get_active_agents(self) -> Dict[str, Any]:
+    async def get_active_agents(self) -> dict[str, Any]:
         """
         Get currently active agent executions.
 
         Returns:
             Dict containing list of active agents with execution info
         """
-        pass
 
     @abstractmethod
-    async def get_api_usage(self) -> Dict[str, Any]:
+    async def get_api_usage(self) -> dict[str, Any]:
         """
         Get API usage and quota information.
 
         Returns:
             Dict with usage statistics for external APIs (Claude, etc.)
         """
-        pass
 
     @abstractmethod
     async def get_repair_cycle_metrics(
         self,
-        agent_name: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None
-    ) -> Dict[str, Any]:
+        agent_name: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None
+    ) -> dict[str, Any]:
         """
         Get repair cycle metrics.
 
@@ -388,4 +376,3 @@ class IMetricsQueryPort(ABC):
             - Per-agent metrics
             - File fixing and warning review statistics
         """
-        pass

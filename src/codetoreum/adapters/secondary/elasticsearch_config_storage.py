@@ -1,20 +1,14 @@
 """Elasticsearch configuration storage adapter for production persistence."""
 
 import logging
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
-from uuid import uuid4
+from datetime import UTC, datetime
+from typing import Any
 
 from elasticsearch import AsyncElasticsearch, NotFoundError
 
-from codetoreum.ports.exceptions import (
-    ConcurrencyConflictError,
-    ResourceNotFoundError,
-)
 from codetoreum.ports.output.config_store import (
     AgentConfig,
     ConfigNotFoundError,
-    ConfigValidationError,
     ConfigVersion,
     IConfigStore,
     PipelineConfig,
@@ -129,7 +123,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             await self._create_index_template(index_name, mappings)
 
     async def _create_index_template(
-        self, index_name: str, mappings: Dict[str, Any]
+        self, index_name: str, mappings: dict[str, Any]
     ) -> None:
         """
         Create or update an index template.
@@ -183,7 +177,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             )
             raise
 
-    def _get_projects_mapping(self) -> Dict[str, Any]:
+    def _get_projects_mapping(self) -> dict[str, Any]:
         """Get Elasticsearch mapping for projects index."""
         return {
             "properties": {
@@ -204,7 +198,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             }
         }
 
-    def _get_agents_mapping(self) -> Dict[str, Any]:
+    def _get_agents_mapping(self) -> dict[str, Any]:
         """Get Elasticsearch mapping for agents index."""
         return {
             "properties": {
@@ -224,7 +218,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             }
         }
 
-    def _get_pipelines_mapping(self) -> Dict[str, Any]:
+    def _get_pipelines_mapping(self) -> dict[str, Any]:
         """Get Elasticsearch mapping for pipelines index."""
         return {
             "properties": {
@@ -240,7 +234,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             }
         }
 
-    def _get_workflows_mapping(self) -> Dict[str, Any]:
+    def _get_workflows_mapping(self) -> dict[str, Any]:
         """Get Elasticsearch mapping for workflow templates index."""
         return {
             "properties": {
@@ -255,7 +249,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             }
         }
 
-    def _get_history_mapping(self) -> Dict[str, Any]:
+    def _get_history_mapping(self) -> dict[str, Any]:
         """Get Elasticsearch mapping for configuration history index."""
         return {
             "properties": {
@@ -359,7 +353,7 @@ class ElasticsearchConfigStorage(IConfigStore):
 
         try:
             # Set timestamps
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             if config.created_at is None:
                 config.created_at = now
             config.updated_at = now
@@ -477,7 +471,7 @@ class ElasticsearchConfigStorage(IConfigStore):
 
         try:
             # Set timestamps
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             if config.created_at is None:
                 config.created_at = now
             config.updated_at = now
@@ -604,7 +598,7 @@ class ElasticsearchConfigStorage(IConfigStore):
 
         try:
             # Set timestamps
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             if config.created_at is None:
                 config.created_at = now
             config.updated_at = now
@@ -721,7 +715,7 @@ class ElasticsearchConfigStorage(IConfigStore):
 
         try:
             # Set timestamps
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             if template.created_at is None:
                 template.created_at = now
             template.updated_at = now
@@ -785,7 +779,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             )
             raise
 
-    async def list_projects(self) -> List[ProjectConfig]:
+    async def list_projects(self) -> list[ProjectConfig]:
         """
         List all projects.
 
@@ -815,7 +809,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             )
             raise
 
-    async def list_agents(self, project_id: str) -> List[AgentConfig]:
+    async def list_agents(self, project_id: str) -> list[AgentConfig]:
         """
         List all agents for a project.
 
@@ -851,7 +845,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             )
             raise
 
-    async def list_pipelines(self, project_id: str) -> List[PipelineConfig]:
+    async def list_pipelines(self, project_id: str) -> list[PipelineConfig]:
         """
         List all pipelines for a project.
 
@@ -888,8 +882,8 @@ class ElasticsearchConfigStorage(IConfigStore):
             raise
 
     async def search_configs(
-        self, query: str, config_type: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+        self, query: str, config_type: str | None = None
+    ) -> list[dict[str, Any]]:
         """
         Search configurations using full-text search with injection protection.
 
@@ -1000,7 +994,7 @@ class ElasticsearchConfigStorage(IConfigStore):
 
     async def get_config_version(
         self, config_id: str, version: int
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Get specific version of a configuration.
 
@@ -1053,7 +1047,7 @@ class ElasticsearchConfigStorage(IConfigStore):
 
     async def list_config_versions(
         self, config_id: str, limit: int = 10
-    ) -> List[ConfigVersion]:
+    ) -> list[ConfigVersion]:
         """
         List configuration version history.
 
@@ -1202,9 +1196,9 @@ class ElasticsearchConfigStorage(IConfigStore):
         version: int,
         changed_by: str,
         change_type: str,
-        changes: Dict[str, Any],
-        snapshot: Dict[str, Any],
-        reason: Optional[str] = None,
+        changes: dict[str, Any],
+        snapshot: dict[str, Any],
+        reason: str | None = None,
     ) -> None:
         """
         Save configuration history entry.
@@ -1226,7 +1220,7 @@ class ElasticsearchConfigStorage(IConfigStore):
                 "config_id": config_id,
                 "config_type": config_type,
                 "version": version,
-                "changed_at": datetime.now(timezone.utc).isoformat(),
+                "changed_at": datetime.now(UTC).isoformat(),
                 "changed_by": changed_by,
                 "change_type": change_type,
                 "changes": changes,
@@ -1251,7 +1245,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             )
             # Don't raise - history failure shouldn't block config save
 
-    def _serialize_project(self, config: ProjectConfig) -> Dict[str, Any]:
+    def _serialize_project(self, config: ProjectConfig) -> dict[str, Any]:
         """Serialize ProjectConfig to dictionary."""
         return {
             "id": config.id,
@@ -1274,7 +1268,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             "metadata": config.metadata,
         }
 
-    def _deserialize_project(self, doc: Dict[str, Any]) -> ProjectConfig:
+    def _deserialize_project(self, doc: dict[str, Any]) -> ProjectConfig:
         """Deserialize dictionary to ProjectConfig."""
         return ProjectConfig(
             id=doc["id"],
@@ -1301,7 +1295,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             metadata=doc.get("metadata", {}),
         )
 
-    def _serialize_agent(self, config: AgentConfig) -> Dict[str, Any]:
+    def _serialize_agent(self, config: AgentConfig) -> dict[str, Any]:
         """Serialize AgentConfig to dictionary."""
         return {
             "project_id": config.project_id,
@@ -1323,7 +1317,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             "metadata": config.metadata,
         }
 
-    def _deserialize_agent(self, doc: Dict[str, Any]) -> AgentConfig:
+    def _deserialize_agent(self, doc: dict[str, Any]) -> AgentConfig:
         """Deserialize dictionary to AgentConfig."""
         return AgentConfig(
             project_id=doc["project_id"],
@@ -1349,7 +1343,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             metadata=doc.get("metadata", {}),
         )
 
-    def _serialize_pipeline(self, config: PipelineConfig) -> Dict[str, Any]:
+    def _serialize_pipeline(self, config: PipelineConfig) -> dict[str, Any]:
         """Serialize PipelineConfig to dictionary."""
         return {
             "id": config.id,
@@ -1367,7 +1361,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             "metadata": config.metadata,
         }
 
-    def _deserialize_pipeline(self, doc: Dict[str, Any]) -> PipelineConfig:
+    def _deserialize_pipeline(self, doc: dict[str, Any]) -> PipelineConfig:
         """Deserialize dictionary to PipelineConfig."""
         return PipelineConfig(
             id=doc["id"],
@@ -1389,7 +1383,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             metadata=doc.get("metadata", {}),
         )
 
-    def _serialize_workflow(self, template: WorkflowTemplate) -> Dict[str, Any]:
+    def _serialize_workflow(self, template: WorkflowTemplate) -> dict[str, Any]:
         """Serialize WorkflowTemplate to dictionary."""
         return {
             "id": template.id,
@@ -1406,7 +1400,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             "metadata": template.metadata,
         }
 
-    def _deserialize_workflow(self, doc: Dict[str, Any]) -> WorkflowTemplate:
+    def _deserialize_workflow(self, doc: dict[str, Any]) -> WorkflowTemplate:
         """Deserialize dictionary to WorkflowTemplate."""
         return WorkflowTemplate(
             id=doc["id"],

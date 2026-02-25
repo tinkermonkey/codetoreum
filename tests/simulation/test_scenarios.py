@@ -1,7 +1,7 @@
 """Simulation scenario tests."""
 
-from datetime import timedelta
-from typing import Callable
+from collections.abc import Callable
+from datetime import UTC, timedelta
 
 import pytest
 
@@ -14,7 +14,6 @@ from codetoreum.infrastructure.simulation import (
 from .helpers import (
     AssertionHelpers,
     print_event_timeline,
-    print_metrics_summary,
 )
 
 # Import scenario functions
@@ -282,7 +281,7 @@ async def test_all_scenarios_meet_performance_target() -> None:
 @pytest.mark.asyncio
 async def test_simulation_with_custom_helpers(simulation_runner):
     """Test using simulation helpers for common patterns."""
-    from .helpers import AssertionHelpers, ScenarioHelpers
+    from .helpers import ScenarioHelpers
 
     runner = simulation_runner
 
@@ -313,21 +312,21 @@ async def test_simulation_with_custom_helpers(simulation_runner):
 @pytest.mark.asyncio
 async def test_simulation_clock_manipulation(simulation_clock):
     """Test simulation clock time manipulation."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     clock = simulation_clock
 
     # Verify initial time
     start_time = clock.now()
-    assert start_time == datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    assert start_time == datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
 
     # Advance time (1 minute simulated = 0.6s real at 100x speed)
     await clock.advance(timedelta(minutes=1))
-    assert clock.now() == datetime(2025, 1, 1, 12, 1, 0, tzinfo=timezone.utc)
+    assert clock.now() == datetime(2025, 1, 1, 12, 1, 0, tzinfo=UTC)
 
     # Advance to specific time
-    await clock.advance_to(datetime(2025, 1, 1, 12, 5, 0, tzinfo=timezone.utc))
-    assert clock.now() == datetime(2025, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
+    await clock.advance_to(datetime(2025, 1, 1, 12, 5, 0, tzinfo=UTC))
+    assert clock.now() == datetime(2025, 1, 1, 12, 5, 0, tzinfo=UTC)
 
 
 @pytest.mark.simulation

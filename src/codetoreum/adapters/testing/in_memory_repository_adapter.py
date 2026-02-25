@@ -2,9 +2,8 @@
 
 import asyncio
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, List, Optional
 from uuid import uuid4
 
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
@@ -13,7 +12,7 @@ from codetoreum.domain.events.repository_events import (
     CommitCreatedEvent,
     FilesStagedEvent,
 )
-from codetoreum.domain.types import BranchName, CommitHash, RemoteName, RepositoryId
+from codetoreum.domain.types import BranchName, CommitHash, RepositoryId
 from codetoreum.ports.exceptions import (
     ResourceNotFoundError,
     ValidationError,
@@ -37,7 +36,7 @@ class InMemoryRepositoryAdapter(IRepository):
     dictionary and list modifications are protected by a lock.
     """
 
-    def __init__(self, event_emitter: Optional[IEventEmitter] = None):
+    def __init__(self, event_emitter: IEventEmitter | None = None):
         """Initialize the in-memory repository adapter with thread-safe storage.
 
         Args:
@@ -45,19 +44,19 @@ class InMemoryRepositoryAdapter(IRepository):
                           Defaults to MockEventEmitter.
         """
         # Repository storage: repo_id -> repo_data
-        self._repositories: Dict[str, Dict] = {}
+        self._repositories: dict[str, dict] = {}
 
         # File storage: (repo_id, path) -> content
-        self._files: Dict[tuple[str, str], str] = {}
+        self._files: dict[tuple[str, str], str] = {}
 
         # Commit storage: (repo_id, commit_sha) -> commit_info
-        self._commits: Dict[tuple[str, str], Dict] = {}
+        self._commits: dict[tuple[str, str], dict] = {}
 
         # Branch storage: (repo_id, branch_name) -> commit_sha
-        self._branches: Dict[tuple[str, str], str] = {}
+        self._branches: dict[tuple[str, str], str] = {}
 
         # Remote storage: (repo_id, remote_name) -> url
-        self._remotes: Dict[tuple[str, str], str] = {}
+        self._remotes: dict[tuple[str, str], str] = {}
 
         # Thread safety for concurrent test execution
         self._lock = threading.Lock()
@@ -69,7 +68,7 @@ class InMemoryRepositoryAdapter(IRepository):
         self,
         url: str,
         destination: Path,
-        branch: Optional[BranchName] = None,
+        branch: BranchName | None = None,
     ) -> RepositoryId:
         """
         Clone a repository.
@@ -101,7 +100,7 @@ class InMemoryRepositoryAdapter(IRepository):
                 "url": url,
                 "path": str(destination),
                 "current_branch": default_branch,
-                "created_at": datetime.now(timezone.utc),
+                "created_at": datetime.now(UTC),
             }
 
             # Create default branch
@@ -114,7 +113,7 @@ class InMemoryRepositoryAdapter(IRepository):
                 "message": "Initial commit",
                 "author_name": "System",
                 "author_email": "system@codetoreum.local",
-                "timestamp": datetime.now(timezone.utc),
+                "timestamp": datetime.now(UTC),
                 "parent": None,
             }
 
@@ -165,7 +164,7 @@ class InMemoryRepositoryAdapter(IRepository):
         self,
         repo_path: Path,
         branch_name: BranchName,
-        from_branch: Optional[BranchName] = None,
+        from_branch: BranchName | None = None,
     ) -> None:
         """
         Create a new branch.
@@ -202,7 +201,7 @@ class InMemoryRepositoryAdapter(IRepository):
             self._event_emitter.emit(
                 BranchCreatedEvent(
                     type="repository.branch_created",
-                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    timestamp=datetime.now(UTC).isoformat(),
                     source="mock",
                     repository_id=repo_id,
                     branch_name=str(branch_name),
@@ -217,7 +216,7 @@ class InMemoryRepositoryAdapter(IRepository):
         message: str,
         author_name: str,
         author_email: str,
-        files: Optional[List[str]] = None,
+        files: list[str] | None = None,
     ) -> CommitHash:
         """
         Create a commit.
@@ -260,7 +259,7 @@ class InMemoryRepositoryAdapter(IRepository):
                 "message": message,
                 "author_name": author_name,
                 "author_email": author_email,
-                "timestamp": datetime.now(timezone.utc),
+                "timestamp": datetime.now(UTC),
                 "parent": parent_commit,
                 "files": changed_files,
             }
@@ -277,7 +276,7 @@ class InMemoryRepositoryAdapter(IRepository):
                 self._event_emitter.emit(
                     FilesStagedEvent(
                         type="repository.files_staged",
-                        timestamp=datetime.now(timezone.utc).isoformat(),
+                        timestamp=datetime.now(UTC).isoformat(),
                         source="mock",
                         repository_id=repo_id,
                         file_paths=tuple(changed_files),
@@ -290,7 +289,7 @@ class InMemoryRepositoryAdapter(IRepository):
             self._event_emitter.emit(
                 CommitCreatedEvent(
                     type="repository.commit_created",
-                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    timestamp=datetime.now(UTC).isoformat(),
                     source="mock",
                     repository_id=repo_id,
                     commit_sha=str(commit_sha),
@@ -307,7 +306,7 @@ class InMemoryRepositoryAdapter(IRepository):
         self,
         repo_path: Path,
         remote: str = "origin",
-        branch: Optional[str] = None,
+        branch: str | None = None,
         force: bool = False,
     ) -> None:
         """
@@ -345,7 +344,7 @@ class InMemoryRepositoryAdapter(IRepository):
         self,
         repo_path: Path,
         remote: str = "origin",
-        branch: Optional[str] = None,
+        branch: str | None = None,
     ) -> None:
         """
         Pull commits from remote.
@@ -434,7 +433,7 @@ class InMemoryRepositoryAdapter(IRepository):
         repo_id = self._get_repo_id_by_path(repo_path)
 
         # Return mock diff
-        return f"""diff --git a/file.txt b/file.txt
+        return """diff --git a/file.txt b/file.txt
 index abc123..def456 100644
 --- a/file.txt
 +++ b/file.txt
@@ -481,7 +480,7 @@ index abc123..def456 100644
         self,
         repo_path: Path,
         remote: bool = False,
-    ) -> List[str]:
+    ) -> list[str]:
         """
         List branches.
 
@@ -554,7 +553,7 @@ index abc123..def456 100644
                 "message": f"Merge branch '{branch}' into '{current_branch}'",
                 "author_name": "System",
                 "author_email": "system@codetoreum.local",
-                "timestamp": datetime.now(timezone.utc),
+                "timestamp": datetime.now(UTC),
                 "parent": current_commit,
                 "merge_parent": merge_commit,
             }
@@ -572,7 +571,7 @@ index abc123..def456 100644
         self,
         repo_path: Path,
         file_path: str,
-        ref: Optional[str] = None,
+        ref: str | None = None,
     ) -> str:
         """
         Get content of a file at a specific ref.
@@ -654,10 +653,10 @@ index abc123..def456 100644
     async def get_commit_history(
         self,
         repo_path: Path,
-        branch: Optional[str] = None,
+        branch: str | None = None,
         limit: int = 100,
-        since: Optional[datetime] = None,
-    ) -> List[dict]:
+        since: datetime | None = None,
+    ) -> list[dict]:
         """
         Get commit history.
 

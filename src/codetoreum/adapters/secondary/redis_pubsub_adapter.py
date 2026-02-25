@@ -16,7 +16,8 @@ broadcast to their local WebSocket connections.
 import asyncio
 import json
 import logging
-from typing import Any, Callable, Dict, List, Optional, Set
+from collections.abc import Callable
+from typing import Any
 
 from redis import asyncio as aioredis
 
@@ -30,7 +31,6 @@ logger = logging.getLogger(__name__)
 class RedisPubSubError(Exception):
     """Raised when Redis pub/sub operations fail."""
 
-    pass
 
 
 class RedisPubSubAdapter(IMessageBroker):
@@ -70,13 +70,13 @@ class RedisPubSubAdapter(IMessageBroker):
         self.event_channel = event_channel
         self.control_channel = control_channel
 
-        self._pubsub: Optional[aioredis.client.PubSub] = None
-        self._listener_task: Optional[asyncio.Task] = None
+        self._pubsub: aioredis.client.PubSub | None = None
+        self._listener_task: asyncio.Task | None = None
         self._initialized = False
         self._init_lock = asyncio.Lock()
 
         # Callback registry: channel -> List[callback]
-        self._callbacks: Dict[str, List[Callable]] = {}
+        self._callbacks: dict[str, list[Callable]] = {}
         self._callbacks_lock = asyncio.Lock()
 
         # Statistics
@@ -139,7 +139,7 @@ class RedisPubSubAdapter(IMessageBroker):
                         # Dispatch to callbacks (stats tracked in _dispatch_message)
                         await self._dispatch_message(channel, data)
 
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # No message received, continue
                     continue
                 except Exception as e:
@@ -241,7 +241,7 @@ class RedisPubSubAdapter(IMessageBroker):
             raise RedisPubSubError(f"Failed to publish event: {e}") from e
 
     async def publish_control_message(
-        self, message_type: str, data: Dict[str, Any]
+        self, message_type: str, data: dict[str, Any]
     ) -> None:
         """
         Publish control message to all server instances.
@@ -320,7 +320,7 @@ class RedisPubSubAdapter(IMessageBroker):
                     # Callback not found, that's okay
                     pass
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """
         Get pub/sub statistics.
 

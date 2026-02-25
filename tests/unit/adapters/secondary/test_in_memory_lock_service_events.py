@@ -1,7 +1,7 @@
 """Unit tests for InMemoryLockService event emission."""
 
-from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, call
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -376,7 +376,7 @@ class TestStaleLockDetection:
         )
 
         # Set lock time to 59 seconds ago (below 60 second threshold)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         old_time = now - timedelta(seconds=59)
         lock_service_with_short_threshold.set_lock_acquired_at(
             project_id="proj-1", board_id="board-1", timestamp=old_time
@@ -414,7 +414,7 @@ class TestStaleLockDetection:
         )
 
         # Set lock time to 61 seconds ago (above 60 second threshold)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         old_time = now - timedelta(seconds=61)
         lock_service_with_short_threshold.set_lock_acquired_at(
             project_id="proj-1", board_id="board-1", timestamp=old_time
@@ -462,7 +462,7 @@ class TestStaleLockDetection:
         )
 
         # Set lock time to 59.5 seconds ago (clearly below 60 second threshold)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         old_time = now - timedelta(seconds=59.5)
         lock_service_with_short_threshold.set_lock_acquired_at(
             project_id="proj-1", board_id="board-1", timestamp=old_time
@@ -496,7 +496,7 @@ class TestStaleLockDetection:
         )
 
         # Set specific lock time
-        specific_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        specific_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
         lock_service_with_short_threshold.set_lock_acquired_at(
             project_id="proj-1", board_id="board-1", timestamp=specific_time
         )
@@ -531,7 +531,7 @@ class TestStaleLockDetection:
         )
 
         # Age the lock
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         old_time = now - timedelta(seconds=61)
         lock_service_with_short_threshold.set_lock_acquired_at(
             project_id="proj-1", board_id="board-1", timestamp=old_time
@@ -565,7 +565,7 @@ class TestStaleLockDetection:
         )
 
         # Set specific timestamp
-        new_time = datetime(2024, 12, 25, 10, 30, 0, tzinfo=timezone.utc)
+        new_time = datetime(2024, 12, 25, 10, 30, 0, tzinfo=UTC)
         lock_service_with_short_threshold.set_lock_acquired_at(
             project_id="proj-1", board_id="board-1", timestamp=new_time
         )
@@ -579,7 +579,7 @@ class TestStaleLockDetection:
     @pytest.mark.asyncio
     async def test_set_lock_acquired_at_raises_when_no_lock(self, lock_service_with_short_threshold):
         """Test helper should raise ValueError when no lock exists."""
-        new_time = datetime.now(timezone.utc)
+        new_time = datetime.now(UTC)
 
         with pytest.raises(ValueError, match="No lock exists"):
             lock_service_with_short_threshold.set_lock_acquired_at(
@@ -616,7 +616,7 @@ class TestStaleLockDetection:
         )
 
         # Age the lock
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         old_time = now - timedelta(seconds=61)
         lock_service_with_short_threshold.set_lock_acquired_at(
             project_id="proj-1", board_id="board-1", timestamp=old_time
@@ -662,7 +662,7 @@ class TestStaleLockDetection:
         )
 
         # Age the lock to be stale
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         old_time = now - timedelta(seconds=61)
         service_no_bus.set_lock_acquired_at(
             project_id="proj-1", board_id="board-1", timestamp=old_time

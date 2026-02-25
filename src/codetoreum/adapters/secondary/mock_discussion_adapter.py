@@ -5,8 +5,8 @@ discussion threads and comments in memory, and includes test helper methods
 for simulating discussion updates via event emission.
 """
 
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.domain.events.discussion_events import (
@@ -104,9 +104,9 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
             identity_service: Service for identifying bot users
         """
         super().__init__()
-        self._threads: Dict[str, List[Comment]] = {}  # work_item_id -> comments
-        self._monitoring: Dict[str, DiscussionMonitoringConfig] = {}  # work_item_id -> config
-        self._processed_comment_ids: Dict[str, set] = {}  # work_item_id -> set of comment IDs
+        self._threads: dict[str, list[Comment]] = {}  # work_item_id -> comments
+        self._monitoring: dict[str, DiscussionMonitoringConfig] = {}  # work_item_id -> config
+        self._processed_comment_ids: dict[str, set] = {}  # work_item_id -> set of comment IDs
         self._identity_service = identity_service
 
     # Query Operations
@@ -130,7 +130,7 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
             id=f"thread-{work_item_id}",
             work_item_id=work_item_id,
             comments=self._threads[work_item_id].copy(),
-            thread_type='flat'
+            thread_type="flat"
         )
 
     # Command Operations
@@ -139,7 +139,7 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
         self,
         work_item_id: str,
         content: str,
-        parent_id: Optional[str] = None,
+        parent_id: str | None = None,
     ) -> Comment:
         """Post a comment to a work item.
 
@@ -171,12 +171,12 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
         if work_item_id in self._monitoring:
             config = self._monitoring[work_item_id]
             self.emit(CommentPostedEvent(
-                type='comment.posted',
+                type="comment.posted",
                 work_item_id=work_item_id,
                 project_id=config.project_id,
                 comment=comment,
                 timestamp=self._get_iso_timestamp(),
-                source='mock'
+                source="mock"
             ))
 
         return comment
@@ -228,7 +228,7 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
         work_item_id: str,
         author: str,
         body: str,
-        parent_id: Optional[str] = None,
+        parent_id: str | None = None,
         is_initial: bool = False
     ) -> None:
         """Test helper: Simulate human comment requiring response.
@@ -278,20 +278,20 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
                 )
 
             self.emit(CommentNeedsResponseEvent(
-                type='comment.needs_response',
+                type="comment.needs_response",
                 work_item_id=work_item_id,
                 project_id=config.project_id,
                 comment=comment,
                 context=context,
                 timestamp=self._get_iso_timestamp(),
-                source='mock'
+                source="mock"
             ))
 
     def simulate_bot_comment(
         self,
         work_item_id: str,
         body: str,
-        parent_id: Optional[str] = None
+        parent_id: str | None = None
     ) -> Comment:
         """Test helper: Simulate bot comment.
 
@@ -330,12 +330,12 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
         if work_item_id in self._monitoring:
             config = self._monitoring[work_item_id]
             self.emit(CommentPostedEvent(
-                type='comment.posted',
+                type="comment.posted",
                 work_item_id=work_item_id,
                 project_id=config.project_id,
                 comment=comment,
                 timestamp=self._get_iso_timestamp(),
-                source='mock'
+                source="mock"
             ))
 
         return comment
@@ -382,7 +382,7 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
         self,
         work_item_id: str,
         author: str
-    ) -> List[Comment]:
+    ) -> list[Comment]:
         """Test helper: Get all comments from a specific author.
 
         Args:
@@ -468,7 +468,7 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
         """
         self._monitoring.clear()
 
-    def get_thread_info(self, work_item_id: str) -> Dict[str, Any]:
+    def get_thread_info(self, work_item_id: str) -> dict[str, Any]:
         """Test helper: Get diagnostic info about a discussion thread.
 
         Provides thread metadata without raising exceptions for missing threads.
@@ -485,10 +485,10 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
             assert 'alice' in info['authors']
         """
         return {
-            'exists': work_item_id in self._threads,
-            'comment_count': len(self._threads.get(work_item_id, [])),
-            'is_monitored': work_item_id in self._monitoring,
-            'authors': list(set(
+            "exists": work_item_id in self._threads,
+            "comment_count": len(self._threads.get(work_item_id, [])),
+            "is_monitored": work_item_id in self._monitoring,
+            "authors": list(set(
                 c.author for c in self._threads.get(work_item_id, [])
             ))
         }
@@ -522,7 +522,7 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
         config = self._monitoring[work_item_id]
 
         event = WorkItemColumnChangedEvent(
-            type='workitem.column_changed',
+            type="workitem.column_changed",
             work_item_id=work_item_id,
             project_id=config.project_id,
             board_id=f"board-{config.project_id}",
@@ -530,7 +530,7 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
             to_column=to_column,
             moved_by="unknown",
             timestamp=self._get_iso_timestamp(),
-            source='mock'
+            source="mock"
         )
 
         self.emit(event)
@@ -582,4 +582,4 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
     @staticmethod
     def _get_iso_timestamp() -> str:
         """Get current time as ISO 8601 timestamp."""
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()

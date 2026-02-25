@@ -10,9 +10,8 @@ for changes.
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 
 class MonitoringState(Enum):
@@ -38,8 +37,8 @@ class MonitoringStatus:
 
     state: MonitoringState
     project_id: str
-    started_at: Optional[str] = None
-    error_message: Optional[str] = None
+    started_at: str | None = None
+    error_message: str | None = None
 
 
 @dataclass
@@ -60,7 +59,7 @@ class MonitoringConfig:
     """
 
     project_id: str
-    poll_interval_seconds: Optional[int] = None
+    poll_interval_seconds: int | None = None
     webhook_enabled: bool = True
 
 
@@ -102,7 +101,6 @@ class IMonitoredService(ABC):
             ExternalServiceError: If unable to start monitoring (e.g., webhook
                                  registration fails)
         """
-        pass
 
     @abstractmethod
     async def stop_monitoring(self, project_id: str) -> None:
@@ -120,7 +118,6 @@ class IMonitoredService(ABC):
             ExternalServiceError: If unable to stop monitoring (e.g., webhook
                                  deregistration fails)
         """
-        pass
 
     @abstractmethod
     async def get_monitoring_status(self, project_id: str) -> MonitoringStatus:
@@ -138,4 +135,3 @@ class IMonitoredService(ABC):
         Raises:
             ValidationError: If project_id is invalid
         """
-        pass

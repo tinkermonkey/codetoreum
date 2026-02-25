@@ -13,8 +13,8 @@ Supports multiple metrics backends (in-memory, Prometheus, etc.)
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from codetoreum.domain.events import DomainEvent
 from codetoreum.domain.events.repair_cycle_events import (
@@ -45,32 +45,32 @@ class RepairCycleMetrics:
     cycles_fast_failed: int = 0
 
     # Duration metrics
-    cycle_durations: List[float] = None  # seconds
+    cycle_durations: list[float] = None  # seconds
     total_duration_seconds: float = 0.0
 
     # Test execution metrics
-    test_executions_by_type: Dict[str, int] = None  # {test_type: count}
-    test_failures_by_type: Dict[str, int] = None  # {test_type: failure_count}
-    test_iterations_by_type: Dict[str, List[int]] = None  # {test_type: [iteration_counts]}
+    test_executions_by_type: dict[str, int] = None  # {test_type: count}
+    test_failures_by_type: dict[str, int] = None  # {test_type: failure_count}
+    test_iterations_by_type: dict[str, list[int]] = None  # {test_type: [iteration_counts]}
 
     # File fixing metrics
     files_fixed_total: int = 0
-    unique_files_fixed: Dict[str, int] = None  # {file_path: fix_count}
-    file_fix_durations_by_type: Dict[str, List[float]] = None  # {file_ext: [durations]}
+    unique_files_fixed: dict[str, int] = None  # {file_path: fix_count}
+    file_fix_durations_by_type: dict[str, list[float]] = None  # {file_ext: [durations]}
 
     # Warning metrics
     warnings_reviewed_total: int = 0
-    warnings_by_severity: Dict[str, int] = None  # {severity: count}
+    warnings_by_severity: dict[str, int] = None  # {severity: count}
 
     # Agent call metrics
-    agent_calls_per_cycle: List[int] = None  # agent call counts per cycle
+    agent_calls_per_cycle: list[int] = None  # agent call counts per cycle
     total_agent_calls: int = 0
 
     # Per-agent breakdown
-    per_agent_metrics: Dict[str, "RepairCycleMetrics"] = None
+    per_agent_metrics: dict[str, "RepairCycleMetrics"] = None
 
     # Error tracking
-    fast_fail_reasons: Dict[str, int] = None  # {reason: count}
+    fast_fail_reasons: dict[str, int] = None  # {reason: count}
 
     def __post_init__(self):
         """Initialize list/dict fields."""
@@ -95,32 +95,32 @@ class RepairCycleMetrics:
         if self.fast_fail_reasons is None:
             self.fast_fail_reasons = {}
 
-    def get_success_rate_percent(self) -> Optional[float]:
+    def get_success_rate_percent(self) -> float | None:
         """Calculate success rate percentage."""
         if self.cycles_completed == 0:
             return None
         return (self.cycles_successful / self.cycles_completed) * 100
 
-    def get_avg_duration_seconds(self) -> Optional[float]:
+    def get_avg_duration_seconds(self) -> float | None:
         """Calculate average cycle duration."""
         if not self.cycle_durations:
             return None
         return sum(self.cycle_durations) / len(self.cycle_durations)
 
-    def get_avg_agent_calls(self) -> Optional[float]:
+    def get_avg_agent_calls(self) -> float | None:
         """Calculate average agent calls per cycle."""
         if not self.agent_calls_per_cycle:
             return None
         return sum(self.agent_calls_per_cycle) / len(self.agent_calls_per_cycle)
 
-    def get_avg_iterations_by_test_type(self, test_type: str) -> Optional[float]:
+    def get_avg_iterations_by_test_type(self, test_type: str) -> float | None:
         """Calculate average iterations for a specific test type."""
         iterations = self.test_iterations_by_type.get(test_type, [])
         if not iterations:
             return None
         return sum(iterations) / len(iterations)
 
-    def get_test_failure_rate_percent(self, test_type: str) -> Optional[float]:
+    def get_test_failure_rate_percent(self, test_type: str) -> float | None:
         """Calculate failure rate for a specific test type."""
         executions = self.test_executions_by_type.get(test_type, 0)
         failures = self.test_failures_by_type.get(test_type, 0)
@@ -134,8 +134,8 @@ class RepairCycleMetricsCollector:
 
     def __init__(
         self,
-        event_bus: Optional[EventBus] = None,
-        metrics_backend: Optional[IMetrics] = None,
+        event_bus: EventBus | None = None,
+        metrics_backend: IMetrics | None = None,
     ):
         """
         Initialize repair cycle metrics collector.
@@ -151,7 +151,7 @@ class RepairCycleMetricsCollector:
         self._metrics = RepairCycleMetrics()
 
         # Track active cycles for gauges
-        self._active_cycles_by_agent: Dict[str, int] = {}
+        self._active_cycles_by_agent: dict[str, int] = {}
 
         # Circuit breaker for metrics backend
         self._backend_consecutive_failures = 0
@@ -219,7 +219,7 @@ class RepairCycleMetricsCollector:
         """Extract attribute from event."""
         if hasattr(event, attribute):
             return getattr(event, attribute, default)
-        if hasattr(event, 'payload') and isinstance(event.payload, dict):
+        if hasattr(event, "payload") and isinstance(event.payload, dict):
             return event.payload.get(attribute, default)
         return default
 
@@ -260,14 +260,14 @@ class RepairCycleMetricsCollector:
             self.event_bus.emit(
                 RepairCycleMetricsBackendFailedEvent(
                     type="repair_cycle.metrics_backend_failed",
-                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    timestamp=datetime.now(UTC).isoformat(),
                     source="repair_cycle_metrics_collector",
                     operation=operation,
                     error_type=type(error).__name__,
                     error_message=str(error),
                     consecutive_failures=self._backend_consecutive_failures,
                     circuit_breaker_open=self._backend_circuit_open,
-                    workflow_run_id=getattr(error, 'workflow_run_id', ''),
+                    workflow_run_id=getattr(error, "workflow_run_id", ""),
                 )
             )
 

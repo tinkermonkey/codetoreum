@@ -77,11 +77,11 @@ class AddEnvironmentVariableRequest(BaseModel):
     def validate_variable_value(cls, v):
         # Sanitize value - strip leading/trailing whitespace
         # Don't allow null bytes or other control characters except tabs and newlines
-        if '\x00' in v:
+        if "\x00" in v:
             raise ValueError("Variable value cannot contain null bytes")
 
         # Check for suspicious patterns that might indicate injection attempts
-        suspicious_patterns = ['$(', '`', '${', '\r']
+        suspicious_patterns = ["$(", "`", "${", "\r"]
         for pattern in suspicious_patterns:
             if pattern in v:
                 raise ValueError(

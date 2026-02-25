@@ -26,18 +26,18 @@ from codetoreum.infrastructure.adapters.registry_base import (
 
 __all__ = [
     # Base registry
-    'AdapterRegistry',
-    'AdapterMetadata',
+    "AdapterRegistry",
+    "AdapterMetadata",
 
     # Specific registries
-    'TicketSystemRegistry',
-    'LLMProviderRegistry',
-    'ContainerRegistry',
-    'RepositoryRegistry',
-    'EventStoreRegistry',
-    'StorageRegistry',
+    "TicketSystemRegistry",
+    "LLMProviderRegistry",
+    "ContainerRegistry",
+    "RepositoryRegistry",
+    "EventStoreRegistry",
+    "StorageRegistry",
 
     # Factory
-    'AdapterFactory',
-    'AdapterFactoryConfig',
+    "AdapterFactory",
+    "AdapterFactoryConfig",
 ]

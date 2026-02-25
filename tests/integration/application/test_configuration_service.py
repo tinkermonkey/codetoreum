@@ -8,7 +8,7 @@ Tests configuration service with in-memory adapters to verify:
 - Event emission
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -18,12 +18,10 @@ from codetoreum.application.configuration_service import ConfigurationService
 from codetoreum.domain.events import (
     AgentConfigUpdated,
     CommandMounted,
-    CommandUnmounted,
     EnvironmentVariableChanged,
     PipelineConfigUpdated,
     ProjectConfigUpdated,
     SubAgentMounted,
-    SubAgentUnmounted,
 )
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.input.config_command import (
@@ -39,9 +37,7 @@ from codetoreum.ports.input.config_command import (
 )
 from codetoreum.ports.input.exceptions import ValidationError
 from codetoreum.ports.output.config_store import (
-    AgentConfig,
     ConfigNotFoundError,
-    PipelineConfig,
     ProjectConfig,
 )
 
@@ -110,8 +106,8 @@ async def sample_project(config_store):
         tech_stacks={"language": "python", "framework": "fastapi"},
         pipelines=[],
         testing={"command": "pytest", "directory": "tests"},
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     await config_store.save_project_config(project)
     return project
@@ -753,8 +749,8 @@ async def test_search_functionality(config_store, sample_project):
         github_org="test",
         github_repo="api-gateway",
         tech_stacks={"python": "3.11"},
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     project2 = ProjectConfig(
         id="proj-user-service",
@@ -762,8 +758,8 @@ async def test_search_functionality(config_store, sample_project):
         github_org="test",
         github_repo="users",
         tech_stacks={"java": "17"},
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     await config_store.save_project_config(project1)
     await config_store.save_project_config(project2)

@@ -10,12 +10,10 @@ abstractions over GitHub Projects v2, Trello, JIRA boards, etc.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime
 from enum import Enum
-from typing import List, Optional
 
 from .event_emitter import IEventEmitter
-from .monitoring import IMonitoredService, MonitoringConfig
+from .monitoring import IMonitoredService
 
 
 class MovedByType(Enum):
@@ -39,7 +37,7 @@ class BoardColumn:
     id: str
     name: str
     position: int
-    work_item_ids: List[str]
+    work_item_ids: list[str]
 
 
 @dataclass
@@ -71,7 +69,7 @@ class ProjectBoard:
     id: str
     name: str
     project_id: str
-    columns: List[BoardColumn]
+    columns: list[BoardColumn]
 
 
 @dataclass
@@ -87,7 +85,7 @@ class ColumnMovementResult:
     """
 
     work_item_id: str
-    from_column: Optional[str]
+    from_column: str | None
     to_column: str
     moved_by: MovedByType
     timestamp: str
@@ -109,10 +107,10 @@ class ReconciliationResult:
     """
 
     board_id: str
-    columns_added: List[str]
-    columns_removed: List[str]
-    columns_renamed: List[tuple[str, str]]
-    orphaned_items: List[str]
+    columns_added: list[str]
+    columns_removed: list[str]
+    columns_renamed: list[tuple[str, str]]
+    orphaned_items: list[str]
 
 
 @dataclass
@@ -130,7 +128,7 @@ class BoardConfig:
     """
 
     board_id: str
-    expected_columns: List[str]
+    expected_columns: list[str]
     auto_create_missing: bool = True
 
 
@@ -200,10 +198,9 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
             ResourceNotFoundError: Board doesn't exist
             ExternalServiceError: Service communication failure
         """
-        pass
 
     @abstractmethod
-    async def get_columns(self, board_id: str) -> List[BoardColumn]:
+    async def get_columns(self, board_id: str) -> list[BoardColumn]:
         """Get all columns for a board.
 
         Returns columns in order of their position on the board.
@@ -218,12 +215,11 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
             ResourceNotFoundError: Board doesn't exist
             ExternalServiceError: Service communication failure
         """
-        pass
 
     @abstractmethod
     async def get_items_in_column(
         self, board_id: str, column_name: str
-    ) -> List[WorkItemPosition]:
+    ) -> list[WorkItemPosition]:
         """Get all work items in a specific column ordered by position.
 
         Args:
@@ -237,7 +233,6 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
             ResourceNotFoundError: Board or column doesn't exist
             ExternalServiceError: Service communication failure
         """
-        pass
 
     @abstractmethod
     async def get_item_position(self, work_item_id: str) -> WorkItemPosition:
@@ -255,7 +250,6 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
             ResourceNotFoundError: Work item not found on any board
             ExternalServiceError: Service communication failure
         """
-        pass
 
     # Command Operations
 
@@ -284,7 +278,6 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
         Events:
             Emits 'workitem.column_changed' event with source and target columns
         """
-        pass
 
     @abstractmethod
     async def reconcile_board(
@@ -314,4 +307,3 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
         Events:
             Emits 'board.reconciled' event with changes made
         """
-        pass

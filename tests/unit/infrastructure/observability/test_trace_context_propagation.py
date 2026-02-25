@@ -8,8 +8,7 @@ Tests cover:
 - Integration with event bus publishing and handling
 """
 
-from unittest.mock import MagicMock, Mock, patch
-from uuid import uuid4
+from unittest.mock import Mock, patch
 
 import pytest
 

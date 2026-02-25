@@ -18,7 +18,6 @@ about test execution and repair steps—they cannot be modified after creation.
 
 import warnings
 from dataclasses import dataclass
-from typing import Optional, Tuple
 from uuid import uuid4
 
 from ..repair_cycle_types import (
@@ -47,7 +46,7 @@ class RepairCycleStartedEvent(CodetoreumEvent):
     """
 
     stage_name: str = ""
-    test_types: Tuple[RepairTestType, ...] = ()
+    test_types: tuple[RepairTestType, ...] = ()
     workflow_run_id: str = ""
 
     def __post_init__(self) -> None:
@@ -212,7 +211,7 @@ class RepairCycleTestExecutionCompletedEvent(CodetoreumEvent):
     failed: int = 0
     warnings: int = 0
     has_failures: bool = False
-    failures: Tuple[RepairTestFailure, ...] = ()
+    failures: tuple[RepairTestFailure, ...] = ()
     workflow_run_id: str = ""
 
     def __post_init__(self) -> None:
@@ -561,7 +560,7 @@ class RepairCycleWarningReviewStartedEvent(CodetoreumEvent):
     source_file: str = ""
     warning_count: int = 0
     test_type: RepairTestType = RepairTestType.UNIT
-    warnings: Tuple[RepairTestWarning, ...] = ()
+    warnings: tuple[RepairTestWarning, ...] = ()
     workflow_run_id: str = ""
 
     def __post_init__(self) -> None:
@@ -732,7 +731,7 @@ class RepairCycleTestCycleCompletedEvent(CodetoreumEvent):
     test_cycle_iterations: int = 0
     files_fixed: int = 0
     warnings_reviewed: int = 0
-    error: Optional[str] = None
+    error: str | None = None
     duration_seconds: float = 0.0
     workflow_run_id: str = ""
 
@@ -1127,7 +1126,7 @@ class RepairCycleCompletedEvent(CodetoreumEvent):
     """
 
     overall_success: bool = False
-    test_results: Tuple[CycleResult, ...] = ()
+    test_results: tuple[CycleResult, ...] = ()
     total_agent_calls: int = 0
     duration_seconds: float = 0.0
     workflow_run_id: str = ""

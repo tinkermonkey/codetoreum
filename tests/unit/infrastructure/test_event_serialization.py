@@ -1,7 +1,7 @@
 """Unit tests for event serialization."""
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -29,7 +29,7 @@ class TestEventSerializer:
         # Arrange
         event_id = uuid4()
         correlation_id = uuid4()
-        occurred_at = datetime.now(timezone.utc)
+        occurred_at = datetime.now(UTC)
 
         event = DomainEvent(
             aggregate_id="test-123",
@@ -63,7 +63,7 @@ class TestEventSerializer:
         # Arrange
         event_id = uuid4()
         correlation_id = uuid4()
-        occurred_at = datetime.now(timezone.utc)
+        occurred_at = datetime.now(UTC)
 
         original_event = DomainEvent(
             aggregate_id="test-123",
@@ -189,7 +189,7 @@ class TestEventSerializer:
                         "list": [1, 2, 3],
                     }
                 },
-                "timestamp": datetime.now(timezone.utc),
+                "timestamp": datetime.now(UTC),
             },
         )
 
@@ -296,7 +296,7 @@ class TestEventSerializer:
                 "event_version": 1,
                 "aggregate_id": "test-123",
                 "aggregate_type": "TestAggregate",
-                "occurred_at": datetime.now(timezone.utc).isoformat(),
+                "occurred_at": datetime.now(UTC).isoformat(),
                 "correlation_id": None,
                 "causation_id": None,
                 "user_id": None,

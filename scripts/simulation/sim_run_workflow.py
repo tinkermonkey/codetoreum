@@ -45,7 +45,7 @@ def main() -> None:
         print(f"       Created: {issue_id} ({issue['title']})")
 
         # Step 2: Move to Ready
-        print(f"[2/4] Moving to Ready column...")
+        print("[2/4] Moving to Ready column...")
         resp = client.post(f"{base}/issues/{issue_id}/move", json={
             "target_column": "Ready",
         })
@@ -54,7 +54,7 @@ def main() -> None:
         print(f"       Moved: {move['from_column']} -> {move['to_column']}")
 
         # Step 3: Add a comment
-        print(f"[3/4] Adding comment...")
+        print("[3/4] Adding comment...")
         resp = client.post(f"{base}/issues/{issue_id}/comment", json={
             "body": "This issue is ready for orchestrator pickup.",
             "author": "simulation-operator",

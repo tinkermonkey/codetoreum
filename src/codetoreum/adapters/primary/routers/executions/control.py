@@ -104,14 +104,14 @@ def register_control_endpoints(
             if "not found" in error_lower:
                 raise HTTPException(
                     status_code=http_status.HTTP_404_NOT_FOUND,
-                    detail=f"Execution not found: {str(e)}",
+                    detail=f"Execution not found: {e!s}",
                 )
-            elif "already completed" in error_lower or "invalid state" in error_lower:
+            if "already completed" in error_lower or "invalid state" in error_lower:
                 raise HTTPException(
                     status_code=http_status.HTTP_409_CONFLICT,
-                    detail=f"Cannot terminate execution: {str(e)}",
+                    detail=f"Cannot terminate execution: {e!s}",
                 )
             raise HTTPException(
                 status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to terminate execution: {str(e)}",
+                detail=f"Failed to terminate execution: {e!s}",
             )

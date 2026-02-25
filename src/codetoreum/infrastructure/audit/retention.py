@@ -7,8 +7,7 @@ Implements configurable retention policies for audit logs with automatic cleanup
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 from codetoreum.infrastructure.audit.interfaces import IAuditStore
 
@@ -54,7 +53,7 @@ class RetentionPolicyManager:
     def __init__(
         self,
         audit_store: IAuditStore,
-        policy: Optional[RetentionPolicy] = None,
+        policy: RetentionPolicy | None = None,
     ):
         """
         Initialize retention policy manager.
@@ -65,7 +64,7 @@ class RetentionPolicyManager:
         """
         self.audit_store = audit_store
         self.policy = policy or RetentionPolicy()
-        self._cleanup_task: Optional[asyncio.Task] = None
+        self._cleanup_task: asyncio.Task | None = None
 
     async def cleanup_old_events(self, dry_run: bool = False) -> dict:
         """
@@ -83,7 +82,7 @@ class RetentionPolicyManager:
         )
 
         stats = {
-            "start_time": datetime.now(timezone.utc).isoformat(),
+            "start_time": datetime.now(UTC).isoformat(),
             "dry_run": dry_run,
             "events_deleted": 0,
             "errors": [],
@@ -96,7 +95,7 @@ class RetentionPolicyManager:
                     AuditQueryFilters,
                 )
 
-                cutoff_date = datetime.now(timezone.utc) - timedelta(
+                cutoff_date = datetime.now(UTC) - timedelta(
                     days=self.policy.default_retention_days
                 )
                 filters = AuditQueryFilters(
@@ -121,7 +120,7 @@ class RetentionPolicyManager:
                 extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
             )
 
-        stats["end_time"] = datetime.now(timezone.utc).isoformat()
+        stats["end_time"] = datetime.now(UTC).isoformat()
         return stats
 
     async def start_periodic_cleanup(self) -> None:

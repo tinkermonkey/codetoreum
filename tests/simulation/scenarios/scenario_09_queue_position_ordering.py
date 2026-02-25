@@ -19,13 +19,12 @@ Expected Outcome:
 - Next waiting item correctly identified by position
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
 from codetoreum.adapters.testing.in_memory_queue_service import InMemoryQueueService
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
-from codetoreum.ports.output.board_service import BoardColumn
 
 
 @pytest.mark.asyncio
@@ -34,7 +33,7 @@ async def test_scenario_09_queue_position_ordering():
     # Setup
     queue_service = InMemoryQueueService()
     board_service = MockBoardAdapter()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Create board with trigger column
     board_service.current_project = "proj-1"
@@ -139,7 +138,7 @@ async def test_scenario_09_queue_position_ordering():
 async def test_scenario_09_parallel_queues():
     """Test independent queues for multiple boards."""
     queue_service = InMemoryQueueService()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Create items in project-1, board-1
     await queue_service.enqueue_item(
@@ -192,7 +191,7 @@ async def test_scenario_09_parallel_queues():
 async def test_scenario_09_position_changes_affect_priority():
     """Test that position changes affect queue ordering."""
     queue_service = InMemoryQueueService()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Add items with specific positions
     await queue_service.enqueue_item(
@@ -233,7 +232,7 @@ async def test_scenario_09_with_board_service_sync():
     """Test queue synchronization with actual board service."""
     board_service = MockBoardAdapter()
     queue_service = InMemoryQueueService(board_service=board_service)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Create board
     board_service.current_project = "proj-1"

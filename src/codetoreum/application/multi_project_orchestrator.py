@@ -8,8 +8,8 @@ and cross-project state management.
 import asyncio
 import logging
 import time
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from codetoreum.domain.events.project_events import (
     OrchestrationCycleCompletedEvent,
@@ -68,7 +68,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
         project_manager: IProjectManagerService,
         workflow_orchestrator: "IWorkflowOrchestrator",
         board_service: IBoardService,
-        event_emitter: Optional[IEventEmitter] = None,
+        event_emitter: IEventEmitter | None = None,
         poll_interval_seconds: int = POLL_INTERVAL_SECONDS,
     ) -> None:
         """Initialize the multi-project orchestrator.
@@ -85,7 +85,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
         self._board_service = board_service
         self._event_emitter = event_emitter
         self._poll_interval_seconds = poll_interval_seconds
-        self._last_cycle_time: Optional[datetime] = None
+        self._last_cycle_time: datetime | None = None
         self._cycle_count = 0
         self._stop_event = asyncio.Event()
 
@@ -126,7 +126,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                 # Stop event was set, exit gracefully
                 logger.info("Orchestration cycle loop stopped")
                 break
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Normal timeout - continue to next cycle
                 pass
 
@@ -196,7 +196,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
             ExternalServiceError: Critical infrastructure failure preventing cycle
         """
         cycle_start = time.time()
-        cycle_timestamp = datetime.now(timezone.utc)
+        cycle_timestamp = datetime.now(UTC)
         self._cycle_count += 1
 
         try:
@@ -246,7 +246,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
             logger.info(f"Found {len(enabled_projects)} enabled projects")
 
             # Step 3: Orchestrate each project (sequentially to avoid resource contention)
-            project_results: List[ProjectOrchestrationResult] = []
+            project_results: list[ProjectOrchestrationResult] = []
             total_actions = 0
             total_errors = 0
 
@@ -300,7 +300,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                             actions_taken=0,
                             errors=(str(e),),
                             workspace_path="",
-                            timestamp=datetime.now(timezone.utc),
+                            timestamp=datetime.now(UTC),
                         )
                     )
 
@@ -407,7 +407,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
         Returns:
             ProjectOrchestrationResult: Results for this project (success or failure)
         """
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         try:
             # Get project configuration
@@ -540,7 +540,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
             workspace_path=workspace_path,
         )
 
-    async def list_enabled_projects(self) -> List[str]:
+    async def list_enabled_projects(self) -> list[str]:
         """Get list of all enabled projects.
 
         Returns:
@@ -584,4 +584,4 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
     @staticmethod
     def _get_iso_timestamp() -> str:
         """Get current timestamp in ISO 8601 format with UTC timezone."""
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()

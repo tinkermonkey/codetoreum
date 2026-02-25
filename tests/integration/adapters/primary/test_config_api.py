@@ -5,8 +5,7 @@ Tests all configuration management endpoints including projects, pipelines, agen
 environment variables, search, versioning, and audit trail.
 """
 
-from datetime import datetime, timedelta, timezone
-from typing import AsyncGenerator
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -18,7 +17,6 @@ from codetoreum.ports.input.config_command import IConfigurationCommandPort
 from codetoreum.ports.input.config_query import (
     AgentConfigInfo,
     IConfigurationQueryPort,
-    PaginationParams,
     PipelineConfigInfo,
     ProjectConfigInfo,
 )
@@ -75,8 +73,8 @@ def sample_project_config() -> ProjectConfigInfo:
         github_org="test-org",
         github_repo="test-repo",
         version=1,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
         environment_variables={"DEBUG": "true", "API_KEY": "secret123"},
         mounted_commands=[],
         mounted_subagents=[],
@@ -93,8 +91,8 @@ def sample_pipeline_config() -> PipelineConfigInfo:
         description="Test pipeline",
         project_id="proj-123",
         version=1,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
         stages=[
             {
                 "name": "analysis",
@@ -132,8 +130,8 @@ def sample_agent_config() -> AgentConfigInfo:
         makes_code_changes=True,
         filesystem_write_allowed=True,
         version=1,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
         mcp_servers=[],
         capabilities={"code_analysis": True, "bug_fix": True},
         metadata={"agent_type": "specialist"},
@@ -640,14 +638,14 @@ class TestConfigurationVersioning:
         version_history = [
             ConfigVersionInfo(
                 version=2,
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
                 created_by="user@example.com",
                 changes={"description": "Updated"},
                 reason="User update",
             ),
             ConfigVersionInfo(
                 version=1,
-                created_at=datetime.now(timezone.utc) - timedelta(days=1),
+                created_at=datetime.now(UTC) - timedelta(days=1),
                 created_by="admin@example.com",
                 changes={},
                 reason="Initial creation",

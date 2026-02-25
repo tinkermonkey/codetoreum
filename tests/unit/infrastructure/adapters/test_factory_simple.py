@@ -7,11 +7,8 @@ Tests configuration-driven instantiation and registry integration.
 import pytest
 
 from codetoreum.adapters.testing import (
-    FakeContainerAdapter,
     InMemoryEventStore,
-    InMemoryRepositoryAdapter,
     InMemoryTicketAdapter,
-    MockLLMAdapter,
 )
 from codetoreum.infrastructure.adapters import AdapterFactory, AdapterFactoryConfig
 from codetoreum.infrastructure.resilience import OperationMode

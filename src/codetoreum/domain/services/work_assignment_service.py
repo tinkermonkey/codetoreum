@@ -1,7 +1,6 @@
 """Work assignment service for assigning work items to agents."""
 
 from dataclasses import dataclass
-from typing import List
 
 from codetoreum.domain.agent import Agent
 from codetoreum.domain.exceptions import DomainError
@@ -38,8 +37,8 @@ class WorkAssignmentService:
     def assign_work(
         self,
         work_item: WorkItem,
-        available_agents: List[Agent],
-        requirements: List[Requirement],
+        available_agents: list[Agent],
+        requirements: list[Requirement],
         min_score: float = 0.5,
     ) -> AssignmentResult:
         """
@@ -116,7 +115,7 @@ class WorkAssignmentService:
         return True
 
     def _generate_assignment_reason(
-        self, agent: Agent, score: float, requirements: List[Requirement]
+        self, agent: Agent, score: float, requirements: list[Requirement]
     ) -> str:
         """
         Generate human-readable assignment reasoning.

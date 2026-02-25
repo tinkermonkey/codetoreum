@@ -6,7 +6,6 @@ including creating, updating, and deleting work items.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Optional
 
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority
 
@@ -18,10 +17,10 @@ class CreateWorkItemCommand:
     project_id: str
     title: str
     description: str
-    labels: Optional[List[str]] = None
+    labels: list[str] | None = None
     priority: WorkItemPriority = WorkItemPriority.MEDIUM
-    external_id: Optional[str] = None
-    external_url: Optional[str] = None
+    external_id: str | None = None
+    external_url: str | None = None
 
 
 @dataclass
@@ -29,10 +28,10 @@ class UpdateWorkItemCommand:
     """Command to update an existing work item"""
 
     work_item_id: str
-    title: Optional[str] = None
-    description: Optional[str] = None
-    labels: Optional[List[str]] = None
-    priority: Optional[WorkItemPriority] = None
+    title: str | None = None
+    description: str | None = None
+    labels: list[str] | None = None
+    priority: WorkItemPriority | None = None
 
 
 @dataclass
@@ -49,7 +48,7 @@ class UpdateLabelsCommand:
     """Command to update work item labels"""
 
     work_item_id: str
-    labels: List[str]
+    labels: list[str]
 
 
 @dataclass
@@ -83,7 +82,7 @@ class WorkItemCommandResult:
     success: bool
     work_item_id: str
     message: str
-    errors: Optional[List[str]] = None
+    errors: list[str] | None = None
 
 
 class IWorkItemCommandPort(ABC):
@@ -113,7 +112,6 @@ class IWorkItemCommandPort(ABC):
             ValidationError: If command parameters invalid
             ProjectNotFoundError: If project doesn't exist
         """
-        pass
 
     @abstractmethod
     async def update_work_item(self, command: UpdateWorkItemCommand) -> WorkItem:
@@ -130,7 +128,6 @@ class IWorkItemCommandPort(ABC):
             WorkItemNotFoundError: If work item doesn't exist
             ValidationError: If command parameters invalid
         """
-        pass
 
     @abstractmethod
     async def delete_work_item(self, work_item_id: str) -> WorkItemCommandResult:
@@ -146,7 +143,6 @@ class IWorkItemCommandPort(ABC):
         Raises:
             WorkItemNotFoundError: If work item doesn't exist
         """
-        pass
 
     @abstractmethod
     async def assign_agent(self, command: AssignAgentCommand) -> WorkItem:
@@ -163,7 +159,6 @@ class IWorkItemCommandPort(ABC):
             WorkItemNotFoundError: If work item doesn't exist
             AgentNotFoundError: If agent doesn't exist
         """
-        pass
 
     @abstractmethod
     async def update_labels(self, command: UpdateLabelsCommand) -> WorkItem:
@@ -179,7 +174,6 @@ class IWorkItemCommandPort(ABC):
         Raises:
             WorkItemNotFoundError: If work item doesn't exist
         """
-        pass
 
     @abstractmethod
     async def update_priority(self, command: UpdatePriorityCommand) -> WorkItem:
@@ -195,7 +189,6 @@ class IWorkItemCommandPort(ABC):
         Raises:
             WorkItemNotFoundError: If work item doesn't exist
         """
-        pass
 
     @abstractmethod
     async def attach_workflow(self, command: AttachWorkflowCommand) -> WorkItem:
@@ -212,7 +205,6 @@ class IWorkItemCommandPort(ABC):
             WorkItemNotFoundError: If work item doesn't exist
             WorkflowNotFoundError: If workflow doesn't exist
         """
-        pass
 
     @abstractmethod
     async def update_stage(self, command: UpdateStageCommand) -> WorkItem:
@@ -228,4 +220,3 @@ class IWorkItemCommandPort(ABC):
         Raises:
             WorkItemNotFoundError: If work item doesn't exist
         """
-        pass

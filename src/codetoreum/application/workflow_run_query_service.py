@@ -8,9 +8,9 @@ from the event store using event sourcing.
 import asyncio
 import logging
 from collections import OrderedDict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from codetoreum.application.event_sequence_validator import EventSequenceValidator
 from codetoreum.application.expected_sequence_registry import ExpectedSequenceRegistry
@@ -62,7 +62,7 @@ class LRUCache:
         self._cache: OrderedDict[str, tuple[Any, datetime]] = OrderedDict()
         self._lock = asyncio.Lock()
 
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Any | None:
         """
         Get value from cache.
 
@@ -80,7 +80,7 @@ class LRUCache:
             value, timestamp = self._cache[key]
 
             # Check if expired
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             if now - timestamp > self.ttl:
                 age_seconds = (now - timestamp).total_seconds()
                 logger.debug(f"Cache expired: key={key}, age={age_seconds:.1f}s, ttl={self.ttl.total_seconds()}s")
@@ -117,7 +117,7 @@ class LRUCache:
                 self._cache.popitem(last=False)
 
             # Add new entry (at end = most recently used)
-            self._cache[key] = (value, datetime.now(timezone.utc))
+            self._cache[key] = (value, datetime.now(UTC))
             if not was_update:
                 logger.debug(f"Cache set: key={key}, cache_size={len(self._cache)}")
 
@@ -162,7 +162,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
     def __init__(
         self,
         event_store: IEventStore,
-        ticket_system: Optional[ITicketSystem] = None,
+        ticket_system: ITicketSystem | None = None,
         cache_size: int = 1000,
         cache_ttl_seconds: int = 300,
     ):
@@ -214,8 +214,8 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
 
     async def list_workflow_runs(
         self,
-        filters: Optional[WorkflowRunFilters] = None,
-        pagination: Optional[WorkflowRunPaginationParams] = None,
+        filters: WorkflowRunFilters | None = None,
+        pagination: WorkflowRunPaginationParams | None = None,
     ) -> WorkflowRunListResult:
         """
         List workflow runs matching the specified criteria.
@@ -260,7 +260,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         )
 
         # Reconstruct workflows from events (only the ones we need)
-        workflows: List[Workflow] = []
+        workflows: list[Workflow] = []
         failed_count = 0
 
         for stream_id in stream_ids:
@@ -330,8 +330,8 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         workflow_run_id: str,
         offset: int = 0,
         limit: int = 50,
-        event_types: Optional[List[str]] = None,
-        since: Optional[datetime] = None,
+        event_types: list[str] | None = None,
+        since: datetime | None = None,
     ) -> WorkflowRunEventsResult:
         """
         Retrieve events for a specific workflow run.
@@ -517,8 +517,8 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
     # Private helper methods
 
     def _build_event_data_filters(
-        self, filters: Optional[WorkflowRunFilters]
-    ) -> Optional[Dict[str, Any]]:
+        self, filters: WorkflowRunFilters | None
+    ) -> dict[str, Any] | None:
         """
         Build Elasticsearch event data filters from WorkflowRunFilters.
 
@@ -538,7 +538,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         if filters is None:
             return None
 
-        event_filters: Dict[str, Any] = {}
+        event_filters: dict[str, Any] = {}
 
         # Note: Status filtering is complex with event sourcing because status
         # is derived from events. For now, we'll do post-filtering after reconstruction.
@@ -559,8 +559,8 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         return event_filters if event_filters else None
 
     async def _enrich_workflows_with_metadata(
-        self, workflows: List[Workflow]
-    ) -> List[WorkflowRunSummary]:
+        self, workflows: list[Workflow]
+    ) -> list[WorkflowRunSummary]:
         """
         Enrich workflows with metadata in parallel.
 
@@ -602,7 +602,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         summaries = await asyncio.gather(*[enrich_one(w) for w in workflows], return_exceptions=True)
 
         # Handle any exceptions returned from gather
-        processed_summaries: List[WorkflowRunSummary] = []
+        processed_summaries: list[WorkflowRunSummary] = []
         for summary in summaries:
             if isinstance(summary, (Exception, BaseException)):
                 logger.error(
@@ -618,7 +618,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         return processed_summaries
 
     @staticmethod
-    def _parse_issue_number(external_id: Optional[str]) -> Optional[int]:
+    def _parse_issue_number(external_id: str | None) -> int | None:
         """Parse issue number from external_id, stripping any leading '#'."""
         if not external_id:
             return None
@@ -627,7 +627,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         except (ValueError, TypeError):
             return None
 
-    def _default_metadata(self) -> Dict[str, Any]:
+    def _default_metadata(self) -> dict[str, Any]:
         """
         Get default metadata for when work item fetch fails.
 
@@ -644,9 +644,9 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
 
     def _filter_workflows_by_status(
         self,
-        workflows: List[Workflow],
-        filters: Optional[WorkflowRunFilters],
-    ) -> List[Workflow]:
+        workflows: list[Workflow],
+        filters: WorkflowRunFilters | None,
+    ) -> list[Workflow]:
         """
         Filter workflows by status after reconstruction.
 
@@ -673,9 +673,9 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
 
     def _sort_workflows(
         self,
-        workflows: List[Workflow],
+        workflows: list[Workflow],
         pagination: WorkflowRunPaginationParams,
-    ) -> List[Workflow]:
+    ) -> list[Workflow]:
         """
         Sort workflows according to pagination parameters.
 
@@ -694,27 +694,26 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
                 key=lambda w: w.started_at or datetime.min,
                 reverse=reverse,
             )
-        elif pagination.sort_by.value == "completedAt":
+        if pagination.sort_by.value == "completedAt":
             return sorted(
                 workflows,
                 key=lambda w: w.completed_at or datetime.min,
                 reverse=reverse,
             )
-        elif pagination.sort_by.value == "duration":
+        if pagination.sort_by.value == "duration":
             return sorted(
                 workflows,
                 key=lambda w: w.get_duration_seconds() or 0,
                 reverse=reverse,
             )
-        else:
-            # Default to startedAt
-            return sorted(
-                workflows,
-                key=lambda w: w.started_at or datetime.min,
-                reverse=reverse,
-            )
+        # Default to startedAt
+        return sorted(
+            workflows,
+            key=lambda w: w.started_at or datetime.min,
+            reverse=reverse,
+        )
 
-    async def _get_work_item_metadata(self, work_item_id: str) -> Dict:
+    async def _get_work_item_metadata(self, work_item_id: str) -> dict:
         """
         Get work item metadata with LRU caching and TTL.
 
@@ -744,7 +743,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
                     "issue_title": work_item.title,
                     "issue_number": self._parse_issue_number(work_item.external_id),
                     "project": work_item.project_id,
-                    "triggered_by": getattr(work_item, 'assignee', None) or work_item.assigned_agent_id,
+                    "triggered_by": getattr(work_item, "assignee", None) or work_item.assigned_agent_id,
                     "priority": work_item.priority.name if work_item.priority else None,
                 }
             except WorkItemNotFoundError:
@@ -770,7 +769,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         return metadata
 
     def _to_workflow_run_info(
-        self, workflow: Workflow, work_item_metadata: Dict
+        self, workflow: Workflow, work_item_metadata: dict
     ) -> WorkflowRunInfo:
         """
         Convert Workflow domain model to WorkflowRunInfo.
@@ -783,7 +782,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
             WorkflowRunInfo data structure
         """
         # Extract stage information
-        stages: List[WorkflowRunStageInfo] = []
+        stages: list[WorkflowRunStageInfo] = []
         for stage in workflow.stages:
             # Get metadata and wrap in MappingProxyType for immutability
             stage_info = WorkflowRunStageInfo(
@@ -825,7 +824,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         )
 
     def _to_workflow_run_summary(
-        self, workflow: Workflow, work_item_metadata: Dict
+        self, workflow: Workflow, work_item_metadata: dict
     ) -> WorkflowRunSummary:
         """
         Convert Workflow domain model to WorkflowRunSummary.
@@ -903,7 +902,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
             "metadata": event.metadata,
         }
 
-    def _build_stage_info(self, workflow: Workflow, events: List[DomainEvent]) -> List[dict]:
+    def _build_stage_info(self, workflow: Workflow, events: list[DomainEvent]) -> list[dict]:
         """
         Build stage-grouped event information for audit view.
 
@@ -918,13 +917,13 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         """
         # Pre-index events by stage_name and execution_id for O(1) lookup
         # This avoids O(stages * events) complexity
-        events_by_stage_name: Dict[str, List[DomainEvent]] = {}
-        events_by_execution_id: Dict[str, List[DomainEvent]] = {}
+        events_by_stage_name: dict[str, list[DomainEvent]] = {}
+        events_by_execution_id: dict[str, list[DomainEvent]] = {}
 
         for event in events:
-            event_data = event.payload if hasattr(event, 'payload') else {}
-            event_stage_name = event_data.get('stage_name')
-            event_execution_id = event_data.get('execution_id')
+            event_data = event.payload if hasattr(event, "payload") else {}
+            event_stage_name = event_data.get("stage_name")
+            event_execution_id = event_data.get("execution_id")
 
             if event_stage_name:
                 if event_stage_name not in events_by_stage_name:

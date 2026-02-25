@@ -13,7 +13,6 @@ The service is responsible for:
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional
 
 from codetoreum.domain.conversational_session import ConversationalSessionState
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
@@ -81,7 +80,6 @@ class IConversationalLoopService(ABC):
         - PortError: If starting monitoring fails
         - EventStoreError: If persisting session state fails
         """
-        pass
 
     @abstractmethod
     async def handle_comment_event(
@@ -127,7 +125,6 @@ class IConversationalLoopService(ABC):
         - LLMProviderError: If agent execution fails
         - ValidationError: If event data is invalid or missing
         """
-        pass
 
     @abstractmethod
     async def handle_column_change_event(
@@ -170,7 +167,6 @@ class IConversationalLoopService(ABC):
         - ValidationError: If event data is invalid
         - PortError: If starting/stopping monitoring fails
         """
-        pass
 
     @abstractmethod
     async def cleanup_loop(
@@ -202,13 +198,12 @@ class IConversationalLoopService(ABC):
         **Raises**:
         - PortError: If stopping monitoring fails (should not prevent cleanup)
         """
-        pass
 
     @abstractmethod
     async def load_session_state(
         self,
         work_item_id: str
-    ) -> Optional[ConversationalSessionState]:
+    ) -> ConversationalSessionState | None:
         """Load persisted session state from storage.
 
         Retrieves the current session state for a work item from the event store,
@@ -230,7 +225,6 @@ class IConversationalLoopService(ABC):
         - ValidationError: If work_item_id is invalid or empty
         - EventStoreError: If storage retrieval fails
         """
-        pass
 
     @abstractmethod
     async def save_session_state(
@@ -257,4 +251,3 @@ class IConversationalLoopService(ABC):
         - ValidationError: If state is invalid (validation happens in ConversationalSessionState)
         - EventStoreError: If storage operation fails
         """
-        pass

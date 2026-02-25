@@ -1,6 +1,5 @@
 """In-memory workflow configuration service for testing and simulation."""
 
-from typing import Dict, Optional
 
 from codetoreum.domain.board_workflow_template import BoardWorkflowTemplate
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
@@ -18,11 +17,11 @@ class InMemoryWorkflowConfigService(IWorkflowConfigService):
 
     def __init__(self):
         """Initialize the in-memory configuration service."""
-        self._templates: Dict[str, BoardWorkflowTemplate] = {}
+        self._templates: dict[str, BoardWorkflowTemplate] = {}
 
     async def get_board_workflow_template(
         self, board_id: str
-    ) -> Optional[BoardWorkflowTemplate]:
+    ) -> BoardWorkflowTemplate | None:
         """Get workflow template for a board.
 
         Args:

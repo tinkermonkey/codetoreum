@@ -3,7 +3,7 @@
 Creates resilient adapters with appropriate components based on operation mode.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from codetoreum.ports.output.container import IContainer
 from codetoreum.ports.output.llm_provider import ILLMProvider
@@ -13,9 +13,7 @@ from codetoreum.ports.output.ticket_system import ITicketSystem
 from .circuit_breaker import CircuitBreaker
 from .config import (
     CLAUDE_RESILIENCE_CONFIG,
-    CONTAINER_RESILIENCE_CONFIG,
     GITHUB_RESILIENCE_CONFIG,
-    REPOSITORY_RESILIENCE_CONFIG,
     OperationMode,
 )
 from .decorators import ResilientLLMProviderDecorator, ResilientTicketSystemDecorator
@@ -35,7 +33,7 @@ class ResilienceFactory:
     def __init__(
         self,
         mode: OperationMode = OperationMode.PRODUCTION,
-        config: Optional[Dict[str, Any]] = None
+        config: dict[str, Any] | None = None
     ):
         """
         Initialize factory.
@@ -50,7 +48,7 @@ class ResilienceFactory:
     def create_resilient_ticket_system(
         self,
         adapter: ITicketSystem,
-        service_config: Optional[Dict[str, Any]] = None
+        service_config: dict[str, Any] | None = None
     ) -> ITicketSystem:
         """
         Create resilient ticket system adapter.
@@ -67,21 +65,21 @@ class ResilienceFactory:
         # Create components based on mode
         if self.mode == OperationMode.PRODUCTION:
             rate_limiter = TokenBucketRateLimiter(
-                max_requests=cfg.get('max_requests', GITHUB_RESILIENCE_CONFIG.rate_limit.max_requests if GITHUB_RESILIENCE_CONFIG.rate_limit else 5000),
-                window_seconds=cfg.get('window_seconds', 3600),
-                max_wait_seconds=cfg.get('max_wait_seconds', 60)
+                max_requests=cfg.get("max_requests", GITHUB_RESILIENCE_CONFIG.rate_limit.max_requests if GITHUB_RESILIENCE_CONFIG.rate_limit else 5000),
+                window_seconds=cfg.get("window_seconds", 3600),
+                max_wait_seconds=cfg.get("max_wait_seconds", 60)
             )
 
             circuit_breaker = CircuitBreaker(
-                failure_threshold=cfg.get('failure_threshold', 5),
-                timeout_seconds=cfg.get('circuit_timeout_seconds', 60),
-                success_threshold=cfg.get('success_threshold', 2)
+                failure_threshold=cfg.get("failure_threshold", 5),
+                timeout_seconds=cfg.get("circuit_timeout_seconds", 60),
+                success_threshold=cfg.get("success_threshold", 2)
             )
 
             retry_policy = ExponentialBackoffRetry(
-                max_retries=cfg.get('max_retries', 3),
-                base_delay=cfg.get('base_delay', 1.0),
-                max_delay=cfg.get('max_delay', 60.0)
+                max_retries=cfg.get("max_retries", 3),
+                base_delay=cfg.get("base_delay", 1.0),
+                max_delay=cfg.get("max_delay", 60.0)
             )
 
             timeout = AsyncTimeout()
@@ -109,13 +107,13 @@ class ResilienceFactory:
             circuit_breaker=circuit_breaker,
             retry_policy=retry_policy,
             timeout=timeout,
-            default_timeout_seconds=cfg.get('default_timeout', 30.0)
+            default_timeout_seconds=cfg.get("default_timeout", 30.0)
         )
 
     def create_resilient_llm_provider(
         self,
         adapter: ILLMProvider,
-        service_config: Optional[Dict[str, Any]] = None
+        service_config: dict[str, Any] | None = None
     ) -> ILLMProvider:
         """
         Create resilient LLM provider adapter.
@@ -137,21 +135,21 @@ class ResilienceFactory:
         if self.mode == OperationMode.PRODUCTION:
             # Token-based rate limiting for LLMs
             rate_limiter = TokenBucketRateLimiter(
-                max_requests=cfg.get('max_requests', CLAUDE_RESILIENCE_CONFIG.rate_limit.max_requests if CLAUDE_RESILIENCE_CONFIG.rate_limit else 50),
-                window_seconds=cfg.get('window_seconds', 60),
-                max_tokens=cfg.get('max_tokens', CLAUDE_RESILIENCE_CONFIG.rate_limit.max_tokens if CLAUDE_RESILIENCE_CONFIG.rate_limit else 40000)
+                max_requests=cfg.get("max_requests", CLAUDE_RESILIENCE_CONFIG.rate_limit.max_requests if CLAUDE_RESILIENCE_CONFIG.rate_limit else 50),
+                window_seconds=cfg.get("window_seconds", 60),
+                max_tokens=cfg.get("max_tokens", CLAUDE_RESILIENCE_CONFIG.rate_limit.max_tokens if CLAUDE_RESILIENCE_CONFIG.rate_limit else 40000)
             )
 
             circuit_breaker = CircuitBreaker(
-                failure_threshold=cfg.get('failure_threshold', 3),
-                timeout_seconds=cfg.get('circuit_timeout_seconds', 120)
+                failure_threshold=cfg.get("failure_threshold", 3),
+                timeout_seconds=cfg.get("circuit_timeout_seconds", 120)
             )
 
             # Only retry on network errors, not LLM errors
             retry_policy = ExponentialBackoffRetry(
-                max_retries=cfg.get('max_retries', 2),
-                base_delay=cfg.get('base_delay', 2.0),
-                max_delay=cfg.get('max_delay', 30.0)
+                max_retries=cfg.get("max_retries", 2),
+                base_delay=cfg.get("base_delay", 2.0),
+                max_delay=cfg.get("max_delay", 30.0)
             )
 
             timeout = AsyncTimeout()
@@ -174,13 +172,13 @@ class ResilienceFactory:
             circuit_breaker=circuit_breaker,
             retry_policy=retry_policy,
             timeout=timeout,
-            default_timeout_seconds=cfg.get('default_timeout', 300.0)
+            default_timeout_seconds=cfg.get("default_timeout", 300.0)
         )
 
     def create_resilient_repository(
         self,
         adapter: IRepository,
-        service_config: Optional[Dict[str, Any]] = None
+        service_config: dict[str, Any] | None = None
     ) -> IRepository:
         """
         Create resilient repository adapter.
@@ -202,7 +200,7 @@ class ResilienceFactory:
     def create_resilient_container(
         self,
         adapter: IContainer,
-        service_config: Optional[Dict[str, Any]] = None
+        service_config: dict[str, Any] | None = None
     ) -> IContainer:
         """
         Create resilient container adapter.

@@ -1,6 +1,5 @@
 """Shared fixtures for GitHub discussion adapter integration tests."""
 
-from typing import List, Optional
 from unittest.mock import Mock
 
 import pytest
@@ -16,7 +15,7 @@ from codetoreum.ports.output.discussion_adapter import DiscussionMonitoringConfi
 class MockIdentityService:
     """Mock identity service for consistent bot identification in tests."""
 
-    def __init__(self, bot_usernames: Optional[List[str]] = None):
+    def __init__(self, bot_usernames: list[str] | None = None):
         """Initialize with list of bot usernames.
 
         Args:
@@ -39,13 +38,12 @@ class MockIdentityService:
         """Get configured bot username."""
         return self.configured_bot
 
-    def get_human_users(self, usernames: List[str]) -> List[str]:
+    def get_human_users(self, usernames: list[str]) -> list[str]:
         """Filter list to only human users."""
         return [u for u in usernames if not self.is_bot_user(u)]
 
     def configure(self, config) -> None:
         """Update configuration."""
-        pass
 
 
 @pytest.fixture
@@ -124,7 +122,7 @@ def sample_comments():
 def mock_github_issue_comments_response():
     """Provide mock GitHub REST API response for issue comments."""
 
-    def _create_response(comments: List[dict]):
+    def _create_response(comments: list[dict]):
         response = Mock()
         response.status_code = 200
         response.json.return_value = comments

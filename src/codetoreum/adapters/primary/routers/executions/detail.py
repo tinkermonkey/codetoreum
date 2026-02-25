@@ -66,11 +66,11 @@ def register_detail_endpoints(
             if "not found" in str(e).lower():
                 raise HTTPException(
                     status_code=http_status.HTTP_404_NOT_FOUND,
-                    detail=f"Execution not found: {str(e)}",
+                    detail=f"Execution not found: {e!s}",
                 )
             raise HTTPException(
                 status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to get execution: {str(e)}",
+                detail=f"Failed to get execution: {e!s}",
             )
 
     @router.get(
@@ -122,9 +122,9 @@ def register_detail_endpoints(
             if "not found" in str(e).lower():
                 raise HTTPException(
                     status_code=http_status.HTTP_404_NOT_FOUND,
-                    detail=f"Execution not found: {str(e)}",
+                    detail=f"Execution not found: {e!s}",
                 )
             raise HTTPException(
                 status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to get execution history: {str(e)}",
+                detail=f"Failed to get execution history: {e!s}",
             )

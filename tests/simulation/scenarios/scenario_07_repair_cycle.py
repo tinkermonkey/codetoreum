@@ -15,7 +15,6 @@ Comprehensive scenarios cover:
 """
 
 from dataclasses import dataclass
-from typing import Tuple
 
 import pytest
 
@@ -38,7 +37,7 @@ class RepairCycleTestContext:
 
     stage_name: str
     workflow_run_id: str
-    test_configs: Tuple[RepairTestRunConfig, ...]
+    test_configs: tuple[RepairTestRunConfig, ...]
     agent_name: str
     max_total_agent_calls: int
     checkpoint_interval: int

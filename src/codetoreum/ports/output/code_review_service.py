@@ -10,10 +10,10 @@ flow through a review process before merging.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Literal, Optional
+from typing import Literal
 
 from .event_emitter import IEventEmitter
-from .monitoring import IMonitoredService, MonitoringConfig
+from .monitoring import IMonitoredService
 
 CodeReviewStatus = Literal["open", "approved", "changes_requested", "merged", "closed"]
 
@@ -51,9 +51,9 @@ class CodeReview:
     source_branch: str
     target_branch: str
     status: CodeReviewStatus
-    reviewers: List[str]
-    approvals: List[Approval]
-    work_item_id: Optional[str] = None
+    reviewers: list[str]
+    approvals: list[Approval]
+    work_item_id: str | None = None
 
 
 @dataclass
@@ -73,8 +73,8 @@ class ReviewComment:
     author: str
     body: str
     created_at: str
-    file_path: Optional[str] = None
-    line_number: Optional[int] = None
+    file_path: str | None = None
+    line_number: int | None = None
 
 
 class ICodeReviewService(IEventEmitter, IMonitoredService, ABC):
@@ -125,7 +125,7 @@ class ICodeReviewService(IEventEmitter, IMonitoredService, ABC):
     @abstractmethod
     async def get_review_for_work_item(
         self, work_item_id: str
-    ) -> Optional[CodeReview]:
+    ) -> CodeReview | None:
         """Find code review associated with a work item.
 
         Returns the code review (PR/MR) linked to this work item,
@@ -141,7 +141,6 @@ class ICodeReviewService(IEventEmitter, IMonitoredService, ABC):
             ResourceNotFoundError: Work item doesn't exist
             ExternalServiceError: Service communication failure
         """
-        pass
 
     @abstractmethod
     async def get_review_status(self, review_id: str) -> CodeReviewStatus:
@@ -159,10 +158,9 @@ class ICodeReviewService(IEventEmitter, IMonitoredService, ABC):
             ResourceNotFoundError: Review doesn't exist
             ExternalServiceError: Service communication failure
         """
-        pass
 
     @abstractmethod
-    async def get_review_comments(self, review_id: str) -> List[ReviewComment]:
+    async def get_review_comments(self, review_id: str) -> list[ReviewComment]:
         """Retrieve all comments on a code review.
 
         Returns all feedback comments posted during the review process.
@@ -177,7 +175,6 @@ class ICodeReviewService(IEventEmitter, IMonitoredService, ABC):
             ResourceNotFoundError: Review doesn't exist
             ExternalServiceError: Service communication failure
         """
-        pass
 
     # Command Operations
 
@@ -202,7 +199,6 @@ class ICodeReviewService(IEventEmitter, IMonitoredService, ABC):
             Emits 'review.status_changed' event if review status changes
             Emits 'review.comment_added' event for the new comment
         """
-        pass
 
     @abstractmethod
     async def approve(self, review_id: str) -> None:
@@ -223,4 +219,3 @@ class ICodeReviewService(IEventEmitter, IMonitoredService, ABC):
         Events:
             Emits 'review.status_changed' event with new_status='approved'
         """
-        pass

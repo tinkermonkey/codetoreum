@@ -3,13 +3,12 @@
 import asyncio
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from redis import asyncio as aioredis
 
 from codetoreum.ports.output.config_store import (
     AgentConfig,
-    ConfigNotFoundError,
     PipelineConfig,
     ProjectConfig,
     WorkflowTemplate,
@@ -21,7 +20,6 @@ logger = logging.getLogger(__name__)
 class RedisConfigCacheError(Exception):
     """Raised when Redis config cache operations fail."""
 
-    pass
 
 
 class RedisConfigCache:
@@ -72,8 +70,8 @@ class RedisConfigCache:
         self.default_ttl = default_ttl
         self.invalidation_channel = invalidation_channel
 
-        self._pubsub: Optional[aioredis.client.PubSub] = None
-        self._listener_task: Optional[asyncio.Task] = None
+        self._pubsub: aioredis.client.PubSub | None = None
+        self._listener_task: asyncio.Task | None = None
         self._initialized = False
         self._init_lock = asyncio.Lock()  # Prevent concurrent initialization
         self._stats = {
@@ -178,7 +176,7 @@ class RedisConfigCache:
         """Create cache key from parts."""
         return ":".join([self.key_prefix] + list(parts))
 
-    async def get_project_config(self, project_id: str) -> Optional[ProjectConfig]:
+    async def get_project_config(self, project_id: str) -> ProjectConfig | None:
         """
         Get project configuration from cache.
 
@@ -213,7 +211,7 @@ class RedisConfigCache:
 
     async def get_project_config_by_name(
         self, project_name: str
-    ) -> Optional[ProjectConfig]:
+    ) -> ProjectConfig | None:
         """
         Get project configuration from cache by name.
 
@@ -247,7 +245,7 @@ class RedisConfigCache:
             return None
 
     async def set_project_config(
-        self, config: ProjectConfig, ttl: Optional[int] = None
+        self, config: ProjectConfig, ttl: int | None = None
     ) -> None:
         """
         Set project configuration in cache.
@@ -281,7 +279,7 @@ class RedisConfigCache:
 
     async def get_agent_config(
         self, project_id: str, agent_name: str
-    ) -> Optional[AgentConfig]:
+    ) -> AgentConfig | None:
         """
         Get agent configuration from cache.
 
@@ -316,7 +314,7 @@ class RedisConfigCache:
             return None
 
     async def set_agent_config(
-        self, config: AgentConfig, ttl: Optional[int] = None
+        self, config: AgentConfig, ttl: int | None = None
     ) -> None:
         """
         Set agent configuration in cache.
@@ -345,7 +343,7 @@ class RedisConfigCache:
 
     async def get_pipeline_config(
         self, project_id: str, pipeline_name: str
-    ) -> Optional[PipelineConfig]:
+    ) -> PipelineConfig | None:
         """
         Get pipeline configuration from cache.
 
@@ -380,7 +378,7 @@ class RedisConfigCache:
             return None
 
     async def set_pipeline_config(
-        self, config: PipelineConfig, ttl: Optional[int] = None
+        self, config: PipelineConfig, ttl: int | None = None
     ) -> None:
         """
         Set pipeline configuration in cache.
@@ -409,7 +407,7 @@ class RedisConfigCache:
 
     async def get_workflow_template(
         self, template_name: str
-    ) -> Optional[WorkflowTemplate]:
+    ) -> WorkflowTemplate | None:
         """
         Get workflow template from cache.
 
@@ -443,7 +441,7 @@ class RedisConfigCache:
             return None
 
     async def set_workflow_template(
-        self, template: WorkflowTemplate, ttl: Optional[int] = None
+        self, template: WorkflowTemplate, ttl: int | None = None
     ) -> None:
         """
         Set workflow template in cache.
@@ -565,7 +563,7 @@ class RedisConfigCache:
         except Exception as e:
             logger.warning(f"Failed to invalidate all cache: {e}")
 
-    async def get_stats(self) -> Dict[str, Any]:
+    async def get_stats(self) -> dict[str, Any]:
         """
         Get cache statistics.
 
@@ -597,7 +595,7 @@ class RedisConfigCache:
         }
         logger.info("Cache statistics reset")
 
-    def _serialize_project(self, config: ProjectConfig) -> Dict[str, Any]:
+    def _serialize_project(self, config: ProjectConfig) -> dict[str, Any]:
         """Serialize ProjectConfig to dictionary."""
         return {
             "id": config.id,
@@ -620,7 +618,7 @@ class RedisConfigCache:
             "metadata": config.metadata,
         }
 
-    def _deserialize_project(self, doc: Dict[str, Any]) -> ProjectConfig:
+    def _deserialize_project(self, doc: dict[str, Any]) -> ProjectConfig:
         """Deserialize dictionary to ProjectConfig."""
         from datetime import datetime
 
@@ -649,7 +647,7 @@ class RedisConfigCache:
             metadata=doc.get("metadata", {}),
         )
 
-    def _serialize_agent(self, config: AgentConfig) -> Dict[str, Any]:
+    def _serialize_agent(self, config: AgentConfig) -> dict[str, Any]:
         """Serialize AgentConfig to dictionary."""
         return {
             "project_id": config.project_id,
@@ -671,7 +669,7 @@ class RedisConfigCache:
             "metadata": config.metadata,
         }
 
-    def _deserialize_agent(self, doc: Dict[str, Any]) -> AgentConfig:
+    def _deserialize_agent(self, doc: dict[str, Any]) -> AgentConfig:
         """Deserialize dictionary to AgentConfig."""
         from datetime import datetime
 
@@ -699,7 +697,7 @@ class RedisConfigCache:
             metadata=doc.get("metadata", {}),
         )
 
-    def _serialize_pipeline(self, config: PipelineConfig) -> Dict[str, Any]:
+    def _serialize_pipeline(self, config: PipelineConfig) -> dict[str, Any]:
         """Serialize PipelineConfig to dictionary."""
         return {
             "id": config.id,
@@ -717,7 +715,7 @@ class RedisConfigCache:
             "metadata": config.metadata,
         }
 
-    def _deserialize_pipeline(self, doc: Dict[str, Any]) -> PipelineConfig:
+    def _deserialize_pipeline(self, doc: dict[str, Any]) -> PipelineConfig:
         """Deserialize dictionary to PipelineConfig."""
         from datetime import datetime
 
@@ -741,7 +739,7 @@ class RedisConfigCache:
             metadata=doc.get("metadata", {}),
         )
 
-    def _serialize_workflow(self, template: WorkflowTemplate) -> Dict[str, Any]:
+    def _serialize_workflow(self, template: WorkflowTemplate) -> dict[str, Any]:
         """Serialize WorkflowTemplate to dictionary."""
         return {
             "id": template.id,
@@ -758,7 +756,7 @@ class RedisConfigCache:
             "metadata": template.metadata,
         }
 
-    def _deserialize_workflow(self, doc: Dict[str, Any]) -> WorkflowTemplate:
+    def _deserialize_workflow(self, doc: dict[str, Any]) -> WorkflowTemplate:
         """Deserialize dictionary to WorkflowTemplate."""
         from datetime import datetime
 

@@ -1,7 +1,6 @@
 """Wire up event bus to application services and handlers."""
 
 import logging
-from typing import Optional
 
 from codetoreum.application.event_handlers import (
     ExecutionEventHandler,
@@ -22,7 +21,6 @@ logger = logging.getLogger(__name__)
 class EventBusWiringError(Exception):
     """Raised when event bus wiring fails."""
 
-    pass
 
 
 class EventBusRegistry:
@@ -38,7 +36,7 @@ class EventBusRegistry:
 
     def __init__(
         self,
-        event_bus: Optional[EventBus] = None,
+        event_bus: EventBus | None = None,
         max_retries: int = 3,
         retry_delay_seconds: float = 1.0,
     ):
@@ -61,11 +59,11 @@ class EventBusRegistry:
 
     def register_services(
         self,
-        workflow_orchestrator: Optional[WorkflowOrchestrator] = None,
-        execution_service: Optional[ExecutionService] = None,
-        review_service: Optional[ReviewService] = None,
-        repair_cycle: Optional[IRepairCycle] = None,
-        clock: Optional[SimulationClock] = None,
+        workflow_orchestrator: WorkflowOrchestrator | None = None,
+        execution_service: ExecutionService | None = None,
+        review_service: ReviewService | None = None,
+        repair_cycle: IRepairCycle | None = None,
+        clock: SimulationClock | None = None,
     ) -> None:
         """
         Register application services.
@@ -251,11 +249,11 @@ class EventBusRegistry:
 
 
 def setup_event_bus(
-    workflow_orchestrator: Optional[WorkflowOrchestrator] = None,
-    execution_service: Optional[ExecutionService] = None,
-    review_service: Optional[ReviewService] = None,
-    repair_cycle: Optional[IRepairCycle] = None,
-    clock: Optional[SimulationClock] = None,
+    workflow_orchestrator: WorkflowOrchestrator | None = None,
+    execution_service: ExecutionService | None = None,
+    review_service: ReviewService | None = None,
+    repair_cycle: IRepairCycle | None = None,
+    clock: SimulationClock | None = None,
     max_retries: int = 3,
     retry_delay_seconds: float = 1.0,
 ) -> EventBusRegistry:

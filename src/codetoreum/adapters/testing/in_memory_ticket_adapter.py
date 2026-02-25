@@ -2,8 +2,9 @@
 
 import asyncio
 import threading
-from datetime import datetime, timezone
-from typing import Any, AsyncIterator, Dict, List, Optional
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 from codetoreum.domain.comment import Comment
@@ -30,10 +31,10 @@ class InMemoryTicketAdapter(ITicketSystem):
 
     def __init__(self):
         """Initialize the in-memory ticket adapter with thread-safe storage."""
-        self._work_items: Dict[str, WorkItem] = {}
-        self._comments: Dict[str, List[Comment]] = {}  # work_item_id -> comments
-        self._webhooks: Dict[str, Dict[str, Any]] = {}
-        self._relationships: Dict[str, List[tuple[str, str]]] = {}  # source_id -> [(target_id, relationship)]
+        self._work_items: dict[str, WorkItem] = {}
+        self._comments: dict[str, list[Comment]] = {}  # work_item_id -> comments
+        self._webhooks: dict[str, dict[str, Any]] = {}
+        self._relationships: dict[str, list[tuple[str, str]]] = {}  # source_id -> [(target_id, relationship)]
         self._next_work_item_number = 1
         self._lock = threading.Lock()  # Thread safety for concurrent test execution
 
@@ -61,10 +62,10 @@ class InMemoryTicketAdapter(ITicketSystem):
         title: str,
         description: str,
         project_id: ProjectId,
-        labels: Optional[List[str]] = None,
-        assignee: Optional[UserId] = None,
-        priority: Optional[WorkItemPriority] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        labels: list[str] | None = None,
+        assignee: UserId | None = None,
+        priority: WorkItemPriority | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> WorkItem:
         """
         Create a new work item.
@@ -114,7 +115,7 @@ class InMemoryTicketAdapter(ITicketSystem):
             return work_item
 
     async def update_work_item(
-        self, item_id: WorkItemId, updates: Dict[str, Any]
+        self, item_id: WorkItemId, updates: dict[str, Any]
     ) -> WorkItem:
         """
         Update an existing work item.
@@ -152,7 +153,7 @@ class InMemoryTicketAdapter(ITicketSystem):
                     priority = WorkItemPriority[priority.upper()]
                 work_item.update_priority(priority)
 
-            work_item.updated_at = datetime.now(timezone.utc)
+            work_item.updated_at = datetime.now(UTC)
             work_item.clear_events()
             return work_item
 
@@ -184,7 +185,7 @@ class InMemoryTicketAdapter(ITicketSystem):
         self,
         item_id: WorkItemId,
         status: WorkItemStatus,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> WorkItem:
         """
         Update work item status.
@@ -230,15 +231,15 @@ class InMemoryTicketAdapter(ITicketSystem):
 
     async def list_work_items(
         self,
-        project_id: Optional[ProjectId] = None,
-        status: Optional[WorkItemStatus] = None,
-        assignee: Optional[UserId] = None,
-        labels: Optional[List[str]] = None,
-        created_after: Optional[datetime] = None,
-        updated_after: Optional[datetime] = None,
+        project_id: ProjectId | None = None,
+        status: WorkItemStatus | None = None,
+        assignee: UserId | None = None,
+        labels: list[str] | None = None,
+        created_after: datetime | None = None,
+        updated_after: datetime | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[WorkItem]:
+    ) -> list[WorkItem]:
         """
         List work items with optional filters.
 
@@ -283,9 +284,9 @@ class InMemoryTicketAdapter(ITicketSystem):
     async def search_work_items(
         self,
         query: str,
-        project_id: Optional[ProjectId] = None,
+        project_id: ProjectId | None = None,
         limit: int = 100,
-    ) -> List[WorkItem]:
+    ) -> list[WorkItem]:
         """
         Full-text search for work items.
 
@@ -320,8 +321,8 @@ class InMemoryTicketAdapter(ITicketSystem):
 
     async def get_work_item_stream(
         self,
-        project_id: Optional[ProjectId] = None,
-        since: Optional[datetime] = None,
+        project_id: ProjectId | None = None,
+        since: datetime | None = None,
     ) -> AsyncIterator[WorkItem]:
         """
         Stream work item updates in real-time.
@@ -347,8 +348,8 @@ class InMemoryTicketAdapter(ITicketSystem):
         self,
         item_id: WorkItemId,
         body: str,
-        author: Optional[UserId] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        author: UserId | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> Comment:
         """
         Add a comment to a work item.
@@ -381,7 +382,7 @@ class InMemoryTicketAdapter(ITicketSystem):
                 work_item_id=item_id,
                 author_id=author or UserId("system"),
                 body=body,
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
             )
 
             self._comments[str(item_id)].append(comment)
@@ -390,9 +391,9 @@ class InMemoryTicketAdapter(ITicketSystem):
     async def get_comments(
         self,
         item_id: WorkItemId,
-        since: Optional[datetime] = None,
+        since: datetime | None = None,
         limit: int = 100,
-    ) -> List[Comment]:
+    ) -> list[Comment]:
         """
         Get comments for a work item.
 
@@ -462,8 +463,8 @@ class InMemoryTicketAdapter(ITicketSystem):
     async def get_related_items(
         self,
         item_id: WorkItemId,
-        relationship: Optional[str] = None,
-    ) -> List[WorkItem]:
+        relationship: str | None = None,
+    ) -> list[WorkItem]:
         """
         Get related work items.
 
@@ -498,8 +499,8 @@ class InMemoryTicketAdapter(ITicketSystem):
     async def register_webhook(
         self,
         url: str,
-        events: List[str],
-        project_id: Optional[ProjectId] = None,
+        events: list[str],
+        project_id: ProjectId | None = None,
     ) -> str:
         """
         Register a webhook for events.
@@ -527,7 +528,7 @@ class InMemoryTicketAdapter(ITicketSystem):
                 "url": url,
                 "events": events,
                 "project_id": str(project_id) if project_id else None,
-                "created_at": datetime.now(timezone.utc),
+                "created_at": datetime.now(UTC),
             }
 
             return webhook_id
@@ -567,7 +568,7 @@ class InMemoryTicketAdapter(ITicketSystem):
             self._relationships.clear()
             self._next_work_item_number = 1
 
-    def get_all_work_items(self) -> List[WorkItem]:
+    def get_all_work_items(self) -> list[WorkItem]:
         """
         Get all work items (for testing).
 

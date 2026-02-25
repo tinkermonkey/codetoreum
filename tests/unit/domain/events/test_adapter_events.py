@@ -5,7 +5,7 @@ of the core CodetoreumEvent base class.
 """
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime
 
 import pytest
 

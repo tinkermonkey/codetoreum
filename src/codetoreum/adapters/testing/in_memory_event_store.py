@@ -2,9 +2,9 @@
 
 import asyncio
 import threading
-from datetime import datetime, timezone
-from typing import Any, AsyncIterator, Dict, List, Optional
-from uuid import UUID
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime
+from typing import Any
 
 from codetoreum.domain.events import DomainEvent
 from codetoreum.ports.exceptions import (
@@ -29,19 +29,19 @@ class InMemoryEventStore(IEventStore):
     def __init__(self):
         """Initialize the in-memory event store with thread-safe storage."""
         # Stream storage: stream_id -> list of events
-        self._streams: Dict[str, List[DomainEvent]] = {}
+        self._streams: dict[str, list[DomainEvent]] = {}
 
         # Snapshot storage: stream_id -> snapshot data
-        self._snapshots: Dict[str, Dict[str, Any]] = {}
+        self._snapshots: dict[str, dict[str, Any]] = {}
 
         # Global event list for cross-stream queries
-        self._all_events: List[DomainEvent] = []
+        self._all_events: list[DomainEvent] = []
 
         # Event type index for fast lookups
-        self._events_by_type: Dict[str, List[DomainEvent]] = {}
+        self._events_by_type: dict[str, list[DomainEvent]] = {}
 
         # Correlation ID index
-        self._events_by_correlation: Dict[str, List[DomainEvent]] = {}
+        self._events_by_correlation: dict[str, list[DomainEvent]] = {}
 
         # Thread safety for concurrent test execution
         self._lock = threading.Lock()
@@ -49,8 +49,8 @@ class InMemoryEventStore(IEventStore):
     async def append(
         self,
         stream_id: str,
-        events: List[DomainEvent],
-        expected_version: Optional[int] = None,
+        events: list[DomainEvent],
+        expected_version: int | None = None,
     ) -> None:
         """
         Append events to a stream.
@@ -90,7 +90,7 @@ class InMemoryEventStore(IEventStore):
 
                 # Update indexes
                 # Handle both old DomainEvent (event_type) and new CodetoreumEvent (type)
-                event_type = getattr(event, 'event_type', None) or getattr(event, 'type', None)
+                event_type = getattr(event, "event_type", None) or getattr(event, "type", None)
                 if event_type:
                     if event_type not in self._events_by_type:
                         self._events_by_type[event_type] = []
@@ -107,8 +107,8 @@ class InMemoryEventStore(IEventStore):
         self,
         stream_id: str,
         from_version: int = 0,
-        to_version: Optional[int] = None,
-    ) -> List[DomainEvent]:
+        to_version: int | None = None,
+    ) -> list[DomainEvent]:
         """
         Get events from a stream.
 
@@ -144,8 +144,8 @@ class InMemoryEventStore(IEventStore):
     async def get_events_since(
         self,
         since: datetime,
-        stream_id: Optional[str] = None,
-    ) -> List[DomainEvent]:
+        stream_id: str | None = None,
+    ) -> list[DomainEvent]:
         """
         Get events since a timestamp.
 
@@ -174,7 +174,7 @@ class InMemoryEventStore(IEventStore):
 
     async def stream_events(
         self,
-        stream_id: Optional[str] = None,
+        stream_id: str | None = None,
         from_version: int = 0,
     ) -> AsyncIterator[DomainEvent]:
         """
@@ -246,7 +246,7 @@ class InMemoryEventStore(IEventStore):
         self,
         stream_id: str,
         version: int,
-        snapshot: Dict[str, Any],
+        snapshot: dict[str, Any],
     ) -> None:
         """
         Save a snapshot for faster replay.
@@ -269,13 +269,13 @@ class InMemoryEventStore(IEventStore):
             self._snapshots[stream_id] = {
                 "version": version,
                 "data": snapshot,
-                "timestamp": datetime.now(timezone.utc),
+                "timestamp": datetime.now(UTC),
             }
 
     async def get_latest_snapshot(
         self,
         stream_id: str,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Get most recent snapshot.
 
@@ -323,7 +323,7 @@ class InMemoryEventStore(IEventStore):
 
                 # Remove from type index
                 # Handle both old DomainEvent (event_type) and new CodetoreumEvent (type)
-                event_type = getattr(event, 'event_type', None) or getattr(event, 'type', None)
+                event_type = getattr(event, "event_type", None) or getattr(event, "type", None)
                 if event_type and event_type in self._events_by_type:
                     if event in self._events_by_type[event_type]:
                         self._events_by_type[event_type].remove(event)
@@ -341,8 +341,8 @@ class InMemoryEventStore(IEventStore):
 
     async def get_all_stream_ids(
         self,
-        aggregate_type: Optional[str] = None,
-    ) -> List[str]:
+        aggregate_type: str | None = None,
+    ) -> list[str]:
         """
         Get all stream IDs.
 
@@ -366,9 +366,9 @@ class InMemoryEventStore(IEventStore):
     async def get_events_by_type(
         self,
         event_type: str,
-        since: Optional[datetime] = None,
+        since: datetime | None = None,
         limit: int = 1000,
-    ) -> List[DomainEvent]:
+    ) -> list[DomainEvent]:
         """
         Get events by event type.
 
@@ -397,7 +397,7 @@ class InMemoryEventStore(IEventStore):
     async def get_events_by_correlation_id(
         self,
         correlation_id: str,
-    ) -> List[DomainEvent]:
+    ) -> list[DomainEvent]:
         """
         Get all events with a specific correlation ID.
 
@@ -420,7 +420,7 @@ class InMemoryEventStore(IEventStore):
         self,
         stream_id: str,
         from_version: int = 0,
-        to_version: Optional[int] = None,
+        to_version: int | None = None,
     ) -> AsyncIterator[DomainEvent]:
         """
         Replay events from a stream for debugging/recovery.
@@ -459,7 +459,7 @@ class InMemoryEventStore(IEventStore):
             await asyncio.sleep(0.001)  # Simulate replay delay
             yield event
 
-    async def get_statistics(self) -> Dict[str, Any]:
+    async def get_statistics(self) -> dict[str, Any]:
         """
         Get event store statistics.
 
@@ -525,7 +525,7 @@ class InMemoryEventStore(IEventStore):
         with self._lock:
             return len(self._streams)
 
-    def get_events_for_stream(self, stream_id: str) -> List[DomainEvent]:
+    def get_events_for_stream(self, stream_id: str) -> list[DomainEvent]:
         """
         Get all events for a stream (synchronous, for testing).
 
@@ -538,7 +538,7 @@ class InMemoryEventStore(IEventStore):
         with self._lock:
             return self._streams.get(stream_id, []).copy()
 
-    def get_all_events_list(self) -> List[DomainEvent]:
+    def get_all_events_list(self) -> list[DomainEvent]:
         """
         Get all events across all streams (for testing).
 
@@ -551,13 +551,13 @@ class InMemoryEventStore(IEventStore):
     async def query_streams_by_latest_event(
         self,
         aggregate_type: str,
-        event_type_filters: Optional[List[str]] = None,
-        event_data_filters: Optional[Dict[str, Any]] = None,
+        event_type_filters: list[str] | None = None,
+        event_data_filters: dict[str, Any] | None = None,
         sort_by: str = "timestamp",
         sort_order: str = "desc",
         offset: int = 0,
         limit: int = 100,
-    ) -> tuple[List[str], int]:
+    ) -> tuple[list[str], int]:
         """
         Query stream IDs by analyzing their latest events with in-memory filtering.
 
@@ -601,7 +601,7 @@ class InMemoryEventStore(IEventStore):
                 # Apply event type filters
                 # Handle both old DomainEvent (event_type) and new CodetoreumEvent (type)
                 if event_type_filters:
-                    latest_event_type = getattr(latest_event, 'event_type', None) or getattr(latest_event, 'type', None)
+                    latest_event_type = getattr(latest_event, "event_type", None) or getattr(latest_event, "type", None)
                     if latest_event_type not in event_type_filters:
                         continue
 

@@ -22,12 +22,10 @@ class TestBoardServiceContract(ABC):
     @abstractmethod
     async def create_service(self) -> IBoardService:
         """Create and return an IBoardService instance for testing."""
-        pass
 
     @abstractmethod
     async def setup_test_board(self, service: IBoardService, project_id: str, board_id: str) -> ProjectBoard:
         """Set up a test board with sample data."""
-        pass
 
     @pytest.mark.asyncio
     async def test_get_board_returns_board_with_columns(self):
@@ -217,7 +215,6 @@ class TestBoardServiceContract(ABC):
     @pytest.mark.asyncio
     async def test_column_position_negative_rejected(self):
         """Test that negative column positions are rejected."""
-        from codetoreum.ports.output.board_service import BoardColumn
 
         service = await self.create_service()
         board = await self.setup_test_board(service, "proj-123", "board-456")

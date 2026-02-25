@@ -4,9 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
-
-from codetoreum.domain.types import ChannelId, NotificationId, TemplateId, UserId
+from typing import Any
 
 # ============================================================================
 # Enums
@@ -55,7 +53,7 @@ class Notification:
     subject: str
     message: str
     priority: NotificationPriority
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
 
 @dataclass
@@ -64,7 +62,7 @@ class NotificationResult:
 
     success: bool
     notification_id: str
-    error: Optional[str]
+    error: str | None
     timestamp: datetime
 
 
@@ -83,7 +81,7 @@ class Action:
 
     label: str
     url: str
-    style: Optional[str] = None  # primary, danger, default
+    style: str | None = None  # primary, danger, default
 
 
 @dataclass
@@ -92,12 +90,12 @@ class RichContent:
 
     title: str
     body: str
-    attachments: List[Attachment]
-    actions: List[Action]
-    color: Optional[str] = None
-    footer: Optional[str] = None
-    thumbnail_url: Optional[str] = None
-    image_url: Optional[str] = None
+    attachments: list[Attachment]
+    actions: list[Action]
+    color: str | None = None
+    footer: str | None = None
+    thumbnail_url: str | None = None
+    image_url: str | None = None
 
 
 # ============================================================================
@@ -116,7 +114,7 @@ class INotifier(ABC):
         subject: str,
         message: str,
         priority: NotificationPriority = NotificationPriority.NORMAL,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> NotificationResult:
         """
         Send a notification.
@@ -137,7 +135,6 @@ class INotifier(ABC):
             UnsupportedChannelError: Channel not supported
             NotificationError: Send failed
         """
-        pass
 
     @abstractmethod
     async def send_rich(
@@ -164,13 +161,12 @@ class INotifier(ABC):
             UnsupportedChannelError: Channel doesn't support rich content
             NotificationError: Send failed
         """
-        pass
 
     @abstractmethod
     async def send_batch(
         self,
-        notifications: List[Notification],
-    ) -> List[NotificationResult]:
+        notifications: list[Notification],
+    ) -> list[NotificationResult]:
         """
         Send multiple notifications.
 
@@ -184,7 +180,6 @@ class INotifier(ABC):
             ValidationError: Invalid notification data
             NotificationError: Batch send failed
         """
-        pass
 
     @abstractmethod
     async def send_template(
@@ -192,7 +187,7 @@ class INotifier(ABC):
         channel: NotificationChannel,
         recipient: str,
         template_id: str,
-        variables: Dict[str, Any],
+        variables: dict[str, Any],
         priority: NotificationPriority = NotificationPriority.NORMAL,
     ) -> NotificationResult:
         """
@@ -213,7 +208,6 @@ class INotifier(ABC):
             ValidationError: Invalid template variables
             NotificationError: Send failed
         """
-        pass
 
     @abstractmethod
     async def get_delivery_status(
@@ -233,16 +227,15 @@ class INotifier(ABC):
             ResourceNotFoundError: Notification doesn't exist
             NotificationError: Status check failed
         """
-        pass
 
     @abstractmethod
     async def get_notification_history(
         self,
-        recipient: Optional[str] = None,
-        channel: Optional[NotificationChannel] = None,
-        since: Optional[datetime] = None,
+        recipient: str | None = None,
+        channel: NotificationChannel | None = None,
+        since: datetime | None = None,
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get notification history.
 
@@ -258,7 +251,6 @@ class INotifier(ABC):
         Raises:
             NotificationError: Query failed
         """
-        pass
 
     @abstractmethod
     async def cancel_notification(
@@ -278,7 +270,6 @@ class INotifier(ABC):
             ResourceNotFoundError: Notification doesn't exist
             NotificationError: Cancel failed
         """
-        pass
 
     @abstractmethod
     async def register_template(
@@ -286,8 +277,8 @@ class INotifier(ABC):
         template_id: str,
         channel: NotificationChannel,
         template: str,
-        subject_template: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        subject_template: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """
         Register a notification template.
@@ -303,7 +294,6 @@ class INotifier(ABC):
             ValidationError: Invalid template
             NotificationError: Registration failed
         """
-        pass
 
     @abstractmethod
     async def unregister_template(
@@ -320,13 +310,12 @@ class INotifier(ABC):
             ResourceNotFoundError: Template doesn't exist
             NotificationError: Unregistration failed
         """
-        pass
 
     @abstractmethod
     async def list_templates(
         self,
-        channel: Optional[NotificationChannel] = None,
-    ) -> List[Dict[str, Any]]:
+        channel: NotificationChannel | None = None,
+    ) -> list[dict[str, Any]]:
         """
         List registered templates.
 
@@ -339,7 +328,6 @@ class INotifier(ABC):
         Raises:
             NotificationError: Query failed
         """
-        pass
 
     @abstractmethod
     async def test_channel(
@@ -360,14 +348,13 @@ class INotifier(ABC):
         Raises:
             NotificationError: Test failed
         """
-        pass
 
     @abstractmethod
     async def get_statistics(
         self,
-        since: Optional[datetime] = None,
-        channel: Optional[NotificationChannel] = None,
-    ) -> Dict[str, Any]:
+        since: datetime | None = None,
+        channel: NotificationChannel | None = None,
+    ) -> dict[str, Any]:
         """
         Get notification statistics.
 
@@ -381,13 +368,12 @@ class INotifier(ABC):
         Raises:
             NotificationError: Query failed
         """
-        pass
 
     @abstractmethod
     async def configure_channel(
         self,
         channel: NotificationChannel,
-        configuration: Dict[str, Any],
+        configuration: dict[str, Any],
     ) -> None:
         """
         Configure a notification channel.
@@ -400,10 +386,9 @@ class INotifier(ABC):
             ValidationError: Invalid configuration
             NotificationError: Configuration failed
         """
-        pass
 
     @abstractmethod
-    async def health_check(self) -> Dict[NotificationChannel, bool]:
+    async def health_check(self) -> dict[NotificationChannel, bool]:
         """
         Check health of all configured channels.
 
@@ -413,4 +398,3 @@ class INotifier(ABC):
         Raises:
             NotificationError: Health check failed
         """
-        pass

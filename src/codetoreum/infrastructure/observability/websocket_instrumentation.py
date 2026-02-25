@@ -13,7 +13,7 @@ of real-time events from server to client.
 """
 
 import logging
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import Any
 
 try:
     from opentelemetry import trace
@@ -27,11 +27,7 @@ except ImportError:
 from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.observability.trace_context_propagation import (
     TraceContextData,
-    inject_current_trace_context_into_event,
 )
-
-if TYPE_CHECKING:
-    from fastapi import WebSocket
 
 logger = logging.getLogger(__name__)
 
@@ -61,9 +57,9 @@ class WebSocketSessionTracer:
     def start_session(
         self,
         connection_id: str,
-        client_ip: Optional[str] = None,
+        client_ip: str | None = None,
         token_present: bool = False,
-    ) -> Optional[Any]:
+    ) -> Any | None:
         """
         Start a SESSION span for WebSocket connection.
 
@@ -104,7 +100,7 @@ class WebSocketSessionTracer:
 
     def end_session(
         self,
-        session_span: Optional[Any],
+        session_span: Any | None,
         reason: str = "normal_closure",
         message_count: int = 0,
         buffered_events: int = 0,
@@ -146,9 +142,9 @@ class WebSocketSessionTracer:
 
     def add_session_event(
         self,
-        session_span: Optional[Any],
+        session_span: Any | None,
         event_name: str,
-        attributes: Optional[dict] = None,
+        attributes: dict | None = None,
     ) -> None:
         """
         Add an event to the SESSION span.
@@ -186,7 +182,7 @@ class WebSocketMessageTracer:
         message_tracer.end_message_span(msg_span, success=True)
     """
 
-    def __init__(self, session_span: Optional[Any]):
+    def __init__(self, session_span: Any | None):
         """
         Initialize WebSocket message tracer.
 
@@ -199,9 +195,9 @@ class WebSocketMessageTracer:
     def start_subscribe_message(
         self,
         connection_id: str,
-        subscription_type: Optional[str] = None,
+        subscription_type: str | None = None,
         filter_count: int = 0,
-    ) -> Optional[Any]:
+    ) -> Any | None:
         """
         Start a MESSAGE span for subscribe operation.
 
@@ -238,7 +234,7 @@ class WebSocketMessageTracer:
 
     def start_unsubscribe_message(
         self, connection_id: str, subscription_id: str
-    ) -> Optional[Any]:
+    ) -> Any | None:
         """
         Start a MESSAGE span for unsubscribe operation.
 
@@ -265,13 +261,13 @@ class WebSocketMessageTracer:
         )
 
         logger.debug(
-            f"Started MESSAGE span for unsubscribe",
+            "Started MESSAGE span for unsubscribe",
             extra={"span_id": span.get_span_context().span_id if span else None},
         )
 
         return span
 
-    def start_ping_message(self, connection_id: str) -> Optional[Any]:
+    def start_ping_message(self, connection_id: str) -> Any | None:
         """
         Start a MESSAGE span for ping operation.
 
@@ -307,8 +303,8 @@ class WebSocketMessageTracer:
         connection_id: str,
         event_type: str,
         event_id: str,
-        subscription_type: Optional[str] = None,
-    ) -> Optional[Any]:
+        subscription_type: str | None = None,
+    ) -> Any | None:
         """
         Start a MESSAGE span for event delivery to client.
 
@@ -353,9 +349,9 @@ class WebSocketMessageTracer:
 
     def end_message_span(
         self,
-        message_span: Optional[Any],
+        message_span: Any | None,
         success: bool = True,
-        error_code: Optional[str] = None,
+        error_code: str | None = None,
         message_size: int = 0,
     ) -> None:
         """
@@ -393,7 +389,7 @@ class WebSocketMessageTracer:
 
     def link_to_event_trace_context(
         self,
-        message_span: Optional[Any],
+        message_span: Any | None,
         event: DomainEvent,
     ) -> None:
         """
@@ -423,7 +419,7 @@ class WebSocketMessageTracer:
                     })
 
                     logger.debug(
-                        f"Linked message span to event trace context",
+                        "Linked message span to event trace context",
                         extra={
                             "event_id": str(event.event_id),
                             "event_trace_id": trace_data.trace_id[:8] + "...",

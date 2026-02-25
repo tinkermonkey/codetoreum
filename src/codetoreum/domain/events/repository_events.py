@@ -5,7 +5,6 @@ and staged files.
 """
 
 from dataclasses import dataclass
-from typing import Optional, Tuple
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
@@ -41,8 +40,8 @@ class FilesStagedEvent(CodetoreumEvent):
     """
 
     repository_id: str = ""
-    file_paths: Tuple[str, ...] = ()
-    project_id: Optional[str] = None
+    file_paths: tuple[str, ...] = ()
+    project_id: str | None = None
 
     def __post_init__(self) -> None:
         """Validate event after initialization and convert lists to tuples."""
@@ -120,8 +119,8 @@ class CommitCreatedEvent(CodetoreumEvent):
     commit_sha: str = ""
     message: str = ""
     author: str = ""
-    changed_files: Tuple[str, ...] = ()
-    project_id: Optional[str] = None
+    changed_files: tuple[str, ...] = ()
+    project_id: str | None = None
 
     def __post_init__(self) -> None:
         """Validate event after initialization and convert lists to tuples."""
@@ -204,7 +203,7 @@ class BranchCreatedEvent(CodetoreumEvent):
     repository_id: str = ""
     branch_name: str = ""
     base_commit: str = ""
-    project_id: Optional[str] = None
+    project_id: str | None = None
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""

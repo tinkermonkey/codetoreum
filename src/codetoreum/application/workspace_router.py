@@ -3,13 +3,13 @@
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from codetoreum.domain.agent import Agent
 from codetoreum.domain.project_context import ProjectContext
 from codetoreum.domain.types import BranchName
 from codetoreum.domain.work_item import WorkItem
-from codetoreum.domain.workspace_context import WorkspaceContext, WorkspaceType
+from codetoreum.domain.workspace_context import WorkspaceContext
 from codetoreum.ports.output import IContainer, IEventStore, IRepository
 
 logger = logging.getLogger(__name__)
@@ -61,7 +61,7 @@ class WorkspacePreparationResult:
     workspace_context: WorkspaceContext
     workspace_dir: Path
     reason: str
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
 
 @dataclass
@@ -69,10 +69,10 @@ class WorkspaceFinalizationResult:
     """Result of workspace finalization operation."""
 
     success: bool
-    commit_sha: Optional[str]
-    pr_url: Optional[str]
+    commit_sha: str | None
+    pr_url: str | None
     reason: str
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
 
 # ============================================================================
@@ -101,7 +101,7 @@ class WorkspaceRouter:
         repository: IRepository,
         container: IContainer,
         event_store: IEventStore,
-        config: Optional[WorkspaceRouterConfig] = None,
+        config: WorkspaceRouterConfig | None = None,
     ):
         """
         Initialize WorkspaceRouter.
@@ -195,18 +195,17 @@ class WorkspaceRouter:
                 work_item_id=work_item.id,
                 discussion_id=work_item.external_id or "",
             )
-        else:
-            # Issue workspace with feature branch
-            branch_name = self._generate_branch_name(work_item, project)
-            self._logger.info(
-                f"Routing to ISSUE workspace with branch={branch_name}"
-            )
-            return WorkspaceContext.for_issue(
-                project_id=project.id,
-                work_item_id=work_item.id,
-                branch_name=branch_name,
-                create_pr=True,
-            )
+        # Issue workspace with feature branch
+        branch_name = self._generate_branch_name(work_item, project)
+        self._logger.info(
+            f"Routing to ISSUE workspace with branch={branch_name}"
+        )
+        return WorkspaceContext.for_issue(
+            project_id=project.id,
+            work_item_id=work_item.id,
+            branch_name=branch_name,
+            create_pr=True,
+        )
 
     def _validate_agent_capabilities(
         self,
@@ -277,7 +276,7 @@ class WorkspaceRouter:
             f"project={project.id}, work_item={work_item.id}"
         )
 
-        metadata: Dict[str, Any] = {}
+        metadata: dict[str, Any] = {}
 
         try:
             if context.should_create_branch():
@@ -330,16 +329,15 @@ class WorkspaceRouter:
                     reason="Issue workspace prepared successfully",
                     metadata=metadata,
                 )
-            else:
-                # Discussion workspace - minimal setup
-                self._logger.info("Discussion workspace - minimal setup")
-                return WorkspacePreparationResult(
-                    success=True,
-                    workspace_context=context,
-                    workspace_dir=Path(repository_path),
-                    reason="Discussion workspace prepared successfully",
-                    metadata=metadata,
-                )
+            # Discussion workspace - minimal setup
+            self._logger.info("Discussion workspace - minimal setup")
+            return WorkspacePreparationResult(
+                success=True,
+                workspace_context=context,
+                workspace_dir=Path(repository_path),
+                reason="Discussion workspace prepared successfully",
+                metadata=metadata,
+            )
 
         except Exception as e:
             self._logger.error(
@@ -351,7 +349,7 @@ class WorkspaceRouter:
                 success=False,
                 workspace_context=context,
                 workspace_dir=Path(repository_path),
-                reason=f"Workspace preparation failed: {str(e)}",
+                reason=f"Workspace preparation failed: {e!s}",
                 metadata={"error": str(e)},
             )
 
@@ -359,7 +357,7 @@ class WorkspaceRouter:
         self,
         context: WorkspaceContext,
         project: ProjectContext,
-        execution_result: Dict[str, Any],
+        execution_result: dict[str, Any],
         repository_path: str,
     ) -> WorkspaceFinalizationResult:
         """
@@ -390,7 +388,7 @@ class WorkspaceRouter:
             f"project={project.id}"
         )
 
-        metadata: Dict[str, Any] = {}
+        metadata: dict[str, Any] = {}
         commit_sha = None
         pr_url = None
 
@@ -415,10 +413,10 @@ class WorkspaceRouter:
 
                     # Get author info, use config defaults if not in project
                     author_name = getattr(
-                        project, 'author_name', self.config.default_author_name
+                        project, "author_name", self.config.default_author_name
                     )
                     author_email = getattr(
-                        project, 'author_email', self.config.default_author_email
+                        project, "author_email", self.config.default_author_email
                     )
 
                     commit_sha = await self.repository.commit(
@@ -450,25 +448,23 @@ class WorkspaceRouter:
                         reason="Issue workspace finalized successfully with commit",
                         metadata=metadata,
                     )
-                else:
-                    self._logger.info("No changes to commit")
-                    return WorkspaceFinalizationResult(
-                        success=True,
-                        commit_sha=None,
-                        pr_url=None,
-                        reason="Issue workspace finalized successfully (no changes)",
-                        metadata=metadata,
-                    )
-            else:
-                # Discussion workspace or no commits needed
-                self._logger.info("Discussion workspace - no finalization needed")
+                self._logger.info("No changes to commit")
                 return WorkspaceFinalizationResult(
                     success=True,
                     commit_sha=None,
                     pr_url=None,
-                    reason="Discussion workspace finalized successfully",
+                    reason="Issue workspace finalized successfully (no changes)",
                     metadata=metadata,
                 )
+            # Discussion workspace or no commits needed
+            self._logger.info("Discussion workspace - no finalization needed")
+            return WorkspaceFinalizationResult(
+                success=True,
+                commit_sha=None,
+                pr_url=None,
+                reason="Discussion workspace finalized successfully",
+                metadata=metadata,
+            )
 
         except Exception as e:
             self._logger.error(
@@ -480,7 +476,7 @@ class WorkspaceRouter:
                 success=False,
                 commit_sha=None,
                 pr_url=None,
-                reason=f"Workspace finalization failed: {str(e)}",
+                reason=f"Workspace finalization failed: {e!s}",
                 metadata={"error": str(e)},
             )
 
@@ -489,7 +485,7 @@ class WorkspaceRouter:
         context: WorkspaceContext,
         project: ProjectContext,
         agent: Agent,
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         """
         Prepare environment variables for container execution.
 
@@ -533,7 +529,7 @@ class WorkspaceRouter:
         context: WorkspaceContext,
         project: ProjectContext,
         repository_path: str,
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         """
         Prepare volume mounts for container execution.
 
@@ -612,7 +608,7 @@ class WorkspaceRouter:
         )
 
     def _generate_commit_message(
-        self, context: WorkspaceContext, execution_result: Dict[str, Any]
+        self, context: WorkspaceContext, execution_result: dict[str, Any]
     ) -> str:
         """
         Generate commit message for workspace changes.

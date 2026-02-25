@@ -4,9 +4,8 @@ This module defines the domain models for column-based workflow orchestration,
 where board position (not labels) determines workflow state and agent triggers.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional, Tuple
 
 
 class ColumnType(Enum):
@@ -33,7 +32,7 @@ class ColumnTemplate:
 
     name: str
     type: ColumnType
-    agent_id: Optional[str]
+    agent_id: str | None
     is_pipeline_trigger: bool
     is_exit_column: bool
     position: int
@@ -88,9 +87,9 @@ class BoardWorkflowTemplate:
 
     id: str
     name: str
-    pipeline_trigger_columns: Tuple[str, ...]
-    exit_columns: Tuple[str, ...]
-    columns: Tuple[ColumnTemplate, ...]
+    pipeline_trigger_columns: tuple[str, ...]
+    exit_columns: tuple[str, ...]
+    columns: tuple[ColumnTemplate, ...]
 
     def __post_init__(self) -> None:
         """Validate workflow template invariants."""
@@ -134,7 +133,7 @@ class BoardWorkflowTemplate:
                     f"exit_columns references non-existent column: {exit_col}"
                 )
 
-    def get_column_config(self, column_name: str) -> Optional[ColumnTemplate]:
+    def get_column_config(self, column_name: str) -> ColumnTemplate | None:
         """Get configuration for a specific column by name.
 
         Args:
@@ -145,7 +144,7 @@ class BoardWorkflowTemplate:
         """
         return next((c for c in self.columns if c.name == column_name), None)
 
-    def get_next_column(self, current: str) -> Optional[str]:
+    def get_next_column(self, current: str) -> str | None:
         """Get the next column by position order.
 
         Args:

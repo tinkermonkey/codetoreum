@@ -5,8 +5,7 @@ Tests the JupyterLab-style token generation, validation, and security properties
 """
 
 import os
-import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -57,7 +56,7 @@ class TestSimpleTokenAuthManager:
 
         # Check expiration is approximately correct (within 1 second tolerance)
         expected_exp = manager.server_start_time + timedelta(days=expiry_days)
-        actual_exp = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
+        actual_exp = datetime.fromtimestamp(payload["exp"], tz=UTC)
         time_diff = abs((actual_exp - expected_exp).total_seconds())
 
         assert time_diff < 1, f"Expiration time differs by {time_diff} seconds"
@@ -97,8 +96,8 @@ class TestSimpleTokenAuthManager:
             {
                 "sub": "wrong-subject",
                 "type": "access",
-                "iat": datetime.now(timezone.utc),
-                "exp": datetime.now(timezone.utc) + timedelta(days=1),
+                "iat": datetime.now(UTC),
+                "exp": datetime.now(UTC) + timedelta(days=1),
             },
             secret_key,
             algorithm="HS256"
@@ -116,8 +115,8 @@ class TestSimpleTokenAuthManager:
             {
                 "sub": "codetoreum-server",
                 "type": "refresh",  # Wrong type
-                "iat": datetime.now(timezone.utc),
-                "exp": datetime.now(timezone.utc) + timedelta(days=1),
+                "iat": datetime.now(UTC),
+                "exp": datetime.now(UTC) + timedelta(days=1),
             },
             secret_key,
             algorithm="HS256"
@@ -134,8 +133,8 @@ class TestSimpleTokenAuthManager:
             {
                 "sub": "codetoreum-server",
                 "type": "access",
-                "iat": datetime.now(timezone.utc) - timedelta(days=2),
-                "exp": datetime.now(timezone.utc) - timedelta(days=1),  # Expired yesterday
+                "iat": datetime.now(UTC) - timedelta(days=2),
+                "exp": datetime.now(UTC) - timedelta(days=1),  # Expired yesterday
             },
             secret_key,
             algorithm="HS256"

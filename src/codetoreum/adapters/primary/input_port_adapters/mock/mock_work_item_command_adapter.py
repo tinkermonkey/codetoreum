@@ -4,7 +4,7 @@ Mock Work Item Command Adapter
 In-memory implementation of IWorkItemCommandPort for development and testing.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from threading import RLock
 from uuid import uuid4
 
@@ -35,7 +35,7 @@ class MockWorkItemCommandAdapter(IWorkItemCommandPort):
     async def create_work_item(self, command: CreateWorkItemCommand) -> WorkItem:
         """Creates a new work item."""
         with self._lock:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
 
             work_item = WorkItem(
                 id=str(uuid4()),
@@ -82,7 +82,7 @@ class MockWorkItemCommandAdapter(IWorkItemCommandPort):
             if command.priority is not None:
                 work_item.update_priority(command.priority)
 
-            work_item.updated_at = datetime.now(timezone.utc)
+            work_item.updated_at = datetime.now(UTC)
             return work_item
 
     async def delete_work_item(self, work_item_id: str) -> WorkItemCommandResult:
@@ -147,7 +147,7 @@ class MockWorkItemCommandAdapter(IWorkItemCommandPort):
             work_item = self._work_items[command.work_item_id]
             # Note: Direct assignment for current_workflow_id as domain model doesn't enforce validation
             work_item.current_workflow_id = command.workflow_id
-            work_item.updated_at = datetime.now(timezone.utc)
+            work_item.updated_at = datetime.now(UTC)
 
             return work_item
 

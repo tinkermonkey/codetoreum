@@ -10,8 +10,9 @@ Implements IBoardService interface for GitHub Projects v2, supporting:
 
 import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -71,20 +72,20 @@ class GitHubBoardAdapter(IBoardService):
         self._webhook_enabled = webhook_enabled
 
         # Monitoring state
-        self._monitoring: Dict[str, MonitoringStatus] = {}
-        self._polling_tasks: Dict[str, asyncio.Task] = {}
+        self._monitoring: dict[str, MonitoringStatus] = {}
+        self._polling_tasks: dict[str, asyncio.Task] = {}
 
         # Event handlers
-        self._event_handlers: Dict[str, List[Callable]] = {}
+        self._event_handlers: dict[str, list[Callable]] = {}
 
         # State tracking for polling
-        self._last_known_state: Dict[str, Dict[str, str]] = {}
-        self._polling_intervals: Dict[str, float] = {}
-        self._activity_counters: Dict[str, Dict[str, int]] = {}
+        self._last_known_state: dict[str, dict[str, str]] = {}
+        self._polling_intervals: dict[str, float] = {}
+        self._activity_counters: dict[str, dict[str, int]] = {}
 
         # Current context for event emission
-        self._current_project_id: Optional[str] = None
-        self._current_board_id: Optional[str] = None
+        self._current_project_id: str | None = None
+        self._current_board_id: str | None = None
 
     # IEventEmitter implementation
 
@@ -149,7 +150,7 @@ class GitHubBoardAdapter(IBoardService):
         self._monitoring[key] = MonitoringStatus(
             state=MonitoringState.ACTIVE,
             project_id=project_id,
-            started_at=datetime.now(timezone.utc).isoformat(),
+            started_at=datetime.now(UTC).isoformat(),
         )
 
         # Initialize activity tracking
@@ -160,7 +161,7 @@ class GitHubBoardAdapter(IBoardService):
         self._polling_intervals[key] = 60.0  # Initial 60s interval
 
         # Start polling if webhooks disabled
-        if not self._webhook_enabled and hasattr(config, 'board_id'):
+        if not self._webhook_enabled and hasattr(config, "board_id"):
             board_id = config.board_id
             poll_key = f"{project_id}:{board_id}"
             self._polling_tasks[poll_key] = asyncio.create_task(
@@ -282,9 +283,9 @@ class GitHubBoardAdapter(IBoardService):
         except ExternalServiceError:
             raise
         except Exception as e:
-            raise ExternalServiceError("GitHub", f"Failed to fetch board: {str(e)}")
+            raise ExternalServiceError("GitHub", f"Failed to fetch board: {e!s}")
 
-    async def get_columns(self, board_id: str) -> List[BoardColumn]:
+    async def get_columns(self, board_id: str) -> list[BoardColumn]:
         """Get all columns for a board.
 
         Args:
@@ -304,7 +305,7 @@ class GitHubBoardAdapter(IBoardService):
 
     async def get_items_in_column(
         self, board_id: str, column_name: str
-    ) -> List[WorkItemPosition]:
+    ) -> list[WorkItemPosition]:
         """Get work items in a specific column ordered by position.
 
         Args:
@@ -382,7 +383,7 @@ class GitHubBoardAdapter(IBoardService):
         board = await self.get_board(
             self._current_project_id, self._current_board_id
         )
-        from_column: Optional[str] = None
+        from_column: str | None = None
 
         for column in board.columns:
             if work_item_id in column.work_item_ids:
@@ -455,7 +456,7 @@ class GitHubBoardAdapter(IBoardService):
         self.emit(
             WorkItemColumnChangedEvent(
                 type="workitem.column_changed",
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 source="github",
                 work_item_id=work_item_id,
                 project_id=self._current_project_id,
@@ -512,7 +513,7 @@ class GitHubBoardAdapter(IBoardService):
         self.emit(
             BoardReconciledEvent(
                 type="board.reconciled",
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 source="github",
                 project_id=project_id,
                 board_id=config.board_id,
@@ -556,7 +557,7 @@ class GitHubBoardAdapter(IBoardService):
         self.emit(
             WorkItemColumnChangedEvent(
                 type="workitem.column_changed",
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 source="github",
                 work_item_id=work_item_id,
                 project_id=payload.get("organization", {}).get("id", ""),
@@ -674,8 +675,8 @@ class GitHubBoardAdapter(IBoardService):
         self,
         project_id: str,
         board_id: str,
-        current_state: Dict[str, str],
-    ) -> List[WorkItemColumnChangedEvent]:
+        current_state: dict[str, str],
+    ) -> list[WorkItemColumnChangedEvent]:
         """Detect column changes by comparing states.
 
         Args:
@@ -692,7 +693,7 @@ class GitHubBoardAdapter(IBoardService):
             return []
 
         last_state = self._last_known_state[key]
-        changes: List[WorkItemColumnChangedEvent] = []
+        changes: list[WorkItemColumnChangedEvent] = []
 
         for work_item_id, current_column in current_state.items():
             if work_item_id in last_state:
@@ -701,7 +702,7 @@ class GitHubBoardAdapter(IBoardService):
                     changes.append(
                         WorkItemColumnChangedEvent(
                             type="workitem.column_changed",
-                            timestamp=datetime.now(timezone.utc).isoformat(),
+                            timestamp=datetime.now(UTC).isoformat(),
                             source="github",
                             work_item_id=work_item_id,
                             project_id=project_id,
@@ -716,7 +717,7 @@ class GitHubBoardAdapter(IBoardService):
 
     def _extract_item_positions(
         self, board: ProjectBoard
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         """Extract work item -> column mapping from board.
 
         Args:
@@ -725,7 +726,7 @@ class GitHubBoardAdapter(IBoardService):
         Returns:
             Dictionary mapping work_item_id -> column_name
         """
-        positions: Dict[str, str] = {}
+        positions: dict[str, str] = {}
 
         for column in board.columns:
             for work_item_id in column.work_item_ids:
@@ -737,7 +738,7 @@ class GitHubBoardAdapter(IBoardService):
         self,
         project_id: str,
         board_id: str,
-        node: Dict[str, Any],
+        node: dict[str, Any],
     ) -> ProjectBoard:
         """Parse GraphQL board response into ProjectBoard.
 
@@ -768,13 +769,13 @@ class GitHubBoardAdapter(IBoardService):
                 raise ExternalServiceError("GitHub", "Status field not found on board")
 
             # Build column map
-            columns_by_id: Dict[str, str] = {}
+            columns_by_id: dict[str, str] = {}
             for option in status_field.get("options", []):
                 columns_by_id[option.get("id", "")] = option.get("name", "")
 
             # Extract items and their positions
             items_data = node.get("items", {}).get("nodes", [])
-            columns_by_name: Dict[str, List[str]] = {}
+            columns_by_name: dict[str, list[str]] = {}
 
             for item in items_data:
                 # Extract issue number from content
@@ -800,7 +801,7 @@ class GitHubBoardAdapter(IBoardService):
                             )
 
             # Create BoardColumn objects ordered by position
-            columns: List[BoardColumn] = []
+            columns: list[BoardColumn] = []
             for position, option in enumerate(
                 status_field.get("options", [])
             ):
@@ -826,10 +827,10 @@ class GitHubBoardAdapter(IBoardService):
 
         except (KeyError, TypeError) as e:
             raise ExternalServiceError(
-                "GitHub", f"Invalid board response format: {str(e)}"
+                "GitHub", f"Invalid board response format: {e!s}"
             )
 
-    def _find_status_field_id(self, board: ProjectBoard) -> Optional[str]:
+    def _find_status_field_id(self, board: ProjectBoard) -> str | None:
         """Find status field ID from board data.
 
         Args:
@@ -849,9 +850,9 @@ class GitHubBoardAdapter(IBoardService):
     def _find_option_id(
         self,
         board: ProjectBoard,
-        field_id: Optional[str],
+        field_id: str | None,
         column_name: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Find option ID for a column name.
 
         Args:
@@ -886,7 +887,7 @@ class GitHubBoardAdapter(IBoardService):
             "This requires extracting the field ID and building the proper GraphQL mutation."
         )
 
-    def _extract_work_item_id(self, item_data: dict) -> Optional[str]:
+    def _extract_work_item_id(self, item_data: dict) -> str | None:
         """Extract work item ID from webhook item data.
 
         Args:

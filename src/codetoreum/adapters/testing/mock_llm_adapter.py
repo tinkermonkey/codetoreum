@@ -3,13 +3,13 @@
 import asyncio
 import re
 import threading
-from datetime import datetime, timezone
-from typing import AsyncIterator, Dict, List, Optional, Pattern
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime
+from re import Pattern
 from uuid import uuid4
 
 from codetoreum.ports.exceptions import (
     RateLimitError,
-    UnsupportedFeatureError,
     ValidationError,
 )
 from codetoreum.ports.output.llm_provider import (
@@ -73,7 +73,7 @@ class MockLLMAdapter(ILLMProvider):
         self._simulate_rate_limits = simulate_rate_limits
 
         # Pattern-based responses
-        self._response_patterns: List[tuple[Pattern, str]] = []
+        self._response_patterns: list[tuple[Pattern, str]] = []
 
         # Usage tracking
         self._total_requests = 0
@@ -82,7 +82,7 @@ class MockLLMAdapter(ILLMProvider):
         self._output_tokens = 0
 
         # Conversations
-        self._conversations: Dict[str, List[Dict[str, str]]] = {}
+        self._conversations: dict[str, list[dict[str, str]]] = {}
 
         # Model info (configurable)
         self._model_info = ModelInfo(
@@ -139,8 +139,8 @@ class MockLLMAdapter(ILLMProvider):
     async def execute(
         self,
         prompt: str,
-        context: Optional[ExecutionContext] = None,
-        stream_callback: Optional[StreamCallback] = None,
+        context: ExecutionContext | None = None,
+        stream_callback: StreamCallback | None = None,
     ) -> ExecutionResult:
         """
         Execute a prompt with the LLM.
@@ -168,7 +168,7 @@ class MockLLMAdapter(ILLMProvider):
         if self._delay_seconds > 0:
             await asyncio.sleep(self._delay_seconds)
 
-        started_at = datetime.now(timezone.utc)
+        started_at = datetime.now(UTC)
 
         # Get response
         response = self._get_response_for_prompt(prompt)
@@ -184,7 +184,7 @@ class MockLLMAdapter(ILLMProvider):
             self._output_tokens += completion_tokens
             self._total_tokens += prompt_tokens + completion_tokens
 
-        completed_at = datetime.now(timezone.utc)
+        completed_at = datetime.now(UTC)
         duration_ms = int((completed_at - started_at).total_seconds() * 1000)
 
         # If streaming callback provided, simulate streaming
@@ -210,9 +210,9 @@ class MockLLMAdapter(ILLMProvider):
     async def execute_with_tools(
         self,
         prompt: str,
-        tools: List[ToolDefinition],
-        context: Optional[ExecutionContext] = None,
-        stream_callback: Optional[StreamCallback] = None,
+        tools: list[ToolDefinition],
+        context: ExecutionContext | None = None,
+        stream_callback: StreamCallback | None = None,
     ) -> ExecutionResult:
         """
         Execute prompt with tool/function calling capabilities.
@@ -254,7 +254,7 @@ class MockLLMAdapter(ILLMProvider):
     async def stream_completion(
         self,
         prompt: str,
-        context: Optional[ExecutionContext] = None,
+        context: ExecutionContext | None = None,
     ) -> AsyncIterator[StreamChunk]:
         """
         Stream completion tokens as they're generated.
@@ -285,7 +285,7 @@ class MockLLMAdapter(ILLMProvider):
                 content=word + (" " if i < len(words) - 1 else ""),
                 chunk_index=i,
                 is_final=(i == len(words) - 1),
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
             yield chunk
 
@@ -312,8 +312,8 @@ class MockLLMAdapter(ILLMProvider):
 
     async def create_conversation(
         self,
-        system_prompt: Optional[str] = None,
-        parameters: Optional[ExecutionContext] = None,
+        system_prompt: str | None = None,
+        parameters: ExecutionContext | None = None,
     ) -> str:
         """
         Create a new conversation session.
@@ -342,7 +342,7 @@ class MockLLMAdapter(ILLMProvider):
         self,
         conversation_id: str,
         message: str,
-        stream_callback: Optional[StreamCallback] = None,
+        stream_callback: StreamCallback | None = None,
     ) -> ExecutionResult:
         """
         Continue an existing conversation.
@@ -395,7 +395,7 @@ class MockLLMAdapter(ILLMProvider):
         """
         return self._model_info
 
-    async def list_available_models(self) -> List[ModelInfo]:
+    async def list_available_models(self) -> list[ModelInfo]:
         """
         List all available models from this provider.
 
@@ -420,7 +420,7 @@ class MockLLMAdapter(ILLMProvider):
     async def count_tokens(
         self,
         text: str,
-        model: Optional[str] = None,
+        model: str | None = None,
     ) -> int:
         """
         Count tokens in text.
@@ -438,7 +438,7 @@ class MockLLMAdapter(ILLMProvider):
 
     async def get_usage_stats(
         self,
-        since: Optional[datetime] = None,
+        since: datetime | None = None,
     ) -> UsageStats:
         """
         Get usage statistics.
@@ -456,8 +456,8 @@ class MockLLMAdapter(ILLMProvider):
                 input_tokens=self._input_tokens,
                 output_tokens=self._output_tokens,
                 total_cost=0.0,
-                period_start=since or datetime.now(timezone.utc),
-                period_end=datetime.now(timezone.utc),
+                period_start=since or datetime.now(UTC),
+                period_end=datetime.now(UTC),
                 by_model={
                     self._model_info.model_id: {
                         "requests": self._total_requests,

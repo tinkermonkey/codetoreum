@@ -26,9 +26,9 @@ import asyncio
 import json
 import logging
 import re
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from codetoreum.domain.events.repair_cycle_events import (
     RepairCycleCheckpointFailedEvent,
@@ -36,7 +36,6 @@ from codetoreum.domain.events.repair_cycle_events import (
     RepairCycleFastFailEvent,
     RepairCycleFileFixCompletedEvent,
     RepairCycleFileFixStartedEvent,
-    RepairCycleResumedEvent,
     RepairCycleStartedEvent,
     RepairCycleTestCycleCompletedEvent,
     RepairCycleTestExecutionCompletedEvent,
@@ -69,13 +68,11 @@ logger = logging.getLogger(__name__)
 class CircuitBreakerTripped(Exception):
     """Raised when max_total_agent_calls exceeded."""
 
-    pass
 
 
 class JSONParseError(Exception):
     """Raised when agent response cannot be parsed as JSON."""
 
-    pass
 
 
 @dataclass(frozen=True)
@@ -103,7 +100,6 @@ class NullEventEmitter:
 
     def emit(self, event: Any) -> None:
         """No-op emit."""
-        pass
 
 
 class ProductionRepairCycleAdapter(IRepairCycle):
@@ -163,7 +159,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         if not context.test_configs:
             raise ValueError("test_configs cannot be empty")
 
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
         cycle_start_timestamp = start_time.isoformat()
 
         # Emit repair cycle started event
@@ -179,7 +175,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         )
 
         # Execute each test type in sequence
-        test_results: List[CycleResult] = []
+        test_results: list[CycleResult] = []
         overall_success = True
 
         for test_type_index, test_config in enumerate(context.test_configs, start=1):
@@ -198,7 +194,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 self.event_emitter.emit(
                     RepairCycleFastFailEvent(
                         type="repair_cycle.fast_fail",
-                        timestamp=datetime.now(timezone.utc).isoformat(),
+                        timestamp=datetime.now(UTC).isoformat(),
                         source="production_repair_cycle",
                         test_type=test_config.test_type,
                         reason="circuit_breaker_triggered",
@@ -222,7 +218,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 break
 
         # Emit cycle completed event
-        end_time = datetime.now(timezone.utc)
+        end_time = datetime.now(UTC)
         duration_seconds = (end_time - start_time).total_seconds()
 
         if test_results:
@@ -309,7 +305,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             failures = self._extract_failures(test_output, config.test_type)
             warnings = self._extract_warnings(test_output, config.test_type)
 
-            timestamp = datetime.now(timezone.utc).isoformat()
+            timestamp = datetime.now(UTC).isoformat()
 
             result = RepairTestResult(
                 test_type=config.test_type,
@@ -369,7 +365,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
     async def fix_failures_by_file(
         self,
-        grouped_failures: Dict[str, Tuple[RepairTestFailure, ...]],
+        grouped_failures: dict[str, tuple[RepairTestFailure, ...]],
         config: RepairTestRunConfig,
         context: RepairCycleContext,
     ) -> int:
@@ -410,7 +406,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             self.agent_call_count += 1
 
             # Emit file fix started event
-            timestamp = datetime.now(timezone.utc).isoformat()
+            timestamp = datetime.now(UTC).isoformat()
             self.event_emitter.emit(
                 RepairCycleFileFixStartedEvent(
                     type="repair_cycle.file_fix_started",
@@ -447,7 +443,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 self.event_emitter.emit(
                     RepairCycleFileFixCompletedEvent(
                         type="repair_cycle.file_fix_completed",
-                        timestamp=datetime.now(timezone.utc).isoformat(),
+                        timestamp=datetime.now(UTC).isoformat(),
                         source="production_repair_cycle",
                         test_file=file_path,
                         failure_count=len(failures),
@@ -483,7 +479,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 self.event_emitter.emit(
                     RepairCycleFileFixCompletedEvent(
                         type="repair_cycle.file_fix_completed",
-                        timestamp=datetime.now(timezone.utc).isoformat(),
+                        timestamp=datetime.now(UTC).isoformat(),
                         source="production_repair_cycle",
                         test_file=file_path,
                         failure_count=len(failures),
@@ -540,7 +536,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             self.agent_call_count += 1
 
             # Emit warning review started event
-            timestamp = datetime.now(timezone.utc).isoformat()
+            timestamp = datetime.now(UTC).isoformat()
             self.event_emitter.emit(
                 RepairCycleWarningReviewStartedEvent(
                     type="repair_cycle.warning_review_started",
@@ -578,7 +574,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 self.event_emitter.emit(
                     RepairCycleWarningReviewCompletedEvent(
                         type="repair_cycle.warning_review_completed",
-                        timestamp=datetime.now(timezone.utc).isoformat(),
+                        timestamp=datetime.now(UTC).isoformat(),
                         source="production_repair_cycle",
                         source_file=warning.file,
                         warning_count=1,
@@ -645,7 +641,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
         try:
             # Create checkpoint with current state
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             expires_at = (now + timedelta(hours=24)).isoformat()
 
             checkpoint = RepairCycleCheckpoint(
@@ -695,7 +691,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 self.event_emitter.emit(
                     RepairCycleCheckpointFailedEvent(
                         type="repair_cycle.checkpoint_failed",
-                        timestamp=datetime.now(timezone.utc).isoformat(),
+                        timestamp=datetime.now(UTC).isoformat(),
                         source="production_repair_cycle",
                         workflow_run_id=context.workflow_run_id,
                         test_type=test_type.value,
@@ -738,7 +734,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
     async def _parse_test_output_with_retry(
         self, agent_response: str, test_type: RepairTestType
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Parse test output with retry logic for JSON parsing.
 
         Attempts to parse agent response as JSON up to max_json_parse_retries times.
@@ -797,8 +793,8 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         )
 
     def _extract_failures(
-        self, test_output: Dict[str, Any], test_type: RepairTestType
-    ) -> List[RepairTestFailure]:
+        self, test_output: dict[str, Any], test_type: RepairTestType
+    ) -> list[RepairTestFailure]:
         """Extract test failures from parsed test output.
 
         Assumes test_output has structure:
@@ -889,8 +885,8 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         return failures
 
     def _extract_warnings(
-        self, test_output: Dict[str, Any], test_type: RepairTestType
-    ) -> List[RepairTestWarning]:
+        self, test_output: dict[str, Any], test_type: RepairTestType
+    ) -> list[RepairTestWarning]:
         """Extract test warnings from parsed test output.
 
         Assumes test_output has structure:
@@ -977,7 +973,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         return warnings
 
     def _build_fix_prompt(
-        self, file_path: str, failures: Tuple[RepairTestFailure, ...]
+        self, file_path: str, failures: tuple[RepairTestFailure, ...]
     ) -> str:
         """Build prompt for LLM to fix test failures in a file.
 
@@ -1019,8 +1015,8 @@ Analyze the warning, understand its root cause, and make targeted fixes.
 Return a JSON response with the status of fixes applied."""
 
     def _group_failures_by_file(
-        self, failures: Tuple[RepairTestFailure, ...]
-    ) -> Dict[str, Tuple[RepairTestFailure, ...]]:
+        self, failures: tuple[RepairTestFailure, ...]
+    ) -> dict[str, tuple[RepairTestFailure, ...]]:
         """Group test failures by file.
 
         Args:
@@ -1029,7 +1025,7 @@ Return a JSON response with the status of fixes applied."""
         Returns:
             Dictionary mapping file path to failures in that file
         """
-        grouped: Dict[str, List[RepairTestFailure]] = {}
+        grouped: dict[str, list[RepairTestFailure]] = {}
         for failure in failures:
             if failure.file not in grouped:
                 grouped[failure.file] = []
@@ -1061,7 +1057,7 @@ Return a JSON response with the status of fixes applied."""
         warnings_reviewed = 0
         cycle_passed = False
         error = None
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         for iteration in range(1, config.max_iterations + 1):
             # Check circuit breaker
@@ -1148,12 +1144,12 @@ Return a JSON response with the status of fixes applied."""
                 break
 
         # Emit test cycle completed event
-        duration_seconds = (datetime.now(timezone.utc) - start_time).total_seconds()
+        duration_seconds = (datetime.now(UTC) - start_time).total_seconds()
 
         self.event_emitter.emit(
             RepairCycleTestCycleCompletedEvent(
                 type="repair_cycle.test_cycle_completed",
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 source="production_repair_cycle",
                 test_type=config.test_type,
                 test_type_index=test_type_index,

@@ -4,7 +4,7 @@ Mock Workflow Command Adapter
 In-memory implementation of IWorkflowCommandPort for development and testing.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from threading import RLock
 from uuid import uuid4
 
@@ -38,7 +38,7 @@ class MockWorkflowCommandAdapter(IWorkflowCommandPort):
                 "work_item_id": command.work_item_id,
                 "workflow_id": command.workflow_id,
                 "state": "STARTED",
-                "started_at": datetime.now(timezone.utc),
+                "started_at": datetime.now(UTC),
             }
 
             return WorkflowCommandResult(

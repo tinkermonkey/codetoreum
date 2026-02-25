@@ -9,7 +9,7 @@ Terminology (vendor-agnostic):
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
@@ -48,7 +48,7 @@ class WorkItemCreatedEvent(CodetoreumEvent):
     work_item_id: str = ""
     project_id: str = ""
     title: str = ""
-    initial_column: Optional[str] = None
+    initial_column: str | None = None
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""
@@ -121,7 +121,7 @@ class WorkItemUpdatedEvent(CodetoreumEvent):
 
     work_item_id: str = ""
     project_id: str = ""
-    changes: Dict[str, Any] = field(default_factory=dict)
+    changes: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""

@@ -1,7 +1,7 @@
 """Domain events base classes and specific event types."""
 
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID, uuid4
 
 
@@ -12,12 +12,12 @@ class DomainEvent:
         self,
         aggregate_id: str,
         aggregate_type: str,
-        payload: Optional[Dict[str, Any]] = None,
-        user_id: Optional[str] = None,
-        correlation_id: Optional[UUID] = None,
-        causation_id: Optional[UUID] = None,
-        event_id: Optional[UUID] = None,
-        occurred_at: Optional[datetime] = None,
+        payload: dict[str, Any] | None = None,
+        user_id: str | None = None,
+        correlation_id: UUID | None = None,
+        causation_id: UUID | None = None,
+        event_id: UUID | None = None,
+        occurred_at: datetime | None = None,
     ):
         """
         Initialize domain event.
@@ -37,14 +37,14 @@ class DomainEvent:
         self.event_version = 1
         self.aggregate_id = aggregate_id
         self.aggregate_type = aggregate_type
-        self.occurred_at = occurred_at or datetime.now(timezone.utc)
+        self.occurred_at = occurred_at or datetime.now(UTC)
         self.correlation_id = correlation_id or uuid4()
         self.causation_id = causation_id
         self.user_id = user_id
         self.payload = payload or {}
-        self.metadata: Dict[str, Any] = {}
+        self.metadata: dict[str, Any] = {}
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """
         Serialize event to dictionary.
 
@@ -66,7 +66,7 @@ class DomainEvent:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "DomainEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "DomainEvent":
         """
         Deserialize event from dictionary.
 
@@ -127,7 +127,7 @@ class DomainEvent:
 class WorkItemCreated(DomainEvent):
     """Emitted when a work item is created."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize WorkItemCreated event.
 
@@ -151,7 +151,7 @@ class WorkItemCreated(DomainEvent):
 class AgentAssigned(DomainEvent):
     """Emitted when an agent is assigned to work item."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize AgentAssigned event.
 
@@ -171,7 +171,7 @@ class AgentAssigned(DomainEvent):
 class WorkItemStarted(DomainEvent):
     """Emitted when work begins on item."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize WorkItemStarted event.
 
@@ -190,7 +190,7 @@ class WorkItemStarted(DomainEvent):
 class WorkItemUnderReview(DomainEvent):
     """Emitted when work item enters review."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize WorkItemUnderReview event.
 
@@ -208,7 +208,7 @@ class WorkItemUnderReview(DomainEvent):
 class WorkItemCompleted(DomainEvent):
     """Emitted when work item completes successfully."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize WorkItemCompleted event.
 
@@ -227,7 +227,7 @@ class WorkItemCompleted(DomainEvent):
 class WorkItemFailed(DomainEvent):
     """Emitted when work item fails."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize WorkItemFailed event.
 
@@ -248,7 +248,7 @@ class WorkItemFailed(DomainEvent):
 class WorkItemBlocked(DomainEvent):
     """Emitted when work item is blocked."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize WorkItemBlocked event.
 
@@ -268,7 +268,7 @@ class WorkItemBlocked(DomainEvent):
 class WorkItemUnblocked(DomainEvent):
     """Emitted when work item is unblocked."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize WorkItemUnblocked event.
 
@@ -287,7 +287,7 @@ class WorkItemUnblocked(DomainEvent):
 class WorkflowAttached(DomainEvent):
     """Emitted when workflow attached to work item."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize WorkflowAttached event.
 
@@ -306,7 +306,7 @@ class WorkflowAttached(DomainEvent):
 class WorkItemStageUpdated(DomainEvent):
     """Emitted when work item moves to new stage."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize WorkItemStageUpdated event.
 
@@ -327,7 +327,7 @@ class WorkItemStageUpdated(DomainEvent):
 class WorkItemLabelsUpdated(DomainEvent):
     """Emitted when work item labels change."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize WorkItemLabelsUpdated event.
 
@@ -347,7 +347,7 @@ class WorkItemLabelsUpdated(DomainEvent):
 class WorkItemPriorityUpdated(DomainEvent):
     """Emitted when work item priority changes."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize WorkItemPriorityUpdated event.
 
@@ -372,7 +372,7 @@ class WorkItemPriorityUpdated(DomainEvent):
 class AgentCreated(DomainEvent):
     """Emitted when agent is created."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize AgentCreated event.
 
@@ -394,7 +394,7 @@ class AgentCreated(DomainEvent):
 class AgentCapabilityAdded(DomainEvent):
     """Emitted when capability added to agent."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize AgentCapabilityAdded event.
 
@@ -414,7 +414,7 @@ class AgentCapabilityAdded(DomainEvent):
 class AgentCapabilityRemoved(DomainEvent):
     """Emitted when capability removed from agent."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize AgentCapabilityRemoved event.
 
@@ -433,7 +433,7 @@ class AgentCapabilityRemoved(DomainEvent):
 class AgentCapabilityUpdated(DomainEvent):
     """Emitted when capability proficiency updated."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize AgentCapabilityUpdated event.
 
@@ -454,7 +454,7 @@ class AgentCapabilityUpdated(DomainEvent):
 class AgentModelUpdated(DomainEvent):
     """Emitted when agent LLM model changed."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize AgentModelUpdated event.
 
@@ -474,7 +474,7 @@ class AgentModelUpdated(DomainEvent):
 class AgentTimeoutUpdated(DomainEvent):
     """Emitted when agent timeout changed."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize AgentTimeoutUpdated event.
 
@@ -494,7 +494,7 @@ class AgentTimeoutUpdated(DomainEvent):
 class AgentMaxRetriesUpdated(DomainEvent):
     """Emitted when agent max retries changed."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize AgentMaxRetriesUpdated event.
 
@@ -514,7 +514,7 @@ class AgentMaxRetriesUpdated(DomainEvent):
 class AgentConstraintsUpdated(DomainEvent):
     """Emitted when agent constraints changed."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize AgentConstraintsUpdated event.
 
@@ -534,7 +534,7 @@ class AgentConstraintsUpdated(DomainEvent):
 class AgentMcpServerAdded(DomainEvent):
     """Emitted when MCP server added to agent."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize AgentMcpServerAdded event.
 
@@ -553,7 +553,7 @@ class AgentMcpServerAdded(DomainEvent):
 class AgentMcpServerRemoved(DomainEvent):
     """Emitted when MCP server removed from agent."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize AgentMcpServerRemoved event.
 
@@ -577,7 +577,7 @@ class AgentMcpServerRemoved(DomainEvent):
 class ExecutionInitialized(DomainEvent):
     """Emitted when execution is initialized."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ExecutionInitialized event.
 
@@ -599,7 +599,7 @@ class ExecutionInitialized(DomainEvent):
 class ExecutionStarted(DomainEvent):
     """Emitted when execution starts."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ExecutionStarted event.
 
@@ -618,7 +618,7 @@ class ExecutionStarted(DomainEvent):
 class ExecutionCompleted(DomainEvent):
     """Emitted when execution completes successfully."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ExecutionCompleted event.
 
@@ -640,7 +640,7 @@ class ExecutionCompleted(DomainEvent):
 class ExecutionFailed(DomainEvent):
     """Emitted when execution fails."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ExecutionFailed event.
 
@@ -661,7 +661,7 @@ class ExecutionFailed(DomainEvent):
 class ExecutionTimeout(DomainEvent):
     """Emitted when execution times out."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ExecutionTimeout event.
 
@@ -680,7 +680,7 @@ class ExecutionTimeout(DomainEvent):
 class ExecutionCancelled(DomainEvent):
     """Emitted when execution is cancelled."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ExecutionCancelled event.
 
@@ -700,7 +700,7 @@ class ExecutionCancelled(DomainEvent):
 class ExecutionPaused(DomainEvent):
     """Emitted when execution is paused."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ExecutionPaused event.
 
@@ -719,7 +719,7 @@ class ExecutionPaused(DomainEvent):
 class ExecutionResumed(DomainEvent):
     """Emitted when execution is resumed."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ExecutionResumed event.
 
@@ -742,7 +742,7 @@ class ExecutionResumed(DomainEvent):
 class WorkflowCreated(DomainEvent):
     """Emitted when a workflow is created."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize WorkflowCreated event.
 
@@ -763,7 +763,7 @@ class WorkflowCreated(DomainEvent):
 class WorkflowStarted(DomainEvent):
     """Emitted when workflow execution begins."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize WorkflowStarted event.
 
@@ -783,7 +783,7 @@ class WorkflowStarted(DomainEvent):
 class WorkflowStageAdvanced(DomainEvent):
     """Emitted when workflow moves to the next stage."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize WorkflowStageAdvanced event.
 
@@ -804,7 +804,7 @@ class WorkflowStageAdvanced(DomainEvent):
 class WorkflowStageStatusUpdated(DomainEvent):
     """Emitted when a stage's status changes."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize WorkflowStageStatusUpdated event.
 
@@ -825,7 +825,7 @@ class WorkflowStageStatusUpdated(DomainEvent):
 class WorkflowCompleted(DomainEvent):
     """Emitted when workflow completes successfully."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize WorkflowCompleted event.
 
@@ -845,7 +845,7 @@ class WorkflowCompleted(DomainEvent):
 class WorkflowFailed(DomainEvent):
     """Emitted when workflow fails."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize WorkflowFailed event.
 
@@ -866,7 +866,7 @@ class WorkflowFailed(DomainEvent):
 class WorkflowPaused(DomainEvent):
     """Emitted when workflow is paused."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize WorkflowPaused event.
 
@@ -886,7 +886,7 @@ class WorkflowPaused(DomainEvent):
 class WorkflowResumed(DomainEvent):
     """Emitted when workflow is resumed."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize WorkflowResumed event.
 
@@ -905,7 +905,7 @@ class WorkflowResumed(DomainEvent):
 class WorkflowCancelled(DomainEvent):
     """Emitted when workflow is cancelled."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize WorkflowCancelled event.
 
@@ -930,7 +930,7 @@ class WorkflowCancelled(DomainEvent):
 class ReviewCycleCreated(DomainEvent):
     """Emitted when a review cycle is created."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ReviewCycleCreated event.
 
@@ -953,7 +953,7 @@ class ReviewCycleCreated(DomainEvent):
 class ReviewIterationStarted(DomainEvent):
     """Emitted when a new review iteration starts."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ReviewIterationStarted event.
 
@@ -973,7 +973,7 @@ class ReviewIterationStarted(DomainEvent):
 class ReviewFeedbackSubmitted(DomainEvent):
     """Emitted when reviewer provides feedback."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ReviewFeedbackSubmitted event.
 
@@ -996,7 +996,7 @@ class ReviewFeedbackSubmitted(DomainEvent):
 class ReviewCycleApproved(DomainEvent):
     """Emitted when review is approved."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ReviewCycleApproved event.
 
@@ -1017,7 +1017,7 @@ class ReviewCycleApproved(DomainEvent):
 class ReviewCycleRejected(DomainEvent):
     """Emitted when review is rejected."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ReviewCycleRejected event.
 
@@ -1038,7 +1038,7 @@ class ReviewCycleRejected(DomainEvent):
 class ReviewCycleEscalated(DomainEvent):
     """Emitted when review is escalated to human."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ReviewCycleEscalated event.
 
@@ -1065,7 +1065,7 @@ class ReviewCycleEscalated(DomainEvent):
 class ProjectContextCreated(DomainEvent):
     """Emitted when project context is created."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ProjectContextCreated event.
 
@@ -1087,7 +1087,7 @@ class ProjectContextCreated(DomainEvent):
 class ProjectTestConfigUpdated(DomainEvent):
     """Emitted when test configuration changes."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ProjectTestConfigUpdated event.
 
@@ -1108,7 +1108,7 @@ class ProjectTestConfigUpdated(DomainEvent):
 class ProjectDockerConfigUpdated(DomainEvent):
     """Emitted when Docker configuration changes."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ProjectDockerConfigUpdated event.
 
@@ -1129,7 +1129,7 @@ class ProjectDockerConfigUpdated(DomainEvent):
 class ProjectWorkflowMappingAdded(DomainEvent):
     """Emitted when custom workflow mapping is added."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ProjectWorkflowMappingAdded event.
 
@@ -1161,9 +1161,9 @@ class PipelineStageStarted(DomainEvent):
         pipeline_id: str,
         stage_name: str,
         stage_type: str,
-        agent_config: Dict[str, Any],
+        agent_config: dict[str, Any],
         execution_id: str,
-        timestamp: Optional[datetime] = None,
+        timestamp: datetime | None = None,
         **kwargs: Any
     ):
         """
@@ -1184,7 +1184,7 @@ class PipelineStageStarted(DomainEvent):
             "stage_type": stage_type,
             "agent_config": agent_config,
             "execution_id": execution_id,
-            "started_at": (timestamp or datetime.now(timezone.utc)).isoformat(),
+            "started_at": (timestamp or datetime.now(UTC)).isoformat(),
         }
         super().__init__(
             aggregate_id=aggregate_id,
@@ -1205,7 +1205,7 @@ class PipelineStageCompleted(DomainEvent):
         execution_id: str,
         output: str,
         duration_seconds: float,
-        timestamp: Optional[datetime] = None,
+        timestamp: datetime | None = None,
         **kwargs: Any
     ):
         """
@@ -1226,7 +1226,7 @@ class PipelineStageCompleted(DomainEvent):
             "execution_id": execution_id,
             "output": output,
             "duration_seconds": duration_seconds,
-            "completed_at": (timestamp or datetime.now(timezone.utc)).isoformat(),
+            "completed_at": (timestamp or datetime.now(UTC)).isoformat(),
         }
         super().__init__(
             aggregate_id=aggregate_id,
@@ -1247,7 +1247,7 @@ class PipelineStageFailed(DomainEvent):
         execution_id: str,
         error: str,
         duration_seconds: float,
-        timestamp: Optional[datetime] = None,
+        timestamp: datetime | None = None,
         **kwargs: Any
     ):
         """
@@ -1268,7 +1268,7 @@ class PipelineStageFailed(DomainEvent):
             "execution_id": execution_id,
             "error": error,
             "duration_seconds": duration_seconds,
-            "failed_at": (timestamp or datetime.now(timezone.utc)).isoformat(),
+            "failed_at": (timestamp or datetime.now(UTC)).isoformat(),
         }
         super().__init__(
             aggregate_id=aggregate_id,
@@ -1287,9 +1287,9 @@ class PipelineCompleted(DomainEvent):
         pipeline_id: str,
         workflow_id: str,
         completed_stages: list,
-        outputs: Dict[str, Any],
+        outputs: dict[str, Any],
         duration_seconds: float,
-        timestamp: Optional[datetime] = None,
+        timestamp: datetime | None = None,
         **kwargs: Any
     ):
         """
@@ -1310,7 +1310,7 @@ class PipelineCompleted(DomainEvent):
             "completed_stages": completed_stages,
             "outputs": outputs,
             "duration_seconds": duration_seconds,
-            "completed_at": (timestamp or datetime.now(timezone.utc)).isoformat(),
+            "completed_at": (timestamp or datetime.now(UTC)).isoformat(),
         }
         super().__init__(
             aggregate_id=aggregate_id,
@@ -1331,7 +1331,7 @@ class PipelineFailed(DomainEvent):
         error: str,
         completed_stages: list,
         failed_stages: list,
-        timestamp: Optional[datetime] = None,
+        timestamp: datetime | None = None,
         **kwargs: Any
     ):
         """
@@ -1352,7 +1352,7 @@ class PipelineFailed(DomainEvent):
             "error": error,
             "completed_stages": completed_stages,
             "failed_stages": failed_stages,
-            "failed_at": (timestamp or datetime.now(timezone.utc)).isoformat(),
+            "failed_at": (timestamp or datetime.now(UTC)).isoformat(),
         }
         super().__init__(
             aggregate_id=aggregate_id,
@@ -1370,7 +1370,7 @@ class PipelineFailed(DomainEvent):
 class ProjectConfigUpdated(DomainEvent):
     """Emitted when project configuration is updated."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ProjectConfigUpdated event.
 
@@ -1392,7 +1392,7 @@ class ProjectConfigUpdated(DomainEvent):
 class AgentConfigUpdated(DomainEvent):
     """Emitted when agent configuration is updated."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize AgentConfigUpdated event.
 
@@ -1415,7 +1415,7 @@ class AgentConfigUpdated(DomainEvent):
 class PipelineConfigUpdated(DomainEvent):
     """Emitted when pipeline configuration is updated."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize PipelineConfigUpdated event.
 
@@ -1438,7 +1438,7 @@ class PipelineConfigUpdated(DomainEvent):
 class EnvironmentVariableChanged(DomainEvent):
     """Emitted when environment variable is added, updated, or removed."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize EnvironmentVariableChanged event.
 
@@ -1460,7 +1460,7 @@ class EnvironmentVariableChanged(DomainEvent):
 class CommandMounted(DomainEvent):
     """Emitted when command is mounted to project agent."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize CommandMounted event.
 
@@ -1481,7 +1481,7 @@ class CommandMounted(DomainEvent):
 class CommandUnmounted(DomainEvent):
     """Emitted when command is unmounted from project agent."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize CommandUnmounted event.
 
@@ -1501,7 +1501,7 @@ class CommandUnmounted(DomainEvent):
 class SubAgentMounted(DomainEvent):
     """Emitted when sub-agent is mounted to project agent."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize SubAgentMounted event.
 
@@ -1521,7 +1521,7 @@ class SubAgentMounted(DomainEvent):
 class SubAgentUnmounted(DomainEvent):
     """Emitted when sub-agent is unmounted from project agent."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize SubAgentUnmounted event.
 
@@ -1546,7 +1546,7 @@ class SubAgentUnmounted(DomainEvent):
 class WorkItemColumnChanged(DomainEvent):
     """Emitted when work item moves between board columns."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize WorkItemColumnChanged event.
 
@@ -1569,7 +1569,7 @@ class WorkItemColumnChanged(DomainEvent):
 class BoardReconciled(DomainEvent):
     """Emitted after board structure synchronized with config."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize BoardReconciled event.
 

@@ -8,7 +8,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
 
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
 
@@ -34,17 +33,17 @@ class SortField(Enum):
 class WorkItemFilters:
     """Filters for querying work items"""
 
-    project_id: Optional[str] = None
-    status: Optional[WorkItemStatus] = None
-    assignee: Optional[str] = None  # Agent ID
-    labels: Optional[List[str]] = None  # AND logic for multiple labels
-    workflow_stage: Optional[str] = None
-    priority: Optional[WorkItemPriority] = None
-    external_id: Optional[str] = None
-    created_after: Optional[datetime] = None
-    created_before: Optional[datetime] = None
-    updated_after: Optional[datetime] = None
-    updated_before: Optional[datetime] = None
+    project_id: str | None = None
+    status: WorkItemStatus | None = None
+    assignee: str | None = None  # Agent ID
+    labels: list[str] | None = None  # AND logic for multiple labels
+    workflow_stage: str | None = None
+    priority: WorkItemPriority | None = None
+    external_id: str | None = None
+    created_after: datetime | None = None
+    created_before: datetime | None = None
+    updated_after: datetime | None = None
+    updated_before: datetime | None = None
 
 
 @dataclass
@@ -62,7 +61,7 @@ class WorkItemSearchParams:
     """Search parameters for work items"""
 
     query: str  # Search in title and description
-    filters: Optional[WorkItemFilters] = None
+    filters: WorkItemFilters | None = None
     pagination: PaginationParams = field(default_factory=PaginationParams)
 
 
@@ -70,7 +69,7 @@ class WorkItemSearchParams:
 class WorkItemListResult:
     """Result of listing work items"""
 
-    work_items: List[WorkItem]
+    work_items: list[WorkItem]
     total_count: int
     offset: int
     limit: int
@@ -82,7 +81,7 @@ class WorkItemHistory:
     """History of a work item including all events"""
 
     work_item: WorkItem
-    events: List[dict]  # Domain events as dicts
+    events: list[dict]  # Domain events as dicts
     total_events: int
 
 
@@ -108,11 +107,10 @@ class IWorkItemQueryPort(ABC):
         Raises:
             WorkItemNotFoundError: If work item doesn't exist
         """
-        pass
 
     @abstractmethod
     async def list_work_items(
-        self, filters: Optional[WorkItemFilters] = None, pagination: Optional[PaginationParams] = None
+        self, filters: WorkItemFilters | None = None, pagination: PaginationParams | None = None
     ) -> WorkItemListResult:
         """
         Lists work items with optional filtering and pagination.
@@ -124,7 +122,6 @@ class IWorkItemQueryPort(ABC):
         Returns:
             List result with work items and metadata
         """
-        pass
 
     @abstractmethod
     async def search_work_items(self, search_params: WorkItemSearchParams) -> WorkItemListResult:
@@ -137,11 +134,10 @@ class IWorkItemQueryPort(ABC):
         Returns:
             List result with matching work items
         """
-        pass
 
     @abstractmethod
     async def get_work_item_history(
-        self, work_item_id: str, limit: Optional[int] = None
+        self, work_item_id: str, limit: int | None = None
     ) -> WorkItemHistory:
         """
         Retrieves work item history including all events.
@@ -156,10 +152,9 @@ class IWorkItemQueryPort(ABC):
         Raises:
             WorkItemNotFoundError: If work item doesn't exist
         """
-        pass
 
     @abstractmethod
-    async def count_work_items(self, filters: Optional[WorkItemFilters] = None) -> int:
+    async def count_work_items(self, filters: WorkItemFilters | None = None) -> int:
         """
         Counts work items matching the given filters.
 
@@ -169,4 +164,3 @@ class IWorkItemQueryPort(ABC):
         Returns:
             Count of matching work items
         """
-        pass

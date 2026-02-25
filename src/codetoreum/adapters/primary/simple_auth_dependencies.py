@@ -56,10 +56,10 @@ class SimpleAuthDependencies:
         """
         if not token or len(token) < 20 or len(token) > 2000:
             return False
-        if '.' not in token:
+        if "." not in token:
             return False
         # JWT should have 3 parts separated by dots
-        parts = token.count('.')
+        parts = token.count(".")
         if parts != 2:
             return False
         return True

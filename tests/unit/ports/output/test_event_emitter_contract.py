@@ -5,7 +5,6 @@ follow the contract correctly.
 """
 
 from abc import ABC, abstractmethod
-from typing import Callable, List
 
 import pytest
 
@@ -23,12 +22,11 @@ class TestEventEmitterContract(ABC):
     @abstractmethod
     def create_emitter(self) -> IEventEmitter:
         """Create and return an IEventEmitter instance for testing."""
-        pass
 
     def test_on_registers_handler(self):
         """Handler should be called when event is emitted."""
         emitter = self.create_emitter()
-        events: List[CodetoreumEvent] = []
+        events: list[CodetoreumEvent] = []
 
         def handler(event: CodetoreumEvent) -> None:
             events.append(event)
@@ -49,7 +47,7 @@ class TestEventEmitterContract(ABC):
     def test_off_unregisters_handler(self):
         """Handler should not be called after unsubscribe."""
         emitter = self.create_emitter()
-        events: List[CodetoreumEvent] = []
+        events: list[CodetoreumEvent] = []
 
         def handler(event: CodetoreumEvent) -> None:
             events.append(event)
@@ -69,8 +67,8 @@ class TestEventEmitterContract(ABC):
     def test_multiple_handlers_all_called(self):
         """All registered handlers should be called for an event."""
         emitter = self.create_emitter()
-        events1: List[CodetoreumEvent] = []
-        events2: List[CodetoreumEvent] = []
+        events1: list[CodetoreumEvent] = []
+        events2: list[CodetoreumEvent] = []
 
         def handler1(event: CodetoreumEvent) -> None:
             events1.append(event)
@@ -96,7 +94,7 @@ class TestEventEmitterContract(ABC):
     def test_once_calls_handler_once(self):
         """Handler registered with once() should only be called once."""
         emitter = self.create_emitter()
-        events: List[CodetoreumEvent] = []
+        events: list[CodetoreumEvent] = []
 
         def handler(event: CodetoreumEvent) -> None:
             events.append(event)
@@ -124,8 +122,8 @@ class TestEventEmitterContract(ABC):
     def test_different_event_types_separate_handlers(self):
         """Handlers for different event types should not interfere."""
         emitter = self.create_emitter()
-        events1: List[CodetoreumEvent] = []
-        events2: List[CodetoreumEvent] = []
+        events1: list[CodetoreumEvent] = []
+        events2: list[CodetoreumEvent] = []
 
         def handler1(event: CodetoreumEvent) -> None:
             events1.append(event)
@@ -158,7 +156,7 @@ class TestEventEmitterContract(ABC):
     def test_emit_calls_handlers_synchronously_in_order(self):
         """Handlers should be called synchronously in registration order."""
         emitter = self.create_emitter()
-        call_order: List[str] = []
+        call_order: list[str] = []
 
         def handler1(event: CodetoreumEvent) -> None:
             call_order.append("handler1")

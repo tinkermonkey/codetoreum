@@ -1,6 +1,6 @@
 """Integration tests for AgentScheduler."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -41,8 +41,8 @@ def create_test_agent(agent_id: str, agent_name: str, requires_dev_container: bo
         filesystem_write_allowed=True,
         mcp_servers=[],
         metadata={},
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
 
@@ -150,8 +150,8 @@ def sample_work_item():
         assigned_at=None,
         current_workflow_id=None,
         current_stage=None,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
         completed_at=None,
     )
 
@@ -234,8 +234,8 @@ async def test_schedule_resource_unavailable_dev_container(
         assigned_at=None,
         current_workflow_id=None,
         current_stage=None,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
         completed_at=None,
     )
 
@@ -397,8 +397,8 @@ async def test_schedule_multiple_tasks(
             assigned_at=None,
             current_workflow_id=None,
             current_stage=None,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
             completed_at=None,
         )
         for i in range(3)

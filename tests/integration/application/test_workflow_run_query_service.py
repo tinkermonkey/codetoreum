@@ -5,7 +5,7 @@ Tests the real WorkflowRunQueryService implementation with an in-memory event st
 validating event sourcing, filtering, pagination, and error handling.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -16,10 +16,9 @@ from codetoreum.domain.events import (
     WorkflowCompleted,
     WorkflowCreated,
     WorkflowFailed,
-    WorkflowStageAdvanced,
     WorkflowStarted,
 )
-from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
+from codetoreum.domain.work_item import WorkItemPriority
 from codetoreum.ports.exceptions import ResourceNotFoundError
 from codetoreum.ports.input.workflow_run_query import (
     SortOrder,
@@ -72,7 +71,7 @@ async def sample_workflow_events(event_store):
         WorkflowStarted(
             aggregate_id=workflow_id,
             payload={
-                "started_at": datetime.now(timezone.utc).isoformat(),
+                "started_at": datetime.now(UTC).isoformat(),
                 "work_item_id": work_item_id,
                 "first_stage": "stage-1",
             },
@@ -80,7 +79,7 @@ async def sample_workflow_events(event_store):
         WorkflowCompleted(
             aggregate_id=workflow_id,
             payload={
-                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(UTC).isoformat(),
                 "work_item_id": work_item_id,
                 "duration_seconds": 120.5,
             },
@@ -120,7 +119,7 @@ async def multiple_workflows(event_store):
             WorkflowStarted(
                 aggregate_id=workflow_id,
                 payload={
-                    "started_at": datetime.now(timezone.utc).isoformat(),
+                    "started_at": datetime.now(UTC).isoformat(),
                     "work_item_id": work_item_id,
                     "first_stage": "stage-1",
                 },
@@ -133,7 +132,7 @@ async def multiple_workflows(event_store):
                 WorkflowCompleted(
                     aggregate_id=workflow_id,
                     payload={
-                        "completed_at": datetime.now(timezone.utc).isoformat(),
+                        "completed_at": datetime.now(UTC).isoformat(),
                         "work_item_id": work_item_id,
                         "duration_seconds": 100.0 + i * 10,
                     },
@@ -144,7 +143,7 @@ async def multiple_workflows(event_store):
                 WorkflowFailed(
                     aggregate_id=workflow_id,
                     payload={
-                        "failed_at": datetime.now(timezone.utc).isoformat(),
+                        "failed_at": datetime.now(UTC).isoformat(),
                         "reason": "Agent execution failed",
                         "failed_stage": "stage-2",
                         "completed_stages": ["stage-1"],
@@ -529,8 +528,8 @@ class TestStageOutputFields:
             name="implementation",
             agent_name="developer_agent",
             status="completed",
-            started_at=datetime.now(timezone.utc),
-            completed_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
             execution_id="exec-123",
             output="Implementation completed successfully",
             error_message=None,
@@ -552,8 +551,8 @@ class TestStageOutputFields:
             name="testing",
             agent_name="test_agent",
             status="failed",
-            started_at=datetime.now(timezone.utc),
-            completed_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
             execution_id="exec-456",
             output=None,
             error_message="Test suite failed with 3 errors",
@@ -576,8 +575,8 @@ class TestStageOutputFields:
             name="review",
             agentName="reviewer_agent",
             status="completed",
-            startedAt=datetime.now(timezone.utc),
-            completedAt=datetime.now(timezone.utc),
+            startedAt=datetime.now(UTC),
+            completedAt=datetime.now(UTC),
             executionId="exec-789",
             output="Code review passed",
             errorMessage=None,
@@ -596,8 +595,8 @@ class TestStageOutputFields:
         stage_info = AuditStageInfo(
             name="deployment",
             status="completed",
-            startedAt=datetime.now(timezone.utc),
-            completedAt=datetime.now(timezone.utc),
+            startedAt=datetime.now(UTC),
+            completedAt=datetime.now(UTC),
             durationSeconds=45.5,
             events=[],
             output="Deployment successful",
@@ -619,8 +618,8 @@ class TestStageOutputFields:
             name="build",
             agent_name="build_agent",
             status="completed",
-            started_at=datetime.now(timezone.utc),
-            completed_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
             execution_id="exec-build-1",
             output="Build artifacts created",
             error_message=None,

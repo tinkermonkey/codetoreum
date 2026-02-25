@@ -1,9 +1,7 @@
 """Unit tests for BoardColumnEventHandler."""
 
 import logging
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, call
-from uuid import uuid4
+from unittest.mock import AsyncMock
 
 import pytest
 

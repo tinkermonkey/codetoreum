@@ -6,17 +6,14 @@ These tests interact with actual git repositories and require:
 """
 
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 import pytest
 
 from codetoreum.adapters.secondary import GitConfig, GitRepositoryAdapter
-from codetoreum.domain.types import BranchName, CommitHash
+from codetoreum.domain.types import BranchName
 from codetoreum.ports.exceptions import (
-    MergeConflictError,
-    RepositoryError,
-    ResourceNotFoundError,
     ValidationError,
 )
 

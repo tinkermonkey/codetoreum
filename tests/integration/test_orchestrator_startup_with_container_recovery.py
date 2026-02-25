@@ -9,8 +9,7 @@ Tests the complete startup flow including:
 5. Proper lifespan handling
 """
 
-from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import Mock
 
 import pytest
 
@@ -23,7 +22,6 @@ from codetoreum.infrastructure.simulation.bootstrap import (
     SimulationApplicationBootstrap,
 )
 from codetoreum.ports.output.container_recovery import (
-    ContainerMetadata,
     RecoveryAssessment,
 )
 

@@ -1,6 +1,5 @@
 """Workflow validation service for validating workflow configurations."""
 
-from typing import List
 
 from codetoreum.domain.workflow_template import WorkflowTemplate
 
@@ -13,7 +12,7 @@ class WorkflowValidationService:
     """
 
     @staticmethod
-    def validate_workflow_template(template: WorkflowTemplate) -> List[str]:
+    def validate_workflow_template(template: WorkflowTemplate) -> list[str]:
         """
         Validate workflow template.
 

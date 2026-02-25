@@ -93,7 +93,7 @@ def register_agent_endpoints(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to list agents: {str(e)}",
+                detail=f"Failed to list agents: {e!s}",
             )
 
     @router.get(
@@ -148,7 +148,7 @@ def register_agent_endpoints(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve agent config: {str(e)}",
+                detail=f"Failed to retrieve agent config: {e!s}",
             )
 
     @router.put(
@@ -254,7 +254,7 @@ def register_agent_endpoints(
             )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to update agent config: {str(e)}",
+                detail=f"Failed to update agent config: {e!s}",
             )
 
     @router.get(
@@ -323,5 +323,5 @@ def register_agent_endpoints(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to list agents: {str(e)}",
+                detail=f"Failed to list agents: {e!s}",
             )

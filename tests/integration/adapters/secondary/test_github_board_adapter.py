@@ -9,10 +9,7 @@ Tests cover:
 - Event emission
 """
 
-import asyncio
-from datetime import datetime
-from typing import Dict, List, Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -22,7 +19,6 @@ from codetoreum.adapters.secondary.github_ticket_adapter import (
     GitHubTicketAdapter,
 )
 from codetoreum.domain.events.board_events import (
-    BoardReconciledEvent,
     WorkItemColumnChangedEvent,
 )
 from codetoreum.infrastructure.http.github_graphql_client import (
@@ -31,17 +27,11 @@ from codetoreum.infrastructure.http.github_graphql_client import (
 )
 from codetoreum.ports.exceptions import (
     ExternalServiceError,
-    ResourceNotFoundError,
     ValidationError,
 )
 from codetoreum.ports.output.board_service import (
-    BoardColumn,
-    BoardConfig,
     MovedByType,
-    ProjectBoard,
-    ReconciliationResult,
 )
-from codetoreum.ports.output.monitoring import MonitoringConfig, MonitoringState
 
 
 @pytest.fixture

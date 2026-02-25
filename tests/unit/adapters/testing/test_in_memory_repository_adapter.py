@@ -1,13 +1,13 @@
 """Unit tests for InMemoryRepositoryAdapter."""
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from codetoreum.adapters.testing import InMemoryRepositoryAdapter
-from codetoreum.domain.types import BranchName, CommitHash
+from codetoreum.domain.types import BranchName
 from codetoreum.ports.exceptions import ResourceNotFoundError, ValidationError
 
 
@@ -509,7 +509,7 @@ class TestInMemoryRepositoryAdapter:
         )
 
         # Mark the time
-        cutoff_time = datetime.now(timezone.utc)
+        cutoff_time = datetime.now(UTC)
         await asyncio.sleep(0.01)
 
         # Create newer commits

@@ -1,6 +1,6 @@
 """Unit tests for ProjectContext aggregate root."""
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 import pytest
 

@@ -28,7 +28,6 @@ class TestIdentityServiceContract(ABC):
     @abstractmethod
     def create_service(self) -> IIdentityService:
         """Create and return an IIdentityService instance for testing."""
-        pass
 
     # Bot Detection Tests
 

@@ -14,10 +14,9 @@ SECURITY FEATURES:
 
 import asyncio
 import logging
-import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import click
 import yaml
@@ -26,9 +25,6 @@ from rich.progress import Progress
 from rich.table import Table
 
 from codetoreum.adapters.secondary.config_storage_factory import ConfigStorageFactory
-from codetoreum.adapters.secondary.elasticsearch_config_storage import (
-    ElasticsearchConfigStorage,
-)
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.output.config_store import (
     AgentConfig,
@@ -41,14 +37,13 @@ console = Console()
 
 # Security constants
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10MB
-ALLOWED_EXTENSIONS = {'.yaml', '.yml'}
+ALLOWED_EXTENSIONS = {".yaml", ".yml"}
 MAX_YAML_DEPTH = 10
 MAX_YAML_NODES = 10000
 
 
 class SecurityError(Exception):
     """Raised when a security validation fails."""
-    pass
 
 
 class YAMLConfigImporter:
@@ -116,7 +111,7 @@ class YAMLConfigImporter:
         except (OSError, RuntimeError) as e:
             raise SecurityError(f"Invalid or inaccessible file path: {e}")
 
-    def _safe_load_yaml(self, file_path: Path) -> Dict[str, Any]:
+    def _safe_load_yaml(self, file_path: Path) -> dict[str, Any]:
         """
         Safely load YAML file with protection against malicious content.
 
@@ -131,7 +126,7 @@ class YAMLConfigImporter:
             ValueError: If YAML is invalid
         """
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, encoding="utf-8") as f:
                 # Use safe_load to prevent code execution
                 # This protects against arbitrary Python object instantiation
                 yaml_content = yaml.safe_load(f)
@@ -208,7 +203,7 @@ class YAMLConfigImporter:
 
     async def import_project_config(
         self, yaml_file: Path, dry_run: bool = False
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Import a project configuration from YAML file.
 
@@ -339,7 +334,7 @@ class YAMLConfigImporter:
             return {"success": False, "error": str(e)}
 
     async def _import_agent_config(
-        self, project_id: str, agent_name: str, agent_data: Dict[str, Any]
+        self, project_id: str, agent_name: str, agent_data: dict[str, Any]
     ):
         """Import agent configuration."""
         agent_config = AgentConfig(
@@ -358,7 +353,7 @@ class YAMLConfigImporter:
         await self.config_store.save_agent_config(agent_config)
 
     async def _import_pipeline_config(
-        self, project_id: str, pipeline_data: Dict[str, Any]
+        self, project_id: str, pipeline_data: dict[str, Any]
     ):
         """Import pipeline configuration."""
         pipeline_config = PipelineConfig(
@@ -372,7 +367,7 @@ class YAMLConfigImporter:
         )
         await self.config_store.save_pipeline_config(pipeline_config)
 
-    def _validate_yaml_structure(self, yaml_config: Dict[str, Any]) -> List[str]:
+    def _validate_yaml_structure(self, yaml_config: dict[str, Any]) -> list[str]:
         """
         Validate YAML configuration structure.
 
@@ -411,7 +406,6 @@ class YAMLConfigImporter:
 @click.group()
 def cli():
     """YAML Configuration Import Tool"""
-    pass
 
 
 @cli.command()

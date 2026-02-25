@@ -4,12 +4,12 @@ import asyncio
 import json
 import logging
 import os
-import signal
 import subprocess
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, AsyncIterator, Callable, Dict, List, Optional
+from typing import Any
 
 from codetoreum.ports.exceptions import (
     AuthenticationError,
@@ -29,7 +29,6 @@ from codetoreum.ports.output.llm_provider import (
     ModelInfo,
     StreamCallback,
     StreamChunk,
-    ToolCall,
     ToolDefinition,
     UsageStats,
 )
@@ -38,7 +37,7 @@ from codetoreum.ports.output.llm_provider import (
 class ICredentialProvider:
     """Interface for secure credential providers."""
 
-    async def get_credential(self, key: str) -> Optional[str]:
+    async def get_credential(self, key: str) -> str | None:
         """
         Retrieve a credential securely.
 
@@ -54,23 +53,21 @@ class ICredentialProvider:
 class EnvironmentCredentialProvider(ICredentialProvider):
     """Credential provider that retrieves from environment variables."""
 
-    async def get_credential(self, key: str) -> Optional[str]:
+    async def get_credential(self, key: str) -> str | None:
         """Get credential from environment."""
-        import os
         return os.environ.get(key)
 
 
 class SecureStoreCredentialProvider(ICredentialProvider):
     """Credential provider that uses a secure key store (placeholder for production)."""
 
-    def __init__(self, store_path: Optional[Path] = None):
+    def __init__(self, store_path: Path | None = None):
         self.store_path = store_path
         # In production, this would integrate with system keychain/vault
 
-    async def get_credential(self, key: str) -> Optional[str]:
+    async def get_credential(self, key: str) -> str | None:
         """Get credential from secure store."""
         # Placeholder implementation - integrate with system keychain in production
-        import os
         return os.environ.get(key)
 
 
@@ -81,7 +78,7 @@ class ClaudeCodeConfig:
     # Authentication (secure references)
     api_key_credential_name: str = "ANTHROPIC_API_KEY"  # Name of credential in provider
     oauth_token_credential_name: str = "CLAUDE_CODE_OAUTH_TOKEN"  # Name of OAuth token
-    credential_provider: Optional[ICredentialProvider] = None  # Secure credential provider
+    credential_provider: ICredentialProvider | None = None  # Secure credential provider
 
     # CLI configuration
     claude_cli_path: str = "claude"  # Path to Claude CLI executable
@@ -132,7 +129,7 @@ class ClaudeCodeAdapter(ILLMProvider):
         self._validate_configuration()
 
         # Conversation tracking
-        self._conversations: Dict[str, Dict[str, Any]] = {}
+        self._conversations: dict[str, dict[str, Any]] = {}
 
         # Track usage stats
         self._usage_stats = {
@@ -146,13 +143,12 @@ class ClaudeCodeAdapter(ILLMProvider):
     def _validate_configuration(self) -> None:
         """Validate configuration."""
         # Configuration validation will happen at runtime when credentials are retrieved
-        pass
 
     def _build_command(
         self,
         prompt: str,
-        context: Optional[ExecutionContext] = None,
-    ) -> List[str]:
+        context: ExecutionContext | None = None,
+    ) -> list[str]:
         """
         Build Claude CLI command.
 
@@ -199,8 +195,8 @@ class ClaudeCodeAdapter(ILLMProvider):
 
     async def _build_environment(
         self,
-        context: Optional[ExecutionContext] = None,
-    ) -> Dict[str, str]:
+        context: ExecutionContext | None = None,
+    ) -> dict[str, str]:
         """
         Build environment variables.
 
@@ -210,7 +206,6 @@ class ClaudeCodeAdapter(ILLMProvider):
         Returns:
             Environment variables dictionary
         """
-        import os
 
         env = os.environ.copy()
 
@@ -274,12 +269,12 @@ class ClaudeCodeAdapter(ILLMProvider):
         import re
 
         # Remove API keys (common patterns)
-        sanitized = re.sub(r'sk-[a-zA-Z0-9]{20,}', '[REDACTED_API_KEY]', error)
-        sanitized = re.sub(r'Bearer [a-zA-Z0-9_-]{20,}', 'Bearer [REDACTED_TOKEN]', sanitized)
+        sanitized = re.sub(r"sk-[a-zA-Z0-9]{20,}", "[REDACTED_API_KEY]", error)
+        sanitized = re.sub(r"Bearer [a-zA-Z0-9_-]{20,}", "Bearer [REDACTED_TOKEN]", sanitized)
 
         # Remove file paths that might contain sensitive info
-        sanitized = re.sub(r'/home/[^/]+/', '/home/[USER]/', sanitized)
-        sanitized = re.sub(r'/Users/[^/]+/', '/Users/[USER]/', sanitized)
+        sanitized = re.sub(r"/home/[^/]+/", "/home/[USER]/", sanitized)
+        sanitized = re.sub(r"/Users/[^/]+/", "/Users/[USER]/", sanitized)
 
         # Truncate to reasonable length
         if len(sanitized) > 500:
@@ -308,8 +303,8 @@ class ClaudeCodeAdapter(ILLMProvider):
     async def execute(
         self,
         prompt: str,
-        context: Optional[ExecutionContext] = None,
-        stream_callback: Optional[StreamCallback] = None,
+        context: ExecutionContext | None = None,
+        stream_callback: StreamCallback | None = None,
     ) -> ExecutionResult:
         """Execute a prompt with Claude."""
         ctx = context or ExecutionContext()
@@ -325,7 +320,7 @@ class ClaudeCodeAdapter(ILLMProvider):
         cwd = str(ctx.working_directory) if ctx.working_directory else None
 
         # Execute with timeout
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         try:
             # Use shell=False explicitly for security
@@ -339,7 +334,7 @@ class ClaudeCodeAdapter(ILLMProvider):
             )
 
             # Process streaming output
-            output_parts: List[str] = []
+            output_parts: list[str] = []
             conversation_id = ctx.conversation_id
             usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
             chunk_index = 0
@@ -390,8 +385,8 @@ class ClaudeCodeAdapter(ILLMProvider):
             timeout = ctx.timeout_seconds
             try:
                 await asyncio.wait_for(read_stream(), timeout=timeout)
-            except asyncio.TimeoutError:
-                logging.error(
+            except TimeoutError:
+                logging.exception(
                     "Claude Code streaming timed out after %d seconds, terminating process (PID: %s)",
                     timeout,
                     process.pid,
@@ -400,7 +395,7 @@ class ClaudeCodeAdapter(ILLMProvider):
                 # Wait for process termination with timeout to prevent hanging
                 try:
                     await asyncio.wait_for(process.wait(), timeout=_PROCESS_TIMEOUT_AFTER_SIGKILL_SECONDS)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # Process didn't respond to SIGKILL - it's in uninterruptible state
                     logging.warning(
                         "Process (PID: %s) did not terminate after SIGKILL within %d seconds, "
@@ -413,8 +408,8 @@ class ClaudeCodeAdapter(ILLMProvider):
             # Wait for process completion with timeout to prevent hanging
             try:
                 await asyncio.wait_for(process.wait(), timeout=_PROCESS_TIMEOUT_NORMAL_COMPLETION_SECONDS)
-            except asyncio.TimeoutError:
-                logging.error(
+            except TimeoutError:
+                logging.exception(
                     "Process (PID: %s) did not complete within %d seconds after streaming finished, "
                     "killing process",
                     process.pid,
@@ -423,7 +418,7 @@ class ClaudeCodeAdapter(ILLMProvider):
                 process.kill()
                 try:
                     await asyncio.wait_for(process.wait(), timeout=_PROCESS_TIMEOUT_AFTER_SIGKILL_SECONDS)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     logging.warning(
                         "Process (PID: %s) did not terminate after SIGKILL within %d seconds, "
                         "giving up - process may be in D-state",
@@ -443,10 +438,9 @@ class ClaudeCodeAdapter(ILLMProvider):
                 # Parse specific errors
                 if "rate limit" in error_text.lower():
                     raise RateLimitError()
-                elif "authentication" in error_text.lower() or "invalid api key" in error_text.lower():
+                if "authentication" in error_text.lower() or "invalid api key" in error_text.lower():
                     raise AuthenticationError("Invalid API key or OAuth token")
-                else:
-                    raise LLMProviderError(f"Claude execution failed: {sanitized_error}")
+                raise LLMProviderError(f"Claude execution failed: {sanitized_error}")
 
             # Send final chunk
             if stream_callback:
@@ -458,7 +452,7 @@ class ClaudeCodeAdapter(ILLMProvider):
                 await stream_callback(final_chunk)
 
             # Build result
-            end_time = datetime.now(timezone.utc)
+            end_time = datetime.now(UTC)
             duration_ms = int((end_time - start_time).total_seconds() * 1000)
 
             # Update usage stats
@@ -486,14 +480,14 @@ class ClaudeCodeAdapter(ILLMProvider):
         except Exception as e:
             if isinstance(e, (LLMProviderError, AuthenticationError, RateLimitError)):
                 raise
-            raise LLMProviderError(f"Execution error: {str(e)}")
+            raise LLMProviderError(f"Execution error: {e!s}")
 
     async def execute_with_tools(
         self,
         prompt: str,
-        tools: List[ToolDefinition],
-        context: Optional[ExecutionContext] = None,
-        stream_callback: Optional[StreamCallback] = None,
+        tools: list[ToolDefinition],
+        context: ExecutionContext | None = None,
+        stream_callback: StreamCallback | None = None,
     ) -> ExecutionResult:
         """
         Execute prompt with tool calling.
@@ -545,7 +539,7 @@ class ClaudeCodeAdapter(ILLMProvider):
     async def stream_completion(
         self,
         prompt: str,
-        context: Optional[ExecutionContext] = None,
+        context: ExecutionContext | None = None,
     ) -> AsyncIterator[StreamChunk]:
         """Stream completion tokens."""
         ctx = context or ExecutionContext()
@@ -596,8 +590,8 @@ class ClaudeCodeAdapter(ILLMProvider):
             timeout = ctx.timeout_seconds
             try:
                 await asyncio.wait_for(process.wait(), timeout=timeout)
-            except asyncio.TimeoutError:
-                logging.error(
+            except TimeoutError:
+                logging.exception(
                     "Claude Code streaming timed out after %d seconds, terminating process (PID: %s)",
                     timeout,
                     process.pid,
@@ -605,7 +599,7 @@ class ClaudeCodeAdapter(ILLMProvider):
                 process.kill()
                 try:
                     await asyncio.wait_for(process.wait(), timeout=_PROCESS_TIMEOUT_AFTER_SIGKILL_SECONDS)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     logging.warning(
                         "Process (PID: %s) did not terminate after SIGKILL within %d seconds, "
                         "likely in D-state (uninterruptible kernel I/O)",
@@ -616,7 +610,7 @@ class ClaudeCodeAdapter(ILLMProvider):
 
             if process.returncode != 0:
                 stderr = await process.stderr.read()
-                error_text = stderr.decode('utf-8')
+                error_text = stderr.decode("utf-8")
                 sanitized_error = self._sanitize_error_message(error_text)
                 raise StreamingError(f"Stream failed: {sanitized_error}")
 
@@ -635,8 +629,8 @@ class ClaudeCodeAdapter(ILLMProvider):
 
     async def create_conversation(
         self,
-        system_prompt: Optional[str] = None,
-        parameters: Optional[ExecutionContext] = None,
+        system_prompt: str | None = None,
+        parameters: ExecutionContext | None = None,
     ) -> str:
         """
         Create a new conversation.
@@ -651,7 +645,7 @@ class ClaudeCodeAdapter(ILLMProvider):
         self._conversations[conversation_id] = {
             "system_prompt": system_prompt,
             "parameters": parameters,
-            "created_at": datetime.now(timezone.utc),
+            "created_at": datetime.now(UTC),
             "message_count": 0,
         }
 
@@ -661,7 +655,7 @@ class ClaudeCodeAdapter(ILLMProvider):
         self,
         conversation_id: str,
         message: str,
-        stream_callback: Optional[StreamCallback] = None,
+        stream_callback: StreamCallback | None = None,
     ) -> ExecutionResult:
         """Continue an existing conversation."""
         if conversation_id not in self._conversations:
@@ -678,7 +672,7 @@ class ClaudeCodeAdapter(ILLMProvider):
 
         # Update conversation tracking
         conv_data["message_count"] += 1
-        conv_data["last_message_at"] = datetime.now(timezone.utc)
+        conv_data["last_message_at"] = datetime.now(UTC)
 
         return result
 
@@ -703,7 +697,7 @@ class ClaudeCodeAdapter(ILLMProvider):
             },
         )
 
-    async def list_available_models(self) -> List[ModelInfo]:
+    async def list_available_models(self) -> list[ModelInfo]:
         """List available Claude models."""
         return [
             await self.get_model_info(),
@@ -734,7 +728,7 @@ class ClaudeCodeAdapter(ILLMProvider):
     async def count_tokens(
         self,
         text: str,
-        model: Optional[str] = None,
+        model: str | None = None,
     ) -> int:
         """
         Count tokens in text.
@@ -746,7 +740,7 @@ class ClaudeCodeAdapter(ILLMProvider):
 
     async def get_usage_stats(
         self,
-        since: Optional[datetime] = None,
+        since: datetime | None = None,
     ) -> UsageStats:
         """
         Get usage statistics from adapter tracking.
@@ -774,8 +768,8 @@ class ClaudeCodeAdapter(ILLMProvider):
             input_tokens=self._usage_stats["input_tokens"],
             output_tokens=self._usage_stats["output_tokens"],
             total_cost=total_cost,
-            period_start=since or datetime.now(timezone.utc),
-            period_end=datetime.now(timezone.utc),
+            period_start=since or datetime.now(UTC),
+            period_end=datetime.now(UTC),
             by_model=self._usage_stats["by_model"].copy(),
         )
 
@@ -823,7 +817,7 @@ class ClaudeCodeAdapter(ILLMProvider):
                         f"or {self.config.oauth_token_credential_name}"
                     )
             except Exception as e:
-                raise LLMProviderError(f"Credential validation failed: {str(e)}")
+                raise LLMProviderError(f"Credential validation failed: {e!s}")
 
             return True
 

@@ -14,7 +14,7 @@ Tests verify that:
 """
 
 import asyncio
-from typing import Any, Dict, List, Set
+from typing import Any
 
 import pytest
 
@@ -54,7 +54,7 @@ class _StatefulHandler(EventHandler):
 
     def __init__(self, handler_id: str):
         self.handler_id = handler_id
-        self.state: Dict[str, Any] = {"count": 0, "events": [], "event_ids": set()}
+        self.state: dict[str, Any] = {"count": 0, "events": [], "event_ids": set()}
 
     async def handle(self, event: DomainEvent) -> None:
         """Handle event with state."""
@@ -71,7 +71,7 @@ class _StatefulExceptionHandler(EventHandler):
 
     def __init__(self, handler_id: str):
         self.handler_id = handler_id
-        self.state: Dict[str, int] = {"processed": 0, "failed": 0}
+        self.state: dict[str, int] = {"processed": 0, "failed": 0}
 
     async def handle(self, event: DomainEvent) -> None:
         """Handle event with state tracking, but fail."""
@@ -88,7 +88,7 @@ class _MultiEventStatefulHandler(EventHandler):
 
     def __init__(self, handler_id: str):
         self.handler_id = handler_id
-        self.state: Dict[str, Any] = {
+        self.state: dict[str, Any] = {
             "created_count": 0,
             "completed_count": 0,
             "all_events": []
@@ -110,7 +110,7 @@ class _StatefulWildcardHandler(EventHandler):
 
     def __init__(self, handler_id: str):
         self.handler_id = handler_id
-        self.state: Dict[str, Any] = {"event_types": [], "count": 0}
+        self.state: dict[str, Any] = {"event_types": [], "count": 0}
 
     async def handle(self, event: DomainEvent) -> None:
         """Handle all events with state."""
@@ -550,7 +550,7 @@ class TestEventBusConcurrentFailures:
         # Handler stores in its own state dict, callback stores in callback_events list
         assert isinstance(handler.state, dict)
         assert isinstance(callback_events, list)
-        assert handler.state is not {"events": callback_events}  # Different objects
+        assert handler.state != {"events": callback_events}  # Different objects
 
     async def test_async_handler_execution_order_independence(self):
         """Test async handler execution order independence.

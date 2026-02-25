@@ -4,9 +4,9 @@ Provides dataclasses for configuring resilience components and
 predefined service-specific configurations.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 class OperationMode(Enum):
@@ -21,8 +21,8 @@ class RateLimitConfig:
     """Rate limiter configuration."""
     max_requests: int
     window_seconds: int = 60
-    max_tokens: Optional[int] = None
-    max_wait_seconds: Optional[float] = None
+    max_tokens: int | None = None
+    max_wait_seconds: float | None = None
 
 
 @dataclass
@@ -53,14 +53,14 @@ class TimeoutConfig:
 class ServiceResilienceConfig:
     """Complete resilience configuration for a service."""
     service_name: str
-    rate_limit: Optional[RateLimitConfig] = None
-    circuit_breaker: Optional[CircuitBreakerConfig] = None
-    retry: Optional[RetryConfig] = None
-    timeout: Optional[TimeoutConfig] = None
+    rate_limit: RateLimitConfig | None = None
+    circuit_breaker: CircuitBreakerConfig | None = None
+    retry: RetryConfig | None = None
+    timeout: TimeoutConfig | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
-        result: Dict[str, Any] = {"service_name": self.service_name}
+        result: dict[str, Any] = {"service_name": self.service_name}
 
         if self.rate_limit:
             result["rate_limit"] = {
@@ -94,7 +94,7 @@ class ServiceResilienceConfig:
         return result
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ServiceResilienceConfig":
+    def from_dict(cls, data: dict[str, Any]) -> "ServiceResilienceConfig":
         """Create from dictionary."""
         rate_limit = None
         if "rate_limit" in data:

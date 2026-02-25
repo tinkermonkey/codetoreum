@@ -5,12 +5,13 @@ Provides async timeout handling using asyncio.wait_for.
 
 import asyncio
 import time
-from typing import Callable, List, TypeVar
+from collections.abc import Callable
+from typing import TypeVar
 
 from .exceptions import TimeoutError as ResilienceTimeoutError
 from .interfaces import ITimeout, TimeoutStats
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class AsyncTimeout(ITimeout):
@@ -23,7 +24,7 @@ class AsyncTimeout(ITimeout):
     def __init__(self):
         self._total_operations = 0
         self._total_timeouts = 0
-        self._durations: List[float] = []
+        self._durations: list[float] = []
 
     async def execute(
         self,
@@ -48,7 +49,7 @@ class AsyncTimeout(ITimeout):
 
             return result
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._total_timeouts += 1
             raise ResilienceTimeoutError(
                 f"Operation {operation_name} exceeded timeout of {timeout_seconds}s"

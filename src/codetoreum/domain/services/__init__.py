@@ -14,8 +14,8 @@ from codetoreum.domain.services.workflow_validation_service import (
 
 __all__ = [
     "AgentMatchingService",
-    "WorkAssignmentService",
     "AssignmentResult",
-    "WorkflowValidationService",
     "ExecutionContextBuilder",
+    "WorkAssignmentService",
+    "WorkflowValidationService",
 ]

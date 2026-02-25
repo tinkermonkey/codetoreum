@@ -9,8 +9,7 @@ Comprehensive unit tests covering:
 - Enable/disable operations
 """
 
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -18,10 +17,6 @@ from codetoreum.application.multi_project_orchestrator import MultiProjectOrches
 from codetoreum.domain.events.project_events import OrchestrationCycleCompletedEvent
 from codetoreum.domain.value_objects import ProjectConfig
 from codetoreum.ports.exceptions import ExternalServiceError, ResourceNotFoundError
-from codetoreum.ports.output.multi_project_orchestrator import (
-    OrchestrationCycleResult,
-    ProjectOrchestrationResult,
-)
 
 
 @pytest.fixture
@@ -524,7 +519,7 @@ class TestMultiProjectOrchestratorLifecycle:
         await multi_orchestrator.stop()
         try:
             await asyncio.wait_for(task, timeout=1.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pass  # Expected if loop takes time to exit
 
     @pytest.mark.asyncio
@@ -551,7 +546,7 @@ class TestMultiProjectOrchestratorLifecycle:
         # Task should complete now (not running indefinitely)
         try:
             await asyncio.wait_for(task, timeout=1.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             # If it times out, the stop didn't work as expected
             task.cancel()
             try:

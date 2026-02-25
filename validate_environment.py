@@ -32,16 +32,15 @@ def run_command(cmd: Sequence[str] | str, description: str) -> bool:
             if output:
                 print(f"✓ PASS - {output}")
             else:
-                print(f"✓ PASS")
+                print("✓ PASS")
             return True
-        else:
-            print(f"✗ FAIL - {result.stderr.strip()}")
-            return False
+        print(f"✗ FAIL - {result.stderr.strip()}")
+        return False
     except subprocess.TimeoutExpired:
         print("✗ FAIL - Command timed out")
         return False
     except Exception as e:
-        print(f"✗ FAIL - {str(e)}")
+        print(f"✗ FAIL - {e!s}")
         return False
 
 

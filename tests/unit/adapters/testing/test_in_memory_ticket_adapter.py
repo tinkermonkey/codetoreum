@@ -1,6 +1,5 @@
 """Unit tests for InMemoryTicketAdapter."""
 
-from datetime import datetime, timezone
 
 import pytest
 

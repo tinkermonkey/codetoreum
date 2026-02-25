@@ -5,7 +5,8 @@ from adapters to the orchestrator.
 """
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Callable, Optional
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from codetoreum.domain.events.adapter_events import CodetoreumEvent
@@ -36,7 +37,6 @@ class IEventEmitter(ABC):
         Raises:
             ValueError: If event_type is invalid or handler is not callable
         """
-        pass
 
     @abstractmethod
     def off(self, event_type: str, handler: Callable) -> None:
@@ -49,7 +49,6 @@ class IEventEmitter(ABC):
         Raises:
             ValueError: If handler was not previously subscribed
         """
-        pass
 
     @abstractmethod
     def emit(self, event: "CodetoreumEvent") -> None:
@@ -65,7 +64,6 @@ class IEventEmitter(ABC):
         Raises:
             ValueError: If event is invalid or not a CodetoreumEvent
         """
-        pass
 
     def once(self, event_type: str, handler: Callable) -> None:
         """Subscribe to receive a single event, then unsubscribe.

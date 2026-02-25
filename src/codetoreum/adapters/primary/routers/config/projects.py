@@ -96,7 +96,7 @@ def register_project_endpoints(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve project config: {str(e)}",
+                detail=f"Failed to retrieve project config: {e!s}",
             )
 
     @router.put(
@@ -154,7 +154,7 @@ def register_project_endpoints(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to update project config: {str(e)}",
+                detail=f"Failed to update project config: {e!s}",
             )
 
     @router.get(
@@ -211,7 +211,7 @@ def register_project_endpoints(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to list projects: {str(e)}",
+                detail=f"Failed to list projects: {e!s}",
             )
 
     @router.get(
@@ -273,5 +273,5 @@ def register_project_endpoints(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve version history: {str(e)}",
+                detail=f"Failed to retrieve version history: {e!s}",
             )

@@ -15,13 +15,9 @@ These tests are currently being deferred until the repair cycle API is
 finalized or the metrics collector is refactored to match the events.
 """
 
-import asyncio
-from datetime import datetime, timezone
-from unittest.mock import MagicMock
 
 import pytest
 
-from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.metrics_collector import MetricsCollector
 

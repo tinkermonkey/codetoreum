@@ -1,11 +1,12 @@
 """IContainer output port interface."""
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
-from codetoreum.domain.types import ContainerId, ImageId
+from codetoreum.domain.types import ContainerId
 
 # ============================================================================
 # Data Models
@@ -30,9 +31,9 @@ class ContainerStatus:
     id: ContainerId
     status: str  # running, stopped, exited, paused, restarting, dead
     created_at: datetime
-    started_at: Optional[datetime]
-    finished_at: Optional[datetime]
-    exit_code: Optional[int] = None
+    started_at: datetime | None
+    finished_at: datetime | None
+    exit_code: int | None = None
 
 
 # ============================================================================
@@ -47,11 +48,11 @@ class IContainer(ABC):
     async def run(
         self,
         image: str,
-        command: List[str],
-        volumes: Dict[str, str],
-        environment: Dict[str, str],
+        command: list[str],
+        volumes: dict[str, str],
+        environment: dict[str, str],
         timeout: int = 300,
-        stream_callback: Optional[Callable] = None,
+        stream_callback: Callable | None = None,
     ) -> ContainerResult:
         """
         Run a command in a container.
@@ -74,20 +75,19 @@ class IContainer(ABC):
             ImageNotFoundError: Container image doesn't exist
             ValidationError: Invalid configuration
         """
-        pass
 
     @abstractmethod
     async def create(
         self,
         image: str,
-        name: Optional[str] = None,
-        command: Optional[List[str]] = None,
-        volumes: Optional[Dict[str, str]] = None,
-        environment: Optional[Dict[str, str]] = None,
-        working_dir: Optional[str] = None,
-        user: Optional[str] = None,
-        network: Optional[str] = None,
-        labels: Optional[Dict[str, str]] = None,
+        name: str | None = None,
+        command: list[str] | None = None,
+        volumes: dict[str, str] | None = None,
+        environment: dict[str, str] | None = None,
+        working_dir: str | None = None,
+        user: str | None = None,
+        network: str | None = None,
+        labels: dict[str, str] | None = None,
     ) -> str:
         """
         Create a container without starting it.
@@ -111,7 +111,6 @@ class IContainer(ABC):
             ValidationError: Invalid configuration
             ContainerError: Container creation failed
         """
-        pass
 
     @abstractmethod
     async def start(self, container_id: str) -> None:
@@ -125,7 +124,6 @@ class IContainer(ABC):
             ResourceNotFoundError: Container doesn't exist
             ContainerError: Start operation failed
         """
-        pass
 
     @abstractmethod
     async def stop(self, container_id: str, timeout: int = 10) -> None:
@@ -140,7 +138,6 @@ class IContainer(ABC):
             ResourceNotFoundError: Container doesn't exist
             ContainerError: Stop operation failed
         """
-        pass
 
     @abstractmethod
     async def remove(self, container_id: str, force: bool = False) -> None:
@@ -155,7 +152,6 @@ class IContainer(ABC):
             ResourceNotFoundError: Container doesn't exist
             ContainerError: Remove operation failed
         """
-        pass
 
     @abstractmethod
     async def kill(self, container_id: str, signal: str = "SIGKILL") -> None:
@@ -170,7 +166,6 @@ class IContainer(ABC):
             ResourceNotFoundError: Container doesn't exist
             ContainerError: Kill operation failed
         """
-        pass
 
     @abstractmethod
     async def logs(
@@ -178,8 +173,8 @@ class IContainer(ABC):
         container_id: str,
         stream: bool = False,
         follow: bool = False,
-        tail: Optional[int] = None,
-        since: Optional[datetime] = None,
+        tail: int | None = None,
+        since: datetime | None = None,
     ) -> Any:
         """
         Get container logs.
@@ -198,7 +193,6 @@ class IContainer(ABC):
             ResourceNotFoundError: Container doesn't exist
             ContainerError: Logs operation failed
         """
-        pass
 
     @abstractmethod
     async def status(self, container_id: str) -> ContainerStatus:
@@ -215,16 +209,15 @@ class IContainer(ABC):
             ResourceNotFoundError: Container doesn't exist
             ContainerError: Status check failed
         """
-        pass
 
     @abstractmethod
     async def exec(
         self,
         container_id: str,
-        command: List[str],
-        user: Optional[str] = None,
-        working_dir: Optional[str] = None,
-        environment: Optional[Dict[str, str]] = None,
+        command: list[str],
+        user: str | None = None,
+        working_dir: str | None = None,
+        environment: dict[str, str] | None = None,
     ) -> ContainerResult:
         """
         Execute a command in a running container.
@@ -244,14 +237,13 @@ class IContainer(ABC):
             ContainerNotRunningError: Container is not running
             ContainerError: Exec operation failed
         """
-        pass
 
     @abstractmethod
     async def list_containers(
         self,
         all: bool = False,
-        filters: Optional[Dict[str, Any]] = None,
-    ) -> List[ContainerStatus]:
+        filters: dict[str, Any] | None = None,
+    ) -> list[ContainerStatus]:
         """
         List containers.
 
@@ -265,14 +257,13 @@ class IContainer(ABC):
         Raises:
             ContainerError: List operation failed
         """
-        pass
 
     @abstractmethod
     async def pull_image(
         self,
         image: str,
         tag: str = "latest",
-        stream_callback: Optional[Callable] = None,
+        stream_callback: Callable | None = None,
     ) -> None:
         """
         Pull a container image.
@@ -287,7 +278,6 @@ class IContainer(ABC):
             AuthenticationError: Registry authentication failed
             ContainerError: Pull operation failed
         """
-        pass
 
     @abstractmethod
     async def image_exists(self, image: str, tag: str = "latest") -> bool:
@@ -304,10 +294,9 @@ class IContainer(ABC):
         Raises:
             ContainerError: Check operation failed
         """
-        pass
 
     @abstractmethod
-    async def inspect(self, container_id: str) -> Dict[str, Any]:
+    async def inspect(self, container_id: str) -> dict[str, Any]:
         """
         Get detailed container information.
 
@@ -321,13 +310,12 @@ class IContainer(ABC):
             ResourceNotFoundError: Container doesn't exist
             ContainerError: Inspect operation failed
         """
-        pass
 
     @abstractmethod
     async def wait(
         self,
         container_id: str,
-        timeout: Optional[int] = None,
+        timeout: int | None = None,
     ) -> int:
         """
         Wait for a container to stop.
@@ -344,7 +332,6 @@ class IContainer(ABC):
             TimeoutError: Wait timed out
             ContainerError: Wait operation failed
         """
-        pass
 
     @abstractmethod
     async def copy_to_container(
@@ -365,7 +352,6 @@ class IContainer(ABC):
             ResourceNotFoundError: Container or file doesn't exist
             ContainerError: Copy operation failed
         """
-        pass
 
     @abstractmethod
     async def copy_from_container(
@@ -386,4 +372,3 @@ class IContainer(ABC):
             ResourceNotFoundError: Container or file doesn't exist
             ContainerError: Copy operation failed
         """
-        pass

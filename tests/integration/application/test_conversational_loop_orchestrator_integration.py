@@ -15,8 +15,7 @@ Tests validate correct integration across component boundaries:
 """
 
 import asyncio
-from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -77,10 +76,10 @@ class MockDiscussionAdapter:
     """
 
     def __init__(self, identity_service: IIdentityService):
-        self.monitoring_sessions: Dict[str, DiscussionMonitoringConfig] = {}
-        self.comments_posted: List[Comment] = []
-        self._threads: Dict[str, List[Comment]] = {}
-        self._event_handlers: Dict[str, List] = {}
+        self.monitoring_sessions: dict[str, DiscussionMonitoringConfig] = {}
+        self.comments_posted: list[Comment] = []
+        self._threads: dict[str, list[Comment]] = {}
+        self._event_handlers: dict[str, list] = {}
         self._identity_service = identity_service
 
     def on(self, event_type: str, handler) -> None:
@@ -123,7 +122,7 @@ class MockDiscussionAdapter:
         self,
         work_item_id: str,
         content: str,
-        parent_id: Optional[str] = None,
+        parent_id: str | None = None,
     ) -> Comment:
         """Post a comment to a work item."""
         comment_id = f"comment-{len(self.comments_posted)}"
@@ -131,7 +130,7 @@ class MockDiscussionAdapter:
             id=comment_id,
             author=self._identity_service.get_bot_username(),
             body=content,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
             parent_id=parent_id,
             is_bot=True
         )
@@ -148,18 +147,18 @@ class MockDiscussionAdapter:
             id=f"thread-{work_item_id}",
             work_item_id=work_item_id,
             comments=comments,
-            thread_type='flat'
+            thread_type="flat"
         )
 
     # Test helper methods
-    def simulate_comment(self, work_item_id: str, author: str, body: str, parent_id: Optional[str] = None) -> Comment:
+    def simulate_comment(self, work_item_id: str, author: str, body: str, parent_id: str | None = None) -> Comment:
         """Simulate a human comment (for testing)."""
         comment_id = f"comment-{len(self.comments_posted)}"
         comment = Comment(
             id=comment_id,
             author=author,
             body=body,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
             parent_id=parent_id,
             is_bot=False
         )
@@ -172,7 +171,7 @@ class MockDiscussionAdapter:
         """Get total comments on a work item."""
         return len(self._threads.get(work_item_id, []))
 
-    def get_posted_comments(self) -> List[Comment]:
+    def get_posted_comments(self) -> list[Comment]:
         """Get all comments posted by agent."""
         return self.comments_posted.copy()
 
@@ -184,9 +183,9 @@ class MockLLMProvider:
     """
 
     def __init__(self):
-        self.executions: List[dict] = []
-        self.conversations: Dict[str, List[str]] = {}
-        self._response_patterns: Dict[str, str] = {}
+        self.executions: list[dict] = []
+        self.conversations: dict[str, list[str]] = {}
+        self._response_patterns: dict[str, str] = {}
 
     def add_response_pattern(self, pattern_key: str, response: str) -> None:
         """Add deterministic response for specific patterns."""
@@ -218,7 +217,7 @@ class MockLLMProvider:
         self.executions.append({
             "conversation_id": conversation_id,
             "message": message,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         })
 
         # Generate response
@@ -242,7 +241,7 @@ class MockLLMProvider:
             "supports_conversations": True,
         }
 
-    def get_conversation_history(self, conversation_id: str) -> List[str]:
+    def get_conversation_history(self, conversation_id: str) -> list[str]:
         """Get all messages in a conversation."""
         return self.conversations.get(conversation_id, [])
 
@@ -267,7 +266,7 @@ async def real_event_store():
     work correctly with the orchestrator.
     """
     event_store = InMemoryEventStore()
-    yield event_store
+    return event_store
 
 
 @pytest.fixture
@@ -363,12 +362,12 @@ class TestFullLoopLifecycleIntegration:
             id="comment-1",
             author="user1",
             body="Can you review this code?",
-            created_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            created_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         )
 
         event1 = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id=work_item_id,
             project_id=project_id,
@@ -398,13 +397,13 @@ class TestFullLoopLifecycleIntegration:
             id="comment-2",
             author="user1",
             body="What about error handling?",
-            created_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            created_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             parent_id=response1.id,
         )
 
         event2 = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id=work_item_id,
             project_id=project_id,
@@ -434,7 +433,7 @@ class TestFullLoopLifecycleIntegration:
 
         column_change_event = WorkItemColumnChangedEvent(
             type="workitem.column_changed",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id=work_item_id,
             project_id=project_id,
@@ -499,12 +498,12 @@ class TestSessionPersistenceAcrossInstancesIntegration:
             id="comment-1",
             author="alice",
             body="First review request",
-            created_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            created_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         )
 
         event_1 = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id=work_item_id,
             project_id=project_id,
@@ -548,12 +547,12 @@ class TestSessionPersistenceAcrossInstancesIntegration:
             id="comment-2",
             author="bob",
             body="Second question",
-            created_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            created_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         )
 
         event_2 = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id=work_item_id,
             project_id=project_id,
@@ -607,7 +606,7 @@ class TestErrorHandlingIntegration:
             id="comment-1",
             author="user1",
             body="Review this",
-            created_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            created_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         )
 
         # Make LLM provider fail to trigger error event
@@ -617,7 +616,7 @@ class TestErrorHandlingIntegration:
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id=work_item_id,
             project_id=project_id,
@@ -739,11 +738,11 @@ class TestConcurrentSessionsWithRealEventStoreIntegration:
                 id=comment_id,
                 author="user",
                 body=f"Comment for {work_item_id}",
-                created_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                created_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             )
             event = CommentNeedsResponseEvent(
                 type="comment.needs_response",
-                timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
                 source="github",
                 work_item_id=work_item_id,
                 project_id=project_id,
@@ -811,7 +810,7 @@ class TestConcurrentSessionsWithRealEventStoreIntegration:
             column_name=session_1.column_name,
             llm_conversation_id=session_1.llm_conversation_id,
             last_processed_comment_id="updated-comment-id",
-            last_interaction_timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            last_interaction_timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             status="active",
         )
         await orchestrator.save_session_state(updated_session_1)
@@ -866,7 +865,7 @@ class TestAdapterInteractionIntegration:
             column_name=session.column_name,
             llm_conversation_id="conv-abc123",
             last_processed_comment_id="__checkpoint_start",
-            last_interaction_timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            last_interaction_timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             status="active",
         )
         await orchestrator.save_session_state(updated_session)
@@ -880,12 +879,12 @@ class TestAdapterInteractionIntegration:
             id="comment-1",
             author="user1",
             body="Question?",
-            created_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            created_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         )
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id=work_item_id,
             project_id="proj-1",

@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
 
 from codetoreum.domain.types import CommentId, UserId, WorkItemId
 
@@ -26,5 +25,5 @@ class Comment:
     author_id: UserId
     body: str
     created_at: datetime
-    updated_at: Optional[datetime] = None
-    parent_id: Optional[CommentId] = None
+    updated_at: datetime | None = None
+    parent_id: CommentId | None = None

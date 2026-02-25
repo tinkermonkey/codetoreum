@@ -1,13 +1,11 @@
 """Unit tests for EventBusRegistry with repair cycle support."""
 
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, Mock
+from unittest.mock import Mock
 
 import pytest
 
 from codetoreum.application.event_bus_wiring import (
     EventBusRegistry,
-    EventBusWiringError,
     setup_event_bus,
 )
 from codetoreum.application.event_handlers.repair_cycle_event_handler import (

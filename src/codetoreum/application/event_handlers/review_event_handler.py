@@ -1,7 +1,6 @@
 """Event handler for review cycle events."""
 
 import logging
-from typing import Dict, List, Optional
 
 from codetoreum.application.review_service import ReviewService
 from codetoreum.domain.events import (
@@ -49,7 +48,7 @@ class ReviewEventHandler(EventHandler):
         self.review_service = review_service
 
         # Track review metrics
-        self._metrics: Dict[str, int] = {
+        self._metrics: dict[str, int] = {
             "total_reviews": 0,
             "active_reviews": 0,
             "approved_reviews": 0,
@@ -59,7 +58,7 @@ class ReviewEventHandler(EventHandler):
         }
 
         # Track active reviews by ID
-        self._active_reviews: Dict[str, str] = {}  # review_id -> workflow_id
+        self._active_reviews: dict[str, str] = {}  # review_id -> workflow_id
 
     async def handle(self, event: DomainEvent) -> None:
         """
@@ -97,7 +96,7 @@ class ReviewEventHandler(EventHandler):
         """
         self._metrics["total_reviews"] += 1
         self._metrics["active_reviews"] += 1
-        self._active_reviews[event.aggregate_id] = event.payload.get('workflow_id', '')
+        self._active_reviews[event.aggregate_id] = event.payload.get("workflow_id", "")
 
         logger.info(
             f"Review cycle created: {event.aggregate_id} "
@@ -154,7 +153,7 @@ class ReviewEventHandler(EventHandler):
         Args:
             event: ReviewFeedbackSubmitted event
         """
-        issues_found = event.payload.get('issues_found', [])
+        issues_found = event.payload.get("issues_found", [])
         logger.info(
             f"Review feedback submitted: {event.aggregate_id}, "
             f"iteration {event.payload.get('iteration_number')}, "
@@ -162,7 +161,7 @@ class ReviewEventHandler(EventHandler):
             f"issues: {len(issues_found)}"
         )
 
-        feedback_text = event.payload.get('feedback')
+        feedback_text = event.payload.get("feedback")
         if feedback_text:
             logger.debug(f"Reviewer comment: {feedback_text}")
 
@@ -217,7 +216,7 @@ class ReviewEventHandler(EventHandler):
         self._metrics["active_reviews"] -= 1
         self._active_reviews.pop(event.aggregate_id, None)
 
-        final_iteration = event.payload.get('final_iteration', 0)
+        final_iteration = event.payload.get("final_iteration", 0)
         logger.warning(
             f"Review cycle rejected: {event.aggregate_id}, "
             f"final iteration: {final_iteration}, "
@@ -292,7 +291,7 @@ class ReviewEventHandler(EventHandler):
             self._metrics["escalated_reviews"] / self._metrics["total_reviews"] * 100
         )
 
-    def get_metrics(self) -> Dict[str, object]:
+    def get_metrics(self) -> dict[str, object]:
         """
         Get review metrics.
 
@@ -311,7 +310,7 @@ class ReviewEventHandler(EventHandler):
             "avg_iterations_per_review": round(avg_iterations, 2),
         }
 
-    def get_active_reviews(self) -> Dict[str, str]:
+    def get_active_reviews(self) -> dict[str, str]:
         """
         Get currently active reviews.
 

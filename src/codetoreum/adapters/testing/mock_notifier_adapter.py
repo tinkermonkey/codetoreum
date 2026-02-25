@@ -3,8 +3,8 @@
 import asyncio
 import re
 import threading
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 from codetoreum.ports.exceptions import (
@@ -65,14 +65,14 @@ class MockNotifierAdapter(INotifier):
         self._failure_rate = failure_rate
 
         # Notification storage
-        self._notifications: Dict[str, Dict[str, Any]] = {}
-        self._templates: Dict[str, Dict[str, Any]] = {}
+        self._notifications: dict[str, dict[str, Any]] = {}
+        self._templates: dict[str, dict[str, Any]] = {}
 
         # Notification history
-        self._history: List[Dict[str, Any]] = []
+        self._history: list[dict[str, Any]] = []
 
         # Channel configuration
-        self._channel_config: Dict[NotificationChannel, Dict[str, Any]] = {}
+        self._channel_config: dict[NotificationChannel, dict[str, Any]] = {}
 
         # Statistics
         self._stats = {
@@ -124,7 +124,7 @@ class MockNotifierAdapter(INotifier):
                 raise ValidationError(f"Invalid Slack recipient: {recipient}")
         elif channel == NotificationChannel.SMS:
             # Basic phone number validation
-            if not re.match(r'^\+?[0-9]{10,15}$', recipient.replace("-", "").replace(" ", "")):
+            if not re.match(r"^\+?[0-9]{10,15}$", recipient.replace("-", "").replace(" ", "")):
                 raise ValidationError(f"Invalid phone number: {recipient}")
 
     async def send(
@@ -134,7 +134,7 @@ class MockNotifierAdapter(INotifier):
         subject: str,
         message: str,
         priority: NotificationPriority = NotificationPriority.NORMAL,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> NotificationResult:
         """
         Send a notification.
@@ -168,7 +168,7 @@ class MockNotifierAdapter(INotifier):
         # Check if should fail
         if self._should_fail():
             notification_id = str(uuid4())
-            timestamp = datetime.now(timezone.utc)
+            timestamp = datetime.now(UTC)
 
             with self._lock:
                 self._stats["total_failed"] += 1
@@ -186,7 +186,7 @@ class MockNotifierAdapter(INotifier):
 
         # Create notification record
         notification_id = str(uuid4())
-        timestamp = datetime.now(timezone.utc)
+        timestamp = datetime.now(UTC)
 
         notification_record = {
             "id": notification_id,
@@ -274,8 +274,8 @@ class MockNotifierAdapter(INotifier):
 
     async def send_batch(
         self,
-        notifications: List[Notification],
-    ) -> List[NotificationResult]:
+        notifications: list[Notification],
+    ) -> list[NotificationResult]:
         """
         Send multiple notifications.
 
@@ -319,7 +319,7 @@ class MockNotifierAdapter(INotifier):
         channel: NotificationChannel,
         recipient: str,
         template_id: str,
-        variables: Dict[str, Any],
+        variables: dict[str, Any],
         priority: NotificationPriority = NotificationPriority.NORMAL,
     ) -> NotificationResult:
         """
@@ -398,11 +398,11 @@ class MockNotifierAdapter(INotifier):
 
     async def get_notification_history(
         self,
-        recipient: Optional[str] = None,
-        channel: Optional[NotificationChannel] = None,
-        since: Optional[datetime] = None,
+        recipient: str | None = None,
+        channel: NotificationChannel | None = None,
+        since: datetime | None = None,
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get notification history.
 
@@ -469,8 +469,8 @@ class MockNotifierAdapter(INotifier):
         template_id: str,
         channel: NotificationChannel,
         template: str,
-        subject_template: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        subject_template: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """
         Register a notification template.
@@ -498,7 +498,7 @@ class MockNotifierAdapter(INotifier):
                 "template": template,
                 "subject_template": subject_template or "Notification",
                 "metadata": metadata or {},
-                "created_at": datetime.now(timezone.utc),
+                "created_at": datetime.now(UTC),
             }
 
     async def unregister_template(
@@ -522,8 +522,8 @@ class MockNotifierAdapter(INotifier):
 
     async def list_templates(
         self,
-        channel: Optional[NotificationChannel] = None,
-    ) -> List[Dict[str, Any]]:
+        channel: NotificationChannel | None = None,
+    ) -> list[dict[str, Any]]:
         """
         List registered templates.
 
@@ -564,9 +564,9 @@ class MockNotifierAdapter(INotifier):
 
     async def get_statistics(
         self,
-        since: Optional[datetime] = None,
-        channel: Optional[NotificationChannel] = None,
-    ) -> Dict[str, Any]:
+        since: datetime | None = None,
+        channel: NotificationChannel | None = None,
+    ) -> dict[str, Any]:
         """
         Get notification statistics.
 
@@ -603,7 +603,7 @@ class MockNotifierAdapter(INotifier):
     async def configure_channel(
         self,
         channel: NotificationChannel,
-        configuration: Dict[str, Any],
+        configuration: dict[str, Any],
     ) -> None:
         """
         Configure a notification channel.
@@ -621,7 +621,7 @@ class MockNotifierAdapter(INotifier):
         with self._lock:
             self._channel_config[channel] = configuration.copy()
 
-    async def health_check(self) -> Dict[NotificationChannel, bool]:
+    async def health_check(self) -> dict[NotificationChannel, bool]:
         """
         Check health of all configured channels.
 
@@ -654,9 +654,9 @@ class MockNotifierAdapter(INotifier):
 
     def get_sent_notifications(
         self,
-        recipient: Optional[str] = None,
-        channel: Optional[NotificationChannel] = None,
-    ) -> List[Dict[str, Any]]:
+        recipient: str | None = None,
+        channel: NotificationChannel | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Get all sent notifications.
 
@@ -688,7 +688,7 @@ class MockNotifierAdapter(INotifier):
         with self._lock:
             return len(self._notifications)
 
-    def get_last_notification(self) -> Optional[Dict[str, Any]]:
+    def get_last_notification(self) -> dict[str, Any] | None:
         """
         Get the most recent notification.
 
@@ -703,8 +703,8 @@ class MockNotifierAdapter(INotifier):
     def assert_notification_sent(
         self,
         recipient: str,
-        subject_contains: Optional[str] = None,
-        message_contains: Optional[str] = None,
+        subject_contains: str | None = None,
+        message_contains: str | None = None,
     ) -> bool:
         """
         Assert that a notification was sent matching criteria.

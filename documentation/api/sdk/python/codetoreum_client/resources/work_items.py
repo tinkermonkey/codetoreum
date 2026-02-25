@@ -4,7 +4,7 @@ Work items resource client
 from __future__ import annotations
 
 import builtins
-from typing import Any, List, Optional
+from typing import Any
 
 from ..models import PaginatedResponse, WorkItem
 
@@ -20,10 +20,10 @@ class WorkItemsResource:
         title: str,
         description: str,
         project_id: str,
-        labels: Optional[List[str]] = None,
+        labels: builtins.list[str] | None = None,
         priority: str = "medium",
         status: str = "pending",
-        external_id: Optional[str] = None,
+        external_id: str | None = None,
     ) -> WorkItem:
         """
         Create a new work item.
@@ -65,10 +65,10 @@ class WorkItemsResource:
 
     def list(
         self,
-        project_id: Optional[str] = None,
-        status: Optional[str] = None,
-        assignee: Optional[str] = None,
-        labels: Optional[List[str]] = None,
+        project_id: str | None = None,
+        status: str | None = None,
+        assignee: str | None = None,
+        labels: builtins.list[str] | None = None,
         offset: int = 0,
         limit: int = 50,
         sort_by: str = "created_at",
@@ -136,13 +136,13 @@ class WorkItemsResource:
     def update(
         self,
         work_item_id: str,
-        title: Optional[str] = None,
-        description: Optional[str] = None,
-        status: Optional[str] = None,
-        assignee: Optional[str] = None,
-        labels: Optional[List[str]] = None,
-        priority: Optional[str] = None,
-        workflow_stage: Optional[str] = None,
+        title: str | None = None,
+        description: str | None = None,
+        status: str | None = None,
+        assignee: str | None = None,
+        labels: builtins.list[str] | None = None,
+        priority: str | None = None,
+        workflow_stage: str | None = None,
     ) -> WorkItem:
         """
         Update a work item.

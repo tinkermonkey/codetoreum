@@ -1,7 +1,6 @@
 """Unit tests for conversational session state value object."""
 
 from dataclasses import FrozenInstanceError
-from datetime import datetime, timezone
 
 import pytest
 

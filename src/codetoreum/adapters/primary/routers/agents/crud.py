@@ -122,7 +122,7 @@ def register_crud_endpoints(
                 )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid request: {str(e)}",
+                detail=f"Invalid request: {e!s}",
             )
 
     @router.put(
@@ -214,11 +214,11 @@ def register_crud_endpoints(
             if "not found" in str(e).lower():
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Agent not found: {str(e)}",
+                    detail=f"Agent not found: {e!s}",
                 )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to update agent: {str(e)}",
+                detail=f"Failed to update agent: {e!s}",
             )
 
     @router.delete(
@@ -272,9 +272,9 @@ def register_crud_endpoints(
             if "not found" in str(e).lower():
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Agent not found: {str(e)}",
+                    detail=f"Agent not found: {e!s}",
                 )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to delete agent: {str(e)}",
+                detail=f"Failed to delete agent: {e!s}",
             )

@@ -1,6 +1,5 @@
 """Tests for retry policy implementations."""
 
-import asyncio
 
 import pytest
 
@@ -161,7 +160,7 @@ class TestExponentialBackoffRetry:
         async def operation_with_keyboard_interrupt():
             nonlocal call_count
             call_count += 1
-            raise KeyboardInterrupt()
+            raise KeyboardInterrupt
 
         with pytest.raises(KeyboardInterrupt):
             await policy.execute(operation_with_keyboard_interrupt, "test_op")

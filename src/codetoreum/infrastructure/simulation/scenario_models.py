@@ -5,7 +5,7 @@ These models define the schema for declarative scenario configuration files.
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -15,11 +15,11 @@ class ScenarioProjectModel(BaseModel):
 
     name: str = Field(..., description="Project name (must be unique)")
     description: str = Field(default="", description="Project description")
-    repository_url: Optional[str] = Field(
+    repository_url: str | None = Field(
         None, description="Repository URL (auto-generated if not provided)"
     )
     default_branch: str = Field(default="main", description="Default branch name")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
 
 
 class ScenarioStageModel(BaseModel):
@@ -29,10 +29,10 @@ class ScenarioStageModel(BaseModel):
     agent_type: str = Field(..., description="Agent type for this stage")
     description: str = Field(default="", description="Stage description")
     order: int = Field(..., description="Stage order (1-based)")
-    entry_conditions: Dict[str, Any] = Field(
+    entry_conditions: dict[str, Any] = Field(
         default_factory=dict, description="Entry conditions"
     )
-    exit_conditions: Dict[str, Any] = Field(
+    exit_conditions: dict[str, Any] = Field(
         default_factory=dict, description="Exit conditions"
     )
     max_retries: int = Field(default=3, description="Maximum retry attempts", ge=0)
@@ -54,13 +54,13 @@ class ScenarioWorkflowModel(BaseModel):
 
     name: str = Field(..., description="Workflow name")
     description: str = Field(default="", description="Workflow description")
-    stages: List[ScenarioStageModel] = Field(
+    stages: list[ScenarioStageModel] = Field(
         default_factory=list, description="Pipeline stages"
     )
 
     @field_validator("stages")
     @classmethod
-    def validate_stages(cls, v: List[ScenarioStageModel]) -> List[ScenarioStageModel]:
+    def validate_stages(cls, v: list[ScenarioStageModel]) -> list[ScenarioStageModel]:
         """Validate stages have unique names and sequential order."""
         if not v:
             return v
@@ -83,7 +83,7 @@ class ScenarioAgentModel(BaseModel):
     name: str = Field(..., description="Agent name")
     agent_type: str = Field(default="generic", description="Agent type")
     description: str = Field(default="", description="Agent description")
-    capabilities: List[str] = Field(
+    capabilities: list[str] = Field(
         default_factory=lambda: ["code_generation"], description="Agent capabilities"
     )
     llm_model: str = Field(
@@ -95,11 +95,11 @@ class ScenarioAgentModel(BaseModel):
     max_tokens: int = Field(default=4096, description="Maximum tokens", ge=1)
     system_prompt: str = Field(default="", description="System prompt")
     enabled: bool = Field(default=True, description="Whether agent is enabled")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
 
     @field_validator("capabilities")
     @classmethod
-    def validate_capabilities(cls, v: List[str]) -> List[str]:
+    def validate_capabilities(cls, v: list[str]) -> list[str]:
         """Validate capabilities are valid."""
         valid_capabilities = {
             "code_generation",
@@ -122,7 +122,7 @@ class ScenarioBoardModel(BaseModel):
 
     board_id: str = Field(..., description="Board ID")
     board_name: str = Field(..., description="Board display name")
-    columns: List[str] = Field(..., description="Column names in order", min_length=1)
+    columns: list[str] = Field(..., description="Column names in order", min_length=1)
 
 
 class ScenarioBoardItemPlacementModel(BaseModel):
@@ -139,10 +139,10 @@ class ScenarioWorkItemModel(BaseModel):
 
     title: str = Field(..., description="Work item title")
     description: str = Field(default="", description="Work item description")
-    labels: List[str] = Field(default_factory=list, description="Labels")
+    labels: list[str] = Field(default_factory=list, description="Labels")
     priority: str = Field(default="medium", description="Priority level")
     status: str = Field(default="new", description="Initial status")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
 
     @field_validator("priority")
     @classmethod
@@ -181,7 +181,7 @@ class ScenarioModel(BaseModel):
     name: str = Field(..., description="Scenario name")
     description: str = Field(default="", description="Scenario description")
     version: str = Field(default="1.0", description="Scenario version")
-    created_at: Optional[datetime] = Field(
+    created_at: datetime | None = Field(
         None, description="Scenario creation timestamp"
     )
 
@@ -194,33 +194,33 @@ class ScenarioModel(BaseModel):
     )
 
     # Data definitions
-    projects: List[ScenarioProjectModel] = Field(
+    projects: list[ScenarioProjectModel] = Field(
         default_factory=list, description="Projects to create"
     )
-    workflows: List[ScenarioWorkflowModel] = Field(
+    workflows: list[ScenarioWorkflowModel] = Field(
         default_factory=list, description="Workflows to create"
     )
-    agents: List[ScenarioAgentModel] = Field(
+    agents: list[ScenarioAgentModel] = Field(
         default_factory=list, description="Agents to create"
     )
-    work_items: List[ScenarioWorkItemModel] = Field(
+    work_items: list[ScenarioWorkItemModel] = Field(
         default_factory=list, description="Work items to create"
     )
-    boards: List[ScenarioBoardModel] = Field(
+    boards: list[ScenarioBoardModel] = Field(
         default_factory=list, description="Boards to create"
     )
-    board_placements: List[ScenarioBoardItemPlacementModel] = Field(
+    board_placements: list[ScenarioBoardItemPlacementModel] = Field(
         default_factory=list, description="Work item placements on boards"
     )
 
     # Additional metadata
-    metadata: Dict[str, Any] = Field(
+    metadata: dict[str, Any] = Field(
         default_factory=dict, description="Additional scenario metadata"
     )
 
     @field_validator("projects")
     @classmethod
-    def validate_projects(cls, v: List[ScenarioProjectModel]) -> List[ScenarioProjectModel]:
+    def validate_projects(cls, v: list[ScenarioProjectModel]) -> list[ScenarioProjectModel]:
         """Validate project names are unique."""
         if not v:
             return v
@@ -233,7 +233,7 @@ class ScenarioModel(BaseModel):
 
     @field_validator("workflows")
     @classmethod
-    def validate_workflows(cls, v: List[ScenarioWorkflowModel]) -> List[ScenarioWorkflowModel]:
+    def validate_workflows(cls, v: list[ScenarioWorkflowModel]) -> list[ScenarioWorkflowModel]:
         """Validate workflow names are unique."""
         if not v:
             return v
@@ -246,7 +246,7 @@ class ScenarioModel(BaseModel):
 
     @field_validator("agents")
     @classmethod
-    def validate_agents(cls, v: List[ScenarioAgentModel]) -> List[ScenarioAgentModel]:
+    def validate_agents(cls, v: list[ScenarioAgentModel]) -> list[ScenarioAgentModel]:
         """Validate agent names are unique."""
         if not v:
             return v

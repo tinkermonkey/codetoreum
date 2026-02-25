@@ -1,18 +1,16 @@
 """In-memory storage adapter for testing."""
 
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-from uuid import uuid4
+from typing import Any
 
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.domain.events.storage_events import (
     ArtifactDeletedEvent,
     ArtifactUploadedEvent,
 )
-from codetoreum.domain.types import BucketName, StorageKey
-from codetoreum.ports.exceptions import ResourceNotFoundError, UnsupportedFeatureError
+from codetoreum.ports.exceptions import ResourceNotFoundError
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.storage import IStorage, StorageObject
 
@@ -24,15 +22,15 @@ class InMemoryStorageAdapter(IStorage):
     Stores all objects in memory dictionaries.
     """
 
-    def __init__(self, event_emitter: Optional[IEventEmitter] = None):
+    def __init__(self, event_emitter: IEventEmitter | None = None):
         """Initialize in-memory storage.
 
         Args:
             event_emitter: Optional IEventEmitter for emitting domain events.
                           Defaults to MockEventEmitter.
         """
-        self._objects: Dict[str, bytes] = {}
-        self._metadata: Dict[str, Dict[str, any]] = {}
+        self._objects: dict[str, bytes] = {}
+        self._metadata: dict[str, dict[str, any]] = {}
         self._lock = threading.Lock()
         self._event_emitter = event_emitter or MockEventEmitter()
 
@@ -40,8 +38,8 @@ class InMemoryStorageAdapter(IStorage):
         self,
         key: str,
         content: bytes,
-        content_type: Optional[str] = None,
-        metadata: Optional[Dict[str, str]] = None,
+        content_type: str | None = None,
+        metadata: dict[str, str] | None = None,
     ) -> None:
         """Upload object to memory."""
         with self._lock:
@@ -52,7 +50,7 @@ class InMemoryStorageAdapter(IStorage):
                 "size": size_bytes,
                 "content_type": content_type_value,
                 "metadata": metadata or {},
-                "last_modified": datetime.now(timezone.utc),
+                "last_modified": datetime.now(UTC),
             }
 
             # Emit domain event
@@ -60,7 +58,7 @@ class InMemoryStorageAdapter(IStorage):
             self._event_emitter.emit(
                 ArtifactUploadedEvent(
                     type="storage.artifact_uploaded",
-                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    timestamp=datetime.now(UTC).isoformat(),
                     source="mock",
                     key=key,
                     size_bytes=size_bytes,
@@ -73,8 +71,8 @@ class InMemoryStorageAdapter(IStorage):
         self,
         key: str,
         file_path: Path,
-        content_type: Optional[str] = None,
-        metadata: Optional[Dict[str, str]] = None,
+        content_type: str | None = None,
+        metadata: dict[str, str] | None = None,
     ) -> None:
         """Upload from file."""
         if not file_path.exists():
@@ -109,14 +107,14 @@ class InMemoryStorageAdapter(IStorage):
             self._event_emitter.emit(
                 ArtifactDeletedEvent(
                     type="storage.artifact_deleted",
-                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    timestamp=datetime.now(UTC).isoformat(),
                     source="mock",
                     key=key,
                     project_id=None,
                 )
             )
 
-    async def delete_many(self, keys: List[str]) -> None:
+    async def delete_many(self, keys: list[str]) -> None:
         """Delete multiple files."""
         with self._lock:
             for key in keys:
@@ -130,7 +128,7 @@ class InMemoryStorageAdapter(IStorage):
                     self._event_emitter.emit(
                         ArtifactDeletedEvent(
                             type="storage.artifact_deleted",
-                            timestamp=datetime.now(timezone.utc).isoformat(),
+                            timestamp=datetime.now(UTC).isoformat(),
                             source="mock",
                             key=key,
                             project_id=None,
@@ -139,10 +137,10 @@ class InMemoryStorageAdapter(IStorage):
 
     async def list_files(
         self,
-        prefix: Optional[str] = None,
+        prefix: str | None = None,
         limit: int = 1000,
         offset: int = 0,
-    ) -> List[StorageObject]:
+    ) -> list[StorageObject]:
         """List objects in memory."""
         with self._lock:
             objects = []
@@ -169,7 +167,7 @@ class InMemoryStorageAdapter(IStorage):
         with self._lock:
             return key in self._objects
 
-    async def get_metadata(self, key: str) -> Dict[str, Any]:
+    async def get_metadata(self, key: str) -> dict[str, Any]:
         """Get object metadata."""
         with self._lock:
             if key not in self._metadata:
@@ -179,7 +177,7 @@ class InMemoryStorageAdapter(IStorage):
     async def update_metadata(
         self,
         key: str,
-        metadata: Dict[str, str],
+        metadata: dict[str, str],
     ) -> None:
         """Update file metadata."""
         with self._lock:
@@ -198,14 +196,14 @@ class InMemoryStorageAdapter(IStorage):
                 raise ResourceNotFoundError(f"Source not found: {source_key}")
             self._objects[destination_key] = self._objects[source_key]
             self._metadata[destination_key] = dict(self._metadata[source_key])
-            self._metadata[destination_key]["last_modified"] = datetime.now(timezone.utc)
+            self._metadata[destination_key]["last_modified"] = datetime.now(UTC)
 
             # Emit ArtifactUploadedEvent for the copied artifact
             # Note: source="mock" identifies this as a test/simulation event for traceability
             self._event_emitter.emit(
                 ArtifactUploadedEvent(
                     type="storage.artifact_uploaded",
-                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    timestamp=datetime.now(UTC).isoformat(),
                     source="mock",
                     key=destination_key,
                     size_bytes=self._metadata[destination_key]["size"],
@@ -252,9 +250,9 @@ class InMemoryStorageAdapter(IStorage):
 
     async def list_prefixes(
         self,
-        prefix: Optional[str] = None,
+        prefix: str | None = None,
         delimiter: str = "/",
-    ) -> List[str]:
+    ) -> list[str]:
         """List common prefixes (like directories)."""
         with self._lock:
             prefixes = set()
@@ -272,7 +270,7 @@ class InMemoryStorageAdapter(IStorage):
 
             return sorted(list(prefixes))
 
-    async def get_storage_info(self) -> Dict[str, Any]:
+    async def get_storage_info(self) -> dict[str, Any]:
         """Get storage system information."""
         with self._lock:
             total_size = sum(len(content) for content in self._objects.values())

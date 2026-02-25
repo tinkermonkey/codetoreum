@@ -85,7 +85,7 @@ def register_pipeline_endpoints(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to list pipelines: {str(e)}",
+                detail=f"Failed to list pipelines: {e!s}",
             )
 
     @router.get(
@@ -133,7 +133,7 @@ def register_pipeline_endpoints(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve pipeline config: {str(e)}",
+                detail=f"Failed to retrieve pipeline config: {e!s}",
             )
 
     @router.put(
@@ -191,7 +191,7 @@ def register_pipeline_endpoints(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to update pipeline config: {str(e)}",
+                detail=f"Failed to update pipeline config: {e!s}",
             )
 
     @router.get(
@@ -253,5 +253,5 @@ def register_pipeline_endpoints(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to list pipelines: {str(e)}",
+                detail=f"Failed to list pipelines: {e!s}",
             )

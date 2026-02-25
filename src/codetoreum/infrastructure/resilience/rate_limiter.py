@@ -7,7 +7,6 @@ import asyncio
 import time
 from collections import deque
 from datetime import datetime
-from typing import Optional
 
 from .exceptions import RateLimitExceededError
 from .interfaces import IRateLimiter, RateLimitStats
@@ -27,8 +26,8 @@ class TokenBucketRateLimiter(IRateLimiter):
         self,
         max_requests: int,
         window_seconds: int = 60,
-        max_tokens: Optional[int] = None,
-        max_wait_seconds: Optional[float] = None
+        max_tokens: int | None = None,
+        max_wait_seconds: float | None = None
     ):
         """
         Initialize rate limiter.

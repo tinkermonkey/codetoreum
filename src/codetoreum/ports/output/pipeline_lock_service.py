@@ -11,7 +11,7 @@ multi-agent orchestration system.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Literal, Optional, Tuple
+from typing import Literal
 
 from .event_emitter import IEventEmitter
 
@@ -100,7 +100,7 @@ class IPipelineLockService(IEventEmitter, ABC):
     @abstractmethod
     async def get_lock(
         self, project_id: str, board_id: str
-    ) -> Optional[PipelineLock]:
+    ) -> PipelineLock | None:
         """Query current lock state for a project's board.
 
         Returns the active lock if one exists, or None if no lock is held.
@@ -116,10 +116,9 @@ class IPipelineLockService(IEventEmitter, ABC):
             ResourceNotFoundError: Project or board doesn't exist
             ExternalServiceError: Service communication failure
         """
-        pass
 
     @abstractmethod
-    async def get_all_locks(self) -> List[PipelineLock]:
+    async def get_all_locks(self) -> list[PipelineLock]:
         """Retrieve all active locks across all projects and boards.
 
         Useful for operational visibility and detecting lock contention.
@@ -130,14 +129,13 @@ class IPipelineLockService(IEventEmitter, ABC):
         Raises:
             ExternalServiceError: Service communication failure
         """
-        pass
 
     # Command Operations
 
     @abstractmethod
     async def try_acquire_lock(
         self, project_id: str, board_id: str, work_item_id: str
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         """Attempt to acquire lock for exclusive work item access.
 
         Tries to acquire a lock on the work item. If successful, the caller
@@ -171,7 +169,6 @@ class IPipelineLockService(IEventEmitter, ABC):
             If a stale lock is detected and forcibly released, emits that event
             with acquisition_method='stale_recovery'
         """
-        pass
 
     @abstractmethod
     async def release_lock(
@@ -197,4 +194,3 @@ class IPipelineLockService(IEventEmitter, ABC):
         Events:
             Emits 'lock.released' event on successful release
         """
-        pass

@@ -5,10 +5,7 @@ Tests that callbacks can be properly unsubscribed after being wrapped
 for instrumentation, preventing memory leaks.
 """
 
-from typing import Any, Optional
-from unittest import mock
 
-import pytest
 
 from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.event_bus import EventBus

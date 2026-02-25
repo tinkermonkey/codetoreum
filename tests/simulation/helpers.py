@@ -1,7 +1,7 @@
 """Test helpers and utilities for simulation testing."""
 
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.simulation import SimulationRunner
@@ -15,7 +15,7 @@ class EventBuilder:
         self.aggregate_id = "test-aggregate"
         self.aggregate_type = "TestAggregate"
         self.event_type = "TestEvent"
-        self.payload: Dict[str, Any] = {}
+        self.payload: dict[str, Any] = {}
 
     def with_aggregate_id(self, aggregate_id: str) -> "EventBuilder":
         """Set aggregate ID."""
@@ -32,7 +32,7 @@ class EventBuilder:
         self.event_type = event_type
         return self
 
-    def with_payload(self, payload: Dict[str, Any]) -> "EventBuilder":
+    def with_payload(self, payload: dict[str, Any]) -> "EventBuilder":
         """Set payload."""
         self.payload = payload
         return self
@@ -60,7 +60,7 @@ class AssertionHelpers:
     def assert_workflow_completed(
         runner: SimulationRunner,
         work_item_id: str,
-        expected_stages: Optional[int] = None,
+        expected_stages: int | None = None,
     ) -> None:
         """
         Assert that a workflow completed successfully.
@@ -101,7 +101,7 @@ class AssertionHelpers:
     def assert_agent_executed(
         runner: SimulationRunner,
         agent_id: str,
-        work_item_id: Optional[str] = None,
+        work_item_id: str | None = None,
     ) -> None:
         """
         Assert that an agent executed.
@@ -128,7 +128,7 @@ class AssertionHelpers:
     @staticmethod
     def assert_execution_sequence(
         runner: SimulationRunner,
-        expected_sequence: List[str],
+        expected_sequence: list[str],
     ) -> None:
         """
         Assert events occurred in a specific sequence.
@@ -163,7 +163,7 @@ class AssertionHelpers:
     def assert_time_elapsed(
         runner: SimulationRunner,
         min_seconds: float,
-        max_seconds: Optional[float] = None,
+        max_seconds: float | None = None,
     ) -> None:
         """
         Assert that simulated time elapsed within range.
@@ -206,7 +206,7 @@ class ScenarioHelpers:
     async def simulate_workflow_execution(
         runner: SimulationRunner,
         work_item_id: str,
-        stages: List[Dict[str, Any]],
+        stages: list[dict[str, Any]],
     ) -> None:
         """
         Simulate a complete workflow execution.
@@ -271,7 +271,7 @@ class ScenarioHelpers:
         work_item_id: str,
         review_id: str,
         approved: bool,
-        feedback: Optional[str] = None,
+        feedback: str | None = None,
     ) -> None:
         """
         Simulate a review cycle.
@@ -313,7 +313,6 @@ def print_event_timeline(runner: SimulationRunner) -> None:
     Args:
         runner: Simulation runner
     """
-    from datetime import timezone
 
     print("\n=== Event Timeline ===")
 
@@ -323,29 +322,29 @@ def print_event_timeline(runner: SimulationRunner) -> None:
 
     # Get start time from first event (handle both event types)
     first_event = runner.captured_events[0]
-    if hasattr(first_event, 'occurred_at'):
+    if hasattr(first_event, "occurred_at"):
         start_time = first_event.occurred_at
-    elif hasattr(first_event, 'timestamp'):
-        start_time = datetime.fromisoformat(first_event.timestamp.replace('Z', '+00:00'))
+    elif hasattr(first_event, "timestamp"):
+        start_time = datetime.fromisoformat(first_event.timestamp.replace("Z", "+00:00"))
     else:
         print("Unknown event type - no timestamp found")
         return
 
     for i, event in enumerate(runner.captured_events, 1):
         # Extract timestamp from event (handle both types)
-        if hasattr(event, 'occurred_at'):
+        if hasattr(event, "occurred_at"):
             event_time = event.occurred_at
-        elif hasattr(event, 'timestamp'):
-            event_time = datetime.fromisoformat(event.timestamp.replace('Z', '+00:00'))
+        elif hasattr(event, "timestamp"):
+            event_time = datetime.fromisoformat(event.timestamp.replace("Z", "+00:00"))
         else:
             event_time = start_time
 
         elapsed = (event_time - start_time).total_seconds()
 
         # Extract event type (handle both types)
-        event_type = getattr(event, 'event_type', getattr(event, 'type', 'Unknown'))
-        aggregate_type = getattr(event, 'aggregate_type', 'Unknown')
-        aggregate_id = getattr(event, 'aggregate_id', 'Unknown')
+        event_type = getattr(event, "event_type", getattr(event, "type", "Unknown"))
+        aggregate_type = getattr(event, "aggregate_type", "Unknown")
+        aggregate_id = getattr(event, "aggregate_id", "Unknown")
 
         print(
             f"{i:2d}. [{elapsed:6.1f}s] "

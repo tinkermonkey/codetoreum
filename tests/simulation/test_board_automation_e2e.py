@@ -51,7 +51,7 @@ async def e2e_env():
     config = SimulationConfig.create_fast_config("e2e_cascade")
     bootstrap = SimulationApplicationBootstrap(config)
     await bootstrap.setup()
-    adapters = cast(SimulationAdapters, bootstrap.adapters)
+    adapters = cast("SimulationAdapters", bootstrap.adapters)
     adapters.agent_executor._execution_delay = 0.1
     seeder = SimulationDataSeeder(bootstrap)
     await seeder.seed_default_scenario()
@@ -72,7 +72,7 @@ async def test_item_cascades_from_trigger_to_exit(e2e_env):
     Ready (architect) → In Progress (coder) → Review (tester) → Done (exit)
     """
     bootstrap, seeder = e2e_env
-    adapters = cast(SimulationAdapters, bootstrap.adapters)
+    adapters = cast("SimulationAdapters", bootstrap.adapters)
     board = adapters.board
     work_item_id = seeder.created_items.work_items[0]
 
@@ -118,7 +118,7 @@ async def test_item_cascades_from_trigger_to_exit(e2e_env):
 async def test_lock_released_after_cascade(e2e_env):
     """After cascade completes, verify the pipeline lock is released."""
     bootstrap, seeder = e2e_env
-    adapters = cast(SimulationAdapters, bootstrap.adapters)
+    adapters = cast("SimulationAdapters", bootstrap.adapters)
     board = adapters.board
     lock_service = adapters.lock_service
     work_item_id = seeder.created_items.work_items[0]
@@ -154,7 +154,7 @@ async def test_cascade_stops_on_agent_failure(e2e_env):
     without auto-progressing. Item stays in In Progress.
     """
     bootstrap, seeder = e2e_env
-    adapters = cast(SimulationAdapters, bootstrap.adapters)
+    adapters = cast("SimulationAdapters", bootstrap.adapters)
     board = adapters.board
     executor = adapters.agent_executor
     work_item_id = seeder.created_items.work_items[0]

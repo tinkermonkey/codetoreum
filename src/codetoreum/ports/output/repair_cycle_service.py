@@ -17,7 +17,7 @@ For each test type:
 6. Optionally review warnings after success
 """
 
-from typing import TYPE_CHECKING, Dict, Protocol, Tuple
+from typing import Protocol
 
 from codetoreum.domain.repair_cycle_types import (
     RepairCycleResult,
@@ -26,9 +26,6 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestRunConfig,
     RepairTestType,
 )
-
-if TYPE_CHECKING:
-    from codetoreum.ports.output.agent_executor import IAgentExecutor
 
 
 class RepairCycleContext(Protocol):
@@ -48,7 +45,7 @@ class RepairCycleContext(Protocol):
 
     stage_name: str
     workflow_run_id: str
-    test_configs: Tuple[RepairTestRunConfig, ...]
+    test_configs: tuple[RepairTestRunConfig, ...]
     agent_name: str
     max_total_agent_calls: int
     checkpoint_interval: int
@@ -119,7 +116,7 @@ class IRepairCycle(Protocol):
 
     async def fix_failures_by_file(
         self,
-        grouped_failures: Dict[str, Tuple[RepairTestFailure, ...]],
+        grouped_failures: dict[str, tuple[RepairTestFailure, ...]],
         config: RepairTestRunConfig,
         context: RepairCycleContext,
     ) -> int:

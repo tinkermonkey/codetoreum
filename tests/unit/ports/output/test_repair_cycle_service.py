@@ -7,8 +7,7 @@ Tests validate:
 4. All methods have correct signatures and return types
 """
 
-from datetime import datetime, timezone
-from typing import Dict, Tuple
+from datetime import UTC, datetime
 
 import pytest
 
@@ -34,7 +33,7 @@ class MockRepairCycleContext:
         self,
         stage_name: str = "fix_failures",
         workflow_run_id: str = "pipeline-123",
-        test_configs: Tuple[RepairTestRunConfig, ...] = (),
+        test_configs: tuple[RepairTestRunConfig, ...] = (),
         agent_name: str = "repair-agent",
         max_total_agent_calls: int = 100,
         checkpoint_interval: int = 5,
@@ -92,7 +91,6 @@ class MockRepairCycle:
     async def execute(self, context: RepairCycleContext) -> RepairCycleResult:
         """Execute complete repair cycle."""
         # Create a simple CycleResult for UNIT test type
-        from codetoreum.domain.repair_cycle_types import CycleResult
 
         final_result = RepairTestResult(
             test_type=RepairTestType.UNIT,
@@ -103,7 +101,7 @@ class MockRepairCycle:
             failures=(),
             warning_list=(),
             raw_output="All tests passed",
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
 
         cycle_result = CycleResult(
@@ -123,7 +121,7 @@ class MockRepairCycle:
             overall_success=True,
             total_agent_calls=0,
             duration_seconds=5.0,
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
 
     async def run_tests(
@@ -141,12 +139,12 @@ class MockRepairCycle:
             failures=(),
             warning_list=(),
             raw_output="Tests completed successfully",
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
 
     async def fix_failures_by_file(
         self,
-        grouped_failures: Dict[str, Tuple[RepairTestFailure, ...]],
+        grouped_failures: dict[str, tuple[RepairTestFailure, ...]],
         config: RepairTestRunConfig,
         context: RepairCycleContext,
     ) -> int:
@@ -169,7 +167,7 @@ class MockRepairCycle:
         context: RepairCycleContext,
     ) -> None:
         """Save repair cycle state for resume after failures."""
-        return None
+        return
 
 
 class TestIRepairCycleProtocol:
@@ -256,7 +254,7 @@ class TestIRepairCycleProtocol:
             test_type=RepairTestType.UNIT,
             timeout=900,
         )
-        failures: Dict[str, Tuple[RepairTestFailure, ...]] = {
+        failures: dict[str, tuple[RepairTestFailure, ...]] = {
             "test_auth.py": (
                 RepairTestFailure(
                     file="test_auth.py",
@@ -296,7 +294,7 @@ class TestIRepairCycleProtocol:
                 ),
             ),
             raw_output="Test output with warnings",
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
 
         result = await impl.handle_warnings(test_result, config, ctx)

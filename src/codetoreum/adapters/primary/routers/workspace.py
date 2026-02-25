@@ -165,12 +165,12 @@ def create_workspace_router(
             # Invalid enum value
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid parameter: {str(e)}",
+                detail=f"Invalid parameter: {e!s}",
             )
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to list workspaces: {str(e)}",
+                detail=f"Failed to list workspaces: {e!s}",
             )
 
     @router.get(
@@ -225,7 +225,7 @@ def create_workspace_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to list active workspaces: {str(e)}",
+                detail=f"Failed to list active workspaces: {e!s}",
             )
 
     # ========================================================================
@@ -338,7 +338,7 @@ def create_workspace_router(
             # Fallback for unexpected exceptions
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve workspace: {str(e)}",
+                detail=f"Failed to retrieve workspace: {e!s}",
             )
 
     # ========================================================================
@@ -400,7 +400,7 @@ def create_workspace_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve resource usage summary: {str(e)}",
+                detail=f"Failed to retrieve resource usage summary: {e!s}",
             )
 
     # ========================================================================
@@ -475,7 +475,7 @@ def create_workspace_router(
             # Fallback for unexpected exceptions
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve workspace logs: {str(e)}",
+                detail=f"Failed to retrieve workspace logs: {e!s}",
             )
 
     return router

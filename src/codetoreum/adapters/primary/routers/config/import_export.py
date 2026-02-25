@@ -75,7 +75,7 @@ def register_import_export_endpoints(router: APIRouter) -> None:
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to process upload: {str(e)}"
+                detail=f"Failed to process upload: {e!s}"
             )
 
         finally:

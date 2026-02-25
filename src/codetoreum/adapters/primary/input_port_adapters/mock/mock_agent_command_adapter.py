@@ -4,7 +4,7 @@ Mock Agent Command Adapter
 In-memory implementation of IAgentCommandPort for development and testing.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from threading import RLock
 from uuid import uuid4
 
@@ -46,7 +46,7 @@ class MockAgentCommandAdapter(IAgentCommandPort):
 
             # Create agent
             agent_id = str(uuid4())
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
 
             agent = Agent(
                 id=agent_id,
@@ -110,7 +110,7 @@ class MockAgentCommandAdapter(IAgentCommandPort):
             if command.filesystem_write_allowed is not None:
                 agent.filesystem_write_allowed = command.filesystem_write_allowed
 
-            agent.updated_at = datetime.now(timezone.utc)
+            agent.updated_at = datetime.now(UTC)
 
             return agent
 
@@ -130,7 +130,7 @@ class MockAgentCommandAdapter(IAgentCommandPort):
 
             # Add capability
             agent.capabilities[command.capability.skill] = command.capability
-            agent.updated_at = datetime.now(timezone.utc)
+            agent.updated_at = datetime.now(UTC)
 
             return agent
 
@@ -156,7 +156,7 @@ class MockAgentCommandAdapter(IAgentCommandPort):
 
             # Remove capability
             del agent.capabilities[command.skill]
-            agent.updated_at = datetime.now(timezone.utc)
+            agent.updated_at = datetime.now(UTC)
 
             return agent
 
@@ -185,7 +185,7 @@ class MockAgentCommandAdapter(IAgentCommandPort):
                 proficiency=command.proficiency,
                 description=capability.description,
             )
-            agent.updated_at = datetime.now(timezone.utc)
+            agent.updated_at = datetime.now(UTC)
 
             return agent
 
@@ -205,7 +205,7 @@ class MockAgentCommandAdapter(IAgentCommandPort):
 
             # Add server
             agent.mcp_servers.append(command.server_name)
-            agent.updated_at = datetime.now(timezone.utc)
+            agent.updated_at = datetime.now(UTC)
 
             return agent
 
@@ -225,7 +225,7 @@ class MockAgentCommandAdapter(IAgentCommandPort):
 
             # Remove server
             agent.mcp_servers.remove(command.server_name)
-            agent.updated_at = datetime.now(timezone.utc)
+            agent.updated_at = datetime.now(UTC)
 
             return agent
 

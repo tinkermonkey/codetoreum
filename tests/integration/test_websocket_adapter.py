@@ -2,14 +2,12 @@
 Integration tests for WebSocket Adapter
 """
 
-import json
 import os
 
 import pytest
 from fastapi.testclient import TestClient
 
 from codetoreum.adapters.primary.fastapi_app import create_development_app
-from codetoreum.domain.events import DomainEvent
 
 
 @pytest.fixture(scope="function")

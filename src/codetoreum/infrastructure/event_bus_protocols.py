@@ -5,7 +5,8 @@ These protocols define the interfaces that adapters must implement
 to work with the event bus wiring system.
 """
 
-from typing import Any, Awaitable, Callable, Protocol
+from collections.abc import Awaitable, Callable
+from typing import Any, Protocol
 
 
 class EventEmitter(Protocol):

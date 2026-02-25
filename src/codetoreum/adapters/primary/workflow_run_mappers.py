@@ -69,7 +69,7 @@ class WorkflowRunMapper:
             workItemId=run.work_item_id,
             workflowId=run.workflow_id,
             projectId=run.project_id,
-            status=run.status.value if hasattr(run.status, 'value') else str(run.status),
+            status=run.status.value if hasattr(run.status, "value") else str(run.status),
             currentStageIndex=run.current_stage_index,
             currentStageName=run.current_stage_name,
             startedAt=run.started_at,
@@ -98,7 +98,7 @@ class WorkflowRunMapper:
             workItemId=run.work_item_id,
             workflowId=run.workflow_id,
             projectId=run.project_id,
-            status=run.status.value if hasattr(run.status, 'value') else str(run.status),
+            status=run.status.value if hasattr(run.status, "value") else str(run.status),
             stages=[WorkflowRunMapper.to_stage_response(stage) for stage in run.stages],
             metadata=run.metadata,
         )

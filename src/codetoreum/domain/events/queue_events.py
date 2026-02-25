@@ -5,7 +5,6 @@ and position changes based on board state updates.
 """
 
 from dataclasses import dataclass
-from typing import Optional
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
@@ -45,7 +44,7 @@ class QueueItemAddedEvent(CodetoreumEvent):
     queue_name: str = ""
     item_id: str = ""
     position: int = 0
-    project_id: Optional[str] = None
+    project_id: str | None = None
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""
@@ -115,7 +114,7 @@ class QueueItemRemovedEvent(CodetoreumEvent):
 
     queue_name: str = ""
     item_id: str = ""
-    project_id: Optional[str] = None
+    project_id: str | None = None
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""
@@ -187,7 +186,7 @@ class QueuePositionChangedEvent(CodetoreumEvent):
     item_id: str = ""
     old_position: int = 0
     new_position: int = 0
-    project_id: Optional[str] = None
+    project_id: str | None = None
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""

@@ -1,7 +1,7 @@
 """Integration tests for PipelineManager."""
 
-from datetime import datetime, timezone
-from typing import Any, Dict
+from datetime import UTC, datetime
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -16,12 +16,11 @@ from codetoreum.domain.events import (
     PipelineCompleted,
     PipelineFailed,
     PipelineStageCompleted,
-    PipelineStageFailed,
     PipelineStageStarted,
 )
 from codetoreum.domain.exceptions import DomainError
-from codetoreum.domain.pipeline_stage import PipelineStage, StageStatus, StageType
-from codetoreum.domain.workflow import Workflow, WorkflowStatus
+from codetoreum.domain.pipeline_stage import StageStatus, StageType
+from codetoreum.domain.workflow import Workflow
 from codetoreum.domain.workflow_template import WorkflowTemplate
 
 # ============================================================================
@@ -164,7 +163,7 @@ async def test_execute_simple_pipeline(pipeline_manager, simple_workflow, mock_e
 @pytest.mark.asyncio
 async def test_execute_pipeline_with_dependencies(pipeline_manager, simple_workflow):
     """Test that stages execute in correct order based on dependencies."""
-    context: Dict[str, Any] = {}
+    context: dict[str, Any] = {}
 
     result = await pipeline_manager.execute_pipeline(
         workflow=simple_workflow,
@@ -233,7 +232,7 @@ async def test_execute_stage_marks_ready(pipeline_manager, simple_workflow):
 @pytest.mark.asyncio
 async def test_checkpoint_after_each_stage(pipeline_manager, simple_workflow, mock_checkpoint_store):
     """Test that pipeline checkpoints after each stage."""
-    context: Dict[str, Any] = {}
+    context: dict[str, Any] = {}
 
     await pipeline_manager.execute_pipeline(
         workflow=simple_workflow,
@@ -255,7 +254,7 @@ async def test_recover_from_checkpoint(pipeline_manager, simple_workflow, mock_c
         failed_stages=[],
         status=PipelineStatus.RUNNING,
         context={"stage1_output": "previous output"},
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     mock_checkpoint_store.load_checkpoint.return_value = checkpoint
@@ -284,7 +283,7 @@ async def test_checkpoint_save_and_recover(pipeline_manager, mock_checkpoint_sto
         failed_stages=[],
         status=PipelineStatus.RUNNING,
         context={"test": "data"},
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         metadata={"extra": "info"},
     )
 
@@ -311,7 +310,7 @@ async def test_checkpoint_save_and_recover(pipeline_manager, mock_checkpoint_sto
 @pytest.mark.asyncio
 async def test_parallel_stages_after_dependency(pipeline_manager, parallel_workflow):
     """Test that parallel stages can execute after their dependency."""
-    context: Dict[str, Any] = {}
+    context: dict[str, Any] = {}
 
     result = await pipeline_manager.execute_pipeline(
         workflow=parallel_workflow,
@@ -471,7 +470,7 @@ async def test_checkpoint_without_store(mock_event_store):
         failed_stages=[],
         status=PipelineStatus.RUNNING,
         context={},
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     # Should not raise error

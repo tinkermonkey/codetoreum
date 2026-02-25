@@ -5,7 +5,6 @@ import pytest
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.pipeline_stage import StageType
 from codetoreum.domain.workflow_template import (
-    StageTemplate,
     WorkflowTemplate,
 )
 

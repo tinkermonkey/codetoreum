@@ -1,7 +1,7 @@
 """
 Orchestrator resource client
 """
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from ..models import WorkflowRun
 
@@ -18,7 +18,7 @@ class OrchestratorResource:
     def start_workflow(
         self,
         work_item_id: str,
-        workflow_id: Optional[str] = None,
+        workflow_id: str | None = None,
     ) -> WorkflowRun:
         """
         Start workflow execution for a work item.

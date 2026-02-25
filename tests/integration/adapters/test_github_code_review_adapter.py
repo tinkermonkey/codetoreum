@@ -10,26 +10,19 @@ Tests verify:
 """
 
 import asyncio
-from datetime import datetime
-from typing import Any, Dict, List, Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
 from codetoreum.adapters.secondary.github_code_review_adapter import (
     GitHubCodeReviewAdapter,
 )
-from codetoreum.adapters.secondary.github_ticket_adapter import GitHubTicketAdapter
 from codetoreum.domain.events.review_events import (
     ReviewCommentAddedEvent,
     ReviewStatusChangedEvent,
 )
-from codetoreum.infrastructure.http.github_graphql_client import (
-    GitHubGraphQLClient,
-    GitHubGraphQLConfig,
-)
 from codetoreum.ports.exceptions import (
-    ExternalServiceError,
     ResourceNotFoundError,
     ValidationError,
 )
@@ -40,11 +33,11 @@ class MockGraphQLClient:
     """Mock GraphQL client for testing without real GitHub API calls."""
 
     def __init__(self):
-        self.queries: List[tuple] = []
-        self.responses: Dict[str, Any] = {}
-        self.call_count: Dict[str, int] = {}  # Track call counts per query type
+        self.queries: list[tuple] = []
+        self.responses: dict[str, Any] = {}
+        self.call_count: dict[str, int] = {}  # Track call counts per query type
 
-    async def execute(self, query: str, variables: Optional[Dict] = None) -> dict[str, Any]:
+    async def execute(self, query: str, variables: dict | None = None) -> dict[str, Any]:
         """Record query and return mock response."""
         self.queries.append((query, variables))
 
@@ -123,7 +116,6 @@ class MockGraphQLClient:
 
     async def close(self) -> None:
         """Close client."""
-        pass
 
 
 class MockTicketAdapter:

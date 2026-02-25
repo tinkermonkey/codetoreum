@@ -8,9 +8,9 @@ versioning, and event emission.
 import asyncio
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from codetoreum.domain.events import (
     AgentConfigUpdated,
@@ -42,10 +42,7 @@ from codetoreum.ports.input.exceptions import ValidationError
 from codetoreum.ports.output.config_store import (
     AgentConfig,
     ConfigNotFoundError,
-    EnvironmentVariable,
     IConfigStore,
-    MountedCommand,
-    MountedSubAgent,
     PipelineConfig,
     ProjectConfig,
 )
@@ -67,7 +64,7 @@ class ConfigurationService:
         self,
         config_store: IConfigStore,
         event_bus: EventBus,
-        encryption_service: Optional[IEncryptionService] = None,
+        encryption_service: IEncryptionService | None = None,
         validator: Optional["ConfigurationValidator"] = None,
     ):
         """
@@ -84,7 +81,7 @@ class ConfigurationService:
         self.encryption_service = encryption_service
         self.validator = validator or ConfigurationValidator()
         # Locks for concurrent access protection (one per project)
-        self._locks: Dict[str, asyncio.Lock] = {}
+        self._locks: dict[str, asyncio.Lock] = {}
 
     def _get_lock(self, project_name: str) -> asyncio.Lock:
         """Get or create lock for a project."""
@@ -130,7 +127,7 @@ class ConfigurationService:
                 raise ValidationError("; ".join(validation.errors or []))
 
             # Store old values for computing changes
-            old_config: Dict[str, Any] = {
+            old_config: dict[str, Any] = {
                 "tech_stacks": config.tech_stacks.copy(),
                 "pipelines": [p.copy() for p in config.pipelines],
                 "testing": config.testing.copy(),
@@ -144,7 +141,7 @@ class ConfigurationService:
                 self._deep_merge(config.testing, command.updates["testing"])
 
             # Update metadata
-            config.updated_at = datetime.now(timezone.utc)
+            config.updated_at = datetime.now(UTC)
             config.version += 1
             config.metadata["updated_by"] = command.user_id
             if command.reason:
@@ -240,8 +237,8 @@ class ConfigurationService:
                 timeout=3600,
                 requires_docker=True,
                 makes_code_changes=True,
-                created_at=datetime.now(timezone.utc),
-                updated_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
             )
 
         # Validate updates
@@ -276,7 +273,7 @@ class ConfigurationService:
             config.constraints = command.updates["constraints"]
 
         # Update metadata
-        config.updated_at = datetime.now(timezone.utc)
+        config.updated_at = datetime.now(UTC)
         config.version += 1
         config.metadata["updated_by"] = command.user_id
         if command.reason:
@@ -353,8 +350,8 @@ class ConfigurationService:
                 id=f"{project.id}:{command.pipeline_name}",
                 project_id=project.id,
                 name=command.pipeline_name,
-                created_at=datetime.now(timezone.utc),
-                updated_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
             )
 
         # Validate updates
@@ -378,7 +375,7 @@ class ConfigurationService:
             config.triggers = command.updates["triggers"]
 
         # Update metadata
-        config.updated_at = datetime.now(timezone.utc)
+        config.updated_at = datetime.now(UTC)
         config.version += 1
         config.metadata["updated_by"] = command.user_id
         if command.reason:
@@ -481,12 +478,12 @@ class ConfigurationService:
                 "value": stored_value,
                 "is_secret": command.is_secret,
                 "description": command.description,
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": datetime.now(UTC).isoformat(),
                 "created_by": command.user_id,
             }
 
             # Update metadata
-            config.updated_at = datetime.now(timezone.utc)
+            config.updated_at = datetime.now(UTC)
             config.version += 1
 
             # Save with rollback on failure
@@ -566,7 +563,7 @@ class ConfigurationService:
         del config.environment_variables[command.variable_name]
 
         # Update metadata
-        config.updated_at = datetime.now(timezone.utc)
+        config.updated_at = datetime.now(UTC)
         config.version += 1
 
         # Save
@@ -633,12 +630,12 @@ class ConfigurationService:
         config.mounted_commands[command.command_name] = {
             "path": command.command_path,
             "description": command.description,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "created_by": command.user_id,
         }
 
         # Update metadata
-        config.updated_at = datetime.now(timezone.utc)
+        config.updated_at = datetime.now(UTC)
         config.version += 1
 
         # Save
@@ -701,7 +698,7 @@ class ConfigurationService:
         del config.mounted_commands[command.command_name]
 
         # Update metadata
-        config.updated_at = datetime.now(timezone.utc)
+        config.updated_at = datetime.now(UTC)
         config.version += 1
 
         # Save
@@ -764,12 +761,12 @@ class ConfigurationService:
         config.mounted_subagents[command.subagent_name] = {
             "config": command.subagent_config,
             "description": command.description,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "created_by": command.user_id,
         }
 
         # Update metadata
-        config.updated_at = datetime.now(timezone.utc)
+        config.updated_at = datetime.now(UTC)
         config.version += 1
 
         # Save
@@ -831,7 +828,7 @@ class ConfigurationService:
         del config.mounted_subagents[command.subagent_name]
 
         # Update metadata
-        config.updated_at = datetime.now(timezone.utc)
+        config.updated_at = datetime.now(UTC)
         config.version += 1
 
         # Save
@@ -858,7 +855,7 @@ class ConfigurationService:
 
     # Helper methods
 
-    def _deep_merge(self, target: Dict[str, Any], source: Dict[str, Any]) -> Dict[str, Any]:
+    def _deep_merge(self, target: dict[str, Any], source: dict[str, Any]) -> dict[str, Any]:
         """
         Deep merge source into target dict.
 
@@ -878,9 +875,9 @@ class ConfigurationService:
 
     def _compute_changes(
         self,
-        old_config: Dict[str, Any],
-        new_config: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        old_config: dict[str, Any],
+        new_config: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Compute changes between old and new config.
 
@@ -891,7 +888,7 @@ class ConfigurationService:
         Returns:
             Dictionary mapping changed keys to old/new values
         """
-        changes: Dict[str, Any] = {}
+        changes: dict[str, Any] = {}
         for key in new_config:
             if key not in old_config or old_config[key] != new_config[key]:
                 changes[key] = {
@@ -907,7 +904,7 @@ class ConfigurationValidator:
     def validate_project_updates(
         self,
         current_config: ProjectConfig,
-        updates: Dict[str, Any]
+        updates: dict[str, Any]
     ) -> "ValidationResult":
         """
         Validate project configuration updates.
@@ -948,7 +945,7 @@ class ConfigurationValidator:
     def validate_agent_updates(
         self,
         agent_name: str,
-        updates: Dict[str, Any]
+        updates: dict[str, Any]
     ) -> "ValidationResult":
         """
         Validate agent configuration updates.
@@ -985,7 +982,7 @@ class ConfigurationValidator:
     def validate_pipeline_updates(
         self,
         pipeline_name: str,
-        updates: Dict[str, Any]
+        updates: dict[str, Any]
     ) -> "ValidationResult":
         """
         Validate pipeline configuration updates.
@@ -994,7 +991,7 @@ class ConfigurationValidator:
         - Stages format and uniqueness
         - No circular dependencies in stage transitions
         """
-        errors: List[str] = []
+        errors: list[str] = []
 
         # Validate stages
         if "stages" in updates:
@@ -1007,7 +1004,7 @@ class ConfigurationValidator:
                     errors.append("Pipeline stage names must be unique")
 
                 # Check for circular dependencies
-                stage_map: Dict[str, Any] = {s.get("name") or "": s for s in updates["stages"] if isinstance(s, dict)}
+                stage_map: dict[str, Any] = {s.get("name") or "": s for s in updates["stages"] if isinstance(s, dict)}
                 for stage in updates["stages"]:
                     if isinstance(stage, dict) and "transitions" in stage:
                         if self._has_circular_dependency(
@@ -1032,9 +1029,9 @@ class ConfigurationValidator:
     def _has_circular_dependency(
         self,
         start_stage: str,
-        transitions: List[str],
-        stage_map: Dict[str, Any],
-        visited: Optional[set] = None
+        transitions: list[str],
+        stage_map: dict[str, Any],
+        visited: set | None = None
     ) -> bool:
         """
         Check for circular dependencies in pipeline stage transitions.
@@ -1080,10 +1077,10 @@ class ConfigurationValidator:
         - Not a reserved system variable
         - Value is string
         """
-        errors: List[str] = []
+        errors: list[str] = []
 
         # Check name format
-        if not re.match(r'^[A-Z][A-Z0-9_]*$', name):
+        if not re.match(r"^[A-Z][A-Z0-9_]*$", name):
             errors.append(
                 f"Variable name must be uppercase with underscores: {name}"
             )
@@ -1091,15 +1088,15 @@ class ConfigurationValidator:
         # Check reserved names (expanded list of common system variables)
         reserved = [
             # System paths
-            'PATH', 'HOME', 'PWD', 'OLDPWD', 'TMPDIR', 'TEMP', 'TMP',
+            "PATH", "HOME", "PWD", "OLDPWD", "TMPDIR", "TEMP", "TMP",
             # User/session
-            'USER', 'LOGNAME', 'USERNAME', 'SHELL', 'TERM', 'EDITOR',
+            "USER", "LOGNAME", "USERNAME", "SHELL", "TERM", "EDITOR",
             # System info
-            'HOSTNAME', 'HOSTTYPE', 'OSTYPE', 'MACHTYPE', 'LANG', 'LC_ALL',
+            "HOSTNAME", "HOSTTYPE", "OSTYPE", "MACHTYPE", "LANG", "LC_ALL",
             # Process info
-            'PID', 'PPID', 'UID', 'GID', 'EUID', 'EGID',
+            "PID", "PPID", "UID", "GID", "EUID", "EGID",
             # Special
-            'IFS', 'PS1', 'PS2', 'PS3', 'PS4', 'BASH_VERSION', 'SHLVL',
+            "IFS", "PS1", "PS2", "PS3", "PS4", "BASH_VERSION", "SHLVL",
         ]
         if name in reserved:
             errors.append(f"Cannot override reserved system variable: {name}")
@@ -1115,7 +1112,7 @@ class ConfigurationValidator:
 
     def validate_subagent_config(
         self,
-        config: Dict[str, Any]
+        config: dict[str, Any]
     ) -> "ValidationResult":
         """Validate sub-agent configuration."""
         errors = []
@@ -1141,7 +1138,7 @@ class ConfigurationValidator:
 class ValidationResult:
     """Result of configuration validation."""
 
-    def __init__(self, valid: bool, errors: Optional[List[str]] = None):
+    def __init__(self, valid: bool, errors: list[str] | None = None):
         """
         Initialize validation result.
 

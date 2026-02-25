@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class WorkspaceStatus(str, Enum):
@@ -36,10 +36,10 @@ class ResourceUsage:
     """Container resource usage"""
     cpu_percent: float
     memory_mb: float
-    memory_limit_mb: Optional[float]
-    memory_percent: Optional[float]
+    memory_limit_mb: float | None
+    memory_percent: float | None
     disk_usage_mb: float
-    disk_limit_mb: Optional[float]
+    disk_limit_mb: float | None
     network_rx_bytes: int
     network_tx_bytes: int
 
@@ -55,31 +55,31 @@ class WorkspaceInfo:
     project_id: str
 
     # Container details
-    container_id: Optional[str]
-    container_name: Optional[str]
+    container_id: str | None
+    container_name: str | None
     image_name: str
     status: WorkspaceStatus
 
     # Resource usage
-    resource_usage: Optional[ResourceUsage]
+    resource_usage: ResourceUsage | None
 
     # Mounted files and context
-    mounted_files: List[MountedFile]
+    mounted_files: list[MountedFile]
     context_path: str
-    artifacts_path: Optional[str]
+    artifacts_path: str | None
 
     # Environment
-    environment_variables: Dict[str, str]  # Without sensitive values
+    environment_variables: dict[str, str]  # Without sensitive values
     working_directory: str
 
     # Timestamps
     created_at: datetime
-    started_at: Optional[datetime]
-    stopped_at: Optional[datetime]
-    last_activity: Optional[datetime]
+    started_at: datetime | None
+    stopped_at: datetime | None
+    last_activity: datetime | None
 
     # Metadata
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
 
 @dataclass
@@ -90,16 +90,16 @@ class WorkspaceListItem:
     agent_name: str
     work_item_id: str
     status: WorkspaceStatus
-    cpu_percent: Optional[float]
-    memory_mb: Optional[float]
+    cpu_percent: float | None
+    memory_mb: float | None
     created_at: datetime
-    last_activity: Optional[datetime]
+    last_activity: datetime | None
 
 
 @dataclass
 class WorkspaceListResult:
     """List of workspaces"""
-    workspaces: List[WorkspaceListItem]
+    workspaces: list[WorkspaceListItem]
     total_count: int
     active_count: int
     total_cpu_percent: float
@@ -109,11 +109,11 @@ class WorkspaceListResult:
 @dataclass
 class WorkspaceFilters:
     """Filters for workspace queries"""
-    execution_id: Optional[str] = None
-    agent_id: Optional[str] = None
-    work_item_id: Optional[str] = None
-    project_id: Optional[str] = None
-    status: Optional[WorkspaceStatus] = None
+    execution_id: str | None = None
+    agent_id: str | None = None
+    work_item_id: str | None = None
+    project_id: str | None = None
+    status: WorkspaceStatus | None = None
 
 
 @dataclass
@@ -148,7 +148,6 @@ class IWorkspaceQueryPort(ABC):
         Raises:
             WorkspaceNotFoundError: If workspace doesn't exist
         """
-        pass
 
     @abstractmethod
     async def get_workspace_by_execution(
@@ -167,13 +166,12 @@ class IWorkspaceQueryPort(ABC):
         Raises:
             WorkspaceNotFoundError: If workspace doesn't exist
         """
-        pass
 
     @abstractmethod
     async def list_workspaces(
         self,
-        filters: Optional[WorkspaceFilters] = None,
-        pagination: Optional[PaginationParams] = None
+        filters: WorkspaceFilters | None = None,
+        pagination: PaginationParams | None = None
     ) -> WorkspaceListResult:
         """
         List workspaces with optional filtering.
@@ -185,12 +183,11 @@ class IWorkspaceQueryPort(ABC):
         Returns:
             List of workspaces with aggregate stats
         """
-        pass
 
     @abstractmethod
     async def list_active_workspaces(
         self,
-        pagination: Optional[PaginationParams] = None
+        pagination: PaginationParams | None = None
     ) -> WorkspaceListResult:
         """
         List all active workspaces (running or initializing).
@@ -201,13 +198,12 @@ class IWorkspaceQueryPort(ABC):
         Returns:
             List of active workspaces with resource usage
         """
-        pass
 
     @abstractmethod
     async def get_resource_usage_summary(
         self,
-        project_id: Optional[str] = None
-    ) -> Dict[str, Any]:
+        project_id: str | None = None
+    ) -> dict[str, Any]:
         """
         Get aggregate resource usage across workspaces.
 
@@ -217,12 +213,11 @@ class IWorkspaceQueryPort(ABC):
         Returns:
             Dict with total CPU, memory, disk usage and container counts
         """
-        pass
 
     @abstractmethod
     async def count_workspaces(
         self,
-        filters: Optional[WorkspaceFilters] = None
+        filters: WorkspaceFilters | None = None
     ) -> int:
         """
         Count workspaces matching filters.
@@ -233,15 +228,14 @@ class IWorkspaceQueryPort(ABC):
         Returns:
             Count of matching workspaces
         """
-        pass
 
     @abstractmethod
     async def get_workspace_logs(
         self,
         workspace_id: str,
-        tail: Optional[int] = None,
-        since: Optional[datetime] = None
-    ) -> List[str]:
+        tail: int | None = None,
+        since: datetime | None = None
+    ) -> list[str]:
         """
         Get workspace container logs.
 
@@ -256,4 +250,3 @@ class IWorkspaceQueryPort(ABC):
         Raises:
             WorkspaceNotFoundError: If workspace doesn't exist
         """
-        pass

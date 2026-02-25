@@ -1,7 +1,7 @@
 """Pytest fixtures for simulation testing."""
 
-from datetime import datetime, timezone
-from typing import Dict, Generator, List
+from collections.abc import Generator
+from datetime import UTC, datetime
 
 import pytest
 from fastapi import FastAPI
@@ -37,7 +37,7 @@ class MockAgentExecutor(IAgentExecutor):
 
     def __init__(self):
         """Initialize the mock agent executor."""
-        self._executions: List[Dict] = []
+        self._executions: list[dict] = []
         self._lock = __import__("threading").Lock()
 
     async def execute(self, work_item_id: str, agent_id: str) -> None:
@@ -52,7 +52,7 @@ class MockAgentExecutor(IAgentExecutor):
                 {
                     "work_item_id": work_item_id,
                     "agent_id": agent_id,
-                    "timestamp": datetime.now(tz=timezone.utc),
+                    "timestamp": datetime.now(tz=UTC),
                 }
             )
 
@@ -125,7 +125,7 @@ def create_column_changed_event(
 
 
 @pytest.fixture
-def simulation_clock() -> Generator[SimulationClock, None, None]:
+def simulation_clock() -> SimulationClock:
     """
     Provide a simulation clock for tests.
 
@@ -133,8 +133,8 @@ def simulation_clock() -> Generator[SimulationClock, None, None]:
         SimulationClock instance configured for fast execution
     """
     clock = SimulationClock(speed_multiplier=100.0)
-    clock.start_at(datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc))
-    yield clock
+    clock.start_at(datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC))
+    return clock
 
 
 @pytest.fixture

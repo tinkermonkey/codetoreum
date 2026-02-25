@@ -9,7 +9,7 @@ database-backed configuration.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 @dataclass
@@ -19,16 +19,16 @@ class ProjectConfig:
     name: str
     github_org: str
     github_repo: str
-    tech_stacks: Dict[str, str] = field(default_factory=dict)
-    pipelines: List[Dict[str, Any]] = field(default_factory=list)
-    testing: Dict[str, Any] = field(default_factory=dict)
-    environment_variables: Dict[str, Any] = field(default_factory=dict)
-    mounted_commands: Dict[str, Any] = field(default_factory=dict)
-    mounted_subagents: Dict[str, Any] = field(default_factory=dict)
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    tech_stacks: dict[str, str] = field(default_factory=dict)
+    pipelines: list[dict[str, Any]] = field(default_factory=list)
+    testing: dict[str, Any] = field(default_factory=dict)
+    environment_variables: dict[str, Any] = field(default_factory=dict)
+    mounted_commands: dict[str, Any] = field(default_factory=dict)
+    mounted_subagents: dict[str, Any] = field(default_factory=dict)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
     version: int = 1
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -40,13 +40,13 @@ class AgentConfig:
     timeout: int
     requires_docker: bool
     makes_code_changes: bool
-    mcp_servers: List[str] = field(default_factory=list)
-    capabilities: List[str] = field(default_factory=list)
-    constraints: Dict[str, Any] = field(default_factory=dict)
+    mcp_servers: list[str] = field(default_factory=list)
+    capabilities: list[str] = field(default_factory=list)
+    constraints: dict[str, Any] = field(default_factory=dict)
     version: int = 1
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -55,12 +55,12 @@ class PipelineConfig:
     id: str
     project_id: str
     name: str
-    stages: List[Dict[str, Any]] = field(default_factory=list)
-    triggers: List[str] = field(default_factory=list)
+    stages: list[dict[str, Any]] = field(default_factory=list)
+    triggers: list[str] = field(default_factory=list)
     version: int = 1
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -69,11 +69,11 @@ class WorkflowTemplate:
     id: str
     name: str
     description: str
-    stages: List[Dict[str, Any]] = field(default_factory=list)
+    stages: list[dict[str, Any]] = field(default_factory=list)
     version: int = 1
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -82,11 +82,11 @@ class EnvironmentVariable:
     name: str
     value: str  # Encrypted if is_secret=True
     is_secret: bool = False
-    description: Optional[str] = None
-    created_at: Optional[datetime] = None
-    created_by: Optional[str] = None
-    updated_at: Optional[datetime] = None
-    updated_by: Optional[str] = None
+    description: str | None = None
+    created_at: datetime | None = None
+    created_by: str | None = None
+    updated_at: datetime | None = None
+    updated_by: str | None = None
 
 
 @dataclass
@@ -94,19 +94,19 @@ class MountedCommand:
     """Mounted command configuration."""
     name: str
     path: str
-    description: Optional[str] = None
-    created_at: Optional[datetime] = None
-    created_by: Optional[str] = None
+    description: str | None = None
+    created_at: datetime | None = None
+    created_by: str | None = None
 
 
 @dataclass
 class MountedSubAgent:
     """Mounted sub-agent configuration."""
     name: str
-    config: Dict[str, Any]
-    description: Optional[str] = None
-    created_at: Optional[datetime] = None
-    created_by: Optional[str] = None
+    config: dict[str, Any]
+    description: str | None = None
+    created_at: datetime | None = None
+    created_by: str | None = None
 
 
 @dataclass
@@ -116,18 +116,16 @@ class ConfigVersion:
     changed_at: datetime
     changed_by: str
     change_type: str
-    changes: Dict[str, Any]
-    reason: Optional[str] = None
+    changes: dict[str, Any]
+    reason: str | None = None
 
 
 class ConfigNotFoundError(Exception):
     """Raised when configuration is not found."""
-    pass
 
 
 class ConfigValidationError(Exception):
     """Raised when configuration validation fails."""
-    pass
 
 
 class IConfigStore(ABC):
@@ -154,7 +152,6 @@ class IConfigStore(ABC):
         Raises:
             ConfigNotFoundError: If project doesn't exist
         """
-        pass
 
     @abstractmethod
     async def get_project_config_by_name(self, project_name: str) -> ProjectConfig:
@@ -170,7 +167,6 @@ class IConfigStore(ABC):
         Raises:
             ConfigNotFoundError: If project doesn't exist
         """
-        pass
 
     @abstractmethod
     async def save_project_config(self, config: ProjectConfig) -> None:
@@ -182,7 +178,6 @@ class IConfigStore(ABC):
         Args:
             config: ProjectConfig to save
         """
-        pass
 
     @abstractmethod
     async def get_agent_config(
@@ -203,7 +198,6 @@ class IConfigStore(ABC):
         Raises:
             ConfigNotFoundError: If agent config doesn't exist
         """
-        pass
 
     @abstractmethod
     async def save_agent_config(self, config: AgentConfig) -> None:
@@ -213,7 +207,6 @@ class IConfigStore(ABC):
         Args:
             config: AgentConfig to save
         """
-        pass
 
     @abstractmethod
     async def get_pipeline_config(
@@ -234,7 +227,6 @@ class IConfigStore(ABC):
         Raises:
             ConfigNotFoundError: If pipeline doesn't exist
         """
-        pass
 
     @abstractmethod
     async def save_pipeline_config(self, config: PipelineConfig) -> None:
@@ -244,7 +236,6 @@ class IConfigStore(ABC):
         Args:
             config: PipelineConfig to save
         """
-        pass
 
     @abstractmethod
     async def get_workflow_template(self, template_name: str) -> WorkflowTemplate:
@@ -260,7 +251,6 @@ class IConfigStore(ABC):
         Raises:
             ConfigNotFoundError: If template doesn't exist
         """
-        pass
 
     @abstractmethod
     async def save_workflow_template(self, template: WorkflowTemplate) -> None:
@@ -270,20 +260,18 @@ class IConfigStore(ABC):
         Args:
             template: WorkflowTemplate to save
         """
-        pass
 
     @abstractmethod
-    async def list_projects(self) -> List[ProjectConfig]:
+    async def list_projects(self) -> list[ProjectConfig]:
         """
         List all projects.
 
         Returns:
             List of ProjectConfig instances
         """
-        pass
 
     @abstractmethod
-    async def list_agents(self, project_id: str) -> List[AgentConfig]:
+    async def list_agents(self, project_id: str) -> list[AgentConfig]:
         """
         List all agents for a project.
 
@@ -293,10 +281,9 @@ class IConfigStore(ABC):
         Returns:
             List of AgentConfig instances
         """
-        pass
 
     @abstractmethod
-    async def list_pipelines(self, project_id: str) -> List[PipelineConfig]:
+    async def list_pipelines(self, project_id: str) -> list[PipelineConfig]:
         """
         List all pipelines for a project.
 
@@ -306,14 +293,13 @@ class IConfigStore(ABC):
         Returns:
             List of PipelineConfig instances
         """
-        pass
 
     @abstractmethod
     async def search_configs(
         self,
         query: str,
-        config_type: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+        config_type: str | None = None
+    ) -> list[dict[str, Any]]:
         """
         Search configurations using full-text search.
 
@@ -337,14 +323,13 @@ class IConfigStore(ABC):
         Returns:
             List of matching configurations (dictionaries with config data)
         """
-        pass
 
     @abstractmethod
     async def get_config_version(
         self,
         config_id: str,
         version: int
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Get specific version of a configuration.
 
@@ -358,14 +343,13 @@ class IConfigStore(ABC):
         Raises:
             ConfigNotFoundError: If version doesn't exist
         """
-        pass
 
     @abstractmethod
     async def list_config_versions(
         self,
         config_id: str,
         limit: int = 10
-    ) -> List[ConfigVersion]:
+    ) -> list[ConfigVersion]:
         """
         List configuration version history.
 
@@ -376,7 +360,6 @@ class IConfigStore(ABC):
         Returns:
             List of ConfigVersion instances, newest first
         """
-        pass
 
     @abstractmethod
     async def delete_project_config(self, project_id: str) -> None:
@@ -389,7 +372,6 @@ class IConfigStore(ABC):
         Raises:
             ConfigNotFoundError: If project doesn't exist
         """
-        pass
 
     @abstractmethod
     async def delete_agent_config(
@@ -407,7 +389,6 @@ class IConfigStore(ABC):
         Raises:
             ConfigNotFoundError: If agent config doesn't exist
         """
-        pass
 
     @abstractmethod
     async def exists(self, project_id: str) -> bool:
@@ -420,4 +401,3 @@ class IConfigStore(ABC):
         Returns:
             True if project exists, False otherwise
         """
-        pass

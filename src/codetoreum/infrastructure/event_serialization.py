@@ -1,8 +1,8 @@
 """Event serialization with schema versioning support."""
 
 import json
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Type
+from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from codetoreum.domain.events import DomainEvent
@@ -11,7 +11,6 @@ from codetoreum.domain.events import DomainEvent
 class EventSerializationError(Exception):
     """Raised when event serialization/deserialization fails."""
 
-    pass
 
 
 class EventSerializer:
@@ -29,10 +28,10 @@ class EventSerializer:
     SCHEMA_VERSION = 1
 
     # Event type registry for deserialization
-    _event_type_registry: Dict[str, Type[DomainEvent]] = {}
+    _event_type_registry: dict[str, type[DomainEvent]] = {}
 
     @classmethod
-    def register_event_type(cls, event_class: Type[DomainEvent]) -> None:
+    def register_event_type(cls, event_class: type[DomainEvent]) -> None:
         """
         Register an event type for deserialization.
 
@@ -164,7 +163,7 @@ class EventSerializer:
             ) from e
 
     @classmethod
-    def to_dict(cls, event: DomainEvent) -> Dict[str, Any]:
+    def to_dict(cls, event: DomainEvent) -> dict[str, Any]:
         """
         Convert event to dictionary (for Elasticsearch indexing).
 
@@ -200,7 +199,7 @@ class EventSerializer:
             ) from e
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> DomainEvent:
+    def from_dict(cls, data: dict[str, Any]) -> DomainEvent:
         """
         Reconstruct event from dictionary (from Elasticsearch).
 
@@ -258,9 +257,9 @@ class _EventJSONEncoder(json.JSONEncoder):
         """Handle custom types in event data."""
         if isinstance(obj, datetime):
             return obj.isoformat()
-        elif isinstance(obj, UUID):
+        if isinstance(obj, UUID):
             return str(obj)
-        elif hasattr(obj, "__dict__"):
+        if hasattr(obj, "__dict__"):
             # Handle custom objects
             return obj.__dict__
         return super().default(obj)
@@ -273,7 +272,7 @@ class _EventJSONDecoder(json.JSONDecoder):
         """Initialize decoder with object hook."""
         super().__init__(object_hook=self._object_hook, *args, **kwargs)
 
-    def _object_hook(self, obj: Dict[str, Any]) -> Dict[str, Any]:
+    def _object_hook(self, obj: dict[str, Any]) -> dict[str, Any]:
         """Hook to process objects during decoding."""
         # Future: Handle custom type reconstruction
         return obj
@@ -286,7 +285,6 @@ def auto_register_event_types() -> None:
     This should be called at application startup to populate the
     event type registry for deserialization.
     """
-    from codetoreum import domain
 
     # Import all event classes
     from codetoreum.domain.events import (
@@ -301,7 +299,6 @@ def auto_register_event_types() -> None:
         AgentMcpServerRemoved,
         AgentModelUpdated,
         AgentTimeoutUpdated,
-        DomainEvent,
         ExecutionCompleted,
         ExecutionFailed,
         ExecutionInitialized,

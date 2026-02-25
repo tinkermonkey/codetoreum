@@ -48,15 +48,15 @@ from .models import (
 
 __version__ = "2.0.0"
 __all__ = [
+    "Agent",
+    "AuthenticationError",
     "CodetoreumClient",
     "CodetoreumError",
-    "AuthenticationError",
-    "NotFoundError",
-    "ValidationError",
-    "RateLimitError",
-    "WorkItem",
-    "Agent",
     "Execution",
+    "NotFoundError",
+    "RateLimitError",
+    "ValidationError",
+    "WorkItem",
     "Workflow",
     "WorkflowRun",
 ]

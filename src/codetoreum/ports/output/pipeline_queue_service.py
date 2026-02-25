@@ -30,10 +30,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
 
 # Type aliases for improved clarity
-PipelineId = Tuple[str, str]  # (project_id, board_id)
+PipelineId = tuple[str, str]  # (project_id, board_id)
 NonNegativeInt = int  # Used for positions, counts, etc.
 
 
@@ -50,27 +49,22 @@ class QueueStatus(str, Enum):
 # Domain-specific exceptions for queue service operations
 class QueueServiceError(Exception):
     """Base exception for queue service errors."""
-    pass
 
 
 class QueueValidationError(QueueServiceError):
     """Invalid parameters provided to queue service."""
-    pass
 
 
 class DuplicateQueueEntryError(QueueServiceError):
     """Work item already exists in queue."""
-    pass
 
 
 class QueueItemNotFoundError(QueueServiceError):
     """Work item not found in queue."""
-    pass
 
 
 class InvalidQueueStateError(QueueServiceError):
     """Invalid state transition attempted."""
-    pass
 
 
 @dataclass(frozen=True)
@@ -166,7 +160,6 @@ class IPipelineQueueService(ABC):
         Raises:
             QueueValidationError: Invalid work_item_id
         """
-        pass
 
     @abstractmethod
     async def enqueue_item(
@@ -193,7 +186,6 @@ class IPipelineQueueService(ABC):
             QueueValidationError: Invalid parameters
             DuplicateQueueEntryError: Item already exists in queue
         """
-        pass
 
     @abstractmethod
     async def mark_item_active(self, work_item_id: str) -> None:
@@ -211,7 +203,6 @@ class IPipelineQueueService(ABC):
             QueueItemNotFoundError: Item not in queue
             InvalidQueueStateError: Item already marked active
         """
-        pass
 
     @abstractmethod
     async def remove_from_queue(self, work_item_id: str) -> bool:
@@ -233,12 +224,11 @@ class IPipelineQueueService(ABC):
         Raises:
             QueueValidationError: Invalid work_item_id
         """
-        pass
 
     @abstractmethod
     async def get_next_waiting_item(
         self, project_id: str, board_id: str
-    ) -> Optional[PipelineQueueEntry]:
+    ) -> PipelineQueueEntry | None:
         """Get the next waiting item from the queue based on board position.
 
         Before selecting the next item, this method syncs with the board state
@@ -268,12 +258,11 @@ class IPipelineQueueService(ABC):
             QueueValidationError: Invalid parameters
             QueueServiceError: Board service communication failure
         """
-        pass
 
     @abstractmethod
     async def get_queue_entries(
         self, project_id: str, board_id: str
-    ) -> List[PipelineQueueEntry]:
+    ) -> list[PipelineQueueEntry]:
         """Get all queue entries for a pipeline.
 
         Returns all queue entries (both WAITING and ACTIVE) for the specified
@@ -295,7 +284,6 @@ class IPipelineQueueService(ABC):
         Raises:
             QueueValidationError: Invalid parameters
         """
-        pass
 
     @abstractmethod
     async def sync_queue_with_board(
@@ -327,4 +315,3 @@ class IPipelineQueueService(ABC):
             QueueValidationError: Invalid parameters
             QueueServiceError: Board service communication failure
         """
-        pass

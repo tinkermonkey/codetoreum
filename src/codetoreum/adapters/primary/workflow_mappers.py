@@ -5,7 +5,7 @@ Maps between domain models/port objects and API DTOs for workflows and orchestra
 This keeps the domain layer independent of API concerns.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from codetoreum.adapters.primary.orchestration_dtos import (
     ConditionValidationResult,
@@ -383,7 +383,7 @@ class OrchestrationMapper:
             workflow_run_id=result.workflow_run_id,
             status=result.status,
             message=result.message,
-            started_at=result.started_at or datetime.now(timezone.utc),
+            started_at=result.started_at or datetime.now(UTC),
         )
 
     @staticmethod
@@ -464,7 +464,7 @@ class OrchestrationMapper:
                 agent_name=exec.agent_name,
                 status=exec.status.value,
                 priority="MEDIUM",  # Would need to be in the execution data
-                queued_at=exec.started_at or datetime.now(timezone.utc),
+                queued_at=exec.started_at or datetime.now(UTC),
                 started_at=exec.started_at,
                 estimated_duration_seconds=int(exec.duration_seconds) if exec.duration_seconds else None,
             )

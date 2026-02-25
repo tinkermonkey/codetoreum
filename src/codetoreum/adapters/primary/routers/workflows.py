@@ -127,7 +127,7 @@ def create_workflows_router(
             # Invalid enum values or validation errors
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid request: {str(e)}",
+                detail=f"Invalid request: {e!s}",
             )
         except Exception as e:
             # Domain errors (circular dependencies, agent not found, etc.)
@@ -137,10 +137,10 @@ def create_workflows_router(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=str(e),
                 )
-            elif "circular" in error_msg:
+            if "circular" in error_msg:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Circular dependency detected: {str(e)}",
+                    detail=f"Circular dependency detected: {e!s}",
                 )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -283,7 +283,7 @@ def create_workflows_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Workflow not found: {str(e)}",
+                detail=f"Workflow not found: {e!s}",
             )
 
     # ========================================================================
@@ -355,7 +355,7 @@ def create_workflows_router(
             # Invalid enum values or validation errors
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid request: {str(e)}",
+                detail=f"Invalid request: {e!s}",
             )
         except Exception as e:
             # Domain errors
@@ -365,10 +365,10 @@ def create_workflows_router(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=str(e),
                 )
-            elif "circular" in error_msg:
+            if "circular" in error_msg:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Circular dependency detected: {str(e)}",
+                    detail=f"Circular dependency detected: {e!s}",
                 )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -498,7 +498,7 @@ def create_workflows_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Workflow not found: {str(e)}",
+                detail=f"Workflow not found: {e!s}",
             )
 
     # ========================================================================
@@ -550,7 +550,7 @@ def create_workflows_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Workflow not found: {str(e)}",
+                detail=f"Workflow not found: {e!s}",
             )
 
     return router

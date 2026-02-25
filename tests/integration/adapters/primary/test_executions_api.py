@@ -1,6 +1,6 @@
 """Integration tests for Executions REST API endpoints."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -18,9 +18,7 @@ from codetoreum.ports.input.execution_query import (
     ContainerStatus,
     ErrorType,
     ExecutionErrorDetail,
-    ExecutionFilters,
     ExecutionInfo,
-    ExecutionPaginationParams,
     ExecutionSortField,
     IExecutionQueryPort,
     LogEntry,
@@ -119,7 +117,7 @@ def client(app):
 @pytest.fixture
 def sample_execution_info():
     """Fixture providing a sample execution info."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return ExecutionInfo(
         id="exec-123",
         agent_id="agent-123",
@@ -148,7 +146,7 @@ def sample_execution_info():
 @pytest.fixture
 def failed_execution_info():
     """Fixture providing a failed execution info."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return ExecutionInfo(
         id="exec-failed",
         agent_id="agent-123",
@@ -181,7 +179,7 @@ def failed_execution_info():
 @pytest.fixture
 def crashed_execution_info():
     """Fixture providing a container crash execution info."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return ExecutionInfo(
         id="exec-crashed",
         agent_id="agent-123",
@@ -538,7 +536,7 @@ class TestGetExecution:
     def test_get_execution_with_timeout(self, client, mock_query_port):
         """Test execution retrieval with timeout error."""
         # Arrange
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         timeout_execution = ExecutionInfo(
             id="exec-timeout",
             agent_id="agent-123",
@@ -603,7 +601,7 @@ class TestGetExecutionLogs:
         # Arrange
         from codetoreum.ports.input.execution_query import ExecutionLogs
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         mock_query_port._get_execution_logs.return_value = ExecutionLogs(
             execution_id="exec-123",
             logs=[
@@ -649,7 +647,7 @@ class TestGetExecutionLogs:
         # Arrange
         from codetoreum.ports.input.execution_query import ExecutionLogs
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         mock_query_port._get_execution_logs.return_value = ExecutionLogs(
             execution_id="exec-123",
             logs=[
@@ -685,7 +683,7 @@ class TestGetExecutionLogs:
         # Arrange
         from codetoreum.ports.input.execution_query import ExecutionLogs
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         mock_query_port._get_execution_logs.return_value = ExecutionLogs(
             execution_id="exec-123",
             logs=[
@@ -743,7 +741,7 @@ class TestGetExecutionHistory:
             ExecutionHistoryEntry,
         )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         mock_query_port._get_execution_history.return_value = ExecutionHistory(
             execution_id="exec-123",
             events=[
@@ -787,7 +785,7 @@ class TestGetExecutionHistory:
             ExecutionHistoryEntry,
         )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         mock_query_port._get_execution_history.return_value = ExecutionHistory(
             execution_id="exec-123",
             events=[

@@ -8,38 +8,34 @@ This module provides security functions to prevent common vulnerabilities:
 - Input sanitization
 """
 
-import os
 import re
 from pathlib import Path
-from typing import List, Optional, Set
 
 from fastapi import HTTPException, UploadFile
 
 # File upload limits
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 ALLOWED_CONTENT_TYPES = {
-    'application/json',
-    'application/yaml',
-    'application/x-yaml',
-    'text/plain',
-    'text/yaml',
+    "application/json",
+    "application/yaml",
+    "application/x-yaml",
+    "text/plain",
+    "text/yaml",
 }
 
 # Input validation patterns
-SAFE_FILENAME_PATTERN = re.compile(r'^[a-zA-Z0-9_\-\.]+$')
-SAFE_ENV_VAR_NAME_PATTERN = re.compile(r'^[A-Z][A-Z0-9_]*$')
-SAFE_AGENT_NAME_PATTERN = re.compile(r'^[a-z][a-z0-9_]*$')
-SAFE_LABEL_PATTERN = re.compile(r'^[a-zA-Z0-9_\-\.:/]+$')
+SAFE_FILENAME_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
+SAFE_ENV_VAR_NAME_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
+SAFE_AGENT_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
+SAFE_LABEL_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.:/]+$")
 
 
 class PathTraversalError(Exception):
     """Raised when path traversal attempt is detected."""
-    pass
 
 
 class InvalidInputError(Exception):
     """Raised when invalid input is detected."""
-    pass
 
 
 def safe_path_join(base_path: str, user_path: str) -> Path:
@@ -80,7 +76,7 @@ def safe_path_join(base_path: str, user_path: str) -> Path:
 async def validate_upload(
     file: UploadFile,
     max_size: int = MAX_FILE_SIZE,
-    allowed_types: Optional[Set[str]] = None
+    allowed_types: set[str] | None = None
 ) -> None:
     """
     Validate uploaded file for security.
@@ -109,7 +105,7 @@ async def validate_upload(
         )
 
     # Check filename for path traversal
-    if file.filename and ('/' in file.filename or '\\' in file.filename or '..' in file.filename):
+    if file.filename and ("/" in file.filename or "\\" in file.filename or ".." in file.filename):
         raise HTTPException(
             status_code=400,
             detail="Invalid filename: path separators not allowed"
@@ -142,7 +138,7 @@ async def validate_upload(
 
 def sanitize_string(
     value: str,
-    max_length: Optional[int] = None,
+    max_length: int | None = None,
     strip: bool = True,
     allow_empty: bool = False
 ) -> str:
@@ -238,7 +234,7 @@ def validate_agent_name(name: str) -> str:
     return name
 
 
-def validate_labels(labels: List[str], max_labels: int = 20) -> List[str]:
+def validate_labels(labels: list[str], max_labels: int = 20) -> list[str]:
     """
     Validate list of labels.
 
@@ -275,7 +271,7 @@ def validate_labels(labels: List[str], max_labels: int = 20) -> List[str]:
     return validated
 
 
-def validate_url(url: str, allowed_schemes: Optional[Set[str]] = None) -> str:
+def validate_url(url: str, allowed_schemes: set[str] | None = None) -> str:
     """
     Validate URL format.
 
@@ -290,7 +286,7 @@ def validate_url(url: str, allowed_schemes: Optional[Set[str]] = None) -> str:
         InvalidInputError: If URL is invalid
     """
     if allowed_schemes is None:
-        allowed_schemes = {'http', 'https'}
+        allowed_schemes = {"http", "https"}
 
     url = sanitize_string(url, max_length=2048)
 
@@ -319,8 +315,8 @@ def validate_url(url: str, allowed_schemes: Optional[Set[str]] = None) -> str:
 
 def validate_integer_range(
     value: int,
-    min_value: Optional[int] = None,
-    max_value: Optional[int] = None,
+    min_value: int | None = None,
+    max_value: int | None = None,
     field_name: str = "value"
 ) -> int:
     """
@@ -356,8 +352,8 @@ def validate_integer_range(
 
 def validate_float_range(
     value: float,
-    min_value: Optional[float] = None,
-    max_value: Optional[float] = None,
+    min_value: float | None = None,
+    max_value: float | None = None,
     field_name: str = "value"
 ) -> float:
     """
@@ -415,12 +411,12 @@ def sanitize_search_query(query: str, max_length: int = 500) -> str:
     # Keep tabs, newlines, carriage returns for readability
     # Keep search operators: -, +, *, "
     allowed_chars = set('\t\n\r-+*"')
-    query = ''.join(
+    query = "".join(
         char for char in query
         if ord(char) >= 32 or char in allowed_chars
     )
 
     # Remove multiple consecutive spaces
-    query = re.sub(r'\s+', ' ', query)
+    query = re.sub(r"\s+", " ", query)
 
     return query.strip()

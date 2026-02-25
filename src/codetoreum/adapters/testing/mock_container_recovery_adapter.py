@@ -5,9 +5,8 @@ for use in unit tests, integration tests, and simulation mode.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
-from typing import Dict, List, Optional
 
 from codetoreum.domain.types import CONTAINER_TYPE_AGENT, CONTAINER_TYPE_REPAIR_CYCLE
 from codetoreum.ports.output.container_recovery import (
@@ -37,17 +36,17 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
 
     def __init__(self):
         """Initialize MockContainerRecoveryAdapter."""
-        self.containers: List[ContainerMetadata] = []  # Agent containers
-        self.repair_cycle_containers: List[ContainerMetadata] = []  # Repair cycle containers
-        self.assessments: Dict[str, RecoveryAssessment] = {}
+        self.containers: list[ContainerMetadata] = []  # Agent containers
+        self.repair_cycle_containers: list[ContainerMetadata] = []  # Repair cycle containers
+        self.assessments: dict[str, RecoveryAssessment] = {}
         self.failed_actions: set = set()
-        self.executed_actions: List[RecoveryAssessment] = []
+        self.executed_actions: list[RecoveryAssessment] = []
         self.repair_cycles_to_process: int = 0
-        self.docker_failure_after_count: Optional[int] = None  # Simulate Docker failure after N containers
+        self.docker_failure_after_count: int | None = None  # Simulate Docker failure after N containers
         self.docker_failure_counter: int = 0  # Current count of processed containers
-        self.assessment_exceptions: Dict[str, Exception] = {}  # Exceptions to raise during assessment
+        self.assessment_exceptions: dict[str, Exception] = {}  # Exceptions to raise during assessment
         self.checkpoint_store_failures: set = set()  # Container IDs that cause checkpoint store failure
-        self.malformed_storage_keys: List[str] = []  # Malformed keys to simulate storage issues
+        self.malformed_storage_keys: list[str] = []  # Malformed keys to simulate storage issues
 
     def add_container(
         self,
@@ -56,11 +55,11 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
         project_id: str,
         agent_id: str,
         task_id: str,
-        work_item_id: Optional[str] = None,
-        execution_id: Optional[str] = None,
-        workflow_run_id: Optional[str] = None,
-        created_at: Optional[datetime] = None,
-        age_hours: Optional[float] = None,
+        work_item_id: str | None = None,
+        execution_id: str | None = None,
+        workflow_run_id: str | None = None,
+        created_at: datetime | None = None,
+        age_hours: float | None = None,
         container_type: str = CONTAINER_TYPE_AGENT,
     ) -> ContainerMetadata:
         """
@@ -84,9 +83,9 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
         """
         if created_at is None:
             if age_hours is not None:
-                created_at = datetime.now(timezone.utc) - timedelta(hours=age_hours)
+                created_at = datetime.now(UTC) - timedelta(hours=age_hours)
             else:
-                created_at = datetime.now(timezone.utc)
+                created_at = datetime.now(UTC)
 
         metadata = ContainerMetadata(
             container_id=container_id,
@@ -119,10 +118,10 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
         project_id: str,
         agent_id: str,
         task_id: str,
-        work_item_id: Optional[str] = None,
-        execution_id: Optional[str] = None,
-        created_at: Optional[datetime] = None,
-        age_hours: Optional[float] = None,
+        work_item_id: str | None = None,
+        execution_id: str | None = None,
+        created_at: datetime | None = None,
+        age_hours: float | None = None,
     ) -> ContainerMetadata:
         """
         Add a mock repair cycle container to the adapter.
@@ -143,9 +142,9 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
         """
         if created_at is None:
             if age_hours is not None:
-                created_at = datetime.now(timezone.utc) - timedelta(hours=age_hours)
+                created_at = datetime.now(UTC) - timedelta(hours=age_hours)
             else:
-                created_at = datetime.now(timezone.utc)
+                created_at = datetime.now(UTC)
 
         metadata = ContainerMetadata(
             container_id=container_id,
@@ -173,7 +172,7 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
         action: str,
         reason: str,
         with_monitoring: bool = False,
-        execution_id: Optional[str] = None,
+        execution_id: str | None = None,
     ) -> None:
         """
         Set the recovery assessment for a container.
@@ -202,7 +201,7 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
         """
         self.failed_actions.add(container_id)
 
-    async def get_running_agent_containers(self) -> List[ContainerMetadata]:
+    async def get_running_agent_containers(self) -> list[ContainerMetadata]:
         """
         Return mock agent containers.
 
@@ -212,7 +211,7 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
         logger.debug(f"Mock adapter returning {len(self.containers)} agent containers")
         return self.containers
 
-    async def get_running_repair_cycle_containers(self) -> List[ContainerMetadata]:
+    async def get_running_repair_cycle_containers(self) -> list[ContainerMetadata]:
         """
         Return mock repair cycle containers.
 
@@ -256,24 +255,23 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
 
         if metadata.container_id in self.assessments:
             assessment = self.assessments[metadata.container_id]
+        # Default: reconnect if execution_id present, otherwise kill
+        elif metadata.execution_id:
+            assessment = RecoveryAssessment(
+                container_id=metadata.container_id,
+                action="reconnect",
+                reason="default_recovery",
+                with_monitoring=bool(metadata.work_item_id),
+                execution_id=metadata.execution_id,
+            )
         else:
-            # Default: reconnect if execution_id present, otherwise kill
-            if metadata.execution_id:
-                assessment = RecoveryAssessment(
-                    container_id=metadata.container_id,
-                    action="reconnect",
-                    reason="default_recovery",
-                    with_monitoring=bool(metadata.work_item_id),
-                    execution_id=metadata.execution_id,
-                )
-            else:
-                assessment = RecoveryAssessment(
-                    container_id=metadata.container_id,
-                    action="kill",
-                    reason="no_execution_found",
-                    with_monitoring=False,
-                    execution_id=None,
-                )
+            assessment = RecoveryAssessment(
+                container_id=metadata.container_id,
+                action="kill",
+                reason="no_execution_found",
+                with_monitoring=False,
+                execution_id=None,
+            )
 
         logger.debug(
             f"Mock assess container {metadata.container_id}: {assessment.action}"
@@ -305,24 +303,23 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
 
         if metadata.container_id in self.assessments:
             assessment = self.assessments[metadata.container_id]
+        # Default: reconnect if execution_id present, otherwise kill
+        elif metadata.execution_id:
+            assessment = RecoveryAssessment(
+                container_id=metadata.container_id,
+                action="reconnect",
+                reason="default_repair_cycle_recovery",
+                with_monitoring=bool(metadata.work_item_id),
+                execution_id=metadata.execution_id,
+            )
         else:
-            # Default: reconnect if execution_id present, otherwise kill
-            if metadata.execution_id:
-                assessment = RecoveryAssessment(
-                    container_id=metadata.container_id,
-                    action="reconnect",
-                    reason="default_repair_cycle_recovery",
-                    with_monitoring=bool(metadata.work_item_id),
-                    execution_id=metadata.execution_id,
-                )
-            else:
-                assessment = RecoveryAssessment(
-                    container_id=metadata.container_id,
-                    action="kill",
-                    reason="no_checkpoint",
-                    with_monitoring=False,
-                    execution_id=None,
-                )
+            assessment = RecoveryAssessment(
+                container_id=metadata.container_id,
+                action="kill",
+                reason="no_checkpoint",
+                with_monitoring=False,
+                execution_id=None,
+            )
 
         logger.debug(
             f"Mock assess repair cycle container {metadata.container_id}: {assessment.action}"
@@ -347,7 +344,7 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
                 self.docker_failure_counter > self.docker_failure_after_count):
             from codetoreum.ports.exceptions import ContainerError
             raise ContainerError(
-                f"Docker daemon unavailable (simulated failure)",
+                "Docker daemon unavailable (simulated failure)",
                 error_code="ERR_DOCKER_CONNECTION_FAILED"
             )
 

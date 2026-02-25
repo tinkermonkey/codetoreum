@@ -3,8 +3,9 @@
 import asyncio
 import re
 import threading
-from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 from codetoreum.ports.exceptions import (
@@ -70,13 +71,13 @@ class FakeContainerAdapter(IContainer):
         self._max_containers = max_containers
 
         # Container storage
-        self._containers: Dict[str, Dict[str, Any]] = {}
+        self._containers: dict[str, dict[str, Any]] = {}
 
         # Predefined results for specific commands
-        self._command_results: Dict[str, ContainerResult] = {}
+        self._command_results: dict[str, ContainerResult] = {}
 
         # Execution history
-        self._execution_history: List[Dict[str, Any]] = []
+        self._execution_history: list[dict[str, Any]] = []
 
         # Thread safety
         self._lock = threading.Lock()
@@ -115,7 +116,7 @@ class FakeContainerAdapter(IContainer):
 
     def _get_result_for_command(
         self,
-        command: List[str],
+        command: list[str],
         container_id: str,
     ) -> ContainerResult:
         """
@@ -156,11 +157,11 @@ class FakeContainerAdapter(IContainer):
     async def run(
         self,
         image: str,
-        command: List[str],
-        volumes: Dict[str, str],
-        environment: Dict[str, str],
+        command: list[str],
+        volumes: dict[str, str],
+        environment: dict[str, str],
         timeout: int = 300,
-        stream_callback: Optional[Callable] = None,
+        stream_callback: Callable | None = None,
     ) -> ContainerResult:
         """
         Run a command in a container.
@@ -205,7 +206,7 @@ class FakeContainerAdapter(IContainer):
                 "environment": environment,
                 "timeout": timeout,
                 "result": result,
-                "executed_at": datetime.now(timezone.utc),
+                "executed_at": datetime.now(UTC),
             })
 
         # Simulate streaming if callback provided
@@ -219,14 +220,14 @@ class FakeContainerAdapter(IContainer):
     async def create(
         self,
         image: str,
-        name: Optional[str] = None,
-        command: Optional[List[str]] = None,
-        volumes: Optional[Dict[str, str]] = None,
-        environment: Optional[Dict[str, str]] = None,
-        working_dir: Optional[str] = None,
-        user: Optional[str] = None,
-        network: Optional[str] = None,
-        labels: Optional[Dict[str, str]] = None,
+        name: str | None = None,
+        command: list[str] | None = None,
+        volumes: dict[str, str] | None = None,
+        environment: dict[str, str] | None = None,
+        working_dir: str | None = None,
+        user: str | None = None,
+        network: str | None = None,
+        labels: dict[str, str] | None = None,
     ) -> str:
         """
         Create a container without starting it.
@@ -257,7 +258,7 @@ class FakeContainerAdapter(IContainer):
 
             # Validate container name format if provided
             if name:
-                if not re.match(r'^[a-zA-Z0-9][a-zA-Z0-9_.-]*$', name):
+                if not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]*$", name):
                     raise ValidationError(f"Invalid container name format: '{name}'")
 
             container_id = name or f"fake-{uuid4().hex[:12]}"
@@ -273,7 +274,7 @@ class FakeContainerAdapter(IContainer):
                 "network": network,
                 "labels": labels or {},
                 "status": "created",
-                "created_at": datetime.now(timezone.utc),
+                "created_at": datetime.now(UTC),
                 "started_at": None,
                 "finished_at": None,
                 "exit_code": None,
@@ -300,7 +301,7 @@ class FakeContainerAdapter(IContainer):
 
             container = self._containers[container_id]
             container["status"] = "running"
-            container["started_at"] = datetime.now(timezone.utc)
+            container["started_at"] = datetime.now(UTC)
 
     async def stop(self, container_id: str, timeout: int = 10) -> None:
         """
@@ -322,7 +323,7 @@ class FakeContainerAdapter(IContainer):
 
             container = self._containers[container_id]
             container["status"] = "exited"
-            container["finished_at"] = datetime.now(timezone.utc)
+            container["finished_at"] = datetime.now(UTC)
             container["exit_code"] = 0
 
     async def remove(self, container_id: str, force: bool = False) -> None:
@@ -365,7 +366,7 @@ class FakeContainerAdapter(IContainer):
 
             container = self._containers[container_id]
             container["status"] = "dead"
-            container["finished_at"] = datetime.now(timezone.utc)
+            container["finished_at"] = datetime.now(UTC)
             container["exit_code"] = 137 if signal == "SIGKILL" else 143
 
     async def logs(
@@ -373,8 +374,8 @@ class FakeContainerAdapter(IContainer):
         container_id: str,
         stream: bool = False,
         follow: bool = False,
-        tail: Optional[int] = None,
-        since: Optional[datetime] = None,
+        tail: int | None = None,
+        since: datetime | None = None,
     ) -> Any:
         """
         Get container logs.
@@ -450,10 +451,10 @@ class FakeContainerAdapter(IContainer):
     async def exec(
         self,
         container_id: str,
-        command: List[str],
-        user: Optional[str] = None,
-        working_dir: Optional[str] = None,
-        environment: Optional[Dict[str, str]] = None,
+        command: list[str],
+        user: str | None = None,
+        working_dir: str | None = None,
+        environment: dict[str, str] | None = None,
     ) -> ContainerResult:
         """
         Execute a command in a running container.
@@ -496,8 +497,8 @@ class FakeContainerAdapter(IContainer):
     async def list_containers(
         self,
         all: bool = False,
-        filters: Optional[Dict[str, Any]] = None,
-    ) -> List[ContainerStatus]:
+        filters: dict[str, Any] | None = None,
+    ) -> list[ContainerStatus]:
         """
         List containers.
 
@@ -536,7 +537,7 @@ class FakeContainerAdapter(IContainer):
         self,
         image: str,
         tag: str = "latest",
-        stream_callback: Optional[Callable] = None,
+        stream_callback: Callable | None = None,
     ) -> None:
         """
         Pull a container image.
@@ -573,7 +574,7 @@ class FakeContainerAdapter(IContainer):
         """
         return True
 
-    async def inspect(self, container_id: str) -> Dict[str, Any]:
+    async def inspect(self, container_id: str) -> dict[str, Any]:
         """
         Get detailed container information.
 
@@ -598,7 +599,7 @@ class FakeContainerAdapter(IContainer):
     async def wait(
         self,
         container_id: str,
-        timeout: Optional[int] = None,
+        timeout: int | None = None,
     ) -> int:
         """
         Wait for a container to stop.
@@ -703,7 +704,7 @@ class FakeContainerAdapter(IContainer):
             self._execution_history.clear()
             self._command_results.clear()
 
-    def get_execution_history(self) -> List[Dict[str, Any]]:
+    def get_execution_history(self) -> list[dict[str, Any]]:
         """
         Get execution history.
 

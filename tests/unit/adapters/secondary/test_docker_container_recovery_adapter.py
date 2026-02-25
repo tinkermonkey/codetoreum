@@ -7,7 +7,7 @@ These tests verify:
 - Error handling
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -25,7 +25,7 @@ from codetoreum.domain.types import (
     CONTAINER_LABEL_WORK_ITEM_ID,
     CONTAINER_TYPE_AGENT,
 )
-from codetoreum.ports.exceptions import ContainerError, StorageError
+from codetoreum.ports.exceptions import StorageError
 
 
 class TestDockerContainerRecoveryAdapterInitialization:
@@ -138,7 +138,7 @@ class TestDockerContainerAssessment:
         )
 
         # Create metadata for a 3-hour-old container
-        created_at = datetime.now(timezone.utc) - timedelta(hours=3)
+        created_at = datetime.now(UTC) - timedelta(hours=3)
         from codetoreum.ports.output.container_recovery import ContainerMetadata
 
         metadata = ContainerMetadata(
@@ -170,7 +170,7 @@ class TestDockerContainerAssessment:
             execution_tracker=execution_tracker, tracking_storage=tracking_storage
         )
 
-        created_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        created_at = datetime.now(UTC) - timedelta(hours=1)
         from codetoreum.ports.output.container_recovery import ContainerMetadata
 
         metadata = ContainerMetadata(
@@ -205,7 +205,7 @@ class TestDockerContainerAssessment:
             execution_tracker=execution_tracker, tracking_storage=tracking_storage
         )
 
-        created_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        created_at = datetime.now(UTC) - timedelta(hours=1)
         from codetoreum.ports.output.container_recovery import ContainerMetadata
 
         metadata = ContainerMetadata(
@@ -245,7 +245,7 @@ class TestDockerContainerAssessment:
             execution_tracker=execution_tracker, tracking_storage=tracking_storage
         )
 
-        created_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        created_at = datetime.now(UTC) - timedelta(hours=1)
         from codetoreum.ports.output.container_recovery import ContainerMetadata
 
         metadata = ContainerMetadata(
@@ -285,7 +285,7 @@ class TestDockerContainerAssessment:
             execution_tracker=execution_tracker, tracking_storage=tracking_storage
         )
 
-        created_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        created_at = datetime.now(UTC) - timedelta(hours=1)
         from codetoreum.ports.output.container_recovery import ContainerMetadata
 
         metadata = ContainerMetadata(
@@ -533,7 +533,7 @@ class TestDockerContainerRecoveryAction:
             execution_tracker=execution_tracker, tracking_storage=tracking_storage
         )
 
-        created_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        created_at = datetime.now(UTC) - timedelta(hours=1)
         from codetoreum.ports.output.container_recovery import ContainerMetadata
 
         metadata = ContainerMetadata(
@@ -572,7 +572,7 @@ class TestDockerContainerRecoveryAction:
             execution_tracker=execution_tracker, tracking_storage=tracking_storage
         )
 
-        created_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        created_at = datetime.now(UTC) - timedelta(hours=1)
         from codetoreum.domain.types import CONTAINER_TYPE_REPAIR_CYCLE
         from codetoreum.ports.output.container_recovery import ContainerMetadata
 
@@ -718,7 +718,7 @@ class TestTimestampParsingErrors:
         )
 
         # Recent container (within 2 hours) with old container age check
-        created_at = datetime.now(timezone.utc) - timedelta(hours=3)
+        created_at = datetime.now(UTC) - timedelta(hours=3)
         from codetoreum.ports.output.container_recovery import ContainerMetadata
 
         metadata = ContainerMetadata(
@@ -769,7 +769,7 @@ class TestTimestampParsingErrors:
         )
 
         # Old container (beyond 2 hours) with null checkpoint timestamp
-        created_at = datetime.now(timezone.utc) - timedelta(hours=3)
+        created_at = datetime.now(UTC) - timedelta(hours=3)
         from codetoreum.ports.output.container_recovery import ContainerMetadata
 
         metadata = ContainerMetadata(

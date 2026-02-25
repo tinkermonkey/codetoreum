@@ -7,8 +7,8 @@ Subscribes to workitem.column_changed events and orchestrates:
 """
 
 import logging
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 from codetoreum.application.pipeline_lock_service import (
@@ -82,7 +82,7 @@ class BoardColumnEventHandler(EventHandler):
         workflow_config: IWorkflowConfigService,
         agent_executor: IAgentExecutor,
         event_bus: EventBus,
-        event_store: Optional[IEventStore] = None,
+        event_store: IEventStore | None = None,
     ):
         """
         Initialize board column event handler.
@@ -102,7 +102,7 @@ class BoardColumnEventHandler(EventHandler):
         self.event_bus = event_bus
         self.event_store = event_store
         # Tracks active workflow runs: work_item_id -> run metadata
-        self._active_runs: Dict[str, Dict[str, Any]] = {}
+        self._active_runs: dict[str, dict[str, Any]] = {}
 
     def get_event_types(self) -> list[str]:
         """Get list of event types this handler processes.
@@ -222,7 +222,7 @@ class BoardColumnEventHandler(EventHandler):
         # Get item position for queue ordering with error handling
         try:
             position = await self.board_service.get_item_position(work_item_id)
-        except ResourceNotFoundError as e:
+        except ResourceNotFoundError:
             logger.error(
                 f"Cannot acquire lock for {work_item_id}: work item not found on board",
                 exc_info=True,
@@ -406,7 +406,7 @@ class BoardColumnEventHandler(EventHandler):
             return
 
         workflow_run_id = str(uuid4())
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         stage_count = len([c for c in workflow_config.columns if c.agent_id])
 
         self._active_runs[work_item_id] = {
@@ -487,7 +487,7 @@ class BoardColumnEventHandler(EventHandler):
 
         run_info = self._active_runs.pop(work_item_id)
         workflow_run_id = run_info["run_id"]
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         duration = (now - run_info["started_at"]).total_seconds()
 
         event = WorkflowCompleted(
@@ -523,7 +523,7 @@ class BoardColumnEventHandler(EventHandler):
 
         run_info = self._active_runs.pop(work_item_id)
         workflow_run_id = run_info["run_id"]
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         event = WorkflowFailed(
             aggregate_id=workflow_run_id,

@@ -16,7 +16,6 @@ from codetoreum.infrastructure.simulation.bootstrap import (
     SimulationServices,
 )
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
-from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
 
 
 @pytest.mark.asyncio

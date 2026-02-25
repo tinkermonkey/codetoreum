@@ -9,9 +9,10 @@ import hashlib
 import hmac
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Callable
+from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import Header, HTTPException, Request
 
@@ -235,7 +236,7 @@ class GitHubWebhookAdapter:
                 event_type=x_github_event,
                 payload=payload,
                 signature=x_hub_signature_256,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 repository=payload.get("repository", {}).get("full_name", ""),
             )
 

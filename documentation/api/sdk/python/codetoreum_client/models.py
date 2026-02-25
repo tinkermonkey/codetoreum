@@ -2,8 +2,7 @@
 Data models for Codetoreum API resources
 """
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any, Dict, List, Optional, Type, TypeVar, cast
+from typing import Any, TypeVar, cast
 
 T = TypeVar("T")
 
@@ -19,12 +18,12 @@ class WorkItem:
     project_id: str
     created_at: str
     updated_at: str
-    external_id: Optional[str] = None
-    assignee: Optional[str] = None
-    labels: List[str] = field(default_factory=list)
+    external_id: str | None = None
+    assignee: str | None = None
+    labels: list[str] = field(default_factory=list)
     priority: str = "medium"
-    workflow_stage: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    workflow_stage: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "WorkItem":
@@ -40,11 +39,11 @@ class Agent:
     name: str
     description: str
     agent_type: str
-    capabilities: List[str]
-    configuration: Dict[str, Any]
+    capabilities: list[str]
+    configuration: dict[str, Any]
     active: bool
     created_at: str
-    updated_at: Optional[str] = None
+    updated_at: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Agent":
@@ -63,11 +62,11 @@ class Execution:
     stage_name: str
     status: str
     started_at: str
-    completed_at: Optional[str] = None
-    duration_seconds: Optional[float] = None
-    container_id: Optional[str] = None
-    progress: Optional[Dict[str, Any]] = None
-    error_message: Optional[str] = None
+    completed_at: str | None = None
+    duration_seconds: float | None = None
+    container_id: str | None = None
+    progress: dict[str, Any] | None = None
+    error_message: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Execution":
@@ -81,9 +80,9 @@ class WorkflowStage:
 
     name: str
     agent_id: str
-    entry_conditions: List[str] = field(default_factory=list)
+    entry_conditions: list[str] = field(default_factory=list)
     timeout_minutes: int = 60
-    retry_policy: Optional[Dict[str, Any]] = None
+    retry_policy: dict[str, Any] | None = None
 
 
 @dataclass
@@ -95,9 +94,9 @@ class Workflow:
     description: str
     version: str
     active: bool
-    stages: List[Dict[str, Any]]
+    stages: list[dict[str, Any]]
     created_at: str
-    updated_at: Optional[str] = None
+    updated_at: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Workflow":
@@ -111,12 +110,12 @@ class WorkflowRun:
 
     workflow_run_id: str
     work_item_id: str
-    workflow_id: Optional[str] = None
-    workflow_name: Optional[str] = None
-    current_stage: Optional[str] = None
+    workflow_id: str | None = None
+    workflow_name: str | None = None
+    current_stage: str | None = None
     status: str = "pending"
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
+    started_at: str | None = None
+    completed_at: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "WorkflowRun":
@@ -128,16 +127,16 @@ class WorkflowRun:
 class PaginatedResponse:
     """Represents a paginated API response."""
 
-    items: List[Any]
+    items: list[Any]
     total: int
     offset: int
     limit: int
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any], item_class: Type[T]) -> "PaginatedResponse":
+    def from_dict(cls, data: dict[str, Any], item_class: type[T]) -> "PaginatedResponse":
         """Create PaginatedResponse from API response dict."""
         return cls(
-            items=[cast(Any, item_class).from_dict(item) for item in data.get("items", [])],
+            items=[cast("Any", item_class).from_dict(item) for item in data.get("items", [])],
             total=data.get("total", 0),
             offset=data.get("offset", 0),
             limit=data.get("limit", 50),

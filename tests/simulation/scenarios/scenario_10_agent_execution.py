@@ -21,15 +21,13 @@ Key Features Tested:
 - Resource cleanup and container removal
 """
 
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import timedelta
 
 import pytest
 
-from codetoreum.domain.agent import Agent, AgentType
 from codetoreum.domain.agent_execution import AgentExecution, ExecutionStatus
 from codetoreum.domain.value_objects import ContainerConfig, ExecutionContext
-from codetoreum.domain.workspace_context import WorkspaceContext, WorkspaceType
+from codetoreum.domain.workspace_context import WorkspaceContext
 from codetoreum.infrastructure.simulation import (
     SimulationConfig,
     SimulationRunner,

@@ -5,11 +5,10 @@ It handles command and query operations by coordinating with the event store
 and reconstructing work items from their event streams.
 """
 
-from datetime import datetime, timezone
-from typing import Any, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
-from codetoreum.domain.exceptions import DomainError
-from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
+from codetoreum.domain.work_item import WorkItem
 from codetoreum.ports.input.work_item_command import (
     AssignAgentCommand,
     AttachWorkflowCommand,
@@ -37,7 +36,6 @@ from codetoreum.ports.output.event_store import IEventStore
 class WorkItemNotFoundError(Exception):
     """Raised when a work item is not found"""
 
-    pass
 
 
 class WorkItemService(IWorkItemCommandPort, IWorkItemQueryPort):
@@ -148,11 +146,11 @@ class WorkItemService(IWorkItemCommandPort, IWorkItemQueryPort):
             # For now, we'll update the field directly
             # In production, add a proper domain method
             work_item.title = command.title
-            work_item.updated_at = datetime.now(timezone.utc)
+            work_item.updated_at = datetime.now(UTC)
 
         if command.description is not None:
             work_item.description = command.description
-            work_item.updated_at = datetime.now(timezone.utc)
+            work_item.updated_at = datetime.now(UTC)
 
         if command.labels is not None:
             work_item.update_labels(command.labels)
@@ -247,7 +245,7 @@ class WorkItemService(IWorkItemCommandPort, IWorkItemQueryPort):
         return await self._load_work_item(work_item_id)
 
     async def list_work_items(
-        self, filters: Optional[WorkItemFilters] = None, pagination: Optional[PaginationParams] = None
+        self, filters: WorkItemFilters | None = None, pagination: PaginationParams | None = None
     ) -> WorkItemListResult:
         """Lists work items with optional filtering and pagination."""
         # Set defaults
@@ -260,7 +258,7 @@ class WorkItemService(IWorkItemCommandPort, IWorkItemQueryPort):
         all_streams = await self._get_all_work_item_streams()
 
         # Load all work items
-        work_items: List[WorkItem] = []
+        work_items: list[WorkItem] = []
         for stream_id in all_streams:
             try:
                 events = await self.event_store.get_events(stream_id)
@@ -318,7 +316,7 @@ class WorkItemService(IWorkItemCommandPort, IWorkItemQueryPort):
         )
 
     async def get_work_item_history(
-        self, work_item_id: str, limit: Optional[int] = None
+        self, work_item_id: str, limit: int | None = None
     ) -> WorkItemHistory:
         """Retrieves work item history including all events."""
         work_item = await self._load_work_item(work_item_id)
@@ -335,7 +333,7 @@ class WorkItemService(IWorkItemCommandPort, IWorkItemQueryPort):
 
         return WorkItemHistory(work_item=work_item, events=event_dicts, total_events=len(events))
 
-    async def count_work_items(self, filters: Optional[WorkItemFilters] = None) -> int:
+    async def count_work_items(self, filters: WorkItemFilters | None = None) -> int:
         """Counts work items matching the given filters."""
         # This is inefficient - in production, use a read model
         result = await self.list_work_items(filters, PaginationParams(offset=0, limit=999999))
@@ -345,7 +343,7 @@ class WorkItemService(IWorkItemCommandPort, IWorkItemQueryPort):
     # Helper Methods
     # ========================================================================
 
-    async def _get_all_work_item_streams(self) -> List[str]:
+    async def _get_all_work_item_streams(self) -> list[str]:
         """
         Get all work item stream IDs.
 
@@ -397,23 +395,22 @@ class WorkItemService(IWorkItemCommandPort, IWorkItemQueryPort):
         return True
 
     def _sort_work_items(
-        self, work_items: List[WorkItem], sort_by: SortField, sort_order: SortOrder
-    ) -> List[WorkItem]:
+        self, work_items: list[WorkItem], sort_by: SortField, sort_order: SortOrder
+    ) -> list[WorkItem]:
         """Sort work items by the specified field and order."""
         reverse = sort_order == SortOrder.DESC
 
         if sort_by == SortField.CREATED_AT:
             return sorted(work_items, key=lambda x: x.created_at, reverse=reverse)
-        elif sort_by == SortField.UPDATED_AT:
+        if sort_by == SortField.UPDATED_AT:
             return sorted(work_items, key=lambda x: x.updated_at, reverse=reverse)
-        elif sort_by == SortField.PRIORITY:
+        if sort_by == SortField.PRIORITY:
             return sorted(work_items, key=lambda x: x.priority.value, reverse=reverse)
-        elif sort_by == SortField.TITLE:
+        if sort_by == SortField.TITLE:
             return sorted(work_items, key=lambda x: x.title.lower(), reverse=reverse)
-        elif sort_by == SortField.STATUS:
+        if sort_by == SortField.STATUS:
             return sorted(work_items, key=lambda x: x.status.value, reverse=reverse)
-        else:
-            return work_items
+        return work_items
 
     def _event_to_dict(self, event: Any) -> dict:
         """Convert a domain event to a dictionary."""

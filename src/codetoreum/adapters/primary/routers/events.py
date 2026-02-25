@@ -4,7 +4,7 @@ Events REST API Router
 Provides REST endpoints for historical event queries and event replay.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -176,7 +176,7 @@ def create_events_router(
                     domain_events.extend(stream_events)
 
                 # Sort by timestamp
-                domain_events.sort(key=lambda e: e.occurred_at if hasattr(e, 'occurred_at') else e.timestamp)
+                domain_events.sort(key=lambda e: e.occurred_at if hasattr(e, "occurred_at") else e.timestamp)
 
             # Filter by aggregate type if specified
             if aggregate_type:
@@ -210,7 +210,7 @@ def create_events_router(
                         event_version=event_dict.get("event_version", 1),
                         aggregate_id=event_dict.get("aggregate_id", ""),
                         aggregate_type=event_dict.get("aggregate_type", ""),
-                        occurred_at=event_dict.get("occurred_at", datetime.now(timezone.utc)),
+                        occurred_at=event_dict.get("occurred_at", datetime.now(UTC)),
                         correlation_id=str(event_dict.get("correlation_id"))
                         if event_dict.get("correlation_id")
                         else None,
@@ -234,7 +234,7 @@ def create_events_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to query events: {str(e)}",
+                detail=f"Failed to query events: {e!s}",
             )
 
     @router.post(

@@ -5,7 +5,7 @@ Provides RESTful endpoints for system metrics, health checks, performance statis
 and resilience infrastructure monitoring.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -137,7 +137,7 @@ def create_metrics_router(
             # If health check itself fails, return 503
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Health check failed: {str(e)}",
+                detail=f"Health check failed: {e!s}",
             )
 
     # ========================================================================
@@ -190,7 +190,7 @@ def create_metrics_router(
         try:
             # Default to last hour if not specified
             if not end_time:
-                end_time = datetime.now(timezone.utc)
+                end_time = datetime.now(UTC)
             if not start_time:
                 start_time = end_time - timedelta(hours=1)
 
@@ -224,7 +224,7 @@ def create_metrics_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve performance metrics: {str(e)}",
+                detail=f"Failed to retrieve performance metrics: {e!s}",
             )
 
     # ========================================================================
@@ -265,7 +265,7 @@ def create_metrics_router(
         try:
             # Default to last hour
             if not end_time:
-                end_time = datetime.now(timezone.utc)
+                end_time = datetime.now(UTC)
             if not start_time:
                 start_time = end_time - timedelta(hours=1)
 
@@ -309,7 +309,7 @@ def create_metrics_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve resilience metrics: {str(e)}",
+                detail=f"Failed to retrieve resilience metrics: {e!s}",
             )
 
     # ========================================================================
@@ -371,7 +371,7 @@ def create_metrics_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve integration status: {str(e)}",
+                detail=f"Failed to retrieve integration status: {e!s}",
             )
 
     # ========================================================================
@@ -426,7 +426,7 @@ def create_metrics_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve simulation mode info: {str(e)}",
+                detail=f"Failed to retrieve simulation mode info: {e!s}",
             )
 
     # ========================================================================
@@ -463,7 +463,7 @@ def create_metrics_router(
         try:
             # Default to last hour
             if not end_time:
-                end_time = datetime.now(timezone.utc)
+                end_time = datetime.now(UTC)
             if not start_time:
                 start_time = end_time - timedelta(hours=1)
 
@@ -506,7 +506,7 @@ def create_metrics_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve endpoint metrics: {str(e)}",
+                detail=f"Failed to retrieve endpoint metrics: {e!s}",
             )
 
     @router.get(
@@ -539,7 +539,7 @@ def create_metrics_router(
         try:
             # Default to last hour
             if not end_time:
-                end_time = datetime.now(timezone.utc)
+                end_time = datetime.now(UTC)
             if not start_time:
                 start_time = end_time - timedelta(hours=1)
 
@@ -582,7 +582,7 @@ def create_metrics_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve agent execution metrics: {str(e)}",
+                detail=f"Failed to retrieve agent execution metrics: {e!s}",
             )
 
     # ========================================================================
@@ -622,7 +622,7 @@ def create_metrics_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to list metric names: {str(e)}",
+                detail=f"Failed to list metric names: {e!s}",
             )
 
     # ========================================================================
@@ -680,7 +680,7 @@ def create_metrics_router(
                     project=agent_data.get("project", ""),
                     issueNumber=agent_data.get("issue_number"),
                     status=agent_data.get("status", "unknown"),
-                    startedAt=agent_data.get("started_at", datetime.now(timezone.utc)),
+                    startedAt=agent_data.get("started_at", datetime.now(UTC)),
                     containerName=agent_data.get("container_name"),
                 ))
 
@@ -692,7 +692,7 @@ def create_metrics_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve active agents: {str(e)}",
+                detail=f"Failed to retrieve active agents: {e!s}",
             )
 
     # ========================================================================
@@ -760,7 +760,7 @@ def create_metrics_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve API usage: {str(e)}",
+                detail=f"Failed to retrieve API usage: {e!s}",
             )
 
     # ========================================================================
@@ -805,7 +805,7 @@ def create_metrics_router(
         try:
             # Default to last hour
             if not end_time:
-                end_time = datetime.now(timezone.utc)
+                end_time = datetime.now(UTC)
             if not start_time:
                 start_time = end_time - timedelta(hours=1)
 
@@ -890,7 +890,7 @@ def create_metrics_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve repair cycle metrics: {str(e)}",
+                detail=f"Failed to retrieve repair cycle metrics: {e!s}",
             )
 
     return router

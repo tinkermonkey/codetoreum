@@ -1,10 +1,11 @@
 """Elasticsearch event store adapter for production persistence."""
 
 import logging
-from datetime import datetime, timezone
-from typing import Any, AsyncIterator, Dict, List, Optional
+from collections.abc import AsyncIterator
+from datetime import datetime
+from typing import Any
 
-from elasticsearch import AsyncElasticsearch, NotFoundError
+from elasticsearch import AsyncElasticsearch
 
 from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.event_serialization import EventSerializer
@@ -124,8 +125,8 @@ class ElasticsearchEventStore(IEventStore):
     async def append(
         self,
         stream_id: str,
-        events: List[DomainEvent],
-        expected_version: Optional[int] = None,
+        events: list[DomainEvent],
+        expected_version: int | None = None,
     ) -> None:
         """
         Append events to a stream.
@@ -202,8 +203,8 @@ class ElasticsearchEventStore(IEventStore):
         self,
         stream_id: str,
         from_version: int = 0,
-        to_version: Optional[int] = None,
-    ) -> List[DomainEvent]:
+        to_version: int | None = None,
+    ) -> list[DomainEvent]:
         """
         Get events from a stream.
 
@@ -253,9 +254,8 @@ class ElasticsearchEventStore(IEventStore):
                 if from_version == 0:
                     # No events yet, that's ok
                     return []
-                else:
-                    # Stream should exist but doesn't
-                    raise ResourceNotFoundError("Stream", stream_id)
+                # Stream should exist but doesn't
+                raise ResourceNotFoundError("Stream", stream_id)
 
             # Convert to domain events
             events = [EventSerializer.from_dict(hit["_source"]) for hit in hits]
@@ -270,8 +270,8 @@ class ElasticsearchEventStore(IEventStore):
     async def get_events_since(
         self,
         since: datetime,
-        stream_id: Optional[str] = None,
-    ) -> List[DomainEvent]:
+        stream_id: str | None = None,
+    ) -> list[DomainEvent]:
         """
         Get events since a timestamp.
 
@@ -315,7 +315,7 @@ class ElasticsearchEventStore(IEventStore):
 
     async def stream_events(
         self,
-        stream_id: Optional[str] = None,
+        stream_id: str | None = None,
         from_version: int = 0,
     ) -> AsyncIterator[DomainEvent]:
         """
@@ -417,7 +417,7 @@ class ElasticsearchEventStore(IEventStore):
         self,
         stream_id: str,
         version: int,
-        snapshot: Dict[str, Any],
+        snapshot: dict[str, Any],
     ) -> None:
         """
         Save a snapshot for faster replay.
@@ -433,12 +433,11 @@ class ElasticsearchEventStore(IEventStore):
         # Snapshots could be stored in a separate index: snapshots-{prefix}
         # For now, we'll skip snapshot implementation
         # TODO: Implement snapshot support
-        pass
 
     async def get_latest_snapshot(
         self,
         stream_id: str,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Get most recent snapshot.
 
@@ -490,8 +489,8 @@ class ElasticsearchEventStore(IEventStore):
 
     async def get_all_stream_ids(
         self,
-        aggregate_type: Optional[str] = None,
-    ) -> List[str]:
+        aggregate_type: str | None = None,
+    ) -> list[str]:
         """
         Get all stream IDs.
 
@@ -509,7 +508,7 @@ class ElasticsearchEventStore(IEventStore):
 
         try:
             # Build query
-            query: Dict[str, Any] = {"match_all": {}}
+            query: dict[str, Any] = {"match_all": {}}
 
             if aggregate_type:
                 query = {"term": {"aggregate_type": aggregate_type}}
@@ -537,13 +536,13 @@ class ElasticsearchEventStore(IEventStore):
     async def query_streams_by_latest_event(
         self,
         aggregate_type: str,
-        event_type_filters: Optional[List[str]] = None,
-        event_data_filters: Optional[Dict[str, Any]] = None,
+        event_type_filters: list[str] | None = None,
+        event_data_filters: dict[str, Any] | None = None,
         sort_by: str = "timestamp",
         sort_order: str = "desc",
         offset: int = 0,
         limit: int = 100,
-    ) -> tuple[List[str], int]:
+    ) -> tuple[list[str], int]:
         """
         Query stream IDs by analyzing their latest events with filtering at DB level.
 
@@ -680,9 +679,9 @@ class ElasticsearchEventStore(IEventStore):
     async def get_events_by_type(
         self,
         event_type: str,
-        since: Optional[datetime] = None,
+        since: datetime | None = None,
         limit: int = 1000,
-    ) -> List[DomainEvent]:
+    ) -> list[DomainEvent]:
         """
         Get events by event type.
 
@@ -730,7 +729,7 @@ class ElasticsearchEventStore(IEventStore):
     async def get_events_by_correlation_id(
         self,
         correlation_id: str,
-    ) -> List[DomainEvent]:
+    ) -> list[DomainEvent]:
         """
         Get all events with a specific correlation ID.
 
@@ -768,7 +767,7 @@ class ElasticsearchEventStore(IEventStore):
         self,
         stream_id: str,
         from_version: int = 0,
-        to_version: Optional[int] = None,
+        to_version: int | None = None,
     ) -> AsyncIterator[DomainEvent]:
         """
         Replay events from a stream for debugging/recovery.
@@ -802,7 +801,7 @@ class ElasticsearchEventStore(IEventStore):
         except Exception as e:
             raise EventStoreError(f"Failed to replay events: {e}") from e
 
-    async def get_statistics(self) -> Dict[str, Any]:
+    async def get_statistics(self) -> dict[str, Any]:
         """
         Get event store statistics.
 
@@ -863,7 +862,7 @@ class ElasticsearchEventStore(IEventStore):
         """
         return f"{self.index_prefix}-{timestamp.strftime('%Y.%m')}"
 
-    async def _get_all_events(self, from_version: int = 0) -> List[DomainEvent]:
+    async def _get_all_events(self, from_version: int = 0) -> list[DomainEvent]:
         """
         Get all events across all streams.
 

@@ -5,7 +5,7 @@ import logging
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from codetoreum.domain.agent import Agent
 from codetoreum.domain.exceptions import DomainError
@@ -16,7 +16,7 @@ from codetoreum.domain.services.execution_context_builder import (
 from codetoreum.domain.types import WorkItemId
 from codetoreum.domain.value_objects import ExecutionContext
 from codetoreum.domain.work_item import WorkItem
-from codetoreum.domain.workspace_context import WorkspaceContext, WorkspaceType
+from codetoreum.domain.workspace_context import WorkspaceContext
 from codetoreum.ports.exceptions import ResourceNotFoundError, TicketSystemError
 from codetoreum.ports.output import IStorage, ITicketSystem
 
@@ -37,9 +37,9 @@ class WorkspaceContextResult:
     """Result of building workspace context."""
 
     success: bool
-    context_files: List[ContextFile]
-    workspace_path: Optional[Path] = None
-    error: Optional[str] = None
+    context_files: list[ContextFile]
+    workspace_path: Path | None = None
+    error: str | None = None
 
 
 class ContextBuilder:
@@ -58,7 +58,7 @@ class ContextBuilder:
         self,
         ticket_system: ITicketSystem,
         storage: IStorage,
-        workspace_base_path: Optional[Path] = None,
+        workspace_base_path: Path | None = None,
     ):
         """
         Initialize ContextBuilder.
@@ -80,8 +80,8 @@ class ContextBuilder:
         agent: Agent,
         project: ProjectContext,
         workspace: WorkspaceContext,
-        previous_session_id: Optional[str] = None,
-        additional_metadata: Optional[Dict[str, Any]] = None,
+        previous_session_id: str | None = None,
+        additional_metadata: dict[str, Any] | None = None,
     ) -> ExecutionContext:
         """
         Build complete execution context.
@@ -144,7 +144,7 @@ class ContextBuilder:
 
     async def fetch_work_item_details(
         self, work_item_id: str
-    ) -> Optional[WorkItem]:
+    ) -> WorkItem | None:
         """
         Fetch detailed work item information from ticket system.
 
@@ -188,7 +188,7 @@ class ContextBuilder:
         agent: Agent,
         project: ProjectContext,
         workspace: WorkspaceContext,
-        previous_output: Optional[str] = None,
+        previous_output: str | None = None,
     ) -> WorkspaceContextResult:
         """
         Build workspace context files for execution.
@@ -215,7 +215,7 @@ class ContextBuilder:
                 f"workspace type {workspace.workspace_type.value}"
             )
 
-            context_files: List[ContextFile] = []
+            context_files: list[ContextFile] = []
 
             # Create issue context file
             issue_content = self._format_work_item_context(work_item)
@@ -299,7 +299,7 @@ class ContextBuilder:
     async def write_context_files(
         self,
         workspace_path: Path,
-        context_files: List[ContextFile],
+        context_files: list[ContextFile],
     ) -> bool:
         """
         Write context files to disk for mounting.
@@ -362,9 +362,8 @@ class ContextBuilder:
                 shutil.rmtree(workspace_path)
                 logger.info(f"Cleaned up workspace: {workspace_path}")
                 return True
-            else:
-                logger.debug(f"Workspace {workspace_path} does not exist, skipping cleanup")
-                return True
+            logger.debug(f"Workspace {workspace_path} does not exist, skipping cleanup")
+            return True
 
         except OSError as e:
             logger.error(
@@ -433,7 +432,7 @@ class ContextBuilder:
 
         return "\n".join(lines)
 
-    def _format_project_context(self, project: ProjectContext) -> Dict[str, Any]:
+    def _format_project_context(self, project: ProjectContext) -> dict[str, Any]:
         """
         Format project context as dictionary.
 
@@ -459,7 +458,7 @@ class ContextBuilder:
             "mcp_servers": project.mcp_servers,
         }
 
-    def _format_agent_context(self, agent: Agent) -> Dict[str, Any]:
+    def _format_agent_context(self, agent: Agent) -> dict[str, Any]:
         """
         Format agent context as dictionary.
 
@@ -492,7 +491,7 @@ class ContextBuilder:
 
     def _format_workspace_context(
         self, workspace: WorkspaceContext
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Format workspace context as dictionary.
 
@@ -516,7 +515,7 @@ class ContextBuilder:
 
     async def gather_previous_stage_context(
         self, workflow_id: str, current_stage: str
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Gather context from previous pipeline stages.
 

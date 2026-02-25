@@ -18,7 +18,6 @@ from codetoreum.adapters.testing import (
     InMemoryEventStore,
     InMemoryRepositoryAdapter,
     InMemoryTicketAdapter,
-    MockLLMAdapter,
 )
 from codetoreum.infrastructure.adapters import AdapterFactory, AdapterFactoryConfig
 from codetoreum.infrastructure.resilience import (

@@ -2,7 +2,7 @@
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from codetoreum.domain.agent import Agent
 from codetoreum.domain.agent_execution import AgentExecution
@@ -10,7 +10,6 @@ from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.review_cycle import (
     ReviewCycle,
     ReviewDecision,
-    ReviewFeedback,
     ReviewStatus,
 )
 from codetoreum.ports.exceptions import EventStoreError
@@ -25,8 +24,8 @@ class ReviewCycleResult:
 
     success: bool
     review_cycle: ReviewCycle
-    reason: Optional[str] = None
-    error: Optional[str] = None
+    reason: str | None = None
+    error: str | None = None
 
 
 @dataclass
@@ -36,10 +35,10 @@ class ReviewIterationResult:
     success: bool
     should_continue: bool  # True if needs another iteration
     review_cycle: ReviewCycle
-    maker_execution: Optional[AgentExecution] = None
-    reviewer_execution: Optional[AgentExecution] = None
-    reason: Optional[str] = None
-    error: Optional[str] = None
+    maker_execution: AgentExecution | None = None
+    reviewer_execution: AgentExecution | None = None
+    reason: str | None = None
+    error: str | None = None
 
 
 @dataclass
@@ -50,7 +49,7 @@ class ReviewCompletionResult:
     review_cycle: ReviewCycle
     approved: bool
     escalated: bool
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 class ReviewService:
@@ -217,8 +216,8 @@ class ReviewService:
         decision: ReviewDecision,
         comment: str,
         reviewer_execution: AgentExecution,
-        issues: Optional[List[str]] = None,
-        suggestions: Optional[List[str]] = None,
+        issues: list[str] | None = None,
+        suggestions: list[str] | None = None,
     ) -> ReviewCycleResult:
         """
         Submit reviewer's feedback for current iteration.
@@ -359,53 +358,51 @@ class ReviewService:
                     escalated=False,
                     reason="Review approved",
                 )
-            else:
-                # Check if should escalate
-                should_escalate = await self.should_escalate(review_cycle)
+            # Check if should escalate
+            should_escalate = await self.should_escalate(review_cycle)
 
-                if should_escalate:
-                    # Either already escalated or needs escalation
-                    if not review_cycle.is_complete():
-                        reason = (
-                            f"Max iterations reached ({review_cycle.max_iterations})"
-                            if review_cycle.current_iteration >= review_cycle.max_iterations
-                            else "Reviewer requested escalation"
-                        )
-                        review_cycle.escalate(reason)
-
-                        # Persist events
-                        events = review_cycle.get_pending_events()
-                        for event in events:
-                            await self.event_store.append(event.aggregate_id, [event])
-                        review_cycle.clear_events()
-
-                        logger.warning(
-                            f"Review cycle {review_cycle.id} escalated to human: {reason}",
-                            extra={"error_id": "ERR_REVIEW_ESCALATED_TO_HUMAN"}
-                        )
-
-                    # Return escalation result (either just escalated or already was)
-                    return ReviewCompletionResult(
-                        success=True,
-                        review_cycle=review_cycle,
-                        approved=False,
-                        escalated=True,
-                        reason=review_cycle.escalation_reason or "Escalated to human",
+            if should_escalate:
+                # Either already escalated or needs escalation
+                if not review_cycle.is_complete():
+                    reason = (
+                        f"Max iterations reached ({review_cycle.max_iterations})"
+                        if review_cycle.current_iteration >= review_cycle.max_iterations
+                        else "Reviewer requested escalation"
                     )
-                else:
-                    # Not complete, needs another iteration
-                    logger.info(
-                        f"Review cycle {review_cycle.id} needs maker revision "
-                        f"(iteration {review_cycle.current_iteration})"
+                    review_cycle.escalate(reason)
+
+                    # Persist events
+                    events = review_cycle.get_pending_events()
+                    for event in events:
+                        await self.event_store.append(event.aggregate_id, [event])
+                    review_cycle.clear_events()
+
+                    logger.warning(
+                        f"Review cycle {review_cycle.id} escalated to human: {reason}",
+                        extra={"error_id": "ERR_REVIEW_ESCALATED_TO_HUMAN"}
                     )
 
-                    return ReviewCompletionResult(
-                        success=True,
-                        review_cycle=review_cycle,
-                        approved=False,
-                        escalated=False,
-                        reason="Changes requested, needs maker revision",
-                    )
+                # Return escalation result (either just escalated or already was)
+                return ReviewCompletionResult(
+                    success=True,
+                    review_cycle=review_cycle,
+                    approved=False,
+                    escalated=True,
+                    reason=review_cycle.escalation_reason or "Escalated to human",
+                )
+            # Not complete, needs another iteration
+            logger.info(
+                f"Review cycle {review_cycle.id} needs maker revision "
+                f"(iteration {review_cycle.current_iteration})"
+            )
+
+            return ReviewCompletionResult(
+                success=True,
+                review_cycle=review_cycle,
+                approved=False,
+                escalated=False,
+                reason="Changes requested, needs maker revision",
+            )
 
         except EventStoreError as e:
             logger.error(
@@ -426,7 +423,7 @@ class ReviewService:
             )
             raise
 
-    def get_review_status(self, review_cycle: ReviewCycle) -> Dict[str, Any]:
+    def get_review_status(self, review_cycle: ReviewCycle) -> dict[str, Any]:
         """
         Get current status of review cycle.
 

@@ -2,9 +2,9 @@
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, cast
 
 from codetoreum.domain.events import (
     PipelineCompleted,
@@ -15,7 +15,6 @@ from codetoreum.domain.events import (
 )
 from codetoreum.domain.pipeline_stage import PipelineStage, StageStatus
 from codetoreum.domain.workflow import Workflow
-from codetoreum.ports.exceptions import EventStoreError, PortError
 from codetoreum.ports.output import IEventStore
 
 logger = logging.getLogger(__name__)
@@ -43,12 +42,12 @@ class StageOutput:
     stage_name: str
     success: bool
     data: Any  # Stage-specific output data
-    artifacts: Dict[str, str] = field(default_factory=dict)  # artifact_name -> path
-    metrics: Dict[str, float] = field(default_factory=dict)  # metric_name -> value
-    error: Optional[str] = None
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    artifacts: dict[str, str] = field(default_factory=dict)  # artifact_name -> path
+    metrics: dict[str, float] = field(default_factory=dict)  # metric_name -> value
+    error: str | None = None
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for context propagation."""
         return {
             "stage_name": self.stage_name,
@@ -66,13 +65,13 @@ class PipelineCheckpoint:
     """Pipeline checkpoint for recovery."""
 
     pipeline_id: str
-    current_stage: Optional[str]
-    completed_stages: List[str]
-    failed_stages: List[str]
+    current_stage: str | None
+    completed_stages: list[str]
+    failed_stages: list[str]
     status: PipelineStatus
-    context: Dict[str, Any]
+    context: dict[str, Any]
     timestamp: datetime
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -81,12 +80,12 @@ class PipelineResult:
 
     success: bool
     status: PipelineStatus
-    completed_stages: List[str]
-    failed_stages: List[str]
-    outputs: Dict[str, Any]  # stage_name -> output
-    errors: Dict[str, str]  # stage_name -> error
+    completed_stages: list[str]
+    failed_stages: list[str]
+    outputs: dict[str, Any]  # stage_name -> output
+    errors: dict[str, str]  # stage_name -> error
     duration_seconds: float
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
 
 @dataclass
@@ -95,10 +94,10 @@ class StageResult:
 
     success: bool
     stage_name: str
-    output: Optional[str]
-    error: Optional[str]
+    output: str | None
+    error: str | None
     duration_seconds: float
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
 
 # ============================================================================
@@ -124,7 +123,7 @@ class PipelineManager:
     def __init__(
         self,
         event_store: IEventStore,
-        checkpoint_store: Optional[Any] = None,
+        checkpoint_store: Any | None = None,
     ):
         """
         Initialize PipelineManager.
@@ -163,7 +162,7 @@ class PipelineManager:
     async def execute_pipeline(
         self,
         workflow: Workflow,
-        context: Dict[str, Any],
+        context: dict[str, Any],
         resume_from_checkpoint: bool = False,
     ) -> PipelineResult:
         """
@@ -190,7 +189,7 @@ class PipelineManager:
             f"resume={resume_from_checkpoint}"
         )
 
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         # Initialize tracking
         completed_stages = []
@@ -271,7 +270,7 @@ class PipelineManager:
                         failed_stages=failed_stages,
                         status=PipelineStatus.RUNNING,
                         context=context,
-                        timestamp=datetime.now(timezone.utc),
+                        timestamp=datetime.now(UTC),
                         metadata={
                             "last_stage": stage.name,
                             "stage_result": stage_result.success,
@@ -287,22 +286,21 @@ class PipelineManager:
                             f"Parallel stage {stage.name} failed, continuing"
                         )
                         continue
-                    else:
-                        # For sequential stages, stop pipeline and cleanup
-                        self._logger.error(
-                            f"Sequential stage {stage.name} failed, stopping pipeline",
-                            extra={"error_id": "ERR_PIPELINE_SEQUENTIAL_STAGE_FAILURE"}
-                        )
-                        # Cleanup partial state
-                        await self._cleanup_failed_pipeline(
-                            pipeline_id, context, completed_stages, failed_stages
-                        )
-                        raise Exception(
-                            f"Stage {stage.name} failed: {stage_result.error}"
-                        )
+                    # For sequential stages, stop pipeline and cleanup
+                    self._logger.error(
+                        f"Sequential stage {stage.name} failed, stopping pipeline",
+                        extra={"error_id": "ERR_PIPELINE_SEQUENTIAL_STAGE_FAILURE"}
+                    )
+                    # Cleanup partial state
+                    await self._cleanup_failed_pipeline(
+                        pipeline_id, context, completed_stages, failed_stages
+                    )
+                    raise Exception(
+                        f"Stage {stage.name} failed: {stage_result.error}"
+                    )
 
             # All stages completed
-            duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+            duration = (datetime.now(UTC) - start_time).total_seconds()
 
             # Emit completion event
             await self._emit_pipeline_completed(
@@ -324,7 +322,7 @@ class PipelineManager:
             )
 
         except Exception as e:
-            duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+            duration = (datetime.now(UTC) - start_time).total_seconds()
             self._logger.error(
                 f"Pipeline execution failed: {e}",
                 exc_info=True,
@@ -353,8 +351,8 @@ class PipelineManager:
     async def execute_stage(
         self,
         stage: PipelineStage,
-        context: Dict[str, Any],
-        workflow_id: Optional[str] = None,
+        context: dict[str, Any],
+        workflow_id: str | None = None,
     ) -> StageResult:
         """
         Execute single pipeline stage.
@@ -376,7 +374,7 @@ class PipelineManager:
             f"status={stage.status.value}"
         )
 
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         try:
             # Mark stage as ready if pending
@@ -403,7 +401,7 @@ class PipelineManager:
             output = f"Output from stage {stage.name}"
             stage.complete(output)
 
-            duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+            duration = (datetime.now(UTC) - start_time).total_seconds()
 
             # Emit stage completed event
             await self._emit_stage_completed(
@@ -423,7 +421,7 @@ class PipelineManager:
             )
 
         except Exception as e:
-            duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+            duration = (datetime.now(UTC) - start_time).total_seconds()
             self._logger.error(
                 f"Stage execution failed: stage={stage.name}, error={e}",
                 exc_info=True,
@@ -480,7 +478,7 @@ class PipelineManager:
         else:
             self._logger.debug("No checkpoint store configured, skipping")
 
-    async def recover(self, pipeline_id: str) -> Optional[PipelineCheckpoint]:
+    async def recover(self, pipeline_id: str) -> PipelineCheckpoint | None:
         """
         Recover pipeline from checkpoint.
 
@@ -497,15 +495,14 @@ class PipelineManager:
 
         if self.checkpoint_store:
             try:
-                checkpoint = cast(Optional[PipelineCheckpoint], await self.checkpoint_store.load_checkpoint(pipeline_id))
+                checkpoint = cast("PipelineCheckpoint | None", await self.checkpoint_store.load_checkpoint(pipeline_id))
                 if checkpoint:
                     self._logger.info(
                         f"Recovered checkpoint: completed={len(checkpoint.completed_stages)}"
                     )
                     return checkpoint
-                else:
-                    self._logger.info("No checkpoint found")
-                    return None
+                self._logger.info("No checkpoint found")
+                return None
             except Exception as e:
                 self._logger.error(
                     f"Failed to recover checkpoint: {e}",
@@ -522,7 +519,7 @@ class PipelineManager:
     # ========================================================================
 
     async def _emit_stage_started(
-        self, stage: PipelineStage, workflow_id: str, context: Dict[str, Any]
+        self, stage: PipelineStage, workflow_id: str, context: dict[str, Any]
     ) -> None:
         """Emit stage started event."""
         event = PipelineStageStarted(
@@ -532,7 +529,7 @@ class PipelineManager:
             stage_type=stage.stage_type.value,
             agent_config=stage.agent_config,
             execution_id=stage.execution_id or "",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
         await self._emit_event_safely(event)
 
@@ -551,7 +548,7 @@ class PipelineManager:
             execution_id=stage.execution_id or "",
             output=output,
             duration_seconds=duration_seconds,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
         await self._emit_event_safely(event)
 
@@ -570,7 +567,7 @@ class PipelineManager:
             execution_id=stage.execution_id or "",
             error=error,
             duration_seconds=duration_seconds,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
         await self._emit_event_safely(event)
 
@@ -578,8 +575,8 @@ class PipelineManager:
         self,
         pipeline_id: str,
         workflow: Workflow,
-        completed_stages: List[str],
-        outputs: Dict[str, Any],
+        completed_stages: list[str],
+        outputs: dict[str, Any],
         duration_seconds: float,
     ) -> None:
         """Emit pipeline completed event."""
@@ -590,7 +587,7 @@ class PipelineManager:
             completed_stages=completed_stages,
             outputs=outputs,
             duration_seconds=duration_seconds,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
         await self._emit_event_safely(event)
 
@@ -599,8 +596,8 @@ class PipelineManager:
         pipeline_id: str,
         workflow: Workflow,
         error: str,
-        completed_stages: List[str],
-        failed_stages: List[str],
+        completed_stages: list[str],
+        failed_stages: list[str],
     ) -> None:
         """Emit pipeline failed event."""
         event = PipelineFailed(
@@ -610,16 +607,16 @@ class PipelineManager:
             error=error,
             completed_stages=completed_stages,
             failed_stages=failed_stages,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
         await self._emit_event_safely(event)
 
     async def _cleanup_failed_pipeline(
         self,
         pipeline_id: str,
-        context: Dict[str, Any],
-        completed_stages: List[str],
-        failed_stages: List[str],
+        context: dict[str, Any],
+        completed_stages: list[str],
+        failed_stages: list[str],
     ) -> None:
         """
         Cleanup resources and partial state from failed pipeline.
@@ -639,8 +636,7 @@ class PipelineManager:
             # Clear stage outputs from context to prevent stale data
             for stage_name in completed_stages + failed_stages:
                 output_key = f"{stage_name}_output"
-                if output_key in context:
-                    del context[output_key]
+                context.pop(output_key, None)
 
             # TODO: Add rollback logic for specific stages if needed
             # This could include:

@@ -4,9 +4,6 @@ import pytest
 
 from codetoreum.application.feedback_processor import (
     FeedbackProcessor,
-    FeedbackType,
-    ParsedFeedback,
-    ParsedIssue,
     Severity,
 )
 from codetoreum.domain.review_cycle import ReviewDecision

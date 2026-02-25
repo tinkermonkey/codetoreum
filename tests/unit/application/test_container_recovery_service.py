@@ -7,8 +7,8 @@ These tests verify:
 - Error handling and recovery
 """
 
-from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime, timedelta
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -23,7 +23,6 @@ from codetoreum.domain.events.container_recovery_events import (
     ContainerRecoveredEvent,
     ContainerRecoveryCompletedEvent,
 )
-from codetoreum.ports.output.container_recovery import ContainerMetadata
 
 
 class TestContainerRecoveryServiceInitialization:
@@ -436,7 +435,7 @@ class TestCalculateUptimeSeconds:
 
     def test_calculate_uptime_seconds_current(self):
         """Should calculate uptime correctly for recently created container."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         created_at = now - timedelta(seconds=30)
 
         uptime = ContainerRecoveryService._calculate_uptime_seconds(created_at)
@@ -446,7 +445,7 @@ class TestCalculateUptimeSeconds:
 
     def test_calculate_uptime_seconds_hours(self):
         """Should calculate uptime correctly for container hours old."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         created_at = now - timedelta(hours=2)
 
         uptime = ContainerRecoveryService._calculate_uptime_seconds(created_at)
@@ -457,7 +456,7 @@ class TestCalculateUptimeSeconds:
 
     def test_calculate_uptime_seconds_very_new(self):
         """Should handle containers created less than a second ago."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         created_at = now
 
         uptime = ContainerRecoveryService._calculate_uptime_seconds(created_at)

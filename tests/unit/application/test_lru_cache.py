@@ -9,7 +9,7 @@ Tests cover:
 """
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -164,9 +164,9 @@ class TestTTLExpiration:
         """Test TTL expiration using time mocking."""
         cache = LRUCache(max_size=10, ttl_seconds=300)
 
-        base_time = datetime.now(timezone.utc)
+        base_time = datetime.now(UTC)
 
-        with patch('codetoreum.application.workflow_run_query_service.datetime') as mock_datetime:
+        with patch("codetoreum.application.workflow_run_query_service.datetime") as mock_datetime:
             # Set initial time
             mock_datetime.now.return_value = base_time
             await cache.set("key1", "value1")

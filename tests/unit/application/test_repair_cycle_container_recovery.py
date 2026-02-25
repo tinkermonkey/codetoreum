@@ -9,7 +9,7 @@ These tests verify:
 - Integration with checkpoint store
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -26,7 +26,6 @@ from codetoreum.adapters.testing.in_memory_checkpoint_store import (
 from codetoreum.ports.exceptions import StorageError
 from codetoreum.ports.output.container_recovery import (
     ContainerMetadata,
-    RecoveryAssessment,
 )
 
 
@@ -131,7 +130,7 @@ class TestRepairCycleContainerAssessment:
             project_id="proj-1",
             agent_id="repair-agent",
             task_id="task-1",
-            created_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            created_at=datetime.now(UTC) - timedelta(hours=1),
             labels=MappingProxyType({
                 "org.codetoreum.type": "repair-cycle",
                 "org.codetoreum.project": "proj-1",
@@ -170,7 +169,7 @@ class TestRepairCycleContainerAssessment:
             project_id="proj-1",
             agent_id="repair-agent",
             task_id="task-1",
-            created_at=datetime.now(timezone.utc) - timedelta(hours=3),  # 3h old
+            created_at=datetime.now(UTC) - timedelta(hours=3),  # 3h old
             labels=MappingProxyType({
                 "org.codetoreum.type": "repair-cycle",
                 "org.codetoreum.project": "proj-1",
@@ -209,7 +208,7 @@ class TestRepairCycleContainerAssessment:
             project_id="proj-1",
             agent_id="repair-agent",
             task_id="task-1",
-            created_at=datetime.now(timezone.utc) - timedelta(minutes=30),  # 30 min
+            created_at=datetime.now(UTC) - timedelta(minutes=30),  # 30 min
             labels=MappingProxyType({
                 "org.codetoreum.type": "repair-cycle",
                 "org.codetoreum.project": "proj-1",
@@ -245,7 +244,7 @@ class TestRepairCycleContainerAssessment:
             project_id="proj-1",
             agent_id="repair-agent",
             task_id="task-1",
-            created_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            created_at=datetime.now(UTC) - timedelta(hours=1),
             labels=MappingProxyType({
                 "org.codetoreum.type": "repair-cycle",
                 "org.codetoreum.project": "proj-1",
@@ -269,11 +268,11 @@ class TestCheckpointStalenessThresholds:
 
     def test_checkpoint_staleness_threshold_is_60_minutes(self):
         """CHECKPOINT_STALENESS_THRESHOLD should be 60 minutes."""
-        assert CHECKPOINT_STALENESS_THRESHOLD == timedelta(minutes=60)
+        assert timedelta(minutes=60) == CHECKPOINT_STALENESS_THRESHOLD
 
     def test_repair_cycle_age_threshold_is_2_hours(self):
         """REPAIR_CYCLE_AGE_THRESHOLD should be 2 hours."""
-        assert REPAIR_CYCLE_AGE_THRESHOLD == timedelta(hours=2)
+        assert timedelta(hours=2) == REPAIR_CYCLE_AGE_THRESHOLD
 
 
 class TestOrphanedRepairResultsProcessing:

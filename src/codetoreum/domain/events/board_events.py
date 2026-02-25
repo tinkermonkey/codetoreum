@@ -10,7 +10,7 @@ Terminology (vendor-agnostic):
 """
 
 from dataclasses import dataclass
-from typing import Literal, Optional, Tuple
+from typing import Literal
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
@@ -146,8 +146,8 @@ class BoardReconciledEvent(CodetoreumEvent):
 
     project_id: str = ""
     board_id: str = ""
-    columns_added: Tuple[str, ...] = ()
-    columns_removed: Tuple[str, ...] = ()
+    columns_added: tuple[str, ...] = ()
+    columns_removed: tuple[str, ...] = ()
     items_moved: int = 0
 
     def __post_init__(self) -> None:

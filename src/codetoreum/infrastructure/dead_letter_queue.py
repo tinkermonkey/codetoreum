@@ -5,11 +5,11 @@ Handles failed events with retry logic and persistent storage.
 
 import asyncio
 import logging
-import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 from uuid import uuid4
 
 from codetoreum.infrastructure.error_ids import ErrorRegistry
@@ -35,15 +35,15 @@ class FailedEvent:
     """
     id: str
     event_type: str
-    event_data: Dict[str, Any]
+    event_data: dict[str, Any]
     failure_reason: FailureReason
     error_message: str
     failed_at: datetime
     retry_count: int = 0
     max_retries: int = 3
-    next_retry_at: Optional[datetime] = None
-    last_retry_at: Optional[datetime] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    next_retry_at: datetime | None = None
+    last_retry_at: datetime | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def can_retry(self) -> bool:
         """Check if event can be retried (has retries left)."""
@@ -61,7 +61,7 @@ class FailedEvent:
         if not self.can_retry():
             return False
 
-        if self.next_retry_at and datetime.now(timezone.utc) < self.next_retry_at:
+        if self.next_retry_at and datetime.now(UTC) < self.next_retry_at:
             return False
 
         return True
@@ -81,7 +81,7 @@ class FailedEvent:
         # Cap at 1 hour
         delay_seconds = min(delay_seconds, 3600)
 
-        return datetime.now(timezone.utc) + timedelta(seconds=delay_seconds)
+        return datetime.now(UTC) + timedelta(seconds=delay_seconds)
 
 
 @dataclass
@@ -93,9 +93,9 @@ class DeadLetterQueueStats:
     total_retries_attempted: int
     total_retries_succeeded: int
     total_retries_failed: int
-    oldest_event: Optional[datetime] = None
-    newest_event: Optional[datetime] = None
-    failure_reasons: Dict[str, int] = field(default_factory=dict)
+    oldest_event: datetime | None = None
+    newest_event: datetime | None = None
+    failure_reasons: dict[str, int] = field(default_factory=dict)
 
 
 class DeadLetterQueue:
@@ -120,7 +120,7 @@ class DeadLetterQueue:
 
     def __init__(
         self,
-        storage: Optional[Dict[str, FailedEvent]] = None,
+        storage: dict[str, FailedEvent] | None = None,
         max_retries: int = 3,
         base_delay_seconds: float = 60.0,
         exponential_base: float = 2.0,
@@ -136,7 +136,7 @@ class DeadLetterQueue:
             exponential_base: Base for exponential calculation
             retry_interval_seconds: How often to check for retryable events
         """
-        self._storage: Dict[str, FailedEvent] = storage if storage is not None else {}
+        self._storage: dict[str, FailedEvent] = storage if storage is not None else {}
         self._max_retries = max_retries
         self._base_delay_seconds = base_delay_seconds
         self._exponential_base = exponential_base
@@ -148,17 +148,17 @@ class DeadLetterQueue:
         self._total_retries_failed = 0
 
         # Retry processing
-        self._retry_task: Optional[asyncio.Task] = None
+        self._retry_task: asyncio.Task | None = None
         self._running = False
-        self._retry_handler: Optional[Callable] = None
+        self._retry_handler: Callable | None = None
 
     async def add_failed_event(
         self,
         event_type: str,
-        event_data: Dict[str, Any],
+        event_data: dict[str, Any],
         failure_reason: FailureReason,
         error_message: str,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: dict[str, Any] | None = None
     ) -> str:
         """
         Add a failed event to the queue.
@@ -181,7 +181,7 @@ class DeadLetterQueue:
             event_data=event_data,
             failure_reason=failure_reason,
             error_message=error_message,
-            failed_at=datetime.now(timezone.utc),
+            failed_at=datetime.now(UTC),
             max_retries=self._max_retries,
             metadata=metadata or {}
         )
@@ -220,7 +220,7 @@ class DeadLetterQueue:
 
         self._total_retries_attempted += 1
         event.retry_count += 1
-        event.last_retry_at = datetime.now(timezone.utc)
+        event.last_retry_at = datetime.now(UTC)
 
         try:
             # Call the retry handler
@@ -345,7 +345,7 @@ class DeadLetterQueue:
         newest_event = max((e.failed_at for e in events), default=None)
 
         # Count failure reasons
-        failure_reasons: Dict[str, int] = {}
+        failure_reasons: dict[str, int] = {}
         for event in events:
             reason = event.failure_reason.value
             failure_reasons[reason] = failure_reasons.get(reason, 0) + 1
@@ -362,16 +362,16 @@ class DeadLetterQueue:
             failure_reasons=failure_reasons
         )
 
-    def get_event(self, event_id: str) -> Optional[FailedEvent]:
+    def get_event(self, event_id: str) -> FailedEvent | None:
         """Get a specific failed event."""
         return self._storage.get(event_id)
 
     def list_events(
         self,
-        failure_reason: Optional[FailureReason] = None,
-        can_retry: Optional[bool] = None,
-        limit: Optional[int] = None
-    ) -> List[FailedEvent]:
+        failure_reason: FailureReason | None = None,
+        can_retry: bool | None = None,
+        limit: int | None = None
+    ) -> list[FailedEvent]:
         """
         List failed events with optional filtering.
 
@@ -448,7 +448,7 @@ class DeadLetterQueue:
         Returns:
             Number of events removed
         """
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff = datetime.now(UTC) - timedelta(days=days)
 
         old_events = [
             event_id

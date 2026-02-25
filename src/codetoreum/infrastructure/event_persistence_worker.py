@@ -3,8 +3,8 @@
 import asyncio
 import logging
 import signal
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.redis_event_buffer import (
@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 class EventPersistenceWorkerError(Exception):
     """Raised when worker operations fail."""
 
-    pass
 
 
 class EventPersistenceWorker:
@@ -99,7 +98,7 @@ class EventPersistenceWorker:
             )
 
         self._running = True
-        self._stats["started_at"] = datetime.now(timezone.utc)
+        self._stats["started_at"] = datetime.now(UTC)
 
         logger.info(
             f"Starting event persistence worker '{self.worker_id}' "
@@ -178,7 +177,7 @@ class EventPersistenceWorker:
             )
                 await asyncio.sleep(self.retry_delay_seconds)
 
-    async def _process_batch(self, batch: List[Dict[str, Any]]) -> None:
+    async def _process_batch(self, batch: list[dict[str, Any]]) -> None:
         """
         Process a batch of events: persist to Elasticsearch and acknowledge.
 
@@ -217,7 +216,7 @@ class EventPersistenceWorker:
                 # Update statistics
                 self._stats["events_processed"] += len(events)
                 self._stats["batches_processed"] += 1
-                self._stats["last_batch_at"] = datetime.now(timezone.utc)
+                self._stats["last_batch_at"] = datetime.now(UTC)
 
                 logger.debug(
                     f"Worker {self.worker_id} persisted {len(events)} events "
@@ -259,8 +258,8 @@ class EventPersistenceWorker:
                 raise
 
     def _group_events_by_stream(
-        self, events: List[Any]
-    ) -> Dict[str, List[Any]]:
+        self, events: list[Any]
+    ) -> dict[str, list[Any]]:
         """
         Group events by stream ID (aggregate ID) for efficient batch appending.
 
@@ -270,7 +269,7 @@ class EventPersistenceWorker:
         Returns:
             Dictionary mapping stream_id to list of events
         """
-        events_by_stream: Dict[str, List[Any]] = {}
+        events_by_stream: dict[str, list[Any]] = {}
 
         for event in events:
             stream_id = event.aggregate_id
@@ -282,7 +281,7 @@ class EventPersistenceWorker:
 
         return events_by_stream
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """
         Get worker statistics.
 
@@ -299,7 +298,7 @@ class EventPersistenceWorker:
         # Calculate runtime
         if stats["started_at"]:
             runtime_seconds = (
-                datetime.now(timezone.utc) - stats["started_at"]
+                datetime.now(UTC) - stats["started_at"]
             ).total_seconds()
             stats["runtime_seconds"] = runtime_seconds
 
@@ -359,8 +358,8 @@ class EventPersistenceWorkerPool:
         self.worker_prefix = worker_prefix
         self.worker_kwargs = worker_kwargs
 
-        self.workers: List[EventPersistenceWorker] = []
-        self.tasks: List[asyncio.Task] = []
+        self.workers: list[EventPersistenceWorker] = []
+        self.tasks: list[asyncio.Task] = []
 
     async def start(self) -> None:
         """Start all workers in the pool."""
@@ -398,7 +397,7 @@ class EventPersistenceWorkerPool:
 
         logger.info("Worker pool stopped")
 
-    def get_pool_statistics(self) -> Dict[str, Any]:
+    def get_pool_statistics(self) -> dict[str, Any]:
         """
         Get aggregated statistics for the pool.
 

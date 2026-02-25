@@ -11,15 +11,12 @@ Configuration changes emit ProjectEnabledEvent/ProjectDisabledEvent.
 
 import logging
 import threading
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Dict, List, Optional, Set
+from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from codetoreum.domain.events.project_events import (
     ProjectClonedEvent,
     ProjectCloneFailedEvent,
-    ProjectDisabledEvent,
-    ProjectEnabledEvent,
 )
 from codetoreum.domain.repository_url import extract_repo_name
 from codetoreum.domain.value_objects import ProjectConfig
@@ -27,7 +24,6 @@ from codetoreum.domain.work_item import WorkItem
 from codetoreum.ports.exceptions import (
     ExternalServiceError,
     ResourceNotFoundError,
-    ValidationError,
 )
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
@@ -50,7 +46,7 @@ class MockProjectState:
     config: ProjectConfig
     cloned: bool = False
     clone_path: str = ""
-    last_clone_attempt: Optional[datetime] = None
+    last_clone_attempt: datetime | None = None
     clone_failures: int = 0
 
 
@@ -98,7 +94,7 @@ class MockProjectManagerAdapter(IProjectManagerService):
 
     def __init__(
         self,
-        event_emitter: Optional[IEventEmitter] = None,
+        event_emitter: IEventEmitter | None = None,
         base_workspace: str = "/workspace",
     ) -> None:
         """Initialize the mock project manager adapter.
@@ -108,19 +104,19 @@ class MockProjectManagerAdapter(IProjectManagerService):
                           If not provided, events are not emitted.
             base_workspace: Base path for cloned projects (default: /workspace)
         """
-        self._projects: Dict[str, MockProjectState] = {}
+        self._projects: dict[str, MockProjectState] = {}
         self._event_emitter = event_emitter
         self._base_workspace = base_workspace
         self._lock = threading.Lock()
-        self._clone_failures: Set[str] = set()  # Per-project clone failures
-        self._project_boards: Dict[str, List[str]] = {}  # Per-project boards
-        self._project_work_items: Dict[str, List[WorkItem]] = {}  # Per-project work items
+        self._clone_failures: set[str] = set()  # Per-project clone failures
+        self._project_boards: dict[str, list[str]] = {}  # Per-project boards
+        self._project_work_items: dict[str, list[WorkItem]] = {}  # Per-project work items
 
     # =========================================================================
     # IProjectManagerService Implementation
     # =========================================================================
 
-    async def get_enabled_projects(self) -> List[str]:
+    async def get_enabled_projects(self) -> list[str]:
         """Return names of all enabled projects.
 
         Returns only projects with enabled=True in their configuration.
@@ -240,7 +236,7 @@ class MockProjectManagerAdapter(IProjectManagerService):
             # Mark as cloned
             state.cloned = True
             state.clone_path = workspace_path
-            state.last_clone_attempt = datetime.now(timezone.utc)
+            state.last_clone_attempt = datetime.now(UTC)
             state.clone_failures = 0
 
             # Emit success event
@@ -273,7 +269,6 @@ class MockProjectManagerAdapter(IProjectManagerService):
         """
         # In mock implementation, configurations are managed via helper methods
         # This is a no-op
-        pass
 
     # =========================================================================
     # Test Helper Methods
@@ -320,7 +315,7 @@ class MockProjectManagerAdapter(IProjectManagerService):
                 raise ResourceNotFoundError("Project", project_name)
             del self._projects[project_name]
 
-    def get_project_state(self, project_name: str) -> Optional[MockProjectState]:
+    def get_project_state(self, project_name: str) -> MockProjectState | None:
         """Get internal state for a project (testing only).
 
         Args:
@@ -377,7 +372,7 @@ class MockProjectManagerAdapter(IProjectManagerService):
                 self._project_work_items[project_name] = []
             self._project_work_items[project_name].append(work_item)
 
-    def add_boards_to_project(self, project_name: str, boards: List[str]) -> None:
+    def add_boards_to_project(self, project_name: str, boards: list[str]) -> None:
         """Configure boards for a project.
 
         Args:
@@ -392,7 +387,7 @@ class MockProjectManagerAdapter(IProjectManagerService):
                 raise ResourceNotFoundError("Project", project_name)
             self._project_boards[project_name] = boards
 
-    def get_project_boards(self, project_name: str) -> List[str]:
+    def get_project_boards(self, project_name: str) -> list[str]:
         """Get boards configured for a project.
 
         Args:
@@ -409,7 +404,7 @@ class MockProjectManagerAdapter(IProjectManagerService):
                 raise ResourceNotFoundError("Project", project_name)
             return self._project_boards.get(project_name, [])
 
-    def get_project_work_items(self, project_name: str) -> List[WorkItem]:
+    def get_project_work_items(self, project_name: str) -> list[WorkItem]:
         """Get work items added to a project.
 
         Args:
@@ -463,4 +458,4 @@ class MockProjectManagerAdapter(IProjectManagerService):
         Returns:
             ISO 8601 timestamp string
         """
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()

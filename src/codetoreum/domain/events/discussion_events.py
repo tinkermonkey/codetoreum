@@ -10,8 +10,7 @@ Terminology (vendor-agnostic):
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import datetime
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
@@ -49,7 +48,7 @@ class Comment:
     author: str
     body: str
     created_at: str
-    parent_id: Optional[str] = None
+    parent_id: str | None = None
     is_bot: bool = False
 
     def __post_init__(self) -> None:
@@ -137,11 +136,11 @@ class CommentContext:
         ... )
     """
 
-    thread_id: Optional[str] = None
-    parent_comment: Optional[Comment] = None
+    thread_id: str | None = None
+    parent_comment: Comment | None = None
     is_initial_request: bool = False
-    column_name: Optional[str] = None
-    agent_assignment: Optional[str] = None
+    column_name: str | None = None
+    agent_assignment: str | None = None
 
     def __post_init__(self) -> None:
         """Validate comment context after initialization."""
@@ -162,8 +161,8 @@ class CommentContext:
     @classmethod
     def for_initial_request(
         cls,
-        column_name: Optional[str] = None,
-        agent_assignment: Optional[str] = None,
+        column_name: str | None = None,
+        agent_assignment: str | None = None,
     ) -> "CommentContext":
         """Factory method to create context for an initial request comment.
 
@@ -201,8 +200,8 @@ class CommentContext:
         cls,
         thread_id: str,
         parent_comment: Comment,
-        column_name: Optional[str] = None,
-        agent_assignment: Optional[str] = None,
+        column_name: str | None = None,
+        agent_assignment: str | None = None,
     ) -> "CommentContext":
         """Factory method to create context for a reply to a parent comment.
 
@@ -304,8 +303,8 @@ class CommentNeedsResponseEvent(CodetoreumEvent):
 
     work_item_id: str = ""
     project_id: str = ""
-    comment: Optional[Comment] = None
-    context: Optional[CommentContext] = None
+    comment: Comment | None = None
+    context: CommentContext | None = None
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""
@@ -377,7 +376,7 @@ class CommentPostedEvent(CodetoreumEvent):
 
     work_item_id: str = ""
     project_id: str = ""
-    comment: Optional[Comment] = None
+    comment: Comment | None = None
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""
@@ -460,7 +459,7 @@ class AgentResponsePostedEvent(CodetoreumEvent):
     comment_id: str = ""
     response_comment_id: str = ""
     agent_name: str = ""
-    conversation_id: Optional[str] = None
+    conversation_id: str | None = None
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""

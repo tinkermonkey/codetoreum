@@ -14,7 +14,6 @@ For production use, consider:
 import base64
 import logging
 import os
-from typing import Dict, Optional
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
@@ -40,14 +39,14 @@ class SimpleEncryptionAdapter(IEncryptionService):
     - Example: "default:aGVsbG8=:Y2lwaGVy..."
     """
 
-    def __init__(self, default_key: Optional[bytes] = None):
+    def __init__(self, default_key: bytes | None = None):
         """
         Initialize the encryption adapter.
 
         Args:
             default_key: Default 32-byte encryption key. If None, generates a random key.
         """
-        self._keys: Dict[str, bytes] = {}
+        self._keys: dict[str, bytes] = {}
 
         # Initialize default key
         if default_key is None:
@@ -58,7 +57,7 @@ class SimpleEncryptionAdapter(IEncryptionService):
         self._keys["default"] = default_key
         logger.debug("SimpleEncryptionAdapter initialized with default key")
 
-    async def encrypt(self, plaintext: str, key_id: Optional[str] = None) -> str:
+    async def encrypt(self, plaintext: str, key_id: str | None = None) -> str:
         """
         Encrypt a plaintext string using AES-256-GCM.
 

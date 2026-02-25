@@ -5,9 +5,7 @@ InMemoryStorageAdapter emit appropriate domain events for all state-changing
 operations, establishing complete event sourcing audit trail for simulation testing.
 """
 
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import List
+from datetime import UTC, datetime
 
 import pytest
 
@@ -21,20 +19,14 @@ from codetoreum.adapters.testing.in_memory_repository_adapter import (
 from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
 from codetoreum.domain.events.queue_events import (
     QueueItemAddedEvent,
-    QueueItemRemovedEvent,
-    QueuePositionChangedEvent,
 )
 from codetoreum.domain.events.repository_events import (
-    BranchCreatedEvent,
     CommitCreatedEvent,
-    FilesStagedEvent,
 )
 from codetoreum.domain.events.storage_events import (
-    ArtifactDeletedEvent,
     ArtifactUploadedEvent,
 )
-from codetoreum.domain.types import BranchName, CommitHash
-from codetoreum.ports.output.pipeline_queue_service import QueueStatus
+from codetoreum.domain.types import BranchName
 
 
 class TestQueueServiceEventEmission:
@@ -53,7 +45,7 @@ class TestQueueServiceEventEmission:
     @pytest.mark.asyncio
     async def test_enqueue_item_emits_queue_item_added_event(self, queue_service, emitter):
         """Enqueuing item should emit QueueItemAddedEvent."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         await queue_service.enqueue_item(
             project_id="proj-1",
@@ -78,7 +70,7 @@ class TestQueueServiceEventEmission:
     @pytest.mark.asyncio
     async def test_remove_from_queue_emits_queue_item_removed_event(self, queue_service, emitter):
         """Removing item from queue should emit QueueItemRemovedEvent."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Enqueue an item first
         await queue_service.enqueue_item(
@@ -108,7 +100,7 @@ class TestQueueServiceEventEmission:
     @pytest.mark.asyncio
     async def test_enqueue_multiple_items_emits_multiple_events(self, queue_service, emitter):
         """Enqueuing multiple items should emit multiple events."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         for i in range(3):
             await queue_service.enqueue_item(
@@ -129,7 +121,7 @@ class TestQueueServiceEventEmission:
     @pytest.mark.asyncio
     async def test_sync_queue_with_board_emits_position_changed_event(self, queue_service, emitter):
         """Syncing queue with board should emit QueuePositionChangedEvent when positions change."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Enqueue item at position 0
         await queue_service.enqueue_item(
@@ -439,7 +431,7 @@ class TestEventImmutability:
         """QueueItemAddedEvent should be immutable."""
         event = QueueItemAddedEvent(
             type="queue.item_added",
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             source="mock",
             queue_name="queue-1",
             item_id="item-1",
@@ -455,7 +447,7 @@ class TestEventImmutability:
         """CommitCreatedEvent should be immutable."""
         event = CommitCreatedEvent(
             type="repository.commit_created",
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             source="mock",
             repository_id="repo-1",
             commit_sha="abc123",
@@ -473,7 +465,7 @@ class TestEventImmutability:
         """ArtifactUploadedEvent should be immutable."""
         event = ArtifactUploadedEvent(
             type="storage.artifact_uploaded",
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             source="mock",
             key="artifact-1",
             size_bytes=1024,

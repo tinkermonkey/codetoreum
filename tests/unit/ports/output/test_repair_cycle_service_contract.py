@@ -15,8 +15,7 @@ Subclasses must implement create_context() to provide context for testing.
 """
 
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
-from typing import Dict, Tuple
+from datetime import UTC, datetime
 
 import pytest
 
@@ -41,7 +40,7 @@ class MockRepairCycleContext:
         self,
         stage_name: str = "fix_failures",
         workflow_run_id: str = "pipeline-123",
-        test_configs: Tuple[RepairTestRunConfig, ...] = (),
+        test_configs: tuple[RepairTestRunConfig, ...] = (),
         agent_name: str = "repair-agent",
         max_total_agent_calls: int = 100,
         checkpoint_interval: int = 5,
@@ -77,7 +76,6 @@ class TestRepairCycleDomainTypesContract(ABC):
         max_total_agent_calls: int = 100,
     ) -> RepairCycleContext:
         """Create a test context with given configuration."""
-        pass
 
     # =========================================================================
     # ERROR HANDLING CONTRACT TESTS
@@ -119,7 +117,7 @@ class TestRepairCycleDomainTypesContract(ABC):
         a valid scenario that domain types must support.
         """
         # Verify the empty failures dict scenario is representable
-        failures_dict: Dict = {}
+        failures_dict: dict = {}
         assert len(failures_dict) == 0
 
     @pytest.mark.asyncio
@@ -138,7 +136,7 @@ class TestRepairCycleDomainTypesContract(ABC):
             failures=(),
             warning_list=(),  # Empty warnings list
             raw_output="No warnings",
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
 
         # Verify test result represents zero warnings correctly
@@ -235,7 +233,7 @@ class TestRepairCycleDomainTypesContract(ABC):
             failures=failures,
             warning_list=(),
             raw_output="2 failures",
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
 
         # Verify consistency: failed count matches failures tuple length
@@ -264,7 +262,7 @@ class TestRepairCycleDomainTypesContract(ABC):
             failures=(),
             warning_list=warnings,
             raw_output="",
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
 
         # Verify warning count consistency
@@ -296,7 +294,7 @@ class TestRepairCycleDomainTypesContract(ABC):
             ),
             warning_list=(RepairTestWarning(file="auth.py", message="deprecated API"),),
             raw_output="Partial failure - 3 failures, 1 warning",
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
 
         # Verify state consistency under partial failure
@@ -448,7 +446,7 @@ class TestRepairCycleDomainTypesContract(ABC):
             overall_success=True,
             total_agent_calls=0,
             duration_seconds=1.0,
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
 
         # Attempting to modify should raise FrozenInstanceError or similar
@@ -467,7 +465,7 @@ class TestRepairCycleDomainTypesContract(ABC):
             failures=(),
             warning_list=(),
             raw_output="",
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
 
         # Attempting to modify should raise FrozenInstanceError or similar
@@ -499,7 +497,7 @@ class TestRepairCycleDomainTypesContract(ABC):
             failures=(),
             warning_list=(),
             raw_output="",
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
 
         cycle = CycleResult(
@@ -608,7 +606,7 @@ class TestRepairCycleAdapterMethodContract:
         adapter = MockRepairCycleAdapter(clock=clock)
         adapter.current_project = "test-proj"
 
-        failures_by_file: Dict[str, Tuple[RepairTestFailure, ...]] = {
+        failures_by_file: dict[str, tuple[RepairTestFailure, ...]] = {
             "test_auth.py": (
                 RepairTestFailure(
                     file="test_auth.py",
@@ -659,7 +657,7 @@ class TestRepairCycleAdapterMethodContract:
                 RepairTestWarning(file="db.py", message="PendingDeprecationWarning"),
             ),
             raw_output="Tests passed with warnings",
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
 
         config = RepairTestRunConfig(

@@ -1,9 +1,10 @@
 """GitHub Issues adapter for ITicketSystem interface."""
 
 import asyncio
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, AsyncIterator, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import httpx
 from dateutil import parser as dateparser
@@ -14,7 +15,6 @@ from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStat
 from codetoreum.ports.exceptions import (
     AuthenticationError,
     ExternalServiceError,
-    ProjectNotFoundError,
     ValidationError,
     WorkItemNotFoundError,
 )
@@ -62,15 +62,15 @@ class GitHubTicketAdapter(ITicketSystem):
             config: GitHub configuration
         """
         self.config = config
-        self._http_client: Optional[httpx.AsyncClient] = None
+        self._http_client: httpx.AsyncClient | None = None
 
         # In-memory cache with eviction support
-        self._cache: Dict[str, tuple[datetime, Any]] = {}
-        self._cache_access_times: Dict[str, datetime] = {}  # Track LRU
+        self._cache: dict[str, tuple[datetime, Any]] = {}
+        self._cache_access_times: dict[str, datetime] = {}  # Track LRU
 
         # Rate limit tracking
-        self._rate_limit_remaining: Optional[int] = None
-        self._rate_limit_reset: Optional[datetime] = None
+        self._rate_limit_remaining: int | None = None
+        self._rate_limit_reset: datetime | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
@@ -111,13 +111,13 @@ class GitHubTicketAdapter(ITicketSystem):
                 self._cache.pop(key, None)
                 self._cache_access_times.pop(key, None)
 
-    def _check_cache(self, key: str) -> Optional[Any]:
+    def _check_cache(self, key: str) -> Any | None:
         """Check cache for value."""
         if key not in self._cache:
             return None
 
         cached_at, value = self._cache[key]
-        age_seconds = (datetime.now(timezone.utc) - cached_at).total_seconds()
+        age_seconds = (datetime.now(UTC) - cached_at).total_seconds()
 
         if age_seconds > self.config.cache_ttl_seconds:
             del self._cache[key]
@@ -125,14 +125,14 @@ class GitHubTicketAdapter(ITicketSystem):
             return None
 
         # Update access time for LRU
-        self._cache_access_times[key] = datetime.now(timezone.utc)
+        self._cache_access_times[key] = datetime.now(UTC)
         return value
 
     def _set_cache(self, key: str, value: Any) -> None:
         """Set cache value with eviction if needed."""
         self._evict_cache_if_needed()
-        self._cache[key] = (datetime.now(timezone.utc), value)
-        self._cache_access_times[key] = datetime.now(timezone.utc)
+        self._cache[key] = (datetime.now(UTC), value)
+        self._cache_access_times[key] = datetime.now(UTC)
 
     def _invalidate_cache(self, key: str) -> None:
         """Invalidate cache entry."""
@@ -152,8 +152,8 @@ class GitHubTicketAdapter(ITicketSystem):
         import re
 
         # Remove tokens
-        sanitized = re.sub(r'ghp_[a-zA-Z0-9]{36}', '[REDACTED_TOKEN]', error)
-        sanitized = re.sub(r'ghs_[a-zA-Z0-9]{36}', '[REDACTED_TOKEN]', sanitized)
+        sanitized = re.sub(r"ghp_[a-zA-Z0-9]{36}", "[REDACTED_TOKEN]", error)
+        sanitized = re.sub(r"ghs_[a-zA-Z0-9]{36}", "[REDACTED_TOKEN]", sanitized)
 
         # Truncate to reasonable length
         if len(sanitized) > 500:
@@ -176,13 +176,13 @@ class GitHubTicketAdapter(ITicketSystem):
             self._rate_limit_remaining = int(remaining)
 
         if reset:
-            self._rate_limit_reset = datetime.fromtimestamp(int(reset), tz=timezone.utc)
+            self._rate_limit_reset = datetime.fromtimestamp(int(reset), tz=UTC)
 
     async def _wait_for_rate_limit_if_needed(self) -> None:
         """Wait if we're approaching rate limits."""
         if self._rate_limit_remaining is not None and self._rate_limit_remaining < 10:
             if self._rate_limit_reset:
-                wait_seconds = (self._rate_limit_reset - datetime.now(timezone.utc)).total_seconds()
+                wait_seconds = (self._rate_limit_reset - datetime.now(UTC)).total_seconds()
                 if wait_seconds > 0:
                     # Wait with a maximum of 60 seconds
                     await asyncio.sleep(min(wait_seconds, 60))
@@ -230,8 +230,8 @@ class GitHubTicketAdapter(ITicketSystem):
                         # Parse reset time from headers
                         reset_time = response.headers.get("X-RateLimit-Reset")
                         if reset_time and attempt < self.config.max_retries - 1:
-                            reset_dt = datetime.fromtimestamp(int(reset_time), tz=timezone.utc)
-                            wait_seconds = (reset_dt - datetime.now(timezone.utc)).total_seconds()
+                            reset_dt = datetime.fromtimestamp(int(reset_time), tz=UTC)
+                            wait_seconds = (reset_dt - datetime.now(UTC)).total_seconds()
                             # Wait for reset or exponential backoff, whichever is shorter
                             backoff_seconds = self.config.retry_delay_seconds * (2 ** attempt)
                             await asyncio.sleep(min(wait_seconds, backoff_seconds, 60))
@@ -254,7 +254,7 @@ class GitHubTicketAdapter(ITicketSystem):
 
         raise ExternalServiceError("GitHub", "Max retries exceeded")
 
-    def _map_github_issue_to_work_item(self, issue: Dict[str, Any], project_id: str) -> WorkItem:
+    def _map_github_issue_to_work_item(self, issue: dict[str, Any], project_id: str) -> WorkItem:
         """
         Map GitHub issue to WorkItem domain model.
 
@@ -334,7 +334,7 @@ class GitHubTicketAdapter(ITicketSystem):
 
         if response.status_code == 404:
             raise WorkItemNotFoundError(f"Work item {item_id} not found")
-        elif response.status_code != 200:
+        if response.status_code != 200:
             sanitized_error = self._sanitize_error_message(response.text)
             raise ExternalServiceError("GitHub", f"Unexpected status {response.status_code}: {sanitized_error}")
 
@@ -351,17 +351,17 @@ class GitHubTicketAdapter(ITicketSystem):
         title: str,
         description: str,
         project_id: ProjectId,
-        labels: Optional[List[str]] = None,
-        assignee: Optional[UserId] = None,
-        priority: Optional[WorkItemPriority] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        labels: list[str] | None = None,
+        assignee: UserId | None = None,
+        priority: WorkItemPriority | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> WorkItem:
         """Create a new work item."""
         if not title:
             raise ValidationError("Title is required")
 
         # Build request payload
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "title": title,
             "body": description,
         }
@@ -391,10 +391,10 @@ class GitHubTicketAdapter(ITicketSystem):
         return self._map_github_issue_to_work_item(issue, project_id)
 
     async def update_work_item(
-        self, item_id: WorkItemId, updates: Dict[str, Any]
+        self, item_id: WorkItemId, updates: dict[str, Any]
     ) -> WorkItem:
         """Update an existing work item."""
-        payload: Dict[str, Any] = {}
+        payload: dict[str, Any] = {}
 
         # Map domain updates to GitHub API format
         if "title" in updates:
@@ -419,7 +419,7 @@ class GitHubTicketAdapter(ITicketSystem):
 
         if response.status_code == 404:
             raise WorkItemNotFoundError(f"Work item {item_id} not found")
-        elif response.status_code != 200:
+        if response.status_code != 200:
             raise ExternalServiceError("GitHub", f"Failed to update issue: {response.text}")
 
         # Invalidate cache
@@ -454,7 +454,7 @@ class GitHubTicketAdapter(ITicketSystem):
         self,
         item_id: WorkItemId,
         status: WorkItemStatus,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> WorkItem:
         """Update work item status."""
         updates = {"status": status}
@@ -471,18 +471,18 @@ class GitHubTicketAdapter(ITicketSystem):
 
     async def list_work_items(
         self,
-        project_id: Optional[ProjectId] = None,
-        status: Optional[WorkItemStatus] = None,
-        assignee: Optional[UserId] = None,
-        labels: Optional[List[str]] = None,
-        created_after: Optional[datetime] = None,
-        updated_after: Optional[datetime] = None,
+        project_id: ProjectId | None = None,
+        status: WorkItemStatus | None = None,
+        assignee: UserId | None = None,
+        labels: list[str] | None = None,
+        created_after: datetime | None = None,
+        updated_after: datetime | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[WorkItem]:
+    ) -> list[WorkItem]:
         """List work items with filters."""
         # Build query parameters
-        params: Dict[str, Any] = {
+        params: dict[str, Any] = {
             "per_page": min(limit, 100),
             "page": (offset // 100) + 1,
         }
@@ -532,9 +532,9 @@ class GitHubTicketAdapter(ITicketSystem):
     async def search_work_items(
         self,
         query: str,
-        project_id: Optional[ProjectId] = None,
+        project_id: ProjectId | None = None,
         limit: int = 100,
-    ) -> List[WorkItem]:
+    ) -> list[WorkItem]:
         """Full-text search for work items."""
         # Build search query
         search_query = f"{query} repo:{self.config.organization}/{self.config.repository} is:issue"
@@ -557,8 +557,8 @@ class GitHubTicketAdapter(ITicketSystem):
 
     async def get_work_item_stream(
         self,
-        project_id: Optional[ProjectId] = None,
-        since: Optional[datetime] = None,
+        project_id: ProjectId | None = None,
+        since: datetime | None = None,
     ) -> AsyncIterator[WorkItem]:
         """
         Stream work item updates.
@@ -566,7 +566,7 @@ class GitHubTicketAdapter(ITicketSystem):
         Note: GitHub doesn't support real-time streaming.
         This implementation polls for updates.
         """
-        last_check = since or datetime.now(timezone.utc)
+        last_check = since or datetime.now(UTC)
 
         while True:
             items = await self.list_work_items(
@@ -588,8 +588,8 @@ class GitHubTicketAdapter(ITicketSystem):
         self,
         item_id: WorkItemId,
         body: str,
-        author: Optional[UserId] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        author: UserId | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> Comment:
         """Add a comment to a work item."""
         if not body:
@@ -602,7 +602,7 @@ class GitHubTicketAdapter(ITicketSystem):
 
         if response.status_code == 404:
             raise WorkItemNotFoundError(f"Work item {item_id} not found")
-        elif response.status_code != 201:
+        if response.status_code != 201:
             raise ExternalServiceError("GitHub", f"Failed to create comment: {response.text}")
 
         comment_data = response.json()
@@ -623,11 +623,11 @@ class GitHubTicketAdapter(ITicketSystem):
     async def get_comments(
         self,
         item_id: WorkItemId,
-        since: Optional[datetime] = None,
+        since: datetime | None = None,
         limit: int = 100,
-    ) -> List[Comment]:
+    ) -> list[Comment]:
         """Get comments for a work item."""
-        params: Dict[str, Any] = {
+        params: dict[str, Any] = {
             "per_page": min(limit, 100),
         }
 
@@ -639,7 +639,7 @@ class GitHubTicketAdapter(ITicketSystem):
 
         if response.status_code == 404:
             raise WorkItemNotFoundError(f"Work item {item_id} not found")
-        elif response.status_code != 200:
+        if response.status_code != 200:
             raise ExternalServiceError("GitHub", f"Failed to get comments: {response.text}")
 
         comments_data = response.json()
@@ -678,8 +678,8 @@ class GitHubTicketAdapter(ITicketSystem):
     async def get_related_items(
         self,
         item_id: WorkItemId,
-        relationship: Optional[str] = None,
-    ) -> List[WorkItem]:
+        relationship: str | None = None,
+    ) -> list[WorkItem]:
         """
         Get related work items.
 
@@ -690,7 +690,7 @@ class GitHubTicketAdapter(ITicketSystem):
 
         # Extract issue numbers from description and comments
         import re
-        issue_pattern = r'#(\d+)'
+        issue_pattern = r"#(\d+)"
 
         referenced_ids = set()
 
@@ -719,8 +719,8 @@ class GitHubTicketAdapter(ITicketSystem):
     async def register_webhook(
         self,
         url: str,
-        events: List[str],
-        project_id: Optional[ProjectId] = None,
+        events: list[str],
+        project_id: ProjectId | None = None,
     ) -> str:
         """Register a webhook for events."""
         if not url:
@@ -752,7 +752,7 @@ class GitHubTicketAdapter(ITicketSystem):
         if response.status_code == 404:
             from codetoreum.ports.exceptions import ResourceNotFoundError
             raise ResourceNotFoundError("Webhook", webhook_id)
-        elif response.status_code != 204:
+        if response.status_code != 204:
             raise ExternalServiceError("GitHub", f"Failed to delete webhook: {response.text}")
 
     async def __aenter__(self):

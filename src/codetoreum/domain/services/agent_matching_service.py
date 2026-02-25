@@ -1,6 +1,5 @@
 """Agent matching service for calculating agent-requirement match scores."""
 
-from typing import List, Optional
 
 from codetoreum.domain.agent import Agent
 from codetoreum.domain.value_objects import Requirement
@@ -14,7 +13,7 @@ class AgentMatchingService:
     """
 
     @staticmethod
-    def calculate_match_score(agent: Agent, requirements: List[Requirement]) -> float:
+    def calculate_match_score(agent: Agent, requirements: list[Requirement]) -> float:
         """
         Calculate match score between agent and requirements.
 
@@ -55,12 +54,11 @@ class AgentMatchingService:
                     required_scores.append(requirement_ratio)
                 else:
                     optional_scores.append(requirement_ratio)
+            # Missing capability
+            elif requirement.is_required:
+                return 0.0  # Cannot satisfy required skill
             else:
-                # Missing capability
-                if requirement.is_required:
-                    return 0.0  # Cannot satisfy required skill
-                else:
-                    optional_scores.append(0.0)
+                optional_scores.append(0.0)
 
         # Calculate weighted average
         if not required_scores:
@@ -76,10 +74,10 @@ class AgentMatchingService:
 
     @staticmethod
     def find_best_match(
-        agents: List[Agent],
-        requirements: List[Requirement],
+        agents: list[Agent],
+        requirements: list[Requirement],
         min_score: float = 0.5,
-    ) -> Optional[Agent]:
+    ) -> Agent | None:
         """
         Find agent with highest match score above threshold.
 
@@ -110,8 +108,8 @@ class AgentMatchingService:
 
     @staticmethod
     def rank_agents(
-        agents: List[Agent], requirements: List[Requirement]
-    ) -> List[tuple[Agent, float]]:
+        agents: list[Agent], requirements: list[Requirement]
+    ) -> list[tuple[Agent, float]]:
         """
         Rank all agents by match score.
 
