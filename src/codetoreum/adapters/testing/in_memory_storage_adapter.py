@@ -100,8 +100,10 @@ class InMemoryStorageAdapter(IStorage):
         """Download object from memory."""
         with self._lock:
             if key not in self._objects:
-                msg = f"Object not found: {key}"
-                raise ResourceNotFoundError(msg)
+                raise ResourceNotFoundError(
+                    f"Artifact not found: {key}",
+                    key
+                )
             return self._objects[key]
 
     async def download_to_file(self, key: str, file_path: Path) -> None:
@@ -113,8 +115,10 @@ class InMemoryStorageAdapter(IStorage):
         """Delete object from memory."""
         with self._lock:
             if key not in self._objects:
-                msg = f"Object not found: {key}"
-                raise ResourceNotFoundError(msg)
+                raise ResourceNotFoundError(
+                    f"Artifact not found: {key}",
+                    key
+                )
             self._objects.pop(key)
             self._metadata.pop(key)
 

@@ -603,10 +603,10 @@ index abc123..def456 100644
             ref: Optional ref (commit, branch, tag)
 
         Returns:
-            File content as string (empty if file doesn't exist)
+            File content as string
 
         Raises:
-            ResourceNotFoundError: If repository doesn't exist
+            ResourceNotFoundError: If repository or file doesn't exist
             ValidationError: If repo_path or file_path is None/empty
         """
         if not repo_path:
@@ -622,11 +622,13 @@ index abc123..def456 100644
         with self._lock:
             file_key = (repo_id, file_path)
 
-            if file_key in self._files:
-                return self._files[file_key]
+            if file_key not in self._files:
+                raise ResourceNotFoundError(
+                    f"File not found: {file_path} in repository {repo_id}",
+                    file_key
+                )
 
-            # Return empty content if file doesn't exist
-            return ""
+            return self._files[file_key]
 
     async def get_commit_info(
         self,

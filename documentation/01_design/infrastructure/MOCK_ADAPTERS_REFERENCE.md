@@ -910,6 +910,125 @@ runner.clear_captured_data()  # Clear events/metrics
 
 ---
 
+## Error Handling Contract
+
+All mock adapters must raise appropriate exceptions when resources are not found, matching production adapter behavior. This ensures error handling code is tested realistically in simulations.
+
+### Resource Not Found Errors
+
+**Pattern**: Use `ResourceNotFoundError` (from `codetoreum.ports.exceptions`) when a single-item retrieval fails.
+
+**Constructor**: `ResourceNotFoundError(message: str, resource_id: str)`
+- `message`: Human-readable error description including resource identifier
+- `resource_id`: Programmatic identifier for the missing resource
+
+**Examples**:
+
+```python
+# File not found
+if file_key not in self._files:
+    raise ResourceNotFoundError(
+        f"File not found: {file_path} in repository {repository_id}",
+        file_key
+    )
+
+# Artifact not found
+if key not in self._objects:
+    raise ResourceNotFoundError(
+        f"Artifact not found: {key}",
+        key
+    )
+
+# Work item not found
+if work_item_id not in self._item_positions:
+    raise ResourceNotFoundError(
+        f"Work item not found on any board: {work_item_id}",
+        work_item_id
+    )
+```
+
+### Collection Queries Return Empty
+
+**Pattern**: Return empty list/dict when querying collections that may have zero items.
+
+**Rationale**: Collection queries expect zero or more items; returning empty is a valid result.
+
+**Examples**:
+
+```python
+# Queue entries - return empty list (valid state)
+async def get_queue_entries(self, project_id: str, board_id: str) -> list[PipelineQueueEntry]:
+    with self._lock:
+        key = f"{project_id}:{board_id}"
+        return self._queues.get(key, [])  # Empty list = no items in queue
+
+# Board items in column - return empty list (valid state)
+async def get_items_in_column(self, board_id: str, column_name: str) -> list[WorkItemPosition]:
+    # ... validate inputs that are required ...
+    # Return empty list if no items - this is normal, not an error
+    return items
+```
+
+### Optional Result Return Patterns
+
+**Pattern**: Return `None` only when explicitly documented in the interface as a valid optional result.
+
+**Examples**:
+
+```python
+# get_next_waiting_item returns None when queue is empty (documented as valid)
+async def get_next_waiting_item(self, project_id: str, board_id: str) -> PipelineQueueEntry | None:
+    # Returns None if no waiting items - this is expected behavior
+    # Does NOT raise error because None is documented as valid return value
+```
+
+### Adapter-Specific Error Behavior
+
+| Adapter | Method | Missing Behavior | Exception |
+|---------|--------|------------------|-----------|
+| InMemoryRepositoryAdapter | `get_file_content()` | Raise error | `ResourceNotFoundError` |
+| InMemoryRepositoryAdapter | `get_file_content()` | Repository missing | `ResourceNotFoundError` |
+| InMemoryStorageAdapter | `download()` | Artifact missing | `ResourceNotFoundError` |
+| InMemoryStorageAdapter | `delete()` | Artifact missing | `ResourceNotFoundError` |
+| MockBoardAdapter | `get_item_position()` | Item missing | `ResourceNotFoundError` |
+| MockBoardAdapter | `move_item_to_column()` | Item/column missing | `ResourceNotFoundError` |
+| InMemoryQueueService | `get_next_waiting_item()` | Queue empty | Returns `None` (valid) |
+| InMemoryQueueService | `mark_item_active()` | Item missing | `QueueItemNotFoundError` |
+
+### Testing Error Conditions
+
+All adapters must include tests validating error conditions:
+
+```python
+@pytest.mark.asyncio
+async def test_get_file_content_missing_file_raises_error(self, adapter):
+    """Test that missing file raises ResourceNotFoundError with details."""
+    await adapter.clone(url="...", destination=Path("/tmp/test"))
+
+    with pytest.raises(ResourceNotFoundError) as exc_info:
+        await adapter.get_file_content(
+            repo_path=Path("/tmp/test"),
+            file_path="nonexistent.py"
+        )
+
+    # Verify error includes identifying information
+    assert "nonexistent.py" in str(exc_info.value)
+    assert exc_info.value.resource_id is not None
+```
+
+### Implementation Checklist
+
+- [ ] Adapter raises `ResourceNotFoundError` for missing single items
+- [ ] Error message includes resource identifier and context
+- [ ] Error message is human-readable and helpful for debugging
+- [ ] `resource_id` field contains programmatic identifier
+- [ ] Adapter returns empty collection for zero-item queries (not error)
+- [ ] Adapter returns `None` only if documented in interface
+- [ ] Unit tests validate error conditions, not just happy paths
+- [ ] Error behavior matches production adapters (GitHub, etc.)
+
+---
+
 ## Performance Characteristics
 
 | Adapter | Speed | Determinism | Memory |

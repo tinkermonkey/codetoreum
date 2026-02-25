@@ -392,19 +392,21 @@ class TestInMemoryRepositoryAdapter:
 
         assert content == "# Test Repository"
 
-    async def test_get_file_content_nonexistent_returns_empty(self, adapter):
-        """Test getting non-existent file returns empty string."""
+    async def test_get_file_content_nonexistent_raises_error(self, adapter):
+        """Test getting non-existent file raises ResourceNotFoundError."""
         await adapter.clone(
             url="https://github.com/test/repo.git",
             destination=Path("/tmp/test-repo"),
         )
 
-        content = await adapter.get_file_content(
-            repo_path=Path("/tmp/test-repo"),
-            file_path="nonexistent.txt",
-        )
+        with pytest.raises(ResourceNotFoundError) as exc_info:
+            await adapter.get_file_content(
+                repo_path=Path("/tmp/test-repo"),
+                file_path="nonexistent.txt",
+            )
 
-        assert content == ""
+        assert "nonexistent.txt" in str(exc_info.value)
+        assert exc_info.value.resource_id is not None
 
     async def test_get_commit_info(self, adapter):
         """Test getting commit information."""

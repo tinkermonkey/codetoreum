@@ -198,8 +198,10 @@ class TestSimulateHumanMove:
     @pytest.mark.asyncio
     async def test_simulate_human_move_item_not_found(self, adapter_with_item):
         """Test simulate_human_move_async() raises error for non-existent item."""
+        from codetoreum.ports.exceptions import ResourceNotFoundError
+
         adapter = adapter_with_item
-        with pytest.raises(ValueError, match="Work item not found"):
+        with pytest.raises(ResourceNotFoundError, match="Work item not found"):
             await adapter.simulate_human_move_async("item-999", "In Progress")
 
     @pytest.mark.asyncio

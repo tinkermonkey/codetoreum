@@ -14,6 +14,7 @@ from codetoreum.domain.events.board_events import (
     BoardReconciledEvent,
     WorkItemColumnChangedEvent,
 )
+from codetoreum.ports.exceptions import ResourceNotFoundError
 from codetoreum.ports.output.board_service import (
     BoardColumn,
     BoardConfig,
@@ -223,12 +224,14 @@ class MockBoardAdapter(IBoardService):
             WorkItemPosition: Current position details
 
         Raises:
-            ValueError: Work item not found on any board
+            ResourceNotFoundError: Work item not found on any board
         """
         with self._lock:
             if work_item_id not in self._item_positions:
-                msg = f"Work item not in any column: {work_item_id}"
-                raise ValueError(msg)
+                raise ResourceNotFoundError(
+                    f"Work item not found on any board: {work_item_id}",
+                    work_item_id
+                )
             _, column_name, position = self._item_positions[work_item_id]
             return WorkItemPosition(work_item_id=work_item_id, column_name=column_name, position=position)
 
@@ -248,14 +251,16 @@ class MockBoardAdapter(IBoardService):
             ColumnMovementResult: Details of the movement operation
 
         Raises:
-            ValueError: Work item or column doesn't exist
+            ResourceNotFoundError: Work item or target column doesn't exist
         """
         from codetoreum.ports.output.board_service import ColumnMovementResult
 
         with self._lock:
             if work_item_id not in self._item_positions:
-                msg = f"Work item not found: {work_item_id}"
-                raise ValueError(msg)
+                raise ResourceNotFoundError(
+                    f"Work item not found: {work_item_id}",
+                    work_item_id
+                )
 
             board_id, from_column, _ = self._item_positions[work_item_id]
 
@@ -273,8 +278,10 @@ class MockBoardAdapter(IBoardService):
                     target_col = col
                     break
             if target_col is None:
-                msg = f"Column not found: {target_column}"
-                raise ValueError(msg)
+                raise ResourceNotFoundError(
+                    f"Column not found: {target_column}",
+                    target_column
+                )
 
             # Update item positions
             if from_column != target_column:
