@@ -79,6 +79,7 @@ class TestGitHubDiscussionAdapterWebhook:
         assert len(events) == 1
         event = events[0]
         assert isinstance(event, CommentNeedsResponseEvent)
+        assert event.comment is not None
         assert event.comment.body == "This needs review"
         assert event.comment.author == "alice"
         assert event.comment.is_bot is False
@@ -242,20 +243,20 @@ class TestGitHubDiscussionAdapterPolling:
             call_count[0] += 1
             return result
 
-        polling_adapter.get_thread = mock_get_thread
+        with patch.object(polling_adapter, "get_thread", new=mock_get_thread):
+            # Subscribe to events
+            events: list[CommentNeedsResponseEvent] = []
+            polling_adapter.on("comment.needs_response", events.append)
 
-        # Subscribe to events
-        events: list[CommentNeedsResponseEvent] = []
-        polling_adapter.on("comment.needs_response", events.append)
+            # Wait for 3 events total: alice, bob (first cycle) + charlie (second cycle)
+            # The first polling cycle will return alice and bob (2 events)
+            # The second polling cycle will return charlie (1 new event)
+            await wait_for_polling_cycle(events, expected_count=3, timeout=10.0)
 
-        # Wait for 3 events total: alice, bob (first cycle) + charlie (second cycle)
-        # The first polling cycle will return alice and bob (2 events)
-        # The second polling cycle will return charlie (1 new event)
-        await wait_for_polling_cycle(events, expected_count=3, timeout=10.0)
-
-        # Should have detected all comments including charlie's
-        assert len(events) >= 3
-        assert any(e.comment.author == "charlie" for e in events)
+            # Should have detected all comments including charlie's
+            assert len(events) >= 3
+            assert all(e.comment is not None for e in events)
+            assert any(e.comment.author == "charlie" for e in events)
 
         polling_adapter.stop_monitoring("123")
 
@@ -288,17 +289,16 @@ class TestGitHubDiscussionAdapterPolling:
                 thread_type="flat",
             )
 
-        adapter.get_thread = mock_get_thread
+        with patch.object(adapter, "get_thread", new=mock_get_thread):
+            # Wait for at least 2 polling calls
+            await wait_for_polling_cycle(call_times, expected_count=2, timeout=15.0)
 
-        # Wait for at least 2 polling calls
-        await wait_for_polling_cycle(call_times, expected_count=2, timeout=15.0)
+            adapter.stop_monitoring("123")
 
-        adapter.stop_monitoring("123")
-
-        # Should have at least 2 calls with roughly 2-second intervals
-        if len(call_times) >= 2:
-            interval = (call_times[1] - call_times[0]).total_seconds()
-            assert 1.5 < interval < 3.0  # Allow some variance
+            # Should have at least 2 calls with roughly 2-second intervals
+            if len(call_times) >= 2:
+                interval = (call_times[1] - call_times[0]).total_seconds()
+                assert 1.5 < interval < 3.0  # Allow some variance
 
 
 
@@ -433,6 +433,7 @@ class TestGitHubDiscussionAdapterCommands:
             assert comment.body == "This looks good!"
             assert comment.author == "codetoreum-bot"
             assert len(events) == 1
+            assert events[0].comment is not None
             assert events[0].comment.body == "This looks good!"
 
     @pytest.mark.asyncio

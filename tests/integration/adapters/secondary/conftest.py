@@ -1,6 +1,7 @@
 """Shared fixtures for GitHub discussion adapter integration tests."""
 
 from unittest.mock import Mock
+import re
 
 import pytest
 
@@ -10,9 +11,10 @@ from codetoreum.adapters.secondary.github_discussion_adapter import (
 )
 from codetoreum.domain.events.discussion_events import Comment
 from codetoreum.ports.output.discussion_adapter import DiscussionMonitoringConfig
+from codetoreum.ports.output.identity_service import IIdentityService, BotIdentityConfig
 
 
-class MockIdentityService:
+class MockIdentityService(IIdentityService):
     """Mock identity service for consistent bot identification in tests."""
 
     def __init__(self, bot_usernames: list[str] | None = None):
@@ -42,7 +44,7 @@ class MockIdentityService:
         """Filter list to only human users."""
         return [u for u in usernames if not self.is_bot_user(u)]
 
-    def configure(self, config) -> None:
+    def configure(self, config: BotIdentityConfig) -> None:
         """Update configuration."""
 
 
