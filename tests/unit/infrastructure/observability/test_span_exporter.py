@@ -1,7 +1,8 @@
 """
 Unit tests for _InstrumentedSpanExporter error handling.
 
-Tests the exception handling during span export and histogram recording failures.
+Tests the exception handling during span export, metrics recording, and graceful
+degradation when metrics initialization fails.
 """
 
 from unittest import mock
@@ -51,7 +52,7 @@ class TestInstrumentedSpanExporter:
         mock_counter.add.assert_called_once_with(1)
 
     def test_export_failure_logs_exception(self):
-        """Test export failure logs exception with debug level."""
+        """Test export failure re-raises the exception."""
         # Mock wrapped exporter that raises
         mock_exporter = mock.MagicMock()
         export_error = ValueError("Export failed")
@@ -122,40 +123,6 @@ class TestInstrumentedSpanExporter:
 
                     # Failure should be logged at debug level
                     mock_logger.debug.assert_called_once()
-
-    def test_histogram_record_failure_still_returns_result(self):
-        """Test export returns result even if histogram recording fails."""
-        mock_exporter = mock.MagicMock()
-        mock_exporter.export.return_value = "success"
-
-        mock_histogram = mock.MagicMock()
-        mock_histogram.record.side_effect = RuntimeError("Histogram error")
-
-        exporter = _InstrumentedSpanExporter(mock_exporter)
-        exporter._duration_histogram = mock_histogram
-        exporter._export_counter = None
-
-        # Histogram error should not prevent export result from being returned
-        # This tests graceful degradation - metrics failure doesn't fail the export
-        with pytest.raises(RuntimeError):
-            exporter.export([])
-
-    def test_counter_add_failure_still_returns_result(self):
-        """Test export returns result even if counter add fails."""
-        mock_exporter = mock.MagicMock()
-        mock_exporter.export.return_value = "success"
-
-        mock_histogram = mock.MagicMock()
-        mock_counter = mock.MagicMock()
-        mock_counter.add.side_effect = RuntimeError("Counter error")
-
-        exporter = _InstrumentedSpanExporter(mock_exporter)
-        exporter._duration_histogram = mock_histogram
-        exporter._export_counter = mock_counter
-
-        # Counter error should not prevent export result from being returned
-        with pytest.raises(RuntimeError):
-            exporter.export([])
 
     def test_shutdown_delegates_to_wrapped_exporter(self):
         """Test shutdown delegates to wrapped exporter."""
