@@ -455,13 +455,13 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
             # Verify workflow exists and get all events
             if not await self.event_store.stream_exists(workflow_run_id):
                 message = "WorkflowRun"
-            raise ResourceNotFoundError(message, workflow_run_id)
+                raise ResourceNotFoundError(message, workflow_run_id)
 
             all_events = await self.event_store.get_events(stream_id=workflow_run_id)
 
             if not all_events:
                 message = "WorkflowRun"
-            raise ResourceNotFoundError(message, workflow_run_id)
+                raise ResourceNotFoundError(message, workflow_run_id)
 
             # Reconstruct workflow for summary and stage info
             workflow = Workflow.from_events(all_events)

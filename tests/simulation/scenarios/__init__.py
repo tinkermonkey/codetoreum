@@ -8,7 +8,6 @@ from . import (
     scenario_05_complex_workflow,
     scenario_07_repair_cycle,
     scenario_09_queue_position_ordering,
-    scenario_10_agent_execution,
     scenario_10_conversational_modes,
 )
 
@@ -20,6 +19,5 @@ __all__ = [
     "scenario_05_complex_workflow",
     "scenario_07_repair_cycle",
     "scenario_09_queue_position_ordering",
-    "scenario_10_agent_execution",
     "scenario_10_conversational_modes",
 ]

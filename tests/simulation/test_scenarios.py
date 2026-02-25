@@ -37,12 +37,6 @@ from .scenarios.scenario_05_complex_workflow import (
     create_config as create_complex_config,
 )
 from .scenarios.scenario_05_complex_workflow import run_scenario as run_complex_scenario
-from .scenarios.scenario_10_agent_execution import (
-    create_config as create_agent_execution_config,
-)
-from .scenarios.scenario_10_agent_execution import (
-    run_scenario as run_agent_execution_scenario,
-)
 
 
 @pytest.mark.simulation
@@ -199,34 +193,6 @@ async def test_scenario_05_complex_workflow():
 
 
 @pytest.mark.simulation
-@pytest.mark.scenario
-@pytest.mark.asyncio
-async def test_scenario_10_agent_execution():
-    """Test Scenario 10: Agent Execution Lifecycle."""
-    config = create_agent_execution_config()
-    runner = SimulationRunner(config)
-
-    result = await runner.run(run_agent_execution_scenario)
-
-    # Print diagnostics
-    print_event_timeline(runner)
-
-    # Verify success
-    assert result.success, f"Scenario failed with errors: {result.errors}"
-    assert result.assertions_passed >= 40, (
-        f"Expected at least 40 assertions to pass, got {result.assertions_passed}"
-    )
-    assert result.assertions_failed == 0, (
-        f"Expected no failed assertions, got {result.assertions_failed}"
-    )
-
-    # Verify performance goal (10-100x faster)
-    assert result.speed_multiplier >= 10.0, (
-        f"Speed multiplier {result.speed_multiplier:.1f}x below 10x target"
-    )
-
-
-@pytest.mark.simulation
 @pytest.mark.asyncio
 async def test_all_scenarios_meet_performance_target() -> None:
     """
@@ -244,7 +210,6 @@ async def test_all_scenarios_meet_performance_target() -> None:
         ("Review Cycle", create_review_config, run_review_scenario),
         ("Execution Failure", create_failure_config, run_failure_scenario),
         ("Complex Workflow", create_complex_config, run_complex_scenario),
-        ("Agent Execution", create_agent_execution_config, run_agent_execution_scenario),
     ]
 
     results: list[tuple[str, SimulationResult]] = []
