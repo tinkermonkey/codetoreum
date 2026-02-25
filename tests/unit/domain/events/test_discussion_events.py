@@ -137,7 +137,7 @@ class TestComment:
         )
 
         with pytest.raises(FrozenInstanceError):
-            comment.id = "c2"
+            object.__setattr__(comment, "id", "c2")
 
 
 class TestCommentContext:
@@ -426,7 +426,9 @@ class TestCommentNeedsResponseEvent:
         event_comment = event.comment
         assert event_comment is not None
         assert event_comment.author == "alice"
-        assert event.context.column_name == "Review"
+        event_context = event.context
+        assert event_context is not None
+        assert event_context.column_name == "Review"
 
     def test_missing_work_item_id(self):
         """Test that work_item_id is required."""
@@ -723,13 +725,14 @@ class TestCommentContextImmutability:
         assert parent_comment.id == "p1"
 
         # Nested comment is also frozen, so modification should fail
-        assert context.parent_comment is not None
+        parent_comment = context.parent_comment
+        assert parent_comment is not None
         with pytest.raises(FrozenInstanceError):
-            object.__setattr__(context.parent_comment, "author", "bob")
+            object.__setattr__(parent_comment, "author", "bob")
 
         # And the context field itself cannot be reassigned
         with pytest.raises(FrozenInstanceError):
-            context.parent_comment = Comment("p2", "alice", "different", now_iso())
+            object.__setattr__(context, "parent_comment", Comment("p2", "alice", "different", now_iso()))
 
 
 class TestCommentNeedsResponseEventImmutability:
@@ -765,7 +768,9 @@ class TestCommentNeedsResponseEventImmutability:
         event_comment = event.comment
         assert event_comment is not None
         assert event_comment.author == "alice"
-        assert event.context.column_name == "Review"
+        event_context = event.context
+        assert event_context is not None
+        assert event_context.column_name == "Review"
 
         # CommentNeedsResponseEvent is a frozen dataclass, so attempting to modify
         # any attribute should raise FrozenInstanceError
