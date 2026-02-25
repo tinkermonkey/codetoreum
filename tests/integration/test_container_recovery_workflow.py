@@ -26,7 +26,7 @@ from codetoreum.domain.events.container_recovery_events import (
 )
 
 
-class TestEventCollector(MockEventEmitter):
+class EventCollector(MockEventEmitter):
     """Event emitter that collects events for testing.
 
     Extends MockEventEmitter to add event collection capability,
@@ -72,7 +72,7 @@ class TestContainerRecoveryWorkflowWithMocks:
         - 1 orphan (should kill)
         """
         # Setup event emitter
-        event_emitter = TestEventCollector()
+        event_emitter = EventCollector()
 
         # Setup mock adapter
         mock_adapter = MockContainerRecoveryAdapter()
@@ -211,7 +211,7 @@ class TestContainerRecoveryWorkflowWithMocks:
     @pytest.mark.asyncio
     async def test_recovery_with_partial_failures(self):
         """Test recovery when some actions fail."""
-        event_emitter = TestEventCollector()
+        event_emitter = EventCollector()
 
         mock_adapter = MockContainerRecoveryAdapter()
 
@@ -277,7 +277,7 @@ class TestContainerRecoveryWorkflowWithMocks:
     @pytest.mark.asyncio
     async def test_recovery_with_repair_cycles(self):
         """Test recovery processes orphaned repair cycle results."""
-        event_emitter = TestEventCollector()
+        event_emitter = EventCollector()
 
         mock_adapter = MockContainerRecoveryAdapter()
 
@@ -305,7 +305,7 @@ class TestContainerRecoveryWorkflowWithMocks:
     @pytest.mark.asyncio
     async def test_recovery_event_timestamp_ordering(self):
         """Test that events have proper timestamps in chronological order."""
-        event_emitter = TestEventCollector()
+        event_emitter = EventCollector()
 
         mock_adapter = MockContainerRecoveryAdapter()
 

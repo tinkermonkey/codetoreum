@@ -670,6 +670,75 @@ class WorkItem:
         work_item._version = len(events)
         return work_item
 
+    def _apply_agent_assigned(self, event: AgentAssigned) -> None:
+        """Apply AgentAssigned event."""
+        self.assigned_agent_id = event.payload["agent_id"]
+        self.assigned_at = datetime.fromisoformat(event.payload["assigned_at"])
+        self.status = WorkItemStatus.ASSIGNED
+
+    def _apply_work_item_started(self, _event: WorkItemStarted) -> None:
+        """Apply WorkItemStarted event."""
+        self.status = WorkItemStatus.IN_PROGRESS
+
+    def _apply_work_item_under_review(self, _event: WorkItemUnderReview) -> None:
+        """Apply WorkItemUnderReview event."""
+        self.status = WorkItemStatus.UNDER_REVIEW
+
+    def _apply_work_item_completed(self, event: WorkItemCompleted) -> None:
+        """Apply WorkItemCompleted event."""
+        self.status = WorkItemStatus.COMPLETED
+        self.completed_at = datetime.fromisoformat(event.payload["completed_at"])
+
+    def _apply_work_item_failed(self, _event: WorkItemFailed) -> None:
+        """Apply WorkItemFailed event."""
+        self.status = WorkItemStatus.FAILED
+
+    def _apply_work_item_blocked(self, _event: WorkItemBlocked) -> None:
+        """Apply WorkItemBlocked event."""
+        self.status = WorkItemStatus.BLOCKED
+
+    def _apply_work_item_unblocked(self, event: WorkItemUnblocked) -> None:
+        """Apply WorkItemUnblocked event."""
+        self.status = WorkItemStatus(event.payload["new_status"])
+
+    def _apply_workflow_attached(self, event: WorkflowAttached) -> None:
+        """Apply WorkflowAttached event."""
+        self.current_workflow_id = event.payload["workflow_id"]
+
+    def _apply_work_item_stage_updated(self, event: WorkItemStageUpdated) -> None:
+        """Apply WorkItemStageUpdated event."""
+        self.current_stage = event.payload["new_stage"]
+
+    def _apply_work_item_labels_updated(self, event: WorkItemLabelsUpdated) -> None:
+        """Apply WorkItemLabelsUpdated event."""
+        self.labels = event.payload["new_labels"]
+
+    def _apply_work_item_priority_updated(
+        self, event: WorkItemPriorityUpdated
+    ) -> None:
+        """Apply WorkItemPriorityUpdated event."""
+        self.priority = WorkItemPriority(event.payload["new_priority"])
+
+    def _get_event_handlers(self) -> dict[type, Any]:
+        """Get mapping of event types to handler methods.
+
+        Returns:
+            Dictionary mapping event types to handler methods
+        """
+        return {
+            AgentAssigned: self._apply_agent_assigned,
+            WorkItemStarted: self._apply_work_item_started,
+            WorkItemUnderReview: self._apply_work_item_under_review,
+            WorkItemCompleted: self._apply_work_item_completed,
+            WorkItemFailed: self._apply_work_item_failed,
+            WorkItemBlocked: self._apply_work_item_blocked,
+            WorkItemUnblocked: self._apply_work_item_unblocked,
+            WorkflowAttached: self._apply_workflow_attached,
+            WorkItemStageUpdated: self._apply_work_item_stage_updated,
+            WorkItemLabelsUpdated: self._apply_work_item_labels_updated,
+            WorkItemPriorityUpdated: self._apply_work_item_priority_updated,
+        }
+
     def _apply_event(self, event: DomainEvent) -> None:
         """
         Apply an event to update state.
@@ -677,40 +746,11 @@ class WorkItem:
         Args:
             event: Domain event to apply
         """
-        if isinstance(event, AgentAssigned):
-            self.assigned_agent_id = event.payload["agent_id"]
-            self.assigned_at = datetime.fromisoformat(event.payload["assigned_at"])
-            self.status = WorkItemStatus.ASSIGNED
+        # Dispatch to event-specific handler using event type
+        handlers = self._get_event_handlers()
+        event_type = type(event)
+        if event_type in handlers:
+            handlers[event_type](event)
 
-        elif isinstance(event, WorkItemStarted):
-            self.status = WorkItemStatus.IN_PROGRESS
-
-        elif isinstance(event, WorkItemUnderReview):
-            self.status = WorkItemStatus.UNDER_REVIEW
-
-        elif isinstance(event, WorkItemCompleted):
-            self.status = WorkItemStatus.COMPLETED
-            self.completed_at = datetime.fromisoformat(event.payload["completed_at"])
-
-        elif isinstance(event, WorkItemFailed):
-            self.status = WorkItemStatus.FAILED
-
-        elif isinstance(event, WorkItemBlocked):
-            self.status = WorkItemStatus.BLOCKED
-
-        elif isinstance(event, WorkItemUnblocked):
-            self.status = WorkItemStatus(event.payload["new_status"])
-
-        elif isinstance(event, WorkflowAttached):
-            self.current_workflow_id = event.payload["workflow_id"]
-
-        elif isinstance(event, WorkItemStageUpdated):
-            self.current_stage = event.payload["new_stage"]
-
-        elif isinstance(event, WorkItemLabelsUpdated):
-            self.labels = event.payload["new_labels"]
-
-        elif isinstance(event, WorkItemPriorityUpdated):
-            self.priority = WorkItemPriority(event.payload["new_priority"])
-
+        # Update timestamp for all events
         self.updated_at = event.occurred_at
