@@ -11,4 +11,4 @@ export { WorkflowRunDetails } from './WorkflowRunDetails';
 export { WorkflowHeader } from './WorkflowHeader';
 export { EventTimeline } from './EventTimeline';
 export { EventCard } from './EventCard';
-export { EventIcon, getEventLabel } from './EventIcon';
+export { EventIcon } from './EventIcon';
