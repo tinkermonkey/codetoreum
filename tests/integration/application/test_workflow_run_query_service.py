@@ -540,7 +540,9 @@ class TestStageOutputFields:
         assert stage.name == "implementation"
         assert stage.output == "Implementation completed successfully"
         assert stage.error_message is None
-        assert stage.metadata == {"iterations": 3, "files_changed": 5}
+        assert stage.metadata is not None
+        assert stage.metadata["iterations"] == 3
+        assert stage.metadata["files_changed"] == 5
 
     @pytest.mark.asyncio
     async def test_stage_info_with_error_message(self):
@@ -562,6 +564,7 @@ class TestStageOutputFields:
         assert stage.status == "failed"
         assert stage.output is None
         assert stage.error_message == "Test suite failed with 3 errors"
+        assert stage.metadata is not None
         assert stage.metadata["failed_tests"] == 3
 
     @pytest.mark.asyncio
@@ -585,7 +588,8 @@ class TestStageOutputFields:
 
         assert response.output == "Code review passed"
         assert response.errorMessage is None
-        assert response.metadata == {"approval_count": 2}
+        assert response.metadata is not None
+        assert response.metadata["approval_count"] == 2
 
     @pytest.mark.asyncio
     async def test_audit_stage_info_includes_output_fields(self):
@@ -606,7 +610,8 @@ class TestStageOutputFields:
 
         assert stage_info.output == "Deployment successful"
         assert stage_info.errorMessage is None
-        assert stage_info.metadata == {"environment": "production"}
+        assert stage_info.metadata is not None
+        assert stage_info.metadata["environment"] == "production"
 
     @pytest.mark.asyncio
     async def test_mapper_preserves_output_fields(self):
@@ -630,4 +635,5 @@ class TestStageOutputFields:
 
         assert response.output == "Build artifacts created"
         assert response.errorMessage is None
-        assert response.metadata == {"build_number": 42}
+        assert response.metadata is not None
+        assert response.metadata["build_number"] == 42

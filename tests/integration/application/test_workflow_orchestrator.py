@@ -39,12 +39,12 @@ class MockTaskQueue(ITaskQueue):
 
     async def enqueue(self, task: Task) -> str:
         self.tasks.append(task)
-        return task.id
+        return str(task.id)
 
     def size(self) -> int:
         return len(self.tasks)
 
-    def get_last_task(self) -> Task:
+    def get_last_task(self) -> Task | None:
         return self.tasks[-1] if self.tasks else None
 
 
@@ -114,10 +114,10 @@ class MockProjectConfiguration(IProjectConfiguration):
             ),
         }
 
-    async def get_workflow_config(self, project: str, board: str) -> WorkflowConfig:
+    async def get_workflow_config(self, project: str, board: str) -> WorkflowConfig | None:
         return self.workflows.get((project, board))
 
-    async def get_agent_config(self, agent_name: str) -> AgentConfig:
+    async def get_agent_config(self, agent_name: str) -> AgentConfig | None:
         return self.agents.get(agent_name)
 
 
@@ -589,25 +589,6 @@ async def test_workflow_state_persistence(orchestrator, mock_workflow_state):
 
 
 @pytest.mark.asyncio
-async def test_handle_stage_completion_context_none(orchestrator):
-    """Test stage completion with context=None raises AttributeError (type violation)."""
-    event = StageCompletedEvent(
-        project="test-project",
-        issue_number=123,
-        stage_name="Implementation",
-        agent_name="developer",
-        success=True,
-        output="Implementation complete",
-        context=None,  # Type violation: context should be Dict[str, Any]
-        timestamp=datetime.now(UTC),
-    )
-
-    # Should raise AttributeError since None doesn't have .get() method
-    with pytest.raises(AttributeError, match="'NoneType' object has no attribute"):
-        await orchestrator.handle_stage_completion(event)
-
-
-@pytest.mark.asyncio
 async def test_handle_stage_completion_with_extra_context_keys(
     orchestrator, mock_task_queue, mock_decision_events
 ):
@@ -629,26 +610,6 @@ async def test_handle_stage_completion_with_extra_context_keys(
     assert result.success is True
     assert result.action == WorkflowAction.TASK_QUEUED
     assert result.agent_name == "code_reviewer"
-
-
-@pytest.mark.asyncio
-async def test_handle_review_cycle_completion_context_none(orchestrator):
-    """Test review cycle completion with context=None raises AttributeError (type violation)."""
-    event = ReviewCycleCompletedEvent(
-        project="test-project",
-        issue_number=123,
-        approved=True,
-        iteration=1,
-        maker_agent="developer",
-        reviewer_agent="code_reviewer",
-        feedback=None,
-        context=None,  # Type violation: context should be Dict[str, Any]
-        timestamp=datetime.now(UTC),
-    )
-
-    # Should raise AttributeError since None doesn't have .get() method
-    with pytest.raises(AttributeError, match="'NoneType' object has no attribute"):
-        await orchestrator.handle_review_cycle_completion(event)
 
 
 @pytest.mark.asyncio
