@@ -30,10 +30,7 @@ class TestLockAcquisition:
         service = InMemoryLockService()
 
         result = await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-1",
-            board_position=0
+            project_id="proj-1", board_id="board-1", work_item_id="item-1", board_position=0
         )
 
         assert result.status == LockStatus.ACQUIRED
@@ -48,19 +45,13 @@ class TestLockAcquisition:
 
         # First acquisition succeeds
         result1 = await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-1",
-            board_position=0
+            project_id="proj-1", board_id="board-1", work_item_id="item-1", board_position=0
         )
         assert result1.status == LockStatus.ACQUIRED
 
         # Second acquisition with same work item returns ALREADY_HELD
         result2 = await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-1",
-            board_position=0
+            project_id="proj-1", board_id="board-1", work_item_id="item-1", board_position=0
         )
         assert result2.status == LockStatus.ALREADY_HELD
         assert result2.work_item_id == "item-1"
@@ -72,19 +63,11 @@ class TestLockAcquisition:
         service = InMemoryLockService()
 
         # Acquire lock with first item
-        await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-1",
-            board_position=0
-        )
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1", board_position=0)
 
         # Try to acquire with second item
         result = await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-2",
-            board_position=1
+            project_id="proj-1", board_id="board-1", work_item_id="item-2", board_position=1
         )
 
         assert result.status == LockStatus.QUEUED
@@ -99,19 +82,13 @@ class TestLockAcquisition:
 
         # Acquire lock on board 1
         result1 = await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-1",
-            board_position=0
+            project_id="proj-1", board_id="board-1", work_item_id="item-1", board_position=0
         )
         assert result1.status == LockStatus.ACQUIRED
 
         # Should be able to acquire on board 2
         result2 = await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-2",
-            work_item_id="item-2",
-            board_position=0
+            project_id="proj-1", board_id="board-2", work_item_id="item-2", board_position=0
         )
         assert result2.status == LockStatus.ACQUIRED
 
@@ -122,19 +99,13 @@ class TestLockAcquisition:
 
         # Acquire lock in project 1
         result1 = await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-1",
-            board_position=0
+            project_id="proj-1", board_id="board-1", work_item_id="item-1", board_position=0
         )
         assert result1.status == LockStatus.ACQUIRED
 
         # Should be able to acquire in project 2
         result2 = await service.try_acquire_lock(
-            project_id="proj-2",
-            board_id="board-1",
-            work_item_id="item-2",
-            board_position=0
+            project_id="proj-2", board_id="board-1", work_item_id="item-2", board_position=0
         )
         assert result2.status == LockStatus.ACQUIRED
 
@@ -148,35 +119,21 @@ class TestQueueOrdering:
         service = InMemoryLockService()
 
         # Acquire lock
-        await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-1",
-            board_position=0
-        )
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1", board_position=0)
 
         # Add items to queue in non-sequential order
         result_3 = await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-3",
-            board_position=3
+            project_id="proj-1", board_id="board-1", work_item_id="item-3", board_position=3
         )
         assert result_3.queue_position == 0
 
         result_2 = await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-2",
-            board_position=1
+            project_id="proj-1", board_id="board-1", work_item_id="item-2", board_position=1
         )
         assert result_2.queue_position == 0  # item-2 should be first (position 1 < 3)
 
         result_4 = await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-4",
-            board_position=2
+            project_id="proj-1", board_id="board-1", work_item_id="item-4", board_position=2
         )
         assert result_4.queue_position == 1  # item-4 is between item-2 and item-3
 
@@ -194,30 +151,18 @@ class TestQueueOrdering:
 
         # Acquire lock
         await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-holder",
-            board_position=10
+            project_id="proj-1", board_id="board-1", work_item_id="item-holder", board_position=10
         )
 
         # Add items with positions
         await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-at-top",
-            board_position=0
+            project_id="proj-1", board_id="board-1", work_item_id="item-at-top", board_position=0
         )
         await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-at-middle",
-            board_position=5
+            project_id="proj-1", board_id="board-1", work_item_id="item-at-middle", board_position=5
         )
         await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-at-bottom",
-            board_position=9
+            project_id="proj-1", board_id="board-1", work_item_id="item-at-bottom", board_position=9
         )
 
         # Verify topmost item is first in queue
@@ -232,10 +177,7 @@ class TestQueueOrdering:
 
         # Acquire lock
         await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="lock-holder",
-            board_position=100
+            project_id="proj-1", board_id="board-1", work_item_id="lock-holder", board_position=100
         )
 
         # Add 10 items in random positions
@@ -257,7 +199,7 @@ class TestQueueOrdering:
                 project_id="proj-1",
                 board_id="board-1",
                 work_item_id=work_item_id,
-                board_position=position
+                board_position=position,
             )
 
         # Verify queue is sorted by position
@@ -276,18 +218,9 @@ class TestLockRelease:
         """Lock release should succeed if held by work_item_id."""
         service = InMemoryLockService()
 
-        await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-1",
-            board_position=0
-        )
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1", board_position=0)
 
-        result = await service.release_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-1"
-        )
+        result = await service.release_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1")
 
         assert result.released_work_item_id == "item-1"
         assert result.next_work_item_id is None
@@ -298,19 +231,10 @@ class TestLockRelease:
         """Lock release should fail if not held by work_item_id."""
         service = InMemoryLockService()
 
-        await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-1",
-            board_position=0
-        )
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1", board_position=0)
 
         with pytest.raises(ValueError, match="does not hold lock"):
-            await service.release_lock(
-                project_id="proj-1",
-                board_id="board-1",
-                work_item_id="item-2"
-            )
+            await service.release_lock(project_id="proj-1", board_id="board-1", work_item_id="item-2")
 
     @pytest.mark.asyncio
     async def test_release_lock_fails_if_not_held(self):
@@ -318,11 +242,7 @@ class TestLockRelease:
         service = InMemoryLockService()
 
         with pytest.raises(ValueError, match="does not hold lock"):
-            await service.release_lock(
-                project_id="proj-1",
-                board_id="board-1",
-                work_item_id="item-1"
-            )
+            await service.release_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1")
 
     @pytest.mark.asyncio
     async def test_release_lock_grants_to_first_queued(self):
@@ -330,27 +250,13 @@ class TestLockRelease:
         service = InMemoryLockService()
 
         # Acquire lock
-        await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-1",
-            board_position=0
-        )
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1", board_position=0)
 
         # Queue second item
-        await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-2",
-            board_position=1
-        )
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-2", board_position=1)
 
         # Release lock
-        result = await service.release_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-1"
-        )
+        result = await service.release_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1")
 
         assert result.next_work_item_id == "item-2"
         assert result.queue_length_after_release == 0
@@ -366,38 +272,22 @@ class TestLockRelease:
 
         # Acquire lock
         await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-holder",
-            board_position=0
+            project_id="proj-1", board_id="board-1", work_item_id="item-holder", board_position=0
         )
 
         # Queue items with positions (added in non-order)
         await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-at-3",
-            board_position=3
+            project_id="proj-1", board_id="board-1", work_item_id="item-at-3", board_position=3
         )
         await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-at-1",
-            board_position=1
+            project_id="proj-1", board_id="board-1", work_item_id="item-at-1", board_position=1
         )
         await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-at-2",
-            board_position=2
+            project_id="proj-1", board_id="board-1", work_item_id="item-at-2", board_position=2
         )
 
         # Release lock
-        result = await service.release_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-holder"
-        )
+        result = await service.release_lock(project_id="proj-1", board_id="board-1", work_item_id="item-holder")
 
         # Should grant to topmost (position 1)
         assert result.next_work_item_id == "item-at-1"
@@ -414,18 +304,9 @@ class TestLockRelease:
         """Lock release with empty queue should make lock available."""
         service = InMemoryLockService()
 
-        await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-1",
-            board_position=0
-        )
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1", board_position=0)
 
-        await service.release_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-1"
-        )
+        await service.release_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1")
 
         state = await service.get_queue_state("proj-1", "board-1")
         assert state.lock_holder is None
@@ -443,31 +324,13 @@ class TestQueuePositionUpdates:
 
         # Acquire lock
         await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="lock-holder",
-            board_position=10
+            project_id="proj-1", board_id="board-1", work_item_id="lock-holder", board_position=10
         )
 
         # Queue items with initial positions
-        await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-1",
-            board_position=1
-        )
-        await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-2",
-            board_position=2
-        )
-        await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-3",
-            board_position=3
-        )
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1", board_position=1)
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-2", board_position=2)
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-3", board_position=3)
 
         # Verify initial order
         state = await service.get_queue_state("proj-1", "board-1")
@@ -483,7 +346,7 @@ class TestQueuePositionUpdates:
                 "item-1": 5,  # Moved down
                 "item-2": 0,  # Moved to top
                 "item-3": 2,  # Stayed roughly same
-            }
+            },
         )
 
         # Verify queue is re-sorted
@@ -502,32 +365,15 @@ class TestQueuePositionUpdates:
 
         # Acquire lock
         await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="lock-holder",
-            board_position=10
+            project_id="proj-1", board_id="board-1", work_item_id="lock-holder", board_position=10
         )
 
         # Queue items
-        await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-1",
-            board_position=1
-        )
-        await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-2",
-            board_position=2
-        )
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1", board_position=1)
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-2", board_position=2)
 
         # Only update item-1
-        await service.update_queue_positions(
-            project_id="proj-1",
-            board_id="board-1",
-            updated_positions={"item-1": 5}
-        )
+        await service.update_queue_positions(project_id="proj-1", board_id="board-1", updated_positions={"item-1": 5})
 
         state = await service.get_queue_state("proj-1", "board-1")
         assert state.queue[0].work_item_id == "item-2"  # item-2 position unchanged
@@ -541,11 +387,7 @@ class TestQueuePositionUpdates:
         service = InMemoryLockService()
 
         # No-op on empty queue
-        await service.update_queue_positions(
-            project_id="proj-1",
-            board_id="board-1",
-            updated_positions={"item-1": 5}
-        )
+        await service.update_queue_positions(project_id="proj-1", board_id="board-1", updated_positions={"item-1": 5})
 
         state = await service.get_queue_state("proj-1", "board-1")
         assert len(state.queue) == 0
@@ -556,11 +398,7 @@ class TestQueuePositionUpdates:
         service = InMemoryLockService()
 
         # No-op on nonexistent board
-        await service.update_queue_positions(
-            project_id="proj-1",
-            board_id="board-1",
-            updated_positions={"item-1": 5}
-        )
+        await service.update_queue_positions(project_id="proj-1", board_id="board-1", updated_positions={"item-1": 5})
 
         state = await service.get_queue_state("proj-1", "board-1")
         assert len(state.queue) == 0
@@ -588,12 +426,7 @@ class TestQueueStateQueries:
         service = InMemoryLockService()
 
         before = datetime.now(UTC)
-        await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-1",
-            board_position=0
-        )
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1", board_position=0)
         after = datetime.now(UTC)
 
         state = await service.get_queue_state("proj-1", "board-1")
@@ -607,24 +440,9 @@ class TestQueueStateQueries:
         """Get queue state should return all queued items."""
         service = InMemoryLockService()
 
-        await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-1",
-            board_position=0
-        )
-        await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-2",
-            board_position=2
-        )
-        await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-3",
-            board_position=1
-        )
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1", board_position=0)
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-2", board_position=2)
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-3", board_position=1)
 
         state = await service.get_queue_state("proj-1", "board-1")
 
@@ -638,18 +456,8 @@ class TestQueueStateQueries:
         """Get queue state should return a copy (not reference)."""
         service = InMemoryLockService()
 
-        await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-1",
-            board_position=0
-        )
-        await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-2",
-            board_position=1
-        )
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1", board_position=0)
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-2", board_position=1)
 
         state1 = await service.get_queue_state("proj-1", "board-1")
         initial_queue_length = len(state1.queue)
@@ -676,20 +484,10 @@ class TestOrphanedLockHolder:
         service = InMemoryLockService()
 
         # Item-1 acquires lock
-        await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-1",
-            board_position=0
-        )
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1", board_position=0)
 
         # Item-2 queued
-        await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-2",
-            board_position=1
-        )
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-2", board_position=1)
 
         # Check queue state - item-1 holds lock
         state = await service.get_queue_state("proj-1", "board-1")
@@ -708,34 +506,15 @@ class TestOrphanedLockHolder:
         service = InMemoryLockService()
 
         # Item-1 acquires lock
-        await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-1",
-            board_position=0
-        )
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1", board_position=0)
 
         # Item-2 and item-3 queued
-        await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-2",
-            board_position=1
-        )
-        await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-3",
-            board_position=2
-        )
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-2", board_position=1)
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-3", board_position=2)
 
         # Scenario: item-1 removed from board (orphaned)
         # System releases item-1's lock manually (e.g., via board reconciliation)
-        result = await service.release_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-1"
-        )
+        result = await service.release_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1")
 
         # Lock should be granted to item-2
         assert result.released_work_item_id == "item-1"
@@ -754,27 +533,15 @@ class TestOrphanedLockHolder:
         service = InMemoryLockService()
 
         # Item-1 acquires lock
-        await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-1",
-            board_position=0
-        )
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1", board_position=0)
 
         # Scenario: item-1 removed from board (orphaned)
         # System releases lock
-        await service.release_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-1"
-        )
+        await service.release_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1")
 
         # New item should be able to acquire lock
         result = await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-2",
-            board_position=1
+            project_id="proj-1", board_id="board-1", work_item_id="item-2", board_position=1
         )
 
         assert result.status == LockStatus.ACQUIRED
@@ -790,32 +557,12 @@ class TestOrphanedLockHolder:
         service = InMemoryLockService()
 
         # Item-1 holds lock
-        await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-1",
-            board_position=0
-        )
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1", board_position=0)
 
         # Item-2, item-3, item-4 queued
-        await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-2",
-            board_position=1
-        )
-        await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-3",
-            board_position=2
-        )
-        await service.try_acquire_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-4",
-            board_position=3
-        )
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-2", board_position=1)
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-3", board_position=2)
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-4", board_position=3)
 
         # Scenario: item-2 and item-3 removed from board (orphaned)
         # Queue state should still show all items
@@ -828,11 +575,7 @@ class TestOrphanedLockHolder:
 
         # When lock is released, it grants to first queued item (item-2)
         # even though item-2 is orphaned
-        result = await service.release_lock(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-1"
-        )
+        result = await service.release_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1")
         assert result.next_work_item_id == "item-2"
 
         # Orphaned item-2 now holds lock

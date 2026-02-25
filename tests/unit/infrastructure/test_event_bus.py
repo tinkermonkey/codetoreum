@@ -8,7 +8,6 @@ import pytest
 from codetoreum.domain.events import DomainEvent, WorkItemCompleted, WorkItemCreated
 from codetoreum.infrastructure.event_bus import (
     EventBus,
-    EventBusError,
     EventHandler,
     event_handler,
 )
@@ -274,6 +273,7 @@ class TestEventBus:
 
     async def test_handler_error_is_logged_but_not_raised(self):
         """Test that handler errors are caught and logged."""
+
         # Arrange
         class FailingHandler(EventHandler):
             async def handle(self, event: DomainEvent):
@@ -300,6 +300,7 @@ class TestEventBus:
 
     async def test_handler_retry_on_failure(self):
         """Test that handlers are retried on failure."""
+
         # Arrange
         class RetryHandler(EventHandler):
             def __init__(self):
@@ -426,6 +427,7 @@ class TestEventBus:
 
     async def test_cancelled_error_propagates(self, caplog):
         """Test that asyncio.CancelledError is always propagated from publish()."""
+
         # Arrange
         class MockRedisClient:
             async def xadd(self, *args, **kwargs):
@@ -446,4 +448,3 @@ class TestEventBus:
 
         # Verify cancellation was logged
         assert "cancelled" in caplog.text.lower()
-

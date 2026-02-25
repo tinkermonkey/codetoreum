@@ -5,7 +5,6 @@ Provides RESTful CRUD endpoints for workflow definitions with versioning,
 validation, and lifecycle management.
 """
 
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
@@ -164,7 +163,12 @@ def create_workflows_router(
         work_item_type: str | None = Query(None, description="Filter by applicable work item type"),
         name_contains: str | None = Query(None, description="Filter by partial name match"),
         offset: int = Query(DEFAULT_OFFSET, ge=0, description="Offset for pagination"),
-        limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description=f"Limit for pagination (max {MAX_PAGE_SIZE})"),
+        limit: int = Query(
+            DEFAULT_PAGE_SIZE,
+            ge=1,
+            le=MAX_PAGE_SIZE,
+            description=f"Limit for pagination (max {MAX_PAGE_SIZE})",
+        ),
         sort_by: str = Query("updated_at", description="Sort field (name, created_at, updated_at, version)"),
         sort_order: str = Query("desc", description="Sort order (asc, desc)"),
     ) -> WorkflowListResponse:
@@ -251,7 +255,7 @@ def create_workflows_router(
     )
     async def get_workflow(
         workflow_id: str,
-        version: int | None = Query(None, description="Specific version to retrieve (defaults to latest)")
+        version: int | None = Query(None, description="Specific version to retrieve (defaults to latest)"),
     ) -> WorkflowResponse:
         """
         Get detailed information about a specific workflow definition.
@@ -387,7 +391,7 @@ def create_workflows_router(
     )
     async def delete_workflow(
         workflow_id: str,
-        force: bool = Query(False, description="Force delete even if active executions exist")
+        force: bool = Query(False, description="Force delete even if active executions exist"),
     ) -> WorkflowCommandResult:
         """
         Delete a workflow definition (soft delete).
@@ -466,7 +470,12 @@ def create_workflows_router(
     )
     async def get_workflow_versions(
         workflow_id: str,
-        limit: int = Query(VERSIONS_DEFAULT_LIMIT, ge=1, le=VERSIONS_MAX_LIMIT, description=f"Maximum number of versions to return (max {VERSIONS_MAX_LIMIT})")
+        limit: int = Query(
+            VERSIONS_DEFAULT_LIMIT,
+            ge=1,
+            le=VERSIONS_MAX_LIMIT,
+            description=f"Maximum number of versions to return (max {VERSIONS_MAX_LIMIT})",
+        ),
     ) -> WorkflowVersionListResponse:
         """
         Get version history for a workflow.
@@ -513,7 +522,7 @@ def create_workflows_router(
     )
     async def validate_workflow(
         workflow_id: str,
-        version: int | None = Query(None, description="Specific version to validate (defaults to latest)")
+        version: int | None = Query(None, description="Specific version to validate (defaults to latest)"),
     ) -> WorkflowValidationResponse:
         """
         Validate a workflow definition.

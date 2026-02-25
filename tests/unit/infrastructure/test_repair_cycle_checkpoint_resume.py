@@ -25,6 +25,7 @@ from codetoreum.infrastructure.simulation.simulation_clock import SimulationCloc
 @dataclass
 class _RepairCycleContextImpl:
     """Concrete implementation of RepairCycleContext Protocol for testing."""
+
     stage_name: str
     workflow_run_id: str
     test_configs: tuple[RepairTestRunConfig, ...]
@@ -206,9 +207,7 @@ class TestRepairCycleCheckpoint:
         return _create_repair_cycle_context(
             stage_name="code_review",
             workflow_run_id="run-123",
-            test_configs=(
-                RepairTestRunConfig(test_type=RepairTestType.UNIT, max_iterations=3),
-            ),
+            test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT, max_iterations=3),),
             agent_name="reviewer",
             max_total_agent_calls=10,
             checkpoint_interval=1,
@@ -276,9 +275,7 @@ class TestRepairCycleResume:
         return _create_repair_cycle_context(
             stage_name="code_review",
             workflow_run_id="run-123",
-            test_configs=(
-                RepairTestRunConfig(test_type=RepairTestType.UNIT, max_iterations=3),
-            ),
+            test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT, max_iterations=3),),
             agent_name="reviewer",
             max_total_agent_calls=10,
             checkpoint_interval=1,

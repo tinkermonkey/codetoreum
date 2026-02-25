@@ -198,9 +198,7 @@ class TestAgentCapabilityManagement:
     def test_add_capability(self):
         """Test adding capability to agent."""
         capabilities = {"python": AgentCapability("python", 0.9)}
-        agent = Agent.create(
-            "engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities
-        )
+        agent = Agent.create("engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities)
         agent.clear_events()
 
         new_capability = AgentCapability("javascript", 0.7)
@@ -217,9 +215,7 @@ class TestAgentCapabilityManagement:
     def test_add_duplicate_capability_raises_error(self):
         """Test that adding duplicate capability raises error."""
         capabilities = {"python": AgentCapability("python", 0.9)}
-        agent = Agent.create(
-            "engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities
-        )
+        agent = Agent.create("engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities)
 
         with pytest.raises(DomainError) as exc:
             agent.add_capability(AgentCapability("python", 0.95))
@@ -231,9 +227,7 @@ class TestAgentCapabilityManagement:
             "python": AgentCapability("python", 0.9),
             "testing": AgentCapability("testing", 0.8),
         }
-        agent = Agent.create(
-            "engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities
-        )
+        agent = Agent.create("engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities)
         agent.clear_events()
 
         agent.remove_capability("testing")
@@ -249,9 +243,7 @@ class TestAgentCapabilityManagement:
     def test_remove_nonexistent_capability_raises_error(self):
         """Test that removing nonexistent capability raises error."""
         capabilities = {"python": AgentCapability("python", 0.9)}
-        agent = Agent.create(
-            "engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities
-        )
+        agent = Agent.create("engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities)
 
         with pytest.raises(DomainError) as exc:
             agent.remove_capability("javascript")
@@ -260,9 +252,7 @@ class TestAgentCapabilityManagement:
     def test_remove_last_capability_raises_error(self):
         """Test that removing last capability raises error."""
         capabilities = {"python": AgentCapability("python", 0.9)}
-        agent = Agent.create(
-            "engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities
-        )
+        agent = Agent.create("engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities)
 
         with pytest.raises(DomainError) as exc:
             agent.remove_capability("python")
@@ -271,9 +261,7 @@ class TestAgentCapabilityManagement:
     def test_update_capability_proficiency(self):
         """Test updating capability proficiency."""
         capabilities = {"python": AgentCapability("python", 0.9)}
-        agent = Agent.create(
-            "engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities
-        )
+        agent = Agent.create("engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities)
         agent.clear_events()
 
         agent.update_capability_proficiency("python", 0.95)
@@ -289,9 +277,7 @@ class TestAgentCapabilityManagement:
     def test_update_proficiency_for_nonexistent_capability_raises_error(self):
         """Test that updating nonexistent capability raises error."""
         capabilities = {"python": AgentCapability("python", 0.9)}
-        agent = Agent.create(
-            "engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities
-        )
+        agent = Agent.create("engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities)
 
         with pytest.raises(DomainError) as exc:
             agent.update_capability_proficiency("javascript", 0.8)
@@ -300,9 +286,7 @@ class TestAgentCapabilityManagement:
     def test_update_proficiency_with_invalid_value_raises_error(self):
         """Test that invalid proficiency value raises error."""
         capabilities = {"python": AgentCapability("python", 0.9)}
-        agent = Agent.create(
-            "engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities
-        )
+        agent = Agent.create("engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities)
 
         with pytest.raises(DomainError) as exc:
             agent.update_capability_proficiency("python", 1.5)
@@ -315,9 +299,7 @@ class TestAgentConfigurationManagement:
     def test_update_model(self):
         """Test updating agent model."""
         capabilities = {"python": AgentCapability("python", 0.9)}
-        agent = Agent.create(
-            "engineer", "Engineer", AgentType.MAKER, "Codes", "claude-sonnet-4-5", capabilities
-        )
+        agent = Agent.create("engineer", "Engineer", AgentType.MAKER, "Codes", "claude-sonnet-4-5", capabilities)
         agent.clear_events()
 
         agent.update_model("claude-opus-4")
@@ -333,9 +315,7 @@ class TestAgentConfigurationManagement:
     def test_update_model_to_empty_raises_error(self):
         """Test that updating to empty model raises error."""
         capabilities = {"python": AgentCapability("python", 0.9)}
-        agent = Agent.create(
-            "engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities
-        )
+        agent = Agent.create("engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities)
 
         with pytest.raises(DomainError) as exc:
             agent.update_model("")
@@ -344,9 +324,7 @@ class TestAgentConfigurationManagement:
     def test_update_timeout(self):
         """Test updating agent timeout."""
         capabilities = {"python": AgentCapability("python", 0.9)}
-        agent = Agent.create(
-            "engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities
-        )
+        agent = Agent.create("engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities)
         agent.clear_events()
 
         agent.update_timeout(600)
@@ -362,9 +340,7 @@ class TestAgentConfigurationManagement:
     def test_update_timeout_to_zero_raises_error(self):
         """Test that zero timeout raises error."""
         capabilities = {"python": AgentCapability("python", 0.9)}
-        agent = Agent.create(
-            "engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities
-        )
+        agent = Agent.create("engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities)
 
         with pytest.raises(DomainError) as exc:
             agent.update_timeout(0)
@@ -373,14 +349,10 @@ class TestAgentConfigurationManagement:
     def test_update_constraints(self):
         """Test updating agent constraints."""
         capabilities = {"python": AgentCapability("python", 0.9)}
-        agent = Agent.create(
-            "engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities
-        )
+        agent = Agent.create("engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities)
         agent.clear_events()
 
-        agent.update_constraints(
-            requires_docker=False, makes_code_changes=True, filesystem_write_allowed=False
-        )
+        agent.update_constraints(requires_docker=False, makes_code_changes=True, filesystem_write_allowed=False)
 
         assert agent.requires_docker is False
         assert agent.makes_code_changes is True
@@ -394,9 +366,7 @@ class TestAgentConfigurationManagement:
     def test_update_constraints_partial(self):
         """Test updating only some constraints."""
         capabilities = {"python": AgentCapability("python", 0.9)}
-        agent = Agent.create(
-            "engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities
-        )
+        agent = Agent.create("engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities)
         agent.clear_events()
 
         agent.update_constraints(makes_code_changes=True)
@@ -411,9 +381,7 @@ class TestAgentMcpServerManagement:
     def test_add_mcp_server(self):
         """Test adding MCP server to agent."""
         capabilities = {"python": AgentCapability("python", 0.9)}
-        agent = Agent.create(
-            "engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities
-        )
+        agent = Agent.create("engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities)
         agent.clear_events()
 
         agent.add_mcp_server("artifacts")
@@ -468,9 +436,7 @@ class TestAgentMcpServerManagement:
     def test_remove_nonexistent_mcp_server_raises_error(self):
         """Test that removing nonexistent MCP server raises error."""
         capabilities = {"python": AgentCapability("python", 0.9)}
-        agent = Agent.create(
-            "engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities
-        )
+        agent = Agent.create("engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities)
 
         with pytest.raises(DomainError) as exc:
             agent.remove_mcp_server("artifacts")
@@ -483,27 +449,21 @@ class TestAgentQueryMethods:
     def test_has_capability_true(self):
         """Test has_capability returns True when agent has skill."""
         capabilities = {"python": AgentCapability("python", 0.9)}
-        agent = Agent.create(
-            "engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities
-        )
+        agent = Agent.create("engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities)
 
         assert agent.has_capability("python") is True
 
     def test_has_capability_false(self):
         """Test has_capability returns False when agent lacks skill."""
         capabilities = {"python": AgentCapability("python", 0.9)}
-        agent = Agent.create(
-            "engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities
-        )
+        agent = Agent.create("engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities)
 
         assert agent.has_capability("javascript") is False
 
     def test_has_capability_with_min_proficiency(self):
         """Test has_capability with minimum proficiency threshold."""
         capabilities = {"python": AgentCapability("python", 0.7)}
-        agent = Agent.create(
-            "engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities
-        )
+        agent = Agent.create("engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities)
 
         assert agent.has_capability("python", 0.6) is True
         assert agent.has_capability("python", 0.7) is True
@@ -512,18 +472,14 @@ class TestAgentQueryMethods:
     def test_get_capability_score_existing(self):
         """Test get_capability_score for existing capability."""
         capabilities = {"python": AgentCapability("python", 0.85)}
-        agent = Agent.create(
-            "engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities
-        )
+        agent = Agent.create("engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities)
 
         assert agent.get_capability_score("python") == 0.85
 
     def test_get_capability_score_nonexistent(self):
         """Test get_capability_score for nonexistent capability returns 0.0."""
         capabilities = {"python": AgentCapability("python", 0.9)}
-        agent = Agent.create(
-            "engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities
-        )
+        agent = Agent.create("engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities)
 
         assert agent.get_capability_score("javascript") == 0.0
 
@@ -557,21 +513,13 @@ class TestAgentQueryMethods:
             requires_dev_container=True,
         )
 
-        assert (
-            agent.can_execute_in_environment(has_docker=True, has_dev_container=True)
-            is True
-        )
-        assert (
-            agent.can_execute_in_environment(has_docker=True, has_dev_container=False)
-            is False
-        )
+        assert agent.can_execute_in_environment(has_docker=True, has_dev_container=True) is True
+        assert agent.can_execute_in_environment(has_docker=True, has_dev_container=False) is False
 
     def test_is_maker_agent(self):
         """Test is_maker_agent returns True for maker."""
         capabilities = {"python": AgentCapability("python", 0.9)}
-        agent = Agent.create(
-            "engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities
-        )
+        agent = Agent.create("engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities)
 
         assert agent.is_maker_agent() is True
         assert agent.is_reviewer_agent() is False
@@ -579,9 +527,7 @@ class TestAgentQueryMethods:
     def test_is_reviewer_agent(self):
         """Test is_reviewer_agent returns True for reviewer."""
         capabilities = {"code_review": AgentCapability("code_review", 0.9)}
-        agent = Agent.create(
-            "reviewer", "Reviewer", AgentType.REVIEWER, "Reviews", "model", capabilities
-        )
+        agent = Agent.create("reviewer", "Reviewer", AgentType.REVIEWER, "Reviews", "model", capabilities)
 
         assert agent.is_reviewer_agent() is True
         assert agent.is_maker_agent() is False
@@ -593,9 +539,7 @@ class TestAgentEventManagement:
     def test_get_pending_events(self):
         """Test getting pending events."""
         capabilities = {"python": AgentCapability("python", 0.9)}
-        agent = Agent.create(
-            "engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities
-        )
+        agent = Agent.create("engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities)
 
         events = agent.get_pending_events()
 
@@ -605,9 +549,7 @@ class TestAgentEventManagement:
     def test_clear_events(self):
         """Test clearing pending events."""
         capabilities = {"python": AgentCapability("python", 0.9)}
-        agent = Agent.create(
-            "engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities
-        )
+        agent = Agent.create("engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities)
 
         agent.clear_events()
 
@@ -616,9 +558,7 @@ class TestAgentEventManagement:
     def test_get_pending_events_returns_copy(self):
         """Test that get_pending_events returns a copy."""
         capabilities = {"python": AgentCapability("python", 0.9)}
-        agent = Agent.create(
-            "engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities
-        )
+        agent = Agent.create("engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities)
 
         events = agent.get_pending_events()
         events.clear()
@@ -629,9 +569,7 @@ class TestAgentEventManagement:
     def test_version_tracking(self):
         """Test that version is tracked correctly."""
         capabilities = {"python": AgentCapability("python", 0.9)}
-        agent = Agent.create(
-            "engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities
-        )
+        agent = Agent.create("engineer", "Engineer", AgentType.MAKER, "Codes", "model", capabilities)
         assert agent._version == 0
 
         agent.add_capability(AgentCapability("javascript", 0.8))

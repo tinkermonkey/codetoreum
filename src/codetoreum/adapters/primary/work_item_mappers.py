@@ -5,7 +5,6 @@ Maps between domain models and API DTOs for work items.
 This keeps the domain layer independent of API concerns.
 """
 
-
 from codetoreum.adapters.primary.work_item_dtos import (
     CreateWorkItemRequest,
     UpdateWorkItemRequest,
@@ -155,9 +154,7 @@ class WorkItemMapper:
             List response DTO for API
         """
         return WorkItemListResponse(
-            work_items=[
-                WorkItemMapper.to_response(wi) for wi in result.work_items
-            ],
+            work_items=[WorkItemMapper.to_response(wi) for wi in result.work_items],
             total_count=result.total_count,
             page=0,  # Will be set by endpoint based on offset/limit
             page_size=result.limit,

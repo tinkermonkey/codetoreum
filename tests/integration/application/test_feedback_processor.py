@@ -298,9 +298,7 @@ async def test_actionable_items_prioritization(feedback_processor):
 - Add more tests
 """
 
-    parse_result = await feedback_processor.parse_review_output(
-        review_with_mixed_severity
-    )
+    parse_result = await feedback_processor.parse_review_output(review_with_mixed_severity)
     parsed_feedback = parse_result.parsed_feedback
 
     result = await feedback_processor.extract_actionable_items(parsed_feedback)

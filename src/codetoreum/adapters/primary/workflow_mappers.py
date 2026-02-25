@@ -76,10 +76,7 @@ class WorkflowMapper:
                 timeout_seconds=stage.timeout_seconds,
                 retry_count=stage.retry_count,
                 entry_conditions=[
-                    {
-                        "condition_type": cond.condition_type,
-                        "parameters": cond.parameters
-                    }
+                    {"condition_type": cond.condition_type, "parameters": cond.parameters}
                     for cond in stage.entry_conditions
                 ],
                 metadata=stage.metadata,
@@ -130,10 +127,7 @@ class WorkflowMapper:
                     timeout_seconds=stage.timeout_seconds,
                     retry_count=stage.retry_count,
                     entry_conditions=[
-                        {
-                            "condition_type": cond.condition_type,
-                            "parameters": cond.parameters
-                        }
+                        {"condition_type": cond.condition_type, "parameters": cond.parameters}
                         for cond in stage.entry_conditions
                     ],
                     metadata=stage.metadata,
@@ -184,7 +178,7 @@ class WorkflowMapper:
                 entry_conditions=[
                     StageEntryCondition(
                         condition_type=cond.get("condition_type", "unknown"),
-                        parameters=cond.get("parameters", {})
+                        parameters=cond.get("parameters", {}),
                     )
                     for cond in stage.entry_conditions
                 ],
@@ -255,10 +249,7 @@ class WorkflowMapper:
         Returns:
             List response DTO for API
         """
-        workflows = [
-            WorkflowMapper.to_summary_response(wf)
-            for wf in workflow_list.workflows
-        ]
+        workflows = [WorkflowMapper.to_summary_response(wf) for wf in workflow_list.workflows]
 
         return WorkflowListResponse(
             workflows=workflows,
@@ -288,7 +279,9 @@ class WorkflowMapper:
         )
 
     @staticmethod
-    def to_version_list_response(history: WorkflowVersionHistoryResult) -> WorkflowVersionListResponse:
+    def to_version_list_response(
+        history: WorkflowVersionHistoryResult,
+    ) -> WorkflowVersionListResponse:
         """
         Convert WorkflowVersionHistoryResult to WorkflowVersionListResponse DTO.
 
@@ -368,7 +361,9 @@ class OrchestrationMapper:
         )
 
     @staticmethod
-    def to_start_execution_response(result: OrchestrationCommandResult) -> StartWorkflowExecutionResponse:
+    def to_start_execution_response(
+        result: OrchestrationCommandResult,
+    ) -> StartWorkflowExecutionResponse:
         """
         Convert OrchestrationCommandResult to StartWorkflowExecutionResponse DTO.
 
@@ -410,7 +405,7 @@ class OrchestrationMapper:
 
     @staticmethod
     def to_entry_condition_validation_response(
-        check_result: EntryConditionCheckResult
+        check_result: EntryConditionCheckResult,
     ) -> EntryConditionValidationResponse:
         """
         Convert EntryConditionCheckResult to EntryConditionValidationResponse DTO.
@@ -439,10 +434,7 @@ class OrchestrationMapper:
         )
 
     @staticmethod
-    def to_queue_response(
-        execution_list: ExecutionListResult,
-        queue_stats: dict
-    ) -> ExecutionQueueResponse:
+    def to_queue_response(execution_list: ExecutionListResult, queue_stats: dict) -> ExecutionQueueResponse:
         """
         Convert ExecutionListResult to ExecutionQueueResponse DTO.
 

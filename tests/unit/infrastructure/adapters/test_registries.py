@@ -51,7 +51,7 @@ class TestTicketSystemRegistry:
             adapter_type=GitHubTicketAdapter,
             description="GitHub Issues",
             version="1.0.0",
-            tags=["production", "github"]
+            tags=["production", "github"],
         )
 
         assert len(registry) == 1
@@ -62,18 +62,10 @@ class TestTicketSystemRegistry:
         """Test that registering duplicate name raises error."""
         registry = TicketSystemRegistry()
 
-        registry.register(
-            name="github",
-            adapter_type=GitHubTicketAdapter,
-            description="GitHub Issues"
-        )
+        registry.register(name="github", adapter_type=GitHubTicketAdapter, description="GitHub Issues")
 
         with pytest.raises(ValueError, match="already registered"):
-            registry.register(
-                name="github",
-                adapter_type=InMemoryTicketAdapter,
-                description="In-memory"
-            )
+            registry.register(name="github", adapter_type=InMemoryTicketAdapter, description="In-memory")
 
     def test_register_invalid_adapter_raises_error(self):
         """Test that registering invalid adapter raises error."""
@@ -89,19 +81,15 @@ class TestTicketSystemRegistry:
             # validation will catch that it doesn't actually implement ITicketSystem
             registry.register(
                 name="invalid",
-                adapter_type=cast(type[ITicketSystem], InvalidAdapter),
-                description="Invalid"
+                adapter_type=cast("type[ITicketSystem]", InvalidAdapter),
+                description="Invalid",
             )
 
     def test_unregister_adapter(self):
         """Test unregistering an adapter."""
         registry = TicketSystemRegistry()
 
-        registry.register(
-            name="github",
-            adapter_type=GitHubTicketAdapter,
-            description="GitHub Issues"
-        )
+        registry.register(name="github", adapter_type=GitHubTicketAdapter, description="GitHub Issues")
 
         assert len(registry) == 1
         registry.unregister("github")
@@ -130,7 +118,7 @@ class TestTicketSystemRegistry:
             name="github",
             adapter_type=GitHubTicketAdapter,
             description="GitHub Issues",
-            set_as_default=True
+            set_as_default=True,
         )
 
         assert registry.get_default() == GitHubTicketAdapter
@@ -147,16 +135,8 @@ class TestTicketSystemRegistry:
         """Test listing adapters."""
         registry = TicketSystemRegistry()
 
-        registry.register(
-            name="github",
-            adapter_type=GitHubTicketAdapter,
-            description="GitHub"
-        )
-        registry.register(
-            name="in_memory",
-            adapter_type=InMemoryTicketAdapter,
-            description="In-memory"
-        )
+        registry.register(name="github", adapter_type=GitHubTicketAdapter, description="GitHub")
+        registry.register(name="in_memory", adapter_type=InMemoryTicketAdapter, description="In-memory")
 
         adapters = registry.list_adapters()
         assert len(adapters) == 2
@@ -171,13 +151,13 @@ class TestTicketSystemRegistry:
             name="github",
             adapter_type=GitHubTicketAdapter,
             description="GitHub",
-            tags=["production", "github"]
+            tags=["production", "github"],
         )
         registry.register(
             name="in_memory",
             adapter_type=InMemoryTicketAdapter,
             description="In-memory",
-            tags=["testing", "simulation"]
+            tags=["testing", "simulation"],
         )
 
         production = registry.list_by_tags(["production"])
@@ -195,7 +175,7 @@ class TestTicketSystemRegistry:
             adapter_type=GitHubTicketAdapter,
             description="GitHub Issues",
             version="1.0.0",
-            tags=["production"]
+            tags=["production"],
         )
 
         metadata = registry.get_metadata("github")
@@ -219,7 +199,7 @@ class TestTicketSystemRegistry:
             name="in_memory",
             adapter_type=InMemoryTicketAdapter,
             description="In-memory",
-            factory=factory
+            factory=factory,
         )
 
         instance = registry.create_instance("in_memory")
@@ -229,16 +209,8 @@ class TestTicketSystemRegistry:
         """Test clearing registry."""
         registry = TicketSystemRegistry()
 
-        registry.register(
-            name="github",
-            adapter_type=GitHubTicketAdapter,
-            description="GitHub"
-        )
-        registry.register(
-            name="in_memory",
-            adapter_type=InMemoryTicketAdapter,
-            description="In-memory"
-        )
+        registry.register(name="github", adapter_type=GitHubTicketAdapter, description="GitHub")
+        registry.register(name="in_memory", adapter_type=InMemoryTicketAdapter, description="In-memory")
 
         assert len(registry) == 2
         registry.clear()
@@ -248,11 +220,7 @@ class TestTicketSystemRegistry:
         """Test 'in' operator."""
         registry = TicketSystemRegistry()
 
-        registry.register(
-            name="github",
-            adapter_type=GitHubTicketAdapter,
-            description="GitHub"
-        )
+        registry.register(name="github", adapter_type=GitHubTicketAdapter, description="GitHub")
 
         assert "github" in registry
         assert "nonexistent" not in registry
@@ -265,18 +233,11 @@ class TestTicketSystemRegistry:
 
         def register_adapter(name: str):
             try:
-                registry.register(
-                    name=name,
-                    adapter_type=InMemoryTicketAdapter,
-                    description=f"Adapter {name}"
-                )
+                registry.register(name=name, adapter_type=InMemoryTicketAdapter, description=f"Adapter {name}")
             except ValueError:
                 pass  # Duplicate registration expected
 
-        threads = [
-            threading.Thread(target=register_adapter, args=(f"adapter_{i}",))
-            for i in range(10)
-        ]
+        threads = [threading.Thread(target=register_adapter, args=(f"adapter_{i}",)) for i in range(10)]
 
         for thread in threads:
             thread.start()
@@ -299,11 +260,7 @@ class TestLLMProviderRegistry:
         """Test registering valid LLM provider adapter."""
         registry = LLMProviderRegistry()
 
-        registry.register(
-            name="claude_code",
-            adapter_type=ClaudeCodeAdapter,
-            description="Claude Code"
-        )
+        registry.register(name="claude_code", adapter_type=ClaudeCodeAdapter, description="Claude Code")
 
         assert registry.has_adapter("claude_code")
         assert registry.get("claude_code") == ClaudeCodeAdapter
@@ -312,11 +269,7 @@ class TestLLMProviderRegistry:
         """Test registering mock adapter."""
         registry = LLMProviderRegistry()
 
-        registry.register(
-            name="mock",
-            adapter_type=MockLLMAdapter,
-            description="Mock LLM"
-        )
+        registry.register(name="mock", adapter_type=MockLLMAdapter, description="Mock LLM")
 
         assert registry.has_adapter("mock")
 
@@ -333,11 +286,7 @@ class TestContainerRegistry:
         """Test registering Docker adapter."""
         registry = ContainerRegistry()
 
-        registry.register(
-            name="docker",
-            adapter_type=DockerContainerAdapter,
-            description="Docker"
-        )
+        registry.register(name="docker", adapter_type=DockerContainerAdapter, description="Docker")
 
         assert registry.has_adapter("docker")
         assert registry.get("docker") == DockerContainerAdapter
@@ -346,11 +295,7 @@ class TestContainerRegistry:
         """Test registering fake adapter."""
         registry = ContainerRegistry()
 
-        registry.register(
-            name="fake",
-            adapter_type=FakeContainerAdapter,
-            description="Fake container"
-        )
+        registry.register(name="fake", adapter_type=FakeContainerAdapter, description="Fake container")
 
         assert registry.has_adapter("fake")
 
@@ -367,11 +312,7 @@ class TestRepositoryRegistry:
         """Test registering Git adapter."""
         registry = RepositoryRegistry()
 
-        registry.register(
-            name="git",
-            adapter_type=GitRepositoryAdapter,
-            description="Git"
-        )
+        registry.register(name="git", adapter_type=GitRepositoryAdapter, description="Git")
 
         assert registry.has_adapter("git")
         assert registry.get("git") == GitRepositoryAdapter
@@ -380,11 +321,7 @@ class TestRepositoryRegistry:
         """Test registering in-memory adapter."""
         registry = RepositoryRegistry()
 
-        registry.register(
-            name="in_memory",
-            adapter_type=InMemoryRepositoryAdapter,
-            description="In-memory"
-        )
+        registry.register(name="in_memory", adapter_type=InMemoryRepositoryAdapter, description="In-memory")
 
         assert registry.has_adapter("in_memory")
 
@@ -401,11 +338,7 @@ class TestEventStoreRegistry:
         """Test registering in-memory event store."""
         registry = EventStoreRegistry()
 
-        registry.register(
-            name="in_memory",
-            adapter_type=InMemoryEventStore,
-            description="In-memory event store"
-        )
+        registry.register(name="in_memory", adapter_type=InMemoryEventStore, description="In-memory event store")
 
         assert registry.has_adapter("in_memory")
         assert registry.get("in_memory") == InMemoryEventStore
@@ -431,7 +364,7 @@ class TestAdapterMetadata:
             description="Test",
             version="1.0.0",
             tags=["production", "github", "issues"],
-            registered_at=datetime.now(UTC)
+            registered_at=datetime.now(UTC),
         )
 
         assert metadata.matches_tags(["production"])
@@ -449,17 +382,9 @@ class TestRegistryIntegration:
         ticket_registry = TicketSystemRegistry()
         llm_registry = LLMProviderRegistry()
 
-        ticket_registry.register(
-            name="test",
-            adapter_type=InMemoryTicketAdapter,
-            description="Test"
-        )
+        ticket_registry.register(name="test", adapter_type=InMemoryTicketAdapter, description="Test")
 
-        llm_registry.register(
-            name="test",
-            adapter_type=MockLLMAdapter,
-            description="Test"
-        )
+        llm_registry.register(name="test", adapter_type=MockLLMAdapter, description="Test")
 
         # Same name but different registries
         assert len(ticket_registry) == 1

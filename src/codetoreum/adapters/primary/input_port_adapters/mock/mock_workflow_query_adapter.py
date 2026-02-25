@@ -28,9 +28,7 @@ class MockWorkflowQueryAdapter(IWorkflowQueryPort):
         self._workflows: dict[str, dict] = {}
         self._lock = RLock()
 
-    async def get_workflow(
-        self, workflow_id: str, version: int | None = None
-    ) -> WorkflowDefinitionInfo:
+    async def get_workflow(self, workflow_id: str, version: int | None = None) -> WorkflowDefinitionInfo:
         """Get a workflow definition."""
         return WorkflowDefinitionInfo(
             id=workflow_id,
@@ -57,9 +55,7 @@ class MockWorkflowQueryAdapter(IWorkflowQueryPort):
             metadata={},
         )
 
-    async def list_workflows(
-        self, filters=None, pagination=None
-    ) -> WorkflowListResult:
+    async def list_workflows(self, filters=None, pagination=None) -> WorkflowListResult:
         """List workflows."""
         summary = WorkflowSummaryInfo(
             id="wf-mock-123",
@@ -83,9 +79,7 @@ class MockWorkflowQueryAdapter(IWorkflowQueryPort):
             has_next=False,
         )
 
-    async def get_workflow_versions(
-        self, workflow_id: str, limit: int = 10
-    ) -> WorkflowVersionHistoryResult:
+    async def get_workflow_versions(self, workflow_id: str, limit: int = 10) -> WorkflowVersionHistoryResult:
         """Get workflow version history."""
         return WorkflowVersionHistoryResult(
             workflow_id=workflow_id,
@@ -100,9 +94,7 @@ class MockWorkflowQueryAdapter(IWorkflowQueryPort):
             total_count=1,
         )
 
-    async def validate_workflow(
-        self, workflow_id: str, version: int | None = None
-    ) -> WorkflowValidationResult:
+    async def validate_workflow(self, workflow_id: str, version: int | None = None) -> WorkflowValidationResult:
         """Validate a workflow."""
         return WorkflowValidationResult(
             is_valid=True,

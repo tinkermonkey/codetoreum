@@ -77,7 +77,12 @@ def create_workspace_router(
         project_id: str | None = Query(None, description="Filter by project ID"),
         status: str | None = Query(None, description="Filter by status (running, stopped, etc.)"),
         offset: int = Query(DEFAULT_OFFSET, ge=0, description="Pagination offset"),
-        limit: int = Query(WORKSPACE_DEFAULT_PAGE_SIZE, ge=1, le=WORKSPACE_MAX_PAGE_SIZE, description=f"Pagination limit (max {WORKSPACE_MAX_PAGE_SIZE})"),
+        limit: int = Query(
+            WORKSPACE_DEFAULT_PAGE_SIZE,
+            ge=1,
+            le=WORKSPACE_MAX_PAGE_SIZE,
+            description=f"Pagination limit (max {WORKSPACE_MAX_PAGE_SIZE})",
+        ),
     ) -> WorkspaceListResponse:
         """
         List all workspaces with optional filtering.
@@ -310,7 +315,9 @@ def create_workspace_router(
                     disk_limit_mb=workspace.resource_usage.disk_limit_mb,
                     network_rx_bytes=workspace.resource_usage.network_rx_bytes,
                     network_tx_bytes=workspace.resource_usage.network_tx_bytes,
-                ) if workspace.resource_usage else None,
+                )
+                if workspace.resource_usage
+                else None,
                 mounted_files=[
                     MountedFileInfo(
                         source_path=f.source_path,

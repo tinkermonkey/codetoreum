@@ -136,10 +136,7 @@ class ExecutionMapper:
         Returns:
             ExecutionListResponse DTO
         """
-        executions = [
-            ExecutionMapper.to_summary_response(execution)
-            for execution in result.executions
-        ]
+        executions = [ExecutionMapper.to_summary_response(execution) for execution in result.executions]
 
         return ExecutionListResponse(
             executions=executions,

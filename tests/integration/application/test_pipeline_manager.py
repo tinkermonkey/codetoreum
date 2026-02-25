@@ -289,9 +289,7 @@ async def test_checkpoint_save_and_recover(pipeline_manager, mock_checkpoint_sto
 
     # Save checkpoint
     await pipeline_manager.checkpoint("test-pipeline", checkpoint)
-    mock_checkpoint_store.save_checkpoint.assert_called_once_with(
-        "test-pipeline", checkpoint
-    )
+    mock_checkpoint_store.save_checkpoint.assert_called_once_with("test-pipeline", checkpoint)
 
     # Recover checkpoint
     mock_checkpoint_store.load_checkpoint.return_value = checkpoint

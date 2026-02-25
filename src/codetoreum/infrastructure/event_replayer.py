@@ -17,7 +17,6 @@ class EventReplayerError(Exception):
     """Raised when event replay operations fail."""
 
 
-
 class EventReplayer:
     """
     Service for replaying events from event store.
@@ -128,9 +127,7 @@ class EventReplayer:
                 # Time manipulation: sleep proportional to event spacing
                 if i < len(events) - 1 and speed_multiplier > 0:
                     next_event = events[i + 1]
-                    time_diff = (
-                        next_event.occurred_at - event.occurred_at
-                    ).total_seconds()
+                    time_diff = (next_event.occurred_at - event.occurred_at).total_seconds()
 
                     if time_diff > 0:
                         sleep_time = time_diff / speed_multiplier
@@ -185,8 +182,7 @@ class EventReplayer:
             )
 
             logger.info(
-                f"Replaying stream {stream_id}: {len(events)} events "
-                f"(versions {from_version} to {to_version or 'end'})"
+                f"Replaying stream {stream_id}: {len(events)} events (versions {from_version} to {to_version or 'end'})"
             )
 
             total_events = len(events)

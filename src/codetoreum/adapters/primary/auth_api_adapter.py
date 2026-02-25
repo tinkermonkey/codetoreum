@@ -92,10 +92,13 @@ class UserResponse(BaseModel):
 class CreateAPIKeyRequest(BaseModel):
     """Create API key request model."""
 
-    name: str = Field(..., min_length=MIN_API_KEY_NAME_LENGTH, max_length=MAX_API_KEY_NAME_LENGTH, description="API key name")
-    roles: list[UserRole] = Field(
-        default=[UserRole.SERVICE_ACCOUNT], description="API key roles"
+    name: str = Field(
+        ...,
+        min_length=MIN_API_KEY_NAME_LENGTH,
+        max_length=MAX_API_KEY_NAME_LENGTH,
+        description="API key name",
     )
+    roles: list[UserRole] = Field(default=[UserRole.SERVICE_ACCOUNT], description="API key roles")
     expires_at: datetime | None = Field(None, description="Expiration timestamp")
 
 
@@ -169,9 +172,7 @@ class AuthAPIAdapter:
             Returns JWT access token and refresh token.
             """
             try:
-                command = LoginCommand(
-                    username=request.username, password=request.password
-                )
+                command = LoginCommand(username=request.username, password=request.password)
                 result = await self.auth_service.login(command)
 
                 return LoginResponse(
@@ -182,9 +183,7 @@ class AuthAPIAdapter:
                 )
 
             except AuthenticationError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e)
-                ) from e
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e)) from e
 
         @router.post(
             "/refresh",
@@ -209,9 +208,7 @@ class AuthAPIAdapter:
                 )
 
             except AuthenticationError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e)
-                ) from e
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e)) from e
 
         # ====================================================================
         # Authenticated Endpoints
@@ -251,9 +248,7 @@ class AuthAPIAdapter:
         )
         async def create_user(
             request: CreateUserRequest,
-            _auth: AuthContext = Depends(
-                self.auth_deps.require_permission(Permission.USER_CREATE)
-            ),
+            _auth: AuthContext = Depends(self.auth_deps.require_permission(Permission.USER_CREATE)),
         ) -> UserResponse:
             """
             Create a new user.
@@ -281,13 +276,9 @@ class AuthAPIAdapter:
                 )
 
             except UserAlreadyExistsError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT, detail=str(e)
-                ) from e
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
             except ValidationError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-                ) from e
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
         @router.get(
             "/users/{user_id}",
@@ -297,9 +288,7 @@ class AuthAPIAdapter:
         )
         async def get_user(
             user_id: UUID,
-            _auth: AuthContext = Depends(
-                self.auth_deps.require_permission(Permission.USER_VIEW)
-            ),
+            _auth: AuthContext = Depends(self.auth_deps.require_permission(Permission.USER_VIEW)),
         ) -> UserResponse:
             """
             Get user by ID.
@@ -321,9 +310,7 @@ class AuthAPIAdapter:
                 )
 
             except UserNotFoundError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
-                ) from e
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
 
         @router.patch(
             "/users/{user_id}",
@@ -334,9 +321,7 @@ class AuthAPIAdapter:
         async def update_user(
             user_id: UUID,
             request: UpdateUserRequest,
-            _auth: AuthContext = Depends(
-                self.auth_deps.require_permission(Permission.USER_UPDATE)
-            ),
+            _auth: AuthContext = Depends(self.auth_deps.require_permission(Permission.USER_UPDATE)),
         ) -> UserResponse:
             """
             Update user.
@@ -365,13 +350,9 @@ class AuthAPIAdapter:
                 )
 
             except UserNotFoundError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
-                ) from e
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
             except ValidationError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-                ) from e
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
         @router.delete(
             "/users/{user_id}",
@@ -380,9 +361,7 @@ class AuthAPIAdapter:
         )
         async def delete_user(
             user_id: UUID,
-            _auth: AuthContext = Depends(
-                self.auth_deps.require_permission(Permission.USER_DELETE)
-            ),
+            _auth: AuthContext = Depends(self.auth_deps.require_permission(Permission.USER_DELETE)),
         ) -> None:
             """
             Delete user.
@@ -392,9 +371,7 @@ class AuthAPIAdapter:
             try:
                 await self.auth_service.delete_user(user_id)
             except UserNotFoundError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
-                ) from e
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
 
         # ====================================================================
         # API Key Management Endpoints
@@ -436,9 +413,7 @@ class AuthAPIAdapter:
                 )
 
             except ValidationError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-                ) from e
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
         @router.get(
             "/api-keys",

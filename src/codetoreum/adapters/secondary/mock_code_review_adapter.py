@@ -64,10 +64,7 @@ class MockCodeReviewAdapter(MockEventEmitter, ICodeReviewService):
 
     # Query Operations
 
-    async def get_review_for_work_item(
-        self,
-        work_item_id: str
-    ) -> CodeReview | None:
+    async def get_review_for_work_item(self, work_item_id: str) -> CodeReview | None:
         """Find code review associated with a work item.
 
         Args:
@@ -140,17 +137,19 @@ class MockCodeReviewAdapter(MockEventEmitter, ICodeReviewService):
             review.status = "changes_requested"
 
             if self.current_project is not None:
-                self.emit(ReviewStatusChangedEvent(
-                    type="review.status_changed",
-                    review_id=review_id,
-                    work_item_id=review.work_item_id,
-                    project_id=self.current_project,
-                    previous_status=previous_status,
-                    new_status="changes_requested",
-                    reviewer="reviewer-1",
-                    timestamp=self._get_iso_timestamp(),
-                    source="mock"
-                ))
+                self.emit(
+                    ReviewStatusChangedEvent(
+                        type="review.status_changed",
+                        review_id=review_id,
+                        work_item_id=review.work_item_id,
+                        project_id=self.current_project,
+                        previous_status=previous_status,
+                        new_status="changes_requested",
+                        reviewer="reviewer-1",
+                        timestamp=self._get_iso_timestamp(),
+                        source="mock",
+                    )
+                )
 
     async def approve(self, review_id: str) -> None:
         """Approve a code review.
@@ -170,23 +169,22 @@ class MockCodeReviewAdapter(MockEventEmitter, ICodeReviewService):
 
         if previous_status != "approved":
             review.status = "approved"
-            review.approvals.append(Approval(
-                reviewer="reviewer-1",
-                approved_at=self._get_iso_timestamp()
-            ))
+            review.approvals.append(Approval(reviewer="reviewer-1", approved_at=self._get_iso_timestamp()))
 
             if self.current_project is not None:
-                self.emit(ReviewStatusChangedEvent(
-                    type="review.status_changed",
-                    review_id=review_id,
-                    work_item_id=review.work_item_id,
-                    project_id=self.current_project,
-                    previous_status=previous_status,
-                    new_status="approved",
-                    reviewer="reviewer-1",
-                    timestamp=self._get_iso_timestamp(),
-                    source="mock"
-                ))
+                self.emit(
+                    ReviewStatusChangedEvent(
+                        type="review.status_changed",
+                        review_id=review_id,
+                        work_item_id=review.work_item_id,
+                        project_id=self.current_project,
+                        previous_status=previous_status,
+                        new_status="approved",
+                        reviewer="reviewer-1",
+                        timestamp=self._get_iso_timestamp(),
+                        source="mock",
+                    )
+                )
 
     # Monitoring Lifecycle
 
@@ -200,7 +198,7 @@ class MockCodeReviewAdapter(MockEventEmitter, ICodeReviewService):
         self._monitoring[project_id] = MonitoringStatus(
             state=MonitoringState.ACTIVE,
             project_id=project_id,
-            started_at=self._get_iso_timestamp()
+            started_at=self._get_iso_timestamp(),
         )
 
     async def stop_monitoring(self, project_id: str) -> None:
@@ -221,19 +219,11 @@ class MockCodeReviewAdapter(MockEventEmitter, ICodeReviewService):
         Returns:
             MonitoringStatus with current state
         """
-        return self._monitoring.get(project_id, MonitoringStatus(
-            state=MonitoringState.STOPPED,
-            project_id=project_id
-        ))
+        return self._monitoring.get(project_id, MonitoringStatus(state=MonitoringState.STOPPED, project_id=project_id))
 
     # Test Helper Methods
 
-    def add_review(
-        self,
-        review_id: str,
-        work_item_id: str,
-        status: CodeReviewStatus = "open"
-    ) -> None:
+    def add_review(self, review_id: str, work_item_id: str, status: CodeReviewStatus = "open") -> None:
         """Test helper: Create a code review.
 
         Args:
@@ -249,7 +239,7 @@ class MockCodeReviewAdapter(MockEventEmitter, ICodeReviewService):
             target_branch="main",
             status=status,
             reviewers=["reviewer-1"],
-            approvals=[]
+            approvals=[],
         )
         self._work_item_reviews[work_item_id] = review_id
 
@@ -274,29 +264,24 @@ class MockCodeReviewAdapter(MockEventEmitter, ICodeReviewService):
         previous_status = review.status
 
         review.status = "approved"
-        review.approvals.append(Approval(
-            reviewer=reviewer,
-            approved_at=self._get_iso_timestamp()
-        ))
+        review.approvals.append(Approval(reviewer=reviewer, approved_at=self._get_iso_timestamp()))
 
         if self.current_project is not None:
-            self.emit(ReviewStatusChangedEvent(
-                type="review.status_changed",
-                review_id=review_id,
-                work_item_id=review.work_item_id,
-                project_id=self.current_project,
-                previous_status=previous_status,
-                new_status="approved",
-                reviewer=reviewer,
-                timestamp=self._get_iso_timestamp(),
-                source="mock"
-            ))
+            self.emit(
+                ReviewStatusChangedEvent(
+                    type="review.status_changed",
+                    review_id=review_id,
+                    work_item_id=review.work_item_id,
+                    project_id=self.current_project,
+                    previous_status=previous_status,
+                    new_status="approved",
+                    reviewer=reviewer,
+                    timestamp=self._get_iso_timestamp(),
+                    source="mock",
+                )
+            )
 
-    def simulate_changes_requested(
-        self,
-        review_id: str,
-        reviewer: str
-    ) -> None:
+    def simulate_changes_requested(self, review_id: str, reviewer: str) -> None:
         """Test helper: Simulate requesting changes on review.
 
         Simulates a reviewer requesting changes to a code review,
@@ -319,17 +304,19 @@ class MockCodeReviewAdapter(MockEventEmitter, ICodeReviewService):
         review.status = "changes_requested"
 
         if self.current_project is not None:
-            self.emit(ReviewStatusChangedEvent(
-                type="review.status_changed",
-                review_id=review_id,
-                work_item_id=review.work_item_id,
-                project_id=self.current_project,
-                previous_status=previous_status,
-                new_status="changes_requested",
-                reviewer=reviewer,
-                timestamp=self._get_iso_timestamp(),
-                source="mock"
-            ))
+            self.emit(
+                ReviewStatusChangedEvent(
+                    type="review.status_changed",
+                    review_id=review_id,
+                    work_item_id=review.work_item_id,
+                    project_id=self.current_project,
+                    previous_status=previous_status,
+                    new_status="changes_requested",
+                    reviewer=reviewer,
+                    timestamp=self._get_iso_timestamp(),
+                    source="mock",
+                )
+            )
 
     # Helper Methods
 

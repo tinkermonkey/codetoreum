@@ -29,9 +29,9 @@ class CircuitBreaker(ICircuitBreaker):
     def __init__(
         self,
         failure_threshold: int = 5,
-        timeout_seconds: int | float = 60,
+        timeout_seconds: float = 60,
         success_threshold: int = 2,
-        expected_exceptions: tuple[type[Exception], ...] = (Exception,)
+        expected_exceptions: tuple[type[Exception], ...] = (Exception,),
     ):
         """
         Initialize circuit breaker.
@@ -60,13 +60,7 @@ class CircuitBreaker(ICircuitBreaker):
 
         self._lock = asyncio.Lock()
 
-    async def call(
-        self,
-        operation: Callable[..., T],
-        operation_name: str,
-        *args,
-        **kwargs
-    ) -> T:
+    async def call(self, operation: Callable[..., T], operation_name: str, *args, **kwargs) -> T:
         """Execute operation with circuit breaker protection."""
         async with self._lock:
             self._total_calls += 1
@@ -78,13 +72,9 @@ class CircuitBreaker(ICircuitBreaker):
                     self._success_count = 0
                 else:
                     message = (
-                        f"Circuit breaker open for {operation_name}. "
-                        f"Will retry in {self._time_until_retry():.1f}s"
+                        f"Circuit breaker open for {operation_name}. Will retry in {self._time_until_retry():.1f}s"
                     )
-                    raise CircuitBreakerOpenError(
-                        message,
-                        retry_after_seconds=self._time_until_retry()
-                    )
+                    raise CircuitBreakerOpenError(message, retry_after_seconds=self._time_until_retry())
 
         # Execute operation (outside lock to avoid holding during I/O)
         try:
@@ -158,7 +148,7 @@ class CircuitBreaker(ICircuitBreaker):
             last_success_time=datetime.fromtimestamp(self._last_success_time) if self._last_success_time else None,
             total_calls=self._total_calls,
             total_failures=self._total_failures,
-            total_successes=self._total_successes
+            total_successes=self._total_successes,
         )
 
     def reset(self) -> None:

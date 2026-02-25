@@ -72,12 +72,14 @@ class ProjectClonedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "project_name": self.project_name,
-            "repo_url": self.repo_url,
-            "workspace_path": self.workspace_path,
-            "branch": self.branch,
-        })
+        d.update(
+            {
+                "project_name": self.project_name,
+                "repo_url": self.repo_url,
+                "workspace_path": self.workspace_path,
+                "branch": self.branch,
+            }
+        )
         return d
 
     @classmethod
@@ -98,9 +100,7 @@ class ProjectClonedEvent(CodetoreumEvent):
                 f"{missing_fields}. All of project_name, repo_url, workspace_path, "
                 f"and branch are required."
             )
-            raise ValueError(
-                msg
-            )
+            raise ValueError(msg)
 
         return cls(
             type=data.get("type", "project.cloned"),
@@ -171,12 +171,14 @@ class ProjectCloneFailedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "project_name": self.project_name,
-            "repo_url": self.repo_url,
-            "error_message": self.error_message,
-            "will_retry": self.will_retry,
-        })
+        d.update(
+            {
+                "project_name": self.project_name,
+                "repo_url": self.repo_url,
+                "error_message": self.error_message,
+                "will_retry": self.will_retry,
+            }
+        )
         return d
 
     @classmethod
@@ -197,9 +199,7 @@ class ProjectCloneFailedEvent(CodetoreumEvent):
                 f"{missing_fields}. All of project_name, repo_url, and error_message "
                 f"are required."
             )
-            raise ValueError(
-                msg
-            )
+            raise ValueError(msg)
 
         return cls(
             type=data.get("type", "project.clone_failed"),
@@ -252,9 +252,11 @@ class ProjectEnabledEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "project_name": self.project_name,
-        })
+        d.update(
+            {
+                "project_name": self.project_name,
+            }
+        )
         return d
 
     @classmethod
@@ -265,13 +267,8 @@ class ProjectEnabledEvent(CodetoreumEvent):
             ValueError: If required fields are missing from input dict
         """
         if not data.get("project_name"):
-            msg = (
-                "Cannot deserialize ProjectEnabledEvent: missing required field "
-                "'project_name'"
-            )
-            raise ValueError(
-                msg
-            )
+            msg = "Cannot deserialize ProjectEnabledEvent: missing required field 'project_name'"
+            raise ValueError(msg)
 
         return cls(
             type=data.get("type", "project.enabled"),
@@ -321,9 +318,11 @@ class ProjectDisabledEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "project_name": self.project_name,
-        })
+        d.update(
+            {
+                "project_name": self.project_name,
+            }
+        )
         return d
 
     @classmethod
@@ -334,13 +333,8 @@ class ProjectDisabledEvent(CodetoreumEvent):
             ValueError: If required fields are missing from input dict
         """
         if not data.get("project_name"):
-            msg = (
-                "Cannot deserialize ProjectDisabledEvent: missing required field "
-                "'project_name'"
-            )
-            raise ValueError(
-                msg
-            )
+            msg = "Cannot deserialize ProjectDisabledEvent: missing required field 'project_name'"
+            raise ValueError(msg)
 
         return cls(
             type=data.get("type", "project.disabled"),
@@ -413,12 +407,14 @@ class OrchestrationCycleCompletedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "projects_processed": self.projects_processed,
-            "boards_processed": self.boards_processed,
-            "total_actions": self.total_actions,
-            "cycle_duration_ms": self.cycle_duration_ms,
-        })
+        d.update(
+            {
+                "projects_processed": self.projects_processed,
+                "boards_processed": self.boards_processed,
+                "total_actions": self.total_actions,
+                "cycle_duration_ms": self.cycle_duration_ms,
+            }
+        )
         return d
 
     @classmethod

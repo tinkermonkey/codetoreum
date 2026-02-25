@@ -148,9 +148,7 @@ class TestGetEnabledProjects:
         assert projects == ["api-service"]
 
     @pytest.mark.asyncio
-    async def test_get_enabled_projects_filters_disabled(
-        self, adapter, config_1, config_2
-    ):
+    async def test_get_enabled_projects_filters_disabled(self, adapter, config_1, config_2):
         """Test that disabled projects are filtered out."""
         adapter.add_project("api-service", config_1)
         adapter.add_project("web-app", config_2)
@@ -161,9 +159,7 @@ class TestGetEnabledProjects:
         assert "web-app" not in projects
 
     @pytest.mark.asyncio
-    async def test_get_enabled_projects_sorted(
-        self, adapter, config_1, config_2, config_3
-    ):
+    async def test_get_enabled_projects_sorted(self, adapter, config_1, config_2, config_3):
         """Test that enabled projects are returned in sorted order."""
         adapter.add_project("zebra-service", config_1)
         adapter.add_project("alpha-service", config_3)
@@ -194,9 +190,7 @@ class TestGetProjectConfig:
     @pytest.mark.asyncio
     async def test_get_nonexistent_project_config_fails(self, adapter):
         """Test that getting nonexistent project config raises error."""
-        with pytest.raises(
-            ResourceNotFoundError, match="not found"
-        ):
+        with pytest.raises(ResourceNotFoundError, match="not found"):
             await adapter.get_project_config("nonexistent")
 
 
@@ -275,10 +269,7 @@ class TestEnsureProjectCloned:
 
         # Check that event was emitted
         events = emitter.get_events()
-        assert any(
-            isinstance(e, ProjectClonedEvent) and e.project_name == "api-service"
-            for e in events
-        )
+        assert any(isinstance(e, ProjectClonedEvent) and e.project_name == "api-service" for e in events)
 
     @pytest.mark.asyncio
     async def test_clone_event_contains_details(self, config_1):
@@ -324,9 +315,7 @@ class TestEnsureProjectCloned:
         with pytest.raises(ExternalServiceError):
             await adapter.ensure_project_cloned("api-service")
 
-        events = [
-            e for e in emitter.get_events() if isinstance(e, ProjectCloneFailedEvent)
-        ]
+        events = [e for e in emitter.get_events() if isinstance(e, ProjectCloneFailedEvent)]
         assert len(events) == 1
         assert events[0].project_name == "api-service"
         assert events[0].will_retry is True
@@ -415,9 +404,7 @@ class TestEventEmitterIntegration:
 
         await adapter.ensure_project_cloned("api-service")
 
-        events = [
-            e for e in emitter.get_events() if isinstance(e, ProjectClonedEvent)
-        ]
+        events = [e for e in emitter.get_events() if isinstance(e, ProjectClonedEvent)]
         assert len(events) == 1
 
     @pytest.mark.asyncio
@@ -429,9 +416,7 @@ class TestEventEmitterIntegration:
 
         await adapter.ensure_project_cloned("api-service")
 
-        events = [
-            e for e in emitter.get_events() if isinstance(e, ProjectClonedEvent)
-        ]
+        events = [e for e in emitter.get_events() if isinstance(e, ProjectClonedEvent)]
         assert len(events) == 1
 
 
@@ -564,7 +549,6 @@ class TestConcurrency:
         """
         import threading
 
-
         # First, add a project that we'll update concurrently
         adapter.add_project("test-project", config_1)
         errors = []
@@ -595,10 +579,7 @@ class TestConcurrency:
                 errors.append(str(e))
 
         # Run 20 concurrent threads to increase contention
-        threads = [
-            threading.Thread(target=concurrent_operation, args=(i,))
-            for i in range(20)
-        ]
+        threads = [threading.Thread(target=concurrent_operation, args=(i,)) for i in range(20)]
 
         for t in threads:
             t.start()

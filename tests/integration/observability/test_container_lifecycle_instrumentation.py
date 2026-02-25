@@ -106,7 +106,7 @@ class TestDockerContainerAdapterInstrumentation:
                     labels={
                         "org.codetoreum.work_item_id": "work_item_123",
                         "org.codetoreum.agent": "code_analyzer",
-                    }
+                    },
                 )
 
                 assert container_id == "test_container_id_sha256"

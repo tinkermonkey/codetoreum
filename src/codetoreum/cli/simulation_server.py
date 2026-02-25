@@ -86,7 +86,7 @@ def validate_yaml_file(file_path: Path) -> None:
     if file_size_mb > MAX_YAML_FILE_SIZE_MB:
         raise click.FileError(
             str(file_path),
-            f"File too large ({file_size_mb:.1f}MB). Maximum allowed: {MAX_YAML_FILE_SIZE_MB}MB"
+            f"File too large ({file_size_mb:.1f}MB). Maximum allowed: {MAX_YAML_FILE_SIZE_MB}MB",
         )
 
     # Validate YAML structure
@@ -296,10 +296,12 @@ async def seed_data(
     }
 
     console.print("[green]✓ Data seeded successfully[/green]")
-    console.print(f"[dim]  Projects: {counts['projects']}, "
-                  f"Workflows: {counts['workflows']}, "
-                  f"Agents: {counts['agents']}, "
-                  f"Work Items: {counts['work_items']}[/dim]")
+    console.print(
+        f"[dim]  Projects: {counts['projects']}, "
+        f"Workflows: {counts['workflows']}, "
+        f"Agents: {counts['agents']}, "
+        f"Work Items: {counts['work_items']}[/dim]"
+    )
 
     return counts
 
@@ -479,7 +481,10 @@ async def main_async(
         sys.exit(1)
     except RuntimeError as e:
         console.print(f"\n[bold red]Runtime error:[/bold red] {e}")
-        logger.exception("Runtime error in simulation server", extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR})
+        logger.exception(
+            "Runtime error in simulation server",
+            extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+        )
         sys.exit(1)
     except Exception as e:
         console.print(f"\n[bold red]Unexpected error:[/bold red] {e}")
@@ -494,7 +499,10 @@ async def main_async(
                 console.print("[green]✓ Cleanup completed successfully[/green]")
             except Exception as e:
                 console.print(f"[red]Error during cleanup: {e}[/red]")
-                logger.error(f"Error during cleanup: {e}", extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR})
+                logger.error(
+                    f"Error during cleanup: {e}",
+                    extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
+                )
 
 
 @click.command()

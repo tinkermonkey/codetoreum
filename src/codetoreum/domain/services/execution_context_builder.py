@@ -49,23 +49,17 @@ class ExecutionContextBuilder:
             DomainError: If validation fails
         """
         # Validate inputs
-        ExecutionContextBuilder._validate_inputs(
-            work_item, workflow_id, stage_name, agent, project, workspace
-        )
+        ExecutionContextBuilder._validate_inputs(work_item, workflow_id, stage_name, agent, project, workspace)
 
         # Validate workspace and work item match
         if workspace.work_item_id != work_item.id:
             msg = f"Workspace work_item_id ({workspace.work_item_id}) does not match work item ID ({work_item.id})"
-            raise DomainError(
-                msg
-            )
+            raise DomainError(msg)
 
         # Validate project IDs match
         if workspace.project_id != project.id:
             msg = f"Workspace project_id ({workspace.project_id}) does not match project ID ({project.id})"
-            raise DomainError(
-                msg
-            )
+            raise DomainError(msg)
 
         # Determine permissions
         filesystem_write_allowed = agent.filesystem_write_allowed and workspace.can_make_code_changes()
@@ -137,9 +131,7 @@ class ExecutionContextBuilder:
 
         if agent.requires_dev_container and not project.requires_dev_container:
             msg = f"Agent {agent.name} requires dev container but project {project.name} does not have one configured"
-            raise DomainError(
-                msg
-            )
+            raise DomainError(msg)
 
     @staticmethod
     def _build_metadata(

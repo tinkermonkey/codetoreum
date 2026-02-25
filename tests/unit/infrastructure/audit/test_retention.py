@@ -197,12 +197,8 @@ class TestRetentionPolicyManager:
     async def test_cleanup_with_different_retention_periods(self):
         """Test cleanup with different retention periods."""
         store = InMemoryAuditStore()
-        manager30 = RetentionPolicyManager(
-            store, RetentionPolicy(default_retention_days=30)
-        )
-        manager90 = RetentionPolicyManager(
-            store, RetentionPolicy(default_retention_days=90)
-        )
+        manager30 = RetentionPolicyManager(store, RetentionPolicy(default_retention_days=30))
+        manager90 = RetentionPolicyManager(store, RetentionPolicy(default_retention_days=90))
 
         # Add events at different ages
         now = datetime.now(UTC)

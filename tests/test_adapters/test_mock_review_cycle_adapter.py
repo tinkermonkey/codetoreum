@@ -79,14 +79,8 @@ class TestReviewSequenceConfiguration:
     def test_set_review_sequence(self, adapter):
         """Test setting custom review sequence."""
         sequence = [
-            ReviewSequenceItem(
-                decision=ReviewDecision.REQUEST_CHANGES,
-                summary="First pass"
-            ),
-            ReviewSequenceItem(
-                decision=ReviewDecision.APPROVE,
-                summary="Second pass looks good"
-            ),
+            ReviewSequenceItem(decision=ReviewDecision.REQUEST_CHANGES, summary="First pass"),
+            ReviewSequenceItem(decision=ReviewDecision.APPROVE, summary="Second pass looks good"),
         ]
         adapter.set_review_sequence("item-1", sequence)
         assert adapter._review_sequences["item-1"] == sequence
@@ -288,10 +282,7 @@ class TestEventEmission:
 
         await adapter.start_review_cycle(base_request)
 
-        assert any(
-            hasattr(e, "type") and e.type == "review_cycle.approved"
-            for e in events_received
-        )
+        assert any(hasattr(e, "type") and e.type == "review_cycle.approved" for e in events_received)
 
     @pytest.mark.asyncio
     async def test_review_cycle_escalated_event(self, adapter, base_request):

@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 try:
-    from opentelemetry import context, trace
+    from opentelemetry import context  # noqa: F401 - used as context.attach()/detach()
     from opentelemetry.context import Context
     from opentelemetry.trace import (
         SpanContext,
@@ -84,7 +84,7 @@ class TraceContextData:
         if not isinstance(traceparent, str):
             logger.warning(
                 f"traceparent must be a string, got {type(traceparent).__name__}",
-                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
             )
             return None
 
@@ -121,7 +121,7 @@ class TraceContextData:
             logger.error(
                 f"Unexpected error parsing traceparent: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
             )
             return None
 
@@ -200,15 +200,13 @@ class TraceContextPropagator:
 
             event.metadata[TraceContextPropagator.TRACE_CONTEXT_KEY] = traceparent
 
-            logger.debug(
-                f"Injected trace context into event {event.event_type}: {traceparent}"
-            )
+            logger.debug(f"Injected trace context into event {event.event_type}: {traceparent}")
 
         except Exception as e:
             logger.warning(
                 f"Failed to inject trace context: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
             )
 
     @staticmethod
@@ -238,9 +236,7 @@ class TraceContextPropagator:
 
         trace_data = TraceContextData.from_traceparent(traceparent)
         if trace_data:
-            logger.debug(
-                f"Extracted trace context from event {event.event_type}: {traceparent}"
-            )
+            logger.debug(f"Extracted trace context from event {event.event_type}: {traceparent}")
         return trace_data
 
     @staticmethod
@@ -297,10 +293,7 @@ class TraceContextPropagator:
             # Create context with this span context
             ctx = set_span_in_context(non_recording_span)
 
-            logger.debug(
-                f"Activated trace context: trace_id={trace_data.trace_id}, "
-                f"span_id={trace_data.span_id}"
-            )
+            logger.debug(f"Activated trace context: trace_id={trace_data.trace_id}, span_id={trace_data.span_id}")
 
             return ctx
 
@@ -308,7 +301,7 @@ class TraceContextPropagator:
             logger.warning(
                 f"Failed to activate trace context: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
             )
             return None
 
@@ -378,6 +371,7 @@ class EventBusTraceContext:
 
 
 # Convenience functions for event bus integration
+
 
 def inject_current_trace_context_into_event(event: DomainEvent) -> None:
     """

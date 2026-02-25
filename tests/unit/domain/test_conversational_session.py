@@ -21,7 +21,7 @@ class TestConversationalSessionState:
             llm_conversation_id="conv-abc123",
             last_processed_comment_id="comment-10",
             last_interaction_timestamp="2025-01-14T10:35:00+00:00",
-            status="active"
+            status="active",
         )
 
         assert state.session_id == "sess-001"
@@ -45,7 +45,7 @@ class TestConversationalSessionState:
             llm_conversation_id=None,
             last_processed_comment_id="comment-5",
             last_interaction_timestamp="2025-01-14T10:40:00+00:00",
-            status="suspended"
+            status="suspended",
         )
 
         assert state.llm_conversation_id is None
@@ -64,7 +64,7 @@ class TestConversationalSessionState:
                 llm_conversation_id=None,
                 last_processed_comment_id="comment-1",
                 last_interaction_timestamp="2025-01-14T10:00:00+00:00",
-                status=status  # type: ignore
+                status=status,  # type: ignore
             )
             assert state.status == status
 
@@ -80,7 +80,7 @@ class TestConversationalSessionState:
                 llm_conversation_id="conv-abc123",
                 last_processed_comment_id="comment-10",
                 last_interaction_timestamp="2025-01-14T10:35:00+00:00",
-                status="active"
+                status="active",
             )
 
     def test_missing_work_item_id(self):
@@ -95,7 +95,7 @@ class TestConversationalSessionState:
                 llm_conversation_id="conv-abc123",
                 last_processed_comment_id="comment-10",
                 last_interaction_timestamp="2025-01-14T10:35:00+00:00",
-                status="active"
+                status="active",
             )
 
     def test_missing_project_id(self):
@@ -110,7 +110,7 @@ class TestConversationalSessionState:
                 llm_conversation_id="conv-abc123",
                 last_processed_comment_id="comment-10",
                 last_interaction_timestamp="2025-01-14T10:35:00+00:00",
-                status="active"
+                status="active",
             )
 
     def test_missing_agent_assignment(self):
@@ -125,7 +125,7 @@ class TestConversationalSessionState:
                 llm_conversation_id="conv-abc123",
                 last_processed_comment_id="comment-10",
                 last_interaction_timestamp="2025-01-14T10:35:00+00:00",
-                status="active"
+                status="active",
             )
 
     def test_column_name_is_optional(self):
@@ -139,7 +139,7 @@ class TestConversationalSessionState:
             llm_conversation_id="conv-abc123",
             last_processed_comment_id="comment-10",
             last_interaction_timestamp="2025-01-14T10:35:00+00:00",
-            status="active"
+            status="active",
         )
         assert state.column_name is None
 
@@ -155,7 +155,7 @@ class TestConversationalSessionState:
                 llm_conversation_id="conv-abc123",
                 last_processed_comment_id="",
                 last_interaction_timestamp="2025-01-14T10:35:00+00:00",
-                status="active"
+                status="active",
             )
 
     def test_missing_last_interaction_timestamp(self):
@@ -170,7 +170,7 @@ class TestConversationalSessionState:
                 llm_conversation_id="conv-abc123",
                 last_processed_comment_id="comment-10",
                 last_interaction_timestamp="",
-                status="active"
+                status="active",
             )
 
     def test_invalid_iso8601_timestamp(self):
@@ -185,7 +185,7 @@ class TestConversationalSessionState:
                 llm_conversation_id="conv-abc123",
                 last_processed_comment_id="comment-10",
                 last_interaction_timestamp="not-a-timestamp",
-                status="active"
+                status="active",
             )
 
     def test_iso8601_timestamp_with_z_suffix(self):
@@ -199,7 +199,7 @@ class TestConversationalSessionState:
             llm_conversation_id="conv-abc123",
             last_processed_comment_id="comment-10",
             last_interaction_timestamp="2025-01-14T10:35:00Z",
-            status="active"
+            status="active",
         )
         assert state.last_interaction_timestamp == "2025-01-14T10:35:00Z"
 
@@ -214,7 +214,7 @@ class TestConversationalSessionState:
             llm_conversation_id="conv-abc123",
             last_processed_comment_id="comment-10",
             last_interaction_timestamp="2025-01-14T10:35:00+02:30",
-            status="active"
+            status="active",
         )
         assert state.last_interaction_timestamp == "2025-01-14T10:35:00+02:30"
 
@@ -230,7 +230,7 @@ class TestConversationalSessionState:
                 llm_conversation_id="conv-abc123",
                 last_processed_comment_id="comment-10",
                 last_interaction_timestamp="2025-01-14T10:35:00+00:00",
-                status="invalid"  # type: ignore
+                status="invalid",  # type: ignore
             )
 
     def test_session_state_serialization(self):
@@ -244,7 +244,7 @@ class TestConversationalSessionState:
             llm_conversation_id="conv-abc123",
             last_processed_comment_id="comment-10",
             last_interaction_timestamp="2025-01-14T10:35:00+00:00",
-            status="active"
+            status="active",
         )
 
         d = state.to_dict()
@@ -270,7 +270,7 @@ class TestConversationalSessionState:
             "llm_conversation_id": "conv-def456",
             "last_processed_comment_id": "comment-20",
             "last_interaction_timestamp": "2025-01-14T11:00:00+00:00",
-            "status": "suspended"
+            "status": "suspended",
         }
 
         state = ConversationalSessionState.from_dict(d)
@@ -296,7 +296,7 @@ class TestConversationalSessionState:
             llm_conversation_id="conv-ghi789",
             last_processed_comment_id="comment-30",
             last_interaction_timestamp="2025-01-14T12:00:00+00:00",
-            status="active"
+            status="active",
         )
 
         d = original.to_dict()
@@ -323,7 +323,7 @@ class TestConversationalSessionState:
             llm_conversation_id=None,
             last_processed_comment_id="comment-1",
             last_interaction_timestamp="2025-01-14T13:00:00+00:00",
-            status="terminated"
+            status="terminated",
         )
 
         d = original.to_dict()
@@ -365,7 +365,7 @@ class TestConversationalSessionStateImmutability:
             llm_conversation_id="conv-abc123",
             last_processed_comment_id="comment-10",
             last_interaction_timestamp="2025-01-14T10:35:00+00:00",
-            status="active"
+            status="active",
         )
 
         # Verify the state is properly created
@@ -413,7 +413,7 @@ class TestConversationalSessionStateImmutability:
             llm_conversation_id="conv-abc123",
             last_processed_comment_id="comment-10",
             last_interaction_timestamp="2025-01-14T10:35:00+00:00",
-            status="active"
+            status="active",
         )
 
         # To update state, create a new instance (immutability pattern)
@@ -426,7 +426,7 @@ class TestConversationalSessionStateImmutability:
             llm_conversation_id=original_state.llm_conversation_id,
             last_processed_comment_id="comment-11",  # Updated
             last_interaction_timestamp="2025-01-14T10:40:00+00:00",  # Updated
-            status=original_state.status
+            status=original_state.status,
         )
 
         # Original is unchanged
@@ -448,7 +448,7 @@ class TestConversationalSessionStateImmutability:
             llm_conversation_id="conv-abc123",
             last_processed_comment_id="comment-10",
             last_interaction_timestamp="2025-01-14T10:35:00+00:00",
-            status="active"
+            status="active",
         )
 
         # All modification attempts should fail consistently

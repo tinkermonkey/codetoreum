@@ -21,7 +21,6 @@ import logging
 import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Optional
 
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
@@ -75,7 +74,7 @@ class InMemoryQueueService(IPipelineQueueService):
         board_service: IBoardService | None = None,
         time_source: Callable[[], datetime] | None = None,
         event_emitter: IEventEmitter | None = None,
-        event_bus: Optional[EventBus] = None,
+        event_bus: EventBus | None = None,
     ) -> None:
         """Initialize empty queue service.
 
@@ -97,10 +96,7 @@ class InMemoryQueueService(IPipelineQueueService):
 
         # Subscribe to board position changes if event bus provided
         if self._event_bus:
-            self._event_bus.subscribe(
-                "WorkItemColumnChangedEvent",
-                self._handle_board_position_change
-            )
+            self._event_bus.subscribe("WorkItemColumnChangedEvent", self._handle_board_position_change)
 
     async def is_item_in_queue(self, work_item_id: str) -> bool:
         """Check if a work item is currently in any queue.
@@ -176,7 +172,7 @@ class InMemoryQueueService(IPipelineQueueService):
                     "project_id": project_id,
                     "board_id": board_id,
                     "position": position_in_column,
-                }
+                },
             )
 
         # Normalize timestamp to datetime if needed
@@ -195,9 +191,7 @@ class InMemoryQueueService(IPipelineQueueService):
             # Check if item already in queue
             if any(entry.work_item_id == work_item_id for entry in queue):
                 msg = f"Work item {work_item_id} already in queue for {queue_key}"
-                raise DuplicateQueueEntryError(
-                    msg
-                )
+                raise DuplicateQueueEntryError(msg)
 
             # Create new queue entry (frozen dataclass)
             entry = PipelineQueueEntry(
@@ -269,9 +263,7 @@ class InMemoryQueueService(IPipelineQueueService):
                     if entry.work_item_id == work_item_id:
                         if entry.status == QueueStatus.ACTIVE:
                             msg = f"Work item {work_item_id} is already marked active"
-                            raise InvalidQueueStateError(
-                                msg
-                            )
+                            raise InvalidQueueStateError(msg)
 
                         # Create new entry with updated status (immutable pattern)
                         new_entry = PipelineQueueEntry(
@@ -351,9 +343,7 @@ class InMemoryQueueService(IPipelineQueueService):
                         return True
             return False
 
-    async def get_next_waiting_item(
-        self, project_id: str, board_id: str
-    ) -> PipelineQueueEntry | None:
+    async def get_next_waiting_item(self, project_id: str, board_id: str) -> PipelineQueueEntry | None:
         """Get the next waiting item from the queue based on board position.
 
         Before selecting the next item, syncs with board state to ensure queue
@@ -392,9 +382,7 @@ class InMemoryQueueService(IPipelineQueueService):
 
             return None
 
-    async def get_queue_entries(
-        self, project_id: str, board_id: str
-    ) -> list[PipelineQueueEntry]:
+    async def get_queue_entries(self, project_id: str, board_id: str) -> list[PipelineQueueEntry]:
         """Get all queue entries for a pipeline.
 
         Returns all queue entries (both WAITING and ACTIVE) for the specified
@@ -424,9 +412,7 @@ class InMemoryQueueService(IPipelineQueueService):
             # Return a copy to prevent external modification
             return list(queue)
 
-    async def sync_queue_with_board(
-        self, project_id: str, board_id: str, column: str
-    ) -> None:
+    async def sync_queue_with_board(self, project_id: str, board_id: str, column: str) -> None:
         """Synchronize queue state with current board column state.
 
         Ensures queue entries match the actual work items in the trigger column.
@@ -486,17 +472,11 @@ class InMemoryQueueService(IPipelineQueueService):
                 queue_item_ids = {entry.work_item_id for entry in queue}
 
                 # Step 1: Remove items no longer in column
-                queue = [
-                    entry
-                    for entry in queue
-                    if entry.work_item_id in items_in_column
-                ]
+                queue = [entry for entry in queue if entry.work_item_id in items_in_column]
 
                 # Step 2: Add new items discovered in column
                 now = self._time_source()
-                for position, work_item_id in enumerate(
-                    target_column.work_item_ids
-                ):
+                for position, work_item_id in enumerate(target_column.work_item_ids):
                     if work_item_id not in queue_item_ids:
                         # New item in column - add to queue
                         entry = PipelineQueueEntry(
@@ -512,9 +492,7 @@ class InMemoryQueueService(IPipelineQueueService):
 
                 # Step 3: Update positions for existing items based on board state
                 updated_queue = []
-                for position, work_item_id in enumerate(
-                    target_column.work_item_ids
-                ):
+                for position, work_item_id in enumerate(target_column.work_item_ids):
                     # Find corresponding entry in queue
                     for entry in queue:
                         if entry.work_item_id == work_item_id:
@@ -575,7 +553,8 @@ class InMemoryQueueService(IPipelineQueueService):
                     "board_id": board_id,
                     "column": column,
                     "error_type": type(e).__name__,
-                    "error_id": ErrorRegistry.ERR_PIPELINE_LOCK_ERROR}
+                    "error_id": ErrorRegistry.ERR_PIPELINE_LOCK_ERROR,
+                },
             )
             # Don't raise - allow queue to remain in current state
             # Next sync or lock operation will retry
@@ -636,14 +615,12 @@ class InMemoryQueueService(IPipelineQueueService):
                     "from_column": event.from_column,
                     "to_column": event.to_column,
                     "error_type": type(e).__name__,
-                }
+                },
             )
 
     # ===== Test Helper Methods =====
 
-    def set_board_order(
-        self, project_id: str, board_id: str, ordered_work_items: list[str]
-    ) -> None:
+    def set_board_order(self, project_id: str, board_id: str, ordered_work_items: list[str]) -> None:
         """Test helper to set simulated board order for queue position simulation.
 
         Allows tests to directly configure board position ordering without requiring
@@ -697,9 +674,7 @@ class InMemoryQueueService(IPipelineQueueService):
         with self._lock:
             return self._operations_log.copy()
 
-    def get_queue_state_for_testing(
-        self, project_id: str, board_id: str
-    ) -> tuple[int, list[PipelineQueueEntry]]:
+    def get_queue_state_for_testing(self, project_id: str, board_id: str) -> tuple[int, list[PipelineQueueEntry]]:
         """Test helper to get complete queue state.
 
         Returns queue length and all entries for inspection/assertions.

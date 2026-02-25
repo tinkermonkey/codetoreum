@@ -132,9 +132,7 @@ class ObservabilityConfig:
     @property
     def is_enabled(self) -> bool:
         """Check if any observability feature is enabled."""
-        return self.enabled and (
-            self.traces_enabled or self.metrics_enabled or self.logs_enabled
-        )
+        return self.enabled and (self.traces_enabled or self.metrics_enabled or self.logs_enabled)
 
     @property
     def traces_endpoint(self) -> str:
@@ -212,42 +210,19 @@ class ObservabilityConfig:
 
         config = cls(
             enabled=otel_enabled,
-            traces_enabled=(
-                os.getenv("OTEL_TRACES_ENABLED", "true").lower() == "true"
-                and otel_enabled
-            ),
-            metrics_enabled=(
-                os.getenv("OTEL_METRICS_ENABLED", "false").lower() == "true"
-                and otel_enabled
-            ),
-            logs_enabled=(
-                os.getenv("OTEL_LOGS_ENABLED", "false").lower() == "true"
-                and otel_enabled
-            ),
+            traces_enabled=(os.getenv("OTEL_TRACES_ENABLED", "true").lower() == "true" and otel_enabled),
+            metrics_enabled=(os.getenv("OTEL_METRICS_ENABLED", "false").lower() == "true" and otel_enabled),
+            logs_enabled=(os.getenv("OTEL_LOGS_ENABLED", "false").lower() == "true" and otel_enabled),
             signoz=SignozConfig.from_env(),
             sampler_type=cls._validate_sampler_type(os.getenv("OTEL_TRACES_SAMPLER", "always_on")),
             sampler_arg=float(os.getenv("OTEL_TRACES_SAMPLER_ARG", "1.0")),
-            auto_instrument_libraries=(
-                os.getenv("OTEL_AUTO_INSTRUMENT_LIBRARIES", "true").lower() == "true"
-            ),
-            instrument_domain=(
-                os.getenv("OTEL_INSTRUMENT_DOMAIN", "true").lower() == "true"
-            ),
-            instrument_application=(
-                os.getenv("OTEL_INSTRUMENT_APPLICATION", "true").lower() == "true"
-            ),
-            instrument_adapters=(
-                os.getenv("OTEL_INSTRUMENT_ADAPTERS", "true").lower() == "true"
-            ),
-            batch_max_queue_size=int(
-                os.getenv("OTEL_BATCH_SPAN_PROCESSOR_MAX_QUEUE_SIZE", "2048")
-            ),
-            batch_max_export_batch_size=int(
-                os.getenv("OTEL_BATCH_SPAN_PROCESSOR_MAX_EXPORT_BATCH_SIZE", "512")
-            ),
-            batch_schedule_delay_millis=int(
-                os.getenv("OTEL_BATCH_SPAN_PROCESSOR_SCHEDULE_DELAY_MILLIS", "5000")
-            ),
+            auto_instrument_libraries=(os.getenv("OTEL_AUTO_INSTRUMENT_LIBRARIES", "true").lower() == "true"),
+            instrument_domain=(os.getenv("OTEL_INSTRUMENT_DOMAIN", "true").lower() == "true"),
+            instrument_application=(os.getenv("OTEL_INSTRUMENT_APPLICATION", "true").lower() == "true"),
+            instrument_adapters=(os.getenv("OTEL_INSTRUMENT_ADAPTERS", "true").lower() == "true"),
+            batch_max_queue_size=int(os.getenv("OTEL_BATCH_SPAN_PROCESSOR_MAX_QUEUE_SIZE", "2048")),
+            batch_max_export_batch_size=int(os.getenv("OTEL_BATCH_SPAN_PROCESSOR_MAX_EXPORT_BATCH_SIZE", "512")),
+            batch_schedule_delay_millis=int(os.getenv("OTEL_BATCH_SPAN_PROCESSOR_SCHEDULE_DELAY_MILLIS", "5000")),
             log_level=os.getenv("OTEL_LOG_LEVEL", "info"),
         )
 
@@ -270,8 +245,7 @@ class ObservabilityConfig:
         valid_samplers = {"always_on", "always_off", "traceidratio", "parentbased_always_on"}
         if sampler_value not in valid_samplers:
             logger.warning(
-                f"Invalid sampler_type '{sampler_value}'. "
-                f"Valid options: {valid_samplers}. Defaulting to 'always_on'."
+                f"Invalid sampler_type '{sampler_value}'. Valid options: {valid_samplers}. Defaulting to 'always_on'."
             )
             return "always_on"
         return sampler_value
@@ -289,18 +263,31 @@ class ObservabilityConfig:
         """
         # Error: Observability enabled but no signals configured (invalid state)
         if self.enabled and not self.traces_enabled and not self.metrics_enabled and not self.logs_enabled:
-            message = "Observability enabled but no signals (traces/metrics/logs) are enabled. " "Either enable at least one signal or disable observability entirely " "(set OTEL_ENABLED=false)."
+            message = (
+                "Observability enabled but no signals (traces/metrics/logs) are enabled. "
+                "Either enable at least one signal or disable observability entirely "
+                "(set OTEL_ENABLED=false)."
+            )
             raise ValueError(message)
 
         # Error: Signal enabled without endpoint (will definitely fail at export time)
         if self.traces_enabled and not self.traces_endpoint:
-            message = "Traces enabled but traces_endpoint is not configured. " "Check OTEL_EXPORTER_OTLP_TRACES_ENDPOINT or Signoz gRPC configuration."
+            message = (
+                "Traces enabled but traces_endpoint is not configured. "
+                "Check OTEL_EXPORTER_OTLP_TRACES_ENDPOINT or Signoz gRPC configuration."
+            )
             raise ValueError(message)
 
         if self.logs_enabled and not self.logs_endpoint:
-            message = "Logs enabled but logs_endpoint is not configured. " "Check OTEL_EXPORTER_OTLP_LOGS_ENDPOINT or Signoz HTTP configuration."
+            message = (
+                "Logs enabled but logs_endpoint is not configured. "
+                "Check OTEL_EXPORTER_OTLP_LOGS_ENDPOINT or Signoz HTTP configuration."
+            )
             raise ValueError(message)
 
         if self.metrics_enabled and not self.metrics_endpoint:
-            message = "Metrics enabled but metrics_endpoint is not configured. " "Check OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or Signoz HTTP configuration."
+            message = (
+                "Metrics enabled but metrics_endpoint is not configured. "
+                "Check OTEL_EXPORTER_OTLP_METRICS_ENDPOINT or Signoz HTTP configuration."
+            )
             raise ValueError(message)

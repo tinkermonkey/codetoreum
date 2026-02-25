@@ -84,14 +84,16 @@ class WorkItemColumnChangedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "work_item_id": self.work_item_id,
-            "project_id": self.project_id,
-            "board_id": self.board_id,
-            "from_column": self.from_column,
-            "to_column": self.to_column,
-            "moved_by": self.moved_by,
-        })
+        d.update(
+            {
+                "work_item_id": self.work_item_id,
+                "project_id": self.project_id,
+                "board_id": self.board_id,
+                "from_column": self.from_column,
+                "to_column": self.to_column,
+                "moved_by": self.moved_by,
+            }
+        )
         return d
 
     @classmethod
@@ -173,13 +175,15 @@ class BoardReconciledEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "project_id": self.project_id,
-            "board_id": self.board_id,
-            "columns_added": list(self.columns_added),
-            "columns_removed": list(self.columns_removed),
-            "items_moved": self.items_moved,
-        })
+        d.update(
+            {
+                "project_id": self.project_id,
+                "board_id": self.board_id,
+                "columns_added": list(self.columns_added),
+                "columns_removed": list(self.columns_removed),
+                "items_moved": self.items_moved,
+            }
+        )
         return d
 
     @classmethod

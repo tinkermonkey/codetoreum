@@ -3,7 +3,7 @@
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.domain.events.container_events import ContainerExecutionCompletedEvent
@@ -27,7 +27,7 @@ class InMemoryStorageAdapter(IStorage):
     def __init__(
         self,
         event_emitter: IEventEmitter | None = None,
-        event_bus: Optional[EventBus] = None,
+        event_bus: EventBus | None = None,
     ):
         """Initialize in-memory storage.
 
@@ -45,10 +45,7 @@ class InMemoryStorageAdapter(IStorage):
 
         # Subscribe to container execution completion events if event bus provided
         if self._event_bus:
-            self._event_bus.subscribe(
-                "ContainerExecutionCompletedEvent",
-                self._handle_container_completion
-            )
+            self._event_bus.subscribe("ContainerExecutionCompletedEvent", self._handle_container_completion)
 
     async def upload(
         self,
@@ -163,12 +160,9 @@ class InMemoryStorageAdapter(IStorage):
         """List objects in memory."""
         with self._lock:
             objects = []
-            matching_keys = [
-                k for k in self._metadata.keys()
-                if prefix is None or k.startswith(prefix)
-            ]
+            matching_keys = [k for k in self._metadata.keys() if prefix is None or k.startswith(prefix)]
 
-            for key in sorted(matching_keys)[offset:offset + limit]:
+            for key in sorted(matching_keys)[offset : offset + limit]:
                 meta = self._metadata[key]
                 objects.append(
                     StorageObject(
@@ -291,7 +285,7 @@ class InMemoryStorageAdapter(IStorage):
 
                 if delimiter_pos > 0:
                     # Found a prefix
-                    prefixes.add(key[:delimiter_pos + 1])
+                    prefixes.add(key[: delimiter_pos + 1])
 
             return sorted(list(prefixes))
 
@@ -305,9 +299,7 @@ class InMemoryStorageAdapter(IStorage):
                 "total_size_bytes": total_size,
             }
 
-    async def _handle_container_completion(
-        self, event: ContainerExecutionCompletedEvent
-    ) -> None:
+    async def _handle_container_completion(self, event: ContainerExecutionCompletedEvent) -> None:
         """Handle container execution completion by persisting output files.
 
         This handler is invoked when ContainerExecutionCompletedEvent is emitted by the container

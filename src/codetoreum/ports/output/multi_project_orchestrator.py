@@ -136,9 +136,7 @@ class IMultiProjectOrchestrator(ABC):
         """
 
     @abstractmethod
-    async def orchestrate_project(
-        self, project_name: str
-    ) -> ProjectOrchestrationResult:
+    async def orchestrate_project(self, project_name: str) -> ProjectOrchestrationResult:
         """Execute orchestration for a single project.
 
         Operations:

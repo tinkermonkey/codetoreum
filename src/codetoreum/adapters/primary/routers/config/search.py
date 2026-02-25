@@ -4,7 +4,6 @@ Configuration Search Endpoints
 Handles full-text search across all configuration types.
 """
 
-
 from fastapi import APIRouter, HTTPException, Query, status
 
 from codetoreum.adapters.primary.config_dtos import ConfigSearchResponse
@@ -31,7 +30,12 @@ def register_search_endpoints(
         query: str = Query(..., min_length=1, description="Search query string"),
         config_type: str | None = Query(None, description="Filter by type (project, agent, pipeline)"),
         project_id: str | None = Query(None, description="Filter by project"),
-        limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description=f"Maximum results (max {MAX_PAGE_SIZE})"),
+        limit: int = Query(
+            DEFAULT_PAGE_SIZE,
+            ge=1,
+            le=MAX_PAGE_SIZE,
+            description=f"Maximum results (max {MAX_PAGE_SIZE})",
+        ),
     ) -> ConfigSearchResponse:
         """
         Search across all configurations using full-text search.

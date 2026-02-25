@@ -15,7 +15,8 @@ from codetoreum.infrastructure.observability.config import (
 def _is_opentelemetry_available() -> bool:
     """Check if OpenTelemetry is available."""
     try:
-        import opentelemetry  # noqa: F401
+        import opentelemetry
+
         return True
     except ImportError:
         return False
@@ -83,6 +84,7 @@ class TestLogExportSetupFunction:
         """Test that _setup_log_export is properly defined and can be imported."""
         # Simply importing should not raise an error
         from codetoreum.infrastructure.observability.otel_setup import _setup_log_export
+
         assert _setup_log_export is not None
 
 
@@ -123,7 +125,7 @@ class TestTraceCorrelationInLogs:
         assert hasattr(record, "trace_id")
         assert hasattr(record, "span_id")
         # When no span is active, should be N/A
-        assert record.trace_id in ("N/A", ) or len(record.trace_id) == 32
+        assert record.trace_id in ("N/A",) or len(record.trace_id) == 32
 
     def test_logging_integration_filter_in_handler(self):
         """Test TraceContextInjector can be added to logging handler."""
@@ -139,4 +141,3 @@ class TestTraceCorrelationInLogs:
         # Should not raise
         handler.addFilter(filter_obj)
         assert filter_obj in handler.filters
-

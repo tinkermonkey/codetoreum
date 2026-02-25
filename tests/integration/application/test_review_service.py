@@ -1,6 +1,5 @@
 """Integration tests for ReviewService."""
 
-
 import pytest
 
 from codetoreum.adapters.testing import InMemoryEventStore
@@ -102,9 +101,7 @@ def reviewer_execution(reviewer_agent):
 
 
 @pytest.mark.asyncio
-async def test_create_review_cycle(
-    review_service, maker_agent, reviewer_agent, event_store
-):
+async def test_create_review_cycle(review_service, maker_agent, reviewer_agent, event_store):
     """Test creating a review cycle."""
     result = await review_service.create_review_cycle(
         workflow_id="workflow-1",
@@ -130,9 +127,7 @@ async def test_create_review_cycle(
 
 
 @pytest.mark.asyncio
-async def test_create_review_cycle_same_agent_fails(
-    review_service, maker_agent
-):
+async def test_create_review_cycle_same_agent_fails(review_service, maker_agent):
     """Test that creating review cycle with same maker and reviewer fails."""
     with pytest.raises(DomainError, match="Maker and reviewer must be different"):
         await review_service.create_review_cycle(
@@ -145,9 +140,7 @@ async def test_create_review_cycle_same_agent_fails(
 
 
 @pytest.mark.asyncio
-async def test_start_iteration(
-    review_service, maker_agent, reviewer_agent, maker_execution, event_store
-):
+async def test_start_iteration(review_service, maker_agent, reviewer_agent, maker_execution, event_store):
     """Test starting a review iteration."""
     # Create review cycle
     create_result = await review_service.create_review_cycle(
@@ -478,9 +471,7 @@ async def test_complete_cycle_approved(
     )
 
     # Complete cycle
-    result = await review_service.complete_cycle(
-        review_cycle=review_cycle, approved=True
-    )
+    result = await review_service.complete_cycle(review_cycle=review_cycle, approved=True)
 
     assert result.success
     assert result.approved
@@ -550,9 +541,7 @@ class FailingEventStore(InMemoryEventStore):
         self.call_count = 0
         self.fail_on_call = fail_on_call
 
-    async def append(
-        self, stream_id: str, events: list[DomainEvent], expected_version=None
-    ) -> None:
+    async def append(self, stream_id: str, events: list[DomainEvent], expected_version=None) -> None:
         """Append event to store, failing on specified call."""
         self.call_count += 1
         if self.call_count == self.fail_on_call:
@@ -582,9 +571,7 @@ async def test_create_review_cycle_event_store_error(maker_agent, reviewer_agent
 
 
 @pytest.mark.asyncio
-async def test_start_iteration_event_store_error(
-    maker_agent, reviewer_agent, maker_execution
-):
+async def test_start_iteration_event_store_error(maker_agent, reviewer_agent, maker_execution):
     """Test error handling when event store fails during iteration start."""
     # Create with working store
     working_store = InMemoryEventStore()
@@ -616,9 +603,7 @@ async def test_start_iteration_event_store_error(
 
 
 @pytest.mark.asyncio
-async def test_submit_review_event_store_error(
-    maker_agent, reviewer_agent, maker_execution, reviewer_execution
-):
+async def test_submit_review_event_store_error(maker_agent, reviewer_agent, maker_execution, reviewer_execution):
     """Test error handling when event store fails during review submission."""
     # Create and start with working store
     working_store = InMemoryEventStore()
@@ -657,9 +642,7 @@ async def test_submit_review_event_store_error(
 
 
 @pytest.mark.asyncio
-async def test_complete_cycle_event_store_error(
-    maker_agent, reviewer_agent, maker_execution, reviewer_execution
-):
+async def test_complete_cycle_event_store_error(maker_agent, reviewer_agent, maker_execution, reviewer_execution):
     """Test error handling when event store fails during cycle completion."""
     # Create review cycle
     working_store = InMemoryEventStore()

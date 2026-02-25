@@ -30,9 +30,7 @@ class IWorkflowConfigService(ABC):
     """
 
     @abstractmethod
-    async def get_board_workflow_template(
-        self, board_id: str
-    ) -> BoardWorkflowTemplate | None:
+    async def get_board_workflow_template(self, board_id: str) -> BoardWorkflowTemplate | None:
         """Get workflow template for a board.
 
         Args:

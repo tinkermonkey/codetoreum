@@ -248,9 +248,7 @@ class IExecutionQueryPort(ABC):
         """
 
     @abstractmethod
-    async def get_execution_history(
-        self, execution_id: str, limit: int | None = None
-    ) -> ExecutionHistory:
+    async def get_execution_history(self, execution_id: str, limit: int | None = None) -> ExecutionHistory:
         """
         Get execution event history.
 

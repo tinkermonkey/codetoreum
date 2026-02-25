@@ -60,7 +60,7 @@ async def run_scenario(runner: SimulationRunner) -> None:
     # All items start execution
     for i, work_item_id in enumerate(work_items):
         event = DomainEvent(
-            aggregate_id=f"exec-{i+1}",
+            aggregate_id=f"exec-{i + 1}",
             aggregate_type="AgentExecution",
             payload={"work_item_id": work_item_id},
         )
@@ -74,7 +74,7 @@ async def run_scenario(runner: SimulationRunner) -> None:
 
     for i in range(3):
         event = DomainEvent(
-            aggregate_id=f"exec-{i+1}",
+            aggregate_id=f"exec-{i + 1}",
             aggregate_type="AgentExecution",
             payload={"status": "completed"},
         )
@@ -111,4 +111,5 @@ async def test_parallel_executions():
 
 if __name__ == "__main__":
     import asyncio
+
     asyncio.run(test_parallel_executions())

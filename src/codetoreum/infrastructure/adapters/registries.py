@@ -41,10 +41,7 @@ def _get_interface_methods(interface_class: type) -> set[str]:
     return methods
 
 
-def _validate_adapter_implements_interface(
-    adapter_type: type,
-    interface_class: type
-) -> bool:
+def _validate_adapter_implements_interface(adapter_type: type, interface_class: type) -> bool:
     """
     Validate that an adapter implements all required methods from interface.
 
@@ -62,8 +59,7 @@ def _validate_adapter_implements_interface(
 
     # Get methods implemented by adapter
     adapter_methods = {
-        name for name, _ in inspect.getmembers(adapter_type, predicate=inspect.isfunction)
-        if not name.startswith("_")
+        name for name, _ in inspect.getmembers(adapter_type, predicate=inspect.isfunction) if not name.startswith("_")
     }
 
     # Check that all required methods are implemented

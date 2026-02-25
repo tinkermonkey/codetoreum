@@ -1,6 +1,5 @@
 """In-memory workflow configuration service for testing and simulation."""
 
-
 from codetoreum.domain.board_workflow_template import BoardWorkflowTemplate
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
@@ -19,9 +18,7 @@ class InMemoryWorkflowConfigService(IWorkflowConfigService):
         """Initialize the in-memory configuration service."""
         self._templates: dict[str, BoardWorkflowTemplate] = {}
 
-    async def get_board_workflow_template(
-        self, board_id: str
-    ) -> BoardWorkflowTemplate | None:
+    async def get_board_workflow_template(self, board_id: str) -> BoardWorkflowTemplate | None:
         """Get workflow template for a board.
 
         Args:
@@ -32,9 +29,7 @@ class InMemoryWorkflowConfigService(IWorkflowConfigService):
         """
         return self._templates.get(board_id)
 
-    def register_template(
-        self, board_id: str, template: BoardWorkflowTemplate
-    ) -> None:
+    def register_template(self, board_id: str, template: BoardWorkflowTemplate) -> None:
         """Register a workflow template for a board (test helper).
 
         Args:

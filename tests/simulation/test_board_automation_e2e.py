@@ -96,23 +96,23 @@ async def test_item_cascades_from_trigger_to_exit(e2e_env):
     executions = adapters.agent_executor.executions
     item_executions = [e for e in executions if e["work_item_id"] == work_item_id]
     agent_order = [e["agent_id"] for e in item_executions]
-    assert agent_order == ["architect", "coder", "tester"], (
-        f"Expected agents [architect, coder, tester], got {agent_order}"
-    )
+    assert agent_order == [
+        "architect",
+        "coder",
+        "tester",
+    ], f"Expected agents [architect, coder, tester], got {agent_order}"
 
     # Verify movement history
     history = board.get_movement_history(work_item_id)
     assert len(history) == 4, (
-        f"Expected 4 movements (Backlog→Ready, Ready→In Progress, "
-        f"In Progress→Review, Review→Done), got {len(history)}"
+        f"Expected 4 movements (Backlog→Ready, Ready→In Progress, In Progress→Review, Review→Done), got {len(history)}"
     )
 
     # First move is HUMAN, rest are ORCHESTRATOR
     assert history[0].moved_by == MovedByType.HUMAN
     for move in history[1:]:
         assert move.moved_by == MovedByType.ORCHESTRATOR, (
-            f"Expected ORCHESTRATOR for {move.from_column}→{move.to_column}, "
-            f"got {move.moved_by}"
+            f"Expected ORCHESTRATOR for {move.from_column}→{move.to_column}, got {move.moved_by}"
         )
 
     # Verify column progression path
@@ -191,9 +191,7 @@ async def test_cascade_stops_on_agent_failure(
     await board.move_item_to_column(work_item_id, "Ready", MovedByType.HUMAN)
 
     # Wait for first agent to complete and item to move to In Progress
-    reached_in_progress = await wait_for_column(
-        board, work_item_id, "In Progress", timeout=5.0
-    )
+    reached_in_progress = await wait_for_column(board, work_item_id, "In Progress", timeout=5.0)
     assert reached_in_progress, "Item did not reach 'In Progress'"
 
     # Give time for the second agent to fail and not progress further
@@ -202,14 +200,11 @@ async def test_cascade_stops_on_agent_failure(
     # Item should still be in "In Progress" (coder failed, no auto-progress)
     pos = await board.get_item_position(work_item_id)
     assert pos.column_name == "In Progress", (
-        f"Expected item to stay in 'In Progress' after coder failure, "
-        f"but found in '{pos.column_name}'"
+        f"Expected item to stay in 'In Progress' after coder failure, but found in '{pos.column_name}'"
     )
 
     # Verify architect executed but cascade stopped after coder failure
-    item_executions = [
-        e for e in executor.executions if e["work_item_id"] == work_item_id
-    ]
+    item_executions = [e for e in executor.executions if e["work_item_id"] == work_item_id]
     agent_ids = [e["agent_id"] for e in item_executions]
     assert "architect" in agent_ids, "Architect should have been triggered"
     assert "coder" in agent_ids, "Coder should have been triggered (and failed)"

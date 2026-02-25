@@ -451,8 +451,6 @@ class InMemoryRepositoryAdapter(IRepository):
             msg = "Target ref is required"
             raise ValidationError(msg)
 
-        repo_id = self._get_repo_id_by_path(repo_path)
-
         # Return mock diff
         return """diff --git a/file.txt b/file.txt
 index abc123..def456 100644
@@ -524,10 +522,7 @@ index abc123..def456 100644
         repo_id = self._get_repo_id_by_path(repo_path)
 
         with self._lock:
-            branches = [
-                branch for (rid, branch) in self._branches.keys()
-                if rid == repo_id
-            ]
+            branches = [branch for (rid, branch) in self._branches.keys() if rid == repo_id]
 
             return branches
 
@@ -729,15 +724,17 @@ index abc123..def456 100644
                     if since and commit["timestamp"] < since:
                         break
 
-                    commits.append({
-                        "sha": commit["sha"],
-                        "message": commit["message"],
-                        "author": {
-                            "name": commit["author_name"],
-                            "email": commit["author_email"],
-                        },
-                        "timestamp": commit["timestamp"].isoformat(),
-                    })
+                    commits.append(
+                        {
+                            "sha": commit["sha"],
+                            "message": commit["message"],
+                            "author": {
+                                "name": commit["author_name"],
+                                "email": commit["author_email"],
+                            },
+                            "timestamp": commit["timestamp"].isoformat(),
+                        }
+                    )
 
                     current_commit = commit.get("parent")
                 else:

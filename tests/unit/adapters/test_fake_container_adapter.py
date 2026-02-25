@@ -1,6 +1,5 @@
 """Tests for FakeContainerAdapter."""
 
-
 import pytest
 
 from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter

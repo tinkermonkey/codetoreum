@@ -43,7 +43,12 @@ def register_agent_endpoints(
     )
     async def list_all_agents(
         offset: int = Query(DEFAULT_OFFSET, ge=0, description="Pagination offset"),
-        limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description=f"Pagination limit (max {MAX_PAGE_SIZE})"),
+        limit: int = Query(
+            DEFAULT_PAGE_SIZE,
+            ge=1,
+            le=MAX_PAGE_SIZE,
+            description=f"Pagination limit (max {MAX_PAGE_SIZE})",
+        ),
     ) -> AgentListResponse:
         """
         List all agents across all projects with pagination.
@@ -58,31 +63,30 @@ def register_agent_endpoints(
         """
         try:
             pagination = PaginationParams(offset=offset, limit=limit)
-            configs = await query_port.list_agents(
-                project_id=None,
-                pagination=pagination
-            )
+            configs = await query_port.list_agents(project_id=None, pagination=pagination)
 
             agents = []
             for config in configs:
-                agents.append(AgentConfigResponse(
-                    project_id=config.project_id,
-                    agent_name=config.agent_name,
-                    display_name=config.display_name,
-                    model=config.model,
-                    timeout_seconds=config.timeout_seconds,
-                    max_retries=config.max_retries,
-                    requires_docker=config.requires_docker,
-                    requires_dev_container=config.requires_dev_container,
-                    makes_code_changes=config.makes_code_changes,
-                    filesystem_write_allowed=config.filesystem_write_allowed,
-                    version=config.version,
-                    created_at=config.created_at,
-                    updated_at=config.updated_at,
-                    mcp_servers=config.mcp_servers,
-                    capabilities=config.capabilities,
-                    metadata=config.metadata,
-                ))
+                agents.append(
+                    AgentConfigResponse(
+                        project_id=config.project_id,
+                        agent_name=config.agent_name,
+                        display_name=config.display_name,
+                        model=config.model,
+                        timeout_seconds=config.timeout_seconds,
+                        max_retries=config.max_retries,
+                        requires_docker=config.requires_docker,
+                        requires_dev_container=config.requires_dev_container,
+                        makes_code_changes=config.makes_code_changes,
+                        filesystem_write_allowed=config.filesystem_write_allowed,
+                        version=config.version,
+                        created_at=config.created_at,
+                        updated_at=config.updated_at,
+                        mcp_servers=config.mcp_servers,
+                        capabilities=config.capabilities,
+                        metadata=config.metadata,
+                    )
+                )
 
             total = await query_port.count_configs(config_type="agent")
 
@@ -119,10 +123,7 @@ def register_agent_endpoints(
         - 404 Not Found: Project or agent not found
         """
         try:
-            config = await query_port.get_agent_config(
-                project_id=project_id,
-                agent_name=agent_name
-            )
+            config = await query_port.get_agent_config(project_id=project_id, agent_name=agent_name)
 
             return AgentConfigResponse(
                 project_id=config.project_id,
@@ -285,36 +286,32 @@ def register_agent_endpoints(
         """
         try:
             pagination = PaginationParams(offset=offset, limit=limit)
-            configs = await query_port.list_agents(
-                project_id=project_id,
-                pagination=pagination
-            )
+            configs = await query_port.list_agents(project_id=project_id, pagination=pagination)
 
             agents = []
             for config in configs:
-                agents.append(AgentConfigResponse(
-                    project_id=config.project_id,
-                    agent_name=config.agent_name,
-                    display_name=config.display_name,
-                    model=config.model,
-                    timeout_seconds=config.timeout_seconds,
-                    max_retries=config.max_retries,
-                    requires_docker=config.requires_docker,
-                    requires_dev_container=config.requires_dev_container,
-                    makes_code_changes=config.makes_code_changes,
-                    filesystem_write_allowed=config.filesystem_write_allowed,
-                    version=config.version,
-                    created_at=config.created_at,
-                    updated_at=config.updated_at,
-                    mcp_servers=config.mcp_servers,
-                    capabilities=config.capabilities,
-                    metadata=config.metadata,
-                ))
+                agents.append(
+                    AgentConfigResponse(
+                        project_id=config.project_id,
+                        agent_name=config.agent_name,
+                        display_name=config.display_name,
+                        model=config.model,
+                        timeout_seconds=config.timeout_seconds,
+                        max_retries=config.max_retries,
+                        requires_docker=config.requires_docker,
+                        requires_dev_container=config.requires_dev_container,
+                        makes_code_changes=config.makes_code_changes,
+                        filesystem_write_allowed=config.filesystem_write_allowed,
+                        version=config.version,
+                        created_at=config.created_at,
+                        updated_at=config.updated_at,
+                        mcp_servers=config.mcp_servers,
+                        capabilities=config.capabilities,
+                        metadata=config.metadata,
+                    )
+                )
 
-            total = await query_port.count_configs(
-                config_type="agent",
-                project_id=project_id
-            )
+            total = await query_port.count_configs(config_type="agent", project_id=project_id)
 
             return AgentListResponse(agents=agents, total_count=total)
 

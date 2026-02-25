@@ -33,8 +33,9 @@ from enum import Enum
 
 class LockStatus(Enum):
     """Status of lock acquisition attempt."""
-    ACQUIRED = "acquired"          # Lock granted immediately
-    QUEUED = "queued"              # Added to queue, waiting
+
+    ACQUIRED = "acquired"  # Lock granted immediately
+    QUEUED = "queued"  # Added to queue, waiting
     ALREADY_HELD = "already_held"  # Work item already holds lock
 
 
@@ -52,6 +53,7 @@ class QueueEntry:
         board_position: Position in column (mutable for reordering)
         enqueued_at: Timestamp when added to queue
     """
+
     work_item_id: str
     board_position: int
     enqueued_at: datetime
@@ -67,6 +69,7 @@ class LockAcquisitionResult:
         queue_position: Position in queue if QUEUED, None otherwise
         queue_length: Total items in queue after operation
     """
+
     status: LockStatus
     work_item_id: str
     queue_position: int | None = None
@@ -82,6 +85,7 @@ class LockReleaseResult:
         next_work_item_id: ID of next work item in queue, if any
         queue_length_after_release: Items remaining in queue
     """
+
     released_work_item_id: str
     next_work_item_id: str | None
     queue_length_after_release: int
@@ -98,6 +102,7 @@ class PipelineQueueState:
         lock_acquired_at: Timestamp when lock was acquired
         queue: List of QueueEntry items waiting for lock
     """
+
     board_id: str
     project_id: str
     lock_holder: str | None
@@ -146,11 +151,7 @@ class IQueuedPipelineLockService(ABC):
 
     @abstractmethod
     async def try_acquire_lock(
-        self,
-        project_id: str,
-        board_id: str,
-        work_item_id: str,
-        board_position: int
+        self, project_id: str, board_id: str, work_item_id: str, board_position: int
     ) -> LockAcquisitionResult:
         """Attempt to acquire pipeline lock.
 
@@ -171,12 +172,7 @@ class IQueuedPipelineLockService(ABC):
         """
 
     @abstractmethod
-    async def release_lock(
-        self,
-        project_id: str,
-        board_id: str,
-        work_item_id: str
-    ) -> LockReleaseResult:
+    async def release_lock(self, project_id: str, board_id: str, work_item_id: str) -> LockReleaseResult:
         """Release pipeline lock, grant to next queued item.
 
         Releases lock held by work_item_id and grants it to first item
@@ -196,11 +192,7 @@ class IQueuedPipelineLockService(ABC):
         """
 
     @abstractmethod
-    async def get_queue_state(
-        self,
-        project_id: str,
-        board_id: str
-    ) -> PipelineQueueState:
+    async def get_queue_state(self, project_id: str, board_id: str) -> PipelineQueueState:
         """Get current lock holder and queue state.
 
         Args:
@@ -212,12 +204,7 @@ class IQueuedPipelineLockService(ABC):
         """
 
     @abstractmethod
-    async def update_queue_positions(
-        self,
-        project_id: str,
-        board_id: str,
-        updated_positions: dict[str, int]
-    ) -> None:
+    async def update_queue_positions(self, project_id: str, board_id: str, updated_positions: dict[str, int]) -> None:
         """Update queue ordering when humans reorder cards in column.
 
         Called when cards are manually reordered in the UI. Updates board

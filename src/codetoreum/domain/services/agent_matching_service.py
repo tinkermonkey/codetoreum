@@ -1,6 +1,5 @@
 """Agent matching service for calculating agent-requirement match scores."""
 
-
 from codetoreum.domain.agent import Agent
 from codetoreum.domain.value_objects import Requirement
 
@@ -46,9 +45,7 @@ class AgentMatchingService:
                 if requirement.min_proficiency == 0.0:
                     requirement_ratio = 1.0  # Any proficiency satisfies 0.0 requirement
                 else:
-                    requirement_ratio = min(
-                        capability_score / requirement.min_proficiency, 1.0
-                    )
+                    requirement_ratio = min(capability_score / requirement.min_proficiency, 1.0)
 
                 if requirement.is_required:
                     required_scores.append(requirement_ratio)
@@ -65,9 +62,7 @@ class AgentMatchingService:
             required_scores = [1.0]  # No required skills
 
         required_avg = sum(required_scores) / len(required_scores)
-        optional_avg = (
-            sum(optional_scores) / len(optional_scores) if optional_scores else 1.0
-        )
+        optional_avg = sum(optional_scores) / len(optional_scores) if optional_scores else 1.0
 
         # Weight required skills more heavily (70/30)
         return 0.7 * required_avg + 0.3 * optional_avg
@@ -107,9 +102,7 @@ class AgentMatchingService:
         return best_agent if best_score >= min_score else None
 
     @staticmethod
-    def rank_agents(
-        agents: list[Agent], requirements: list[Requirement]
-    ) -> list[tuple[Agent, float]]:
+    def rank_agents(agents: list[Agent], requirements: list[Requirement]) -> list[tuple[Agent, float]]:
         """
         Rank all agents by match score.
 
@@ -122,9 +115,6 @@ class AgentMatchingService:
         Returns:
             List of (agent, score) tuples sorted by score (highest first)
         """
-        scored_agents = [
-            (agent, AgentMatchingService.calculate_match_score(agent, requirements))
-            for agent in agents
-        ]
+        scored_agents = [(agent, AgentMatchingService.calculate_match_score(agent, requirements)) for agent in agents]
 
         return sorted(scored_agents, key=lambda x: x[1], reverse=True)

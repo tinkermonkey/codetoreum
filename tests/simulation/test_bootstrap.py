@@ -287,9 +287,7 @@ class TestBootstrapWithFixtures:
         assert simulation_ports.work_item_command is not None
         assert simulation_ports.work_item_query is not None
 
-    async def test_simulation_infrastructure_fixture(
-        self, simulation_infrastructure: SimulationInfrastructure
-    ) -> None:
+    async def test_simulation_infrastructure_fixture(self, simulation_infrastructure: SimulationInfrastructure) -> None:
         """Test that simulation_infrastructure fixture provides infrastructure."""
         assert simulation_infrastructure is not None
         assert simulation_infrastructure.event_bus is not None

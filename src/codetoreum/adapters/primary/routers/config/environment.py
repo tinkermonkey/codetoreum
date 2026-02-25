@@ -120,10 +120,7 @@ def register_environment_endpoints(
             try:
                 validated_name = validate_env_var_name(variable_name)
             except InvalidInputError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=str(e)
-                )
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
             # Get project name
             project_config = await query_port.get_project_config(project_id, include_secrets=False)

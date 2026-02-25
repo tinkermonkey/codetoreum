@@ -94,12 +94,14 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
             agent_id=agent_id,
             task_id=task_id,
             created_at=created_at,
-            labels=MappingProxyType({
-                "org.codetoreum.type": container_type,
-                "org.codetoreum.project": project_id,
-                "org.codetoreum.agent": agent_id,
-                "org.codetoreum.task_id": task_id,
-            }),
+            labels=MappingProxyType(
+                {
+                    "org.codetoreum.type": container_type,
+                    "org.codetoreum.project": project_id,
+                    "org.codetoreum.agent": agent_id,
+                    "org.codetoreum.task_id": task_id,
+                }
+            ),
             work_item_id=work_item_id,
             execution_id=execution_id,
             workflow_run_id=workflow_run_id,
@@ -153,12 +155,14 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
             agent_id=agent_id,
             task_id=task_id,
             created_at=created_at,
-            labels=MappingProxyType({
-                "org.codetoreum.type": CONTAINER_TYPE_REPAIR_CYCLE,
-                "org.codetoreum.project": project_id,
-                "org.codetoreum.agent": agent_id,
-                "org.codetoreum.task_id": task_id,
-            }),
+            labels=MappingProxyType(
+                {
+                    "org.codetoreum.type": CONTAINER_TYPE_REPAIR_CYCLE,
+                    "org.codetoreum.project": project_id,
+                    "org.codetoreum.agent": agent_id,
+                    "org.codetoreum.task_id": task_id,
+                }
+            ),
             work_item_id=work_item_id,
             execution_id=execution_id,
         )
@@ -218,14 +222,10 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
         Returns:
             List[ContainerMetadata]: Configured mock repair cycle containers
         """
-        logger.debug(
-            f"Mock adapter returning {len(self.repair_cycle_containers)} repair cycle containers"
-        )
+        logger.debug(f"Mock adapter returning {len(self.repair_cycle_containers)} repair cycle containers")
         return self.repair_cycle_containers
 
-    async def assess_container(
-        self, metadata: ContainerMetadata
-    ) -> RecoveryAssessment:
+    async def assess_container(self, metadata: ContainerMetadata) -> RecoveryAssessment:
         """
         Return pre-configured assessment for a container.
 
@@ -243,14 +243,14 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
             raise self.assessment_exceptions[metadata.container_id]
 
         # Check if Docker failure threshold reached
-        if (self.docker_failure_after_count is not None and
-                self.docker_failure_counter >= self.docker_failure_after_count):
+        if (
+            self.docker_failure_after_count is not None
+            and self.docker_failure_counter >= self.docker_failure_after_count
+        ):
             from codetoreum.ports.exceptions import ContainerError
+
             msg = f"Docker daemon unavailable (simulated failure after {self.docker_failure_after_count} containers)"
-            raise ContainerError(
-                msg,
-                error_code="ERR_DOCKER_CONNECTION_FAILED"
-            )
+            raise ContainerError(msg, error_code="ERR_DOCKER_CONNECTION_FAILED")
 
         self.docker_failure_counter += 1
 
@@ -274,14 +274,10 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
                 execution_id=None,
             )
 
-        logger.debug(
-            f"Mock assess container {metadata.container_id}: {assessment.action}"
-        )
+        logger.debug(f"Mock assess container {metadata.container_id}: {assessment.action}")
         return assessment
 
-    async def assess_repair_cycle_container(
-        self, metadata: ContainerMetadata
-    ) -> RecoveryAssessment:
+    async def assess_repair_cycle_container(self, metadata: ContainerMetadata) -> RecoveryAssessment:
         """
         Return pre-configured assessment for a repair cycle container.
 
@@ -297,11 +293,9 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
         # Check if checkpoint store should fail for this container
         if metadata.container_id in self.checkpoint_store_failures:
             from codetoreum.ports.exceptions import StorageError
+
             msg = f"Checkpoint store unavailable for {metadata.container_id}"
-            raise StorageError(
-                msg,
-                error_code="ERR_CHECKPOINT_STORE_UNAVAILABLE"
-            )
+            raise StorageError(msg, error_code="ERR_CHECKPOINT_STORE_UNAVAILABLE")
 
         if metadata.container_id in self.assessments:
             assessment = self.assessments[metadata.container_id]
@@ -323,9 +317,7 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
                 execution_id=None,
             )
 
-        logger.debug(
-            f"Mock assess repair cycle container {metadata.container_id}: {assessment.action}"
-        )
+        logger.debug(f"Mock assess repair cycle container {metadata.container_id}: {assessment.action}")
         return assessment
 
     async def execute_recovery_action(self, assessment: RecoveryAssessment) -> bool:
@@ -342,28 +334,22 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
             ContainerError: If Docker failure threshold is reached
         """
         # Check if Docker failure threshold reached
-        if (self.docker_failure_after_count is not None and
-                self.docker_failure_counter > self.docker_failure_after_count):
+        if (
+            self.docker_failure_after_count is not None
+            and self.docker_failure_counter > self.docker_failure_after_count
+        ):
             from codetoreum.ports.exceptions import ContainerError
+
             msg = "Docker daemon unavailable (simulated failure)"
-            raise ContainerError(
-                msg,
-                error_code="ERR_DOCKER_CONNECTION_FAILED"
-            )
+            raise ContainerError(msg, error_code="ERR_DOCKER_CONNECTION_FAILED")
 
         self.executed_actions.append(assessment)
 
         if assessment.container_id in self.failed_actions:
-            logger.warning(
-                f"Mock execute action failed for {assessment.container_id} "
-                f"(configured to fail)"
-            )
+            logger.warning(f"Mock execute action failed for {assessment.container_id} (configured to fail)")
             return False
 
-        logger.debug(
-            f"Mock execute action succeeded for {assessment.container_id}: "
-            f"{assessment.action}"
-        )
+        logger.debug(f"Mock execute action succeeded for {assessment.container_id}: {assessment.action}")
         return True
 
     async def process_orphaned_repair_results(self) -> int:
@@ -378,10 +364,7 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
         """
         # Simulate processing malformed storage keys
         if self.malformed_storage_keys:
-            logger.warning(
-                f"Found {len(self.malformed_storage_keys)} malformed storage keys, "
-                f"skipping them"
-            )
+            logger.warning(f"Found {len(self.malformed_storage_keys)} malformed storage keys, skipping them")
 
         logger.debug(f"Mock processing {self.repair_cycles_to_process} repair cycles")
         return self.repair_cycles_to_process
@@ -402,9 +385,7 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
             "recover_or_cleanup_containers is orchestrated by ContainerRecoveryService. "
             "Call the service instead of invoking this method directly."
         )
-        raise NotImplementedError(
-            msg
-        )
+        raise NotImplementedError(msg)
 
     def reset(self) -> None:
         """Reset all mock state."""

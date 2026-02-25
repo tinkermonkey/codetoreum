@@ -98,9 +98,7 @@ class IPipelineLockService(IEventEmitter, ABC):
     # Query Operations
 
     @abstractmethod
-    async def get_lock(
-        self, project_id: str, board_id: str
-    ) -> PipelineLock | None:
+    async def get_lock(self, project_id: str, board_id: str) -> PipelineLock | None:
         """Query current lock state for a project's board.
 
         Returns the active lock if one exists, or None if no lock is held.
@@ -133,9 +131,7 @@ class IPipelineLockService(IEventEmitter, ABC):
     # Command Operations
 
     @abstractmethod
-    async def try_acquire_lock(
-        self, project_id: str, board_id: str, work_item_id: str
-    ) -> tuple[bool, str]:
+    async def try_acquire_lock(self, project_id: str, board_id: str, work_item_id: str) -> tuple[bool, str]:
         """Attempt to acquire lock for exclusive work item access.
 
         Tries to acquire a lock on the work item. If successful, the caller
@@ -171,9 +167,7 @@ class IPipelineLockService(IEventEmitter, ABC):
         """
 
     @abstractmethod
-    async def release_lock(
-        self, project_id: str, board_id: str, work_item_id: str
-    ) -> bool:
+    async def release_lock(self, project_id: str, board_id: str, work_item_id: str) -> bool:
         """Release lock held on a work item.
 
         Releases the lock if it's currently held by this work_item_id.

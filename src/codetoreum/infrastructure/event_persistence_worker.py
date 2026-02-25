@@ -21,7 +21,6 @@ class EventPersistenceWorkerError(Exception):
     """Raised when worker operations fail."""
 
 
-
 class EventPersistenceWorker:
     """
     Background worker that reads events from Redis and persists to Elasticsearch.
@@ -117,8 +116,10 @@ class EventPersistenceWorker:
             raise
 
         except Exception as e:
-            logger.error(f"Worker {self.worker_id} failed with error: {e}", exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
+            logger.error(
+                f"Worker {self.worker_id} failed with error: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
             )
 
         finally:
@@ -172,8 +173,8 @@ class EventPersistenceWorker:
                 logger.error(
                     f"Worker {self.worker_id} error in main loop: {e}",
                     exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
-            )
+                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                )
                 await asyncio.sleep(self.retry_delay_seconds)
 
     async def _process_batch(self, batch: list[dict[str, Any]]) -> None:
@@ -218,8 +219,7 @@ class EventPersistenceWorker:
                 self._stats["last_batch_at"] = datetime.now(UTC)
 
                 logger.debug(
-                    f"Worker {self.worker_id} persisted {len(events)} events "
-                    f"across {len(events_by_stream)} streams"
+                    f"Worker {self.worker_id} persisted {len(events)} events across {len(events_by_stream)} streams"
                 )
 
                 return  # Success!
@@ -234,10 +234,9 @@ class EventPersistenceWorker:
                 logger.error(
                     f"Worker {self.worker_id} unexpected error processing batch "
                     f"(attempt {attempt + 1}/{self.max_retries + 1}): {e}",
-                    exc_info=True
-,
-                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
-            )
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                )
             if attempt < self.max_retries:
                 # Wait before retrying
                 await asyncio.sleep(self.retry_delay_seconds * (attempt + 1))
@@ -252,13 +251,11 @@ class EventPersistenceWorker:
                     f"{self.max_retries + 1} attempts. Events will remain in "
                     f"pending state for manual recovery.",
                     exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
-            )
-                raise
+                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                )
+                raise  # noqa: PLE0704 - re-raises exception from enclosing loop's except block
 
-    def _group_events_by_stream(
-        self, events: list[Any]
-    ) -> dict[str, list[Any]]:
+    def _group_events_by_stream(self, events: list[Any]) -> dict[str, list[Any]]:
         """
         Group events by stream ID (aggregate ID) for efficient batch appending.
 
@@ -296,16 +293,12 @@ class EventPersistenceWorker:
 
         # Calculate runtime
         if stats["started_at"]:
-            runtime_seconds = (
-                datetime.now(UTC) - stats["started_at"]
-            ).total_seconds()
+            runtime_seconds = (datetime.now(UTC) - stats["started_at"]).total_seconds()
             stats["runtime_seconds"] = runtime_seconds
 
             # Calculate throughput
             if runtime_seconds > 0:
-                stats["events_per_second"] = (
-                    stats["events_processed"] / runtime_seconds
-                )
+                stats["events_per_second"] = stats["events_processed"] / runtime_seconds
             else:
                 stats["events_per_second"] = 0
         else:

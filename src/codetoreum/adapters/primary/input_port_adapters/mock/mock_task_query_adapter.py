@@ -26,9 +26,7 @@ class MockTaskQueryAdapter(ITaskQueryPort):
         self._executions: dict[str, dict] = {}
         self._lock = RLock()
 
-    async def get_execution_status(
-        self, execution_id: str
-    ) -> ExecutionStatusInfo:
+    async def get_execution_status(self, execution_id: str) -> ExecutionStatusInfo:
         """Get execution status."""
         return ExecutionStatusInfo(
             execution_id=execution_id,
@@ -82,9 +80,7 @@ class MockTaskQueryAdapter(ITaskQueryPort):
             total_entries=0,
         )
 
-    async def get_workflow_executions(
-        self, workflow_run_id: str
-    ) -> ExecutionListResult:
+    async def get_workflow_executions(self, workflow_run_id: str) -> ExecutionListResult:
         """Get all executions for a workflow run."""
         return ExecutionListResult(
             executions=[],

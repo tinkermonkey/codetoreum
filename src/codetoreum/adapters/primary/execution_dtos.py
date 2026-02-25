@@ -42,12 +42,8 @@ class ExecutionErrorDetailDTO(BaseModel):
         description="Error type (CONTAINER_CRASHED, EXECUTION_TIMEOUT, AGENT_FAILURE, UNKNOWN)",
     )
     message: str = Field(..., description="Error message")
-    container_status: ContainerStatusDTO | None = Field(
-        None, description="Container status (for container crashes)"
-    )
-    partial_logs_available: bool = Field(
-        False, description="Whether partial logs are available"
-    )
+    container_status: ContainerStatusDTO | None = Field(None, description="Container status (for container crashes)")
+    partial_logs_available: bool = Field(False, description="Whether partial logs are available")
 
 
 class ExecutionResponse(BaseModel):

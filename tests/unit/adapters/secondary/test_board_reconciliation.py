@@ -59,9 +59,7 @@ class TestBoardReconciliationIdempotency:
         # Should complete successfully
         assert result is not None
 
-    async def test_reconcile_with_partial_changes_applies_only_necessary(
-        self, mock_board_adapter
-    ):
+    async def test_reconcile_with_partial_changes_applies_only_necessary(self, mock_board_adapter):
         """Test that reconciliation with partial changes applies only necessary changes."""
         adapter = mock_board_adapter
 
@@ -97,12 +95,8 @@ class TestBoardReconciliationIdempotency:
 
         # Get initial state
         board1 = await adapter.get_board("proj-1", "board-1")
-        backlog1 = [
-            item for col in board1.columns if col.name == "Backlog" for item in col.work_item_ids
-        ]
-        in_progress1 = [
-            item for col in board1.columns if col.name == "In Progress" for item in col.work_item_ids
-        ]
+        backlog1 = [item for col in board1.columns if col.name == "Backlog" for item in col.work_item_ids]
+        in_progress1 = [item for col in board1.columns if col.name == "In Progress" for item in col.work_item_ids]
 
         # Reconcile multiple times
         config = BoardConfig("board-1", expected_columns=["Backlog", "In Progress", "Review", "Done"])
@@ -112,12 +106,8 @@ class TestBoardReconciliationIdempotency:
 
         # Verify state is unchanged
         board2 = await adapter.get_board("proj-1", "board-1")
-        backlog2 = [
-            item for col in board2.columns if col.name == "Backlog" for item in col.work_item_ids
-        ]
-        in_progress2 = [
-            item for col in board2.columns if col.name == "In Progress" for item in col.work_item_ids
-        ]
+        backlog2 = [item for col in board2.columns if col.name == "Backlog" for item in col.work_item_ids]
+        in_progress2 = [item for col in board2.columns if col.name == "In Progress" for item in col.work_item_ids]
 
         assert backlog1 == backlog2
         assert in_progress1 == in_progress2

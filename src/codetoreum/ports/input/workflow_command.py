@@ -13,6 +13,7 @@ from typing import Any
 
 class TriggerType(Enum):
     """Type of workflow trigger"""
+
     CARD_MOVEMENT = "card_movement"
     MANUAL = "manual"
     SCHEDULED = "scheduled"
@@ -23,6 +24,7 @@ class TriggerType(Enum):
 @dataclass
 class StartWorkflowCommand:
     """Command to start a new workflow execution"""
+
     project_name: str
     work_item_id: str  # Issue number, discussion ID, etc.
     pipeline_name: str
@@ -35,6 +37,7 @@ class StartWorkflowCommand:
 @dataclass
 class PauseWorkflowCommand:
     """Command to pause an active workflow"""
+
     workflow_run_id: str
     reason: str
     pause_point: str  # Current stage to pause at
@@ -43,6 +46,7 @@ class PauseWorkflowCommand:
 @dataclass
 class ResumeWorkflowCommand:
     """Command to resume a paused workflow"""
+
     workflow_run_id: str
     from_stage: str | None = None  # If None, resume from paused point
 
@@ -50,6 +54,7 @@ class ResumeWorkflowCommand:
 @dataclass
 class CancelWorkflowCommand:
     """Command to cancel a workflow"""
+
     workflow_run_id: str
     reason: str
     force: bool = False  # If True, immediate cancellation
@@ -58,6 +63,7 @@ class CancelWorkflowCommand:
 @dataclass
 class RetryStageCommand:
     """Command to retry a failed stage"""
+
     workflow_run_id: str
     stage_name: str
     reset_state: bool = True  # If True, clear previous attempts
@@ -66,6 +72,7 @@ class RetryStageCommand:
 @dataclass
 class WorkflowCommandResult:
     """Result of executing a workflow command"""
+
     success: bool
     workflow_run_id: str
     message: str
@@ -88,10 +95,7 @@ class IWorkflowCommandPort(ABC):
     """
 
     @abstractmethod
-    async def start_workflow(
-        self,
-        command: StartWorkflowCommand
-    ) -> WorkflowCommandResult:
+    async def start_workflow(self, command: StartWorkflowCommand) -> WorkflowCommandResult:
         """
         Starts a new workflow execution.
 
@@ -109,10 +113,7 @@ class IWorkflowCommandPort(ABC):
         """
 
     @abstractmethod
-    async def pause_workflow(
-        self,
-        command: PauseWorkflowCommand
-    ) -> WorkflowCommandResult:
+    async def pause_workflow(self, command: PauseWorkflowCommand) -> WorkflowCommandResult:
         """
         Pauses an active workflow execution.
 
@@ -128,10 +129,7 @@ class IWorkflowCommandPort(ABC):
         """
 
     @abstractmethod
-    async def resume_workflow(
-        self,
-        command: ResumeWorkflowCommand
-    ) -> WorkflowCommandResult:
+    async def resume_workflow(self, command: ResumeWorkflowCommand) -> WorkflowCommandResult:
         """
         Resumes a paused workflow execution.
 
@@ -147,10 +145,7 @@ class IWorkflowCommandPort(ABC):
         """
 
     @abstractmethod
-    async def cancel_workflow(
-        self,
-        command: CancelWorkflowCommand
-    ) -> WorkflowCommandResult:
+    async def cancel_workflow(self, command: CancelWorkflowCommand) -> WorkflowCommandResult:
         """
         Cancels a workflow execution.
 
@@ -165,10 +160,7 @@ class IWorkflowCommandPort(ABC):
         """
 
     @abstractmethod
-    async def retry_stage(
-        self,
-        command: RetryStageCommand
-    ) -> WorkflowCommandResult:
+    async def retry_stage(self, command: RetryStageCommand) -> WorkflowCommandResult:
         """
         Retries a failed workflow stage.
 

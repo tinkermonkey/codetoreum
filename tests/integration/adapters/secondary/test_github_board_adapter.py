@@ -227,10 +227,8 @@ class TestMoveItemToColumn:
             await board_adapter.move_item_to_column("item-1", "In Progress", MovedByType.ORCHESTRATOR)
 
 
-
 class TestReconcileBoard:
     """Tests for reconcile_board method."""
-
 
 
 class TestWebhookHandler:
@@ -356,7 +354,6 @@ class TestPollingMechanism:
         assert changes[0].moved_by == "unknown"
 
 
-
 class TestEventEmission:
     """Tests for event emission functionality."""
 
@@ -373,6 +370,7 @@ class TestEventEmission:
 
     def test_off_unregisters_handler(self, board_adapter):
         """Test event handler unregistration."""
+
         def handler(event):
             pass
 
@@ -420,9 +418,7 @@ class TestErrorHandling:
     @pytest.mark.asyncio
     async def test_graphql_error_handling(self, board_adapter, mock_graphql_client):
         """Test GraphQL error handling."""
-        mock_graphql_client.execute.side_effect = ExternalServiceError(
-            "GitHub", "GraphQL error: Rate limit exceeded"
-        )
+        mock_graphql_client.execute.side_effect = ExternalServiceError("GitHub", "GraphQL error: Rate limit exceeded")
 
         with pytest.raises(ExternalServiceError):
             await board_adapter.get_board("proj-123", "board-456")

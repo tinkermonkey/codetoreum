@@ -338,10 +338,12 @@ class MockLLMAdapter(ILLMProvider):
             self._conversations[conversation_id] = []
 
             if system_prompt:
-                self._conversations[conversation_id].append({
-                    "role": "system",
-                    "content": system_prompt,
-                })
+                self._conversations[conversation_id].append(
+                    {
+                        "role": "system",
+                        "content": system_prompt,
+                    }
+                )
 
         return conversation_id
 
@@ -373,14 +375,17 @@ class MockLLMAdapter(ILLMProvider):
         with self._lock:
             if conversation_id not in self._conversations:
                 from codetoreum.ports.exceptions import ResourceNotFoundError
+
                 msg = "Conversation"
                 raise ResourceNotFoundError(msg, conversation_id)
 
             # Add user message
-            self._conversations[conversation_id].append({
-                "role": "user",
-                "content": message,
-            })
+            self._conversations[conversation_id].append(
+                {
+                    "role": "user",
+                    "content": message,
+                }
+            )
 
         # Execute
         context = ExecutionContext(conversation_id=conversation_id)
@@ -388,10 +393,12 @@ class MockLLMAdapter(ILLMProvider):
 
         # Add assistant response
         with self._lock:
-            self._conversations[conversation_id].append({
-                "role": "assistant",
-                "content": result.content,
-            })
+            self._conversations[conversation_id].append(
+                {
+                    "role": "assistant",
+                    "content": result.content,
+                }
+            )
 
         return result
 

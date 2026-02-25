@@ -151,7 +151,6 @@ class SimulationClock:
             target_time: Target datetime
         """
         with self._lock:
-            old_time = self._current_time
             self._current_time = target_time
 
             # Find callbacks to trigger
@@ -178,7 +177,7 @@ class SimulationClock:
                 callback_type = "async" if asyncio.iscoroutinefunction(callback) else "sync"
                 logger.error(
                     f"Error in scheduled {callback_type} callback at {scheduled_time}: {e}",
-                    exc_info=True
+                    exc_info=True,
                 )
 
     def schedule_callback(
@@ -324,10 +323,7 @@ class SimulationClock:
 
     def __repr__(self) -> str:
         """String representation."""
-        return (
-            f"SimulationClock(current_time={self._current_time.isoformat()}, "
-            f"speed={self._speed_multiplier}x)"
-        )
+        return f"SimulationClock(current_time={self._current_time.isoformat()}, speed={self._speed_multiplier}x)"
 
 
 class RealTimeClock:

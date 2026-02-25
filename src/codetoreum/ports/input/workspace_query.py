@@ -14,6 +14,7 @@ from typing import Any
 
 class WorkspaceStatus(str, Enum):
     """Workspace container status"""
+
     INITIALIZING = "initializing"
     RUNNING = "running"
     PAUSED = "paused"
@@ -25,6 +26,7 @@ class WorkspaceStatus(str, Enum):
 @dataclass
 class MountedFile:
     """Information about a mounted file in the workspace"""
+
     source_path: str
     container_path: str
     read_only: bool
@@ -34,6 +36,7 @@ class MountedFile:
 @dataclass
 class ResourceUsage:
     """Container resource usage"""
+
     cpu_percent: float
     memory_mb: float
     memory_limit_mb: float | None
@@ -47,6 +50,7 @@ class ResourceUsage:
 @dataclass
 class WorkspaceInfo:
     """Workspace information"""
+
     workspace_id: str
     execution_id: str
     agent_id: str
@@ -85,6 +89,7 @@ class WorkspaceInfo:
 @dataclass
 class WorkspaceListItem:
     """Workspace list item (lightweight)"""
+
     workspace_id: str
     execution_id: str
     agent_name: str
@@ -99,6 +104,7 @@ class WorkspaceListItem:
 @dataclass
 class WorkspaceListResult:
     """List of workspaces"""
+
     workspaces: list[WorkspaceListItem]
     total_count: int
     active_count: int
@@ -109,6 +115,7 @@ class WorkspaceListResult:
 @dataclass
 class WorkspaceFilters:
     """Filters for workspace queries"""
+
     execution_id: str | None = None
     agent_id: str | None = None
     work_item_id: str | None = None
@@ -119,6 +126,7 @@ class WorkspaceFilters:
 @dataclass
 class PaginationParams:
     """Pagination parameters"""
+
     offset: int = 0
     limit: int = 50
 
@@ -132,10 +140,7 @@ class IWorkspaceQueryPort(ABC):
     """
 
     @abstractmethod
-    async def get_workspace(
-        self,
-        workspace_id: str
-    ) -> WorkspaceInfo:
+    async def get_workspace(self, workspace_id: str) -> WorkspaceInfo:
         """
         Get workspace information by ID.
 
@@ -150,10 +155,7 @@ class IWorkspaceQueryPort(ABC):
         """
 
     @abstractmethod
-    async def get_workspace_by_execution(
-        self,
-        execution_id: str
-    ) -> WorkspaceInfo:
+    async def get_workspace_by_execution(self, execution_id: str) -> WorkspaceInfo:
         """
         Get workspace information by execution ID.
 
@@ -169,9 +171,7 @@ class IWorkspaceQueryPort(ABC):
 
     @abstractmethod
     async def list_workspaces(
-        self,
-        filters: WorkspaceFilters | None = None,
-        pagination: PaginationParams | None = None
+        self, filters: WorkspaceFilters | None = None, pagination: PaginationParams | None = None
     ) -> WorkspaceListResult:
         """
         List workspaces with optional filtering.
@@ -185,10 +185,7 @@ class IWorkspaceQueryPort(ABC):
         """
 
     @abstractmethod
-    async def list_active_workspaces(
-        self,
-        pagination: PaginationParams | None = None
-    ) -> WorkspaceListResult:
+    async def list_active_workspaces(self, pagination: PaginationParams | None = None) -> WorkspaceListResult:
         """
         List all active workspaces (running or initializing).
 
@@ -200,10 +197,7 @@ class IWorkspaceQueryPort(ABC):
         """
 
     @abstractmethod
-    async def get_resource_usage_summary(
-        self,
-        project_id: str | None = None
-    ) -> dict[str, Any]:
+    async def get_resource_usage_summary(self, project_id: str | None = None) -> dict[str, Any]:
         """
         Get aggregate resource usage across workspaces.
 
@@ -215,10 +209,7 @@ class IWorkspaceQueryPort(ABC):
         """
 
     @abstractmethod
-    async def count_workspaces(
-        self,
-        filters: WorkspaceFilters | None = None
-    ) -> int:
+    async def count_workspaces(self, filters: WorkspaceFilters | None = None) -> int:
         """
         Count workspaces matching filters.
 
@@ -231,10 +222,7 @@ class IWorkspaceQueryPort(ABC):
 
     @abstractmethod
     async def get_workspace_logs(
-        self,
-        workspace_id: str,
-        tail: int | None = None,
-        since: datetime | None = None
+        self, workspace_id: str, tail: int | None = None, since: datetime | None = None
     ) -> list[str]:
         """
         Get workspace container logs.

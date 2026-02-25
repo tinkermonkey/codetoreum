@@ -119,10 +119,7 @@ class TestExpectedSequenceRegistry:
 
     def test_sequence_pattern_dataclass(self):
         """Test SequencePattern dataclass."""
-        pattern = SequencePattern(
-            name="test_pattern",
-            pattern=["Event1", "Event2", "Event3"]
-        )
+        pattern = SequencePattern(name="test_pattern", pattern=["Event1", "Event2", "Event3"])
 
         assert pattern.name == "test_pattern"
         assert len(pattern.pattern) == 3
@@ -135,32 +132,20 @@ class TestSequencePatternValidation:
     def test_sequence_pattern_with_empty_name(self):
         """Test that SequencePattern rejects empty name."""
         with pytest.raises(ValueError, match="name must be non-empty"):
-            SequencePattern(
-                name="",
-                pattern=["Event1", "Event2"]
-            )
+            SequencePattern(name="", pattern=["Event1", "Event2"])
 
     def test_sequence_pattern_with_whitespace_name(self):
         """Test that SequencePattern rejects whitespace-only name."""
         with pytest.raises(ValueError, match="name must be non-empty"):
-            SequencePattern(
-                name="   ",
-                pattern=["Event1", "Event2"]
-            )
+            SequencePattern(name="   ", pattern=["Event1", "Event2"])
 
     def test_sequence_pattern_with_empty_pattern(self):
         """Test that SequencePattern rejects empty pattern list."""
         with pytest.raises(ValueError, match="pattern must be a non-empty list"):
-            SequencePattern(
-                name="test_pattern",
-                pattern=[]
-            )
+            SequencePattern(name="test_pattern", pattern=[])
 
     def test_sequence_pattern_valid_with_single_event(self):
         """Test that SequencePattern accepts single event pattern."""
-        pattern = SequencePattern(
-            name="simple_pattern",
-            pattern=["Event1"]
-        )
+        pattern = SequencePattern(name="simple_pattern", pattern=["Event1"])
         assert pattern.name == "simple_pattern"
         assert len(pattern.pattern) == 1

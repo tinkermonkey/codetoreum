@@ -114,7 +114,7 @@ class RepairCycleEventHandler(EventHandler):
         attributes={
             "component": "repair_cycle",
             "layer": "application",
-        }
+        },
     )
     async def handle(self, event: DomainEvent) -> None:
         """
@@ -127,9 +127,7 @@ class RepairCycleEventHandler(EventHandler):
             Exception: If handling fails (logged but not re-raised)
         """
         if not isinstance(event, WorkItemColumnChanged):
-            logger.warning(
-                f"RepairCycleEventHandler received unexpected event type: {event.event_type}"
-            )
+            logger.warning(f"RepairCycleEventHandler received unexpected event type: {event.event_type}")
             return
 
         try:
@@ -147,7 +145,7 @@ class RepairCycleEventHandler(EventHandler):
         attributes={
             "component": "repair_cycle",
             "layer": "application",
-        }
+        },
     )
     async def handle_column_change(self, event: WorkItemColumnChanged) -> None:
         """
@@ -201,9 +199,7 @@ class RepairCycleEventHandler(EventHandler):
                 # In a full implementation, this would emit an event to move the item
                 # to the next column (e.g., "Staged" or "Ready for Deploy")
             else:
-                logger.warning(
-                    f"Repair cycle failed for {work_item_id}, escalating for human review"
-                )
+                logger.warning(f"Repair cycle failed for {work_item_id}, escalating for human review")
                 # In a full implementation, this would emit an event to escalate
                 # the item for human review or move to an escalation column
 

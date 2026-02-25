@@ -42,7 +42,12 @@ def register_pipeline_endpoints(
     )
     async def list_all_pipelines(
         offset: int = Query(DEFAULT_OFFSET, ge=0, description="Pagination offset"),
-        limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description=f"Pagination limit (max {MAX_PAGE_SIZE})"),
+        limit: int = Query(
+            DEFAULT_PAGE_SIZE,
+            ge=1,
+            le=MAX_PAGE_SIZE,
+            description=f"Pagination limit (max {MAX_PAGE_SIZE})",
+        ),
     ) -> PipelineListResponse:
         """
         List all pipelines across all projects with pagination.
@@ -57,24 +62,23 @@ def register_pipeline_endpoints(
         """
         try:
             pagination = PaginationParams(offset=offset, limit=limit)
-            configs = await query_port.list_pipelines(
-                project_id=None,
-                pagination=pagination
-            )
+            configs = await query_port.list_pipelines(project_id=None, pagination=pagination)
 
             pipelines = []
             for config in configs:
-                pipelines.append(PipelineConfigResponse(
-                    id=config.id,
-                    project_id=config.project_id,
-                    name=config.name,
-                    description=config.description,
-                    version=config.version,
-                    stages=config.stages,
-                    created_at=config.created_at,
-                    updated_at=config.updated_at,
-                    metadata=config.metadata,
-                ))
+                pipelines.append(
+                    PipelineConfigResponse(
+                        id=config.id,
+                        project_id=config.project_id,
+                        name=config.name,
+                        description=config.description,
+                        version=config.version,
+                        stages=config.stages,
+                        created_at=config.created_at,
+                        updated_at=config.updated_at,
+                        metadata=config.metadata,
+                    )
+                )
 
             total = await query_port.count_configs(config_type="pipeline")
 
@@ -111,10 +115,7 @@ def register_pipeline_endpoints(
         - 404 Not Found: Pipeline not found
         """
         try:
-            config = await query_port.get_pipeline_config(
-                project_id=project_id,
-                pipeline_name=pipeline_name
-            )
+            config = await query_port.get_pipeline_config(project_id=project_id, pipeline_name=pipeline_name)
 
             return PipelineConfigResponse(
                 id=config.id,
@@ -222,29 +223,25 @@ def register_pipeline_endpoints(
         """
         try:
             pagination = PaginationParams(offset=offset, limit=limit)
-            configs = await query_port.list_pipelines(
-                project_id=project_id,
-                pagination=pagination
-            )
+            configs = await query_port.list_pipelines(project_id=project_id, pagination=pagination)
 
             pipelines = []
             for config in configs:
-                pipelines.append(PipelineConfigResponse(
-                    id=config.id,
-                    project_id=config.project_id,
-                    name=config.name,
-                    description=config.description,
-                    version=config.version,
-                    stages=config.stages,
-                    created_at=config.created_at,
-                    updated_at=config.updated_at,
-                    metadata=config.metadata,
-                ))
+                pipelines.append(
+                    PipelineConfigResponse(
+                        id=config.id,
+                        project_id=config.project_id,
+                        name=config.name,
+                        description=config.description,
+                        version=config.version,
+                        stages=config.stages,
+                        created_at=config.created_at,
+                        updated_at=config.updated_at,
+                        metadata=config.metadata,
+                    )
+                )
 
-            total = await query_port.count_configs(
-                config_type="pipeline",
-                project_id=project_id
-            )
+            total = await query_port.count_configs(config_type="pipeline", project_id=project_id)
 
             return PipelineListResponse(pipelines=pipelines, total_count=total)
 

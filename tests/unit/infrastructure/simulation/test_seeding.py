@@ -31,7 +31,7 @@ class TestSimulationDataSeeder:
     async def seeder(self, bootstrap):
         """Create seeder instance."""
         seeder_instance = SimulationDataSeeder(bootstrap)
-        yield seeder_instance
+        return seeder_instance
 
     # =========================================================================
     # Initialization Tests
@@ -121,9 +121,7 @@ class TestSimulationDataSeeder:
 
         # Verify pipeline was saved
         pipeline_id = seeder.created_items.pipelines[0]
-        pipeline = await seeder._config_store.get_pipeline_config(
-            seeder._current_project_id, "test-workflow"
-        )
+        pipeline = await seeder._config_store.get_pipeline_config(seeder._current_project_id, "test-workflow")
         assert pipeline.name == "test-workflow"
         assert len(pipeline.stages) == 3
         assert pipeline.stages[0]["name"] == "design"
@@ -157,9 +155,7 @@ class TestSimulationDataSeeder:
             stages=custom_stages,
         )
 
-        pipeline = await seeder._config_store.get_pipeline_config(
-            seeder._current_project_id, "custom-workflow"
-        )
+        pipeline = await seeder._config_store.get_pipeline_config(seeder._current_project_id, "custom-workflow")
         assert len(pipeline.stages) == 2
         assert pipeline.stages[0]["name"] == "analyze"
         assert pipeline.stages[0]["max_retries"] == 5
@@ -200,15 +196,11 @@ class TestSimulationDataSeeder:
         assert len(seeder.created_items.agents) == 2
 
         # Verify agents were saved
-        agent1 = await seeder._config_store.get_agent_config(
-            seeder._current_project_id, "agent1"
-        )
+        agent1 = await seeder._config_store.get_agent_config(seeder._current_project_id, "agent1")
         assert agent1.agent_name == "agent1"
         assert agent1.metadata["agent_type"] == "coder"
 
-        agent2 = await seeder._config_store.get_agent_config(
-            seeder._current_project_id, "agent2"
-        )
+        agent2 = await seeder._config_store.get_agent_config(seeder._current_project_id, "agent2")
         assert agent2.metadata["temperature"] == 0.5
         assert agent2.metadata["max_tokens"] == 2048
 
@@ -288,9 +280,7 @@ class TestSimulationDataSeeder:
         """Test fluent API allows method chaining."""
         result = await seeder.create_project("chain-test-project")
         result = await result.create_workflow("chain-workflow")
-        result = await result.create_agents([
-            {"name": "agent1", "capabilities": ["code_generation"]}
-        ])
+        result = await result.create_agents([{"name": "agent1", "capabilities": ["code_generation"]}])
         result = await result.create_work_items(count=3)
 
         # All operations should succeed

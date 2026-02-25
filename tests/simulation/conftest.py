@@ -68,10 +68,7 @@ class MockAgentExecutor(IAgentExecutor):
             True if agent was triggered for this work item
         """
         with self._lock:
-            return any(
-                e["agent_id"] == agent_id and e["work_item_id"] == work_item_id
-                for e in self._executions
-            )
+            return any(e["agent_id"] == agent_id and e["work_item_id"] == work_item_id for e in self._executions)
 
     def get_execution_count(self, agent_id: str) -> int:
         """Get total execution count for an agent.
@@ -253,6 +250,7 @@ def custom_simulation_runner():
     Returns:
         Function that creates SimulationRunner with custom config
     """
+
     def _create_runner(config: SimulationConfig) -> SimulationRunner:
         return SimulationRunner(config)
 
@@ -303,7 +301,7 @@ async def simulation_app(
         raise RuntimeError("Bootstrap app not initialized")
     # Cast needed because bootstrap.py has ignore_errors in mypy config,
     # making app typed as Any despite runtime type being FastAPI | None
-    return cast(FastAPI, simulation_bootstrap.app)
+    return cast("FastAPI", simulation_bootstrap.app)
 
 
 @pytest.fixture
@@ -380,23 +378,16 @@ async def simulation_infrastructure(
 
 # Markers for categorizing simulation tests
 
+
 def pytest_configure(config):
     """Register custom pytest markers."""
-    config.addinivalue_line(
-        "markers",
-        "simulation: mark test as a simulation test (fast, no external dependencies)"
-    )
-    config.addinivalue_line(
-        "markers",
-        "slow_simulation: mark test as a slow simulation (more realistic timing)"
-    )
-    config.addinivalue_line(
-        "markers",
-        "scenario: mark test as a predefined scenario test"
-    )
+    config.addinivalue_line("markers", "simulation: mark test as a simulation test (fast, no external dependencies)")
+    config.addinivalue_line("markers", "slow_simulation: mark test as a slow simulation (more realistic timing)")
+    config.addinivalue_line("markers", "scenario: mark test as a predefined scenario test")
 
 
 # Hooks for simulation test collection and execution
+
 
 def pytest_collection_modifyitems(config, items):
     """

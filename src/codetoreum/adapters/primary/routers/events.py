@@ -112,21 +112,18 @@ def create_events_router(
     )
     async def get_events(
         event_type: str | None = Query(None, description="Filter by event type"),
-        aggregate_type: str | None = Query(
-            None, description="Filter by aggregate type"
-        ),
+        aggregate_type: str | None = Query(None, description="Filter by aggregate type"),
         aggregate_id: str | None = Query(None, description="Filter by aggregate ID"),
-        correlation_id: str | None = Query(
-            None, description="Filter by correlation ID"
-        ),
-        start_time: datetime | None = Query(
-            None, description="Filter events after this timestamp"
-        ),
-        end_time: datetime | None = Query(
-            None, description="Filter events before this timestamp"
-        ),
+        correlation_id: str | None = Query(None, description="Filter by correlation ID"),
+        start_time: datetime | None = Query(None, description="Filter events after this timestamp"),
+        end_time: datetime | None = Query(None, description="Filter events before this timestamp"),
         offset: int = Query(DEFAULT_OFFSET, ge=0, description="Number of events to skip"),
-        limit: int = Query(EVENTS_DEFAULT_PAGE_SIZE, ge=1, le=EVENTS_MAX_PAGE_SIZE, description=f"Maximum events to return (max {EVENTS_MAX_PAGE_SIZE})"),
+        limit: int = Query(
+            EVENTS_DEFAULT_PAGE_SIZE,
+            ge=1,
+            le=EVENTS_MAX_PAGE_SIZE,
+            description=f"Maximum events to return (max {EVENTS_MAX_PAGE_SIZE})",
+        ),
     ) -> EventListResponse:
         """
         Get historical events with filtering and pagination.
@@ -145,9 +142,7 @@ def create_events_router(
 
             # Query by correlation ID if provided
             if correlation_id:
-                domain_events = await event_store.get_events_by_correlation_id(
-                    correlation_id
-                )
+                domain_events = await event_store.get_events_by_correlation_id(correlation_id)
             # Query by event type if provided
             elif event_type:
                 domain_events = await event_store.get_events_by_type(
@@ -180,19 +175,11 @@ def create_events_router(
 
             # Filter by aggregate type if specified
             if aggregate_type:
-                domain_events = [
-                    e
-                    for e in domain_events
-                    if getattr(e, "aggregate_type", None) == aggregate_type
-                ]
+                domain_events = [e for e in domain_events if getattr(e, "aggregate_type", None) == aggregate_type]
 
             # Filter by time range
             if end_time:
-                domain_events = [
-                    e
-                    for e in domain_events
-                    if getattr(e, "occurred_at", None) <= end_time
-                ]
+                domain_events = [e for e in domain_events if getattr(e, "occurred_at", None) <= end_time]
 
             # Apply pagination
             total_count = len(domain_events)
@@ -200,9 +187,7 @@ def create_events_router(
 
             # Convert to DTOs
             for event in domain_events:
-                event_dict = (
-                    event.to_dict() if hasattr(event, "to_dict") else event.__dict__
-                )
+                event_dict = event.to_dict() if hasattr(event, "to_dict") else event.__dict__
                 events.append(
                     EventDTO(
                         event_id=str(event_dict.get("event_id", "")),
@@ -214,9 +199,7 @@ def create_events_router(
                         correlation_id=str(event_dict.get("correlation_id"))
                         if event_dict.get("correlation_id")
                         else None,
-                        causation_id=str(event_dict.get("causation_id"))
-                        if event_dict.get("causation_id")
-                        else None,
+                        causation_id=str(event_dict.get("causation_id")) if event_dict.get("causation_id") else None,
                         user_id=event_dict.get("user_id"),
                         payload=event_dict.get("payload", {}),
                         metadata=event_dict.get("metadata", {}),

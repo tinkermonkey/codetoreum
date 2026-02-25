@@ -712,7 +712,6 @@ class TestRepairCycleAdapterMethodContract:
         assert saved_checkpoint is not None
         assert saved_checkpoint.iteration == 1
 
-
     @pytest.mark.asyncio
     async def test_execute_returns_repair_cycle_result(self) -> None:
         """Verify execute() method returns RepairCycleResult."""

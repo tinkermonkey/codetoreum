@@ -68,9 +68,15 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
             version=cfg.version,
             created_at=cfg.created_at or datetime.now(UTC),
             updated_at=cfg.updated_at or datetime.now(UTC),
-            environment_variables={k: v for k, v in cfg.environment_variables.items()} if cfg.environment_variables else {},
-            mounted_commands=list(cfg.mounted_commands.values()) if isinstance(cfg.mounted_commands, dict) else cfg.mounted_commands,
-            mounted_subagents=list(cfg.mounted_subagents.values()) if isinstance(cfg.mounted_subagents, dict) else cfg.mounted_subagents,
+            environment_variables={k: v for k, v in cfg.environment_variables.items()}
+            if cfg.environment_variables
+            else {},
+            mounted_commands=list(cfg.mounted_commands.values())
+            if isinstance(cfg.mounted_commands, dict)
+            else cfg.mounted_commands,
+            mounted_subagents=list(cfg.mounted_subagents.values())
+            if isinstance(cfg.mounted_subagents, dict)
+            else cfg.mounted_subagents,
             metadata=cfg.metadata,
         )
 
@@ -115,9 +121,7 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
     # Port interface methods
     # =========================================================================
 
-    async def get_project_config(
-        self, project_id: str, include_secrets: bool = False
-    ) -> ProjectConfigInfo:
+    async def get_project_config(self, project_id: str, include_secrets: bool = False) -> ProjectConfigInfo:
         """Get project configuration by ID."""
         if self._config_store:
             cfg = await self._config_store.get_project_config(project_id)
@@ -128,9 +132,7 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
                 raise ConfigNotFoundError(msg)
             return self._projects[project_id]
 
-    async def get_project_config_by_name(
-        self, project_name: str, include_secrets: bool = False
-    ) -> ProjectConfigInfo:
+    async def get_project_config_by_name(self, project_name: str, include_secrets: bool = False) -> ProjectConfigInfo:
         """Get project configuration by name."""
         if self._config_store:
             cfg = await self._config_store.get_project_config_by_name(project_name)
@@ -142,9 +144,7 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
             project_id = self._projects_by_name[project_name]
             return self._projects[project_id]
 
-    async def get_agent_config(
-        self, project_id: str, agent_name: str
-    ) -> AgentConfigInfo:
+    async def get_agent_config(self, project_id: str, agent_name: str) -> AgentConfigInfo:
         """Get agent configuration."""
         if self._config_store:
             cfg = await self._config_store.get_agent_config(project_id, agent_name)
@@ -158,9 +158,7 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
                 raise AgentNotFoundError(msg)
             return self._agents[project_id][agent_name]
 
-    async def get_pipeline_config(
-        self, project_id: str, pipeline_name: str
-    ) -> PipelineConfigInfo:
+    async def get_pipeline_config(self, project_id: str, pipeline_name: str) -> PipelineConfigInfo:
         """Get pipeline configuration."""
         if self._config_store:
             cfg = await self._config_store.get_pipeline_config(project_id, pipeline_name)
@@ -171,14 +169,10 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
                 raise PipelineNotFoundError(msg)
             if pipeline_name not in self._pipelines[project_id]:
                 msg = f"Pipeline '{pipeline_name}' not found in project"
-                raise PipelineNotFoundError(
-                    msg
-                )
+                raise PipelineNotFoundError(msg)
             return self._pipelines[project_id][pipeline_name]
 
-    async def list_projects(
-        self, pagination: PaginationParams | None = None
-    ) -> list[ProjectConfigInfo]:
+    async def list_projects(self, pagination: PaginationParams | None = None) -> list[ProjectConfigInfo]:
         """List all projects."""
         if self._config_store:
             configs = await self._config_store.list_projects()
@@ -214,11 +208,7 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
             return agents
         with self._lock:
             if project_id is None:
-                agents = [
-                    agent
-                    for project_agents in self._agents.values()
-                    for agent in project_agents.values()
-                ]
+                agents = [agent for project_agents in self._agents.values() for agent in project_agents.values()]
             else:
                 if project_id not in self._agents:
                     return []
@@ -282,9 +272,8 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
                 for proj_id, proj in self._projects.items():
                     if project_id and proj_id != project_id:
                         continue
-                    if (
-                        query_lower in proj.name.lower()
-                        or (proj.description and query_lower in proj.description.lower())
+                    if query_lower in proj.name.lower() or (
+                        proj.description and query_lower in proj.description.lower()
                     ):
                         results.append(
                             ConfigSearchResult(
@@ -319,9 +308,7 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
             history = self._version_history.get(config_id, [])
             return history[-limit:]
 
-    async def get_config_version(
-        self, config_id: str, config_type: str, version: int
-    ) -> dict[str, Any]:
+    async def get_config_version(self, config_id: str, config_type: str, version: int) -> dict[str, Any]:
         """Get a specific version of a configuration."""
         with self._lock:
             # For mock, just return current version
@@ -336,9 +323,7 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
             msg = f"Configuration with ID {config_id} not found"
             raise ConfigNotFoundError(msg)
 
-    async def count_configs(
-        self, config_type: str | None = None, project_id: str | None = None
-    ) -> int:
+    async def count_configs(self, config_type: str | None = None, project_id: str | None = None) -> int:
         """Count configurations."""
         if self._config_store:
             count = 0

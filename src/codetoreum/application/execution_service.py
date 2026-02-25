@@ -133,7 +133,7 @@ class ExecutionService:
 
     @instrument_async_function(
         name="execution.create_execution",
-        attributes={"service": "execution_service", "operation": "create"}
+        attributes={"service": "execution_service", "operation": "create"},
     )
     async def create_execution(
         self,
@@ -178,10 +178,7 @@ class ExecutionService:
                 await self.event_store.append(event.aggregate_id, [event])
             execution.clear_events()
 
-            logger.info(
-                f"Created execution {execution.id} for agent {agent.name} "
-                f"on work item {work_item.id}"
-            )
+            logger.info(f"Created execution {execution.id} for agent {agent.name} on work item {work_item.id}")
 
             return execution
 
@@ -189,20 +186,20 @@ class ExecutionService:
             logger.error(
                 f"Failed to persist execution creation events: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_EXECUTION_CREATE_EVENT_STORE_FAILURE"}
+                extra={"error_id": "ERR_EXECUTION_CREATE_EVENT_STORE_FAILURE"},
             )
             raise
         except DomainError as e:
             logger.error(
                 f"Failed to create execution (validation error): {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_EXECUTION_CREATE_VALIDATION_FAILURE"}
+                extra={"error_id": "ERR_EXECUTION_CREATE_VALIDATION_FAILURE"},
             )
             raise
 
     @instrument_async_function(
         name="execution.start_execution",
-        attributes={"service": "execution_service", "operation": "start"}
+        attributes={"service": "execution_service", "operation": "start"},
     )
     async def start_execution(
         self,
@@ -247,10 +244,7 @@ class ExecutionService:
                 await self.event_store.append(event.aggregate_id, [event])
             execution.clear_events()
 
-            logger.info(
-                f"Started execution {execution.id} "
-                f"(container: {container_name or 'none'})"
-            )
+            logger.info(f"Started execution {execution.id} (container: {container_name or 'none'})")
 
             return ExecutionServiceResult(
                 success=True,
@@ -262,7 +256,7 @@ class ExecutionService:
             logger.error(
                 f"Failed to persist start event for execution {execution.id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_EXECUTION_START_EVENT_STORE_FAILURE"}
+                extra={"error_id": "ERR_EXECUTION_START_EVENT_STORE_FAILURE"},
             )
             return ExecutionServiceResult(
                 success=False,
@@ -274,7 +268,7 @@ class ExecutionService:
             logger.error(
                 f"Failed to start execution {execution.id} (validation error): {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_EXECUTION_START_VALIDATION_FAILURE"}
+                extra={"error_id": "ERR_EXECUTION_START_VALIDATION_FAILURE"},
             )
             return ExecutionServiceResult(
                 success=False,
@@ -285,7 +279,7 @@ class ExecutionService:
 
     @instrument_async_function(
         name="execution.execute_with_llm",
-        attributes={"service": "execution_service", "operation": "execute_llm"}
+        attributes={"service": "execution_service", "operation": "execute_llm"},
     )
     async def execute_with_llm(
         self,
@@ -316,9 +310,7 @@ class ExecutionService:
                 result = await self.llm_provider.execute(
                     prompt=execution.prompt,
                     context=llm_context,
-                    stream_callback=self._create_stream_callback(
-                        execution.id, stream_callback
-                    )
+                    stream_callback=self._create_stream_callback(execution.id, stream_callback)
                     if stream_callback
                     else None,
                 )
@@ -340,20 +332,14 @@ class ExecutionService:
                 # Clean up tracking
                 self._active_executions.pop(execution.id, None)
 
-                logger.info(
-                    f"Completed execution {execution.id} successfully "
-                    f"(tokens: {result.total_tokens})"
-                )
+                logger.info(f"Completed execution {execution.id} successfully (tokens: {result.total_tokens})")
 
-                return ExecutionServiceResult(
-                    success=True, execution=execution, reason="Execution completed"
-                )
+                return ExecutionServiceResult(success=True, execution=execution, reason="Execution completed")
 
             except RateLimitError as e:
                 logger.warning(
-                    f"Rate limit hit for execution {execution.id}, "
-                    f"retry {retry_count + 1}/{self.max_retries}",
-                    extra={"error_id": "ERR_EXECUTION_LLM_RATE_LIMIT"}
+                    f"Rate limit hit for execution {execution.id}, retry {retry_count + 1}/{self.max_retries}",
+                    extra={"error_id": "ERR_EXECUTION_LLM_RATE_LIMIT"},
                 )
                 last_error = e
                 retry_count += 1
@@ -363,10 +349,9 @@ class ExecutionService:
 
             except (ExternalServiceError, LLMProviderError) as e:
                 logger.error(
-                    f"LLM service error for execution {execution.id}: {e}, "
-                    f"retry {retry_count + 1}/{self.max_retries}",
+                    f"LLM service error for execution {execution.id}: {e}, retry {retry_count + 1}/{self.max_retries}",
                     exc_info=True,
-                    extra={"error_id": "ERR_EXECUTION_LLM_SERVICE_ERROR"}
+                    extra={"error_id": "ERR_EXECUTION_LLM_SERVICE_ERROR"},
                 )
                 last_error = e
                 retry_count += 1
@@ -378,7 +363,7 @@ class ExecutionService:
                 logger.error(
                     f"Event store error during execution {execution.id}: {e}",
                     exc_info=True,
-                    extra={"error_id": "ERR_EXECUTION_EVENTSTORE_FAILURE"}
+                    extra={"error_id": "ERR_EXECUTION_EVENTSTORE_FAILURE"},
                 )
                 last_error = e
                 break
@@ -387,7 +372,7 @@ class ExecutionService:
                 logger.error(
                     f"Domain validation error during execution {execution.id}: {e}",
                     exc_info=True,
-                    extra={"error_id": "ERR_EXECUTION_DOMAIN_VALIDATION_FAILURE"}
+                    extra={"error_id": "ERR_EXECUTION_DOMAIN_VALIDATION_FAILURE"},
                 )
                 last_error = e
                 break
@@ -408,7 +393,7 @@ class ExecutionService:
         logger.error(
             f"Failed execution {execution.id}: {error_message}",
             exc_info=True,
-            extra={"error_id": "ERR_EXECUTION_RETRIES_EXHAUSTED"}
+            extra={"error_id": "ERR_EXECUTION_RETRIES_EXHAUSTED"},
         )
 
         return ExecutionServiceResult(
@@ -453,7 +438,7 @@ class ExecutionService:
 
     @instrument_async_function(
         name="execution.execute_with_container",
-        attributes={"service": "execution_service", "operation": "execute_container"}
+        attributes={"service": "execution_service", "operation": "execute_container"},
     )
     async def execute_with_container(
         self,
@@ -493,25 +478,17 @@ class ExecutionService:
                 labels=labels,
             )
 
-            logger.info(
-                f"Created container {container_id} for execution {execution.id}"
-            )
+            logger.info(f"Created container {container_id} for execution {execution.id}")
 
             # Start container
             await self.container.start(container_id)
 
             # Stream logs if callback provided
             if stream_callback:
-                asyncio.create_task(
-                    self._stream_container_logs(
-                        container_id, execution.id, stream_callback
-                    )
-                )
+                asyncio.create_task(self._stream_container_logs(container_id, execution.id, stream_callback))
 
             # Wait for container to complete
-            exit_code = await self.container.wait(
-                container_id, timeout=context.timeout_seconds
-            )
+            exit_code = await self.container.wait(container_id, timeout=context.timeout_seconds)
 
             # Get output
             logs = await self.container.logs(container_id)
@@ -552,7 +529,7 @@ class ExecutionService:
 
             logger.error(
                 f"Container execution {execution.id} failed: {error_message}",
-                extra={"error_id": "ERR_EXECUTION_CONTAINER_EXIT_FAILURE"}
+                extra={"error_id": "ERR_EXECUTION_CONTAINER_EXIT_FAILURE"},
             )
 
             return ExecutionServiceResult(
@@ -566,7 +543,7 @@ class ExecutionService:
             logger.error(
                 f"Container execution {execution.id} timed out: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_EXECUTION_CONTAINER_TIMEOUT"}
+                extra={"error_id": "ERR_EXECUTION_CONTAINER_TIMEOUT"},
             )
             execution.timeout()
 
@@ -587,7 +564,7 @@ class ExecutionService:
             logger.error(
                 f"Container execution error for {execution.id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_EXECUTION_CONTAINER_ERROR"}
+                extra={"error_id": "ERR_EXECUTION_CONTAINER_ERROR"},
             )
 
             error_message = f"Container execution error: {e}"
@@ -610,7 +587,7 @@ class ExecutionService:
             logger.error(
                 f"Event store error during container execution {execution.id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_EXECUTION_CONTAINER_EVENTSTORE_FAILURE"}
+                extra={"error_id": "ERR_EXECUTION_CONTAINER_EVENTSTORE_FAILURE"},
             )
 
             error_message = f"Event store error: {e}"
@@ -626,14 +603,12 @@ class ExecutionService:
         finally:
             # Clean up container with retry
             if container_id:
-                cleanup_success = await self._cleanup_container_with_retry(
-                    container_id, max_attempts=3
-                )
+                cleanup_success = await self._cleanup_container_with_retry(container_id, max_attempts=3)
                 if not cleanup_success:
                     logger.error(
                         f"CRITICAL: Failed to cleanup container {container_id} after retries. "
                         f"Manual intervention may be required.",
-                        extra={"error_id": "ERR_EXECUTION_CONTAINER_CLEANUP_CRITICAL"}
+                        extra={"error_id": "ERR_EXECUTION_CONTAINER_CLEANUP_CRITICAL"},
                     )
 
             # Clean up tracking
@@ -641,7 +616,7 @@ class ExecutionService:
 
     @instrument_async_function(
         name="execution.cancel_execution",
-        attributes={"service": "execution_service", "operation": "cancel"}
+        attributes={"service": "execution_service", "operation": "cancel"},
     )
     async def cancel_execution(self, execution: AgentExecution) -> ExecutionServiceResult:
         """
@@ -657,13 +632,11 @@ class ExecutionService:
             if not execution.is_terminal():
                 # Stop container if running in Docker
                 if execution.container_id:
-                    cleanup_success = await self._cleanup_container_with_retry(
-                        execution.container_id, max_attempts=3
-                    )
+                    cleanup_success = await self._cleanup_container_with_retry(execution.container_id, max_attempts=3)
                     if not cleanup_success:
                         logger.error(
                             f"Failed to stop container {execution.container_id} during cancellation",
-                            extra={"error_id": "ERR_EXECUTION_CANCEL_CONTAINER_STOP_FAILURE"}
+                            extra={"error_id": "ERR_EXECUTION_CANCEL_CONTAINER_STOP_FAILURE"},
                         )
 
                 # Mark as failed
@@ -680,9 +653,7 @@ class ExecutionService:
 
                 logger.info(f"Cancelled execution {execution.id}")
 
-                return ExecutionServiceResult(
-                    success=True, execution=execution, reason="Execution cancelled"
-                )
+                return ExecutionServiceResult(success=True, execution=execution, reason="Execution cancelled")
             return ExecutionServiceResult(
                 success=False,
                 execution=execution,
@@ -693,24 +664,18 @@ class ExecutionService:
             logger.error(
                 f"Failed to persist cancellation for execution {execution.id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_EXECUTION_CANCEL_EVENTSTORE_FAILURE"}
+                extra={"error_id": "ERR_EXECUTION_CANCEL_EVENTSTORE_FAILURE"},
             )
-            return ExecutionServiceResult(
-                success=False, execution=execution, error=str(e)
-            )
+            return ExecutionServiceResult(success=False, execution=execution, error=str(e))
         except DomainError as e:
             logger.error(
                 f"Domain error during cancellation of execution {execution.id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_EXECUTION_CANCEL_DOMAIN_FAILURE"}
+                extra={"error_id": "ERR_EXECUTION_CANCEL_DOMAIN_FAILURE"},
             )
-            return ExecutionServiceResult(
-                success=False, execution=execution, error=str(e)
-            )
+            return ExecutionServiceResult(success=False, execution=execution, error=str(e))
 
-    async def get_execution_logs(
-        self, execution: AgentExecution, tail: int | None = None
-    ) -> list[LogEntry]:
+    async def get_execution_logs(self, execution: AgentExecution, tail: int | None = None) -> list[LogEntry]:
         """
         Get execution logs.
 
@@ -726,9 +691,7 @@ class ExecutionService:
         try:
             if execution.container_id:
                 # Get container logs
-                container_logs = await self.container.logs(
-                    execution.container_id, stream=False, tail=tail
-                )
+                container_logs = await self.container.logs(execution.container_id, stream=False, tail=tail)
 
                 # Parse logs into entries
                 for line in container_logs.split("\n"):
@@ -746,22 +709,20 @@ class ExecutionService:
             logger.error(
                 f"Container error getting logs for execution {execution.id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_EXECUTION_GET_LOGS_CONTAINER_ERROR"}
+                extra={"error_id": "ERR_EXECUTION_GET_LOGS_CONTAINER_ERROR"},
             )
             # Return empty list on container errors
         except PortError as e:
             logger.error(
                 f"Unexpected error getting logs for execution {execution.id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_EXECUTION_GET_LOGS_UNEXPECTED_ERROR"}
+                extra={"error_id": "ERR_EXECUTION_GET_LOGS_UNEXPECTED_ERROR"},
             )
             # Return empty list on unexpected errors
 
         return logs
 
-    async def stream_execution_logs(
-        self, execution: AgentExecution
-    ) -> AsyncIterator[LogEntry]:
+    async def stream_execution_logs(self, execution: AgentExecution) -> AsyncIterator[LogEntry]:
         """
         Stream execution logs in real-time.
 
@@ -775,9 +736,7 @@ class ExecutionService:
             return
 
         try:
-            log_stream = await self.container.logs(
-                execution.container_id, stream=True, follow=True
-            )
+            log_stream = await self.container.logs(execution.container_id, stream=True, follow=True)
 
             async for log_line in log_stream:
                 if log_line.strip():
@@ -792,7 +751,7 @@ class ExecutionService:
             logger.error(
                 f"Error streaming logs for execution {execution.id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_EXECUTION_STREAM_LOGS_ERROR"}
+                extra={"error_id": "ERR_EXECUTION_STREAM_LOGS_ERROR"},
             )
             yield LogEntry(
                 timestamp=datetime.now(UTC),
@@ -801,9 +760,7 @@ class ExecutionService:
                 source="service",
             )
 
-    def subscribe_to_logs(
-        self, execution_id: str, callback: Callable[[LogEntry], None]
-    ) -> None:
+    def subscribe_to_logs(self, execution_id: str, callback: Callable[[LogEntry], None]) -> None:
         """
         Subscribe to log updates for an execution.
 
@@ -815,9 +772,7 @@ class ExecutionService:
             self._log_subscribers[execution_id] = []
         self._log_subscribers[execution_id].append(callback)
 
-    def unsubscribe_from_logs(
-        self, execution_id: str, callback: Callable[[LogEntry], None]
-    ) -> None:
+    def unsubscribe_from_logs(self, execution_id: str, callback: Callable[[LogEntry], None]) -> None:
         """
         Unsubscribe from log updates.
 
@@ -832,9 +787,7 @@ class ExecutionService:
 
     # Helper methods
 
-    def _build_llm_context(
-        self, context: ExecutionContext
-    ) -> LLMExecutionContext:
+    def _build_llm_context(self, context: ExecutionContext) -> LLMExecutionContext:
         """
         Build LLM execution context from domain context.
 
@@ -885,7 +838,7 @@ class ExecutionService:
                         logger.error(
                             f"Error in log subscriber: {e}",
                             exc_info=True,
-                            extra={"error_id": "ERR_EXECUTION_LOG_SUBSCRIBER_ERROR"}
+                            extra={"error_id": "ERR_EXECUTION_LOG_SUBSCRIBER_ERROR"},
                         )
 
             # Call user callback
@@ -896,7 +849,7 @@ class ExecutionService:
                     logger.error(
                         f"Error in user stream callback: {e}",
                         exc_info=True,
-                        extra={"error_id": "ERR_EXECUTION_USER_CALLBACK_ERROR"}
+                        extra={"error_id": "ERR_EXECUTION_USER_CALLBACK_ERROR"},
                     )
 
         return callback
@@ -916,9 +869,7 @@ class ExecutionService:
             callback: Callback for log lines
         """
         try:
-            log_stream = await self.container.logs(
-                container_id, stream=True, follow=True
-            )
+            log_stream = await self.container.logs(container_id, stream=True, follow=True)
 
             async for log_line in log_stream:
                 if log_line.strip():
@@ -928,7 +879,7 @@ class ExecutionService:
             logger.error(
                 f"Error streaming container logs: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_EXECUTION_STREAM_CONTAINER_LOGS_ERROR"}
+                extra={"error_id": "ERR_EXECUTION_STREAM_CONTAINER_LOGS_ERROR"},
             )
 
     def _extract_token_usage(self, logs: str) -> tuple[int, int]:
@@ -966,9 +917,7 @@ class ExecutionService:
 
         return input_tokens, output_tokens
 
-    async def _cleanup_container_with_retry(
-        self, container_id: str, max_attempts: int = 3
-    ) -> bool:
+    async def _cleanup_container_with_retry(self, container_id: str, max_attempts: int = 3) -> bool:
         """
         Clean up container with exponential backoff retry.
 
@@ -992,25 +941,22 @@ class ExecutionService:
 
             except ContainerExecutionError as e:
                 logger.warning(
-                    f"Cleanup attempt {attempt + 1}/{max_attempts} failed for "
-                    f"container {container_id}: {e}",
-                    extra={"error_id": "ERR_EXECUTION_CLEANUP_ATTEMPT_FAILURE"}
+                    f"Cleanup attempt {attempt + 1}/{max_attempts} failed for container {container_id}: {e}",
+                    extra={"error_id": "ERR_EXECUTION_CLEANUP_ATTEMPT_FAILURE"},
                 )
                 if attempt < max_attempts - 1:
                     # Exponential backoff: 1s, 2s, 4s
-                    await asyncio.sleep(2 ** attempt)
+                    await asyncio.sleep(2**attempt)
                 else:
                     logger.error(
                         f"Failed to cleanup container {container_id} after {max_attempts} attempts",
-                        extra={"error_id": "ERR_EXECUTION_CLEANUP_FINAL_FAILURE"}
+                        extra={"error_id": "ERR_EXECUTION_CLEANUP_FINAL_FAILURE"},
                     )
                     return False
 
         return False
 
-    def _classify_failure(
-        self, error: Exception | None
-    ) -> ExecutionFailureReason:
+    def _classify_failure(self, error: Exception | None) -> ExecutionFailureReason:
         """
         Classify failure reason from exception.
 

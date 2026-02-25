@@ -88,11 +88,7 @@ class _MultiEventStatefulHandler(EventHandler):
 
     def __init__(self, handler_id: str):
         self.handler_id = handler_id
-        self.state: dict[str, Any] = {
-            "created_count": 0,
-            "completed_count": 0,
-            "all_events": []
-        }
+        self.state: dict[str, Any] = {"created_count": 0, "completed_count": 0, "all_events": []}
 
     async def handle(self, event: DomainEvent) -> None:
         """Handle multiple event types with state."""

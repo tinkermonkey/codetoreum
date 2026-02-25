@@ -379,6 +379,7 @@ class TestTemplateMetadata:
 
         # Add a small delay to ensure time difference
         import time
+
         time.sleep(0.01)
 
         template.add_stage("stage1", "agent-1")

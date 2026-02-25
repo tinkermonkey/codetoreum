@@ -213,9 +213,7 @@ async def test_connection_limit_with_concurrent_requests(websocket_config, mock_
         return await manager.connect(ws, conn_id)
 
     # Try to create 20 connections (limit is 10)
-    results = await asyncio.gather(
-        *[try_connect(f"conn-{i}") for i in range(20)]
-    )
+    results = await asyncio.gather(*[try_connect(f"conn-{i}") for i in range(20)])
 
     # Count successes and failures
     successes = sum(1 for r in results if r is True)

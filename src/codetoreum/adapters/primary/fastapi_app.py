@@ -18,7 +18,7 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 # Load environment variables from .env file
@@ -121,16 +121,14 @@ async def security_headers_middleware(request: Request, call_next):
 
     # Add HSTS header if using HTTPS
     if os.getenv("API_USE_HTTPS", "false").lower() == "true":
-        response.headers["Strict-Transport-Security"] = (
-            "max-age=31536000; includeSubDomains"
-        )
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
 
     # Content Security Policy - Strict policy for production
     # Note: For development with hot-reload, you may need to add 'unsafe-eval' to script-src
     csp_directives = [
         "default-src 'self'",
         "script-src 'self'",  # Removed 'unsafe-inline' - use nonces or hashes instead
-        "style-src 'self'",   # Removed 'unsafe-inline' - use nonces or hashes instead
+        "style-src 'self'",  # Removed 'unsafe-inline' - use nonces or hashes instead
         "img-src 'self' data: https:",  # Allow HTTPS images and data URIs
         "font-src 'self'",
         "connect-src 'self'",  # WebSocket and API connections
@@ -174,7 +172,7 @@ async def lifespan(app: FastAPI):
             recovery_service = app.state.container_recovery_service
             result = await asyncio.wait_for(
                 recovery_service.recover_or_cleanup_containers(),
-                timeout=300.0  # 5 minute timeout
+                timeout=300.0,  # 5 minute timeout
             )
             logger.info(
                 f"Container recovery completed: "
@@ -186,13 +184,13 @@ async def lifespan(app: FastAPI):
             logger.error(
                 "Container recovery timed out after 5 minutes",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_EXECUTION_TIMEOUT}
+                extra={"error_id": ErrorRegistry.ERR_EXECUTION_TIMEOUT},
             )
         except Exception:
             logger.error(
                 "Container recovery failed",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR},
             )
 
     # Print authentication info if auth manager exists
@@ -354,17 +352,13 @@ def create_app(
                             "CORS wildcard (*) is not allowed in production. "
                             "Set CODETOREUM_ALLOWED_ORIGINS to specific origins."
                         )
-                        raise ValueError(
-                            msg
-                        )
+                        raise ValueError(msg)
                     validated_origins.append(origin)
                 else:
                     # Validate origin format (must be http:// or https://)
                     if not (origin.startswith("http://") or origin.startswith("https://")):
                         msg = f"Invalid CORS origin '{origin}'. Must start with http:// or https://"
-                        raise ValueError(
-                            msg
-                        )
+                        raise ValueError(msg)
                     validated_origins.append(origin)
 
             cors_origins = validated_origins if validated_origins else ["http://localhost:3000"]
@@ -374,9 +368,7 @@ def create_app(
                 "CODETOREUM_ALLOWED_ORIGINS must be set in production. "
                 "Example: CODETOREUM_ALLOWED_ORIGINS=https://app.example.com,https://admin.example.com"
             )
-            raise ValueError(
-                msg
-            )
+            raise ValueError(msg)
         else:
             # Development default - localhost only
             cors_origins = ["http://localhost:3000", "http://localhost:8000"]
@@ -768,7 +760,7 @@ def create_app(
             await auth_deps.logout(response)
         return {
             "message": "Logged out successfully",
-            "detail": "Authentication cookie has been cleared"
+            "detail": "Authentication cookie has been cleared",
         }
 
     # ========================================================================
@@ -781,7 +773,7 @@ def create_app(
         logger.error(
             f"Unhandled exception: {exc}",
             exc_info=True,
-            extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
+            extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
         )
         return JSONResponse(
             status_code=500,
@@ -847,9 +839,7 @@ def create_development_app() -> FastAPI:
 
     # Mock implementations for development
     class MockWorkflowCommandPort(IWorkflowCommandPort):
-        async def start_workflow(
-            self, command: StartWorkflowCommand
-        ) -> WorkflowCommandResult:
+        async def start_workflow(self, command: StartWorkflowCommand) -> WorkflowCommandResult:
             return WorkflowCommandResult(
                 success=True,
                 workflow_run_id="mock-workflow-123",
@@ -898,22 +888,24 @@ def create_development_app() -> FastAPI:
 
         async def get_project_config(self, project_id: str):
             from codetoreum.ports.output.config_store import ProjectConfig
+
             return ProjectConfig(
                 id=project_id,
                 name="test-project",
                 github_org="test-org",
                 github_repo="test-repo",
-                pipelines=[]
+                pipelines=[],
             )
 
         async def get_project_config_by_name(self, project_name: str):
             from codetoreum.ports.output.config_store import ProjectConfig
+
             return ProjectConfig(
                 id="test-id",
                 name=project_name,
                 github_org="test-org",
                 github_repo="test-repo",
-                pipelines=[]
+                pipelines=[],
             )
 
         async def save_project_config(self, config) -> None:
@@ -921,13 +913,14 @@ def create_development_app() -> FastAPI:
 
         async def get_agent_config(self, project_id: str, agent_name: str):
             from codetoreum.ports.output.config_store import AgentConfig
+
             return AgentConfig(
                 project_id=project_id,
                 agent_name=agent_name,
                 model="claude-3-5-sonnet-20241022",
                 timeout=300,
                 requires_docker=False,
-                makes_code_changes=False
+                makes_code_changes=False,
             )
 
         async def save_agent_config(self, config) -> None:
@@ -935,11 +928,12 @@ def create_development_app() -> FastAPI:
 
         async def get_pipeline_config(self, project_id: str, pipeline_name: str):
             from codetoreum.ports.output.config_store import PipelineConfig
+
             return PipelineConfig(
                 id=f"{project_id}-{pipeline_name}",
                 project_id=project_id,
                 name=pipeline_name,
-                stages=[]
+                stages=[],
             )
 
         async def save_pipeline_config(self, config) -> None:
@@ -947,11 +941,12 @@ def create_development_app() -> FastAPI:
 
         async def get_workflow_template(self, template_name: str):
             from codetoreum.ports.output.config_store import WorkflowTemplate
+
             return WorkflowTemplate(
                 id=template_name,
                 name=template_name,
                 description="Mock workflow template",
-                stages=[]
+                stages=[],
             )
 
         async def save_workflow_template(self, template) -> None:
@@ -1003,10 +998,9 @@ def create_development_app() -> FastAPI:
             print(f"DEBUG: {message}")
 
     class MockTaskQueryPort(ITaskQueryPort):
-        async def get_execution_status(
-            self, execution_id: str
-        ) -> ExecutionStatusInfo:
+        async def get_execution_status(self, execution_id: str) -> ExecutionStatusInfo:
             from datetime import datetime
+
             return ExecutionStatusInfo(
                 execution_id=execution_id,
                 workflow_run_id="mock-workflow-123",
@@ -1038,21 +1032,13 @@ def create_development_app() -> FastAPI:
                 has_next=False,
             )
 
-        async def get_artifacts(
-            self, execution_id: str, artifact_type=None
-        ) -> ArtifactListResult:
+        async def get_artifacts(self, execution_id: str, artifact_type=None) -> ArtifactListResult:
             return ArtifactListResult(artifacts=[], total_count=0)
 
-        async def get_execution_history(
-            self, execution_id: str, limit=None
-        ) -> ExecutionHistory:
-            return ExecutionHistory(
-                execution_id=execution_id, entries=[], total_entries=0
-            )
+        async def get_execution_history(self, execution_id: str, limit=None) -> ExecutionHistory:
+            return ExecutionHistory(execution_id=execution_id, entries=[], total_entries=0)
 
-        async def get_workflow_executions(
-            self, workflow_run_id: str
-        ) -> ExecutionListResult:
+        async def get_workflow_executions(self, workflow_run_id: str) -> ExecutionListResult:
             return ExecutionListResult(
                 executions=[],
                 total_count=0,
@@ -1066,6 +1052,7 @@ def create_development_app() -> FastAPI:
 
         async def create_work_item(self, command: CreateWorkItemCommand) -> WorkItem:
             from datetime import datetime
+
             return WorkItem(
                 id="wi-mock-123",
                 project_id=command.project_id,
@@ -1087,6 +1074,7 @@ def create_development_app() -> FastAPI:
 
         async def update_work_item(self, command: UpdateWorkItemCommand) -> WorkItem:
             from datetime import datetime
+
             return WorkItem(
                 id=command.work_item_id,
                 project_id="proj-123",
@@ -1115,6 +1103,7 @@ def create_development_app() -> FastAPI:
 
         async def assign_agent(self, command):
             from datetime import datetime
+
             return WorkItem(
                 id=command.work_item_id,
                 project_id="proj-123",
@@ -1136,6 +1125,7 @@ def create_development_app() -> FastAPI:
 
         async def update_labels(self, command):
             from datetime import datetime
+
             return WorkItem(
                 id=command.work_item_id,
                 project_id="proj-123",
@@ -1157,6 +1147,7 @@ def create_development_app() -> FastAPI:
 
         async def update_priority(self, command):
             from datetime import datetime
+
             return WorkItem(
                 id=command.work_item_id,
                 project_id="proj-123",
@@ -1178,6 +1169,7 @@ def create_development_app() -> FastAPI:
 
         async def attach_workflow(self, command):
             from datetime import datetime
+
             return WorkItem(
                 id=command.work_item_id,
                 project_id="proj-123",
@@ -1199,6 +1191,7 @@ def create_development_app() -> FastAPI:
 
         async def update_stage(self, command):
             from datetime import datetime
+
             return WorkItem(
                 id=command.work_item_id,
                 project_id="proj-123",
@@ -1223,6 +1216,7 @@ def create_development_app() -> FastAPI:
 
         async def get_work_item(self, work_item_id: str) -> WorkItem:
             from datetime import datetime
+
             return WorkItem(
                 id=work_item_id,
                 project_id="proj-123",
@@ -1242,10 +1236,9 @@ def create_development_app() -> FastAPI:
                 completed_at=None,
             )
 
-        async def list_work_items(
-            self, filters=None, pagination=None
-        ) -> WorkItemListResult:
+        async def list_work_items(self, filters=None, pagination=None) -> WorkItemListResult:
             from datetime import datetime
+
             work_item = WorkItem(
                 id="wi-mock-123",
                 project_id="proj-123",
@@ -1275,9 +1268,7 @@ def create_development_app() -> FastAPI:
         async def search_work_items(self, search_params) -> WorkItemListResult:
             return await self.list_work_items()
 
-        async def get_work_item_history(
-            self, work_item_id: str, limit=None
-        ) -> WorkItemHistory:
+        async def get_work_item_history(self, work_item_id: str, limit=None) -> WorkItemHistory:
             work_item = await self.get_work_item(work_item_id)
             return WorkItemHistory(
                 work_item=work_item,
@@ -1319,9 +1310,7 @@ def create_development_app() -> FastAPI:
                 changes_applied=command.updates,
             )
 
-        async def add_environment_variable(
-            self, command
-        ) -> ConfigurationCommandResult:
+        async def add_environment_variable(self, command) -> ConfigurationCommandResult:
             return ConfigurationCommandResult(
                 success=True,
                 config_version=2,
@@ -1329,9 +1318,7 @@ def create_development_app() -> FastAPI:
                 changes_applied={command.variable_name: command.variable_value},
             )
 
-        async def remove_environment_variable(
-            self, command
-        ) -> ConfigurationCommandResult:
+        async def remove_environment_variable(self, command) -> ConfigurationCommandResult:
             return ConfigurationCommandResult(
                 success=True,
                 config_version=2,
@@ -1380,6 +1367,7 @@ def create_development_app() -> FastAPI:
                 WorkflowRunStageInfo,
                 WorkflowRunStatus,
             )
+
             return WorkflowRunInfo(
                 id=workflow_run_id,
                 work_item_id="wi-mock-123",
@@ -1423,6 +1411,7 @@ def create_development_app() -> FastAPI:
                 WorkflowRunStatus,
                 WorkflowRunSummary,
             )
+
             return WorkflowRunListResult(
                 runs=[
                     WorkflowRunSummary(
@@ -1453,6 +1442,7 @@ def create_development_app() -> FastAPI:
             from codetoreum.ports.input.workflow_run_query import (
                 WorkflowRunEventsResult,
             )
+
             return WorkflowRunEventsResult(
                 events=[
                     {
@@ -1538,6 +1528,7 @@ def create_development_app() -> FastAPI:
                 StageInfo,
                 WorkflowDefinitionInfo,
             )
+
             return WorkflowDefinitionInfo(
                 id=workflow_id,
                 name="mock-workflow",
@@ -1568,6 +1559,7 @@ def create_development_app() -> FastAPI:
                 WorkflowListResult,
                 WorkflowSummaryInfo,
             )
+
             summary = WorkflowSummaryInfo(
                 id="wf-mock-123",
                 name="mock-workflow",
@@ -1594,6 +1586,7 @@ def create_development_app() -> FastAPI:
                 WorkflowVersionHistoryResult,
                 WorkflowVersionInfo,
             )
+
             return WorkflowVersionHistoryResult(
                 workflow_id=workflow_id,
                 versions=[
@@ -1609,6 +1602,7 @@ def create_development_app() -> FastAPI:
 
         async def validate_workflow(self, workflow_id: str, version=None):
             from codetoreum.ports.input.workflow_query import WorkflowValidationResult
+
             return WorkflowValidationResult(
                 is_valid=True,
                 errors=[],
@@ -1628,6 +1622,7 @@ def create_development_app() -> FastAPI:
             from codetoreum.ports.input.workflow_definition_command import (
                 WorkflowDefinitionCommandResult,
             )
+
             return WorkflowDefinitionCommandResult(
                 success=True,
                 workflow_id="wf-mock-123",
@@ -1639,6 +1634,7 @@ def create_development_app() -> FastAPI:
             from codetoreum.ports.input.workflow_definition_command import (
                 WorkflowDefinitionCommandResult,
             )
+
             return WorkflowDefinitionCommandResult(
                 success=True,
                 workflow_id=command.workflow_id,
@@ -1650,6 +1646,7 @@ def create_development_app() -> FastAPI:
             from codetoreum.ports.input.workflow_definition_command import (
                 WorkflowDefinitionCommandResult,
             )
+
             return WorkflowDefinitionCommandResult(
                 success=True,
                 workflow_id=command.workflow_id,
@@ -1661,6 +1658,7 @@ def create_development_app() -> FastAPI:
             from codetoreum.ports.input.workflow_definition_command import (
                 WorkflowDefinitionCommandResult,
             )
+
             return WorkflowDefinitionCommandResult(
                 success=True,
                 workflow_id=workflow_id,
@@ -1672,6 +1670,7 @@ def create_development_app() -> FastAPI:
             from codetoreum.ports.input.workflow_definition_command import (
                 WorkflowDefinitionCommandResult,
             )
+
             return WorkflowDefinitionCommandResult(
                 success=True,
                 workflow_id=workflow_id,
@@ -1686,6 +1685,7 @@ def create_development_app() -> FastAPI:
             from codetoreum.ports.input.orchestration_command import (
                 OrchestrationCommandResult,
             )
+
             return OrchestrationCommandResult(
                 success=True,
                 execution_id="exec-mock-123",
@@ -1699,6 +1699,7 @@ def create_development_app() -> FastAPI:
             from codetoreum.ports.input.orchestration_command import (
                 OrchestrationCommandResult,
             )
+
             return OrchestrationCommandResult(
                 success=True,
                 execution_id="exec-mock-123",
@@ -1711,6 +1712,7 @@ def create_development_app() -> FastAPI:
             from codetoreum.ports.input.orchestration_command import (
                 OrchestrationCommandResult,
             )
+
             return OrchestrationCommandResult(
                 success=True,
                 execution_id="exec-mock-123",
@@ -1723,6 +1725,7 @@ def create_development_app() -> FastAPI:
             from codetoreum.ports.input.orchestration_command import (
                 OrchestrationCommandResult,
             )
+
             return OrchestrationCommandResult(
                 success=True,
                 execution_id="exec-mock-123",
@@ -1735,6 +1738,7 @@ def create_development_app() -> FastAPI:
             from codetoreum.ports.input.orchestration_command import (
                 EntryConditionCheckResult,
             )
+
             return EntryConditionCheckResult(
                 can_start=True,
                 stage_name=stage_name or "development",
@@ -1747,6 +1751,7 @@ def create_development_app() -> FastAPI:
 
         async def create_agent(self, command):
             from codetoreum.domain.agent import Agent
+
             return Agent(
                 agent_id="agent-mock-123",
                 name=command.name,
@@ -1759,6 +1764,7 @@ def create_development_app() -> FastAPI:
 
         async def update_agent(self, command):
             from codetoreum.domain.agent import Agent, AgentType
+
             return Agent(
                 agent_id=command.agent_id,
                 name="mock_agent",
@@ -1771,6 +1777,7 @@ def create_development_app() -> FastAPI:
 
         async def add_capability(self, command):
             from codetoreum.domain.agent import Agent, AgentType
+
             return Agent(
                 agent_id=command.agent_id,
                 name="mock_agent",
@@ -1783,6 +1790,7 @@ def create_development_app() -> FastAPI:
 
         async def remove_capability(self, command):
             from codetoreum.domain.agent import Agent, AgentType
+
             return Agent(
                 agent_id=command.agent_id,
                 name="mock_agent",
@@ -1795,6 +1803,7 @@ def create_development_app() -> FastAPI:
 
         async def update_capability(self, command):
             from codetoreum.domain.agent import Agent, AgentType
+
             return Agent(
                 agent_id=command.agent_id,
                 name="mock_agent",
@@ -1807,6 +1816,7 @@ def create_development_app() -> FastAPI:
 
         async def add_mcp_server(self, command):
             from codetoreum.domain.agent import Agent, AgentType
+
             return Agent(
                 agent_id=command.agent_id,
                 name="mock_agent",
@@ -1819,6 +1829,7 @@ def create_development_app() -> FastAPI:
 
         async def remove_mcp_server(self, command):
             from codetoreum.domain.agent import Agent, AgentType
+
             return Agent(
                 agent_id=command.agent_id,
                 name="mock_agent",
@@ -1831,6 +1842,7 @@ def create_development_app() -> FastAPI:
 
         async def delete_agent(self, agent_id: str):
             from codetoreum.ports.input.agent_command import AgentCommandResult
+
             return AgentCommandResult(
                 success=True,
                 agent_id=agent_id,
@@ -1843,6 +1855,7 @@ def create_development_app() -> FastAPI:
 
         async def get_agent(self, agent_id: str, include_stats: bool = False):
             from codetoreum.ports.input.agent_query import AgentInfo
+
             return AgentInfo(
                 id=agent_id,
                 name="mock_agent",
@@ -1864,6 +1877,7 @@ def create_development_app() -> FastAPI:
 
         async def get_agent_by_name(self, name: str, include_stats: bool = False):
             from codetoreum.ports.input.agent_query import AgentInfo
+
             return AgentInfo(
                 id="agent-mock-123",
                 name=name,
@@ -1885,6 +1899,7 @@ def create_development_app() -> FastAPI:
 
         async def list_agents(self, filters=None, pagination=None):
             from codetoreum.ports.input.agent_query import AgentInfo, AgentListResult
+
             return AgentListResult(
                 agents=[
                     AgentInfo(
@@ -1914,6 +1929,7 @@ def create_development_app() -> FastAPI:
 
         async def list_agents_by_capability(self, capability: str, min_proficiency: float = 0.0, pagination=None):
             from codetoreum.ports.input.agent_query import AgentListResult
+
             return AgentListResult(
                 agents=[],
                 total_count=0,
@@ -1930,6 +1946,7 @@ def create_development_app() -> FastAPI:
 
         async def terminate_execution(self, command):
             from codetoreum.ports.input.execution_command import ExecutionCommandResult
+
             return ExecutionCommandResult(
                 success=True,
                 execution_id=command.execution_id,
@@ -1939,6 +1956,7 @@ def create_development_app() -> FastAPI:
 
         async def pause_execution(self, command):
             from codetoreum.ports.input.execution_command import ExecutionCommandResult
+
             return ExecutionCommandResult(
                 success=True,
                 execution_id=command.execution_id,
@@ -1948,6 +1966,7 @@ def create_development_app() -> FastAPI:
 
         async def resume_execution(self, command):
             from codetoreum.ports.input.execution_command import ExecutionCommandResult
+
             return ExecutionCommandResult(
                 success=True,
                 execution_id=command.execution_id,
@@ -1961,6 +1980,7 @@ def create_development_app() -> FastAPI:
         async def get_execution(self, execution_id: str):
             from codetoreum.domain.agent_execution import ExecutionStatus
             from codetoreum.ports.input.execution_query import ExecutionInfo
+
             return ExecutionInfo(
                 id=execution_id,
                 agent_id="agent-mock-123",
@@ -1989,6 +2009,7 @@ def create_development_app() -> FastAPI:
                 ExecutionInfo,
                 ExecutionListResult,
             )
+
             return ExecutionListResult(
                 executions=[
                     ExecutionInfo(
@@ -2021,6 +2042,7 @@ def create_development_app() -> FastAPI:
 
         async def get_execution_logs(self, execution_id: str, stage=None, tail=None):
             from codetoreum.ports.input.execution_query import ExecutionLogs
+
             return ExecutionLogs(
                 execution_id=execution_id,
                 logs=[],
@@ -2031,6 +2053,7 @@ def create_development_app() -> FastAPI:
 
         async def get_execution_history(self, execution_id: str, limit=None):
             from codetoreum.ports.input.execution_query import ExecutionHistory
+
             return ExecutionHistory(
                 execution_id=execution_id,
                 events=[],
@@ -2045,6 +2068,7 @@ def create_development_app() -> FastAPI:
 
         async def get_project_config(self, project_id: str, include_secrets: bool = False):
             from codetoreum.ports.input.config_query import ProjectConfigInfo
+
             return ProjectConfigInfo(
                 id=project_id,
                 name="mock-project",
@@ -2065,6 +2089,7 @@ def create_development_app() -> FastAPI:
 
         async def get_agent_config(self, project_id: str, agent_name: str):
             from codetoreum.ports.input.config_query import AgentConfigInfo
+
             return AgentConfigInfo(
                 project_id=project_id,
                 agent_name=agent_name,
@@ -2086,6 +2111,7 @@ def create_development_app() -> FastAPI:
 
         async def get_pipeline_config(self, project_id: str, pipeline_name: str):
             from codetoreum.ports.input.config_query import PipelineConfigInfo
+
             return PipelineConfigInfo(
                 id=f"{project_id}-{pipeline_name}",
                 project_id=project_id,
@@ -2109,6 +2135,7 @@ def create_development_app() -> FastAPI:
 
         async def search_configs(self, query: str, config_type=None, project_id=None, pagination=None):
             from codetoreum.ports.input.config_query import ConfigSearchResults
+
             return ConfigSearchResults(results=[], total_count=0, query=query, filters={})
 
         async def get_config_version_history(self, config_id: str, config_type: str, limit: int = 10):
@@ -2129,6 +2156,7 @@ def create_development_app() -> FastAPI:
                 ComponentHealthInfo,
                 SystemHealthInfo,
             )
+
             return SystemHealthInfo(
                 status=ComponentHealth.HEALTHY,
                 components=[
@@ -2151,6 +2179,7 @@ def create_development_app() -> FastAPI:
                 ComponentHealth,
                 ComponentHealthInfo,
             )
+
             return ComponentHealthInfo(
                 component_name=component_name,
                 status=ComponentHealth.HEALTHY,
@@ -2162,6 +2191,7 @@ def create_development_app() -> FastAPI:
 
         async def get_performance_metrics(self, start_time, end_time, aggregation_window_seconds=60):
             from codetoreum.ports.input.metrics_query import PerformanceMetrics
+
             return PerformanceMetrics(
                 api_request_count=100,
                 api_error_count=2,
@@ -2185,6 +2215,7 @@ def create_development_app() -> FastAPI:
 
         async def get_resilience_metrics(self, start_time, end_time):
             from codetoreum.ports.input.metrics_query import ResilienceMetrics
+
             return ResilienceMetrics(
                 circuit_breakers={},
                 rate_limiters={},
@@ -2202,6 +2233,7 @@ def create_development_app() -> FastAPI:
                 ComponentHealth,
                 IntegrationStatus,
             )
+
             return IntegrationStatus(
                 github_connected=True,
                 github_api_calls_remaining=5000,
@@ -2219,6 +2251,7 @@ def create_development_app() -> FastAPI:
 
         async def get_simulation_mode_info(self):
             from codetoreum.ports.input.metrics_query import SimulationModeInfo
+
             return SimulationModeInfo(
                 enabled=False,
                 time_multiplier=1.0,
@@ -2231,6 +2264,7 @@ def create_development_app() -> FastAPI:
 
         async def get_metric_time_series(self, metric_name: str, start_time, end_time, labels=None, aggregation=None):
             from codetoreum.ports.input.metrics_query import MetricTimeSeries
+
             return MetricTimeSeries(
                 metric_name=metric_name,
                 data_points=[],
@@ -2251,6 +2285,7 @@ def create_development_app() -> FastAPI:
         async def get_active_agents(self):
             """Return mock active agents with proper DTO structure."""
             from codetoreum.adapters.primary.metrics_dtos import ActiveAgentInfo
+
             return [
                 ActiveAgentInfo(
                     execution_id="exec-mock-123",
@@ -2277,6 +2312,7 @@ def create_development_app() -> FastAPI:
         async def get_api_usage(self):
             """Return mock API usage with calculated percentages."""
             from codetoreum.adapters.primary.metrics_dtos import ClaudeApiUsageInfo
+
             weekly_usage = 15000000
             weekly_quota = 50000000
             session_usage = 2000000
@@ -2336,6 +2372,7 @@ def create_development_app() -> FastAPI:
                 WorkspaceInfo,
                 WorkspaceStatus,
             )
+
             return WorkspaceInfo(
                 workspace_id=workspace_id,
                 execution_id="exec-123",
@@ -2374,6 +2411,7 @@ def create_development_app() -> FastAPI:
 
         async def list_workspaces(self, filters=None, pagination=None):
             from codetoreum.ports.input.workspace_query import WorkspaceListResult
+
             return WorkspaceListResult(
                 workspaces=[],
                 total_count=0,
@@ -2428,10 +2466,7 @@ def create_development_app() -> FastAPI:
         event_bus=MockEventBus(),
         config_service=MockConfigService(),
         logger=MockLogger(),
-        auth_secret_key=os.getenv(
-            "CODETOREUM_AUTH_SECRET",
-            "development-secret-key-change-in-production"
-        ),
+        auth_secret_key=os.getenv("CODETOREUM_AUTH_SECRET", "development-secret-key-change-in-production"),
         disable_auth=os.getenv("CODETOREUM_DISABLE_AUTH", "false").lower() == "true",
         cors_origins=["*"],
     )

@@ -94,9 +94,7 @@ def query(
             for event in events:
                 serializable_event = event.copy()
                 if isinstance(serializable_event.get("timestamp"), datetime):
-                    serializable_event["timestamp"] = serializable_event[
-                        "timestamp"
-                    ].isoformat()
+                    serializable_event["timestamp"] = serializable_event["timestamp"].isoformat()
                 serializable_events.append(serializable_event)
             click.echo(json.dumps(serializable_events, indent=2))
         else:
@@ -145,9 +143,7 @@ def query(
     help="Delete events older than N days",
 )
 @click.option("--dry-run", is_flag=True, help="Show what would be deleted without deleting")
-def cleanup(
-    store_type: str, file_path: str, retention_days: int, dry_run: bool
-):
+def cleanup(store_type: str, file_path: str, retention_days: int, dry_run: bool):
     """Clean up old audit logs according to retention policy."""
 
     async def _cleanup():
@@ -164,16 +160,12 @@ def cleanup(
         manager = RetentionPolicyManager(store, policy)
 
         # Run cleanup
-        click.echo(
-            f"{'DRY RUN: ' if dry_run else ''}Cleaning up audit events older than {retention_days} days..."
-        )
+        click.echo(f"{'DRY RUN: ' if dry_run else ''}Cleaning up audit events older than {retention_days} days...")
         stats = await manager.cleanup_old_events(dry_run=dry_run)
 
         # Show results
         if dry_run:
-            click.echo(
-                f"\nWould delete {stats.get('events_to_delete', 0)} audit events"
-            )
+            click.echo(f"\nWould delete {stats.get('events_to_delete', 0)} audit events")
         else:
             click.echo(f"\nDeleted {stats.get('events_deleted', 0)} audit events")
 

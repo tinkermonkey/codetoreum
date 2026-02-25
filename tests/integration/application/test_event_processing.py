@@ -169,9 +169,7 @@ def workflow_orchestrator(event_store, ticket_system):
             from codetoreum.application.workflow_orchestrator import WorkflowState
 
             if issue_id not in self.states:
-                self.states[issue_id] = WorkflowState(
-                    in_progress_tasks={}, current_column=None, current_agent=None
-                )
+                self.states[issue_id] = WorkflowState(in_progress_tasks={}, current_column=None, current_agent=None)
             return self.states[issue_id]
 
         async def update_workflow_state(self, issue_id, state):
@@ -212,9 +210,7 @@ def event_bus():
 
 
 @pytest.fixture
-def event_registry(
-    event_bus, workflow_orchestrator, execution_service, review_service
-):
+def event_registry(event_bus, workflow_orchestrator, execution_service, review_service):
     """Create event bus registry with all handlers."""
     registry = EventBusRegistry(event_bus=event_bus)
 
@@ -261,9 +257,7 @@ class TestEventHandlerRegistration:
         stats = event_registry.get_statistics()
         assert stats["total_handlers"] == 0
 
-    async def test_setup_event_bus_convenience(
-        self, workflow_orchestrator, execution_service, review_service
-    ):
+    async def test_setup_event_bus_convenience(self, workflow_orchestrator, execution_service, review_service):
         """Test convenience setup function."""
         registry = setup_event_bus(
             workflow_orchestrator=workflow_orchestrator,

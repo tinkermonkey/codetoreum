@@ -75,9 +75,7 @@ class IVersionControlService(ABC):
     """
 
     @abstractmethod
-    async def clone_repository(
-        self, url: str, target_path: str, branch: str | None = None
-    ) -> None:
+    async def clone_repository(self, url: str, target_path: str, branch: str | None = None) -> None:
         """Clone a repository to local path.
 
         Args:

@@ -152,14 +152,16 @@ async def multiple_workflows(event_store):
             )
 
         await event_store.append(workflow_id, events)
-        workflows.append({
-            "workflow_id": workflow_id,
-            "work_item_id": work_item_id,
-            "project_id": project_id,
-            "status": WorkflowRunStatus.COMPLETED if i < 2 else (
-                WorkflowRunStatus.FAILED if i == 2 else WorkflowRunStatus.RUNNING
-            ),
-        })
+        workflows.append(
+            {
+                "workflow_id": workflow_id,
+                "work_item_id": work_item_id,
+                "project_id": project_id,
+                "status": WorkflowRunStatus.COMPLETED
+                if i < 2
+                else (WorkflowRunStatus.FAILED if i == 2 else WorkflowRunStatus.RUNNING),
+            }
+        )
 
     return workflows
 
@@ -195,9 +197,7 @@ class TestGetWorkflowRun:
         assert "nonexistent-id" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_get_workflow_run_with_work_item_metadata(
-        self, event_store, ticket_system, sample_workflow_events
-    ):
+    async def test_get_workflow_run_with_work_item_metadata(self, event_store, ticket_system, sample_workflow_events):
         """Test workflow run enriched with work item metadata."""
         # Create work item in ticket system
         work_item = await ticket_system.create_work_item(
@@ -218,9 +218,7 @@ class TestGetWorkflowRun:
         )
 
         # Act
-        result = await query_service.get_workflow_run(
-            sample_workflow_events["workflow_id"]
-        )
+        result = await query_service.get_workflow_run(sample_workflow_events["workflow_id"])
 
         # Assert
         assert result.issue_title == "Test Issue"
@@ -248,14 +246,10 @@ class TestListWorkflowRuns:
     async def test_list_workflow_runs_with_pagination(self, query_service, multiple_workflows):
         """Test workflow run listing with pagination."""
         # Act - Page 1
-        page1 = await query_service.list_workflow_runs(
-            pagination=WorkflowRunPaginationParams(offset=0, limit=2)
-        )
+        page1 = await query_service.list_workflow_runs(pagination=WorkflowRunPaginationParams(offset=0, limit=2))
 
         # Act - Page 2
-        page2 = await query_service.list_workflow_runs(
-            pagination=WorkflowRunPaginationParams(offset=2, limit=2)
-        )
+        page2 = await query_service.list_workflow_runs(pagination=WorkflowRunPaginationParams(offset=2, limit=2))
 
         # Assert
         assert page1.total_count == 5
@@ -287,9 +281,7 @@ class TestListWorkflowRuns:
     async def test_list_workflow_runs_filter_by_project(self, query_service, multiple_workflows):
         """Test filtering workflow runs by project."""
         # Act
-        result = await query_service.list_workflow_runs(
-            filters=WorkflowRunFilters(project_id="project-1")
-        )
+        result = await query_service.list_workflow_runs(filters=WorkflowRunFilters(project_id="project-1"))
 
         # Assert
         assert result.total_count == 3
@@ -301,18 +293,14 @@ class TestListWorkflowRuns:
         work_item_id = multiple_workflows[0]["work_item_id"]
 
         # Act
-        result = await query_service.list_workflow_runs(
-            filters=WorkflowRunFilters(work_item_id=work_item_id)
-        )
+        result = await query_service.list_workflow_runs(filters=WorkflowRunFilters(work_item_id=work_item_id))
 
         # Assert
         assert result.total_count == 1
         assert result.runs[0].work_item_id == work_item_id
 
     @pytest.mark.asyncio
-    async def test_list_workflow_runs_sort_by_started_at_desc(
-        self, query_service, multiple_workflows
-    ):
+    async def test_list_workflow_runs_sort_by_started_at_desc(self, query_service, multiple_workflows):
         """Test sorting workflow runs by started_at descending (default)."""
         # Act
         result = await query_service.list_workflow_runs(
@@ -331,9 +319,7 @@ class TestListWorkflowRuns:
                 assert result.runs[i].started_at >= result.runs[i + 1].started_at
 
     @pytest.mark.asyncio
-    async def test_list_workflow_runs_sort_by_duration(
-        self, query_service, multiple_workflows
-    ):
+    async def test_list_workflow_runs_sort_by_duration(self, query_service, multiple_workflows):
         """Test sorting workflow runs by duration."""
         # Act
         result = await query_service.list_workflow_runs(
@@ -341,7 +327,7 @@ class TestListWorkflowRuns:
             pagination=WorkflowRunPaginationParams(
                 sort_by=WorkflowRunSortField.DURATION,
                 sort_order=SortOrder.ASC,
-            )
+            ),
         )
 
         # Assert - completed workflows sorted by duration ascending
@@ -353,9 +339,7 @@ class TestListWorkflowRuns:
     async def test_list_workflow_runs_empty_result(self, query_service, multiple_workflows):
         """Test listing with filters that match no workflows."""
         # Act
-        result = await query_service.list_workflow_runs(
-            filters=WorkflowRunFilters(project_id="nonexistent-project")
-        )
+        result = await query_service.list_workflow_runs(filters=WorkflowRunFilters(project_id="nonexistent-project"))
 
         # Assert
         assert result.total_count == 0
@@ -382,16 +366,12 @@ class TestGetWorkflowRunEvents:
         assert result.has_next is False
 
     @pytest.mark.asyncio
-    async def test_get_workflow_run_events_with_pagination(
-        self, query_service, sample_workflow_events
-    ):
+    async def test_get_workflow_run_events_with_pagination(self, query_service, sample_workflow_events):
         """Test event retrieval with pagination."""
         workflow_id = sample_workflow_events["workflow_id"]
 
         # Act
-        result = await query_service.get_workflow_run_events(
-            workflow_id, offset=0, limit=2
-        )
+        result = await query_service.get_workflow_run_events(workflow_id, offset=0, limit=2)
 
         # Assert
         assert result.total_count == 3
@@ -399,9 +379,7 @@ class TestGetWorkflowRunEvents:
         assert result.has_next is True
 
     @pytest.mark.asyncio
-    async def test_get_workflow_run_events_filter_by_type(
-        self, query_service, sample_workflow_events
-    ):
+    async def test_get_workflow_run_events_filter_by_type(self, query_service, sample_workflow_events):
         """Test filtering events by event type."""
         workflow_id = sample_workflow_events["workflow_id"]
 
@@ -427,9 +405,7 @@ class TestGetWorkflowRunEvents:
         assert "WorkflowRun" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_get_workflow_run_events_structure(
-        self, query_service, sample_workflow_events
-    ):
+    async def test_get_workflow_run_events_structure(self, query_service, sample_workflow_events):
         """Test event data structure in response."""
         workflow_id = sample_workflow_events["workflow_id"]
 
@@ -452,9 +428,7 @@ class TestCaching:
     """Tests for work item metadata caching."""
 
     @pytest.mark.asyncio
-    async def test_work_item_metadata_cached(
-        self, event_store, ticket_system, sample_workflow_events
-    ):
+    async def test_work_item_metadata_cached(self, event_store, ticket_system, sample_workflow_events):
         """Test that work item metadata is cached across queries."""
         # Create work item
         work_item = await ticket_system.create_work_item(
@@ -475,14 +449,10 @@ class TestCaching:
         )
 
         # First query
-        result1 = await query_service.get_workflow_run(
-            sample_workflow_events["workflow_id"]
-        )
+        result1 = await query_service.get_workflow_run(sample_workflow_events["workflow_id"])
 
         # Second query (should use cache)
-        result2 = await query_service.get_workflow_run(
-            sample_workflow_events["workflow_id"]
-        )
+        result2 = await query_service.get_workflow_run(sample_workflow_events["workflow_id"])
 
         # Assert metadata is the same (verifies caching behavior)
         assert result1.issue_title == result2.issue_title == "Cached Issue"
@@ -493,9 +463,7 @@ class TestCaching:
         assert cache_size > 0
 
     @pytest.mark.asyncio
-    async def test_graceful_degradation_on_ticket_system_error(
-        self, event_store, sample_workflow_events
-    ):
+    async def test_graceful_degradation_on_ticket_system_error(self, event_store, sample_workflow_events):
         """Test that service works even if ticket system fails."""
         # Create query service without ticket system
         query_service = WorkflowRunQueryService(
@@ -504,9 +472,7 @@ class TestCaching:
         )
 
         # Act
-        result = await query_service.get_workflow_run(
-            sample_workflow_events["workflow_id"]
-        )
+        result = await query_service.get_workflow_run(sample_workflow_events["workflow_id"])
 
         # Assert - metadata fields are None but query succeeds
         assert result.id == sample_workflow_events["workflow_id"]

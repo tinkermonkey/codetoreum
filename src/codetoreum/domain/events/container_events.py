@@ -76,13 +76,15 @@ class ContainerExecutionCompletedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "container_id": self.container_id,
-            "command": self.command,
-            "exit_code": self.exit_code,
-            "output_files": list(self.output_files),
-            "project_id": self.project_id,
-        })
+        d.update(
+            {
+                "container_id": self.container_id,
+                "command": self.command,
+                "exit_code": self.exit_code,
+                "output_files": list(self.output_files),
+                "project_id": self.project_id,
+            }
+        )
         return d
 
     @classmethod

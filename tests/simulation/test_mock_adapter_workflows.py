@@ -4,7 +4,6 @@ These tests show end-to-end scenarios using mock adapters to test
 orchestrator behavior without external service dependencies.
 """
 
-
 import pytest
 
 from codetoreum.adapters.secondary.configurable_identity_service import (
@@ -34,9 +33,12 @@ class TestBoardWorkflow:
         adapter = MockBoardAdapter()
         adapter.current_project = "demo-project"
         adapter.current_board = "main-board"
-        adapter.create_board("demo-project", "main-board", "Main Board", [
-            "Backlog", "Ready", "In Progress", "In Review", "Done"
-        ])
+        adapter.create_board(
+            "demo-project",
+            "main-board",
+            "Main Board",
+            ["Backlog", "Ready", "In Progress", "In Review", "Done"],
+        )
         return adapter
 
     async def test_work_item_progression(self, board_adapter):
@@ -113,10 +115,7 @@ class TestDiscussionWorkflow:
 
         from codetoreum.ports.output.identity_service import BotIdentityConfig
 
-        config = BotIdentityConfig(
-            bot_usernames=["dependabot"],
-            bot_patterns=[re.compile("^bot-.*")]
-        )
+        config = BotIdentityConfig(bot_usernames=["dependabot"], bot_patterns=[re.compile("^bot-.*")])
         identity_service.configure(config)
 
         return MockDiscussionAdapter(identity_service)
@@ -138,15 +137,9 @@ class TestDiscussionWorkflow:
         discussion_adapter.on("comment.needs_response", needs_response_events.append)
 
         # Simulate comments from different users
-        discussion_adapter.simulate_comment(
-            "PROJ-100", "alice", "This needs unit tests"
-        )
-        discussion_adapter.simulate_comment(
-            "PROJ-100", "dependabot", "Updated dependencies"
-        )
-        discussion_adapter.simulate_comment(
-            "PROJ-100", "bob", "Please add error handling"
-        )
+        discussion_adapter.simulate_comment("PROJ-100", "alice", "This needs unit tests")
+        discussion_adapter.simulate_comment("PROJ-100", "dependabot", "Updated dependencies")
+        discussion_adapter.simulate_comment("PROJ-100", "bob", "Please add error handling")
 
         # Only human comments should trigger needs_response
         assert len(needs_response_events) == 2
@@ -176,16 +169,12 @@ class TestDiscussionWorkflow:
 
         # Post initial comment
         initial_comment = await discussion_adapter.add_comment(
-            "PROJ-200",
-            "Ready for review, please test before merging"
+            "PROJ-200", "Ready for review, please test before merging"
         )
 
         # Simulate human reply to bot comment
         discussion_adapter.simulate_comment(
-            "PROJ-200",
-            "reviewer",
-            "Testing now, will report results",
-            parent_id=initial_comment.id
+            "PROJ-200", "reviewer", "Testing now, will report results", parent_id=initial_comment.id
         )
 
         # Get full thread
@@ -280,9 +269,7 @@ class TestPipelineLockWorkflow:
         lock_service.on("lock.released", released_events.append)
 
         # Acquire lock
-        success, reason = await lock_service.try_acquire_lock(
-            "proj-1", "board-1", "item-1"
-        )
+        success, reason = await lock_service.try_acquire_lock("proj-1", "board-1", "item-1")
         assert success
         assert len(acquired_events) == 1
 
@@ -309,22 +296,16 @@ class TestPipelineLockWorkflow:
         lock_service.on("lock.acquired", acquired_events.append)
 
         # First item acquires lock
-        success1, _ = await lock_service.try_acquire_lock(
-            "proj-1", "board-1", "item-1"
-        )
+        success1, _ = await lock_service.try_acquire_lock("proj-1", "board-1", "item-1")
         assert success1
 
         # Second item contends
-        success2, reason = await lock_service.try_acquire_lock(
-            "proj-1", "board-1", "item-2"
-        )
+        success2, reason = await lock_service.try_acquire_lock("proj-1", "board-1", "item-2")
         assert not success2
         assert "already held" in reason
 
         # Third item contends
-        success3, reason = await lock_service.try_acquire_lock(
-            "proj-1", "board-1", "item-3"
-        )
+        success3, reason = await lock_service.try_acquire_lock("proj-1", "board-1", "item-3")
         assert not success3
 
         # Verify only first acquisition emitted event
@@ -341,9 +322,7 @@ class TestPipelineLockWorkflow:
         lock_service.on("lock.acquired", acquired_events.append)
 
         # Simulate stale lock recovery
-        lock_service.simulate_lock_acquired(
-            "proj-1", "board-1", "item-1", "stale_recovery"
-        )
+        lock_service.simulate_lock_acquired("proj-1", "board-1", "item-1", "stale_recovery")
 
         assert len(acquired_events) == 1
         event = acquired_events[0]
@@ -405,9 +384,7 @@ class TestCombinedWorkflow:
         await board.move_item_to_column("ACME-1", "Review", MovedByType.ORCHESTRATOR)
 
         # 6. Simulate review feedback
-        discussion.simulate_comment(
-            "ACME-1", "reviewer", "Looks good, needs tests"
-        )
+        discussion.simulate_comment("ACME-1", "reviewer", "Looks good, needs tests")
 
         # 7. Request changes in review
         review.simulate_changes_requested("PR-1", "reviewer")

@@ -4,7 +4,6 @@ Agent List Endpoints
 Provides endpoints for listing and filtering agents.
 """
 
-
 from fastapi import APIRouter, HTTPException, Query, status
 
 from codetoreum.adapters.primary.agent_dtos import AgentListResponse
@@ -36,8 +35,14 @@ def register_list_endpoints(router: APIRouter, query_port: IAgentQueryPort) -> N
         response_description="List of agents in registry",
         responses={
             200: {"description": "List of agents with pagination metadata"},
-            400: {"description": "Bad Request - Invalid filter parameters", "content": {"application/json": {"example": {"detail": "Invalid agent type: invalid_type"}}}},
-            401: {"description": "Unauthorized - Authentication required", "content": {"application/json": {"example": {"detail": "Not authenticated"}}}},
+            400: {
+                "description": "Bad Request - Invalid filter parameters",
+                "content": {"application/json": {"example": {"detail": "Invalid agent type: invalid_type"}}},
+            },
+            401: {
+                "description": "Unauthorized - Authentication required",
+                "content": {"application/json": {"example": {"detail": "Not authenticated"}}},
+            },
         },
     )
     async def list_agents(
@@ -46,8 +51,16 @@ def register_list_endpoints(router: APIRouter, query_port: IAgentQueryPort) -> N
         requires_docker: bool | None = Query(None, description="Filter by Docker requirement"),
         makes_code_changes: bool | None = Query(None, description="Filter by code modification capability"),
         offset: int = Query(DEFAULT_OFFSET, ge=0, description="Offset for pagination"),
-        limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description=f"Limit for pagination (max {MAX_PAGE_SIZE})"),
-        sort_by: str = Query("updated_at", description="Sort field (name, display_name, agent_type, created_at, updated_at)"),
+        limit: int = Query(
+            DEFAULT_PAGE_SIZE,
+            ge=1,
+            le=MAX_PAGE_SIZE,
+            description=f"Limit for pagination (max {MAX_PAGE_SIZE})",
+        ),
+        sort_by: str = Query(
+            "updated_at",
+            description="Sort field (name, display_name, agent_type, created_at, updated_at)",
+        ),
         sort_order: str = Query("desc", description="Sort order (asc, desc)"),
     ) -> AgentListResponse:
         """
@@ -144,8 +157,16 @@ def register_list_endpoints(router: APIRouter, query_port: IAgentQueryPort) -> N
         response_description="Agent details including capabilities and execution statistics",
         responses={
             200: {"description": "Agent details with capabilities and optional stats"},
-            401: {"description": "Unauthorized - Authentication required", "content": {"application/json": {"example": {"detail": "Not authenticated"}}}},
-            404: {"description": "Not Found - Agent not found", "content": {"application/json": {"example": {"detail": "Agent not found: agent with ID 'agent-123' not found"}}}},
+            401: {
+                "description": "Unauthorized - Authentication required",
+                "content": {"application/json": {"example": {"detail": "Not authenticated"}}},
+            },
+            404: {
+                "description": "Not Found - Agent not found",
+                "content": {
+                    "application/json": {"example": {"detail": "Agent not found: agent with ID 'agent-123' not found"}}
+                },
+            },
         },
     )
     async def get_agent(

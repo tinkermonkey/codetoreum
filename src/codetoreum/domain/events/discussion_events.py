@@ -152,12 +152,9 @@ class CommentContext:
         # Invariant 1: Initial requests cannot have parent comments
         if self.is_initial_request and self.parent_comment is not None:
             msg = (
-                "Initial requests cannot have parent comments. "
-                "A comment cannot be both an initial request and a reply."
+                "Initial requests cannot have parent comments. A comment cannot be both an initial request and a reply."
             )
-            raise ValueError(
-                msg
-            )
+            raise ValueError(msg)
 
         # Invariant 2: Replies with parent comments must have thread_id
         if self.parent_comment is not None and not self.thread_id:
@@ -165,9 +162,7 @@ class CommentContext:
                 "Replies with parent comments must have thread_id. "
                 "Threading context is required to track discussion relationships."
             )
-            raise ValueError(
-                msg
-            )
+            raise ValueError(msg)
 
     @classmethod
     def for_initial_request(
@@ -334,12 +329,14 @@ class CommentNeedsResponseEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "work_item_id": self.work_item_id,
-            "project_id": self.project_id,
-            "comment": self.comment.to_dict() if self.comment else None,
-            "context": self.context.to_dict() if self.context else None,
-        })
+        d.update(
+            {
+                "work_item_id": self.work_item_id,
+                "project_id": self.project_id,
+                "comment": self.comment.to_dict() if self.comment else None,
+                "context": self.context.to_dict() if self.context else None,
+            }
+        )
         return d
 
     @classmethod
@@ -407,11 +404,13 @@ class CommentPostedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "work_item_id": self.work_item_id,
-            "project_id": self.project_id,
-            "comment": self.comment.to_dict() if self.comment else None,
-        })
+        d.update(
+            {
+                "work_item_id": self.work_item_id,
+                "project_id": self.project_id,
+                "comment": self.comment.to_dict() if self.comment else None,
+            }
+        )
         return d
 
     @classmethod
@@ -500,14 +499,16 @@ class AgentResponsePostedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "work_item_id": self.work_item_id,
-            "project_id": self.project_id,
-            "comment_id": self.comment_id,
-            "response_comment_id": self.response_comment_id,
-            "agent_name": self.agent_name,
-            "conversation_id": self.conversation_id,
-        })
+        d.update(
+            {
+                "work_item_id": self.work_item_id,
+                "project_id": self.project_id,
+                "comment_id": self.comment_id,
+                "response_comment_id": self.response_comment_id,
+                "agent_name": self.agent_name,
+                "conversation_id": self.conversation_id,
+            }
+        )
         return d
 
     @classmethod

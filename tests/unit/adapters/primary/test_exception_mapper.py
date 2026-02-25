@@ -326,27 +326,30 @@ class TestExceptionMessageHandling:
 class TestAllNotFoundExceptions:
     """Comprehensive test for all NotFound exception types"""
 
-    @pytest.mark.parametrize("exception_class,exception_args", [
-        (AgentNotFoundError, ("agent-1",)),
-        (WorkspaceNotFoundError, ("ws-1",)),
-        (ConfigNotFoundError, ("config-1",)),
-        (ExecutionNotFoundError, ("exec-1",)),
-        (PipelineNotFoundError, ("pipeline-1",)),
-        (DomainWorkItemNotFoundError, ("wi-1",)),
-        (InputPortAgentNotFoundError, ("Agent not found",)),
-        (AgentExecutionNotFoundError, ("Execution not found",)),
-        (ArtifactNotFoundError, ("Artifact not found",)),
-        (CommandFileNotFoundError, ("Command file not found",)),
-        (CommandNotFoundError, ("Command not found",)),
-        (InputPortPipelineNotFoundError, ("Pipeline not found",)),
-        (ProjectNotFoundError, ("Project not found",)),
-        (StageNotFoundError, ("Stage not found",)),
-        (SubAgentNotFoundError, ("SubAgent not found",)),
-        (VariableNotFoundError, ("Variable not found",)),
-        (WorkflowNotFoundError, ("Workflow not found",)),
-        (InputPortWorkItemNotFoundError, ("WorkItem not found",)),
-        (ResourceNotFoundError, ("Resource", "res-1")),
-    ])
+    @pytest.mark.parametrize(
+        "exception_class,exception_args",
+        [
+            (AgentNotFoundError, ("agent-1",)),
+            (WorkspaceNotFoundError, ("ws-1",)),
+            (ConfigNotFoundError, ("config-1",)),
+            (ExecutionNotFoundError, ("exec-1",)),
+            (PipelineNotFoundError, ("pipeline-1",)),
+            (DomainWorkItemNotFoundError, ("wi-1",)),
+            (InputPortAgentNotFoundError, ("Agent not found",)),
+            (AgentExecutionNotFoundError, ("Execution not found",)),
+            (ArtifactNotFoundError, ("Artifact not found",)),
+            (CommandFileNotFoundError, ("Command file not found",)),
+            (CommandNotFoundError, ("Command not found",)),
+            (InputPortPipelineNotFoundError, ("Pipeline not found",)),
+            (ProjectNotFoundError, ("Project not found",)),
+            (StageNotFoundError, ("Stage not found",)),
+            (SubAgentNotFoundError, ("SubAgent not found",)),
+            (VariableNotFoundError, ("Variable not found",)),
+            (WorkflowNotFoundError, ("Workflow not found",)),
+            (InputPortWorkItemNotFoundError, ("WorkItem not found",)),
+            (ResourceNotFoundError, ("Resource", "res-1")),
+        ],
+    )
     def test_all_not_found_exceptions_map_to_404(self, exception_class, exception_args):
         """Test that all NotFound exceptions map to 404"""
         exc = exception_class(*exception_args)

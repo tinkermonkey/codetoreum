@@ -141,9 +141,7 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
             aggregation_window_seconds=aggregation_window_seconds,
         )
 
-    async def get_resilience_metrics(
-        self, start_time: datetime, end_time: datetime
-    ) -> ResilienceMetrics:
+    async def get_resilience_metrics(self, start_time: datetime, end_time: datetime) -> ResilienceMetrics:
         """Get resilience infrastructure metrics."""
         return ResilienceMetrics(
             circuit_breakers={
@@ -256,17 +254,11 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
             data_points = self._metrics_data.get(metric_name, [])
 
             # Filter by time range
-            data_points = [
-                dp for dp in data_points if start_time <= dp.timestamp <= end_time
-            ]
+            data_points = [dp for dp in data_points if start_time <= dp.timestamp <= end_time]
 
             # Filter by labels if provided
             if labels:
-                data_points = [
-                    dp
-                    for dp in data_points
-                    if all(dp.labels.get(k) == v for k, v in labels.items())
-                ]
+                data_points = [dp for dp in data_points if all(dp.labels.get(k) == v for k, v in labels.items())]
 
             return MetricTimeSeries(
                 metric_name=metric_name,
@@ -353,9 +345,7 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
         """
         # Return empty list in mock implementation
         # Real implementation would query execution tracking system
-        return {
-            "agents": []
-        }
+        return {"agents": []}
 
     async def get_api_usage(self) -> dict[str, Any]:
         """
@@ -433,9 +423,7 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
             if metric_name not in self._metrics_data:
                 self._metrics_data[metric_name] = []
 
-            data_point = MetricTimeSeriesPoint(
-                timestamp=timestamp, value=value, labels=labels or {}
-            )
+            data_point = MetricTimeSeriesPoint(timestamp=timestamp, value=value, labels=labels or {})
             self._metrics_data[metric_name].append(data_point)
 
     def set_integration_status(self, status: IntegrationStatus):

@@ -14,6 +14,7 @@ from typing import Any
 
 class ComponentHealth(str, Enum):
     """Health status of a component"""
+
     HEALTHY = "healthy"
     DEGRADED = "degraded"
     UNHEALTHY = "unhealthy"
@@ -23,6 +24,7 @@ class ComponentHealth(str, Enum):
 @dataclass
 class ComponentHealthInfo:
     """Health information for a system component"""
+
     component_name: str
     status: ComponentHealth
     message: str | None
@@ -34,6 +36,7 @@ class ComponentHealthInfo:
 @dataclass
 class SystemHealthInfo:
     """Overall system health"""
+
     status: ComponentHealth
     components: list[ComponentHealthInfo]
     checked_at: datetime
@@ -44,6 +47,7 @@ class SystemHealthInfo:
 @dataclass
 class PerformanceMetrics:
     """Performance metrics for the system"""
+
     # API metrics
     api_request_count: int
     api_error_count: int
@@ -76,6 +80,7 @@ class PerformanceMetrics:
 @dataclass
 class ResilienceMetrics:
     """Resilience infrastructure metrics"""
+
     # Circuit breaker stats
     circuit_breakers: dict[str, dict[str, Any]]  # {service_name: {state, failure_count, ...}}
 
@@ -99,6 +104,7 @@ class ResilienceMetrics:
 @dataclass
 class IntegrationStatus:
     """Status of external system integrations"""
+
     # GitHub integration
     github_connected: bool
     github_api_calls_remaining: int | None
@@ -124,6 +130,7 @@ class IntegrationStatus:
 @dataclass
 class SimulationModeInfo:
     """Simulation mode status and configuration"""
+
     enabled: bool
     time_multiplier: float  # Speed multiplier for simulation
     deterministic_responses: bool
@@ -136,6 +143,7 @@ class SimulationModeInfo:
 @dataclass
 class MetricTimeSeriesPoint:
     """Single data point in a time series"""
+
     timestamp: datetime
     value: float
     labels: dict[str, str]
@@ -144,6 +152,7 @@ class MetricTimeSeriesPoint:
 @dataclass
 class MetricTimeSeries:
     """Time series data for a metric"""
+
     metric_name: str
     data_points: list[MetricTimeSeriesPoint]
     aggregation: str | None  # sum, avg, min, max, p95, p99
@@ -176,10 +185,7 @@ class IMetricsQueryPort(ABC):
         """
 
     @abstractmethod
-    async def get_component_health(
-        self,
-        component_name: str
-    ) -> ComponentHealthInfo:
+    async def get_component_health(self, component_name: str) -> ComponentHealthInfo:
         """
         Get health status for a specific component.
 
@@ -195,10 +201,7 @@ class IMetricsQueryPort(ABC):
 
     @abstractmethod
     async def get_performance_metrics(
-        self,
-        start_time: datetime,
-        end_time: datetime,
-        aggregation_window_seconds: int = 60
+        self, start_time: datetime, end_time: datetime, aggregation_window_seconds: int = 60
     ) -> PerformanceMetrics:
         """
         Get performance metrics over a time range.
@@ -213,11 +216,7 @@ class IMetricsQueryPort(ABC):
         """
 
     @abstractmethod
-    async def get_resilience_metrics(
-        self,
-        start_time: datetime,
-        end_time: datetime
-    ) -> ResilienceMetrics:
+    async def get_resilience_metrics(self, start_time: datetime, end_time: datetime) -> ResilienceMetrics:
         """
         Get resilience infrastructure metrics.
 
@@ -263,7 +262,7 @@ class IMetricsQueryPort(ABC):
         start_time: datetime,
         end_time: datetime,
         labels: dict[str, str] | None = None,
-        aggregation: str | None = None
+        aggregation: str | None = None,
     ) -> MetricTimeSeries:
         """
         Get time series data for a specific metric.
@@ -283,10 +282,7 @@ class IMetricsQueryPort(ABC):
         """
 
     @abstractmethod
-    async def list_metric_names(
-        self,
-        prefix: str | None = None
-    ) -> list[str]:
+    async def list_metric_names(self, prefix: str | None = None) -> list[str]:
         """
         List available metric names.
 
@@ -302,7 +298,7 @@ class IMetricsQueryPort(ABC):
         self,
         endpoint_path: str | None = None,
         start_time: datetime | None = None,
-        end_time: datetime | None = None
+        end_time: datetime | None = None,
     ) -> dict[str, Any]:
         """
         Get per-endpoint API metrics.
@@ -321,7 +317,7 @@ class IMetricsQueryPort(ABC):
         self,
         agent_name: str | None = None,
         start_time: datetime | None = None,
-        end_time: datetime | None = None
+        end_time: datetime | None = None,
     ) -> dict[str, Any]:
         """
         Get agent execution metrics.
@@ -358,7 +354,7 @@ class IMetricsQueryPort(ABC):
         self,
         agent_name: str | None = None,
         start_time: datetime | None = None,
-        end_time: datetime | None = None
+        end_time: datetime | None = None,
     ) -> dict[str, Any]:
         """
         Get repair cycle metrics.

@@ -35,9 +35,7 @@ class MockWorkspaceQueryAdapter(IWorkspaceQueryPort):
         """Helper method to add a workspace to mock storage."""
         with self._lock:
             self._workspaces[workspace_info.workspace_id] = workspace_info
-            self._workspaces_by_execution[workspace_info.execution_id] = (
-                workspace_info.workspace_id
-            )
+            self._workspaces_by_execution[workspace_info.execution_id] = workspace_info.workspace_id
             if workspace_info.workspace_id not in self._logs:
                 self._logs[workspace_info.workspace_id] = []
 
@@ -59,9 +57,7 @@ class MockWorkspaceQueryAdapter(IWorkspaceQueryPort):
         with self._lock:
             if workspace_id not in self._workspaces:
                 msg = f"Workspace with ID {workspace_id} not found"
-                raise WorkspaceNotFoundError(
-                    msg
-                )
+                raise WorkspaceNotFoundError(msg)
             return self._workspaces[workspace_id]
 
     async def get_workspace_by_execution(self, execution_id: str) -> WorkspaceInfo:
@@ -69,9 +65,7 @@ class MockWorkspaceQueryAdapter(IWorkspaceQueryPort):
         with self._lock:
             if execution_id not in self._workspaces_by_execution:
                 msg = f"Workspace for execution {execution_id} not found"
-                raise WorkspaceNotFoundError(
-                    msg
-                )
+                raise WorkspaceNotFoundError(msg)
             workspace_id = self._workspaces_by_execution[execution_id]
             return self._workspaces[workspace_id]
 
@@ -104,17 +98,9 @@ class MockWorkspaceQueryAdapter(IWorkspaceQueryPort):
             paginated_items = list_items[offset : offset + limit]
 
             # Calculate aggregate stats
-            active_count = sum(
-                1 for ws in workspaces if ws.status.value in ["initializing", "running"]
-            )
-            total_cpu = sum(
-                ws.resource_usage.cpu_percent if ws.resource_usage else 0.0
-                for ws in workspaces
-            )
-            total_memory = sum(
-                ws.resource_usage.memory_mb if ws.resource_usage else 0.0
-                for ws in workspaces
-            )
+            active_count = sum(1 for ws in workspaces if ws.status.value in ["initializing", "running"])
+            total_cpu = sum(ws.resource_usage.cpu_percent if ws.resource_usage else 0.0 for ws in workspaces)
+            total_memory = sum(ws.resource_usage.memory_mb if ws.resource_usage else 0.0 for ws in workspaces)
 
             return WorkspaceListResult(
                 workspaces=paginated_items,
@@ -124,18 +110,11 @@ class MockWorkspaceQueryAdapter(IWorkspaceQueryPort):
                 total_memory_mb=total_memory,
             )
 
-    async def list_active_workspaces(
-        self, pagination: PaginationParams | None = None
-    ) -> WorkspaceListResult:
+    async def list_active_workspaces(self, pagination: PaginationParams | None = None) -> WorkspaceListResult:
         """List all active workspaces (running or initializing)."""
-        filters = WorkspaceFilters()
         # Filter for active statuses in the list method
         with self._lock:
-            workspaces = [
-                ws
-                for ws in self._workspaces.values()
-                if ws.status.value in ["initializing", "running"]
-            ]
+            workspaces = [ws for ws in self._workspaces.values() if ws.status.value in ["initializing", "running"]]
 
             list_items = [self._to_list_item(ws) for ws in workspaces]
 
@@ -152,14 +131,8 @@ class MockWorkspaceQueryAdapter(IWorkspaceQueryPort):
 
             # Calculate aggregate stats
             active_count = len(workspaces)
-            total_cpu = sum(
-                ws.resource_usage.cpu_percent if ws.resource_usage else 0.0
-                for ws in workspaces
-            )
-            total_memory = sum(
-                ws.resource_usage.memory_mb if ws.resource_usage else 0.0
-                for ws in workspaces
-            )
+            total_cpu = sum(ws.resource_usage.cpu_percent if ws.resource_usage else 0.0 for ws in workspaces)
+            total_memory = sum(ws.resource_usage.memory_mb if ws.resource_usage else 0.0 for ws in workspaces)
 
             return WorkspaceListResult(
                 workspaces=paginated_items,
@@ -169,9 +142,7 @@ class MockWorkspaceQueryAdapter(IWorkspaceQueryPort):
                 total_memory_mb=total_memory,
             )
 
-    async def get_resource_usage_summary(
-        self, project_id: str | None = None
-    ) -> dict[str, Any]:
+    async def get_resource_usage_summary(self, project_id: str | None = None) -> dict[str, Any]:
         """Get aggregate resource usage across workspaces."""
         with self._lock:
             workspaces = list(self._workspaces.values())
@@ -180,21 +151,10 @@ class MockWorkspaceQueryAdapter(IWorkspaceQueryPort):
                 workspaces = [ws for ws in workspaces if ws.project_id == project_id]
 
             total_containers = len(workspaces)
-            active_containers = sum(
-                1 for ws in workspaces if ws.status.value in ["initializing", "running"]
-            )
-            total_cpu = sum(
-                ws.resource_usage.cpu_percent if ws.resource_usage else 0.0
-                for ws in workspaces
-            )
-            total_memory = sum(
-                ws.resource_usage.memory_mb if ws.resource_usage else 0.0
-                for ws in workspaces
-            )
-            total_disk = sum(
-                ws.resource_usage.disk_usage_mb if ws.resource_usage else 0.0
-                for ws in workspaces
-            )
+            active_containers = sum(1 for ws in workspaces if ws.status.value in ["initializing", "running"])
+            total_cpu = sum(ws.resource_usage.cpu_percent if ws.resource_usage else 0.0 for ws in workspaces)
+            total_memory = sum(ws.resource_usage.memory_mb if ws.resource_usage else 0.0 for ws in workspaces)
+            total_disk = sum(ws.resource_usage.disk_usage_mb if ws.resource_usage else 0.0 for ws in workspaces)
 
             return {
                 "total_containers": total_containers,
@@ -224,9 +184,7 @@ class MockWorkspaceQueryAdapter(IWorkspaceQueryPort):
         with self._lock:
             if workspace_id not in self._workspaces:
                 msg = f"Workspace with ID {workspace_id} not found"
-                raise WorkspaceNotFoundError(
-                    msg
-                )
+                raise WorkspaceNotFoundError(msg)
 
             logs = self._logs.get(workspace_id, [])
 
@@ -239,9 +197,7 @@ class MockWorkspaceQueryAdapter(IWorkspaceQueryPort):
 
             return logs
 
-    def _apply_filters(
-        self, workspaces: list[WorkspaceInfo], filters: WorkspaceFilters
-    ) -> list[WorkspaceInfo]:
+    def _apply_filters(self, workspaces: list[WorkspaceInfo], filters: WorkspaceFilters) -> list[WorkspaceInfo]:
         """Apply filters to workspace list."""
         result = workspaces
 
@@ -270,12 +226,8 @@ class MockWorkspaceQueryAdapter(IWorkspaceQueryPort):
             agent_name=workspace.agent_name,
             work_item_id=workspace.work_item_id,
             status=workspace.status,
-            cpu_percent=(
-                workspace.resource_usage.cpu_percent if workspace.resource_usage else None
-            ),
-            memory_mb=(
-                workspace.resource_usage.memory_mb if workspace.resource_usage else None
-            ),
+            cpu_percent=(workspace.resource_usage.cpu_percent if workspace.resource_usage else None),
+            memory_mb=(workspace.resource_usage.memory_mb if workspace.resource_usage else None),
             created_at=workspace.created_at,
             last_activity=workspace.last_activity,
         )

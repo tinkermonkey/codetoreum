@@ -2,7 +2,7 @@ exclude: ^venv_test/
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -10,10 +10,12 @@ repos:
       - id: check-added-large-files
         args: ['--maxkb=1000']
       - id: check-json
+        exclude: ^frontend/tsconfig.*\.json$
       - id: check-toml
       - id: check-merge-conflict
       - id: check-case-conflict
       - id: detect-private-key
+        exclude: ^tests/unit/infrastructure/test_logging\.py$
       - id: mixed-line-ending
 
   - repo: local

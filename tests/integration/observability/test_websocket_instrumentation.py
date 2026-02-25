@@ -5,9 +5,9 @@ Tests session spans, message spans, and trace context propagation
 through WebSocket connections.
 """
 
+from typing import TYPE_CHECKING
 
 import pytest
-from typing import TYPE_CHECKING
 
 from codetoreum.adapters.primary.websocket_adapter import (
     EventFilter,
@@ -349,9 +349,7 @@ def test_message_tracer_link_to_event_trace_context():
                 TraceContextData,
             )
 
-            trace_data = TraceContextData.from_span_context(
-                current_span.get_span_context()
-            )
+            trace_data = TraceContextData.from_span_context(current_span.get_span_context())
             event.metadata["traceparent"] = trace_data.to_traceparent()
 
     # Start and link message span
@@ -383,8 +381,6 @@ async def test_websocket_adapter_session_span_initialization():
     assert adapter._session_tracer is not None
     assert len(adapter._session_spans) == 0
     assert len(adapter._message_tracers) == 0
-
-
 
 
 # ============================================================================

@@ -80,14 +80,16 @@ class ReviewStatusChangedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "review_id": self.review_id,
-            "work_item_id": self.work_item_id,
-            "project_id": self.project_id,
-            "previous_status": self.previous_status,
-            "new_status": self.new_status,
-            "reviewer": self.reviewer,
-        })
+        d.update(
+            {
+                "review_id": self.review_id,
+                "work_item_id": self.work_item_id,
+                "project_id": self.project_id,
+                "previous_status": self.previous_status,
+                "new_status": self.new_status,
+                "reviewer": self.reviewer,
+            }
+        )
         return d
 
     @classmethod
@@ -157,12 +159,14 @@ class ReviewCommentAddedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "review_id": self.review_id,
-            "work_item_id": self.work_item_id,
-            "project_id": self.project_id,
-            "comment": self.comment.to_dict() if self.comment else None,
-        })
+        d.update(
+            {
+                "review_id": self.review_id,
+                "work_item_id": self.work_item_id,
+                "project_id": self.project_id,
+                "comment": self.comment.to_dict() if self.comment else None,
+            }
+        )
         return d
 
     @classmethod

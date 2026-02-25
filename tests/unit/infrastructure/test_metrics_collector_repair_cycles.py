@@ -15,7 +15,6 @@ These tests are currently being deferred until the repair cycle API is
 finalized or the metrics collector is refactored to match the events.
 """
 
-
 import pytest
 
 from codetoreum.infrastructure.event_bus import EventBus
@@ -35,4 +34,3 @@ class TestRepairCycleMetricsCollection:
     def metrics_collector(self, event_bus):
         """Create a metrics collector with event bus."""
         return MetricsCollector(event_bus=event_bus)
-

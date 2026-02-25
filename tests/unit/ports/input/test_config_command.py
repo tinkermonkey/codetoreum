@@ -39,11 +39,7 @@ class TestUpdateProjectConfigCommand:
     def test_minimal_command_creation(self):
         """Test creating command with minimal fields"""
         updates = {"github": {"repo": "owner/repo"}}
-        cmd = UpdateProjectConfigCommand(
-            project_name="test-project",
-            updates=updates,
-            user_id="user-123"
-        )
+        cmd = UpdateProjectConfigCommand(project_name="test-project", updates=updates, user_id="user-123")
 
         assert cmd.project_name == "test-project"
         assert cmd.updates == updates
@@ -57,7 +53,7 @@ class TestUpdateProjectConfigCommand:
             project_name="test-project",
             updates=updates,
             user_id="user-123",
-            reason="Updating tech stack for new requirements"
+            reason="Updating tech stack for new requirements",
         )
 
         assert cmd.project_name == "test-project"
@@ -76,7 +72,7 @@ class TestUpdateAgentConfigCommand:
             project_name="test-project",
             agent_name="builder-agent",
             updates=updates,
-            user_id="user-123"
+            user_id="user-123",
         )
 
         assert cmd.project_name == "test-project"
@@ -96,7 +92,7 @@ class TestUpdatePipelineConfigCommand:
             pipeline_name="ci-pipeline",
             updates=updates,
             user_id="user-123",
-            reason="Adding deploy stage"
+            reason="Adding deploy stage",
         )
 
         assert cmd.project_name == "test-project"
@@ -115,7 +111,7 @@ class TestAddEnvironmentVariableCommand:
             project_name="test-project",
             variable_name="BUILD_ENV",
             variable_value="production",
-            user_id="user-123"
+            user_id="user-123",
         )
 
         assert cmd.project_name == "test-project"
@@ -133,7 +129,7 @@ class TestAddEnvironmentVariableCommand:
             variable_value="secret-key-value",
             is_secret=True,
             description="API key for external service",
-            user_id="user-123"
+            user_id="user-123",
         )
 
         assert cmd.project_name == "test-project"
@@ -149,11 +145,7 @@ class TestRemoveEnvironmentVariableCommand:
 
     def test_remove_variable_command(self):
         """Test creating command to remove variable"""
-        cmd = RemoveEnvironmentVariableCommand(
-            project_name="test-project",
-            variable_name="OLD_VAR",
-            user_id="user-123"
-        )
+        cmd = RemoveEnvironmentVariableCommand(project_name="test-project", variable_name="OLD_VAR", user_id="user-123")
 
         assert cmd.project_name == "test-project"
         assert cmd.variable_name == "OLD_VAR"
@@ -170,7 +162,7 @@ class TestMountCommandCommand:
             command_name="custom-build",
             command_path="/commands/custom-build.sh",
             description="Custom build script",
-            user_id="user-123"
+            user_id="user-123",
         )
 
         assert cmd.project_name == "test-project"
@@ -185,11 +177,7 @@ class TestUnmountCommandCommand:
 
     def test_unmount_command(self):
         """Test creating command to unmount a command"""
-        cmd = UnmountCommandCommand(
-            project_name="test-project",
-            command_name="old-command",
-            user_id="user-123"
-        )
+        cmd = UnmountCommandCommand(project_name="test-project", command_name="old-command", user_id="user-123")
 
         assert cmd.project_name == "test-project"
         assert cmd.command_name == "old-command"
@@ -201,16 +189,13 @@ class TestMountSubAgentCommand:
 
     def test_mount_subagent(self):
         """Test creating command to mount a sub-agent"""
-        config = {
-            "model": "claude-3-sonnet",
-            "capabilities": ["code-review", "testing"]
-        }
+        config = {"model": "claude-3-sonnet", "capabilities": ["code-review", "testing"]}
         cmd = MountSubAgentCommand(
             project_name="test-project",
             subagent_name="reviewer-agent",
             subagent_config=config,
             description="Code review sub-agent",
-            user_id="user-123"
+            user_id="user-123",
         )
 
         assert cmd.project_name == "test-project"
@@ -225,11 +210,7 @@ class TestUnmountSubAgentCommand:
 
     def test_unmount_subagent(self):
         """Test creating command to unmount a sub-agent"""
-        cmd = UnmountSubAgentCommand(
-            project_name="test-project",
-            subagent_name="old-agent",
-            user_id="user-123"
-        )
+        cmd = UnmountSubAgentCommand(project_name="test-project", subagent_name="old-agent", user_id="user-123")
 
         assert cmd.project_name == "test-project"
         assert cmd.subagent_name == "old-agent"
@@ -246,7 +227,7 @@ class TestConfigurationCommandResult:
             success=True,
             config_version=5,
             message="Configuration updated successfully",
-            changes_applied=changes
+            changes_applied=changes,
         )
 
         assert result.success is True
@@ -263,7 +244,7 @@ class TestConfigurationCommandResult:
             config_version=4,
             message="Configuration update failed",
             changes_applied={},
-            errors=errors
+            errors=errors,
         )
 
         assert result.success is False
@@ -286,7 +267,7 @@ class TestConfigCommandPortBehavior:
                     success=True,
                     config_version=2,
                     message="Project config updated",
-                    changes_applied=command.updates
+                    changes_applied=command.updates,
                 )
 
             async def update_agent_config(self, command):
@@ -314,11 +295,7 @@ class TestConfigCommandPortBehavior:
                 pass
 
         port = MockPort()
-        cmd = UpdateProjectConfigCommand(
-            project_name="test",
-            updates={"key": "value"},
-            user_id="user-123"
-        )
+        cmd = UpdateProjectConfigCommand(project_name="test", updates={"key": "value"}, user_id="user-123")
 
         result = await port.update_project_config(cmd)
 
@@ -346,7 +323,7 @@ class TestConfigCommandPortBehavior:
                     success=True,
                     config_version=3,
                     message=f"Variable '{command.variable_name}' added",
-                    changes_applied={"variable_name": command.variable_name}
+                    changes_applied={"variable_name": command.variable_name},
                 )
 
             async def remove_environment_variable(self, command):
@@ -370,7 +347,7 @@ class TestConfigCommandPortBehavior:
             variable_name="SECRET_KEY",
             variable_value="secret-value",
             is_secret=True,
-            user_id="user-123"
+            user_id="user-123",
         )
 
         result = await port.add_environment_variable(cmd)
@@ -416,11 +393,7 @@ class TestConfigCommandPortErrorHandling:
                 pass
 
         port = MockPort()
-        cmd = UpdateProjectConfigCommand(
-            project_name="non-existent",
-            updates={"key": "value"},
-            user_id="user-123"
-        )
+        cmd = UpdateProjectConfigCommand(project_name="non-existent", updates={"key": "value"}, user_id="user-123")
 
         with pytest.raises(ProjectNotFoundError, match="Project 'non-existent' not found"):
             await port.update_project_config(cmd)
@@ -457,11 +430,7 @@ class TestConfigCommandPortErrorHandling:
                 pass
 
         port = MockPort()
-        cmd = UpdateProjectConfigCommand(
-            project_name="test-project",
-            updates={"invalid": "format"},
-            user_id="user-123"
-        )
+        cmd = UpdateProjectConfigCommand(project_name="test-project", updates={"invalid": "format"}, user_id="user-123")
 
         with pytest.raises(ValidationError, match="Invalid configuration format"):
             await port.update_project_config(cmd)
@@ -502,7 +471,7 @@ class TestConfigCommandPortErrorHandling:
             project_name="test-project",
             agent_name="non-existent-agent",
             updates={"model": "claude-3-opus"},
-            user_id="user-123"
+            user_id="user-123",
         )
 
         with pytest.raises(AgentNotFoundError, match="Agent 'non-existent-agent' not found"):
@@ -544,7 +513,7 @@ class TestConfigCommandPortErrorHandling:
             project_name="test-project",
             pipeline_name="non-existent-pipeline",
             updates={"stages": ["build"]},
-            user_id="user-123"
+            user_id="user-123",
         )
 
         with pytest.raises(PipelineNotFoundError, match="Pipeline 'non-existent-pipeline' not found"):
@@ -583,9 +552,7 @@ class TestConfigCommandPortErrorHandling:
 
         port = MockPort()
         cmd = RemoveEnvironmentVariableCommand(
-            project_name="test-project",
-            variable_name="NON_EXISTENT_VAR",
-            user_id="user-123"
+            project_name="test-project", variable_name="NON_EXISTENT_VAR", user_id="user-123"
         )
 
         with pytest.raises(VariableNotFoundError, match="Variable 'NON_EXISTENT_VAR' not found"):
@@ -627,7 +594,7 @@ class TestConfigCommandPortErrorHandling:
             project_name="test-project",
             command_name="custom-build",
             command_path="/nonexistent/command.sh",
-            user_id="user-123"
+            user_id="user-123",
         )
 
         with pytest.raises(CommandFileNotFoundError, match="Command file '/nonexistent/command.sh' not found"):
@@ -666,9 +633,7 @@ class TestConfigCommandPortErrorHandling:
 
         port = MockPort()
         cmd = UnmountCommandCommand(
-            project_name="test-project",
-            command_name="non-existent-command",
-            user_id="user-123"
+            project_name="test-project", command_name="non-existent-command", user_id="user-123"
         )
 
         with pytest.raises(CommandNotFoundError, match="Command 'non-existent-command' not mounted"):
@@ -707,9 +672,7 @@ class TestConfigCommandPortErrorHandling:
 
         port = MockPort()
         cmd = UnmountSubAgentCommand(
-            project_name="test-project",
-            subagent_name="non-existent-agent",
-            user_id="user-123"
+            project_name="test-project", subagent_name="non-existent-agent", user_id="user-123"
         )
 
         with pytest.raises(SubAgentNotFoundError, match="Sub-agent 'non-existent-agent' not mounted"):
@@ -748,9 +711,7 @@ class TestConfigCommandPortErrorHandling:
 
         port = MockPort()
         cmd = UpdateProjectConfigCommand(
-            project_name="test-project",
-            updates={"key": "value"},
-            user_id="unauthorized-user"
+            project_name="test-project", updates={"key": "value"}, user_id="unauthorized-user"
         )
 
         with pytest.raises(PermissionError, match="User 'unauthorized-user' lacks permission"):

@@ -18,10 +18,7 @@ class TestTokenBucketRateLimiter:
     @pytest.mark.asyncio
     async def test_allows_requests_within_limit(self):
         """Test that requests within limit are allowed immediately."""
-        limiter = TokenBucketRateLimiter(
-            max_requests=5,
-            window_seconds=1
-        )
+        limiter = TokenBucketRateLimiter(max_requests=5, window_seconds=1)
 
         # First 5 requests should succeed immediately
         start = time.time()
@@ -35,10 +32,7 @@ class TestTokenBucketRateLimiter:
     @pytest.mark.asyncio
     async def test_enforces_rate_limit(self):
         """Test that rate limit is enforced."""
-        limiter = TokenBucketRateLimiter(
-            max_requests=5,
-            window_seconds=1
-        )
+        limiter = TokenBucketRateLimiter(max_requests=5, window_seconds=1)
 
         # First 5 requests
         for i in range(5):
@@ -56,10 +50,7 @@ class TestTokenBucketRateLimiter:
     @pytest.mark.asyncio
     async def test_sliding_window(self):
         """Test that sliding window works correctly."""
-        limiter = TokenBucketRateLimiter(
-            max_requests=3,
-            window_seconds=1
-        )
+        limiter = TokenBucketRateLimiter(max_requests=3, window_seconds=1)
 
         # Make 3 requests
         await limiter.acquire("test_op")
@@ -80,11 +71,7 @@ class TestTokenBucketRateLimiter:
     @pytest.mark.asyncio
     async def test_token_based_limiting(self):
         """Test token-based rate limiting."""
-        limiter = TokenBucketRateLimiter(
-            max_requests=10,
-            window_seconds=1,
-            max_tokens=100
-        )
+        limiter = TokenBucketRateLimiter(max_requests=10, window_seconds=1, max_tokens=100)
 
         # Use up tokens
         await limiter.acquire("test_op", cost=50)
@@ -101,11 +88,7 @@ class TestTokenBucketRateLimiter:
     @pytest.mark.asyncio
     async def test_max_wait_exceeded(self):
         """Test that RateLimitExceededError is raised when max wait exceeded."""
-        limiter = TokenBucketRateLimiter(
-            max_requests=1,
-            window_seconds=10,
-            max_wait_seconds=0.5
-        )
+        limiter = TokenBucketRateLimiter(max_requests=1, window_seconds=10, max_wait_seconds=0.5)
 
         # Use up the limit
         await limiter.acquire("test_op")
@@ -118,10 +101,7 @@ class TestTokenBucketRateLimiter:
 
     def test_try_acquire_non_blocking(self):
         """Test that try_acquire doesn't block."""
-        limiter = TokenBucketRateLimiter(
-            max_requests=2,
-            window_seconds=1
-        )
+        limiter = TokenBucketRateLimiter(max_requests=2, window_seconds=1)
 
         # First 2 should succeed
         assert limiter.try_acquire("test_op") is True
@@ -137,10 +117,7 @@ class TestTokenBucketRateLimiter:
 
     def test_get_stats(self):
         """Test that statistics are tracked correctly."""
-        limiter = TokenBucketRateLimiter(
-            max_requests=5,
-            window_seconds=60
-        )
+        limiter = TokenBucketRateLimiter(max_requests=5, window_seconds=60)
 
         limiter.try_acquire("test_op", cost=10)
         limiter.try_acquire("test_op", cost=20)
@@ -155,10 +132,7 @@ class TestTokenBucketRateLimiter:
 
     def test_reset(self):
         """Test that reset clears state."""
-        limiter = TokenBucketRateLimiter(
-            max_requests=2,
-            window_seconds=1
-        )
+        limiter = TokenBucketRateLimiter(max_requests=2, window_seconds=1)
 
         limiter.try_acquire("test_op")
         limiter.try_acquire("test_op")

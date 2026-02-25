@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 class FailureReason(Enum):
     """Reason for event failure."""
+
     TRANSIENT_ERROR = "transient_error"
     VALIDATION_ERROR = "validation_error"
     PROCESSING_ERROR = "processing_error"
@@ -33,6 +34,7 @@ class FailedEvent:
     """
     Represents a failed event in the dead letter queue.
     """
+
     id: str
     event_type: str
     event_data: dict[str, Any]
@@ -77,7 +79,7 @@ class FailedEvent:
         Returns:
             Next retry timestamp
         """
-        delay_seconds = base_delay * (exponential_base ** self.retry_count)
+        delay_seconds = base_delay * (exponential_base**self.retry_count)
         # Cap at 1 hour
         delay_seconds = min(delay_seconds, 3600)
 
@@ -87,6 +89,7 @@ class FailedEvent:
 @dataclass
 class DeadLetterQueueStats:
     """Statistics for dead letter queue."""
+
     total_failed_events: int
     pending_retries: int
     exhausted_retries: int
@@ -124,7 +127,7 @@ class DeadLetterQueue:
         max_retries: int = 3,
         base_delay_seconds: float = 60.0,
         exponential_base: float = 2.0,
-        retry_interval_seconds: float = 30.0
+        retry_interval_seconds: float = 30.0,
     ):
         """
         Initialize dead letter queue.
@@ -158,7 +161,7 @@ class DeadLetterQueue:
         event_data: dict[str, Any],
         failure_reason: FailureReason,
         error_message: str,
-        metadata: dict[str, Any] | None = None
+        metadata: dict[str, Any] | None = None,
     ) -> str:
         """
         Add a failed event to the queue.
@@ -183,14 +186,13 @@ class DeadLetterQueue:
             error_message=error_message,
             failed_at=datetime.now(UTC),
             max_retries=self._max_retries,
-            metadata=metadata or {}
+            metadata=metadata or {},
         )
 
         # Calculate initial retry time
         if failed_event.can_retry():
             failed_event.next_retry_at = failed_event.calculate_next_retry(
-                self._base_delay_seconds,
-                self._exponential_base
+                self._base_delay_seconds, self._exponential_base
             )
 
         self._storage[event_id] = failed_event
@@ -247,15 +249,12 @@ class DeadLetterQueue:
                     "retry_count": event.retry_count,
                     "max_retries": event.max_retries,
                     "failure_reason": event.failure_reason.value,
-                    "component": "dead_letter_queue"
-                }
+                    "component": "dead_letter_queue",
+                },
             )
 
             if event.can_retry():
-                event.next_retry_at = event.calculate_next_retry(
-                    self._base_delay_seconds,
-                    self._exponential_base
-                )
+                event.next_retry_at = event.calculate_next_retry(self._base_delay_seconds, self._exponential_base)
             else:
                 # Exhausted retries
                 event.next_retry_at = None
@@ -269,8 +268,8 @@ class DeadLetterQueue:
                         "retry_count": event.retry_count,
                         "original_failure": event.failure_reason.value,
                         "component": "dead_letter_queue",
-                        "error_id": ErrorRegistry.ERR_DEAD_LETTER_QUEUE_ERROR
-                    }
+                        "error_id": ErrorRegistry.ERR_DEAD_LETTER_QUEUE_ERROR,
+                    },
                 )
 
             return False
@@ -315,8 +314,8 @@ class DeadLetterQueue:
                     extra={
                         "component": "dead_letter_queue",
                         "operation": "retry_loop",
-                        "error_id": ErrorRegistry.ERR_DEAD_LETTER_QUEUE_ERROR
-                    }
+                        "error_id": ErrorRegistry.ERR_DEAD_LETTER_QUEUE_ERROR,
+                    },
                 )
 
             await asyncio.sleep(self._retry_interval_seconds)
@@ -324,11 +323,7 @@ class DeadLetterQueue:
     async def _process_retryable_events(self) -> None:
         """Process all retryable events."""
         # Find events ready for retry
-        retryable_events = [
-            event_id
-            for event_id, event in self._storage.items()
-            if event.is_ready_for_retry()
-        ]
+        retryable_events = [event_id for event_id, event in self._storage.items() if event.is_ready_for_retry()]
 
         # Retry events
         for event_id in retryable_events:
@@ -359,7 +354,7 @@ class DeadLetterQueue:
             total_retries_failed=self._total_retries_failed,
             oldest_event=oldest_event,
             newest_event=newest_event,
-            failure_reasons=failure_reasons
+            failure_reasons=failure_reasons,
         )
 
     def get_event(self, event_id: str) -> FailedEvent | None:
@@ -370,7 +365,7 @@ class DeadLetterQueue:
         self,
         failure_reason: FailureReason | None = None,
         can_retry: bool | None = None,
-        limit: int | None = None
+        limit: int | None = None,
     ) -> list[FailedEvent]:
         """
         List failed events with optional filtering.
@@ -427,11 +422,7 @@ class DeadLetterQueue:
         Returns:
             Number of events removed
         """
-        exhausted = [
-            event_id
-            for event_id, event in self._storage.items()
-            if not event.can_retry()
-        ]
+        exhausted = [event_id for event_id, event in self._storage.items() if not event.can_retry()]
 
         for event_id in exhausted:
             del self._storage[event_id]
@@ -450,11 +441,7 @@ class DeadLetterQueue:
         """
         cutoff = datetime.now(UTC) - timedelta(days=days)
 
-        old_events = [
-            event_id
-            for event_id, event in self._storage.items()
-            if event.failed_at < cutoff
-        ]
+        old_events = [event_id for event_id, event in self._storage.items() if event.failed_at < cutoff]
 
         for event_id in old_events:
             del self._storage[event_id]

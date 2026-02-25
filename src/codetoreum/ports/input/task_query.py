@@ -14,6 +14,7 @@ from typing import Any
 
 class ExecutionStatus(Enum):
     """Status of an execution"""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -25,6 +26,7 @@ class ExecutionStatus(Enum):
 @dataclass
 class ExecutionStatusInfo:
     """Detailed status information for an execution"""
+
     execution_id: str
     workflow_run_id: str
     work_item_id: str
@@ -44,6 +46,7 @@ class ExecutionStatusInfo:
 @dataclass
 class ExecutionListItem:
     """Summary information for execution in a list"""
+
     execution_id: str
     workflow_run_id: str
     work_item_id: str
@@ -57,6 +60,7 @@ class ExecutionListItem:
 @dataclass
 class ExecutionListResult:
     """Result of listing executions"""
+
     executions: list[ExecutionListItem]
     total_count: int
     page: int
@@ -67,6 +71,7 @@ class ExecutionListResult:
 @dataclass
 class ArtifactInfo:
     """Information about an execution artifact"""
+
     artifact_id: str
     execution_id: str
     artifact_type: str  # code, log, report, diagram, etc.
@@ -81,6 +86,7 @@ class ArtifactInfo:
 @dataclass
 class ArtifactListResult:
     """Result of listing artifacts"""
+
     artifacts: list[ArtifactInfo]
     total_count: int
 
@@ -88,6 +94,7 @@ class ArtifactListResult:
 @dataclass
 class ExecutionHistoryEntry:
     """Single entry in execution history"""
+
     timestamp: datetime
     event_type: str
     message: str
@@ -97,6 +104,7 @@ class ExecutionHistoryEntry:
 @dataclass
 class ExecutionHistory:
     """Complete execution history"""
+
     execution_id: str
     entries: list[ExecutionHistoryEntry]
     total_entries: int
@@ -117,10 +125,7 @@ class ITaskQueryPort(ABC):
     """
 
     @abstractmethod
-    async def get_execution_status(
-        self,
-        execution_id: str
-    ) -> ExecutionStatusInfo:
+    async def get_execution_status(self, execution_id: str) -> ExecutionStatusInfo:
         """
         Retrieves detailed status information for a specific execution.
 
@@ -142,7 +147,7 @@ class ITaskQueryPort(ABC):
         project_name: str | None = None,
         status: ExecutionStatus | None = None,
         page: int = 1,
-        page_size: int = 50
+        page_size: int = 50,
     ) -> ExecutionListResult:
         """
         Lists executions matching the specified criteria.
@@ -163,11 +168,7 @@ class ITaskQueryPort(ABC):
         """
 
     @abstractmethod
-    async def get_artifacts(
-        self,
-        execution_id: str,
-        artifact_type: str | None = None
-    ) -> ArtifactListResult:
+    async def get_artifacts(self, execution_id: str, artifact_type: str | None = None) -> ArtifactListResult:
         """
         Retrieves artifacts produced by an execution.
 
@@ -183,11 +184,7 @@ class ITaskQueryPort(ABC):
         """
 
     @abstractmethod
-    async def get_execution_history(
-        self,
-        execution_id: str,
-        limit: int | None = None
-    ) -> ExecutionHistory:
+    async def get_execution_history(self, execution_id: str, limit: int | None = None) -> ExecutionHistory:
         """
         Retrieves the event history for an execution.
 
@@ -203,10 +200,7 @@ class ITaskQueryPort(ABC):
         """
 
     @abstractmethod
-    async def get_workflow_executions(
-        self,
-        workflow_run_id: str
-    ) -> ExecutionListResult:
+    async def get_workflow_executions(self, workflow_run_id: str) -> ExecutionListResult:
         """
         Retrieves all executions for a specific workflow run.
 

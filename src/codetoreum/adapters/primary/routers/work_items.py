@@ -5,7 +5,6 @@ Provides RESTful CRUD endpoints for work items (issues, tasks) with
 filtering, pagination, and search capabilities.
 """
 
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
@@ -145,7 +144,12 @@ def create_work_items_router(
         priority: str | None = Query(None, description="Filter by priority (LOW, MEDIUM, HIGH, CRITICAL)"),
         search: str | None = Query(None, description="Search in title and description"),
         offset: int = Query(DEFAULT_OFFSET, ge=0, description="Offset for pagination"),
-        limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description=f"Limit for pagination (max {MAX_PAGE_SIZE})"),
+        limit: int = Query(
+            DEFAULT_PAGE_SIZE,
+            ge=1,
+            le=MAX_PAGE_SIZE,
+            description=f"Limit for pagination (max {MAX_PAGE_SIZE})",
+        ),
         sort_by: str = Query("updated_at", description="Sort field (created_at, updated_at, priority, title, status)"),
         sort_order: str = Query("desc", description="Sort order (asc, desc)"),
     ) -> WorkItemListResponse:
@@ -186,7 +190,7 @@ def create_work_items_router(
                 except InvalidInputError as e:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Invalid search query: {e!s}"
+                        detail=f"Invalid search query: {e!s}",
                     )
 
             # Validate sort_by field to prevent injection
@@ -194,14 +198,14 @@ def create_work_items_router(
             if sort_by.lower() not in valid_sort_fields:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Invalid sort field. Must be one of: {', '.join(valid_sort_fields)}"
+                    detail=f"Invalid sort field. Must be one of: {', '.join(valid_sort_fields)}",
                 )
 
             # Validate sort_order to prevent injection
             if sort_order.lower() not in ["asc", "desc"]:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid sort order. Must be 'asc' or 'desc'"
+                    detail="Invalid sort order. Must be 'asc' or 'desc'",
                 )
 
             # Parse filters

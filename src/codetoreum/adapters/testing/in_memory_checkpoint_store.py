@@ -49,7 +49,9 @@ class InMemoryCheckpointStore(IRepairCycleCheckpointStore):
 
         with self._lock:
             # Convert enum to string for key
-            test_type_str = checkpoint.test_type.value if hasattr(checkpoint.test_type, "value") else str(checkpoint.test_type)
+            test_type_str = (
+                checkpoint.test_type.value if hasattr(checkpoint.test_type, "value") else str(checkpoint.test_type)
+            )
             key = (checkpoint.workflow_run_id, test_type_str)
             saved_time = datetime.now(UTC)
             self._checkpoints[key] = (checkpoint, saved_time)
@@ -90,11 +92,7 @@ class InMemoryCheckpointStore(IRepairCycleCheckpointStore):
                 self._checkpoints.pop(key, None)
             else:
                 # Delete all for pipeline run
-                keys_to_delete = [
-                    key
-                    for key in self._checkpoints.keys()
-                    if key[0] == workflow_run_id
-                ]
+                keys_to_delete = [key for key in self._checkpoints.keys() if key[0] == workflow_run_id]
                 for key in keys_to_delete:
                     del self._checkpoints[key]
 

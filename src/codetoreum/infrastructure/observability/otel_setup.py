@@ -36,15 +36,14 @@ try:
     from opentelemetry.sdk.trace.sampling import (
         ALWAYS_OFF,
         ALWAYS_ON,
-        Decision,
         ParentBased,
-        StaticSampler,
         TraceIdRatioBased,
     )
 
     # LoggingInstrumentor is optional - not in current dependencies
     try:
         from opentelemetry.instrumentation.logging import LoggingInstrumentor
+
         LOGGING_INSTRUMENTATION_AVAILABLE = True
     except ImportError:
         LOGGING_INSTRUMENTATION_AVAILABLE = False
@@ -110,7 +109,7 @@ def _check_otlp_connectivity(config: ObservabilityConfig) -> None:
                 f"OTLP endpoint {endpoint} is not reachable (connection failed with code {result}). "
                 f"Observability will be degraded until endpoint is available. "
                 f"Verify that Signoz is running and accessible.",
-                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
             )
         else:
             logger.debug(f"OTLP endpoint {endpoint} connectivity check passed")
@@ -139,9 +138,7 @@ def _get_sampler(config: ObservabilityConfig):
         return TraceIdRatioBased(config.sampler_arg)
     if sampler_type == "parentbased_always_on":
         return ParentBased(root=ALWAYS_ON)
-    logger.warning(
-        f"Unknown sampler type '{sampler_type}', defaulting to ALWAYS_ON"
-    )
+    logger.warning(f"Unknown sampler type '{sampler_type}', defaulting to ALWAYS_ON")
     return ALWAYS_ON
 
 
@@ -159,23 +156,17 @@ def _record_trace_export_error(error: Exception, config: ObservabilityConfig) ->
     # Record failure metric
     try:
         from opentelemetry import metrics
+
         meter = metrics.get_meter("codetoreum.observability")
-        counter = meter.create_counter(
-            "otel.trace.export.failures",
-            description="Number of OTLP trace export failures"
-        )
+        counter = meter.create_counter("otel.trace.export.failures", description="Number of OTLP trace export failures")
         counter.add(1)
     except Exception as metric_error:
-        logger.warning(
-            f"Failed to record trace export error metric: {metric_error}",
-            exc_info=True
-        )
+        logger.warning(f"Failed to record trace export error metric: {metric_error}", exc_info=True)
 
     logger.warning(
-        f"OTLP trace export setup failed: {error}. "
-        f"Continuing without trace export to {config.signoz.grpc_endpoint}",
+        f"OTLP trace export setup failed: {error}. Continuing without trace export to {config.signoz.grpc_endpoint}",
         exc_info=True,
-        extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+        extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
     )
 
 
@@ -202,25 +193,24 @@ class _InstrumentedSpanExporter(SpanExporter):
 
         try:
             from opentelemetry import metrics
+
             self._meter = metrics.get_meter("codetoreum.observability")
 
             # Create histogram for export duration in milliseconds
             self._duration_histogram = self._meter.create_histogram(
                 "otel.trace.export.duration",
                 description="Duration of OTLP trace export in milliseconds",
-                unit="ms"
+                unit="ms",
             )
 
             # Create counter for successful exports
             self._export_counter = self._meter.create_counter(
-                "otel.trace.export.success",
-                description="Number of successful OTLP trace exports"
+                "otel.trace.export.success", description="Number of successful OTLP trace exports"
             )
 
             # Create counter for failed exports
             self._failure_counter = self._meter.create_counter(
-                "otel.trace.export.failures",
-                description="Number of failed OTLP trace exports"
+                "otel.trace.export.failures", description="Number of failed OTLP trace exports"
             )
         except Exception as e:
             logger.debug(f"Failed to create metrics for span export: {e}", exc_info=True)
@@ -236,6 +226,7 @@ class _InstrumentedSpanExporter(SpanExporter):
             Export result
         """
         import time
+
         start_time = time.time()
 
         try:
@@ -263,7 +254,7 @@ class _InstrumentedSpanExporter(SpanExporter):
             logger.error(
                 f"Failed to export {len(spans)} spans to OTLP endpoint: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
             )
             raise
 
@@ -290,23 +281,17 @@ def _record_log_export_error(error: Exception, config: ObservabilityConfig) -> N
     # Record failure metric
     try:
         from opentelemetry import metrics
+
         meter = metrics.get_meter("codetoreum.observability")
-        counter = meter.create_counter(
-            "otel.log.export.failures",
-            description="Number of OTLP log export failures"
-        )
+        counter = meter.create_counter("otel.log.export.failures", description="Number of OTLP log export failures")
         counter.add(1)
     except Exception as metric_error:
-        logger.warning(
-            f"Failed to record log export error metric: {metric_error}",
-            exc_info=True
-        )
+        logger.warning(f"Failed to record log export error metric: {metric_error}", exc_info=True)
 
     logger.warning(
-        f"OTLP log export setup failed: {error}. "
-        f"Continuing without log export to {config.logs_endpoint}",
+        f"OTLP log export setup failed: {error}. Continuing without log export to {config.logs_endpoint}",
         exc_info=True,
-        extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+        extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
     )
 
 
@@ -386,22 +371,17 @@ def _setup_log_export(config: ObservabilityConfig, resource: "Resource") -> None
                 set_logging_format=False,  # Keep existing logging format
             )
         else:
-            logger.debug(
-                "opentelemetry-instrumentation-logging not installed. "
-                "Logging instrumentation disabled."
-            )
+            logger.debug("opentelemetry-instrumentation-logging not installed. Logging instrumentation disabled.")
 
         # Wire TraceContextInjector filter to root logger for trace correlation
         from codetoreum.infrastructure.observability.logging_integration import (
             TraceContextInjector,
         )
+
         trace_filter = TraceContextInjector()
         stdlib_logging.getLogger().addFilter(trace_filter)
 
-        logger.info(
-            f"OTLP log export configured. "
-            f"Sending logs to {config.logs_endpoint}"
-        )
+        logger.info(f"OTLP log export configured. Sending logs to {config.logs_endpoint}")
         logger.debug("TraceContextInjector wired to root logger for trace correlation")
 
     except Exception as e:
@@ -423,15 +403,11 @@ def _record_metrics_export_error(error: Exception, config: ObservabilityConfig) 
     try:
         meter = metrics.get_meter("codetoreum.observability")
         counter = meter.create_counter(
-            "otel.metrics.export.failures",
-            description="Number of OTLP metrics export failures"
+            "otel.metrics.export.failures", description="Number of OTLP metrics export failures"
         )
         counter.add(1)
     except Exception as metric_error:
-        logger.warning(
-            f"Failed to record metrics export error metric: {metric_error}",
-            exc_info=True
-        )
+        logger.warning(f"Failed to record metrics export error metric: {metric_error}", exc_info=True)
 
     logger.warning(
         f"OTLP metrics export setup failed: {error}. "
@@ -440,7 +416,7 @@ def _record_metrics_export_error(error: Exception, config: ObservabilityConfig) 
         f"Local metrics collection is unaffected. "
         f"To enable metrics export, verify endpoint accessibility and restart the service.",
         exc_info=True,
-        extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+        extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
     )
 
 
@@ -500,10 +476,7 @@ def _setup_metrics_export(config: ObservabilityConfig, resource: "Resource") -> 
         # Set global meter provider
         metrics.set_meter_provider(meter_provider)
 
-        logger.info(
-            f"OTLP metrics export configured. "
-            f"Sending metrics to {config.metrics_endpoint}"
-        )
+        logger.info(f"OTLP metrics export configured. Sending metrics to {config.metrics_endpoint}")
 
     except Exception as e:
         _record_metrics_export_error(e, config)
@@ -640,5 +613,9 @@ def setup_opentelemetry(config: ObservabilityConfig, app=None) -> None:
         # Record trace export failure metric
         _record_trace_export_error(e, config)
         # Don't crash the application if observability fails
-        logger.error(f"Failed to initialize OpenTelemetry: {e}", exc_info=True, extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR})
+        logger.error(
+            f"Failed to initialize OpenTelemetry: {e}",
+            exc_info=True,
+            extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
+        )
         logger.warning("Application will continue without distributed tracing and log export")

@@ -29,11 +29,9 @@ __all__ = [
     # Constants
     "MAX_FILE_SIZE",
     "ALLOWED_CONTENT_TYPES",
-
     # Exceptions
     "PathTraversalError",
     "InvalidInputError",
-
     # Functions
     "safe_path_join",
     "validate_upload",

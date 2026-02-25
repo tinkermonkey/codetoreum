@@ -75,6 +75,7 @@ class IEventEmitter(ABC):
             event_type: Type of event to subscribe to
             handler: Callback function
         """
+
         def one_time_handler(event: "CodetoreumEvent") -> None:
             try:
                 handler(event)

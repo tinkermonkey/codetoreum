@@ -111,6 +111,7 @@ class ConversationalSessionState:
         # Validate ISO 8601 timestamp
         try:
             from datetime import datetime
+
             datetime.fromisoformat(self.last_interaction_timestamp.replace("Z", "+00:00"))
         except (ValueError, AttributeError) as e:
             msg = f"last_interaction_timestamp must be ISO 8601 format: {e}"

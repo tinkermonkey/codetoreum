@@ -302,7 +302,6 @@ class TestGitHubDiscussionAdapterPolling:
                 assert 1.5 < interval < 3.0  # Allow some variance
 
 
-
 class TestGitHubDiscussionAdapterQueries:
     """Tests for query operations via REST API."""
 
@@ -529,9 +528,12 @@ class TestGitHubDiscussionAdapterMonitoring:
             adapter.start_monitoring("", config)
 
         with pytest.raises(ValidationError):
-            adapter.start_monitoring("123", DiscussionMonitoringConfig(
-                project_id="",
-            ))
+            adapter.start_monitoring(
+                "123",
+                DiscussionMonitoringConfig(
+                    project_id="",
+                ),
+            )
 
 
 class TestGitHubDiscussionAdapterEventEmission:

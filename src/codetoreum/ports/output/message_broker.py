@@ -41,9 +41,7 @@ class IMessageBroker(ABC):
         """
 
     @abstractmethod
-    async def publish_control_message(
-        self, message_type: str, data: dict[str, Any]
-    ) -> None:
+    async def publish_control_message(self, message_type: str, data: dict[str, Any]) -> None:
         """
         Publish a control message to all subscribers.
 

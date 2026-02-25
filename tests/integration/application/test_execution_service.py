@@ -1,6 +1,6 @@
 """Integration tests for ExecutionService."""
 
-from typing import Iterator
+from collections.abc import Iterator
 
 import pytest
 
@@ -9,7 +9,6 @@ from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
 from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
 from codetoreum.application.execution_service import (
-    ExecutionFailureReason,
     ExecutionService,
     LogEntry,
 )
@@ -24,7 +23,6 @@ from codetoreum.domain.work_item import (
     WorkItem,
     WorkItemPriority,
 )
-
 
 # Fixtures
 
@@ -139,9 +137,7 @@ def sample_execution_context() -> ExecutionContext:
 
 
 @pytest.mark.asyncio
-async def test_create_execution(
-    execution_service, sample_agent, sample_work_item, mock_event_store
-):
+async def test_create_execution(execution_service, sample_agent, sample_work_item, mock_event_store):
     """Test creating agent execution."""
     execution = await execution_service.create_execution(
         agent=sample_agent,
@@ -159,9 +155,7 @@ async def test_create_execution(
 
 
 @pytest.mark.asyncio
-async def test_start_execution(
-    execution_service, sample_agent, sample_work_item, mock_event_store
-):
+async def test_start_execution(execution_service, sample_agent, sample_work_item, mock_event_store):
     """Test starting execution."""
     execution = await execution_service.create_execution(
         agent=sample_agent,
@@ -218,17 +212,13 @@ async def test_execute_with_llm_success(
 
     await execution_service.start_execution(execution, sample_execution_context)
 
-    result = await execution_service.execute_with_llm(
-        execution, sample_execution_context
-    )
+    result = await execution_service.execute_with_llm(execution, sample_execution_context)
 
     assert result.success
     assert execution.status == ExecutionStatus.COMPLETED
     assert execution.output == "Hello World!"
     assert execution.input_tokens == 20
     assert execution.output_tokens == 10
-
-
 
 
 @pytest.mark.asyncio
@@ -255,20 +245,14 @@ async def test_execute_with_container_success(
         user="1000:1000",
     )
 
-    await execution_service.start_execution(
-        execution, sample_execution_context, container_config
-    )
+    await execution_service.start_execution(execution, sample_execution_context, container_config)
 
-    result = await execution_service.execute_with_container(
-        execution, sample_execution_context, container_config
-    )
+    result = await execution_service.execute_with_container(execution, sample_execution_context, container_config)
 
     assert result.success
     assert execution.status == ExecutionStatus.COMPLETED
     assert execution.input_tokens == 20  # Extracted from logs
     assert execution.output_tokens == 10
-
-
 
 
 @pytest.mark.asyncio
@@ -318,9 +302,7 @@ async def test_get_execution_logs(
         working_dir="/workspace",
     )
 
-    await execution_service.start_execution(
-        execution, sample_execution_context, container_config
-    )
+    await execution_service.start_execution(execution, sample_execution_context, container_config)
 
     # Set container ID manually for testing
     execution.container_id = ContainerId("test-container")

@@ -1,10 +1,8 @@
 """Port layer exceptions."""
 
 
-
 class PortError(Exception):
     """Base exception for port operations."""
-
 
 
 class ResourceNotFoundError(PortError):
@@ -27,7 +25,6 @@ class ValidationError(PortError):
     """Invalid input or configuration."""
 
 
-
 class ExternalServiceError(PortError):
     """External service failure."""
 
@@ -47,15 +44,12 @@ class AuthenticationError(PortError):
     """Authentication failure."""
 
 
-
 class PermissionError(PortError):
     """Permission denied."""
 
 
-
 class ConcurrencyConflictError(PortError):
     """Concurrent modification detected."""
-
 
 
 class RateLimitError(PortError):
@@ -76,7 +70,6 @@ class TimeoutError(PortError):
     """Operation timed out."""
 
 
-
 # Ticket System Errors
 
 
@@ -84,20 +77,16 @@ class TicketSystemError(PortError):
     """Ticket system operation failed."""
 
 
-
 class WorkItemNotFoundError(TicketSystemError):
     """Work item doesn't exist."""
-
 
 
 class ColumnNotFoundError(TicketSystemError):
     """Column doesn't exist."""
 
 
-
 class ProjectNotFoundError(TicketSystemError):
     """Project doesn't exist."""
-
 
 
 # LLM Provider Errors
@@ -105,7 +94,6 @@ class ProjectNotFoundError(TicketSystemError):
 
 class LLMProviderError(PortError):
     """LLM provider operation failed."""
-
 
 
 class PromptTooLongError(LLMProviderError):
@@ -128,25 +116,20 @@ class ToolExecutionError(LLMProviderError):
     """Tool execution failed."""
 
 
-
 class UnsupportedFeatureError(LLMProviderError):
     """Provider doesn't support requested feature."""
-
 
 
 class StreamingError(LLMProviderError):
     """Streaming operation failed."""
 
 
-
 class ConversationNotFoundError(LLMProviderError):
     """Conversation doesn't exist."""
 
 
-
 class ConversationExpiredError(LLMProviderError):
     """Conversation has expired."""
-
 
 
 class EmptyAgentResponseError(LLMProviderError):
@@ -159,9 +142,7 @@ class EmptyAgentResponseError(LLMProviderError):
         Args:
             work_item_id: ID of the work item the agent was responding to
         """
-        super().__init__(
-            f"Agent returned empty response for work item: {work_item_id}"
-        )
+        super().__init__(f"Agent returned empty response for work item: {work_item_id}")
         self.work_item_id = work_item_id
 
 
@@ -172,10 +153,8 @@ class RepositoryError(PortError):
     """Repository operation failed."""
 
 
-
 class MergeConflictError(RepositoryError):
     """Merge conflict detected."""
-
 
 
 # Container Errors
@@ -185,25 +164,20 @@ class ContainerError(PortError):
     """Container operation failed."""
 
 
-
 class ContainerExecutionError(ContainerError):
     """Container execution failed."""
-
 
 
 class ContainerTimeoutError(ContainerError):
     """Container execution timed out."""
 
 
-
 class ImageNotFoundError(ContainerError):
     """Container image doesn't exist."""
 
 
-
 class ContainerNotRunningError(ContainerError):
     """Container is not running."""
-
 
 
 # Event Store Errors
@@ -213,15 +187,12 @@ class EventStoreError(PortError):
     """Event store operation failed."""
 
 
-
 class StreamNotFoundError(EventStoreError):
     """Event stream doesn't exist."""
 
 
-
 class SnapshotNotFoundError(EventStoreError):
     """Snapshot doesn't exist."""
-
 
 
 # Storage Errors
@@ -231,13 +202,11 @@ class StorageError(PortError):
     """Storage operation failed."""
 
 
-
 # Metrics Errors
 
 
 class MetricsError(PortError):
     """Metrics operation failed."""
-
 
 
 # Notifier Errors
@@ -247,20 +216,16 @@ class NotificationError(PortError):
     """Notification operation failed."""
 
 
-
 class UnsupportedChannelError(NotificationError):
     """Notification channel not supported."""
-
 
 
 class ChannelNotFoundError(NotificationError):
     """Notification channel doesn't exist."""
 
 
-
 class TemplateNotFoundError(NotificationError):
     """Notification template doesn't exist."""
-
 
 
 class MetricNotFoundError(MetricsError):

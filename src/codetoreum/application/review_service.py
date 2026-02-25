@@ -134,7 +134,7 @@ class ReviewService:
             logger.error(
                 f"Failed to persist review cycle creation events: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_REVIEW_CREATE_EVENTSTORE_FAILURE"}
+                extra={"error_id": "ERR_REVIEW_CREATE_EVENTSTORE_FAILURE"},
             )
             # Clear any pending events to maintain consistency
             if review_cycle:
@@ -144,7 +144,7 @@ class ReviewService:
             logger.error(
                 f"Failed to create review cycle (validation error): {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_REVIEW_CREATE_VALIDATION_FAILURE"}
+                extra={"error_id": "ERR_REVIEW_CREATE_VALIDATION_FAILURE"},
             )
             raise
 
@@ -181,10 +181,7 @@ class ReviewService:
                 await self.event_store.append(event.aggregate_id, [event])
             review_cycle.clear_events()
 
-            logger.info(
-                f"Started iteration {review_cycle.current_iteration} for "
-                f"review cycle {review_cycle.id}"
-            )
+            logger.info(f"Started iteration {review_cycle.current_iteration} for review cycle {review_cycle.id}")
 
             return ReviewCycleResult(
                 success=True,
@@ -196,17 +193,16 @@ class ReviewService:
             logger.error(
                 f"Failed to persist iteration start events for cycle {review_cycle.id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_REVIEW_ITERATION_START_EVENTSTORE_FAILURE"}
+                extra={"error_id": "ERR_REVIEW_ITERATION_START_EVENTSTORE_FAILURE"},
             )
             # Clear any pending events to maintain consistency
             review_cycle.clear_events()
             raise
         except DomainError as e:
             logger.error(
-                f"Failed to start iteration for cycle {review_cycle.id} "
-                f"(validation error): {e}",
+                f"Failed to start iteration for cycle {review_cycle.id} (validation error): {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_REVIEW_ITERATION_START_VALIDATION_FAILURE"}
+                extra={"error_id": "ERR_REVIEW_ITERATION_START_VALIDATION_FAILURE"},
             )
             raise
 
@@ -264,20 +260,18 @@ class ReviewService:
 
         except EventStoreError as e:
             logger.error(
-                f"Failed to persist review submission events for cycle "
-                f"{review_cycle.id}: {e}",
+                f"Failed to persist review submission events for cycle {review_cycle.id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_REVIEW_SUBMIT_EVENTSTORE_FAILURE"}
+                extra={"error_id": "ERR_REVIEW_SUBMIT_EVENTSTORE_FAILURE"},
             )
             # Clear any pending events to maintain consistency
             review_cycle.clear_events()
             raise
         except DomainError as e:
             logger.error(
-                f"Failed to submit review for cycle {review_cycle.id} "
-                f"(validation error): {e}",
+                f"Failed to submit review for cycle {review_cycle.id} (validation error): {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_REVIEW_SUBMIT_VALIDATION_FAILURE"}
+                extra={"error_id": "ERR_REVIEW_SUBMIT_VALIDATION_FAILURE"},
             )
             raise
 
@@ -315,15 +309,13 @@ class ReviewService:
                 logger.warning(
                     f"Review cycle {review_cycle.id} reached max iterations "
                     f"({review_cycle.max_iterations}), escalating to human",
-                    extra={"error_id": "ERR_REVIEW_MAX_ITERATIONS_REACHED"}
+                    extra={"error_id": "ERR_REVIEW_MAX_ITERATIONS_REACHED"},
                 )
                 return True
 
         return False
 
-    async def complete_cycle(
-        self, review_cycle: ReviewCycle, approved: bool
-    ) -> ReviewCompletionResult:
+    async def complete_cycle(self, review_cycle: ReviewCycle, approved: bool) -> ReviewCompletionResult:
         """
         Complete a review cycle.
 
@@ -379,7 +371,7 @@ class ReviewService:
 
                     logger.warning(
                         f"Review cycle {review_cycle.id} escalated to human: {reason}",
-                        extra={"error_id": "ERR_REVIEW_ESCALATED_TO_HUMAN"}
+                        extra={"error_id": "ERR_REVIEW_ESCALATED_TO_HUMAN"},
                     )
 
                 # Return escalation result (either just escalated or already was)
@@ -392,8 +384,7 @@ class ReviewService:
                 )
             # Not complete, needs another iteration
             logger.info(
-                f"Review cycle {review_cycle.id} needs maker revision "
-                f"(iteration {review_cycle.current_iteration})"
+                f"Review cycle {review_cycle.id} needs maker revision (iteration {review_cycle.current_iteration})"
             )
 
             return ReviewCompletionResult(
@@ -406,20 +397,18 @@ class ReviewService:
 
         except EventStoreError as e:
             logger.error(
-                f"Failed to persist review completion events for cycle "
-                f"{review_cycle.id}: {e}",
+                f"Failed to persist review completion events for cycle {review_cycle.id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_REVIEW_COMPLETE_EVENTSTORE_FAILURE"}
+                extra={"error_id": "ERR_REVIEW_COMPLETE_EVENTSTORE_FAILURE"},
             )
             # Clear any pending events to maintain consistency
             review_cycle.clear_events()
             raise
         except DomainError as e:
             logger.error(
-                f"Failed to complete review cycle {review_cycle.id} "
-                f"(validation error): {e}",
+                f"Failed to complete review cycle {review_cycle.id} (validation error): {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_REVIEW_COMPLETE_VALIDATION_FAILURE"}
+                extra={"error_id": "ERR_REVIEW_COMPLETE_VALIDATION_FAILURE"},
             )
             raise
 
@@ -450,8 +439,6 @@ class ReviewService:
             }
             if latest_feedback
             else None,
-            "final_decision": review_cycle.final_decision.value
-            if review_cycle.final_decision
-            else None,
+            "final_decision": review_cycle.final_decision.value if review_cycle.final_decision else None,
             "escalation_reason": review_cycle.escalation_reason,
         }

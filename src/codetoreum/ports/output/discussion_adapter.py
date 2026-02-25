@@ -151,9 +151,7 @@ class IDiscussionAdapter(IEventEmitter, ABC):
     # Work-Item-Specific Monitoring
 
     @abstractmethod
-    def start_monitoring(
-        self, work_item_id: str, config: DiscussionMonitoringConfig
-    ) -> None:
+    def start_monitoring(self, work_item_id: str, config: DiscussionMonitoringConfig) -> None:
         """Start monitoring a specific work item for new comments.
 
         Enables change detection for a particular work item's discussion thread.

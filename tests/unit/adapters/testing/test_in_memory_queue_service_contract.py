@@ -4,7 +4,6 @@ This test class verifies that InMemoryQueueService satisfies all
 IPipelineQueueService contract requirements.
 """
 
-
 from codetoreum.adapters.testing.in_memory_queue_service import InMemoryQueueService
 from tests.unit.ports.output.test_pipeline_queue_service_contract import (
     TestPipelineQueueServiceContract,

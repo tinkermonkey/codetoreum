@@ -14,6 +14,7 @@ from typing import Any
 @dataclass
 class ProjectConfigInfo:
     """Project configuration information"""
+
     id: str
     name: str
     description: str | None
@@ -31,6 +32,7 @@ class ProjectConfigInfo:
 @dataclass
 class AgentConfigInfo:
     """Agent configuration information"""
+
     project_id: str
     agent_name: str
     display_name: str | None
@@ -52,6 +54,7 @@ class AgentConfigInfo:
 @dataclass
 class PipelineConfigInfo:
     """Pipeline configuration information"""
+
     id: str
     project_id: str
     name: str
@@ -66,6 +69,7 @@ class PipelineConfigInfo:
 @dataclass
 class ConfigVersionInfo:
     """Configuration version history entry"""
+
     version: int
     created_at: datetime
     created_by: str | None
@@ -76,6 +80,7 @@ class ConfigVersionInfo:
 @dataclass
 class ConfigSearchResult:
     """Configuration search result"""
+
     config_id: str
     config_type: str  # "project", "agent", "pipeline"
     name: str
@@ -87,6 +92,7 @@ class ConfigSearchResult:
 @dataclass
 class ConfigSearchResults:
     """List of configuration search results"""
+
     results: list[ConfigSearchResult]
     total_count: int
     query: str
@@ -96,6 +102,7 @@ class ConfigSearchResults:
 @dataclass
 class PaginationParams:
     """Pagination parameters"""
+
     offset: int = 0
     limit: int = 20
 
@@ -109,11 +116,7 @@ class IConfigurationQueryPort(ABC):
     """
 
     @abstractmethod
-    async def get_project_config(
-        self,
-        project_id: str,
-        include_secrets: bool = False
-    ) -> ProjectConfigInfo:
+    async def get_project_config(self, project_id: str, include_secrets: bool = False) -> ProjectConfigInfo:
         """
         Get project configuration by ID.
 
@@ -129,11 +132,7 @@ class IConfigurationQueryPort(ABC):
         """
 
     @abstractmethod
-    async def get_project_config_by_name(
-        self,
-        project_name: str,
-        include_secrets: bool = False
-    ) -> ProjectConfigInfo:
+    async def get_project_config_by_name(self, project_name: str, include_secrets: bool = False) -> ProjectConfigInfo:
         """
         Get project configuration by name.
 
@@ -149,11 +148,7 @@ class IConfigurationQueryPort(ABC):
         """
 
     @abstractmethod
-    async def get_agent_config(
-        self,
-        project_id: str,
-        agent_name: str
-    ) -> AgentConfigInfo:
+    async def get_agent_config(self, project_id: str, agent_name: str) -> AgentConfigInfo:
         """
         Get agent configuration.
 
@@ -170,11 +165,7 @@ class IConfigurationQueryPort(ABC):
         """
 
     @abstractmethod
-    async def get_pipeline_config(
-        self,
-        project_id: str,
-        pipeline_name: str
-    ) -> PipelineConfigInfo:
+    async def get_pipeline_config(self, project_id: str, pipeline_name: str) -> PipelineConfigInfo:
         """
         Get pipeline configuration.
 
@@ -191,10 +182,7 @@ class IConfigurationQueryPort(ABC):
         """
 
     @abstractmethod
-    async def list_projects(
-        self,
-        pagination: PaginationParams | None = None
-    ) -> list[ProjectConfigInfo]:
+    async def list_projects(self, pagination: PaginationParams | None = None) -> list[ProjectConfigInfo]:
         """
         List all projects.
 
@@ -207,9 +195,7 @@ class IConfigurationQueryPort(ABC):
 
     @abstractmethod
     async def list_agents(
-        self,
-        project_id: str | None = None,
-        pagination: PaginationParams | None = None
+        self, project_id: str | None = None, pagination: PaginationParams | None = None
     ) -> list[AgentConfigInfo]:
         """
         List agents. When project_id is None, returns agents across all projects.
@@ -227,9 +213,7 @@ class IConfigurationQueryPort(ABC):
 
     @abstractmethod
     async def list_pipelines(
-        self,
-        project_id: str | None = None,
-        pagination: PaginationParams | None = None
+        self, project_id: str | None = None, pagination: PaginationParams | None = None
     ) -> list[PipelineConfigInfo]:
         """
         List pipelines. When project_id is None, returns pipelines across all projects.
@@ -251,7 +235,7 @@ class IConfigurationQueryPort(ABC):
         query: str,
         config_type: str | None = None,
         project_id: str | None = None,
-        pagination: PaginationParams | None = None
+        pagination: PaginationParams | None = None,
     ) -> ConfigSearchResults:
         """
         Search across all configurations using full-text search.
@@ -272,10 +256,7 @@ class IConfigurationQueryPort(ABC):
 
     @abstractmethod
     async def get_config_version_history(
-        self,
-        config_id: str,
-        config_type: str,
-        limit: int = 10
+        self, config_id: str, config_type: str, limit: int = 10
     ) -> list[ConfigVersionInfo]:
         """
         Get version history for a configuration.
@@ -293,12 +274,7 @@ class IConfigurationQueryPort(ABC):
         """
 
     @abstractmethod
-    async def get_config_version(
-        self,
-        config_id: str,
-        config_type: str,
-        version: int
-    ) -> dict[str, Any]:
+    async def get_config_version(self, config_id: str, config_type: str, version: int) -> dict[str, Any]:
         """
         Get a specific version of a configuration.
 
@@ -315,11 +291,7 @@ class IConfigurationQueryPort(ABC):
         """
 
     @abstractmethod
-    async def count_configs(
-        self,
-        config_type: str | None = None,
-        project_id: str | None = None
-    ) -> int:
+    async def count_configs(self, config_type: str | None = None, project_id: str | None = None) -> int:
         """
         Count configurations.
 

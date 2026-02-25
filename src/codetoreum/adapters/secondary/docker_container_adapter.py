@@ -146,16 +146,12 @@ class DockerContainerAdapter(IContainer):
             # Validate container path (should be absolute)
             if not container_path.startswith("/"):
                 msg = f"Container path must be absolute (start with /): {container_path}"
-                raise ValidationError(
-                    msg
-                )
+                raise ValidationError(msg)
 
             # Validate mode
             if mode not in ["rw", "ro"]:
                 msg = f"Invalid mount mode '{mode}'. Must be 'rw' (read-write) or 'ro' (read-only)"
-                raise ValidationError(
-                    msg
-                )
+                raise ValidationError(msg)
 
             docker_volumes[str(resolved_host_path)] = {
                 "bind": container_path,
@@ -270,8 +266,8 @@ class DockerContainerAdapter(IContainer):
                                     exc_info=True,
                                     extra={
                                         "error_id": "ERR_CONTAINER_KILL_FAILED",
-                                        "container_id": container.short_id
-                                    }
+                                        "container_id": container.short_id,
+                                    },
                                 )
                             msg = f"Container execution timed out after {timeout}s"
                             raise ContainerTimeoutError(msg)
@@ -330,8 +326,8 @@ class DockerContainerAdapter(IContainer):
                             exc_info=True,
                             extra={
                                 "error_id": "ERR_CONTAINER_CLEANUP_FAILED",
-                                "container_id": container.short_id if container else "unknown"
-                            }
+                                "container_id": container.short_id if container else "unknown",
+                            },
                         )
 
                 if "timeout" in str(e).lower():
@@ -714,8 +710,8 @@ class DockerContainerAdapter(IContainer):
                             exc_info=True,
                             extra={
                                 "error_id": "ERR_DATE_PARSE_FAILED",
-                                "date_value": state.get("StartedAt")
-                            }
+                                "date_value": state.get("StartedAt"),
+                            },
                         )
 
                 finished_at = None
@@ -728,8 +724,8 @@ class DockerContainerAdapter(IContainer):
                             exc_info=True,
                             extra={
                                 "error_id": "ERR_DATE_PARSE_FAILED",
-                                "date_value": state.get("FinishedAt")
-                            }
+                                "date_value": state.get("FinishedAt"),
+                            },
                         )
 
                 try:
@@ -857,8 +853,8 @@ class DockerContainerAdapter(IContainer):
                                 exc_info=True,
                                 extra={
                                     "error_id": "ERR_CONTAINER_DATE_PARSE_STARTED_AT",
-                                    "date_value": state.get("StartedAt")
-                                }
+                                    "date_value": state.get("StartedAt"),
+                                },
                             )
 
                     finished_at = None
@@ -871,8 +867,8 @@ class DockerContainerAdapter(IContainer):
                                 exc_info=True,
                                 extra={
                                     "error_id": "ERR_CONTAINER_DATE_PARSE_FINISHED_AT",
-                                    "date_value": state.get("FinishedAt")
-                                }
+                                    "date_value": state.get("FinishedAt"),
+                                },
                             )
 
                     try:
@@ -883,8 +879,8 @@ class DockerContainerAdapter(IContainer):
                             exc_info=True,
                             extra={
                                 "error_id": "ERR_CONTAINER_DATE_PARSE_CREATED",
-                                "date_value": attrs.get("Created")
-                            }
+                                "date_value": attrs.get("Created"),
+                            },
                         )
                         created_at = datetime.now(UTC)  # Fallback
 
@@ -927,8 +923,6 @@ class DockerContainerAdapter(IContainer):
 
         def _pull():
             try:
-                full_image = f"{image}:{tag}"
-
                 if stream_callback:
                     for line in client.api.pull(image, tag=tag, stream=True, decode=True):
                         stream_callback(str(line))
@@ -1151,9 +1145,7 @@ class DockerContainerAdapter(IContainer):
                             logger.warning(
                                 f"Error closing Docker API session: {e}",
                                 exc_info=True,
-                                extra={
-                                    "error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR
-                                }
+                                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
                             )
                     # Close adapters (which hold socket connections)
                     if hasattr(api, "_adapters") and api._adapters:
@@ -1165,9 +1157,7 @@ class DockerContainerAdapter(IContainer):
                             logger.warning(
                                 f"Error closing Docker API adapters: {e}",
                                 exc_info=True,
-                                extra={
-                                    "error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR
-                                }
+                                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
                             )
                     if hasattr(api, "close"):
                         try:
@@ -1176,17 +1166,13 @@ class DockerContainerAdapter(IContainer):
                             logger.warning(
                                 f"Error closing Docker API: {e}",
                                 exc_info=True,
-                                extra={
-                                    "error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR
-                                }
+                                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
                             )
             except Exception as e:
                 logger.warning(
                     f"Error cleaning up Docker API client: {e}",
                     exc_info=True,
-                    extra={
-                        "error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR
-                    }
+                    extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
                 )
 
             try:
@@ -1195,9 +1181,7 @@ class DockerContainerAdapter(IContainer):
                 logger.warning(
                     f"Error closing Docker client: {e}",
                     exc_info=True,
-                    extra={
-                        "error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR
-                    }
+                    extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
                 )
             finally:
                 self._docker_client = None
@@ -1226,6 +1210,6 @@ class DockerContainerAdapter(IContainer):
             # but log for observability
             logger.debug(
                 f"Cleanup error in docker container context manager ({type(e).__name__}: {e}), suppressed to avoid masking original exception",
-                exc_info=True
+                exc_info=True,
             )
         return False  # Don't suppress exceptions

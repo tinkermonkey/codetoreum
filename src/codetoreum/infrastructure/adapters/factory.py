@@ -114,14 +114,14 @@ class AdapterFactory:
             description="GitHub Issues and Projects integration",
             version="1.0.0",
             tags=["production", "github", "issues"],
-            set_as_default=True
+            set_as_default=True,
         )
         self._ticket_system_registry.register(
             name="in_memory",
             adapter_type=InMemoryTicketAdapter,
             description="In-memory ticket system for testing",
             version="1.0.0",
-            tags=["testing", "simulation", "mock"]
+            tags=["testing", "simulation", "mock"],
         )
 
         # LLM Provider Adapters
@@ -131,14 +131,14 @@ class AdapterFactory:
             description="Claude Code CLI integration",
             version="1.0.0",
             tags=["production", "claude", "anthropic"],
-            set_as_default=True
+            set_as_default=True,
         )
         self._llm_provider_registry.register(
             name="mock",
             adapter_type=MockLLMAdapter,
             description="Mock LLM provider for testing",
             version="1.0.0",
-            tags=["testing", "simulation", "mock"]
+            tags=["testing", "simulation", "mock"],
         )
 
         # Container Adapters
@@ -148,14 +148,14 @@ class AdapterFactory:
             description="Docker container runtime",
             version="1.0.0",
             tags=["production", "docker"],
-            set_as_default=True
+            set_as_default=True,
         )
         self._container_registry.register(
             name="fake",
             adapter_type=FakeContainerAdapter,
             description="Fake container adapter for testing",
             version="1.0.0",
-            tags=["testing", "simulation", "mock"]
+            tags=["testing", "simulation", "mock"],
         )
 
         # Repository Adapters
@@ -165,14 +165,14 @@ class AdapterFactory:
             description="Git repository operations",
             version="1.0.0",
             tags=["production", "git"],
-            set_as_default=True
+            set_as_default=True,
         )
         self._repository_registry.register(
             name="in_memory",
             adapter_type=InMemoryRepositoryAdapter,
             description="In-memory repository for testing",
             version="1.0.0",
-            tags=["testing", "simulation", "mock"]
+            tags=["testing", "simulation", "mock"],
         )
 
         # Event Store Adapters
@@ -182,7 +182,7 @@ class AdapterFactory:
             description="In-memory event store",
             version="1.0.0",
             tags=["testing", "simulation", "production"],
-            set_as_default=True
+            set_as_default=True,
         )
 
     # Registry access methods
@@ -265,7 +265,7 @@ class AdapterFactory:
         adapter_name: str | None = None,
         adapter_config: Any | None = None,
         resilience_config: ServiceResilienceConfig | None = None,
-        **kwargs
+        **kwargs,
     ) -> ITicketSystem:
         """
         Create a ticket system adapter instance.
@@ -309,9 +309,7 @@ class AdapterFactory:
                         message = f"resilience_config must have to_dict() method, got {type(resilience_config)}"
                         raise TypeError(message)
                 else:
-                    default_config = self._get_resilience_config(
-                        "ticket_system", GITHUB_RESILIENCE_CONFIG
-                    )
+                    default_config = self._get_resilience_config("ticket_system", GITHUB_RESILIENCE_CONFIG)
                     if hasattr(default_config, "to_dict"):
                         service_config = default_config.to_dict()
                     else:
@@ -321,7 +319,10 @@ class AdapterFactory:
                     adapter, service_config=service_config
                 )
             except Exception as e:
-                logger.error(f"Failed to apply resilience to ticket system adapter: {e}", extra={"error_id": "ERR_CONFIGURATION_ERROR"})
+                logger.error(
+                    f"Failed to apply resilience to ticket system adapter: {e}",
+                    extra={"error_id": "ERR_CONFIGURATION_ERROR"},
+                )
                 raise
 
         return adapter
@@ -331,7 +332,7 @@ class AdapterFactory:
         adapter_name: str | None = None,
         adapter_config: Any | None = None,
         resilience_config: ServiceResilienceConfig | None = None,
-        **kwargs
+        **kwargs,
     ) -> ILLMProvider:
         """
         Create an LLM provider adapter instance.
@@ -375,19 +376,18 @@ class AdapterFactory:
                         message = f"resilience_config must have to_dict() method, got {type(resilience_config)}"
                         raise TypeError(message)
                 else:
-                    default_config = self._get_resilience_config(
-                        "llm_provider", CLAUDE_RESILIENCE_CONFIG
-                    )
+                    default_config = self._get_resilience_config("llm_provider", CLAUDE_RESILIENCE_CONFIG)
                     if hasattr(default_config, "to_dict"):
                         service_config = default_config.to_dict()
                     else:
                         service_config = None
 
-                adapter = self._resilience_factory.create_resilient_llm_provider(
-                    adapter, service_config=service_config
-                )
+                adapter = self._resilience_factory.create_resilient_llm_provider(adapter, service_config=service_config)
             except Exception as e:
-                logger.error(f"Failed to apply resilience to LLM provider adapter: {e}", extra={"error_id": "ERR_CONFIGURATION_ERROR"})
+                logger.error(
+                    f"Failed to apply resilience to LLM provider adapter: {e}",
+                    extra={"error_id": "ERR_CONFIGURATION_ERROR"},
+                )
                 raise
 
         return adapter
@@ -397,7 +397,7 @@ class AdapterFactory:
         adapter_name: str | None = None,
         adapter_config: Any | None = None,
         resilience_config: ServiceResilienceConfig | None = None,
-        **kwargs
+        **kwargs,
     ) -> IContainer:
         """
         Create a container adapter instance.
@@ -441,19 +441,18 @@ class AdapterFactory:
                         message = f"resilience_config must have to_dict() method, got {type(resilience_config)}"
                         raise TypeError(message)
                 else:
-                    default_config = self._get_resilience_config(
-                        "container", CONTAINER_RESILIENCE_CONFIG
-                    )
+                    default_config = self._get_resilience_config("container", CONTAINER_RESILIENCE_CONFIG)
                     if hasattr(default_config, "to_dict"):
                         service_config = default_config.to_dict()
                     else:
                         service_config = None
 
-                adapter = self._resilience_factory.create_resilient_container(
-                    adapter, service_config=service_config
-                )
+                adapter = self._resilience_factory.create_resilient_container(adapter, service_config=service_config)
             except Exception as e:
-                logger.error(f"Failed to apply resilience to container adapter: {e}", extra={"error_id": "ERR_CONFIGURATION_ERROR"})
+                logger.error(
+                    f"Failed to apply resilience to container adapter: {e}",
+                    extra={"error_id": "ERR_CONFIGURATION_ERROR"},
+                )
                 raise
 
         return adapter
@@ -463,7 +462,7 @@ class AdapterFactory:
         adapter_name: str | None = None,
         adapter_config: Any | None = None,
         resilience_config: ServiceResilienceConfig | None = None,
-        **kwargs
+        **kwargs,
     ) -> IRepository:
         """
         Create a repository adapter instance.
@@ -507,28 +506,23 @@ class AdapterFactory:
                         message = f"resilience_config must have to_dict() method, got {type(resilience_config)}"
                         raise TypeError(message)
                 else:
-                    default_config = self._get_resilience_config(
-                        "repository", REPOSITORY_RESILIENCE_CONFIG
-                    )
+                    default_config = self._get_resilience_config("repository", REPOSITORY_RESILIENCE_CONFIG)
                     if hasattr(default_config, "to_dict"):
                         service_config = default_config.to_dict()
                     else:
                         service_config = None
 
-                adapter = self._resilience_factory.create_resilient_repository(
-                    adapter, service_config=service_config
-                )
+                adapter = self._resilience_factory.create_resilient_repository(adapter, service_config=service_config)
             except Exception as e:
-                logger.error(f"Failed to apply resilience to repository adapter: {e}", extra={"error_id": "ERR_CONFIGURATION_ERROR"})
+                logger.error(
+                    f"Failed to apply resilience to repository adapter: {e}",
+                    extra={"error_id": "ERR_CONFIGURATION_ERROR"},
+                )
                 raise
 
         return adapter
 
-    def create_event_store(
-        self,
-        adapter_name: str | None = None,
-        **kwargs
-    ) -> IEventStore:
+    def create_event_store(self, adapter_name: str | None = None, **kwargs) -> IEventStore:
         """
         Create an event store adapter instance.
 
@@ -564,9 +558,7 @@ class AdapterFactory:
         return adapter
 
     def _get_resilience_config(
-        self,
-        service_type: str,
-        default_config: ServiceResilienceConfig
+        self, service_type: str, default_config: ServiceResilienceConfig
     ) -> ServiceResilienceConfig:
         """
         Get resilience configuration for a service type.
@@ -578,8 +570,7 @@ class AdapterFactory:
         Returns:
             Resilience configuration
         """
-        if (self._config.custom_resilience_configs and
-                service_type in self._config.custom_resilience_configs):
+        if self._config.custom_resilience_configs and service_type in self._config.custom_resilience_configs:
             return self._config.custom_resilience_configs[service_type]
         return default_config
 

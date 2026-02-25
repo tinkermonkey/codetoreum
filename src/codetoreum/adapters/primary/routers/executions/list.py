@@ -40,7 +40,10 @@ def register_list_endpoints(
         },
     )
     async def list_executions(
-        status: str | None = Query(None, description="Filter by status (pending, initialized, running, completed, failed, timeout, cancelled)"),
+        status: str | None = Query(
+            None,
+            description="Filter by status (pending, initialized, running, completed, failed, timeout, cancelled)",
+        ),
         agent_id: str | None = Query(None, description="Filter by agent ID"),
         work_item_id: str | None = Query(None, description="Filter by work item ID"),
         workflow_id: str | None = Query(None, description="Filter by workflow ID"),
@@ -48,8 +51,16 @@ def register_list_endpoints(
         start_date: str | None = Query(None, description="Filter by start date (ISO 8601 format)"),
         end_date: str | None = Query(None, description="Filter by end date (ISO 8601 format)"),
         offset: int = Query(DEFAULT_OFFSET, ge=0, description="Offset for pagination"),
-        limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description=f"Limit for pagination (max {MAX_PAGE_SIZE})"),
-        sort_by: str = Query("initialized_at", description="Sort field (initialized_at, started_at, completed_at, duration_seconds, status)"),
+        limit: int = Query(
+            DEFAULT_PAGE_SIZE,
+            ge=1,
+            le=MAX_PAGE_SIZE,
+            description=f"Limit for pagination (max {MAX_PAGE_SIZE})",
+        ),
+        sort_by: str = Query(
+            "initialized_at",
+            description="Sort field (initialized_at, started_at, completed_at, duration_seconds, status)",
+        ),
         sort_order: str = Query("desc", description="Sort order (asc, desc)"),
     ) -> ExecutionListResponse:
         """

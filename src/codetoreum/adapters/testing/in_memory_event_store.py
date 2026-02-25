@@ -77,9 +77,7 @@ class InMemoryEventStore(IEventStore):
                 current_version = len(self._streams.get(stream_id, []))
                 if current_version != expected_version:
                     msg = f"Expected version {expected_version}, but stream is at version {current_version}"
-                    raise ConcurrencyConflictError(
-                        msg
-                    )
+                    raise ConcurrencyConflictError(msg)
 
             # Initialize stream if it doesn't exist
             if stream_id not in self._streams:
@@ -139,7 +137,7 @@ class InMemoryEventStore(IEventStore):
 
             # Apply version filters
             if to_version is not None:
-                events = events[from_version:to_version + 1]
+                events = events[from_version : to_version + 1]
             else:
                 events = events[from_version:]
 
@@ -465,7 +463,7 @@ class InMemoryEventStore(IEventStore):
 
             # Apply version filters
             if to_version is not None:
-                events = events[from_version:to_version + 1]
+                events = events[from_version : to_version + 1]
             else:
                 events = events[from_version:]
 
@@ -653,27 +651,18 @@ class InMemoryEventStore(IEventStore):
             reverse = sort_order == "desc"
 
             if sort_by == "timestamp":
-                matching_streams.sort(
-                    key=lambda x: x[1].occurred_at,
-                    reverse=reverse
-                )
+                matching_streams.sort(key=lambda x: x[1].occurred_at, reverse=reverse)
             elif sort_by == "stream_version":
-                matching_streams.sort(
-                    key=lambda x: len(self._streams[x[0]]),
-                    reverse=reverse
-                )
+                matching_streams.sort(key=lambda x: len(self._streams[x[0]]), reverse=reverse)
             else:
                 # Default to timestamp
-                matching_streams.sort(
-                    key=lambda x: x[1].occurred_at,
-                    reverse=reverse
-                )
+                matching_streams.sort(key=lambda x: x[1].occurred_at, reverse=reverse)
 
             # Extract stream IDs
             all_stream_ids = [stream_id for stream_id, _ in matching_streams]
             total_count = len(all_stream_ids)
 
             # Apply pagination
-            paginated_stream_ids = all_stream_ids[offset:offset + limit]
+            paginated_stream_ids = all_stream_ids[offset : offset + limit]
 
             return paginated_stream_ids, total_count

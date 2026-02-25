@@ -73,9 +73,7 @@ def safe_path_join(base_path: str, user_path: str) -> Path:
 
 
 async def validate_upload(
-    file: UploadFile,
-    max_size: int = MAX_FILE_SIZE,
-    allowed_types: set[str] | None = None
+    file: UploadFile, max_size: int = MAX_FILE_SIZE, allowed_types: set[str] | None = None
 ) -> None:
     """
     Validate uploaded file for security.
@@ -99,22 +97,18 @@ async def validate_upload(
     if file.content_type not in allowed_types:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid file type '{file.content_type}'. "
-                   f"Allowed types: {', '.join(sorted(allowed_types))}"
+            detail=f"Invalid file type '{file.content_type}'. Allowed types: {', '.join(sorted(allowed_types))}",
         )
 
     # Check filename for path traversal
     if file.filename and ("/" in file.filename or "\\" in file.filename or ".." in file.filename):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid filename: path separators not allowed"
-        )
+        raise HTTPException(status_code=400, detail="Invalid filename: path separators not allowed")
 
     # Validate filename pattern
     if file.filename and not SAFE_FILENAME_PATTERN.match(file.filename):
         raise HTTPException(
             status_code=400,
-            detail="Invalid filename: only alphanumeric, underscore, hyphen, and dot allowed"
+            detail="Invalid filename: only alphanumeric, underscore, hyphen, and dot allowed",
         )
 
     # Check file size
@@ -125,22 +119,14 @@ async def validate_upload(
     if size > max_size:
         raise HTTPException(
             status_code=400,
-            detail=f"File too large. Maximum size: {max_size / (1024*1024):.1f} MB"
+            detail=f"File too large. Maximum size: {max_size / (1024 * 1024):.1f} MB",
         )
 
     if size == 0:
-        raise HTTPException(
-            status_code=400,
-            detail="File is empty"
-        )
+        raise HTTPException(status_code=400, detail="File is empty")
 
 
-def sanitize_string(
-    value: str,
-    max_length: int | None = None,
-    strip: bool = True,
-    allow_empty: bool = False
-) -> str:
+def sanitize_string(value: str, max_length: int | None = None, strip: bool = True, allow_empty: bool = False) -> str:
     """
     Sanitize string input.
 
@@ -196,7 +182,10 @@ def validate_env_var_name(name: str) -> str:
     name = sanitize_string(name, max_length=255)
 
     if not SAFE_ENV_VAR_NAME_PATTERN.match(name):
-        message = "Invalid environment variable name. Must start with uppercase letter " "and contain only uppercase letters, digits, and underscores."
+        message = (
+            "Invalid environment variable name. Must start with uppercase letter "
+            "and contain only uppercase letters, digits, and underscores."
+        )
         raise InvalidInputError(message)
 
     return name
@@ -224,7 +213,10 @@ def validate_agent_name(name: str) -> str:
     name = sanitize_string(name, max_length=100)
 
     if not SAFE_AGENT_NAME_PATTERN.match(name):
-        message = "Invalid agent name. Must start with lowercase letter " "and contain only lowercase letters, digits, and underscores."
+        message = (
+            "Invalid agent name. Must start with lowercase letter "
+            "and contain only lowercase letters, digits, and underscores."
+        )
         raise InvalidInputError(message)
 
     return name
@@ -257,7 +249,9 @@ def validate_labels(labels: list[str], max_labels: int = 20) -> list[str]:
         label_str = sanitize_string(label, max_length=100)
 
         if not SAFE_LABEL_PATTERN.match(label_str):
-            message = f"Invalid label '{label_str}'. Only alphanumeric, " "underscore, hyphen, dot, colon, and slash allowed."
+            message = (
+                f"Invalid label '{label_str}'. Only alphanumeric, underscore, hyphen, dot, colon, and slash allowed."
+            )
             raise InvalidInputError(message)
 
         validated.append(label_str)
@@ -298,7 +292,7 @@ def validate_url(url: str, allowed_schemes: set[str] | None = None) -> str:
         raise InvalidInputError(message)
 
     if parsed.scheme not in allowed_schemes:
-        message = f"Invalid URL scheme '{parsed.scheme}'. " f"Allowed: {', '.join(sorted(allowed_schemes))}"
+        message = f"Invalid URL scheme '{parsed.scheme}'. Allowed: {', '.join(sorted(allowed_schemes))}"
         raise InvalidInputError(message)
 
     if not parsed.netloc:
@@ -312,7 +306,7 @@ def validate_integer_range(
     value: int,
     min_value: int | None = None,
     max_value: int | None = None,
-    field_name: str = "value"
+    field_name: str = "value",
 ) -> int:
     """
     Validate integer is within range.
@@ -348,7 +342,7 @@ def validate_float_range(
     value: float,
     min_value: float | None = None,
     max_value: float | None = None,
-    field_name: str = "value"
+    field_name: str = "value",
 ) -> float:
     """
     Validate float is within range.
@@ -404,10 +398,7 @@ def sanitize_search_query(query: str, max_length: int = 500) -> str:
     # Keep tabs, newlines, carriage returns for readability
     # Keep search operators: -, +, *, "
     allowed_chars = set('\t\n\r-+*"')
-    query = "".join(
-        char for char in query
-        if ord(char) >= 32 or char in allowed_chars
-    )
+    query = "".join(char for char in query if ord(char) >= 32 or char in allowed_chars)
 
     # Remove multiple consecutive spaces
     query = re.sub(r"\s+", " ", query)

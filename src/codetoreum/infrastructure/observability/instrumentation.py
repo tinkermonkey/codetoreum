@@ -47,6 +47,7 @@ def _get_tracer():
         return None
     return trace.get_tracer(__name__)
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -88,8 +89,10 @@ def instrument_function(
     """
     # If OpenTelemetry is not available, return a no-op decorator
     if not OPENTELEMETRY_AVAILABLE:
+
         def decorator(func: Callable) -> Callable:
             return func
+
         return decorator
 
     def decorator(func: Callable) -> Callable:
@@ -173,8 +176,10 @@ def instrument_async_function(
     """
     # If OpenTelemetry is not available, return a no-op decorator
     if not OPENTELEMETRY_AVAILABLE:
+
         def decorator(func: Callable) -> Callable:
             return func
+
         return decorator
 
     def decorator(func: Callable) -> Callable:
@@ -240,8 +245,10 @@ def instrument_class(attributes: dict[str, Any] | None = None) -> Callable:
     """
     # If OpenTelemetry is not available, return a no-op decorator
     if not OPENTELEMETRY_AVAILABLE:
+
         def decorator(cls):
             return cls
+
         return decorator
 
     def decorator(cls):
@@ -351,9 +358,7 @@ def _extract_business_context(
                     try:
                         span.set_attribute(f"{field_name}.id", str(obj.id))
                     except Exception as e:
-                        logger.debug(
-                            f"Failed to extract {field_name}.id for {func.__name__}: {e}"
-                        )
+                        logger.debug(f"Failed to extract {field_name}.id for {func.__name__}: {e}")
 
     except Exception as e:
         # Don't fail instrumentation if context extraction fails

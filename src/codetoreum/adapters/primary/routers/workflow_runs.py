@@ -72,12 +72,20 @@ def create_workflow_runs_router(
         response_description="List of workflow runs",
     )
     async def list_workflow_runs(
-        status: str | None = Query(None, description="Filter by status (comma-separated: running,completed,failed,cancelled)"),
+        status: str | None = Query(
+            None,
+            description="Filter by status (comma-separated: running,completed,failed,cancelled)",
+        ),
         projectId: str | None = Query(None, description="Filter by project ID", alias="projectId"),
         workItemId: str | None = Query(None, description="Filter by work item ID", alias="workItemId"),
         workflowId: str | None = Query(None, description="Filter by workflow template ID", alias="workflowId"),
         offset: int = Query(DEFAULT_OFFSET, ge=0, description="Offset for pagination"),
-        limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description=f"Limit for pagination (max {MAX_PAGE_SIZE})"),
+        limit: int = Query(
+            DEFAULT_PAGE_SIZE,
+            ge=1,
+            le=MAX_PAGE_SIZE,
+            description=f"Limit for pagination (max {MAX_PAGE_SIZE})",
+        ),
         sortBy: str = Query("startedAt", description="Sort field (startedAt, completedAt, duration)", alias="sortBy"),
         sortOrder: str = Query("desc", description="Sort order (asc, desc)", alias="sortOrder"),
     ) -> WorkflowRunListResponse:
@@ -236,7 +244,12 @@ def create_workflow_runs_router(
     async def get_workflow_run_events(
         workflow_run_id: str,
         offset: int = Query(0, ge=0, description="Pagination offset"),
-        limit: int = Query(50, ge=1, le=AUDIT_EVENTS_MAX_PAGE_SIZE, description=f"Pagination limit (default 50, max {AUDIT_EVENTS_MAX_PAGE_SIZE})"),
+        limit: int = Query(
+            50,
+            ge=1,
+            le=AUDIT_EVENTS_MAX_PAGE_SIZE,
+            description=f"Pagination limit (default 50, max {AUDIT_EVENTS_MAX_PAGE_SIZE})",
+        ),
         eventTypes: str | None = Query(None, description="Filter by event types (comma-separated)", alias="eventTypes"),
         since: datetime | None = Query(None, description="ISO timestamp - events after this time"),
     ) -> WorkflowEventsListResponse:
@@ -317,7 +330,12 @@ def create_workflow_runs_router(
     async def get_workflow_run_audit(
         workflow_run_id: str,
         offset: int = Query(0, ge=0, description="Event pagination offset"),
-        limit: int = Query(100, ge=1, le=AUDIT_EVENTS_MAX_PAGE_SIZE, description=f"Event pagination limit (default 100, max {AUDIT_EVENTS_MAX_PAGE_SIZE})"),
+        limit: int = Query(
+            100,
+            ge=1,
+            le=AUDIT_EVENTS_MAX_PAGE_SIZE,
+            description=f"Event pagination limit (default 100, max {AUDIT_EVENTS_MAX_PAGE_SIZE})",
+        ),
         include_validation: bool = Query(True, description="Whether to validate event sequence (default True)"),
     ) -> WorkflowRunAuditResponse:
         """

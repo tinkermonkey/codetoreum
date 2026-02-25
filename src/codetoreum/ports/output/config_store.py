@@ -15,6 +15,7 @@ from typing import Any
 @dataclass
 class ProjectConfig:
     """Project configuration aggregate."""
+
     id: str
     name: str
     github_org: str
@@ -34,6 +35,7 @@ class ProjectConfig:
 @dataclass
 class AgentConfig:
     """Agent configuration."""
+
     project_id: str
     agent_name: str
     model: str
@@ -52,6 +54,7 @@ class AgentConfig:
 @dataclass
 class PipelineConfig:
     """Pipeline configuration."""
+
     id: str
     project_id: str
     name: str
@@ -66,6 +69,7 @@ class PipelineConfig:
 @dataclass
 class WorkflowTemplate:
     """Workflow template configuration."""
+
     id: str
     name: str
     description: str
@@ -79,6 +83,7 @@ class WorkflowTemplate:
 @dataclass
 class EnvironmentVariable:
     """Environment variable configuration."""
+
     name: str
     value: str  # Encrypted if is_secret=True
     is_secret: bool = False
@@ -92,6 +97,7 @@ class EnvironmentVariable:
 @dataclass
 class MountedCommand:
     """Mounted command configuration."""
+
     name: str
     path: str
     description: str | None = None
@@ -102,6 +108,7 @@ class MountedCommand:
 @dataclass
 class MountedSubAgent:
     """Mounted sub-agent configuration."""
+
     name: str
     config: dict[str, Any]
     description: str | None = None
@@ -112,6 +119,7 @@ class MountedSubAgent:
 @dataclass
 class ConfigVersion:
     """Configuration version metadata."""
+
     version: int
     changed_at: datetime
     changed_by: str
@@ -180,11 +188,7 @@ class IConfigStore(ABC):
         """
 
     @abstractmethod
-    async def get_agent_config(
-        self,
-        project_id: str,
-        agent_name: str
-    ) -> AgentConfig:
+    async def get_agent_config(self, project_id: str, agent_name: str) -> AgentConfig:
         """
         Get agent configuration for a project.
 
@@ -209,11 +213,7 @@ class IConfigStore(ABC):
         """
 
     @abstractmethod
-    async def get_pipeline_config(
-        self,
-        project_id: str,
-        pipeline_name: str
-    ) -> PipelineConfig:
+    async def get_pipeline_config(self, project_id: str, pipeline_name: str) -> PipelineConfig:
         """
         Get pipeline configuration.
 
@@ -295,11 +295,7 @@ class IConfigStore(ABC):
         """
 
     @abstractmethod
-    async def search_configs(
-        self,
-        query: str,
-        config_type: str | None = None
-    ) -> list[dict[str, Any]]:
+    async def search_configs(self, query: str, config_type: str | None = None) -> list[dict[str, Any]]:
         """
         Search configurations using full-text search.
 
@@ -325,11 +321,7 @@ class IConfigStore(ABC):
         """
 
     @abstractmethod
-    async def get_config_version(
-        self,
-        config_id: str,
-        version: int
-    ) -> dict[str, Any]:
+    async def get_config_version(self, config_id: str, version: int) -> dict[str, Any]:
         """
         Get specific version of a configuration.
 
@@ -345,11 +337,7 @@ class IConfigStore(ABC):
         """
 
     @abstractmethod
-    async def list_config_versions(
-        self,
-        config_id: str,
-        limit: int = 10
-    ) -> list[ConfigVersion]:
+    async def list_config_versions(self, config_id: str, limit: int = 10) -> list[ConfigVersion]:
         """
         List configuration version history.
 
@@ -374,11 +362,7 @@ class IConfigStore(ABC):
         """
 
     @abstractmethod
-    async def delete_agent_config(
-        self,
-        project_id: str,
-        agent_name: str
-    ) -> None:
+    async def delete_agent_config(self, project_id: str, agent_name: str) -> None:
         """
         Delete agent configuration.
 

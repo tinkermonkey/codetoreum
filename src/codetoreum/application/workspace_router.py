@@ -39,9 +39,7 @@ class WorkspaceRouterConfig:
     )
 
     # Workspace labels
-    discussion_labels: set[str] = field(default_factory=lambda: {
-        "discussion", "research", "question", "analysis"
-    })
+    discussion_labels: set[str] = field(default_factory=lambda: {"discussion", "research", "question", "analysis"})
 
     # Author info defaults
     default_author_name: str = "Codetoreum"
@@ -133,7 +131,7 @@ class WorkspaceRouter:
             self._logger.error(
                 f"Failed to emit event {type(event).__name__}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_WORKSPACE_EVENT_EMIT_FAILURE"}
+                extra={"error_id": "ERR_WORKSPACE_EVENT_EMIT_FAILURE"},
             )
 
     # ========================================================================
@@ -166,15 +164,10 @@ class WorkspaceRouter:
         Raises:
             ValueError: If work item or agent configuration is invalid
         """
-        self._logger.info(
-            f"Routing workspace for work_item={work_item.id}, "
-            f"agent={agent.id}, project={project.id}"
-        )
+        self._logger.info(f"Routing workspace for work_item={work_item.id}, agent={agent.id}, project={project.id}")
 
         # Check for discussion labels
-        has_discussion_label = any(
-            label.lower() in self.config.discussion_labels for label in work_item.labels
-        )
+        has_discussion_label = any(label.lower() in self.config.discussion_labels for label in work_item.labels)
 
         # Check if agent makes code changes
         agent_makes_code_changes = agent.makes_code_changes
@@ -197,9 +190,7 @@ class WorkspaceRouter:
             )
         # Issue workspace with feature branch
         branch_name = self._generate_branch_name(work_item, project)
-        self._logger.info(
-            f"Routing to ISSUE workspace with branch={branch_name}"
-        )
+        self._logger.info(f"Routing to ISSUE workspace with branch={branch_name}")
         return WorkspaceContext.for_issue(
             project_id=project.id,
             work_item_id=work_item.id,
@@ -229,12 +220,12 @@ class WorkspaceRouter:
             self._logger.warning(
                 f"Code-changing agent {agent.id} assigned to discussion work item {work_item.id}. "
                 f"This may not be optimal.",
-                extra={"error_id": "ERR_WORKSPACE_SUBOPTIMAL_AGENT_ASSIGNMENT"}
+                extra={"error_id": "ERR_WORKSPACE_SUBOPTIMAL_AGENT_ASSIGNMENT"},
             )
 
         # If work item needs code changes, agent must have that capability
         if not has_discussion_label and not agent.makes_code_changes:
-            message = f"Agent {agent.id} cannot make code changes but is assigned to " f"code work item {work_item.id}"
+            message = f"Agent {agent.id} cannot make code changes but is assigned to code work item {work_item.id}"
             raise ValueError(message)
 
     async def prepare_workspace(
@@ -270,8 +261,7 @@ class WorkspaceRouter:
             ContainerError: If container operations fail
         """
         self._logger.info(
-            f"Preparing workspace type={context.workspace_type.value}, "
-            f"project={project.id}, work_item={work_item.id}"
+            f"Preparing workspace type={context.workspace_type.value}, project={project.id}, work_item={work_item.id}"
         )
 
         metadata: dict[str, Any] = {}
@@ -282,42 +272,28 @@ class WorkspaceRouter:
                 repo_path = Path(repository_path)
 
                 # Check if branch exists
-                branches = await self.repository.list_branches(
-                    repo_path, remote=True
-                )
+                branches = await self.repository.list_branches(repo_path, remote=True)
                 branch_exists = context.branch_name in branches
 
                 if branch_exists:
                     # Checkout existing branch
-                    self._logger.info(
-                        f"Checking out existing branch: {context.branch_name}"
-                    )
-                    await self.repository.checkout(
-                        repo_path, BranchName(context.branch_name or ""), create=False
-                    )
+                    self._logger.info(f"Checking out existing branch: {context.branch_name}")
+                    await self.repository.checkout(repo_path, BranchName(context.branch_name or ""), create=False)
                     metadata["branch_action"] = "checkout_existing"
                 else:
                     # Create new branch from base
-                    self._logger.info(
-                        f"Creating new branch: {context.branch_name}"
-                    )
+                    self._logger.info(f"Creating new branch: {context.branch_name}")
                     await self.repository.create_branch(
                         repo_path,
                         BranchName(context.branch_name or ""),
                         from_branch=BranchName(project.default_branch),
                     )
-                    await self.repository.checkout(
-                        repo_path, BranchName(context.branch_name or ""), create=False
-                    )
+                    await self.repository.checkout(repo_path, BranchName(context.branch_name or ""), create=False)
                     metadata["branch_action"] = "create_new"
 
                 # Update branch with latest from base
-                self._logger.info(
-                    f"Pulling latest changes from {project.default_branch}"
-                )
-                await self.repository.pull(
-                    repo_path, remote="origin", branch=project.default_branch
-                )
+                self._logger.info(f"Pulling latest changes from {project.default_branch}")
+                await self.repository.pull(repo_path, remote="origin", branch=project.default_branch)
                 metadata["updated_from_base"] = True
 
                 return WorkspacePreparationResult(
@@ -341,7 +317,7 @@ class WorkspaceRouter:
             self._logger.error(
                 f"Failed to prepare workspace: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_WORKSPACE_PREPARE_FAILURE"}
+                extra={"error_id": "ERR_WORKSPACE_PREPARE_FAILURE"},
             )
             return WorkspacePreparationResult(
                 success=False,
@@ -381,10 +357,7 @@ class WorkspaceRouter:
         Raises:
             RepositoryError: If repository operations fail
         """
-        self._logger.info(
-            f"Finalizing workspace type={context.workspace_type.value}, "
-            f"project={project.id}"
-        )
+        self._logger.info(f"Finalizing workspace type={context.workspace_type.value}, project={project.id}")
 
         metadata: dict[str, Any] = {}
         commit_sha = None
@@ -396,26 +369,16 @@ class WorkspaceRouter:
 
                 # Check if there are changes to commit
                 status = await self.repository.status(repo_path)
-                has_changes = (
-                    status.is_dirty
-                    or status.staged_files
-                    or status.unstaged_files
-                )
+                has_changes = status.is_dirty or status.staged_files or status.unstaged_files
 
                 if has_changes:
                     # Commit changes
-                    commit_message = self._generate_commit_message(
-                        context, execution_result
-                    )
+                    commit_message = self._generate_commit_message(context, execution_result)
                     self._logger.info(f"Committing changes: {commit_message}")
 
                     # Get author info, use config defaults if not in project
-                    author_name = getattr(
-                        project, "author_name", self.config.default_author_name
-                    )
-                    author_email = getattr(
-                        project, "author_email", self.config.default_author_email
-                    )
+                    author_name = getattr(project, "author_name", self.config.default_author_name)
+                    author_email = getattr(project, "author_email", self.config.default_author_email)
 
                     commit_sha = await self.repository.commit(
                         repo_path,
@@ -429,9 +392,7 @@ class WorkspaceRouter:
 
                     # Push branch
                     self._logger.info(f"Pushing branch: {context.branch_name}")
-                    await self.repository.push(
-                        repo_path, remote="origin", branch=context.branch_name
-                    )
+                    await self.repository.push(repo_path, remote="origin", branch=context.branch_name)
                     metadata["pushed"] = True
 
                     # TODO: Create PR if needed (requires ticket system integration)
@@ -468,7 +429,7 @@ class WorkspaceRouter:
             self._logger.error(
                 f"Failed to finalize workspace: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_WORKSPACE_FINALIZE_FAILURE"}
+                extra={"error_id": "ERR_WORKSPACE_FINALIZE_FAILURE"},
             )
             return WorkspaceFinalizationResult(
                 success=False,
@@ -562,9 +523,7 @@ class WorkspaceRouter:
     # Private Methods
     # ========================================================================
 
-    def _generate_branch_name(
-        self, work_item: WorkItem, project: ProjectContext
-    ) -> str:
+    def _generate_branch_name(self, work_item: WorkItem, project: ProjectContext) -> str:
         """
         Generate branch name following project conventions.
 
@@ -584,7 +543,7 @@ class WorkspaceRouter:
             work_item.title.lower()
             .replace(" ", "-")
             .replace("/", "-")
-            .replace("_", "-")[:self.config.branch_title_max_length]
+            .replace("_", "-")[: self.config.branch_title_max_length]
         )
         # Remove any non-alphanumeric characters except hyphens
         title_slug = "".join(c for c in title_slug if c.isalnum() or c == "-")
@@ -594,9 +553,7 @@ class WorkspaceRouter:
         title_slug = title_slug.strip("-")
 
         # Get branch prefix from project or use default
-        branch_prefix = getattr(
-            project, "branch_prefix", self.config.branch_prefix_default
-        )
+        branch_prefix = getattr(project, "branch_prefix", self.config.branch_prefix_default)
 
         # Format using config template
         return self.config.branch_name_format.format(
@@ -605,9 +562,7 @@ class WorkspaceRouter:
             title=title_slug,
         )
 
-    def _generate_commit_message(
-        self, context: WorkspaceContext, execution_result: dict[str, Any]
-    ) -> str:
+    def _generate_commit_message(self, context: WorkspaceContext, execution_result: dict[str, Any]) -> str:
         """
         Generate commit message for workspace changes.
 

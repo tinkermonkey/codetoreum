@@ -21,7 +21,7 @@ Coverage:
 
 import asyncio
 import logging
-from typing import cast, TYPE_CHECKING
+from typing import cast
 
 import pytest
 from fastapi.testclient import TestClient
@@ -58,10 +58,7 @@ async def simulation_env():
     - Seeded test data (projects, workflows, work items)
     """
     # Create fast config for testing
-    config = SimulationConfig.create_fast_config(
-        scenario_name="audit_endpoint_test",
-        speed_multiplier=100.0
-    )
+    config = SimulationConfig.create_fast_config(scenario_name="audit_endpoint_test", speed_multiplier=100.0)
 
     # Bootstrap application
     bootstrap = SimulationApplicationBootstrap(config)
@@ -105,11 +102,7 @@ def e2e_client(simulation_env):
 # ============================================================================
 
 
-async def _wait_for_completion(
-    client: SimulationE2EClient,
-    work_item_id: str,
-    timeout: float = 10.0
-) -> bool:
+async def _wait_for_completion(client: SimulationE2EClient, work_item_id: str, timeout: float = 10.0) -> bool:
     """
     Poll work item status until workflow completes or timeout.
 
@@ -149,9 +142,7 @@ async def _move_to_ready(board, work_item_id: str):
     await board.move_item_to_column(work_item_id, "Ready", MovedByType.HUMAN)
 
 
-async def _get_workflow_run_id(
-    query_service: IWorkflowRunQueryPort, work_item_id: str
-) -> str:
+async def _get_workflow_run_id(query_service: IWorkflowRunQueryPort, work_item_id: str) -> str:
     """Get the workflow run ID for a work item."""
     filters = WorkflowRunFilters(work_item_id=work_item_id)
     pagination = WorkflowRunPaginationParams(
@@ -278,10 +269,7 @@ async def test_audit_endpoint_pagination(e2e_client, simulation_env):
     # Test pagination
     with TestClient(simulation_env["app"]) as client:
         # First page
-        response1 = client.get(
-            f"/api/v2/workflows/runs/{workflow_run_id}/audit",
-            params={"offset": 0, "limit": 5}
-        )
+        response1 = client.get(f"/api/v2/workflows/runs/{workflow_run_id}/audit", params={"offset": 0, "limit": 5})
         assert response1.status_code == 200
         data1 = response1.json()
 
@@ -297,10 +285,7 @@ async def test_audit_endpoint_pagination(e2e_client, simulation_env):
             assert data1["hasNext"] is True
 
             # Second page
-            response2 = client.get(
-                f"/api/v2/workflows/runs/{workflow_run_id}/audit",
-                params={"offset": 5, "limit": 5}
-            )
+            response2 = client.get(f"/api/v2/workflows/runs/{workflow_run_id}/audit", params={"offset": 5, "limit": 5})
             assert response2.status_code == 200
             data2 = response2.json()
 
@@ -419,8 +404,6 @@ async def test_audit_endpoint_stage_grouping(e2e_client, simulation_env):
             assert isinstance(stage["events"], list)
 
 
-
-
 @pytest.mark.asyncio
 @pytest.mark.skip(reason="Mock adapter returns success for any ID - error handling tested in integration tests")
 async def test_audit_endpoint_not_found(e2e_client, simulation_env):
@@ -476,10 +459,7 @@ async def test_audit_endpoint_validation_disabled(e2e_client, simulation_env):
 
     # Call audit endpoint with validation disabled
     with TestClient(simulation_env["app"]) as client:
-        response = client.get(
-            f"/api/v2/workflows/runs/{workflow_run_id}/audit",
-            params={"include_validation": False}
-        )
+        response = client.get(f"/api/v2/workflows/runs/{workflow_run_id}/audit", params={"include_validation": False})
         assert response.status_code == 200
 
         audit_data = response.json()

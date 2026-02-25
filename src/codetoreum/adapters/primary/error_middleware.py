@@ -32,17 +32,14 @@ IS_PRODUCTION = ENV == "production"
 
 # Debug mode only allowed in development
 # In production, debug is ALWAYS disabled for security
-DEBUG_MODE = (
-    not IS_PRODUCTION and
-    os.getenv("CODETOREUM_DEBUG", "false").lower() == "true"
-)
+DEBUG_MODE = not IS_PRODUCTION and os.getenv("CODETOREUM_DEBUG", "false").lower() == "true"
 
 # Warn if someone tries to enable debug in production
 if IS_PRODUCTION and os.getenv("CODETOREUM_DEBUG", "").lower() == "true":
     logger.warning(
         "CODETOREUM_DEBUG=true ignored in production environment. "
         "Debug mode is always disabled in production for security.",
-        extra={"error_id": "ERR_DEBUG_MODE_IN_PRODUCTION"}
+        extra={"error_id": "ERR_DEBUG_MODE_IN_PRODUCTION"},
     )
 
 
@@ -91,11 +88,7 @@ async def error_handling_middleware(request: Request, call_next: Callable):
         Response (either successful or error)
     """
     # Extract correlation ID from request headers or generate new one
-    correlation_id = (
-        request.headers.get("X-Correlation-ID") or
-        request.headers.get("X-Request-ID") or
-        str(uuid4())
-    )
+    correlation_id = request.headers.get("X-Correlation-ID") or request.headers.get("X-Request-ID") or str(uuid4())
     request.state.correlation_id = correlation_id
 
     # Set correlation ID in logging context
@@ -107,7 +100,7 @@ async def error_handling_middleware(request: Request, call_next: Callable):
             "method": request.method,
             "path": str(request.url.path),
             "correlation_id": correlation_id,
-        }
+        },
     )
 
     try:
@@ -124,10 +117,7 @@ async def error_handling_middleware(request: Request, call_next: Callable):
         error_id = ErrorRegistry.ERR_VALIDATION_FAILED
         logger.info(
             f"Validation error on {request.method} {request.url.path}",
-            extra={
-                "error_id": error_id,
-                "validation_errors": exc.errors()
-            }
+            extra={"error_id": error_id, "validation_errors": exc.errors()},
         )
 
         error_response = ErrorResponse(
@@ -157,10 +147,7 @@ async def error_handling_middleware(request: Request, call_next: Callable):
         error_id = ErrorRegistry.ERR_VALUE_ERROR
         logger.info(
             f"Value error on {request.method} {request.url.path}: {exc}",
-            extra={
-                "error_id": error_id,
-                "error_type": "ValueError"
-            }
+            extra={"error_id": error_id, "error_type": "ValueError"},
         )
 
         error_response = ErrorResponse(
@@ -182,10 +169,7 @@ async def error_handling_middleware(request: Request, call_next: Callable):
         error_id = "ERR_PERMISSION_DENIED"
         logger.warning(
             f"Permission denied on {request.method} {request.url.path}: {exc}",
-            extra={
-                "error_id": error_id,
-                "error_type": "PermissionError"
-            }
+            extra={"error_id": error_id, "error_type": "PermissionError"},
         )
 
         error_response = ErrorResponse(
@@ -207,10 +191,7 @@ async def error_handling_middleware(request: Request, call_next: Callable):
         error_id = "ERR_RESOURCE_NOT_FOUND"
         logger.info(
             f"Resource not found on {request.method} {request.url.path}: {exc}",
-            extra={
-                "error_id": error_id,
-                "error_type": "FileNotFoundError"
-            }
+            extra={"error_id": error_id, "error_type": "FileNotFoundError"},
         )
 
         error_response = ErrorResponse(
@@ -232,10 +213,7 @@ async def error_handling_middleware(request: Request, call_next: Callable):
         error_id = "ERR_REQUEST_TIMEOUT"
         logger.warning(
             f"Timeout on {request.method} {request.url.path}: {exc}",
-            extra={
-                "error_id": error_id,
-                "error_type": "TimeoutError"
-            }
+            extra={"error_id": error_id, "error_type": "TimeoutError"},
         )
 
         error_response = ErrorResponse(
@@ -264,7 +242,7 @@ async def error_handling_middleware(request: Request, call_next: Callable):
                 "error_type": type(exc).__name__,
                 "request_method": request.method,
                 "request_path": str(request.url.path),
-            }
+            },
         )
 
         # SECURITY: In production, never expose exception details

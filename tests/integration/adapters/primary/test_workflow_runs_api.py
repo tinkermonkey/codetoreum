@@ -138,9 +138,7 @@ def sample_workflow_run_summary():
 class TestListWorkflowRuns:
     """Tests for GET /api/v2/workflows/runs endpoint."""
 
-    def test_list_workflow_runs_success(
-        self, client, mock_query_port, sample_workflow_run_summary
-    ):
+    def test_list_workflow_runs_success(self, client, mock_query_port, sample_workflow_run_summary):
         """Test successful workflow runs listing."""
         # Arrange
         list_result = WorkflowRunListResult(
@@ -166,9 +164,7 @@ class TestListWorkflowRuns:
         # Verify query port was called
         mock_query_port._list_workflow_runs.assert_called_once()
 
-    def test_list_workflow_runs_with_filters(
-        self, client, mock_query_port, sample_workflow_run_summary
-    ):
+    def test_list_workflow_runs_with_filters(self, client, mock_query_port, sample_workflow_run_summary):
         """Test workflow runs listing with filters."""
         # Arrange
         list_result = WorkflowRunListResult(
@@ -181,9 +177,7 @@ class TestListWorkflowRuns:
         mock_query_port._list_workflow_runs.return_value = list_result
 
         # Act
-        response = client.get(
-            "/api/v2/workflows/runs?status=running&projectId=proj-1"
-        )
+        response = client.get("/api/v2/workflows/runs?status=running&projectId=proj-1")
 
         # Assert
         assert response.status_code == 200
@@ -207,9 +201,7 @@ class TestListWorkflowRuns:
         data = response.json()
         assert "Invalid status value" in data["detail"]
 
-    def test_list_workflow_runs_with_pagination(
-        self, client, mock_query_port, sample_workflow_run_summary
-    ):
+    def test_list_workflow_runs_with_pagination(self, client, mock_query_port, sample_workflow_run_summary):
         """Test workflow runs listing with pagination."""
         # Arrange
         list_result = WorkflowRunListResult(
@@ -236,9 +228,7 @@ class TestListWorkflowRuns:
 class TestGetWorkflowRun:
     """Tests for GET /api/v2/workflows/runs/{workflow_run_id} endpoint."""
 
-    def test_get_workflow_run_success(
-        self, client, mock_query_port, sample_workflow_run
-    ):
+    def test_get_workflow_run_success(self, client, mock_query_port, sample_workflow_run):
         """Test successful workflow run retrieval."""
         # Arrange
         mock_query_port._get_workflow_run.return_value = sample_workflow_run
@@ -265,9 +255,7 @@ class TestGetWorkflowRun:
         # Arrange
         from codetoreum.ports.exceptions import ResourceNotFoundError
 
-        mock_query_port._get_workflow_run.side_effect = ResourceNotFoundError(
-            "WorkflowRun", "wfrun-999"
-        )
+        mock_query_port._get_workflow_run.side_effect = ResourceNotFoundError("WorkflowRun", "wfrun-999")
 
         # Act
         response = client.get("/api/v2/workflows/runs/wfrun-999")
@@ -354,9 +342,7 @@ class TestGetWorkflowRunEvents:
         # Arrange
         from codetoreum.ports.exceptions import ResourceNotFoundError
 
-        mock_query_port._get_workflow_run_events.side_effect = ResourceNotFoundError(
-            "WorkflowRun", "wfrun-999"
-        )
+        mock_query_port._get_workflow_run_events.side_effect = ResourceNotFoundError("WorkflowRun", "wfrun-999")
 
         # Act
         response = client.get("/api/v2/workflows/runs/wfrun-999/events")
@@ -448,9 +434,7 @@ class TestGetWorkflowRunAudit:
         assert data["validation"]["sequenceValid"] is True
 
         # Verify query port was called
-        mock_query_port._get_workflow_run_audit.assert_called_once_with(
-            "wfrun-123", 0, 100, True
-        )
+        mock_query_port._get_workflow_run_audit.assert_called_once_with("wfrun-123", 0, 100, True)
 
     def test_get_workflow_run_audit_with_pagination(self, client, mock_query_port):
         """Test workflow run audit retrieval with custom pagination."""
@@ -497,9 +481,7 @@ class TestGetWorkflowRunAudit:
         mock_query_port._get_workflow_run_audit.return_value = audit_data
 
         # Act
-        response = client.get(
-            "/api/v2/workflows/runs/wfrun-123/audit?offset=100&limit=50"
-        )
+        response = client.get("/api/v2/workflows/runs/wfrun-123/audit?offset=100&limit=50")
 
         # Assert
         assert response.status_code == 200
@@ -510,9 +492,7 @@ class TestGetWorkflowRunAudit:
         assert data["totalEventCount"] == 500
 
         # Verify query port was called with correct parameters
-        mock_query_port._get_workflow_run_audit.assert_called_once_with(
-            "wfrun-123", 100, 50, True
-        )
+        mock_query_port._get_workflow_run_audit.assert_called_once_with("wfrun-123", 100, 50, True)
 
     def test_get_workflow_run_audit_without_validation(self, client, mock_query_port):
         """Test workflow run audit retrieval without validation."""
@@ -560,9 +540,7 @@ class TestGetWorkflowRunAudit:
         mock_query_port._get_workflow_run_audit.return_value = audit_data
 
         # Act
-        response = client.get(
-            "/api/v2/workflows/runs/wfrun-123/audit?include_validation=false"
-        )
+        response = client.get("/api/v2/workflows/runs/wfrun-123/audit?include_validation=false")
 
         # Assert
         assert response.status_code == 200
@@ -572,18 +550,14 @@ class TestGetWorkflowRunAudit:
         assert data["validation"]["sequenceValid"] is True
 
         # Verify query port was called with include_validation=False
-        mock_query_port._get_workflow_run_audit.assert_called_once_with(
-            "wfrun-123", 0, 100, False
-        )
+        mock_query_port._get_workflow_run_audit.assert_called_once_with("wfrun-123", 0, 100, False)
 
     def test_get_workflow_run_audit_not_found(self, client, mock_query_port):
         """Test workflow run audit not found."""
         # Arrange
         from codetoreum.ports.exceptions import ResourceNotFoundError
 
-        mock_query_port._get_workflow_run_audit.side_effect = ResourceNotFoundError(
-            "WorkflowRun", "wfrun-999"
-        )
+        mock_query_port._get_workflow_run_audit.side_effect = ResourceNotFoundError("WorkflowRun", "wfrun-999")
 
         # Act
         response = client.get("/api/v2/workflows/runs/wfrun-999/audit")
@@ -596,9 +570,7 @@ class TestGetWorkflowRunAudit:
     def test_get_workflow_run_audit_server_error(self, client, mock_query_port):
         """Test workflow run audit server error."""
         # Arrange
-        mock_query_port._get_workflow_run_audit.side_effect = Exception(
-            "Database connection failed"
-        )
+        mock_query_port._get_workflow_run_audit.side_effect = Exception("Database connection failed")
 
         # Act
         response = client.get("/api/v2/workflows/runs/wfrun-123/audit")

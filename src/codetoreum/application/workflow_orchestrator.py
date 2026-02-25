@@ -271,9 +271,7 @@ class IDecisionEvents:
 class IProjectsAPI:
     """Interface to GitHub Projects API for card movement."""
 
-    async def move_card_to_column(
-        self, project: str, issue_number: int, column_name: str
-    ) -> None:
+    async def move_card_to_column(self, project: str, issue_number: int, column_name: str) -> None:
         """Move card to specified column."""
         raise NotImplementedError
 
@@ -338,7 +336,7 @@ class WorkflowOrchestrator:
 
     @instrument_async_function(
         name="workflow.handle_card_movement",
-        attributes={"service": "workflow_orchestrator", "operation": "card_movement"}
+        attributes={"service": "workflow_orchestrator", "operation": "card_movement"},
     )
     async def handle_card_movement(self, event: CardMovedEvent) -> WorkflowResult:
         """
@@ -362,20 +360,17 @@ class WorkflowOrchestrator:
             WorkflowResult indicating success and next action
         """
         logger.info(
-            f"Handling card movement: issue #{event.issue_number} "
-            f"from {event.from_column} to {event.to_column}"
+            f"Handling card movement: issue #{event.issue_number} from {event.from_column} to {event.to_column}"
         )
 
         # Load configuration
         try:
-            workflow_config = await self.config.get_workflow_config(
-                event.project, event.board
-            )
+            workflow_config = await self.config.get_workflow_config(event.project, event.board)
         except Exception as e:
             logger.error(
                 f"Failed to load workflow config: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_ORCHESTRATOR_CONFIG_LOAD_FAILURE"}
+                extra={"error_id": "ERR_ORCHESTRATOR_CONFIG_LOAD_FAILURE"},
             )
             return WorkflowResult(
                 success=False,
@@ -392,7 +387,7 @@ class WorkflowOrchestrator:
         if not column_config:
             logger.warning(
                 f"Column {event.to_column} not found in workflow config",
-                extra={"error_id": "ERR_ORCHESTRATOR_COLUMN_CONFIG_NOT_FOUND"}
+                extra={"error_id": "ERR_ORCHESTRATOR_COLUMN_CONFIG_NOT_FOUND"},
             )
             return WorkflowResult(
                 success=False,
@@ -404,14 +399,9 @@ class WorkflowOrchestrator:
             )
 
         # Check if work already in progress
-        workflow_state = await self.workflow_state.get_workflow_state(
-            f"{event.project}:{event.issue_number}"
-        )
+        workflow_state = await self.workflow_state.get_workflow_state(f"{event.project}:{event.issue_number}")
         if workflow_state.is_in_progress(column_config.name, column_config.agent):
-            logger.info(
-                f"Work already in progress for column {column_config.name} "
-                f"and agent {column_config.agent}"
-            )
+            logger.info(f"Work already in progress for column {column_config.name} and agent {column_config.agent}")
             return WorkflowResult(
                 success=False,
                 action=WorkflowAction.NO_ACTION,
@@ -428,7 +418,7 @@ class WorkflowOrchestrator:
             logger.error(
                 f"Failed to load agent config: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_ORCHESTRATOR_AGENT_CONFIG_LOAD_FAILURE"}
+                extra={"error_id": "ERR_ORCHESTRATOR_AGENT_CONFIG_LOAD_FAILURE"},
             )
             return WorkflowResult(
                 success=False,
@@ -441,13 +431,11 @@ class WorkflowOrchestrator:
             )
 
         # Validate agent can run
-        validation_result = await self._validate_agent_can_run(
-            event.project, column_config.agent, agent_config
-        )
+        validation_result = await self._validate_agent_can_run(event.project, column_config.agent, agent_config)
         if not validation_result.can_run:
             logger.warning(
                 f"Agent {column_config.agent} cannot run: {validation_result.reason}",
-                extra={"error_id": "ERR_ORCHESTRATOR_AGENT_VALIDATION_FAILURE"}
+                extra={"error_id": "ERR_ORCHESTRATOR_AGENT_VALIDATION_FAILURE"},
             )
             if validation_result.needs_dev_setup:
                 await self._queue_dev_setup(event.project)
@@ -461,9 +449,7 @@ class WorkflowOrchestrator:
             )
 
         # Build task context
-        task_context = self._build_task_context(
-            event, column_config, workflow_config
-        )
+        task_context = self._build_task_context(event, column_config, workflow_config)
 
         # Create task
         task = Task(
@@ -493,7 +479,7 @@ class WorkflowOrchestrator:
                     "column": event.to_column,
                     "agent": column_config.agent,
                     "error_type": type(e).__name__,
-                }
+                },
             )
             return WorkflowResult(
                 success=False,
@@ -522,13 +508,9 @@ class WorkflowOrchestrator:
 
         # Update workflow state
         workflow_state.mark_in_progress(column_config.name, column_config.agent)
-        await self.workflow_state.update_workflow_state(
-            f"{event.project}:{event.issue_number}", workflow_state
-        )
+        await self.workflow_state.update_workflow_state(f"{event.project}:{event.issue_number}", workflow_state)
 
-        logger.info(
-            f"Successfully handled card movement for issue #{event.issue_number}"
-        )
+        logger.info(f"Successfully handled card movement for issue #{event.issue_number}")
         return WorkflowResult(
             success=True,
             task_id=task_id,
@@ -540,11 +522,9 @@ class WorkflowOrchestrator:
 
     @instrument_async_function(
         name="workflow.handle_stage_completion",
-        attributes={"service": "workflow_orchestrator", "operation": "stage_completion"}
+        attributes={"service": "workflow_orchestrator", "operation": "stage_completion"},
     )
-    async def handle_stage_completion(
-        self, event: StageCompletedEvent
-    ) -> WorkflowResult:
+    async def handle_stage_completion(self, event: StageCompletedEvent) -> WorkflowResult:
         """
         Handle completion of a pipeline stage.
 
@@ -561,20 +541,14 @@ class WorkflowOrchestrator:
         Returns:
             WorkflowResult indicating next action
         """
-        logger.info(
-            f"Handling stage completion: {event.stage_name} for issue #{event.issue_number}"
-        )
+        logger.info(f"Handling stage completion: {event.stage_name} for issue #{event.issue_number}")
 
         # StageCompletedEvent.context is guaranteed to be Dict[str, Any] by type contract
         board_name = event.context.get("board", "default")
-        workflow_config = await self.config.get_workflow_config(
-            event.project, board_name
-        )
+        workflow_config = await self.config.get_workflow_config(event.project, board_name)
 
         # Find current column
-        current_column_config = self._find_column_by_agent(
-            workflow_config, event.agent_name
-        )
+        current_column_config = self._find_column_by_agent(workflow_config, event.agent_name)
 
         if not event.success:
             # Stage failed, emit error decision
@@ -609,9 +583,7 @@ class WorkflowOrchestrator:
             next_column = self._get_next_column(workflow_config, current_column_config)
             if next_column and self.projects_api:
                 # Move card to next column
-                await self.projects_api.move_card_to_column(
-                    event.project, event.issue_number, next_column.name
-                )
+                await self.projects_api.move_card_to_column(event.project, event.issue_number, next_column.name)
 
                 await self.decision_events.emit_progression_decision(
                     ProgressionDecision(
@@ -646,11 +618,9 @@ class WorkflowOrchestrator:
 
     @instrument_async_function(
         name="workflow.handle_review_cycle_completion",
-        attributes={"service": "workflow_orchestrator", "operation": "review_completion"}
+        attributes={"service": "workflow_orchestrator", "operation": "review_completion"},
     )
-    async def handle_review_cycle_completion(
-        self, event: ReviewCycleCompletedEvent
-    ) -> WorkflowResult:
+    async def handle_review_cycle_completion(self, event: ReviewCycleCompletedEvent) -> WorkflowResult:
         """
         Handle review cycle completion.
 
@@ -675,20 +645,14 @@ class WorkflowOrchestrator:
 
         if event.approved:
             # Review approved, check auto-advance
-            workflow_config = await self.config.get_workflow_config(
-                event.project, board_name
-            )
+            workflow_config = await self.config.get_workflow_config(event.project, board_name)
 
-            current_column = self._find_column_by_agent(
-                workflow_config, event.maker_agent
-            )
+            current_column = self._find_column_by_agent(workflow_config, event.maker_agent)
 
             if current_column and current_column.auto_advance_on_approval:
                 next_column = self._get_next_column(workflow_config, current_column)
                 if next_column and self.projects_api:
-                    await self.projects_api.move_card_to_column(
-                        event.project, event.issue_number, next_column.name
-                    )
+                    await self.projects_api.move_card_to_column(event.project, event.issue_number, next_column.name)
 
                     return WorkflowResult(
                         success=True,
@@ -712,9 +676,7 @@ class WorkflowOrchestrator:
         if event.iteration >= max_iterations:
             # Escalate to human
             if self.projects_api:
-                await self.projects_api.add_label(
-                    event.project, event.issue_number, "needs-human-review"
-                )
+                await self.projects_api.add_label(event.project, event.issue_number, "needs-human-review")
 
             return WorkflowResult(
                 success=True,
@@ -739,7 +701,7 @@ class WorkflowOrchestrator:
 
     @instrument_async_function(
         name="workflow.handle_feedback",
-        attributes={"service": "workflow_orchestrator", "operation": "feedback"}
+        attributes={"service": "workflow_orchestrator", "operation": "feedback"},
     )
     async def handle_feedback(self, event: FeedbackEvent) -> WorkflowResult:
         """
@@ -751,9 +713,7 @@ class WorkflowOrchestrator:
         Returns:
             WorkflowResult for feedback handling task
         """
-        logger.info(
-            f"Handling feedback for issue #{event.issue_number} from {event.author}"
-        )
+        logger.info(f"Handling feedback for issue #{event.issue_number} from {event.author}")
 
         # Create feedback handling task
         task = Task(
@@ -784,27 +744,21 @@ class WorkflowOrchestrator:
 
     # Helper methods
 
-    def _find_column_config(
-        self, workflow: WorkflowConfig, column_name: str
-    ) -> ColumnConfig | None:
+    def _find_column_config(self, workflow: WorkflowConfig, column_name: str) -> ColumnConfig | None:
         """Find column configuration by name."""
         for col in workflow.columns:
             if col.name == column_name:
                 return col
         return None
 
-    def _find_column_by_agent(
-        self, workflow: WorkflowConfig, agent_name: str
-    ) -> ColumnConfig | None:
+    def _find_column_by_agent(self, workflow: WorkflowConfig, agent_name: str) -> ColumnConfig | None:
         """Find column configuration by agent name."""
         for col in workflow.columns:
             if col.agent == agent_name:
                 return col
         return None
 
-    def _get_next_column(
-        self, workflow: WorkflowConfig, current: ColumnConfig
-    ) -> ColumnConfig | None:
+    def _get_next_column(self, workflow: WorkflowConfig, current: ColumnConfig) -> ColumnConfig | None:
         """Get next column in workflow sequence."""
         sorted_columns = sorted(workflow.columns, key=lambda c: c.position)
         for i, col in enumerate(sorted_columns):
@@ -848,9 +802,7 @@ class WorkflowOrchestrator:
             "review_required": column_config.review_required,
         }
 
-    async def _queue_review_task(
-        self, event: StageCompletedEvent, column_config: ColumnConfig
-    ) -> WorkflowResult:
+    async def _queue_review_task(self, event: StageCompletedEvent, column_config: ColumnConfig) -> WorkflowResult:
         """Queue a review task."""
         if not column_config.reviewer_agent:
             return WorkflowResult(
@@ -888,9 +840,7 @@ class WorkflowOrchestrator:
             reason="Review task queued",
         )
 
-    async def _queue_revision_task(
-        self, event: ReviewCycleCompletedEvent
-    ) -> str:
+    async def _queue_revision_task(self, event: ReviewCycleCompletedEvent) -> str:
         """Queue a revision task for the maker."""
         task = Task(
             id=f"revision_{event.project}_{event.issue_number}_{int(time.time())}",
@@ -925,34 +875,22 @@ class WorkflowOrchestrator:
             return
 
         # Subscribe to board events
-        self.event_bus.subscribe(
-            EventTypes.WORKITEM_COLUMN_CHANGED,
-            self._handle_column_change
-        )
+        self.event_bus.subscribe(EventTypes.WORKITEM_COLUMN_CHANGED, self._handle_column_change)
 
         # Subscribe to discussion events
-        self.event_bus.subscribe(
-            EventTypes.COMMENT_NEEDS_RESPONSE,
-            self._handle_comment_needs_response
-        )
+        self.event_bus.subscribe(EventTypes.COMMENT_NEEDS_RESPONSE, self._handle_comment_needs_response)
 
         # Subscribe to lock events
-        self.event_bus.subscribe(
-            EventTypes.LOCK_RELEASED,
-            self._handle_lock_released
-        )
+        self.event_bus.subscribe(EventTypes.LOCK_RELEASED, self._handle_lock_released)
 
         # Subscribe to review events
-        self.event_bus.subscribe(
-            EventTypes.REVIEW_STATUS_CHANGED,
-            self._handle_review_status_changed
-        )
+        self.event_bus.subscribe(EventTypes.REVIEW_STATUS_CHANGED, self._handle_review_status_changed)
 
         logger.info("WorkflowOrchestrator subscribed to adapter events")
 
     @instrument_async_function(
         name="workflow.handle_column_change",
-        attributes={"service": "workflow_orchestrator", "event_handler": "true"}
+        attributes={"service": "workflow_orchestrator", "event_handler": "true"},
     )
     async def _handle_column_change(self, event: DomainEvent) -> None:
         """
@@ -986,21 +924,18 @@ class WorkflowOrchestrator:
                 "Column change event has empty required fields",
                 extra={
                     "error_id": "ERR_ORCHESTRATOR_COLUMN_CHANGE_VALIDATION_FAILURE",
-                    "event_payload": event.payload
-                }
+                    "event_payload": event.payload,
+                },
             )
             return
 
         try:
             # Get workflow configuration
             try:
-                workflow_config = await self.config.get_workflow_config(
-                    project_id, board_id
-                )
+                workflow_config = await self.config.get_workflow_config(project_id, board_id)
             except PortTimeoutError as e:
                 logger.error(
-                    f"Failed to get workflow config for project={project_id}, "
-                    f"board={board_id}: {e}",
+                    f"Failed to get workflow config for project={project_id}, board={board_id}: {e}",
                     exc_info=True,
                     extra={
                         "error_id": "ERR_ORCHESTRATOR_CONFIG_TIMEOUT",
@@ -1008,7 +943,7 @@ class WorkflowOrchestrator:
                         "board_id": board_id,
                         "work_item_id": work_item_id,
                         "error_type": type(e).__name__,
-                    }
+                    },
                 )
                 return
 
@@ -1017,7 +952,7 @@ class WorkflowOrchestrator:
             if not target_column_config:
                 logger.warning(
                     f"Column '{to_column}' not found in workflow config",
-                    extra={"error_id": "ERR_ORCHESTRATOR_HANDLER_COLUMN_NOT_FOUND"}
+                    extra={"error_id": "ERR_ORCHESTRATOR_HANDLER_COLUMN_NOT_FOUND"},
                 )
                 return
 
@@ -1044,9 +979,7 @@ class WorkflowOrchestrator:
 
                 try:
                     task_id = await self.task_queue.enqueue(task)
-                    logger.info(
-                        f"Enqueued agent task {task_id} for column '{to_column}'"
-                    )
+                    logger.info(f"Enqueued agent task {task_id} for column '{to_column}'")
                 except Exception as e:
                     logger.error(
                         f"CRITICAL: Failed to enqueue agent task for work_item={work_item_id}, "
@@ -1061,7 +994,7 @@ class WorkflowOrchestrator:
                             "column": to_column,
                             "agent": target_column_config.agent,
                             "error_type": type(e).__name__,
-                        }
+                        },
                     )
 
             # Case 2: Exit column - log for reference
@@ -1074,18 +1007,14 @@ class WorkflowOrchestrator:
 
             # Case 3: Conversational column - start monitoring (if implemented)
             if getattr(target_column_config, "discussion_category", None):
-                logger.debug(
-                    f"Column '{to_column}' has discussion, "
-                    f"would start monitoring (implementation pending)"
-                )
+                logger.debug(f"Column '{to_column}' has discussion, would start monitoring (implementation pending)")
 
             # Case 4: Leaving conversational column - stop monitoring
             if from_column:
                 from_column_config = self._find_column_config(workflow_config, from_column)
                 if from_column_config and getattr(from_column_config, "discussion_category", None):
                     logger.debug(
-                        f"Leaving discussion column '{from_column}', "
-                        f"would stop monitoring (implementation pending)"
+                        f"Leaving discussion column '{from_column}', would stop monitoring (implementation pending)"
                     )
 
         except Exception as e:
@@ -1099,12 +1028,12 @@ class WorkflowOrchestrator:
                     "project_id": project_id,
                     "board_id": board_id,
                     "error_type": type(e).__name__,
-                }
+                },
             )
 
     @instrument_async_function(
         name="workflow.handle_comment_needs_response",
-        attributes={"service": "workflow_orchestrator", "event_handler": "true"}
+        attributes={"service": "workflow_orchestrator", "event_handler": "true"},
     )
     async def _handle_comment_needs_response(self, event: DomainEvent) -> None:
         """
@@ -1126,15 +1055,12 @@ class WorkflowOrchestrator:
                 "Comment event has empty required fields",
                 extra={
                     "error_id": "ERR_ORCHESTRATOR_COMMENT_EVENT_VALIDATION_FAILURE",
-                    "event_payload": event.payload
-                }
+                    "event_payload": event.payload,
+                },
             )
             return
 
-        logger.info(
-            f"Handling comment response for item {work_item_id} "
-            f"with agent {agent_name}"
-        )
+        logger.info(f"Handling comment response for item {work_item_id} with agent {agent_name}")
 
         # Create task for conversational agent
         task = Task(
@@ -1156,8 +1082,7 @@ class WorkflowOrchestrator:
                 logger.info(f"Enqueued comment response task {task_id}")
             except Exception as e:
                 logger.error(
-                    f"Failed to enqueue comment response task for work_item={work_item_id}, "
-                    f"project={project_id}: {e}",
+                    f"Failed to enqueue comment response task for work_item={work_item_id}, project={project_id}: {e}",
                     exc_info=True,
                     extra={
                         "error_id": "ERR_ORCHESTRATOR_COMMENT_RESPONSE_ENQUEUE_FAILURE",
@@ -1165,26 +1090,25 @@ class WorkflowOrchestrator:
                         "project_id": project_id,
                         "agent_name": agent_name,
                         "error_type": type(e).__name__,
-                    }
+                    },
                 )
                 raise
 
         except Exception as e:
             logger.error(
-                f"Error handling comment event for work_item={work_item_id}, "
-                f"project={project_id}",
+                f"Error handling comment event for work_item={work_item_id}, project={project_id}",
                 exc_info=True,
                 extra={
                     "error_id": "ERR_ORCHESTRATOR_COMMENT_HANDLER_FAILURE",
                     "work_item_id": work_item_id,
                     "project_id": project_id,
                     "error_type": type(e).__name__,
-                }
+                },
             )
 
     @instrument_async_function(
         name="workflow.handle_lock_released",
-        attributes={"service": "workflow_orchestrator", "event_handler": "true"}
+        attributes={"service": "workflow_orchestrator", "event_handler": "true"},
     )
     async def _handle_lock_released(self, event: DomainEvent) -> None:
         """
@@ -1206,15 +1130,12 @@ class WorkflowOrchestrator:
                 "Lock event has empty required fields",
                 extra={
                     "error_id": "ERR_ORCHESTRATOR_LOCK_EVENT_VALIDATION_FAILURE",
-                    "event_payload": event.payload
-                }
+                    "event_payload": event.payload,
+                },
             )
             return
 
-        logger.info(
-            f"Lock released for {project_id}/{board_id}, "
-            f"next in queue: {next_in_queue}"
-        )
+        logger.info(f"Lock released for {project_id}/{board_id}, next in queue: {next_in_queue}")
 
         try:
             if not next_in_queue:
@@ -1225,16 +1146,14 @@ class WorkflowOrchestrator:
             if not self.board_service:
                 logger.warning(
                     "Board service not configured, cannot process next queued item",
-                    extra={"error_id": "ERR_ORCHESTRATOR_BOARD_SERVICE_NOT_CONFIGURED"}
+                    extra={"error_id": "ERR_ORCHESTRATOR_BOARD_SERVICE_NOT_CONFIGURED"},
                 )
                 return
 
             # Get workflow configuration
             workflow_config = await self.config.get_workflow_config(project_id, board_id)
             if not workflow_config:
-                logger.warning(
-                    f"No workflow config found for project {project_id}, board {board_id}"
-                )
+                logger.warning(f"No workflow config found for project {project_id}, board {board_id}")
                 return
 
             # Get the column where the next item is currently located
@@ -1243,7 +1162,7 @@ class WorkflowOrchestrator:
                 if not item_position:
                     logger.warning(
                         f"Could not find position for item {next_in_queue}",
-                        extra={"error_id": "ERR_ORCHESTRATOR_ITEM_POSITION_NOT_FOUND"}
+                        extra={"error_id": "ERR_ORCHESTRATOR_ITEM_POSITION_NOT_FOUND"},
                     )
                     return
 
@@ -1253,15 +1172,13 @@ class WorkflowOrchestrator:
                 if not column_config:
                     logger.warning(
                         f"No config found for column {current_column_name}",
-                        extra={"error_id": "ERR_ORCHESTRATOR_QUEUE_COLUMN_CONFIG_NOT_FOUND"}
+                        extra={"error_id": "ERR_ORCHESTRATOR_QUEUE_COLUMN_CONFIG_NOT_FOUND"},
                     )
                     return
 
                 # If this is an automated column, trigger the agent
                 if column_config.agent:
-                    logger.info(
-                        f"Triggering agent {column_config.agent} for queued item {next_in_queue}"
-                    )
+                    logger.info(f"Triggering agent {column_config.agent} for queued item {next_in_queue}")
                     task = Task(
                         id=next_in_queue,
                         agent=column_config.agent,
@@ -1276,10 +1193,7 @@ class WorkflowOrchestrator:
                     )
                     await self.task_queue.enqueue(task)
                 else:
-                    logger.debug(
-                        f"Column {current_column_name} is not automated, "
-                        f"no agent to trigger"
-                    )
+                    logger.debug(f"Column {current_column_name} is not automated, no agent to trigger")
 
             except Exception as e:
                 logger.error(
@@ -1292,14 +1206,13 @@ class WorkflowOrchestrator:
                         "project_id": project_id,
                         "board_id": board_id,
                         "error_type": type(e).__name__,
-                    }
+                    },
                 )
                 raise
 
         except Exception as e:
             logger.error(
-                f"Error handling lock released event for project={project_id}, "
-                f"board={board_id}: {e}",
+                f"Error handling lock released event for project={project_id}, board={board_id}: {e}",
                 exc_info=True,
                 extra={
                     "error_id": "ERR_ORCHESTRATOR_LOCK_RELEASED_HANDLER_FAILURE",
@@ -1307,12 +1220,12 @@ class WorkflowOrchestrator:
                     "board_id": board_id,
                     "next_in_queue": next_in_queue,
                     "error_type": type(e).__name__,
-                }
+                },
             )
 
     @instrument_async_function(
         name="workflow.handle_review_status_changed",
-        attributes={"service": "workflow_orchestrator", "event_handler": "true"}
+        attributes={"service": "workflow_orchestrator", "event_handler": "true"},
     )
     async def _handle_review_status_changed(self, event: DomainEvent) -> None:
         """
@@ -1333,14 +1246,11 @@ class WorkflowOrchestrator:
         if not all([work_item_id, project_id, new_status]):
             logger.warning(
                 f"Review event missing required fields: {event.payload}",
-                extra={"error_id": "ERR_ORCHESTRATOR_REVIEW_EVENT_VALIDATION_FAILURE"}
+                extra={"error_id": "ERR_ORCHESTRATOR_REVIEW_EVENT_VALIDATION_FAILURE"},
             )
             return
 
-        logger.info(
-            f"Review status changed for item {work_item_id}: "
-            f"{previous_status} -> {new_status}"
-        )
+        logger.info(f"Review status changed for item {work_item_id}: {previous_status} -> {new_status}")
 
         if new_status == "approved":
             # Move to next column
@@ -1348,16 +1258,14 @@ class WorkflowOrchestrator:
                 try:
                     # Get workflow to find next column
                     board_id_local: str = event.payload.get("board_id") or "default"
-                    workflow_config = await self.config.get_workflow_config(
-                        project_id, board_id_local
-                    )
+                    workflow_config = await self.config.get_workflow_config(project_id, board_id_local)
 
                     # Find current column
                     item_position = await self.workflow_state.get_item_position(work_item_id)
                     if not item_position:
                         logger.warning(
                             f"Could not find position for item {work_item_id}",
-                            extra={"error_id": "ERR_ORCHESTRATOR_REVIEW_ITEM_POSITION_NOT_FOUND"}
+                            extra={"error_id": "ERR_ORCHESTRATOR_REVIEW_ITEM_POSITION_NOT_FOUND"},
                         )
                         return
 
@@ -1366,7 +1274,7 @@ class WorkflowOrchestrator:
                     if not current_column:
                         logger.warning(
                             f"No config for column {current_column_name}",
-                            extra={"error_id": "ERR_ORCHESTRATOR_REVIEW_COLUMN_CONFIG_NOT_FOUND"}
+                            extra={"error_id": "ERR_ORCHESTRATOR_REVIEW_COLUMN_CONFIG_NOT_FOUND"},
                         )
                         return
 
@@ -1376,13 +1284,9 @@ class WorkflowOrchestrator:
                         logger.info(
                             f"Moving approved item {work_item_id} from {current_column.name} to {next_column.name}"
                         )
-                        await self.projects_api.move_card_to_column(
-                            project_id, int(work_item_id), next_column.name
-                        )
+                        await self.projects_api.move_card_to_column(project_id, int(work_item_id), next_column.name)
                     else:
-                        logger.info(
-                            f"No next column found for item {work_item_id} in workflow"
-                        )
+                        logger.info(f"No next column found for item {work_item_id} in workflow")
                 except Exception as e:
                     logger.error(
                         f"Failed to move approved item: {e}",
@@ -1393,7 +1297,7 @@ class WorkflowOrchestrator:
                             "project_id": project_id,
                             "board_id": board_id_local,
                             "error_type": type(e).__name__,
-                        }
+                        },
                     )
                     raise
 
@@ -1402,9 +1306,7 @@ class WorkflowOrchestrator:
             if self.projects_api:
                 try:
                     board_id_local2: str = event.payload.get("board_id") or "default"
-                    workflow_config = await self.config.get_workflow_config(
-                        project_id, board_id_local2
-                    )
+                    workflow_config = await self.config.get_workflow_config(project_id, board_id_local2)
 
                     # Find development column (typically first column or has "dev" in name)
                     dev_column = None
@@ -1414,16 +1316,12 @@ class WorkflowOrchestrator:
                             break
 
                     if dev_column:
-                        logger.info(
-                            f"Moving item {work_item_id} back to development column {dev_column.name}"
-                        )
-                        await self.projects_api.move_card_to_column(
-                            project_id, int(work_item_id), dev_column.name
-                        )
+                        logger.info(f"Moving item {work_item_id} back to development column {dev_column.name}")
+                        await self.projects_api.move_card_to_column(project_id, int(work_item_id), dev_column.name)
                     else:
                         logger.warning(
                             f"No development column found for item {work_item_id}",
-                            extra={"error_id": "ERR_ORCHESTRATOR_DEV_COLUMN_NOT_FOUND"}
+                            extra={"error_id": "ERR_ORCHESTRATOR_DEV_COLUMN_NOT_FOUND"},
                         )
                 except Exception as e:
                     logger.error(
@@ -1435,6 +1333,6 @@ class WorkflowOrchestrator:
                             "project_id": project_id,
                             "board_id": board_id_local2,
                             "error_type": type(e).__name__,
-                        }
+                        },
                     )
                     raise

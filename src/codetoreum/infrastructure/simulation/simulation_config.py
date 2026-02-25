@@ -20,10 +20,12 @@ class AgentBehaviorConfig:
     # Response templates based on context patterns
     response_patterns: dict[str, str] = field(default_factory=dict)
     # Simulated token usage
-    token_usage: dict[str, int] = field(default_factory=lambda: {
-        "input": 100,
-        "output": 50,
-    })
+    token_usage: dict[str, int] = field(
+        default_factory=lambda: {
+            "input": 100,
+            "output": 50,
+        }
+    )
 
 
 @dataclass
@@ -59,12 +61,14 @@ class MetricsConfig:
     # Whether to collect metrics
     enabled: bool = True
     # Metrics to track
-    tracked_metrics: list[str] = field(default_factory=lambda: [
-        "workflow.stage.duration",
-        "agent.execution.count",
-        "agent.execution.duration",
-        "review.cycle.count",
-    ])
+    tracked_metrics: list[str] = field(
+        default_factory=lambda: [
+            "workflow.stage.duration",
+            "agent.execution.count",
+            "agent.execution.duration",
+            "review.cycle.count",
+        ]
+    )
 
 
 @dataclass

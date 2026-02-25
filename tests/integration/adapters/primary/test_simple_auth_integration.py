@@ -36,16 +36,12 @@ def test_app(auth_deps):
         return {"message": "This is public"}
 
     @app.get("/protected")
-    async def protected_endpoint(
-        authenticated: bool = Depends(auth_deps.require_auth)
-    ):
+    async def protected_endpoint(authenticated: bool = Depends(auth_deps.require_auth)):
         """Protected endpoint - auth required"""
         return {"message": "This is protected"}
 
     @app.get("/optional")
-    async def optional_endpoint(
-        authenticated: bool = Depends(auth_deps.optional_auth)
-    ):
+    async def optional_endpoint(authenticated: bool = Depends(auth_deps.optional_auth)):
         """Optional auth endpoint"""
         return {"message": "authenticated" if authenticated else "not authenticated"}
 
@@ -80,70 +76,46 @@ class TestProtectedEndpoints:
 
     def test_protected_endpoint_with_valid_token_header(self, client, auth_manager):
         """Protected endpoint should accept valid token in Authorization header"""
-        response = client.get(
-            "/protected",
-            headers={"Authorization": f"Bearer {auth_manager.server_token}"}
-        )
+        response = client.get("/protected", headers={"Authorization": f"Bearer {auth_manager.server_token}"})
         assert response.status_code == 200
         assert response.json()["message"] == "This is protected"
 
     def test_protected_endpoint_with_valid_token_query(self, client, auth_manager):
         """Protected endpoint should accept valid token in query parameter"""
-        response = client.get(
-            "/protected",
-            params={"token": auth_manager.server_token}
-        )
+        response = client.get("/protected", params={"token": auth_manager.server_token})
         assert response.status_code == 200
         assert response.json()["message"] == "This is protected"
 
     def test_protected_endpoint_invalid_token_header(self, client):
         """Protected endpoint should reject invalid token in header"""
-        response = client.get(
-            "/protected",
-            headers={"Authorization": "Bearer invalid-token-12345"}
-        )
+        response = client.get("/protected", headers={"Authorization": "Bearer invalid-token-12345"})
         assert response.status_code == 401
 
     def test_protected_endpoint_invalid_token_query(self, client):
         """Protected endpoint should reject invalid token in query parameter"""
-        response = client.get(
-            "/protected",
-            params={"token": "invalid-token-12345"}
-        )
+        response = client.get("/protected", params={"token": "invalid-token-12345"})
         assert response.status_code == 401
 
     def test_protected_endpoint_malformed_auth_header(self, client, auth_manager):
         """Protected endpoint should reject malformed Authorization header"""
         # Missing "Bearer " prefix
-        response = client.get(
-            "/protected",
-            headers={"Authorization": auth_manager.server_token}
-        )
+        response = client.get("/protected", headers={"Authorization": auth_manager.server_token})
         assert response.status_code == 401
         assert "Bearer" in response.json()["detail"]
 
     def test_protected_endpoint_empty_token_header(self, client):
         """Protected endpoint should reject empty token in header"""
-        response = client.get(
-            "/protected",
-            headers={"Authorization": "Bearer "}
-        )
+        response = client.get("/protected", headers={"Authorization": "Bearer "})
         assert response.status_code == 401
 
     def test_protected_endpoint_empty_token_query(self, client):
         """Protected endpoint should reject empty token in query parameter"""
-        response = client.get(
-            "/protected",
-            params={"token": ""}
-        )
+        response = client.get("/protected", params={"token": ""})
         assert response.status_code == 401
 
     def test_protected_endpoint_token_in_wrong_header(self, client, auth_manager):
         """Protected endpoint should not accept token in custom header"""
-        response = client.get(
-            "/protected",
-            headers={"X-Custom-Token": auth_manager.server_token}
-        )
+        response = client.get("/protected", headers={"X-Custom-Token": auth_manager.server_token})
         assert response.status_code == 401
 
 
@@ -158,19 +130,13 @@ class TestOptionalAuthEndpoints:
 
     def test_optional_endpoint_with_auth(self, client, auth_manager):
         """Optional auth endpoint should recognize valid authentication"""
-        response = client.get(
-            "/optional",
-            headers={"Authorization": f"Bearer {auth_manager.server_token}"}
-        )
+        response = client.get("/optional", headers={"Authorization": f"Bearer {auth_manager.server_token}"})
         assert response.status_code == 200
         assert response.json()["message"] == "authenticated"
 
     def test_optional_endpoint_with_invalid_auth(self, client):
         """Optional auth endpoint should treat invalid auth as no auth"""
-        response = client.get(
-            "/optional",
-            headers={"Authorization": "Bearer invalid-token"}
-        )
+        response = client.get("/optional", headers={"Authorization": "Bearer invalid-token"})
         assert response.status_code == 200
         assert response.json()["message"] == "not authenticated"
 
@@ -192,10 +158,7 @@ class TestAuthenticationBypassAttempts:
         ]
 
         for attempt in sql_injection_attempts:
-            response = client.get(
-                "/protected",
-                headers={"Authorization": f"Bearer {attempt}"}
-            )
+            response = client.get("/protected", headers={"Authorization": f"Bearer {attempt}"})
             assert response.status_code == 401
 
     def test_bypass_with_jwt_algorithm_confusion(self, client):
@@ -203,10 +166,7 @@ class TestAuthenticationBypassAttempts:
         # This would be a token signed with "none" algorithm
         malicious_token = "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJjb2RldG9yZXVtLXNlcnZlciJ9."
 
-        response = client.get(
-            "/protected",
-            headers={"Authorization": f"Bearer {malicious_token}"}
-        )
+        response = client.get("/protected", headers={"Authorization": f"Bearer {malicious_token}"})
         assert response.status_code == 401
 
     def test_bypass_with_header_injection(self, client, auth_manager):
@@ -217,7 +177,7 @@ class TestAuthenticationBypassAttempts:
                 "Authorization": f"Bearer {auth_manager.server_token}",
                 "X-Forwarded-For": "admin",
                 "X-Real-IP": "127.0.0.1",
-            }
+            },
         )
         # Should succeed because token is valid (header injection doesn't bypass)
         assert response.status_code == 200
@@ -230,20 +190,14 @@ class TestAuthenticationBypassAttempts:
         ]
 
         for attempt in traversal_attempts:
-            response = client.get(
-                "/protected",
-                params={"token": attempt}
-            )
+            response = client.get("/protected", params={"token": attempt})
             assert response.status_code == 401
 
     def test_bypass_with_very_long_token(self, client):
         """Attempt to bypass with extremely long token (potential DoS)"""
         very_long_token = "A" * 100000  # 100KB token
 
-        response = client.get(
-            "/protected",
-            headers={"Authorization": f"Bearer {very_long_token}"}
-        )
+        response = client.get("/protected", headers={"Authorization": f"Bearer {very_long_token}"})
         assert response.status_code == 401
 
     def test_bypass_with_unicode_tricks(self, client):
@@ -258,10 +212,7 @@ class TestAuthenticationBypassAttempts:
 
         for attempt in unicode_attempts:
             try:
-                response = client.get(
-                    "/protected",
-                    headers={"Authorization": f"Bearer {attempt}"}
-                )
+                response = client.get("/protected", headers={"Authorization": f"Bearer {attempt}"})
                 assert response.status_code == 401
             except UnicodeEncodeError:
                 # If unicode encoding fails in test client, that's also a pass
@@ -278,26 +229,19 @@ class TestTokenPriority:
         response = client.get(
             "/protected",
             params={"token": auth_manager.server_token},
-            headers={"Authorization": "Bearer invalid-token"}
+            headers={"Authorization": "Bearer invalid-token"},
         )
         # Should succeed because query param is checked first
         assert response.status_code == 200
 
     def test_header_used_when_no_query_param(self, client, auth_manager):
         """Header token should be used when no query parameter"""
-        response = client.get(
-            "/protected",
-            headers={"Authorization": f"Bearer {auth_manager.server_token}"}
-        )
+        response = client.get("/protected", headers={"Authorization": f"Bearer {auth_manager.server_token}"})
         assert response.status_code == 200
 
     def test_invalid_query_param_invalid_header(self, client):
         """Both invalid tokens should result in 401"""
-        response = client.get(
-            "/protected",
-            params={"token": "invalid1"},
-            headers={"Authorization": "Bearer invalid2"}
-        )
+        response = client.get("/protected", params={"token": "invalid1"}, headers={"Authorization": "Bearer invalid2"})
         assert response.status_code == 401
 
 
@@ -307,19 +251,13 @@ class TestCaseSensitivity:
     def test_authorization_header_case_sensitive(self, client, auth_manager):
         """Authorization header name should be case-insensitive (HTTP standard)"""
         # FastAPI/Starlette handles this, but verify it works
-        response = client.get(
-            "/protected",
-            headers={"authorization": f"Bearer {auth_manager.server_token}"}
-        )
+        response = client.get("/protected", headers={"authorization": f"Bearer {auth_manager.server_token}"})
         # Should work (HTTP headers are case-insensitive)
         assert response.status_code == 200
 
     def test_bearer_prefix_case_sensitive(self, client, auth_manager):
         """Bearer prefix should be case-sensitive"""
-        response = client.get(
-            "/protected",
-            headers={"Authorization": f"bearer {auth_manager.server_token}"}
-        )
+        response = client.get("/protected", headers={"Authorization": f"bearer {auth_manager.server_token}"})
         # Should fail (we expect "Bearer" with capital B)
         assert response.status_code == 401
 

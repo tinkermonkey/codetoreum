@@ -172,9 +172,7 @@ class TestStageDependencies:
 
     def test_can_enter_with_satisfied_dependencies(self):
         """Test that stage can enter when dependencies are satisfied."""
-        stage = PipelineStage.create(
-            "test", "wf-1", {"agent_id": "agent-1"}, dependencies=["stage-1", "stage-2"]
-        )
+        stage = PipelineStage.create("test", "wf-1", {"agent_id": "agent-1"}, dependencies=["stage-1", "stage-2"])
         stage.mark_ready()
 
         assert not stage.can_enter([])
@@ -296,9 +294,7 @@ class TestStageTypes:
 
     def test_sequential_stage(self):
         """Test sequential stage type."""
-        stage = PipelineStage.create(
-            "test", "wf-1", {"agent_id": "agent-1"}, stage_type=StageType.SEQUENTIAL
-        )
+        stage = PipelineStage.create("test", "wf-1", {"agent_id": "agent-1"}, stage_type=StageType.SEQUENTIAL)
         assert stage.stage_type == StageType.SEQUENTIAL
         assert not stage.is_parallel
 

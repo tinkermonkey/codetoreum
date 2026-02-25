@@ -116,9 +116,7 @@ class ElasticsearchEventStore(IEventStore):
             try:
                 await self._create_index_template_if_not_exists()
                 self._initialized = True
-                logger.info(
-                    f"Elasticsearch event store initialized with prefix '{self.index_prefix}'"
-                )
+                logger.info(f"Elasticsearch event store initialized with prefix '{self.index_prefix}'")
             except Exception as e:
                 msg = f"Failed to initialize event store: {e}"
                 raise EventStoreError(msg) from e
@@ -156,9 +154,7 @@ class ElasticsearchEventStore(IEventStore):
                         f"Stream {stream_id}: expected version {expected_version}, "
                         f"but current version is {current_version}"
                     )
-                    raise ConcurrencyConflictError(
-                        msg
-                    )
+                    raise ConcurrencyConflictError(msg)
 
             # Get starting version for new events
             start_version = await self.get_stream_version(stream_id)
@@ -170,9 +166,7 @@ class ElasticsearchEventStore(IEventStore):
                 index_name = self._get_index_name(event.occurred_at)
 
                 # Index operation
-                bulk_body.append(
-                    {"index": {"_index": index_name, "_id": str(event.event_id)}}
-                )
+                bulk_body.append({"index": {"_index": index_name, "_id": str(event.event_id)}})
 
                 # Document
                 doc = EventSerializer.to_dict(event)
@@ -184,15 +178,9 @@ class ElasticsearchEventStore(IEventStore):
 
             # Check for errors
             if response.get("errors"):
-                errors = [
-                    item
-                    for item in response["items"]
-                    if "error" in item.get("index", {})
-                ]
+                errors = [item for item in response["items"] if "error" in item.get("index", {})]
                 msg = f"Bulk insert had {len(errors)} errors: {errors[0] if errors else 'unknown'}"
-                raise EventStoreError(
-                    msg
-                )
+                raise EventStoreError(msg)
 
             logger.debug(
                 f"Appended {len(events)} events to stream {stream_id} "
@@ -241,9 +229,7 @@ class ElasticsearchEventStore(IEventStore):
             }
 
             if to_version is not None:
-                query["bool"]["must"].append(
-                    {"range": {"stream_version": {"lte": to_version}}}
-                )
+                query["bool"]["must"].append({"range": {"stream_version": {"lte": to_version}}})
 
             # Search across all event indices
             response = await self.client.search(
@@ -532,11 +518,7 @@ class ElasticsearchEventStore(IEventStore):
                 index=f"{self.index_prefix}-*",
                 query=query,
                 size=0,
-                aggs={
-                    "unique_streams": {
-                        "terms": {"field": "aggregate_id", "size": 10000}
-                    }
-                },
+                aggs={"unique_streams": {"terms": {"field": "aggregate_id", "size": 10000}}},
             )
 
             buckets = response["aggregations"]["unique_streams"]["buckets"]
@@ -616,9 +598,7 @@ class ElasticsearchEventStore(IEventStore):
                 "streams": {
                     "composite": {
                         "size": limit,
-                        "sources": [
-                            {"aggregate_id": {"terms": {"field": "aggregate_id"}}}
-                        ],
+                        "sources": [{"aggregate_id": {"terms": {"field": "aggregate_id"}}}],
                     },
                     "aggregations": {
                         "latest_event": {
@@ -676,21 +656,15 @@ class ElasticsearchEventStore(IEventStore):
                 index=f"{self.index_prefix}-*",
                 query=query,
                 size=0,
-                aggs={
-                    "unique_streams": {"cardinality": {"field": "aggregate_id"}}
-                },
+                aggs={"unique_streams": {"cardinality": {"field": "aggregate_id"}}},
             )
-            total_count = int(
-                count_response["aggregations"]["unique_streams"]["value"]
-            )
+            total_count = int(count_response["aggregations"]["unique_streams"]["value"])
 
             return all_streams, total_count
 
         except Exception as e:
             msg = f"Failed to query streams by latest event: {e}"
-            raise EventStoreError(
-                msg
-            ) from e
+            raise EventStoreError(msg) from e
 
     async def get_events_by_type(
         self,
@@ -720,9 +694,7 @@ class ElasticsearchEventStore(IEventStore):
             query = {"bool": {"must": [{"term": {"event_type": event_type}}]}}
 
             if since:
-                query["bool"]["must"].append(
-                    {"range": {"timestamp": {"gte": since.isoformat()}}}
-                )
+                query["bool"]["must"].append({"range": {"timestamp": {"gte": since.isoformat()}}})
 
             # Search
             response = await self.client.search(

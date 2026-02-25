@@ -120,11 +120,13 @@ class WebSocketSessionTracer:
             return
 
         try:
-            session_span.set_attributes({
-                "websocket.session.close_reason": reason,
-                "websocket.session.message_count": message_count,
-                "websocket.session.buffered_events": buffered_events,
-            })
+            session_span.set_attributes(
+                {
+                    "websocket.session.close_reason": reason,
+                    "websocket.session.message_count": message_count,
+                    "websocket.session.buffered_events": buffered_events,
+                }
+            )
             session_span.end()
 
             logger.debug(
@@ -232,9 +234,7 @@ class WebSocketMessageTracer:
 
         return span
 
-    def start_unsubscribe_message(
-        self, connection_id: str, subscription_id: str
-    ) -> Any | None:
+    def start_unsubscribe_message(self, connection_id: str, subscription_id: str) -> Any | None:
         """
         Start a MESSAGE span for unsubscribe operation.
 
@@ -413,10 +413,12 @@ class WebSocketMessageTracer:
                 # Extract trace context data
                 trace_data = TraceContextData.from_traceparent(traceparent)
                 if trace_data:
-                    message_span.set_attributes({
-                        "event.trace_id": trace_data.trace_id,
-                        "event.span_id": trace_data.span_id,
-                    })
+                    message_span.set_attributes(
+                        {
+                            "event.trace_id": trace_data.trace_id,
+                            "event.span_id": trace_data.span_id,
+                        }
+                    )
 
                     logger.debug(
                         "Linked message span to event trace context",

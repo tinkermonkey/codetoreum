@@ -210,21 +210,15 @@ class ClaudeCodeAdapter(ILLMProvider):
         env = os.environ.copy()
 
         # Authentication - retrieve securely from credential provider
-        api_key = await self.config.credential_provider.get_credential(
-            self.config.api_key_credential_name
-        )
-        oauth_token = await self.config.credential_provider.get_credential(
-            self.config.oauth_token_credential_name
-        )
+        api_key = await self.config.credential_provider.get_credential(self.config.api_key_credential_name)
+        oauth_token = await self.config.credential_provider.get_credential(self.config.oauth_token_credential_name)
 
         if not api_key and not oauth_token:
             msg = (
                 f"No credentials found. Set {self.config.api_key_credential_name} "
                 f"or {self.config.oauth_token_credential_name} in credential provider."
             )
-            raise AuthenticationError(
-                msg
-            )
+            raise AuthenticationError(msg)
 
         if api_key:
             env["ANTHROPIC_API_KEY"] = api_key
@@ -416,8 +410,7 @@ class ClaudeCodeAdapter(ILLMProvider):
                 await asyncio.wait_for(process.wait(), timeout=_PROCESS_TIMEOUT_NORMAL_COMPLETION_SECONDS)
             except TimeoutError:
                 logging.exception(
-                    "Process (PID: %s) did not complete within %d seconds after streaming finished, "
-                    "killing process",
+                    "Process (PID: %s) did not complete within %d seconds after streaming finished, killing process",
                     process.pid,
                     _PROCESS_TIMEOUT_NORMAL_COMPLETION_SECONDS,
                 )
@@ -534,6 +527,7 @@ class ClaudeCodeAdapter(ILLMProvider):
             if not ctx.mcp_servers:
                 # Log warning but continue - Claude has built-in tools
                 import logging
+
                 logging.warning(
                     "Tool definitions provided but no MCP servers configured. "
                     "Custom tools will not be available. Built-in Claude tools will be used."
@@ -812,7 +806,8 @@ class ClaudeCodeAdapter(ILLMProvider):
                 capture_output=True,
                 text=True,
                 timeout=10,
-                shell=False,  # Explicit: prevent shell injection
+                shell=False,
+                check=False,  # Explicit: prevent shell injection
             )
 
             if result.returncode != 0:
@@ -821,9 +816,7 @@ class ClaudeCodeAdapter(ILLMProvider):
 
             # Validate credentials are available
             try:
-                api_key = await self.config.credential_provider.get_credential(
-                    self.config.api_key_credential_name
-                )
+                api_key = await self.config.credential_provider.get_credential(self.config.api_key_credential_name)
                 oauth_token = await self.config.credential_provider.get_credential(
                     self.config.oauth_token_credential_name
                 )
@@ -833,9 +826,7 @@ class ClaudeCodeAdapter(ILLMProvider):
                         f"No credentials found. Set {self.config.api_key_credential_name} "
                         f"or {self.config.oauth_token_credential_name}"
                     )
-                    raise LLMProviderError(
-                        msg
-                    )
+                    raise LLMProviderError(msg)
             except Exception as e:
                 msg = f"Credential validation failed: {e!s}"
                 raise LLMProviderError(msg)
@@ -868,6 +859,6 @@ class ClaudeCodeAdapter(ILLMProvider):
                 "Error during context manager cleanup: %s",
                 str(e),
                 exc_info=True,
-                extra={"error_id": "ERR_CLAUDE_CODE_ADAPTER_CLEANUP_ERROR"}
+                extra={"error_id": "ERR_CLAUDE_CODE_ADAPTER_CLEANUP_ERROR"},
             )
         return False  # Don't suppress exceptions

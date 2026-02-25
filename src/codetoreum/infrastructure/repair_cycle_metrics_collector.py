@@ -170,48 +170,21 @@ class RepairCycleMetricsCollector:
             return
 
         # Cycle lifecycle events
-        self.event_bus.subscribe(
-            EventTypes.REPAIR_CYCLE_STARTED,
-            self._on_repair_cycle_started
-        )
-        self.event_bus.subscribe(
-            EventTypes.REPAIR_CYCLE_COMPLETED,
-            self._on_repair_cycle_completed
-        )
-        self.event_bus.subscribe(
-            EventTypes.REPAIR_CYCLE_FAST_FAIL,
-            self._on_repair_cycle_fast_fail
-        )
+        self.event_bus.subscribe(EventTypes.REPAIR_CYCLE_STARTED, self._on_repair_cycle_started)
+        self.event_bus.subscribe(EventTypes.REPAIR_CYCLE_COMPLETED, self._on_repair_cycle_completed)
+        self.event_bus.subscribe(EventTypes.REPAIR_CYCLE_FAST_FAIL, self._on_repair_cycle_fast_fail)
 
         # Test execution events
-        self.event_bus.subscribe(
-            EventTypes.REPAIR_CYCLE_TEST_EXECUTION_STARTED,
-            self._on_test_execution_started
-        )
-        self.event_bus.subscribe(
-            EventTypes.REPAIR_CYCLE_TEST_EXECUTION_COMPLETED,
-            self._on_test_execution_completed
-        )
+        self.event_bus.subscribe(EventTypes.REPAIR_CYCLE_TEST_EXECUTION_STARTED, self._on_test_execution_started)
+        self.event_bus.subscribe(EventTypes.REPAIR_CYCLE_TEST_EXECUTION_COMPLETED, self._on_test_execution_completed)
 
         # File fixing events
-        self.event_bus.subscribe(
-            EventTypes.REPAIR_CYCLE_FILE_FIX_STARTED,
-            self._on_file_fix_started
-        )
-        self.event_bus.subscribe(
-            EventTypes.REPAIR_CYCLE_FILE_FIX_COMPLETED,
-            self._on_file_fix_completed
-        )
+        self.event_bus.subscribe(EventTypes.REPAIR_CYCLE_FILE_FIX_STARTED, self._on_file_fix_started)
+        self.event_bus.subscribe(EventTypes.REPAIR_CYCLE_FILE_FIX_COMPLETED, self._on_file_fix_completed)
 
         # Warning review events
-        self.event_bus.subscribe(
-            EventTypes.REPAIR_CYCLE_WARNING_REVIEW_STARTED,
-            self._on_warning_review_started
-        )
-        self.event_bus.subscribe(
-            EventTypes.REPAIR_CYCLE_WARNING_REVIEW_COMPLETED,
-            self._on_warning_review_completed
-        )
+        self.event_bus.subscribe(EventTypes.REPAIR_CYCLE_WARNING_REVIEW_STARTED, self._on_warning_review_started)
+        self.event_bus.subscribe(EventTypes.REPAIR_CYCLE_WARNING_REVIEW_COMPLETED, self._on_warning_review_completed)
 
         logger.info("RepairCycleMetricsCollector subscribed to events")
 
@@ -240,18 +213,15 @@ class RepairCycleMetricsCollector:
         """Record backend failure and emit event for visibility."""
         self._backend_consecutive_failures += 1
 
-        circuit_opened = False
-        if (not self._backend_circuit_open and
-            self._backend_consecutive_failures >= self._max_consecutive_failures):
+        if not self._backend_circuit_open and self._backend_consecutive_failures >= self._max_consecutive_failures:
             self._backend_circuit_open = True
-            circuit_opened = True
             logger.error(
-                f"Metrics backend circuit breaker OPENED after "
-                f"{self._max_consecutive_failures} consecutive failures",
+                f"Metrics backend circuit breaker OPENED after {self._max_consecutive_failures} consecutive failures",
                 extra={
                     "last_operation": operation,
                     "last_error": str(error),
-                "error_id": ErrorRegistry.ERR_METRICS_ERROR},
+                    "error_id": ErrorRegistry.ERR_METRICS_ERROR,
+                },
                 exc_info=True,
             )
 
@@ -313,7 +283,7 @@ class RepairCycleMetricsCollector:
                     "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_METRICS_ERROR,
                     "circuit_breaker_open": self._backend_circuit_open,
                     "consecutive_failures": self._backend_consecutive_failures,
-                }
+                },
             )
 
     async def _on_repair_cycle_completed(self, event: DomainEvent) -> None:
@@ -324,7 +294,6 @@ class RepairCycleMetricsCollector:
             overall_success = self._get_event_attribute(event, "overall_success", False)
             duration_seconds = self._get_event_attribute(event, "duration_seconds", 0.0)
             total_agent_calls = self._get_event_attribute(event, "total_agent_calls", 0)
-            total_iterations = self._get_event_attribute(event, "total_iterations", 0)
 
             self._metrics.cycles_completed += 1
             self._metrics.cycle_durations.append(duration_seconds)
@@ -388,7 +357,7 @@ class RepairCycleMetricsCollector:
                     "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_METRICS_ERROR,
                     "circuit_breaker_open": self._backend_circuit_open,
                     "consecutive_failures": self._backend_consecutive_failures,
-                }
+                },
             )
 
     async def _on_repair_cycle_fast_fail(self, event: DomainEvent) -> None:
@@ -431,7 +400,7 @@ class RepairCycleMetricsCollector:
                     "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_METRICS_ERROR,
                     "circuit_breaker_open": self._backend_circuit_open,
                     "consecutive_failures": self._backend_consecutive_failures,
-                }
+                },
             )
 
     async def _on_test_execution_started(self, event: DomainEvent) -> None:
@@ -454,7 +423,7 @@ class RepairCycleMetricsCollector:
                     "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_METRICS_ERROR,
                     "circuit_breaker_open": self._backend_circuit_open,
                     "consecutive_failures": self._backend_consecutive_failures,
-                }
+                },
             )
 
     async def _on_test_execution_completed(self, event: DomainEvent) -> None:
@@ -517,7 +486,7 @@ class RepairCycleMetricsCollector:
                 extra={
                     "circuit_breaker_open": self._backend_circuit_open,
                     "consecutive_failures": self._backend_consecutive_failures,
-                }
+                },
             )
 
     async def _on_file_fix_started(self, event: DomainEvent) -> None:
@@ -539,7 +508,7 @@ class RepairCycleMetricsCollector:
                 extra={
                     "circuit_breaker_open": self._backend_circuit_open,
                     "consecutive_failures": self._backend_consecutive_failures,
-                }
+                },
             )
 
     async def _on_file_fix_completed(self, event: DomainEvent) -> None:
@@ -551,9 +520,7 @@ class RepairCycleMetricsCollector:
 
             if fixed:
                 self._metrics.files_fixed_total += 1
-                self._metrics.unique_files_fixed[file_path] = (
-                    self._metrics.unique_files_fixed.get(file_path, 0) + 1
-                )
+                self._metrics.unique_files_fixed[file_path] = self._metrics.unique_files_fixed.get(file_path, 0) + 1
 
                 # Extract file extension for metrics
                 file_ext = file_path.split(".")[-1] if "." in file_path else "unknown"
@@ -589,7 +556,7 @@ class RepairCycleMetricsCollector:
                 extra={
                     "circuit_breaker_open": self._backend_circuit_open,
                     "consecutive_failures": self._backend_consecutive_failures,
-                }
+                },
             )
 
     async def _on_warning_review_started(self, event: DomainEvent) -> None:
@@ -611,7 +578,7 @@ class RepairCycleMetricsCollector:
                 extra={
                     "circuit_breaker_open": self._backend_circuit_open,
                     "consecutive_failures": self._backend_consecutive_failures,
-                }
+                },
             )
 
     async def _on_warning_review_completed(self, event: DomainEvent) -> None:
@@ -625,9 +592,7 @@ class RepairCycleMetricsCollector:
             # Track warnings by severity
             for warning in warnings:
                 severity = getattr(warning, "severity", "info")
-                self._metrics.warnings_by_severity[severity] = (
-                    self._metrics.warnings_by_severity.get(severity, 0) + 1
-                )
+                self._metrics.warnings_by_severity[severity] = self._metrics.warnings_by_severity.get(severity, 0) + 1
 
                 if self.metrics_backend:
                     await self.metrics_backend.increment_counter(
@@ -651,7 +616,7 @@ class RepairCycleMetricsCollector:
                 extra={
                     "circuit_breaker_open": self._backend_circuit_open,
                     "consecutive_failures": self._backend_consecutive_failures,
-                }
+                },
             )
 
     def get_metrics(self) -> RepairCycleMetrics:

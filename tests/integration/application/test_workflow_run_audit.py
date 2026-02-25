@@ -174,7 +174,7 @@ async def workflow_with_many_events(event_store, ticket_system):
                 aggregate_id=workflow_id,
                 payload={
                     "from_stage": f"stage-{i}",
-                    "to_stage": f"stage-{i+1}",
+                    "to_stage": f"stage-{i + 1}",
                     "stage_index": 0,
                     "advanced_at": datetime.now(UTC).isoformat(),
                 },
@@ -561,12 +561,9 @@ async def test_audit_stage_with_no_events(event_store, ticket_system):
                 "work_item_id": work_item_id,
                 "template_id": "test-template",
                 "project_id": project_id,
-            }
+            },
         ),
-        WorkflowStarted(
-            aggregate_id=workflow_id,
-            payload={}
-        )
+        WorkflowStarted(aggregate_id=workflow_id, payload={}),
     ]
     await event_store.append(workflow_id, events)
 

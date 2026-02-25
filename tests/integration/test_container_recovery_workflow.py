@@ -8,7 +8,7 @@ These tests verify:
 """
 
 from datetime import datetime
-from typing import TypeVar, Generic
+from typing import TypeVar
 
 import pytest
 
@@ -173,35 +173,25 @@ class TestContainerRecoveryWorkflowWithMocks:
         # Verify events
         recovered_events = event_emitter.get_events_by_type(ContainerRecoveredEvent)
         killed_events = event_emitter.get_events_by_type(ContainerKilledEvent)
-        completion_events = event_emitter.get_events_by_type(
-            ContainerRecoveryCompletedEvent
-        )
+        completion_events = event_emitter.get_events_by_type(ContainerRecoveryCompletedEvent)
 
         assert len(recovered_events) == 2
         assert len(killed_events) == 2
         assert len(completion_events) == 1
 
         # Verify recovery event details
-        recovery_with_monitoring = [
-            e for e in recovered_events if e.container_id == "container-1"
-        ][0]
+        recovery_with_monitoring = [e for e in recovered_events if e.container_id == "container-1"][0]
         assert recovery_with_monitoring.recovery_action == "reconnect_with_monitoring"
         assert recovery_with_monitoring.project_id == "proj-1"
 
-        recovery_limited = [
-            e for e in recovered_events if e.container_id == "container-2"
-        ][0]
+        recovery_limited = [e for e in recovered_events if e.container_id == "container-2"][0]
         assert recovery_limited.recovery_action == "reconnect_limited"
 
         # Verify kill event details
-        killed_by_timeout = [
-            e for e in killed_events if e.container_id == "container-3"
-        ][0]
+        killed_by_timeout = [e for e in killed_events if e.container_id == "container-3"][0]
         assert killed_by_timeout.kill_reason == "container_timeout"
 
-        killed_orphan = [
-            e for e in killed_events if e.container_id == "container-4"
-        ][0]
+        killed_orphan = [e for e in killed_events if e.container_id == "container-4"][0]
         assert killed_orphan.kill_reason == "no_execution_found"
 
         # Verify completion event
@@ -299,9 +289,7 @@ class TestContainerRecoveryWorkflowWithMocks:
         assert result.repair_cycles_processed == 5
 
         # Verify completion event includes repair cycles
-        completion_events = event_emitter.get_events_by_type(
-            ContainerRecoveryCompletedEvent
-        )
+        completion_events = event_emitter.get_events_by_type(ContainerRecoveryCompletedEvent)
         assert len(completion_events) == 1
         assert completion_events[0].repair_cycles_processed == 5
 

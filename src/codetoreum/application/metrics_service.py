@@ -186,9 +186,7 @@ class MetricsService(IMetricsQueryPort):
             aggregation_window_seconds=aggregation_window_seconds,
         )
 
-    async def get_resilience_metrics(
-        self, start_time: datetime, end_time: datetime
-    ) -> ResilienceMetrics:
+    async def get_resilience_metrics(self, start_time: datetime, end_time: datetime) -> ResilienceMetrics:
         """
         Get resilience infrastructure metrics.
 
@@ -234,7 +232,7 @@ class MetricsService(IMetricsQueryPort):
             logger.warning(
                 f"Event store health check failed: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_METRICS_EVENTSTORE_HEALTH_CHECK_FAILURE"}
+                extra={"error_id": "ERR_METRICS_EVENTSTORE_HEALTH_CHECK_FAILURE"},
             )
             event_store_connected = False
 
@@ -354,8 +352,7 @@ class MetricsService(IMetricsQueryPort):
             end_time = datetime.now(UTC)
 
         logger.debug(
-            f"Getting agent execution metrics for {agent_name or 'all agents'} "
-            f"from {start_time} to {end_time}"
+            f"Getting agent execution metrics for {agent_name or 'all agents'} from {start_time} to {end_time}"
         )
 
         # Query execution events from event store
@@ -379,15 +376,9 @@ class MetricsService(IMetricsQueryPort):
 
         # Filter by agent name if specified
         if agent_name:
-            execution_events = [
-                e for e in execution_events if e.payload.get("agent_name") == agent_name
-            ]
-            completed_events = [
-                e for e in completed_events if e.payload.get("agent_name") == agent_name
-            ]
-            failed_events = [
-                e for e in failed_events if e.payload.get("agent_name") == agent_name
-            ]
+            execution_events = [e for e in execution_events if e.payload.get("agent_name") == agent_name]
+            completed_events = [e for e in completed_events if e.payload.get("agent_name") == agent_name]
+            failed_events = [e for e in failed_events if e.payload.get("agent_name") == agent_name]
 
         # Calculate metrics
         total_executions = len(execution_events)
@@ -395,16 +386,10 @@ class MetricsService(IMetricsQueryPort):
         total_failed = len(failed_events)
         total_active = total_executions - total_completed - total_failed
 
-        success_rate = (
-            total_completed / total_executions if total_executions > 0 else 0.0
-        )
+        success_rate = total_completed / total_executions if total_executions > 0 else 0.0
 
         # Calculate duration stats from completed executions
-        durations = [
-            e.payload["duration_seconds"]
-            for e in completed_events
-            if "duration_seconds" in e.payload
-        ]
+        durations = [e.payload["duration_seconds"] for e in completed_events if "duration_seconds" in e.payload]
 
         avg_duration = sum(durations) / len(durations) if durations else 0.0
         min_duration = min(durations) if durations else 0.0
@@ -466,7 +451,9 @@ class MetricsService(IMetricsQueryPort):
             execution_id = event.payload.get("execution_id")
             if execution_id and execution_id not in finished_ids:
                 # Normalize event.occurred_at to aware datetime if needed
-                occurred_at = event.occurred_at if event.occurred_at.tzinfo is not None else event.occurred_at.replace(tzinfo=UTC)
+                occurred_at = (
+                    event.occurred_at if event.occurred_at.tzinfo is not None else event.occurred_at.replace(tzinfo=UTC)
+                )
                 active_agents.append(
                     {
                         "execution_id": execution_id,
@@ -496,9 +483,6 @@ class MetricsService(IMetricsQueryPort):
         # This would typically query usage metrics from the LLM provider adapter
         # or from a dedicated usage tracking service
 
-        # Query for recent LLM API calls from events
-        recent_time = datetime.now(UTC) - timedelta(days=1)
-
         # For now, return placeholder data
         return {
             "claude_api": {
@@ -521,7 +505,7 @@ class MetricsService(IMetricsQueryPort):
         self,
         agent_name: str | None = None,
         start_time: datetime | None = None,
-        end_time: datetime | None = None
+        end_time: datetime | None = None,
     ) -> dict[str, Any]:
         """
         Get repair cycle metrics.
@@ -539,10 +523,7 @@ class MetricsService(IMetricsQueryPort):
         if end_time is None:
             end_time = datetime.now(UTC)
 
-        logger.debug(
-            f"Getting repair cycle metrics for {agent_name or 'all agents'} "
-            f"from {start_time} to {end_time}"
-        )
+        logger.debug(f"Getting repair cycle metrics for {agent_name or 'all agents'} from {start_time} to {end_time}")
 
         # Query repair cycle events
         started_events = await self.event_store.get_events_by_type(
@@ -641,23 +622,32 @@ class MetricsService(IMetricsQueryPort):
                 files_fixed_total += 1
 
         # Calculate warning metrics
-        warnings_reviewed_total = sum(
-            event.payload.get("warnings_reviewed", 0)
-            for event in warning_review_events
-        )
+        warnings_reviewed_total = sum(event.payload.get("warnings_reviewed", 0) for event in warning_review_events)
 
         # Calculate per-agent metrics
         agents: dict[str, dict[str, int]] = {}
         for event in started_events:
             agent = event.payload.get("agent_name", "unknown")
             if agent not in agents:
-                agents[agent] = {"started": 0, "completed": 0, "successful": 0, "failed": 0, "fast_failed": 0}
+                agents[agent] = {
+                    "started": 0,
+                    "completed": 0,
+                    "successful": 0,
+                    "failed": 0,
+                    "fast_failed": 0,
+                }
             agents[agent]["started"] += 1
 
         for event in completed_events:
             agent = event.payload.get("agent_name", "unknown")
             if agent not in agents:
-                agents[agent] = {"started": 0, "completed": 0, "successful": 0, "failed": 0, "fast_failed": 0}
+                agents[agent] = {
+                    "started": 0,
+                    "completed": 0,
+                    "successful": 0,
+                    "failed": 0,
+                    "fast_failed": 0,
+                }
             agents[agent]["completed"] += 1
             if event.payload.get("overall_success"):
                 agents[agent]["successful"] += 1
@@ -667,7 +657,13 @@ class MetricsService(IMetricsQueryPort):
         for event in fast_fail_events:
             agent = event.payload.get("agent_name", "unknown")
             if agent not in agents:
-                agents[agent] = {"started": 0, "completed": 0, "successful": 0, "failed": 0, "fast_failed": 0}
+                agents[agent] = {
+                    "started": 0,
+                    "completed": 0,
+                    "successful": 0,
+                    "failed": 0,
+                    "fast_failed": 0,
+                }
             agents[agent]["fast_failed"] += 1
 
         # Calculate averages

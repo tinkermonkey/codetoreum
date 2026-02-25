@@ -57,9 +57,7 @@ class TestPipelineQueueServiceContract(ABC):
         service = await self.create_service()
         now = datetime.now(UTC)
 
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-123", position_in_column=0, timestamp=now
-        )
+        await service.enqueue_item("proj-1", "board-1", "item-123", position_in_column=0, timestamp=now)
 
         result = await service.is_item_in_queue("item-123")
         assert result is True
@@ -70,9 +68,7 @@ class TestPipelineQueueServiceContract(ABC):
         service = await self.create_service()
         now = datetime.now(UTC)
 
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-123", position_in_column=0, timestamp=now
-        )
+        await service.enqueue_item("proj-1", "board-1", "item-123", position_in_column=0, timestamp=now)
         await service.remove_from_queue("item-123")
 
         result = await service.is_item_in_queue("item-123")
@@ -94,9 +90,7 @@ class TestPipelineQueueServiceContract(ABC):
         service = await self.create_service()
         now = datetime.now(UTC)
 
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-123", position_in_column=0, timestamp=now
-        )
+        await service.enqueue_item("proj-1", "board-1", "item-123", position_in_column=0, timestamp=now)
 
         entries = await service.get_queue_entries("proj-1", "board-1")
         assert len(entries) == 1
@@ -110,9 +104,7 @@ class TestPipelineQueueServiceContract(ABC):
         service = await self.create_service()
         now = datetime.now(UTC)
 
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-123", position_in_column=5, timestamp=now
-        )
+        await service.enqueue_item("proj-1", "board-1", "item-123", position_in_column=5, timestamp=now)
 
         entries = await service.get_queue_entries("proj-1", "board-1")
         assert entries[0].position_in_column == 5
@@ -123,14 +115,10 @@ class TestPipelineQueueServiceContract(ABC):
         service = await self.create_service()
         now = datetime.now(UTC)
 
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-123", position_in_column=0, timestamp=now
-        )
+        await service.enqueue_item("proj-1", "board-1", "item-123", position_in_column=0, timestamp=now)
 
         with pytest.raises(Exception):  # DuplicateError or RuntimeError
-            await service.enqueue_item(
-                "proj-1", "board-1", "item-123", position_in_column=1, timestamp=now
-            )
+            await service.enqueue_item("proj-1", "board-1", "item-123", position_in_column=1, timestamp=now)
 
     @pytest.mark.asyncio
     async def test_enqueue_item_validates_project_id(self):
@@ -139,9 +127,7 @@ class TestPipelineQueueServiceContract(ABC):
         now = datetime.now(UTC)
 
         with pytest.raises(QueueValidationError):
-            await service.enqueue_item(
-                "", "board-1", "item-123", position_in_column=0, timestamp=now
-            )
+            await service.enqueue_item("", "board-1", "item-123", position_in_column=0, timestamp=now)
 
     @pytest.mark.asyncio
     async def test_enqueue_item_validates_board_id(self):
@@ -150,9 +136,7 @@ class TestPipelineQueueServiceContract(ABC):
         now = datetime.now(UTC)
 
         with pytest.raises(QueueValidationError):
-            await service.enqueue_item(
-                "proj-1", "", "item-123", position_in_column=0, timestamp=now
-            )
+            await service.enqueue_item("proj-1", "", "item-123", position_in_column=0, timestamp=now)
 
     @pytest.mark.asyncio
     async def test_enqueue_item_validates_work_item_id(self):
@@ -161,9 +145,7 @@ class TestPipelineQueueServiceContract(ABC):
         now = datetime.now(UTC)
 
         with pytest.raises(QueueValidationError):
-            await service.enqueue_item(
-                "proj-1", "board-1", "", position_in_column=0, timestamp=now
-            )
+            await service.enqueue_item("proj-1", "board-1", "", position_in_column=0, timestamp=now)
 
     @pytest.mark.asyncio
     async def test_enqueue_item_validates_position(self):
@@ -172,9 +154,7 @@ class TestPipelineQueueServiceContract(ABC):
         now = datetime.now(UTC)
 
         with pytest.raises(QueueValidationError):
-            await service.enqueue_item(
-                "proj-1", "board-1", "item-123", position_in_column=-1, timestamp=now
-            )
+            await service.enqueue_item("proj-1", "board-1", "item-123", position_in_column=-1, timestamp=now)
 
     # ===== mark_item_active Tests =====
 
@@ -184,9 +164,7 @@ class TestPipelineQueueServiceContract(ABC):
         service = await self.create_service()
         now = datetime.now(UTC)
 
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-123", position_in_column=0, timestamp=now
-        )
+        await service.enqueue_item("proj-1", "board-1", "item-123", position_in_column=0, timestamp=now)
         await service.mark_item_active("item-123")
 
         entries = await service.get_queue_entries("proj-1", "board-1")
@@ -206,9 +184,7 @@ class TestPipelineQueueServiceContract(ABC):
         service = await self.create_service()
         now = datetime.now(UTC)
 
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-123", position_in_column=0, timestamp=now
-        )
+        await service.enqueue_item("proj-1", "board-1", "item-123", position_in_column=0, timestamp=now)
         await service.mark_item_active("item-123")
 
         # Second call should either succeed (idempotent) or raise
@@ -233,9 +209,7 @@ class TestPipelineQueueServiceContract(ABC):
         service = await self.create_service()
         now = datetime.now(UTC)
 
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-123", position_in_column=0, timestamp=now
-        )
+        await service.enqueue_item("proj-1", "board-1", "item-123", position_in_column=0, timestamp=now)
 
         result = await service.remove_from_queue("item-123")
         assert result is True
@@ -262,9 +236,7 @@ class TestPipelineQueueServiceContract(ABC):
         service = await self.create_service()
         now = datetime.now(UTC)
 
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-123", position_in_column=0, timestamp=now
-        )
+        await service.enqueue_item("proj-1", "board-1", "item-123", position_in_column=0, timestamp=now)
         await service.remove_from_queue("item-123")
 
         assert await service.is_item_in_queue("item-123") is False
@@ -285,9 +257,7 @@ class TestPipelineQueueServiceContract(ABC):
         service = await self.create_service()
         now = datetime.now(UTC)
 
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-123", position_in_column=0, timestamp=now
-        )
+        await service.enqueue_item("proj-1", "board-1", "item-123", position_in_column=0, timestamp=now)
 
         result = await service.get_next_waiting_item("proj-1", "board-1")
         assert result is not None
@@ -302,15 +272,9 @@ class TestPipelineQueueServiceContract(ABC):
         now = datetime.now(UTC)
 
         # Enqueue out of order
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-3", position_in_column=2, timestamp=now
-        )
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-        )
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-2", position_in_column=1, timestamp=now
-        )
+        await service.enqueue_item("proj-1", "board-1", "item-3", position_in_column=2, timestamp=now)
+        await service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+        await service.enqueue_item("proj-1", "board-1", "item-2", position_in_column=1, timestamp=now)
 
         result = await service.get_next_waiting_item("proj-1", "board-1")
         assert result is not None
@@ -323,12 +287,8 @@ class TestPipelineQueueServiceContract(ABC):
         service = await self.create_service()
         now = datetime.now(UTC)
 
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-        )
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-2", position_in_column=1, timestamp=now
-        )
+        await service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+        await service.enqueue_item("proj-1", "board-1", "item-2", position_in_column=1, timestamp=now)
 
         await service.mark_item_active("item-1")
 
@@ -369,12 +329,8 @@ class TestPipelineQueueServiceContract(ABC):
         service = await self.create_service()
         now = datetime.now(UTC)
 
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-        )
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-2", position_in_column=1, timestamp=now
-        )
+        await service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+        await service.enqueue_item("proj-1", "board-1", "item-2", position_in_column=1, timestamp=now)
 
         result = await service.get_queue_entries("proj-1", "board-1")
         assert len(result) == 2
@@ -386,15 +342,9 @@ class TestPipelineQueueServiceContract(ABC):
         now = datetime.now(UTC)
 
         # Enqueue out of order
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-3", position_in_column=2, timestamp=now
-        )
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-        )
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-2", position_in_column=1, timestamp=now
-        )
+        await service.enqueue_item("proj-1", "board-1", "item-3", position_in_column=2, timestamp=now)
+        await service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+        await service.enqueue_item("proj-1", "board-1", "item-2", position_in_column=1, timestamp=now)
 
         result = await service.get_queue_entries("proj-1", "board-1")
         assert result[0].position_in_column == 0
@@ -407,9 +357,7 @@ class TestPipelineQueueServiceContract(ABC):
         service = await self.create_service()
         now = datetime.now(UTC)
 
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-        )
+        await service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
         await service.mark_item_active("item-1")
 
         result = await service.get_queue_entries("proj-1", "board-1")
@@ -466,9 +414,7 @@ class TestPipelineQueueServiceContract(ABC):
         service = await self.create_service()
         now = datetime.now(UTC)
 
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-123", position_in_column=0, timestamp=now
-        )
+        await service.enqueue_item("proj-1", "board-1", "item-123", position_in_column=0, timestamp=now)
 
         entries = await service.get_queue_entries("proj-1", "board-1")
         entry = entries[0]
@@ -485,12 +431,8 @@ class TestPipelineQueueServiceContract(ABC):
         service = await self.create_service()
         now = datetime.now(UTC)
 
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-        )
-        await service.enqueue_item(
-            "proj-2", "board-1", "item-2", position_in_column=0, timestamp=now
-        )
+        await service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+        await service.enqueue_item("proj-2", "board-1", "item-2", position_in_column=0, timestamp=now)
 
         proj1_entries = await service.get_queue_entries("proj-1", "board-1")
         proj2_entries = await service.get_queue_entries("proj-2", "board-1")
@@ -506,12 +448,8 @@ class TestPipelineQueueServiceContract(ABC):
         service = await self.create_service()
         now = datetime.now(UTC)
 
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-        )
-        await service.enqueue_item(
-            "proj-1", "board-2", "item-2", position_in_column=0, timestamp=now
-        )
+        await service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+        await service.enqueue_item("proj-1", "board-2", "item-2", position_in_column=0, timestamp=now)
 
         board1_entries = await service.get_queue_entries("proj-1", "board-1")
         board2_entries = await service.get_queue_entries("proj-1", "board-2")

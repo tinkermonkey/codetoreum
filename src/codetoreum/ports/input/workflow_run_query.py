@@ -16,6 +16,7 @@ from typing import Any
 
 class WorkflowRunStatus(Enum):
     """Status enumeration for workflow runs"""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -25,6 +26,7 @@ class WorkflowRunStatus(Enum):
 
 class WorkflowRunSortField(Enum):
     """Fields available for sorting workflow run lists"""
+
     STARTED_AT = "startedAt"
     COMPLETED_AT = "completedAt"
     DURATION = "duration"
@@ -32,6 +34,7 @@ class WorkflowRunSortField(Enum):
 
 class SortOrder(Enum):
     """Sort order"""
+
     ASC = "asc"
     DESC = "desc"
 
@@ -39,6 +42,7 @@ class SortOrder(Enum):
 @dataclass(frozen=True)
 class WorkflowRunFilters:
     """Filters for listing workflow runs"""
+
     status: tuple[WorkflowRunStatus, ...] | None = None  # Filter by status (comma-separated)
     project_id: str | None = None  # Filter by project
     work_item_id: str | None = None  # Filter by work item
@@ -65,6 +69,7 @@ class WorkflowRunFilters:
 @dataclass
 class WorkflowRunPaginationParams:
     """Pagination parameters for workflow run queries"""
+
     offset: int = 0
     limit: int = 20
     sort_by: WorkflowRunSortField = WorkflowRunSortField.STARTED_AT
@@ -86,6 +91,7 @@ class WorkflowRunPaginationParams:
 @dataclass(frozen=True)
 class WorkflowRunStageInfo:
     """Information about a workflow run stage"""
+
     name: str
     agent_name: str
     status: str  # pending, running, completed, failed
@@ -107,9 +113,7 @@ class WorkflowRunStageInfo:
         if self.started_at is not None and self.completed_at is not None:
             if self.completed_at < self.started_at:
                 msg = f"completedAt ({self.completed_at}) must be >= startedAt ({self.started_at})"
-                raise ValueError(
-                    msg
-                )
+                raise ValueError(msg)
 
         # Initialize metadata to empty immutable mapping if None
         if self.metadata is None:
@@ -121,6 +125,7 @@ class WorkflowRunStageInfo:
 @dataclass
 class WorkflowRunInfo:
     """Complete workflow run information"""
+
     id: str
     work_item_id: str
     workflow_id: str
@@ -143,6 +148,7 @@ class WorkflowRunInfo:
 @dataclass
 class WorkflowRunSummary:
     """Summary information for workflow run list"""
+
     id: str
     work_item_id: str
     workflow_id: str
@@ -163,6 +169,7 @@ class WorkflowRunSummary:
 @dataclass
 class WorkflowRunListResult:
     """Result of listing workflow runs"""
+
     runs: list[WorkflowRunSummary]
     total_count: int
     offset: int
@@ -173,6 +180,7 @@ class WorkflowRunListResult:
 @dataclass
 class WorkflowRunEventsResult:
     """Result of querying workflow run events"""
+
     events: list[dict[str, Any]]  # List of event dictionaries
     total_count: int
     offset: int
@@ -195,6 +203,7 @@ class WorkflowRunEventsResult:
 @dataclass
 class WorkflowRunAuditResult:
     """Result of querying workflow run audit information"""
+
     workflow_run: WorkflowRunSummary
     events: list[dict[str, Any]]  # List of event dictionaries
     stages: list[dict[str, Any]]  # List of stage information dictionaries
@@ -232,10 +241,7 @@ class IWorkflowRunQueryPort(ABC):
     """
 
     @abstractmethod
-    async def get_workflow_run(
-        self,
-        workflow_run_id: str
-    ) -> WorkflowRunInfo:
+    async def get_workflow_run(self, workflow_run_id: str) -> WorkflowRunInfo:
         """
         Retrieves a workflow run by ID.
 
@@ -253,7 +259,7 @@ class IWorkflowRunQueryPort(ABC):
     async def list_workflow_runs(
         self,
         filters: WorkflowRunFilters | None = None,
-        pagination: WorkflowRunPaginationParams | None = None
+        pagination: WorkflowRunPaginationParams | None = None,
     ) -> WorkflowRunListResult:
         """
         Lists workflow runs matching the specified criteria.
@@ -276,7 +282,7 @@ class IWorkflowRunQueryPort(ABC):
         offset: int = 0,
         limit: int = 50,
         event_types: list[str] | None = None,
-        since: datetime | None = None
+        since: datetime | None = None,
     ) -> WorkflowRunEventsResult:
         """
         Retrieves events for a specific workflow run.

@@ -16,7 +16,7 @@ class User:
 
 
 async def get_current_user(
-    authorization: str | None = Header(None, description="Bearer token")
+    authorization: str | None = Header(None, description="Bearer token"),
 ) -> User:
     """
     Dependency to extract and validate current user from Authorization header.

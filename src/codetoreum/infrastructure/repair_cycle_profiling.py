@@ -158,7 +158,11 @@ class RepairCycleProfiler:
             yield profile
         except Exception as e:
             profile.exceptions += 1
-            logger.error(f"Exception during profiled operation {operation}: {e}", exc_info=True, extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR})
+            logger.error(
+                f"Exception during profiled operation {operation}: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
             raise
         finally:
             profile.end_time = time.time()
@@ -257,11 +261,7 @@ class RepairCycleProfiler:
         if not self.enable_memory_tracking:
             return []
 
-        sorted_profiles = sorted(
-            self._profiles,
-            key=lambda p: p.memory_delta_bytes,
-            reverse=True
-        )
+        sorted_profiles = sorted(self._profiles, key=lambda p: p.memory_delta_bytes, reverse=True)
         return [p.to_dict() for p in sorted_profiles[:top_n]]
 
     def get_hottest_operations(self, top_n: int = 10) -> list[dict[str, Any]]:
@@ -351,32 +351,28 @@ class PerformanceThresholdMonitor:
         # Check duration
         duration_threshold = op_thresholds.get("duration_seconds")
         if duration_threshold and profile.duration_seconds > duration_threshold:
-            violations.append(
-                f"Duration threshold exceeded: {profile.duration_seconds:.2f}s > {duration_threshold}s"
-            )
+            violations.append(f"Duration threshold exceeded: {profile.duration_seconds:.2f}s > {duration_threshold}s")
 
         # Check memory delta
         memory_delta_mb = profile.memory_delta_bytes / 1024 / 1024
         memory_threshold = op_thresholds.get("memory_delta_mb")
         if memory_threshold and memory_delta_mb > memory_threshold:
-            violations.append(
-                f"Memory threshold exceeded: {memory_delta_mb:.2f}MB > {memory_threshold}MB"
-            )
+            violations.append(f"Memory threshold exceeded: {memory_delta_mb:.2f}MB > {memory_threshold}MB")
 
         # Check peak memory
         peak_memory_mb = profile.peak_memory_bytes / 1024 / 1024
         peak_threshold = op_thresholds.get("peak_memory_mb")
         if peak_threshold and peak_memory_mb > peak_threshold:
-            violations.append(
-                f"Peak memory threshold exceeded: {peak_memory_mb:.2f}MB > {peak_threshold}MB"
-            )
+            violations.append(f"Peak memory threshold exceeded: {peak_memory_mb:.2f}MB > {peak_threshold}MB")
 
         if violations:
-            self._violations.append({
-                "operation": profile.operation,
-                "violations": violations,
-                "timestamp": datetime.now(UTC).isoformat(),
-            })
+            self._violations.append(
+                {
+                    "operation": profile.operation,
+                    "violations": violations,
+                    "timestamp": datetime.now(UTC).isoformat(),
+                }
+            )
 
         return violations
 

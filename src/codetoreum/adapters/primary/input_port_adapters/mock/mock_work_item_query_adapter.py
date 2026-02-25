@@ -113,9 +113,7 @@ class MockWorkItemQueryAdapter(IWorkItemQueryPort):
                 has_next=has_next,
             )
 
-    async def search_work_items(
-        self, search_params: WorkItemSearchParams
-    ) -> WorkItemListResult:
+    async def search_work_items(self, search_params: WorkItemSearchParams) -> WorkItemListResult:
         """Searches work items by title and description."""
         with self._lock:
             # Get all work items
@@ -124,9 +122,7 @@ class MockWorkItemQueryAdapter(IWorkItemQueryPort):
             # Apply search query (simple case-insensitive substring match)
             query_lower = search_params.query.lower()
             work_items = [
-                wi
-                for wi in work_items
-                if query_lower in wi.title.lower() or query_lower in wi.description.lower()
+                wi for wi in work_items if query_lower in wi.title.lower() or query_lower in wi.description.lower()
             ]
 
             # Apply filters if provided
@@ -153,9 +149,7 @@ class MockWorkItemQueryAdapter(IWorkItemQueryPort):
                 has_next=has_next,
             )
 
-    async def get_work_item_history(
-        self, work_item_id: str, limit: int | None = None
-    ) -> WorkItemHistory:
+    async def get_work_item_history(self, work_item_id: str, limit: int | None = None) -> WorkItemHistory:
         """Retrieves work item history including all events."""
         with self._lock:
             items = self._all_work_items
@@ -186,9 +180,7 @@ class MockWorkItemQueryAdapter(IWorkItemQueryPort):
 
             return len(work_items)
 
-    def _apply_filters(
-        self, work_items: list[WorkItem], filters: WorkItemFilters
-    ) -> list[WorkItem]:
+    def _apply_filters(self, work_items: list[WorkItem], filters: WorkItemFilters) -> list[WorkItem]:
         """Apply filters to work item list."""
         result = work_items
 
@@ -229,9 +221,7 @@ class MockWorkItemQueryAdapter(IWorkItemQueryPort):
 
         return result
 
-    def _sort_work_items(
-        self, work_items: list[WorkItem], pagination: PaginationParams
-    ) -> list[WorkItem]:
+    def _sort_work_items(self, work_items: list[WorkItem], pagination: PaginationParams) -> list[WorkItem]:
         """Sort work items based on pagination parameters."""
         reverse = pagination.sort_order == SortOrder.DESC
 

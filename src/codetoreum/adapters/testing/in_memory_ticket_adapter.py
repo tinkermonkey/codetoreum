@@ -117,9 +117,7 @@ class InMemoryTicketAdapter(ITicketSystem):
 
             return work_item
 
-    async def update_work_item(
-        self, item_id: WorkItemId, updates: dict[str, Any]
-    ) -> WorkItem:
+    async def update_work_item(self, item_id: WorkItemId, updates: dict[str, Any]) -> WorkItem:
         """
         Update an existing work item.
 
@@ -276,17 +274,14 @@ class InMemoryTicketAdapter(ITicketSystem):
             if assignee:
                 results = [wi for wi in results if wi.assigned_agent_id == str(assignee)]
             if labels:
-                results = [
-                    wi for wi in results
-                    if all(label in wi.labels for label in labels)
-                ]
+                results = [wi for wi in results if all(label in wi.labels for label in labels)]
             if created_after:
                 results = [wi for wi in results if wi.created_at > created_after]
             if updated_after:
                 results = [wi for wi in results if wi.updated_at > updated_after]
 
             # Apply pagination
-            results = results[offset:offset + limit]
+            results = results[offset : offset + limit]
 
             return results
 
@@ -322,10 +317,7 @@ class InMemoryTicketAdapter(ITicketSystem):
 
             # Simple text search in title and description
             query_lower = query.lower()
-            results = [
-                wi for wi in results
-                if query_lower in wi.title.lower() or query_lower in wi.description.lower()
-            ]
+            results = [wi for wi in results if query_lower in wi.title.lower() or query_lower in wi.description.lower()]
 
             return results[:limit]
 
@@ -506,9 +498,7 @@ class InMemoryTicketAdapter(ITicketSystem):
             relationships = self._relationships.get(str(item_id), [])
 
             if relationship:
-                relationships = [
-                    (target, rel) for target, rel in relationships if rel == relationship
-                ]
+                relationships = [(target, rel) for target, rel in relationships if rel == relationship]
 
             related_ids = [target for target, _ in relationships]
             return [self._work_items[wid] for wid in related_ids if wid in self._work_items]

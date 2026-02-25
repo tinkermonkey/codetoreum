@@ -117,9 +117,7 @@ class TestProjectConfigUpdate:
     """Tests for project configuration updates."""
 
     @pytest.mark.asyncio
-    async def test_update_project_config_success(
-        self, config_service, sample_project, event_store
-    ):
+    async def test_update_project_config_success(self, config_service, sample_project, event_store):
         """Test successful project config update."""
         command = UpdateProjectConfigCommand(
             project_name="test-project",
@@ -158,9 +156,7 @@ class TestProjectConfigUpdate:
             await config_service.update_project_config(command)
 
     @pytest.mark.asyncio
-    async def test_update_project_config_validation_error(
-        self, config_service, sample_project
-    ):
+    async def test_update_project_config_validation_error(self, config_service, sample_project):
         """Test update fails with invalid updates."""
         command = UpdateProjectConfigCommand(
             project_name="test-project",
@@ -172,9 +168,7 @@ class TestProjectConfigUpdate:
             await config_service.update_project_config(command)
 
     @pytest.mark.asyncio
-    async def test_update_project_config_versioning(
-        self, config_service, sample_project, config_store
-    ):
+    async def test_update_project_config_versioning(self, config_service, sample_project, config_store):
         """Test version increments on each update."""
         for i in range(3):
             command = UpdateProjectConfigCommand(
@@ -190,9 +184,7 @@ class TestAgentConfigUpdate:
     """Tests for agent configuration updates."""
 
     @pytest.mark.asyncio
-    async def test_update_agent_config_success(
-        self, config_service, sample_project, event_store
-    ):
+    async def test_update_agent_config_success(self, config_service, sample_project, event_store):
         """Test successful agent config update."""
         command = UpdateAgentConfigCommand(
             project_name="test-project",
@@ -217,9 +209,7 @@ class TestAgentConfigUpdate:
         assert isinstance(events[0], AgentConfigUpdated)
 
     @pytest.mark.asyncio
-    async def test_update_agent_config_creates_if_not_exists(
-        self, config_service, sample_project, config_store
-    ):
+    async def test_update_agent_config_creates_if_not_exists(self, config_service, sample_project, config_store):
         """Test agent config is created if doesn't exist."""
         command = UpdateAgentConfigCommand(
             project_name="test-project",
@@ -236,9 +226,7 @@ class TestAgentConfigUpdate:
         assert agent.model == "claude-sonnet-4"
 
     @pytest.mark.asyncio
-    async def test_update_agent_config_validation_error(
-        self, config_service, sample_project
-    ):
+    async def test_update_agent_config_validation_error(self, config_service, sample_project):
         """Test update fails with invalid model."""
         command = UpdateAgentConfigCommand(
             project_name="test-project",
@@ -255,9 +243,7 @@ class TestPipelineConfigUpdate:
     """Tests for pipeline configuration updates."""
 
     @pytest.mark.asyncio
-    async def test_update_pipeline_config_success(
-        self, config_service, sample_project, event_store
-    ):
+    async def test_update_pipeline_config_success(self, config_service, sample_project, event_store):
         """Test successful pipeline config update."""
         command = UpdatePipelineConfigCommand(
             project_name="test-project",
@@ -287,9 +273,7 @@ class TestEnvironmentVariables:
     """Tests for environment variable management."""
 
     @pytest.mark.asyncio
-    async def test_add_environment_variable_success(
-        self, config_service, sample_project, event_store, config_store
-    ):
+    async def test_add_environment_variable_success(self, config_service, sample_project, event_store, config_store):
         """Test adding environment variable."""
         command = AddEnvironmentVariableCommand(
             project_name="test-project",
@@ -317,9 +301,7 @@ class TestEnvironmentVariables:
         assert events[0].payload["action"] == "added"
 
     @pytest.mark.asyncio
-    async def test_update_environment_variable(
-        self, config_service, sample_project, config_store
-    ):
+    async def test_update_environment_variable(self, config_service, sample_project, config_store):
         """Test updating existing environment variable."""
         # Add initial variable
         command1 = AddEnvironmentVariableCommand(
@@ -343,9 +325,7 @@ class TestEnvironmentVariables:
         assert "updated" in result.message
 
     @pytest.mark.asyncio
-    async def test_remove_environment_variable_success(
-        self, config_service, sample_project, config_store, event_store
-    ):
+    async def test_remove_environment_variable_success(self, config_service, sample_project, config_store, event_store):
         """Test removing environment variable."""
         # Add variable first
         add_command = AddEnvironmentVariableCommand(
@@ -372,9 +352,7 @@ class TestEnvironmentVariables:
         assert "REMOVE_ME" not in project.environment_variables
 
     @pytest.mark.asyncio
-    async def test_remove_nonexistent_variable_error(
-        self, config_service, sample_project
-    ):
+    async def test_remove_nonexistent_variable_error(self, config_service, sample_project):
         """Test removing non-existent variable fails."""
         command = RemoveEnvironmentVariableCommand(
             project_name="test-project",
@@ -417,9 +395,7 @@ class TestCommandMounting:
     """Tests for command mounting/unmounting."""
 
     @pytest.mark.asyncio
-    async def test_mount_command_success(
-        self, config_service, sample_project, event_store, config_store, tmp_path
-    ):
+    async def test_mount_command_success(self, config_service, sample_project, event_store, config_store, tmp_path):
         """Test mounting command."""
         # Create temporary command file
         command_file = tmp_path / "test_command.md"
@@ -461,9 +437,7 @@ class TestCommandMounting:
             await config_service.mount_command(command)
 
     @pytest.mark.asyncio
-    async def test_mount_command_invalid_extension(
-        self, config_service, sample_project, tmp_path
-    ):
+    async def test_mount_command_invalid_extension(self, config_service, sample_project, tmp_path):
         """Test mounting non-.md file fails."""
         command_file = tmp_path / "test_command.txt"
         command_file.write_text("Test content")
@@ -479,9 +453,7 @@ class TestCommandMounting:
             await config_service.mount_command(command)
 
     @pytest.mark.asyncio
-    async def test_unmount_command_success(
-        self, config_service, sample_project, config_store, tmp_path
-    ):
+    async def test_unmount_command_success(self, config_service, sample_project, config_store, tmp_path):
         """Test unmounting command."""
         # Mount command first
         command_file = tmp_path / "test_command.md"
@@ -511,9 +483,7 @@ class TestCommandMounting:
         assert "test-cmd" not in project.mounted_commands
 
     @pytest.mark.asyncio
-    async def test_unmount_nonexistent_command_error(
-        self, config_service, sample_project
-    ):
+    async def test_unmount_nonexistent_command_error(self, config_service, sample_project):
         """Test unmounting non-existent command fails."""
         command = UnmountCommandCommand(
             project_name="test-project",
@@ -529,9 +499,7 @@ class TestSubAgentMounting:
     """Tests for sub-agent mounting/unmounting."""
 
     @pytest.mark.asyncio
-    async def test_mount_subagent_success(
-        self, config_service, sample_project, event_store, config_store
-    ):
+    async def test_mount_subagent_success(self, config_service, sample_project, event_store, config_store):
         """Test mounting sub-agent."""
         command = MountSubAgentCommand(
             project_name="test-project",
@@ -560,9 +528,7 @@ class TestSubAgentMounting:
         assert isinstance(events[0], SubAgentMounted)
 
     @pytest.mark.asyncio
-    async def test_mount_subagent_validation_error(
-        self, config_service, sample_project
-    ):
+    async def test_mount_subagent_validation_error(self, config_service, sample_project):
         """Test mounting sub-agent with invalid config fails."""
         command = MountSubAgentCommand(
             project_name="test-project",
@@ -575,9 +541,7 @@ class TestSubAgentMounting:
             await config_service.mount_subagent(command)
 
     @pytest.mark.asyncio
-    async def test_unmount_subagent_success(
-        self, config_service, sample_project, config_store
-    ):
+    async def test_unmount_subagent_success(self, config_service, sample_project, config_store):
         """Test unmounting sub-agent."""
         # Mount sub-agent first
         mount_cmd = MountSubAgentCommand(
@@ -611,9 +575,7 @@ class TestConfigurationCaching:
     """Tests for configuration caching and versioning."""
 
     @pytest.mark.asyncio
-    async def test_version_history_tracking(
-        self, config_service, sample_project, config_store
-    ):
+    async def test_version_history_tracking(self, config_service, sample_project, config_store):
         """Test version history is tracked correctly."""
         # Make multiple updates
         for i in range(3):
@@ -632,9 +594,7 @@ class TestConfigurationCaching:
         assert versions[2].version == 2  # Oldest last
 
     @pytest.mark.asyncio
-    async def test_concurrent_updates_version_increment(
-        self, config_service, sample_project, config_store
-    ):
+    async def test_concurrent_updates_version_increment(self, config_service, sample_project, config_store):
         """Test version increments correctly with multiple updates."""
         initial_version = sample_project.version
 
@@ -658,10 +618,9 @@ class TestConfigurationCaching:
 
 # New tests for revision 1
 
+
 @pytest.mark.asyncio
-async def test_concurrent_configuration_updates(
-    config_service, config_store, sample_project
-):
+async def test_concurrent_configuration_updates(config_service, config_store, sample_project):
     """Test that concurrent updates are properly serialized with locks."""
     import asyncio
 
@@ -669,9 +628,7 @@ async def test_concurrent_configuration_updates(
     async def update_tech_stack(stack_name: str):
         command = UpdateProjectConfigCommand(
             project_name=sample_project.name,
-            updates={
-                "tech_stacks": {stack_name: "1.0.0"}
-            },
+            updates={"tech_stacks": {stack_name: "1.0.0"}},
             user_id="test_user",
         )
         return await config_service.update_project_config(command)
@@ -884,10 +841,9 @@ async def test_reserved_environment_variable_validation(config_service, sample_p
 
 
 @pytest.mark.asyncio
-async def test_rollback_on_event_emission_failure(
-    config_store, sample_project, event_store
-):
+async def test_rollback_on_event_emission_failure(config_store, sample_project, event_store):
     """Test that configuration changes are rolled back if event emission fails."""
+
     # Create an event bus that fails on publish
     class FailingEventBus(EventBus):
         async def publish(self, event):
@@ -919,9 +875,7 @@ async def test_rollback_on_event_emission_failure(
 
 
 @pytest.mark.asyncio
-async def test_concurrent_agent_config_updates(
-    config_service, config_store, sample_project
-):
+async def test_concurrent_agent_config_updates(config_service, config_store, sample_project):
     """Test concurrent updates to different agent configurations."""
     import asyncio
 
@@ -935,10 +889,7 @@ async def test_concurrent_agent_config_updates(
         return await config_service.update_agent_config(command)
 
     # Update 5 different agents concurrently
-    tasks = [
-        update_agent_timeout(f"agent_{i}", 3600 + i * 100)
-        for i in range(5)
-    ]
+    tasks = [update_agent_timeout(f"agent_{i}", 3600 + i * 100) for i in range(5)]
     results = await asyncio.gather(*tasks)
 
     # All should succeed
@@ -946,7 +897,5 @@ async def test_concurrent_agent_config_updates(
 
     # Verify all agents were configured
     for i in range(5):
-        agent_config = await config_store.get_agent_config(
-            sample_project.id, f"agent_{i}"
-        )
+        agent_config = await config_store.get_agent_config(sample_project.id, f"agent_{i}")
         assert agent_config.timeout == 3600 + i * 100

@@ -366,6 +366,7 @@ class TestJSONFormatter:
             raise ValueError("Test error")
         except ValueError:
             import sys
+
             exc_info = sys.exc_info()
 
         record = logging.LogRecord(
@@ -475,9 +476,7 @@ class TestLoggingConfiguration:
         handler = root_logger.handlers[0]
 
         # Check that SensitiveDataFilter is in the filter chain
-        has_sensitive_filter = any(
-            isinstance(f, SensitiveDataFilter) for f in handler.filters
-        )
+        has_sensitive_filter = any(isinstance(f, SensitiveDataFilter) for f in handler.filters)
         assert has_sensitive_filter
 
 

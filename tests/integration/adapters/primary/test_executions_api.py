@@ -223,9 +223,7 @@ def crashed_execution_info():
 class TestListExecutions:
     """Tests for GET /api/v2/executions endpoint."""
 
-    def test_list_executions_success(
-        self, client, mock_query_port, sample_execution_info
-    ):
+    def test_list_executions_success(self, client, mock_query_port, sample_execution_info):
         """Test successful executions listing."""
         # Arrange
         from codetoreum.ports.input.execution_query import ExecutionListResult
@@ -250,9 +248,7 @@ class TestListExecutions:
         assert data["executions"][0]["status"] == "completed"
         assert data["has_next"] is False
 
-    def test_list_executions_with_status_filter(
-        self, client, mock_query_port, failed_execution_info
-    ):
+    def test_list_executions_with_status_filter(self, client, mock_query_port, failed_execution_info):
         """Test executions listing with status filter."""
         # Arrange
         from codetoreum.ports.input.execution_query import ExecutionListResult
@@ -290,9 +286,7 @@ class TestListExecutions:
         data = response.json()
         assert "Invalid status" in data["detail"]
 
-    def test_list_executions_with_multiple_filters(
-        self, client, mock_query_port, sample_execution_info
-    ):
+    def test_list_executions_with_multiple_filters(self, client, mock_query_port, sample_execution_info):
         """Test executions listing with multiple filters."""
         # Arrange
         from codetoreum.ports.input.execution_query import ExecutionListResult
@@ -324,9 +318,7 @@ class TestListExecutions:
         assert filters.workflow_id == "wf-123"
         assert filters.stage_name == "development"
 
-    def test_list_executions_with_date_range(
-        self, client, mock_query_port, sample_execution_info
-    ):
+    def test_list_executions_with_date_range(self, client, mock_query_port, sample_execution_info):
         """Test executions listing with date range filter."""
         # Arrange
         from codetoreum.ports.input.execution_query import ExecutionListResult
@@ -340,9 +332,7 @@ class TestListExecutions:
         )
 
         # Act
-        response = client.get(
-            "/api/v2/executions?start_date=2025-01-01&end_date=2025-01-31"
-        )
+        response = client.get("/api/v2/executions?start_date=2025-01-01&end_date=2025-01-31")
 
         # Assert
         assert response.status_code == 200
@@ -369,18 +359,14 @@ class TestListExecutions:
     def test_list_executions_with_invalid_date_range(self, client):
         """Test executions listing with invalid date range (start > end)."""
         # Act
-        response = client.get(
-            "/api/v2/executions?start_date=2025-01-31&end_date=2025-01-01"
-        )
+        response = client.get("/api/v2/executions?start_date=2025-01-31&end_date=2025-01-01")
 
         # Assert
         assert response.status_code == 400
         data = response.json()
         assert "Invalid date range" in data["detail"]
 
-    def test_list_executions_with_pagination(
-        self, client, mock_query_port, sample_execution_info
-    ):
+    def test_list_executions_with_pagination(self, client, mock_query_port, sample_execution_info):
         """Test executions listing with pagination."""
         # Arrange
         from codetoreum.ports.input.execution_query import ExecutionListResult
@@ -404,9 +390,7 @@ class TestListExecutions:
         assert data["page_size"] == 50
         assert data["has_next"] is True
 
-    def test_list_executions_with_sorting(
-        self, client, mock_query_port, sample_execution_info
-    ):
+    def test_list_executions_with_sorting(self, client, mock_query_port, sample_execution_info):
         """Test executions listing with sorting."""
         # Arrange
         from codetoreum.ports.input.execution_query import ExecutionListResult
@@ -420,9 +404,7 @@ class TestListExecutions:
         )
 
         # Act
-        response = client.get(
-            "/api/v2/executions?sort_by=duration_seconds&sort_order=asc"
-        )
+        response = client.get("/api/v2/executions?sort_by=duration_seconds&sort_order=asc")
 
         # Assert
         assert response.status_code == 200
@@ -470,9 +452,7 @@ class TestListExecutions:
 class TestGetExecution:
     """Tests for GET /api/v2/executions/{id} endpoint."""
 
-    def test_get_execution_success(
-        self, client, mock_query_port, sample_execution_info
-    ):
+    def test_get_execution_success(self, client, mock_query_port, sample_execution_info):
         """Test successful execution retrieval."""
         # Arrange
         mock_query_port._get_execution.return_value = sample_execution_info
@@ -490,9 +470,7 @@ class TestGetExecution:
         assert data["input_tokens"] == 1000
         assert data["output_tokens"] == 500
 
-    def test_get_execution_with_agent_failure(
-        self, client, mock_query_port, failed_execution_info
-    ):
+    def test_get_execution_with_agent_failure(self, client, mock_query_port, failed_execution_info):
         """Test execution retrieval with agent failure error detail."""
         # Arrange
         mock_query_port._get_execution.return_value = failed_execution_info
@@ -511,9 +489,7 @@ class TestGetExecution:
         assert data["error_detail"]["message"] == "Test suite failed with 3 failures"
         assert data["error_detail"]["partial_logs_available"] is False
 
-    def test_get_execution_with_container_crash(
-        self, client, mock_query_port, crashed_execution_info
-    ):
+    def test_get_execution_with_container_crash(self, client, mock_query_port, crashed_execution_info):
         """Test execution retrieval with container crash error detail."""
         # Arrange
         mock_query_port._get_execution.return_value = crashed_execution_info
@@ -580,9 +556,7 @@ class TestGetExecution:
     def test_get_execution_not_found(self, client, mock_query_port):
         """Test execution retrieval when not found."""
         # Arrange
-        mock_query_port._get_execution.side_effect = ValueError(
-            "Execution with ID 'exec-nonexistent' not found"
-        )
+        mock_query_port._get_execution.side_effect = ValueError("Execution with ID 'exec-nonexistent' not found")
 
         # Act
         response = client.get("/api/v2/executions/exec-nonexistent")
@@ -717,9 +691,7 @@ class TestGetExecutionLogs:
     def test_get_execution_logs_not_found(self, client, mock_query_port):
         """Test execution logs retrieval when execution not found."""
         # Arrange
-        mock_query_port._get_execution_logs.side_effect = ValueError(
-            "Execution with ID 'exec-nonexistent' not found"
-        )
+        mock_query_port._get_execution_logs.side_effect = ValueError("Execution with ID 'exec-nonexistent' not found")
 
         # Act
         response = client.get("/api/v2/executions/exec-nonexistent/logs")
@@ -847,9 +819,7 @@ class TestTerminateExecution:
         }
 
         # Act
-        response = client.post(
-            "/api/v2/executions/exec-123/terminate", json=request_data
-        )
+        response = client.post("/api/v2/executions/exec-123/terminate", json=request_data)
 
         # Assert
         assert response.status_code == 200
@@ -892,9 +862,7 @@ class TestTerminateExecution:
         )
 
         # Act
-        response = client.post(
-            "/api/v2/executions/exec-nonexistent/terminate", json={}
-        )
+        response = client.post("/api/v2/executions/exec-nonexistent/terminate", json={})
 
         # Assert
         assert response.status_code == 404
@@ -904,9 +872,7 @@ class TestTerminateExecution:
     def test_terminate_execution_already_completed(self, client, mock_command_port):
         """Test execution termination when already completed."""
         # Arrange
-        mock_command_port._terminate_execution.side_effect = ValueError(
-            "Execution already completed"
-        )
+        mock_command_port._terminate_execution.side_effect = ValueError("Execution already completed")
 
         # Act
         response = client.post("/api/v2/executions/exec-123/terminate", json={})
@@ -919,9 +885,7 @@ class TestTerminateExecution:
     def test_terminate_execution_invalid_state(self, client, mock_command_port):
         """Test execution termination in invalid state."""
         # Arrange
-        mock_command_port._terminate_execution.side_effect = ValueError(
-            "Invalid state transition"
-        )
+        mock_command_port._terminate_execution.side_effect = ValueError("Invalid state transition")
 
         # Act
         response = client.post("/api/v2/executions/exec-123/terminate", json={})

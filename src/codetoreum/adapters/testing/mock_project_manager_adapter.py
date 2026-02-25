@@ -129,11 +129,7 @@ class MockProjectManagerAdapter(IProjectManagerService):
             ExternalServiceError: Should not occur in mock implementation
         """
         with self._lock:
-            enabled = [
-                name
-                for name, state in self._projects.items()
-                if state.config.enabled
-            ]
+            enabled = [name for name, state in self._projects.items() if state.config.enabled]
             return sorted(enabled)
 
     async def get_project_config(self, project_name: str) -> ProjectConfig:
@@ -232,10 +228,7 @@ class MockProjectManagerAdapter(IProjectManagerService):
                 if self._event_emitter:
                     self._event_emitter.emit(event)
                 msg = "mock_project_manager"
-                raise ExternalServiceError(
-                    msg,
-                    f"Failed to clone project '{project_name}': simulated network timeout"
-                )
+                raise ExternalServiceError(msg, f"Failed to clone project '{project_name}': simulated network timeout")
 
             # Mark as cloned
             state.cloned = True
@@ -360,9 +353,7 @@ class MockProjectManagerAdapter(IProjectManagerService):
         with self._lock:
             self._clone_failures.discard(project_name)
 
-    def add_work_item_to_project(
-        self, project_name: str, work_item: WorkItem
-    ) -> None:
+    def add_work_item_to_project(self, project_name: str, work_item: WorkItem) -> None:
         """Add a work item to a project for simulation testing.
 
         Args:

@@ -67,13 +67,8 @@ class CodetoreumEvent:
     def __post_init__(self) -> None:
         """Validate event after initialization."""
         if not self.type or "." not in self.type:
-            msg = (
-                f"Event type must be in dot notation (e.g., 'workitem.created'), "
-                f"got: {self.type}"
-            )
-            raise ValueError(
-                msg
-            )
+            msg = f"Event type must be in dot notation (e.g., 'workitem.created'), got: {self.type}"
+            raise ValueError(msg)
 
         if not self.source:
             msg = "Event source (adapter name) is required"
@@ -84,9 +79,7 @@ class CodetoreumEvent:
             datetime.fromisoformat(self.timestamp.replace("Z", "+00:00"))
         except (ValueError, AttributeError):
             msg = f"Timestamp must be ISO 8601 format, got: {self.timestamp}"
-            raise ValueError(
-                msg
-            )
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize event to dictionary for storage/transmission.

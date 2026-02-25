@@ -60,7 +60,7 @@ class TestScenario06SDLCPipeline:
             max_iterations=5,
             auto_advance_on_approval=True,
             escalate_on_blocked=True,
-            previous_stage_output="Initial implementation output"
+            previous_stage_output="Initial implementation output",
         )
 
         result = await review_adapter.start_review_cycle(request)
@@ -116,7 +116,7 @@ class TestScenario06SDLCPipeline:
             max_iterations=5,
             auto_advance_on_approval=True,
             escalate_on_blocked=True,
-            previous_stage_output="Initial implementation output"
+            previous_stage_output="Initial implementation output",
         )
 
         result = await review_adapter.start_review_cycle(request)
@@ -164,22 +164,17 @@ class TestScenario06SDLCPipeline:
         review_adapter.current_project = "test-project"
 
         # Configure
-        review_adapter.set_review_sequence("work-item-3", [
-            ReviewSequenceItem(
-                decision=ReviewDecision.ESCALATE,
-                findings=[
-                    ReviewFinding(
-                        severity="blocking",
-                        description="Architectural decision required"
-                    )
-                ],
-                summary="Requires human decision on architecture"
-            ),
-            ReviewSequenceItem(
-                decision=ReviewDecision.APPROVE,
-                summary="Approved after human feedback"
-            )
-        ])
+        review_adapter.set_review_sequence(
+            "work-item-3",
+            [
+                ReviewSequenceItem(
+                    decision=ReviewDecision.ESCALATE,
+                    findings=[ReviewFinding(severity="blocking", description="Architectural decision required")],
+                    summary="Requires human decision on architecture",
+                ),
+                ReviewSequenceItem(decision=ReviewDecision.APPROVE, summary="Approved after human feedback"),
+            ],
+        )
         review_adapter.queue_human_feedback("work-item-3", "Use GraphQL for flexibility")
 
         # Execute
@@ -192,7 +187,7 @@ class TestScenario06SDLCPipeline:
             max_iterations=5,
             auto_advance_on_approval=True,
             escalate_on_blocked=True,
-            previous_stage_output="Initial implementation output"
+            previous_stage_output="Initial implementation output",
         )
 
         result = await review_adapter.start_review_cycle(request)
@@ -210,10 +205,7 @@ class TestScenario06SDLCPipeline:
 
         # Verify human feedback event
         events = review_adapter.get_all_events_log()
-        assert any(
-            e["type"] == "REVIEW_CYCLE_HUMAN_FEEDBACK_RECEIVED"
-            for e in events
-        )
+        assert any(e["type"] == "REVIEW_CYCLE_HUMAN_FEEDBACK_RECEIVED" for e in events)
 
     @pytest.mark.asyncio
     async def test_scenario_04_max_iterations_reached(self):
@@ -248,7 +240,7 @@ class TestScenario06SDLCPipeline:
             max_iterations=5,
             auto_advance_on_approval=True,
             escalate_on_blocked=True,
-            previous_stage_output="Initial implementation output"
+            previous_stage_output="Initial implementation output",
         )
 
         result = await review_adapter.start_review_cycle(request)
@@ -265,11 +257,7 @@ class TestScenario06SDLCPipeline:
 
         # Verify max iterations event
         events = review_adapter.get_all_events_log()
-        assert any(
-            e["type"] == "REVIEW_CYCLE_COMPLETED"
-            and e.get("human_escalation") is True
-            for e in events
-        )
+        assert any(e["type"] == "REVIEW_CYCLE_COMPLETED" and e.get("human_escalation") is True for e in events)
 
     @pytest.mark.asyncio
     async def test_scenario_05_multiple_blocks_requiring_human_input(self):
@@ -293,32 +281,22 @@ class TestScenario06SDLCPipeline:
         review_adapter.current_project = "test-project"
 
         # Configure
-        review_adapter.set_review_sequence("work-item-5", [
-            ReviewSequenceItem(
-                decision=ReviewDecision.ESCALATE,
-                findings=[
-                    ReviewFinding(
-                        severity="blocking",
-                        description="Security concern with SQL queries"
-                    )
-                ],
-                summary="Security review required"
-            ),
-            ReviewSequenceItem(
-                decision=ReviewDecision.ESCALATE,
-                findings=[
-                    ReviewFinding(
-                        severity="blocking",
-                        description="Licensing question on dependency"
-                    )
-                ],
-                summary="License review required"
-            ),
-            ReviewSequenceItem(
-                decision=ReviewDecision.APPROVE,
-                summary="All concerns addressed"
-            )
-        ])
+        review_adapter.set_review_sequence(
+            "work-item-5",
+            [
+                ReviewSequenceItem(
+                    decision=ReviewDecision.ESCALATE,
+                    findings=[ReviewFinding(severity="blocking", description="Security concern with SQL queries")],
+                    summary="Security review required",
+                ),
+                ReviewSequenceItem(
+                    decision=ReviewDecision.ESCALATE,
+                    findings=[ReviewFinding(severity="blocking", description="Licensing question on dependency")],
+                    summary="License review required",
+                ),
+                ReviewSequenceItem(decision=ReviewDecision.APPROVE, summary="All concerns addressed"),
+            ],
+        )
         review_adapter.queue_human_feedback("work-item-5", "Use parameterized queries")
         review_adapter.queue_human_feedback("work-item-5", "Approved, license is MIT")
 
@@ -332,7 +310,7 @@ class TestScenario06SDLCPipeline:
             max_iterations=5,
             auto_advance_on_approval=True,
             escalate_on_blocked=True,
-            previous_stage_output="Initial implementation output"
+            previous_stage_output="Initial implementation output",
         )
 
         result = await review_adapter.start_review_cycle(request)
@@ -345,10 +323,7 @@ class TestScenario06SDLCPipeline:
 
         # Verify 2 escalations
         events = review_adapter.get_all_events_log()
-        escalation_count = sum(
-            1 for e in events
-            if e.get("type") == "REVIEW_CYCLE_HUMAN_FEEDBACK_RECEIVED"
-        )
+        escalation_count = sum(1 for e in events if e.get("type") == "REVIEW_CYCLE_HUMAN_FEEDBACK_RECEIVED")
         assert escalation_count >= 2
 
     @pytest.mark.asyncio
@@ -379,10 +354,10 @@ class TestScenario06SDLCPipeline:
 
         # Run all 4 base scenarios sequentially (lightweight, no escalation delays)
         scenarios = [
-            ("work-item-perf-1", ReviewDecision.APPROVE),          # Happy path: immediate approval
-            ("work-item-perf-2", ReviewDecision.APPROVE),          # Happy path: simple approval
-            ("work-item-perf-3", ReviewDecision.APPROVE),          # Happy path: another approval
-            ("work-item-perf-4", ReviewDecision.APPROVE),          # Happy path: fourth approval
+            ("work-item-perf-1", ReviewDecision.APPROVE),  # Happy path: immediate approval
+            ("work-item-perf-2", ReviewDecision.APPROVE),  # Happy path: simple approval
+            ("work-item-perf-3", ReviewDecision.APPROVE),  # Happy path: another approval
+            ("work-item-perf-4", ReviewDecision.APPROVE),  # Happy path: fourth approval
         ]
 
         results = []
@@ -399,7 +374,7 @@ class TestScenario06SDLCPipeline:
                 max_iterations=5,
                 auto_advance_on_approval=True,
                 escalate_on_blocked=True,
-                previous_stage_output=f"Implementation for scenario {idx}"
+                previous_stage_output=f"Implementation for scenario {idx}",
             )
 
             result = await review_adapter.start_review_cycle(request)
@@ -440,16 +415,13 @@ class TestScenario06SDLCPipeline:
         review_adapter.current_project = "test-project"
 
         # Configure
-        review_adapter.set_review_sequence("work-item-6", [
-            ReviewSequenceItem(
-                decision=ReviewDecision.ESCALATE,
-                summary="Requires human decision"
-            ),
-            ReviewSequenceItem(
-                decision=ReviewDecision.APPROVE,
-                summary="Approved after restart"
-            )
-        ])
+        review_adapter.set_review_sequence(
+            "work-item-6",
+            [
+                ReviewSequenceItem(decision=ReviewDecision.ESCALATE, summary="Requires human decision"),
+                ReviewSequenceItem(decision=ReviewDecision.APPROVE, summary="Approved after restart"),
+            ],
+        )
         review_adapter.queue_human_feedback("work-item-6", "Use async patterns")
 
         # Execute
@@ -462,7 +434,7 @@ class TestScenario06SDLCPipeline:
             max_iterations=5,
             auto_advance_on_approval=True,
             escalate_on_blocked=True,
-            previous_stage_output="Initial implementation output"
+            previous_stage_output="Initial implementation output",
         )
 
         result = await review_adapter.start_review_cycle(request)
@@ -504,26 +476,18 @@ class TestScenario06SDLCPipeline:
         review_adapter.current_project = "test-project"
 
         # Configure - human feedback allows immediate approval
-        review_adapter.set_review_sequence("work-item-7", [
-            ReviewSequenceItem(
-                decision=ReviewDecision.ESCALATE,
-                findings=[
-                    ReviewFinding(
-                        severity="blocking",
-                        description="Needs clarification"
-                    )
-                ],
-                summary="Requires human clarification"
-            ),
-            ReviewSequenceItem(
-                decision=ReviewDecision.APPROVE,
-                summary="Approved with human guidance"
-            )
-        ])
-        review_adapter.queue_human_feedback(
+        review_adapter.set_review_sequence(
             "work-item-7",
-            "Approach looks good, proceed as planned"
+            [
+                ReviewSequenceItem(
+                    decision=ReviewDecision.ESCALATE,
+                    findings=[ReviewFinding(severity="blocking", description="Needs clarification")],
+                    summary="Requires human clarification",
+                ),
+                ReviewSequenceItem(decision=ReviewDecision.APPROVE, summary="Approved with human guidance"),
+            ],
         )
+        review_adapter.queue_human_feedback("work-item-7", "Approach looks good, proceed as planned")
 
         # Execute
         request = ReviewCycleRequest(
@@ -535,7 +499,7 @@ class TestScenario06SDLCPipeline:
             max_iterations=5,
             auto_advance_on_approval=True,
             escalate_on_blocked=True,
-            previous_stage_output="Initial implementation output"
+            previous_stage_output="Initial implementation output",
         )
 
         result = await review_adapter.start_review_cycle(request)

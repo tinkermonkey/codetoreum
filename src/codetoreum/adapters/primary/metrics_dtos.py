@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 class MetricsQueryRequest(BaseModel):
     """Request to query metrics"""
+
     start_time: datetime | None = Field(None, description="Start of time range (default: last hour)")
     end_time: datetime | None = Field(None, description="End of time range (default: now)")
     aggregation_window_seconds: int = Field(60, ge=1, le=3600, description="Aggregation window in seconds")
@@ -23,6 +24,7 @@ class MetricsQueryRequest(BaseModel):
 
 class TimeSeriesQueryRequest(BaseModel):
     """Request to query time series data"""
+
     metric_name: str = Field(..., description="Metric name to query")
     start_time: datetime = Field(..., description="Start of time range")
     end_time: datetime = Field(..., description="End of time range")
@@ -37,6 +39,7 @@ class TimeSeriesQueryRequest(BaseModel):
 
 class ComponentHealthResponse(BaseModel):
     """Component health information"""
+
     component_name: str
     status: str  # healthy, degraded, unhealthy, unknown
     message: str | None
@@ -47,6 +50,7 @@ class ComponentHealthResponse(BaseModel):
 
 class SystemHealthResponse(BaseModel):
     """System health response"""
+
     status: str  # healthy, degraded, unhealthy
     components: list[ComponentHealthResponse]
     checked_at: datetime
@@ -56,6 +60,7 @@ class SystemHealthResponse(BaseModel):
 
 class PerformanceMetricsResponse(BaseModel):
     """Performance metrics response"""
+
     # API metrics
     api_request_count: int
     api_error_count: int
@@ -87,6 +92,7 @@ class PerformanceMetricsResponse(BaseModel):
 
 class CircuitBreakerInfo(BaseModel):
     """Circuit breaker status"""
+
     service_name: str
     state: str  # closed, open, half_open
     failure_count: int
@@ -97,6 +103,7 @@ class CircuitBreakerInfo(BaseModel):
 
 class ActiveAgentResponse(BaseModel):
     """Active agent execution information"""
+
     executionId: str = Field(..., description="Execution ID", serialization_alias="executionId")
     agentName: str = Field(..., description="Agent name", serialization_alias="agentName")
     workItemId: str = Field(..., description="Work item ID", serialization_alias="workItemId")
@@ -109,29 +116,39 @@ class ActiveAgentResponse(BaseModel):
 
 class ActiveAgentsResponse(BaseModel):
     """Active agents list response"""
+
     agents: list[ActiveAgentResponse] = Field(..., description="List of active agents")
     count: int = Field(..., description="Total count of active agents")
 
 
 class ApiUsageQuotaResponse(BaseModel):
     """API usage quota information"""
+
     available: bool = Field(..., description="Whether API is available")
     weeklyUsage: int = Field(..., description="Weekly usage in tokens", serialization_alias="weeklyUsage")
     weeklyQuota: int = Field(..., description="Weekly quota in tokens", serialization_alias="weeklyQuota")
-    weeklyUsagePercent: float = Field(..., description="Weekly usage percentage", serialization_alias="weeklyUsagePercent")
+    weeklyUsagePercent: float = Field(
+        ..., description="Weekly usage percentage", serialization_alias="weeklyUsagePercent"
+    )
     sessionUsage: int = Field(..., description="Session usage in tokens", serialization_alias="sessionUsage")
     sessionQuota: int = Field(..., description="Session quota in tokens", serialization_alias="sessionQuota")
-    sessionUsagePercent: float = Field(..., description="Session usage percentage", serialization_alias="sessionUsagePercent")
-    sessionRemainingMinutes: int | None = Field(None, description="Session remaining minutes", serialization_alias="sessionRemainingMinutes")
+    sessionUsagePercent: float = Field(
+        ..., description="Session usage percentage", serialization_alias="sessionUsagePercent"
+    )
+    sessionRemainingMinutes: int | None = Field(
+        None, description="Session remaining minutes", serialization_alias="sessionRemainingMinutes"
+    )
 
 
 class ApiUsageResponse(BaseModel):
     """API usage response"""
+
     claude: ApiUsageQuotaResponse = Field(..., description="Claude API usage")
 
 
 class RateLimitInfo(BaseModel):
     """Rate limit information"""
+
     remaining: int = Field(..., description="Remaining requests")
     limit: int = Field(..., description="Request limit")
     percentageUsed: float = Field(..., description="Percentage used", serialization_alias="percentageUsed")
@@ -139,6 +156,7 @@ class RateLimitInfo(BaseModel):
 
 class CircuitBreakerStatusResponse(BaseModel):
     """Circuit breaker status"""
+
     name: str = Field(..., description="Circuit breaker name")
     state: str = Field(..., description="State (closed, open, half_open)")
     failureCount: int = Field(..., description="Failure count", serialization_alias="failureCount")
@@ -150,6 +168,7 @@ class CircuitBreakerStatusResponse(BaseModel):
 
 class ComponentHealthCheck(BaseModel):
     """Component health check result"""
+
     healthy: bool = Field(..., description="Health status")
     message: str = Field(..., description="Status message")
     lastCheck: datetime = Field(..., description="Last check time", serialization_alias="lastCheck")
@@ -160,13 +179,19 @@ class ComponentHealthCheck(BaseModel):
 
 class HealthCheckResponse(BaseModel):
     """Enhanced health check response"""
+
     status: str = Field(..., description="Overall health status")
     checks: dict[str, ComponentHealthCheck] = Field(..., description="Component health checks")
-    circuitBreakers: list[CircuitBreakerStatusResponse] = Field(default_factory=list, description="Circuit breaker statuses", serialization_alias="circuitBreakers")
+    circuitBreakers: list[CircuitBreakerStatusResponse] = Field(
+        default_factory=list,
+        description="Circuit breaker statuses",
+        serialization_alias="circuitBreakers",
+    )
 
 
 class RateLimiterInfo(BaseModel):
     """Rate limiter status"""
+
     resource_name: str
     requests_count: int
     limit: int
@@ -177,6 +202,7 @@ class RateLimiterInfo(BaseModel):
 
 class ResilienceMetricsResponse(BaseModel):
     """Resilience metrics response"""
+
     circuit_breakers: list[CircuitBreakerInfo]
     rate_limiters: list[RateLimiterInfo]
     retry_attempts_total: int
@@ -190,6 +216,7 @@ class ResilienceMetricsResponse(BaseModel):
 
 class IntegrationStatusResponse(BaseModel):
     """Integration status response"""
+
     # GitHub
     github_connected: bool
     github_api_calls_remaining: int | None
@@ -214,6 +241,7 @@ class IntegrationStatusResponse(BaseModel):
 
 class SimulationModeResponse(BaseModel):
     """Simulation mode information"""
+
     enabled: bool
     time_multiplier: float
     deterministic_responses: bool
@@ -225,6 +253,7 @@ class SimulationModeResponse(BaseModel):
 
 class MetricTimeSeriesPoint(BaseModel):
     """Time series data point"""
+
     timestamp: datetime
     value: float
     labels: dict[str, str]
@@ -232,6 +261,7 @@ class MetricTimeSeriesPoint(BaseModel):
 
 class MetricTimeSeriesResponse(BaseModel):
     """Time series response"""
+
     metric_name: str
     data_points: list[MetricTimeSeriesPoint]
     aggregation: str | None
@@ -241,12 +271,14 @@ class MetricTimeSeriesResponse(BaseModel):
 
 class MetricNamesResponse(BaseModel):
     """List of metric names"""
+
     metric_names: list[str]
     total_count: int
 
 
 class EndpointMetricsItem(BaseModel):
     """Per-endpoint metrics"""
+
     endpoint_path: str
     request_count: int
     error_count: int
@@ -258,6 +290,7 @@ class EndpointMetricsItem(BaseModel):
 
 class EndpointMetricsResponse(BaseModel):
     """API endpoint metrics response"""
+
     endpoints: list[EndpointMetricsItem]
     total_requests: int
     total_errors: int
@@ -268,6 +301,7 @@ class EndpointMetricsResponse(BaseModel):
 
 class AgentExecutionMetricsItem(BaseModel):
     """Per-agent execution metrics"""
+
     agent_name: str
     execution_count: int
     success_count: int
@@ -279,6 +313,7 @@ class AgentExecutionMetricsItem(BaseModel):
 
 class AgentExecutionMetricsResponse(BaseModel):
     """Agent execution metrics response"""
+
     agents: list[AgentExecutionMetricsItem]
     total_executions: int
     overall_success_rate_percent: float
@@ -288,6 +323,7 @@ class AgentExecutionMetricsResponse(BaseModel):
 
 class ActiveAgentInfo(BaseModel):
     """Information about an active agent execution (internal use)"""
+
     execution_id: str
     agent_name: str
     work_item_id: str
@@ -300,6 +336,7 @@ class ActiveAgentInfo(BaseModel):
 
 class ClaudeApiUsageInfo(BaseModel):
     """Claude API usage and quota information (internal use)"""
+
     available: bool
     weekly_usage: int
     weekly_quota: int
@@ -317,6 +354,7 @@ class ClaudeApiUsageInfo(BaseModel):
 
 class RepairCycleMetricsItem(BaseModel):
     """Per-agent repair cycle metrics"""
+
     agent_name: str = Field(..., description="Agent name")
     cycles_started: int = Field(..., description="Total cycles started")
     cycles_completed: int = Field(..., description="Total cycles completed")
@@ -328,6 +366,7 @@ class RepairCycleMetricsItem(BaseModel):
 
 class TestTypeMetricsItem(BaseModel):
     """Per-test-type repair cycle metrics"""
+
     test_type: str = Field(..., description="Test type (unit, integration, e2e)")
     total_executions: int = Field(..., description="Total test executions")
     total_iterations: int = Field(..., description="Total iterations run")
@@ -336,6 +375,7 @@ class TestTypeMetricsItem(BaseModel):
 
 class RepairCycleMetricsResponse(BaseModel):
     """Repair cycle metrics response"""
+
     # Overall metrics
     cycles_started: int = Field(..., description="Total repair cycles started")
     cycles_completed: int = Field(..., description="Total repair cycles completed")
@@ -361,7 +401,9 @@ class RepairCycleMetricsResponse(BaseModel):
     warnings_reviewed_total: int = Field(..., description="Total warnings reviewed")
 
     # Per-agent metrics
-    agent_metrics: list[RepairCycleMetricsItem] = Field(default_factory=list, description="Per-agent repair cycle metrics")
+    agent_metrics: list[RepairCycleMetricsItem] = Field(
+        default_factory=list, description="Per-agent repair cycle metrics"
+    )
 
     # Time range
     start_time: datetime = Field(..., description="Start of time range")

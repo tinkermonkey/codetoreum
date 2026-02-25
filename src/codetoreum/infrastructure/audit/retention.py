@@ -77,8 +77,7 @@ class RetentionPolicyManager:
             Dictionary with cleanup statistics
         """
         logger.info(
-            f"Starting audit log cleanup (dry_run={dry_run}, "
-            f"retention={self.policy.default_retention_days} days)"
+            f"Starting audit log cleanup (dry_run={dry_run}, retention={self.policy.default_retention_days} days)"
         )
 
         stats = {
@@ -95,17 +94,14 @@ class RetentionPolicyManager:
                     AuditQueryFilters,
                 )
 
-                cutoff_date = datetime.now(UTC) - timedelta(
-                    days=self.policy.default_retention_days
-                )
+                cutoff_date = datetime.now(UTC) - timedelta(days=self.policy.default_retention_days)
                 filters = AuditQueryFilters(
-                    end_time=cutoff_date, limit=1000000  # Get all for counting
+                    end_time=cutoff_date,
+                    limit=1000000,  # Get all for counting
                 )
                 deleted_count = await self.audit_store.count_events(filters)
                 stats["events_to_delete"] = deleted_count
-                logger.info(
-                    f"DRY RUN: Would delete {deleted_count} events older than {cutoff_date}"
-                )
+                logger.info(f"DRY RUN: Would delete {deleted_count} events older than {cutoff_date}")
             else:
                 # Actually delete old events
                 deleted_count = await self.audit_store.cleanup_old_events(
@@ -116,9 +112,7 @@ class RetentionPolicyManager:
 
         except Exception as e:
             error_msg = f"Failed to cleanup audit events: {e}"
-            logger.error(error_msg,
-                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
-            )
+            logger.error(error_msg, extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR})
 
         stats["end_time"] = datetime.now(UTC).isoformat()
         return stats
@@ -133,9 +127,7 @@ class RetentionPolicyManager:
             logger.warning("Periodic cleanup already running")
             return
 
-        logger.info(
-            f"Starting periodic audit log cleanup (every {self.policy.cleanup_interval_hours} hours)"
-        )
+        logger.info(f"Starting periodic audit log cleanup (every {self.policy.cleanup_interval_hours} hours)")
         self._cleanup_task = asyncio.create_task(self._cleanup_loop())
 
     async def stop_periodic_cleanup(self) -> None:
@@ -163,9 +155,10 @@ class RetentionPolicyManager:
                 logger.info("Audit log cleanup loop cancelled")
                 break
             except Exception as e:
-                logger.error(f"Error in audit log cleanup loop: {e}",
-                    extra={"error_id": ErrorRegistry.ERR_AUDIT_ERROR}
-            )
+                logger.error(
+                    f"Error in audit log cleanup loop: {e}",
+                    extra={"error_id": ErrorRegistry.ERR_AUDIT_ERROR},
+                )
                 await asyncio.sleep(60)  # Wait 1 minute before retrying
 
     def get_retention_info(self) -> dict:
@@ -183,8 +176,7 @@ class RetentionPolicyManager:
             "security_events_days": self.policy.security_events_days,
             "cleanup_interval_hours": self.policy.cleanup_interval_hours,
             "min_retention_days": self.policy.min_retention_days,
-            "periodic_cleanup_running": self._cleanup_task is not None
-            and not self._cleanup_task.done(),
+            "periodic_cleanup_running": self._cleanup_task is not None and not self._cleanup_task.done(),
         }
 
 

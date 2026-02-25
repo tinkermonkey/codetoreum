@@ -62,12 +62,14 @@ class QueueItemAddedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "queue_name": self.queue_name,
-            "item_id": self.item_id,
-            "position": self.position,
-            "project_id": self.project_id,
-        })
+        d.update(
+            {
+                "queue_name": self.queue_name,
+                "item_id": self.item_id,
+                "position": self.position,
+                "project_id": self.project_id,
+            }
+        )
         return d
 
     @classmethod
@@ -132,11 +134,13 @@ class QueueItemRemovedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "queue_name": self.queue_name,
-            "item_id": self.item_id,
-            "project_id": self.project_id,
-        })
+        d.update(
+            {
+                "queue_name": self.queue_name,
+                "item_id": self.item_id,
+                "project_id": self.project_id,
+            }
+        )
         return d
 
     @classmethod
@@ -212,13 +216,15 @@ class QueuePositionChangedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "queue_name": self.queue_name,
-            "item_id": self.item_id,
-            "old_position": self.old_position,
-            "new_position": self.new_position,
-            "project_id": self.project_id,
-        })
+        d.update(
+            {
+                "queue_name": self.queue_name,
+                "item_id": self.item_id,
+                "old_position": self.old_position,
+                "new_position": self.new_position,
+                "project_id": self.project_id,
+            }
+        )
         return d
 
     @classmethod

@@ -5,7 +5,6 @@ Provides RESTful endpoints for workflow orchestration operations including
 starting, pausing, resuming, and canceling workflow executions.
 """
 
-
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from codetoreum.adapters.primary.orchestration_dtos import (
@@ -64,7 +63,7 @@ def create_orchestrator_router(
         response_description="Execution started and queued",
     )
     async def start_workflow_execution(
-        request: StartWorkflowExecutionRequest
+        request: StartWorkflowExecutionRequest,
     ) -> StartWorkflowExecutionResponse:
         """
         Start a workflow execution for a work item.
@@ -387,7 +386,7 @@ def create_orchestrator_router(
         response_description="Validation result",
     )
     async def validate_entry_conditions(
-        request: EntryConditionValidationRequest
+        request: EntryConditionValidationRequest,
     ) -> EntryConditionValidationResponse:
         """
         Check whether entry conditions are met for starting a workflow.

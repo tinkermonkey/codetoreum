@@ -31,11 +31,13 @@ def create_config() -> SimulationConfig:
     config.scenario_description = "Multi-stage workflow with conditional branches"
 
     # Configurable test output values
-    config.metadata.update({
-        "analysis_approach": "approach B (refactoring)",
-        "test_status": "All tests passed",
-        "validation_status": "Validation successful",
-    })
+    config.metadata.update(
+        {
+            "analysis_approach": "approach B (refactoring)",
+            "test_status": "All tests passed",
+            "validation_status": "Validation successful",
+        }
+    )
 
     # Configure multiple agents
     config.add_agent_response_pattern(
@@ -175,4 +177,5 @@ async def test_complex_workflow():
 
 if __name__ == "__main__":
     import asyncio
+
     asyncio.run(test_complex_workflow())

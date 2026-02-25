@@ -4,7 +4,6 @@ Execution Logs Endpoints
 Handles retrieving container logs for executions.
 """
 
-
 from fastapi import APIRouter, HTTPException, Query
 from fastapi import status as http_status
 

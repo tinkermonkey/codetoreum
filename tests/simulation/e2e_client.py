@@ -125,6 +125,7 @@ class WebSocketEventCollector:
 
         # Receive new events until match or timeout
         import time
+
         start = time.time()
         while (time.time() - start) < timeout:
             event: dict[str, Any] | None = self.collect_event(timeout=0.1)
@@ -526,6 +527,7 @@ class SimulationE2EClient:
             TimeoutError: If status not reached within timeout
         """
         import time
+
         start = time.time()
         last_status = None
         while (time.time() - start) < timeout:
@@ -580,10 +582,7 @@ class SimulationE2EClient:
                     return execution
             await asyncio.sleep(poll_interval)
 
-        raise TimeoutError(
-            f"Execution {execution_id} did not reach status {expected_status} "
-            f"within {timeout}s"
-        )
+        raise TimeoutError(f"Execution {execution_id} did not reach status {expected_status} within {timeout}s")
 
     def assert_metrics_recorded(
         self,
@@ -604,8 +603,7 @@ class SimulationE2EClient:
         """
         metrics = self.get_metrics(metric_name=metric_name, labels=labels)
         assert len(metrics) >= min_count, (
-            f"Expected at least {min_count} data points for metric '{metric_name}', "
-            f"but found {len(metrics)}"
+            f"Expected at least {min_count} data points for metric '{metric_name}', but found {len(metrics)}"
         )
 
     def assert_events_recorded(
@@ -627,6 +625,5 @@ class SimulationE2EClient:
         """
         events = self.get_events(event_type=event_type, aggregate_id=aggregate_id)
         assert len(events) >= min_count, (
-            f"Expected at least {min_count} events of type '{event_type}', "
-            f"but found {len(events)}"
+            f"Expected at least {min_count} events of type '{event_type}', but found {len(events)}"
         )

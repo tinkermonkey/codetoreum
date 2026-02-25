@@ -144,14 +144,10 @@ class MockWorkflowStateManager(IWorkflowStateManager):
 
     async def get_workflow_state(self, issue_id: str) -> WorkflowState:
         if issue_id not in self.states:
-            self.states[issue_id] = WorkflowState(
-                in_progress_tasks={}, current_column=None, current_agent=None
-            )
+            self.states[issue_id] = WorkflowState(in_progress_tasks={}, current_column=None, current_agent=None)
         return self.states[issue_id]
 
-    async def update_workflow_state(
-        self, issue_id: str, state: WorkflowState
-    ) -> None:
+    async def update_workflow_state(self, issue_id: str, state: WorkflowState) -> None:
         self.states[issue_id] = state
 
 
@@ -176,9 +172,7 @@ class MockProjectsAPI(IProjectsAPI):
         self.card_movements = []
         self.labels_added = []
 
-    async def move_card_to_column(
-        self, project: str, issue_number: int, column_name: str
-    ) -> None:
+    async def move_card_to_column(self, project: str, issue_number: int, column_name: str) -> None:
         self.card_movements.append((project, issue_number, column_name))
 
     async def add_label(self, project: str, issue_number: int, label: str) -> None:
@@ -301,9 +295,7 @@ async def test_handle_card_movement_success(orchestrator, mock_task_queue, mock_
 
 
 @pytest.mark.asyncio
-async def test_handle_card_movement_duplicate_work(
-    orchestrator, mock_workflow_state, mock_task_queue
-):
+async def test_handle_card_movement_duplicate_work(orchestrator, mock_workflow_state, mock_task_queue):
     """Test that duplicate work is prevented."""
     # First card movement
     event1 = CardMovedEvent(
@@ -366,9 +358,7 @@ async def test_handle_card_movement_invalid_column(orchestrator, mock_task_queue
 
 
 @pytest.mark.asyncio
-async def test_handle_stage_completion_with_review(
-    orchestrator, mock_task_queue, mock_decision_events
-):
+async def test_handle_stage_completion_with_review(orchestrator, mock_task_queue, mock_decision_events):
     """Test stage completion that requires review."""
     event = StageCompletedEvent(
         project="test-project",
@@ -434,9 +424,7 @@ async def test_handle_stage_completion_with_auto_advance(
 
 
 @pytest.mark.asyncio
-async def test_handle_stage_completion_failure(
-    orchestrator, mock_decision_events
-):
+async def test_handle_stage_completion_failure(orchestrator, mock_decision_events):
     """Test handling of stage failure."""
     event = StageCompletedEvent(
         project="test-project",
@@ -459,9 +447,7 @@ async def test_handle_stage_completion_failure(
 
 
 @pytest.mark.asyncio
-async def test_handle_review_cycle_completion_approved(
-    orchestrator, mock_projects_api
-):
+async def test_handle_review_cycle_completion_approved(orchestrator, mock_projects_api):
     """Test review cycle completion with approval."""
     event = ReviewCycleCompletedEvent(
         project="test-project",
@@ -483,9 +469,7 @@ async def test_handle_review_cycle_completion_approved(
 
 
 @pytest.mark.asyncio
-async def test_handle_review_cycle_completion_rejected(
-    orchestrator, mock_task_queue
-):
+async def test_handle_review_cycle_completion_rejected(orchestrator, mock_task_queue):
     """Test review cycle completion with rejection."""
     event = ReviewCycleCompletedEvent(
         project="test-project",
@@ -514,9 +498,7 @@ async def test_handle_review_cycle_completion_rejected(
 
 
 @pytest.mark.asyncio
-async def test_handle_review_cycle_completion_max_iterations(
-    orchestrator, mock_projects_api
-):
+async def test_handle_review_cycle_completion_max_iterations(orchestrator, mock_projects_api):
     """Test review cycle escalation after max iterations."""
     event = ReviewCycleCompletedEvent(
         project="test-project",
@@ -604,9 +586,7 @@ async def test_workflow_state_persistence(orchestrator, mock_workflow_state):
 
 
 @pytest.mark.asyncio
-async def test_handle_stage_completion_with_extra_context_keys(
-    orchestrator, mock_task_queue, mock_decision_events
-):
+async def test_handle_stage_completion_with_extra_context_keys(orchestrator, mock_task_queue, mock_decision_events):
     """Test stage completion ignores extra keys in context dict."""
     event = StageCompletedEvent(
         project="test-project",
@@ -628,9 +608,7 @@ async def test_handle_stage_completion_with_extra_context_keys(
 
 
 @pytest.mark.asyncio
-async def test_handle_review_cycle_completion_with_extra_context_keys(
-    orchestrator, mock_projects_api
-):
+async def test_handle_review_cycle_completion_with_extra_context_keys(orchestrator, mock_projects_api):
     """Test review cycle completion ignores extra keys in context dict."""
     event = ReviewCycleCompletedEvent(
         project="test-project",
@@ -652,9 +630,7 @@ async def test_handle_review_cycle_completion_with_extra_context_keys(
 
 
 @pytest.mark.asyncio
-async def test_handle_review_cycle_completion_missing_max_iterations(
-    orchestrator, mock_task_queue
-):
+async def test_handle_review_cycle_completion_missing_max_iterations(orchestrator, mock_task_queue):
     """Test review cycle completion without max_iterations uses default of 3."""
     event = ReviewCycleCompletedEvent(
         project="test-project",
@@ -681,9 +657,7 @@ async def test_handle_review_cycle_completion_missing_max_iterations(
 
 
 @pytest.mark.asyncio
-async def test_handle_review_cycle_completion_max_iterations_exceeded(
-    orchestrator, mock_decision_events
-):
+async def test_handle_review_cycle_completion_max_iterations_exceeded(orchestrator, mock_decision_events):
     """Test review cycle completion escalates when max_iterations reached."""
     event = ReviewCycleCompletedEvent(
         project="test-project",

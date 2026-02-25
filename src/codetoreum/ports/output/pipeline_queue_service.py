@@ -42,8 +42,9 @@ class QueueStatus(str, Enum):
     Provides type-safe status values for queue entries, preventing typos and
     enabling IDE autocomplete.
     """
+
     WAITING = "waiting"  # Work item in queue, waiting for lock
-    ACTIVE = "active"    # Work item holds the pipeline lock
+    ACTIVE = "active"  # Work item holds the pipeline lock
 
 
 # Domain-specific exceptions for queue service operations
@@ -226,9 +227,7 @@ class IPipelineQueueService(ABC):
         """
 
     @abstractmethod
-    async def get_next_waiting_item(
-        self, project_id: str, board_id: str
-    ) -> PipelineQueueEntry | None:
+    async def get_next_waiting_item(self, project_id: str, board_id: str) -> PipelineQueueEntry | None:
         """Get the next waiting item from the queue based on board position.
 
         Before selecting the next item, this method syncs with the board state
@@ -260,9 +259,7 @@ class IPipelineQueueService(ABC):
         """
 
     @abstractmethod
-    async def get_queue_entries(
-        self, project_id: str, board_id: str
-    ) -> list[PipelineQueueEntry]:
+    async def get_queue_entries(self, project_id: str, board_id: str) -> list[PipelineQueueEntry]:
         """Get all queue entries for a pipeline.
 
         Returns all queue entries (both WAITING and ACTIVE) for the specified
@@ -286,9 +283,7 @@ class IPipelineQueueService(ABC):
         """
 
     @abstractmethod
-    async def sync_queue_with_board(
-        self, project_id: str, board_id: str, column: str
-    ) -> None:
+    async def sync_queue_with_board(self, project_id: str, board_id: str, column: str) -> None:
         """Synchronize queue state with current board column state.
 
         Ensures queue entries match the actual work items in the trigger column.

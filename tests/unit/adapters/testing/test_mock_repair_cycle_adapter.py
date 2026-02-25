@@ -83,7 +83,7 @@ class TestSimulationClockIntegration:
             failures=(),
             warning_list=(),
             raw_output="",
-            timestamp=clock.now().isoformat()
+            timestamp=clock.now().isoformat(),
         )
         adapter.set_test_result_sequence(RepairTestType.UNIT, [result])
 
@@ -106,9 +106,7 @@ class TestSimulationClockIntegration:
 
         context = MockRepairCycleContext()
         failures: dict[str, tuple[RepairTestFailure, ...]] = {
-            "test_file.py": (
-                RepairTestFailure(file="test_file.py", test="test_1", message="Failed"),
-            )
+            "test_file.py": (RepairTestFailure(file="test_file.py", test="test_1", message="Failed"),)
         }
 
         config = context.test_configs[0]
@@ -143,7 +141,7 @@ class TestSimulationClockIntegration:
                 RepairTestWarning(file="src/file2.py", message="Warning 2"),
             ),
             raw_output="",
-            timestamp=clock.now().isoformat()
+            timestamp=clock.now().isoformat(),
         )
 
         await adapter.handle_warnings(test_result, config, context)
@@ -167,12 +165,10 @@ class TestConfigurationMethods:
             passed=9,
             failed=1,
             warnings=0,
-            failures=(
-                RepairTestFailure(file="test.py", test="test_1", message="Failed"),
-            ),
+            failures=(RepairTestFailure(file="test.py", test="test_1", message="Failed"),),
             warning_list=(),
             raw_output="",
-            timestamp=clock.now().isoformat()
+            timestamp=clock.now().isoformat(),
         )
 
         result2 = RepairTestResult(
@@ -184,7 +180,7 @@ class TestConfigurationMethods:
             failures=(),
             warning_list=(),
             raw_output="",
-            timestamp=clock.now().isoformat()
+            timestamp=clock.now().isoformat(),
         )
 
         adapter.set_test_result_sequence(RepairTestType.UNIT, [result1, result2])
@@ -244,7 +240,7 @@ class TestEventLogging:
             failures=(),
             warning_list=(),
             raw_output="",
-            timestamp=clock.now().isoformat()
+            timestamp=clock.now().isoformat(),
         )
         adapter.set_test_result_sequence(RepairTestType.UNIT, [result])
 
@@ -271,7 +267,7 @@ class TestEventLogging:
             failures=(),
             warning_list=(),
             raw_output="",
-            timestamp=clock.now().isoformat()
+            timestamp=clock.now().isoformat(),
         )
         adapter.set_test_result_sequence(RepairTestType.UNIT, [result])
 
@@ -320,7 +316,7 @@ class TestAssertionHelpers:
             failures=(),
             warning_list=(),
             raw_output="",
-            timestamp=clock.now().isoformat()
+            timestamp=clock.now().isoformat(),
         )
         adapter.set_test_result_sequence(RepairTestType.UNIT, [result])
 
@@ -361,7 +357,7 @@ class TestAssertionHelpers:
             failures=(),
             warning_list=(),
             raw_output="",
-            timestamp=clock.now().isoformat()
+            timestamp=clock.now().isoformat(),
         )
         adapter.set_test_result_sequence(RepairTestType.UNIT, [result])
 
@@ -420,7 +416,7 @@ class TestCircuitBreaker:
             ),
             warning_list=(),
             raw_output="",
-            timestamp=clock.now().isoformat()
+            timestamp=clock.now().isoformat(),
         )
         adapter.set_test_result_sequence(RepairTestType.UNIT, [test_result, test_result, test_result, test_result])
 
@@ -452,7 +448,7 @@ class TestCircuitBreaker:
             ),
             warning_list=(),
             raw_output="",
-            timestamp=clock.now().isoformat()
+            timestamp=clock.now().isoformat(),
         )
         # Create multiple iterations to trigger circuit breaker
         adapter.set_test_result_sequence(RepairTestType.UNIT, [result] * 10)

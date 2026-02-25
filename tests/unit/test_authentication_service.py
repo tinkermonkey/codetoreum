@@ -397,12 +397,8 @@ class TestAPIKeys:
         user = await auth_service.create_user(user_command)
 
         # Create multiple API keys
-        command1 = CreateAPIKeyCommand(
-            name="Key 1", user_id=user.id, roles={UserRole.SERVICE_ACCOUNT}
-        )
-        command2 = CreateAPIKeyCommand(
-            name="Key 2", user_id=user.id, roles={UserRole.SERVICE_ACCOUNT}
-        )
+        command1 = CreateAPIKeyCommand(name="Key 1", user_id=user.id, roles={UserRole.SERVICE_ACCOUNT})
+        command2 = CreateAPIKeyCommand(name="Key 2", user_id=user.id, roles={UserRole.SERVICE_ACCOUNT})
 
         await auth_service.create_api_key(command1)
         await auth_service.create_api_key(command2)
@@ -437,12 +433,8 @@ class TestPermissions:
         auth_context = await auth_service.validate_token(result.access_token)
 
         # Check permissions
-        assert await auth_service.check_permission(
-            auth_context, Permission.WORKFLOW_VIEW.value
-        )
-        assert await auth_service.check_permission(
-            auth_context, Permission.WORKFLOW_CREATE.value
-        )
+        assert await auth_service.check_permission(auth_context, Permission.WORKFLOW_VIEW.value)
+        assert await auth_service.check_permission(auth_context, Permission.WORKFLOW_CREATE.value)
         assert not await auth_service.check_permission(
             auth_context, Permission.USER_DELETE.value
         )  # Developer doesn't have this
@@ -465,12 +457,6 @@ class TestPermissions:
         auth_context = await auth_service.validate_token(result.access_token)
 
         # Admin should have all permissions
-        assert await auth_service.check_permission(
-            auth_context, Permission.WORKFLOW_CREATE.value
-        )
-        assert await auth_service.check_permission(
-            auth_context, Permission.USER_DELETE.value
-        )
-        assert await auth_service.check_permission(
-            auth_context, Permission.CONFIG_UPDATE.value
-        )
+        assert await auth_service.check_permission(auth_context, Permission.WORKFLOW_CREATE.value)
+        assert await auth_service.check_permission(auth_context, Permission.USER_DELETE.value)
+        assert await auth_service.check_permission(auth_context, Permission.CONFIG_UPDATE.value)

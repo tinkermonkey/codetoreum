@@ -44,13 +44,16 @@ class MockGraphQLClient:
         # Return mock responses based on query type
         # Check for GetPullRequestComments FIRST since it contains "GetPullRequest"
         if "GetPullRequestComments" in query:
-            result: dict[str, Any] = self.responses.get("GetPullRequestComments", {
-                "node": {
-                    "id": "PR123",
-                    "reviews": {"nodes": []},
-                    "comments": {"nodes": []},
-                }
-            })
+            result: dict[str, Any] = self.responses.get(
+                "GetPullRequestComments",
+                {
+                    "node": {
+                        "id": "PR123",
+                        "reviews": {"nodes": []},
+                        "comments": {"nodes": []},
+                    }
+                },
+            )
             return result
 
         if "GetPullRequest" in query and "prId" in str(variables):
@@ -66,50 +69,52 @@ class MockGraphQLClient:
                 return result_seq
 
             # Otherwise use default or single response
-            result_default: dict[str, Any] = self.responses.get("GetPullRequest", {
-                "node": {
-                    "id": "PR123",
-                    "state": "OPEN",
-                    "isDraft": False,
-                    "reviews": {
-                        "nodes": [
-                            {
-                                "id": "REVIEW1",
-                                "state": "APPROVED",
-                                "author": {"login": "reviewer1"},
-                                "submittedAt": "2024-01-01T10:00:00Z",
-                            }
-                        ]
-                    },
-                }
-            })
+            result_default: dict[str, Any] = self.responses.get(
+                "GetPullRequest",
+                {
+                    "node": {
+                        "id": "PR123",
+                        "state": "OPEN",
+                        "isDraft": False,
+                        "reviews": {
+                            "nodes": [
+                                {
+                                    "id": "REVIEW1",
+                                    "state": "APPROVED",
+                                    "author": {"login": "reviewer1"},
+                                    "submittedAt": "2024-01-01T10:00:00Z",
+                                }
+                            ]
+                        },
+                    }
+                },
+            )
             return result_default
 
         if "SearchPullRequests" in query:
-            result_search: dict[str, Any] = self.responses.get("SearchPullRequests", {
-                "search": {"nodes": []}
-            })
+            result_search: dict[str, Any] = self.responses.get("SearchPullRequests", {"search": {"nodes": []}})
             return result_search
 
         if "GetOpenPRs" in query:
-            result_prs: dict[str, Any] = self.responses.get("GetOpenPRs", {
-                "repository": {
-                    "pullRequests": {"nodes": []}
-                }
-            })
+            result_prs: dict[str, Any] = self.responses.get(
+                "GetOpenPRs", {"repository": {"pullRequests": {"nodes": []}}}
+            )
             return result_prs
 
         if "SubmitReview" in query:
-            result_review: dict[str, Any] = self.responses.get("SubmitReview", {
-                "submitPullRequestReview": {
-                    "pullRequestReview": {
-                        "id": "REVIEW_NEW",
-                        "state": "CHANGES_REQUESTED",
-                        "author": {"login": "bot"},
-                        "submittedAt": "2024-01-01T11:00:00Z",
+            result_review: dict[str, Any] = self.responses.get(
+                "SubmitReview",
+                {
+                    "submitPullRequestReview": {
+                        "pullRequestReview": {
+                            "id": "REVIEW_NEW",
+                            "state": "CHANGES_REQUESTED",
+                            "author": {"login": "bot"},
+                            "submittedAt": "2024-01-01T11:00:00Z",
+                        }
                     }
-                }
-            })
+                },
+            )
             return result_review
 
         return {}
@@ -328,6 +333,7 @@ class TestEventEmitter:
 
     def test_emit_logs_handler_context(self, adapter, caplog):
         """Test emit logs structured context with event_type and handler name."""
+
         def named_handler(event):
             raise ValueError("Test error")
 
@@ -352,6 +358,7 @@ class TestEventEmitter:
 
     def test_emit_propagates_cancelled_error(self, adapter):
         """Test emit propagates asyncio.CancelledError instead of suppressing it."""
+
         def handler_with_cancel(event):
             raise asyncio.CancelledError("Task cancelled")
 
@@ -414,7 +421,8 @@ class TestEventEmitter:
 
         # Verify summary log exists
         summary_logs = [
-            record for record in error_logs
+            record
+            for record in error_logs
             if "completed with" in record.message and "handler failure(s)" in record.message
         ]
         assert len(summary_logs) == 1

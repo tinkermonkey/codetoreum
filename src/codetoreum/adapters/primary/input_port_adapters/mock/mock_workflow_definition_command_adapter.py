@@ -91,9 +91,7 @@ class MockWorkflowDefinitionCommandAdapter(IWorkflowDefinitionCommandPort):
                 message="Workflow not found",
             )
 
-    async def activate_workflow_definition(
-        self, workflow_id: str
-    ) -> WorkflowDefinitionCommandResult:
+    async def activate_workflow_definition(self, workflow_id: str) -> WorkflowDefinitionCommandResult:
         """Activate a workflow definition."""
         with self._lock:
             if workflow_id in self._workflows:
@@ -113,9 +111,7 @@ class MockWorkflowDefinitionCommandAdapter(IWorkflowDefinitionCommandPort):
                 message="Workflow not found",
             )
 
-    async def deactivate_workflow_definition(
-        self, workflow_id: str
-    ) -> WorkflowDefinitionCommandResult:
+    async def deactivate_workflow_definition(self, workflow_id: str) -> WorkflowDefinitionCommandResult:
         """Deactivate a workflow definition."""
         with self._lock:
             if workflow_id in self._workflows:

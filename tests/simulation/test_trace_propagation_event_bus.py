@@ -174,9 +174,7 @@ class TestTraceContextAttributes:
 
             # Extract the context back
             extracted_carrier = {"traceparent": traceparent}
-            extracted_context = await sim.mock_tracer.extract_context(
-                extracted_carrier
-            )
+            extracted_context = await sim.mock_tracer.extract_context(extracted_carrier)
 
             # Verify roundtrip preserved context
             assert extracted_context == traceparent

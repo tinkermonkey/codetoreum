@@ -31,9 +31,7 @@ class TestServiceTracePropaagation:
                 "workflow_orchestration",
                 kind=SpanKind.INTERNAL,
             )
-            await sim.mock_tracer.set_attribute(
-                orchestrator_span, "workflow_id", "workflow_123"
-            )
+            await sim.mock_tracer.set_attribute(orchestrator_span, "workflow_id", "workflow_123")
 
             # Child span for board interaction
             board_span = await sim.mock_tracer.start_span(
@@ -68,12 +66,8 @@ class TestServiceTracePropaagation:
                 "execution_service",
                 kind=SpanKind.INTERNAL,
             )
-            await sim.mock_tracer.set_attribute(
-                execution_span, "agent_id", "agent_001"
-            )
-            await sim.mock_tracer.set_attribute(
-                execution_span, "work_item_id", "item_123"
-            )
+            await sim.mock_tracer.set_attribute(execution_span, "agent_id", "agent_001")
+            await sim.mock_tracer.set_attribute(execution_span, "work_item_id", "item_123")
 
             # Container operation (child of execution)
             container_span = await sim.mock_tracer.start_span(
@@ -81,9 +75,7 @@ class TestServiceTracePropaagation:
                 kind=SpanKind.CLIENT,
                 parent_context=execution_span.traceparent,
             )
-            await sim.mock_tracer.set_attribute(
-                container_span, "exit_code", "0"
-            )
+            await sim.mock_tracer.set_attribute(container_span, "exit_code", "0")
             await sim.mock_tracer.end_span(container_span)
 
             await sim.mock_tracer.end_span(execution_span)
@@ -114,9 +106,7 @@ class TestServiceTracePropaagation:
                 kind=SpanKind.INTERNAL,
                 parent_context=root_span.traceparent,
             )
-            await sim.mock_tracer.set_attribute(
-                scheduler_span, "queue_position", "1"
-            )
+            await sim.mock_tracer.set_attribute(scheduler_span, "queue_position", "1")
             await sim.mock_tracer.end_span(scheduler_span)
 
             # Executor span (also child of orchestrator)
@@ -125,9 +115,7 @@ class TestServiceTracePropaagation:
                 kind=SpanKind.INTERNAL,
                 parent_context=root_span.traceparent,
             )
-            await sim.mock_tracer.set_attribute(
-                executor_span, "duration_ms", "5000"
-            )
+            await sim.mock_tracer.set_attribute(executor_span, "duration_ms", "5000")
             await sim.mock_tracer.end_span(executor_span)
 
             await sim.mock_tracer.end_span(root_span)
@@ -159,9 +147,7 @@ class TestServiceTracePropaagation:
                 "service_operation",
                 kind=SpanKind.INTERNAL,
             )
-            await sim.mock_tracer.set_attribute(
-                service_span, "service", "WorkflowOrchestrator"
-            )
+            await sim.mock_tracer.set_attribute(service_span, "service", "WorkflowOrchestrator")
 
             # Adapter receiving the call (child of service)
             adapter_span = await sim.mock_tracer.start_span(
@@ -169,12 +155,8 @@ class TestServiceTracePropaagation:
                 kind=SpanKind.CLIENT,
                 parent_context=service_span.traceparent,
             )
-            await sim.mock_tracer.set_attribute(
-                adapter_span, "endpoint", "POST /graphql"
-            )
-            await sim.mock_tracer.set_attribute(
-                adapter_span, "status_code", "200"
-            )
+            await sim.mock_tracer.set_attribute(adapter_span, "endpoint", "POST /graphql")
+            await sim.mock_tracer.set_attribute(adapter_span, "status_code", "200")
             await sim.mock_tracer.end_span(adapter_span)
 
             await sim.mock_tracer.end_span(service_span)
@@ -203,9 +185,7 @@ class TestServiceTracePropaagation:
                 "repair_cycle",
                 kind=SpanKind.INTERNAL,
             )
-            await sim.mock_tracer.set_attribute(
-                repair_span, "issue_id", "fix_001"
-            )
+            await sim.mock_tracer.set_attribute(repair_span, "issue_id", "fix_001")
 
             # Test phase (child of repair cycle)
             test_span = await sim.mock_tracer.start_span(
@@ -213,9 +193,7 @@ class TestServiceTracePropaagation:
                 kind=SpanKind.CLIENT,
                 parent_context=repair_span.traceparent,
             )
-            await sim.mock_tracer.set_attribute(
-                test_span, "test_status", "failed"
-            )
+            await sim.mock_tracer.set_attribute(test_span, "test_status", "failed")
             await sim.mock_tracer.end_span(test_span)
 
             # Fix phase (child of repair cycle)
@@ -224,9 +202,7 @@ class TestServiceTracePropaagation:
                 kind=SpanKind.CLIENT,
                 parent_context=repair_span.traceparent,
             )
-            await sim.mock_tracer.set_attribute(
-                fix_span, "fix_applied", "true"
-            )
+            await sim.mock_tracer.set_attribute(fix_span, "fix_applied", "true")
             await sim.mock_tracer.end_span(fix_span)
 
             # Validate phase (child of repair cycle)
@@ -235,9 +211,7 @@ class TestServiceTracePropaagation:
                 kind=SpanKind.CLIENT,
                 parent_context=repair_span.traceparent,
             )
-            await sim.mock_tracer.set_attribute(
-                validate_span, "validation_result", "passed"
-            )
+            await sim.mock_tracer.set_attribute(validate_span, "validation_result", "passed")
             await sim.mock_tracer.end_span(validate_span)
 
             await sim.mock_tracer.end_span(repair_span)

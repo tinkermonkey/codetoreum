@@ -123,9 +123,7 @@ class ICodeReviewService(IEventEmitter, IMonitoredService, ABC):
     # Query Operations
 
     @abstractmethod
-    async def get_review_for_work_item(
-        self, work_item_id: str
-    ) -> CodeReview | None:
+    async def get_review_for_work_item(self, work_item_id: str) -> CodeReview | None:
         """Find code review associated with a work item.
 
         Returns the code review (PR/MR) linked to this work item,

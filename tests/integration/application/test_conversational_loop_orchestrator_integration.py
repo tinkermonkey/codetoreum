@@ -132,7 +132,7 @@ class MockDiscussionAdapter:
             body=content,
             created_at=datetime.now(UTC).isoformat(),
             parent_id=parent_id,
-            is_bot=True
+            is_bot=True,
         )
         self.comments_posted.append(comment)
         if work_item_id not in self._threads:
@@ -147,7 +147,7 @@ class MockDiscussionAdapter:
             id=f"thread-{work_item_id}",
             work_item_id=work_item_id,
             comments=comments,
-            thread_type="flat"
+            thread_type="flat",
         )
 
     # Test helper methods
@@ -160,7 +160,7 @@ class MockDiscussionAdapter:
             body=body,
             created_at=datetime.now(UTC).isoformat(),
             parent_id=parent_id,
-            is_bot=False
+            is_bot=False,
         )
         if work_item_id not in self._threads:
             self._threads[work_item_id] = []
@@ -194,6 +194,7 @@ class MockLLMProvider:
     async def execute_prompt(self, prompt: str, context=None, stream_callback=None):
         """Execute a one-time prompt."""
         from unittest.mock import MagicMock
+
         result = MagicMock()
         result.content = "Mock response to prompt"
         result.conversation_id = None
@@ -214,11 +215,13 @@ class MockLLMProvider:
         self.conversations[conversation_id].append(message)
 
         # Record execution
-        self.executions.append({
-            "conversation_id": conversation_id,
-            "message": message,
-            "timestamp": datetime.now(UTC).isoformat(),
-        })
+        self.executions.append(
+            {
+                "conversation_id": conversation_id,
+                "message": message,
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        )
 
         # Generate response
         response_text = f"Agent response to: {message[:50]}..."
@@ -248,8 +251,6 @@ class MockLLMProvider:
     def get_execution_count(self) -> int:
         """Get total number of agent executions."""
         return len(self.executions)
-
-
 
 
 @pytest.fixture
@@ -345,7 +346,7 @@ class TestFullLoopLifecycleIntegration:
             {
                 "column_name": "In Review",
                 "agent_assignment": "code-reviewer",
-            }
+            },
         )
 
         assert session.status == "active"
@@ -451,7 +452,6 @@ class TestFullLoopLifecycleIntegration:
         final_session = await orchestrator.load_session_state(work_item_id)
         assert final_session is not None, "Session should still be in event store (marked as terminated)"
         assert final_session.status == "terminated"
-
 
 
 @pytest.mark.integration
@@ -612,9 +612,7 @@ class TestErrorHandlingIntegration:
         )
 
         # Make LLM provider fail to trigger error event
-        testable_llm_provider.continue_conversation = AsyncMock(
-            side_effect=Exception("Agent execution failed")
-        )
+        testable_llm_provider.continue_conversation = AsyncMock(side_effect=Exception("Agent execution failed"))
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
@@ -721,7 +719,7 @@ class TestConcurrentSessionsWithRealEventStoreIntegration:
         ]
 
         sessions = []
-        for orch, (work_item_id, project_id, agent) in zip(orchestrators, session_configs):
+        for orch, (work_item_id, project_id, agent) in zip(orchestrators, session_configs, strict=False):
             session = await orch.initialize_loop(
                 work_item_id,
                 project_id,
@@ -756,7 +754,7 @@ class TestConcurrentSessionsWithRealEventStoreIntegration:
 
         # Process comments concurrently (FR-9.2: sequential per item, parallel across items)
         tasks = []
-        for orch, (work_item_id, project_id, _) in zip(orchestrators, session_configs):
+        for orch, (work_item_id, project_id, _) in zip(orchestrators, session_configs, strict=False):
             task = process_comment(orch, work_item_id, "proj-1", f"{work_item_id}-comment-1")
             tasks.append(task)
 

@@ -85,10 +85,7 @@ class YAMLConfigImporter:
 
             # Check file extension
             if resolved_path.suffix.lower() not in ALLOWED_EXTENSIONS:
-                msg = (
-                    f"Invalid file extension: {resolved_path.suffix}. "
-                    f"Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
-                )
+                msg = f"Invalid file extension: {resolved_path.suffix}. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
                 raise SecurityError(msg)
 
             # Check if it's actually a file
@@ -101,7 +98,7 @@ class YAMLConfigImporter:
             if file_size > MAX_FILE_SIZE_BYTES:
                 msg = (
                     f"File too large: {file_size} bytes "
-                    f"(max: {MAX_FILE_SIZE_BYTES} bytes / {MAX_FILE_SIZE_BYTES // (1024*1024)}MB)"
+                    f"(max: {MAX_FILE_SIZE_BYTES} bytes / {MAX_FILE_SIZE_BYTES // (1024 * 1024)}MB)"
                 )
                 raise SecurityError(msg)
 
@@ -165,10 +162,7 @@ class YAMLConfigImporter:
             SecurityError: If depth exceeds limit
         """
         if current_depth > MAX_YAML_DEPTH:
-            msg = (
-                f"YAML depth exceeds maximum allowed ({MAX_YAML_DEPTH}). "
-                "Possible YAML bomb attack."
-            )
+            msg = f"YAML depth exceeds maximum allowed ({MAX_YAML_DEPTH}). Possible YAML bomb attack."
             raise SecurityError(msg)
 
         if isinstance(obj, dict):
@@ -210,9 +204,7 @@ class YAMLConfigImporter:
 
         return count
 
-    async def import_project_config(
-        self, yaml_file: Path, dry_run: bool = False
-    ) -> dict[str, Any]:
+    async def import_project_config(self, yaml_file: Path, dry_run: bool = False) -> dict[str, Any]:
         """
         Import a project configuration from YAML file.
 
@@ -242,7 +234,10 @@ class YAMLConfigImporter:
             return {"success": False, "error": str(e)}
         except Exception as e:
             console.print(f"[bold red]Unexpected error:[/bold red] {e}")
-            logger.exception("Unexpected error loading YAML", extra={"error_id": ErrorRegistry.ERR_CONFIG_PARSING_ERROR})
+            logger.exception(
+                "Unexpected error loading YAML",
+                extra={"error_id": ErrorRegistry.ERR_CONFIG_PARSING_ERROR},
+            )
             return {"success": False, "error": f"Unexpected error: {e}"}
 
         # Validate YAML structure
@@ -319,9 +314,7 @@ class YAMLConfigImporter:
             if "agents" in yaml_config:
                 console.print("\n[bold blue]Importing agent configurations...[/bold blue]")
                 for agent_name, agent_data in yaml_config["agents"].items():
-                    await self._import_agent_config(
-                        project_config.id, agent_name, agent_data
-                    )
+                    await self._import_agent_config(project_config.id, agent_name, agent_data)
                     console.print(f"[green]✓ Agent '{agent_name}' imported[/green]")
 
             # Import pipeline configurations
@@ -342,9 +335,7 @@ class YAMLConfigImporter:
             logger.exception("Failed to save configuration", extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR})
             return {"success": False, "error": str(e)}
 
-    async def _import_agent_config(
-        self, project_id: str, agent_name: str, agent_data: dict[str, Any]
-    ):
+    async def _import_agent_config(self, project_id: str, agent_name: str, agent_data: dict[str, Any]):
         """Import agent configuration."""
         agent_config = AgentConfig(
             project_id=project_id,
@@ -361,9 +352,7 @@ class YAMLConfigImporter:
         )
         await self.config_store.save_agent_config(agent_config)
 
-    async def _import_pipeline_config(
-        self, project_id: str, pipeline_data: dict[str, Any]
-    ):
+    async def _import_pipeline_config(self, project_id: str, pipeline_data: dict[str, Any]):
         """Import pipeline configuration."""
         pipeline_config = PipelineConfig(
             id=f"{project_id}:{pipeline_data['name']}",
@@ -458,9 +447,7 @@ def import_config(yaml_file: Path, dry_run: bool, elasticsearch_url: str, redis_
         if result["success"]:
             console.print("\n[bold green]✓ Import completed successfully![/bold green]")
             if not dry_run:
-                console.print(
-                    f"Project '{result['project']}' imported at version {result.get('version', 1)}"
-                )
+                console.print(f"Project '{result['project']}' imported at version {result.get('version', 1)}")
         else:
             console.print("\n[bold red]✗ Import failed[/bold red]")
             if "error" in result:

@@ -71,9 +71,7 @@ class WorkflowEventHandler(EventHandler):
         elif isinstance(event, ReviewCycleEscalated):
             await self._handle_review_escalated(event)
         else:
-            logger.warning(
-                f"WorkflowEventHandler received unexpected event type: {event.event_type}"
-            )
+            logger.warning(f"WorkflowEventHandler received unexpected event type: {event.event_type}")
 
     async def _handle_work_item_created(self, event: WorkItemCreated) -> None:
         """
@@ -82,10 +80,7 @@ class WorkflowEventHandler(EventHandler):
         Args:
             event: WorkItemCreated event
         """
-        logger.info(
-            f"Starting workflow for new work item: {event.aggregate_id} "
-            f"(title: {event.payload.get('title')})"
-        )
+        logger.info(f"Starting workflow for new work item: {event.aggregate_id} (title: {event.payload.get('title')})")
 
         # Note: In a full implementation, this would:
         # 1. Load workflow configuration for the project
@@ -94,9 +89,7 @@ class WorkflowEventHandler(EventHandler):
         #
         # For now, we log the event and rely on external triggers
         # (GitHub webhook) to move cards to initial column
-        logger.debug(
-            f"Work item {event.aggregate_id} created, waiting for initial column assignment"
-        )
+        logger.debug(f"Work item {event.aggregate_id} created, waiting for initial column assignment")
 
     async def _handle_execution_completed(self, event: ExecutionCompleted) -> None:
         """
@@ -123,10 +116,7 @@ class WorkflowEventHandler(EventHandler):
         # For Phase 5.6, we demonstrate the pattern but defer
         # full implementation to integration phase
 
-        logger.debug(
-            f"Execution {event.aggregate_id} completed, "
-            f"workflow progression deferred to integration phase"
-        )
+        logger.debug(f"Execution {event.aggregate_id} completed, workflow progression deferred to integration phase")
 
     async def _handle_execution_failed(self, event: ExecutionFailed) -> None:
         """
@@ -149,9 +139,8 @@ class WorkflowEventHandler(EventHandler):
         # For Phase 5.6, we log the failure and track metrics
 
         logger.error(
-            f"Execution {event.aggregate_id} failed, "
-            f"escalation logic deferred to integration phase",
-            extra={"error_id": ErrorRegistry.ERR_EXECUTION_ERROR}
+            f"Execution {event.aggregate_id} failed, escalation logic deferred to integration phase",
+            extra={"error_id": ErrorRegistry.ERR_EXECUTION_ERROR},
         )
 
     async def _handle_review_approved(self, event: ReviewCycleApproved) -> None:
@@ -178,10 +167,7 @@ class WorkflowEventHandler(EventHandler):
         #
         # For Phase 5.6, we demonstrate the event handling pattern
 
-        logger.debug(
-            f"Review cycle {event.aggregate_id} approved, "
-            f"workflow advancement deferred to integration phase"
-        )
+        logger.debug(f"Review cycle {event.aggregate_id} approved, workflow advancement deferred to integration phase")
 
     async def _handle_review_rejected(self, event: ReviewCycleRejected) -> None:
         """
@@ -204,14 +190,10 @@ class WorkflowEventHandler(EventHandler):
         # For Phase 5.6, we demonstrate the pattern
 
         if event.payload.get("current_iteration", 0) >= event.payload.get("max_iterations", 0):
-            logger.warning(
-                f"Review cycle {event.aggregate_id} reached max iterations, "
-                f"escalation required"
-            )
+            logger.warning(f"Review cycle {event.aggregate_id} reached max iterations, escalation required")
         else:
             logger.info(
-                f"Review cycle {event.aggregate_id} needs maker revision, "
-                f"task queuing deferred to integration phase"
+                f"Review cycle {event.aggregate_id} needs maker revision, task queuing deferred to integration phase"
             )
 
     async def _handle_review_escalated(self, event: ReviewCycleEscalated) -> None:
@@ -222,8 +204,7 @@ class WorkflowEventHandler(EventHandler):
             event: ReviewCycleEscalated event
         """
         logger.warning(
-            f"Review cycle escalated to human: {event.aggregate_id}, "
-            f"reason: {event.payload.get('reason', '')}"
+            f"Review cycle escalated to human: {event.aggregate_id}, reason: {event.payload.get('reason', '')}"
         )
 
         # Note: In a full implementation, this would:
@@ -234,7 +215,4 @@ class WorkflowEventHandler(EventHandler):
         #
         # For Phase 5.6, we log the escalation
 
-        logger.info(
-            f"Review cycle {event.aggregate_id} escalated, "
-            f"notification logic deferred to integration phase"
-        )
+        logger.info(f"Review cycle {event.aggregate_id} escalated, notification logic deferred to integration phase")

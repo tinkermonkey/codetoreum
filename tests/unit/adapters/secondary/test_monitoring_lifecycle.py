@@ -54,9 +54,7 @@ class TestMonitoringLifecycleEdgeCases:
         status = await adapter.get_monitoring_status("proj-1")
         assert status.state in (MonitoringState.STOPPED, MonitoringState.STOPPING)
 
-    async def test_status_when_never_started_returns_not_active(
-        self, mock_monitored_adapter
-    ):
+    async def test_status_when_never_started_returns_not_active(self, mock_monitored_adapter):
         """Test that status when never started returns not active."""
         adapter = mock_monitored_adapter
 
@@ -88,9 +86,7 @@ class TestMonitoringLifecycleEdgeCases:
         status3 = await adapter.get_monitoring_status("proj-1")
         assert status3.state == MonitoringState.ACTIVE
 
-    async def test_monitor_multiple_projects_simultaneously(
-        self, mock_monitored_adapter
-    ):
+    async def test_monitor_multiple_projects_simultaneously(self, mock_monitored_adapter):
         """Test that multiple projects can be monitored simultaneously."""
         adapter = mock_monitored_adapter
 

@@ -160,13 +160,8 @@ class ReviewCycleState:
     def __post_init__(self) -> None:
         """Validate state data."""
         if self.current_iteration > self.max_iterations:
-            msg = (
-                f"current_iteration ({self.current_iteration}) cannot exceed "
-                f"max_iterations ({self.max_iterations})"
-            )
-            raise ValueError(
-                msg
-            )
+            msg = f"current_iteration ({self.current_iteration}) cannot exceed max_iterations ({self.max_iterations})"
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True)
@@ -250,9 +245,7 @@ class IReviewCycle(ABC):
         """
 
     @abstractmethod
-    async def resume_review_cycle(
-        self, work_item_id: str, project_id: str
-    ) -> None:
+    async def resume_review_cycle(self, work_item_id: str, project_id: str) -> None:
         """Resume an interrupted review cycle.
 
         Resumes a review cycle that was paused (e.g., due to agent timeout
@@ -269,9 +262,7 @@ class IReviewCycle(ABC):
         """
 
     @abstractmethod
-    async def resume_with_human_feedback(
-        self, cycle_state: ReviewCycleState, feedback: str
-    ) -> None:
+    async def resume_with_human_feedback(self, cycle_state: ReviewCycleState, feedback: str) -> None:
         """Resume a blocked cycle with human feedback.
 
         Resumes a review cycle that was escalated to human when blocked
@@ -289,9 +280,7 @@ class IReviewCycle(ABC):
         """
 
     @abstractmethod
-    async def get_cycle_state(
-        self, work_item_id: str
-    ) -> ReviewCycleState | None:
+    async def get_cycle_state(self, work_item_id: str) -> ReviewCycleState | None:
         """Retrieve current state of a review cycle.
 
         Gets the complete state of a review cycle in progress,

@@ -136,9 +136,7 @@ class IWorkItemQueryPort(ABC):
         """
 
     @abstractmethod
-    async def get_work_item_history(
-        self, work_item_id: str, limit: int | None = None
-    ) -> WorkItemHistory:
+    async def get_work_item_history(self, work_item_id: str, limit: int | None = None) -> WorkItemHistory:
         """
         Retrieves work item history including all events.
 

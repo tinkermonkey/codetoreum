@@ -59,11 +59,13 @@ class FilesStagedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "repository_id": self.repository_id,
-            "file_paths": list(self.file_paths),
-            "project_id": self.project_id,
-        })
+        d.update(
+            {
+                "repository_id": self.repository_id,
+                "file_paths": list(self.file_paths),
+                "project_id": self.project_id,
+            }
+        )
         return d
 
     @classmethod
@@ -146,14 +148,16 @@ class CommitCreatedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "repository_id": self.repository_id,
-            "commit_sha": self.commit_sha,
-            "message": self.message,
-            "author": self.author,
-            "changed_files": list(self.changed_files),
-            "project_id": self.project_id,
-        })
+        d.update(
+            {
+                "repository_id": self.repository_id,
+                "commit_sha": self.commit_sha,
+                "message": self.message,
+                "author": self.author,
+                "changed_files": list(self.changed_files),
+                "project_id": self.project_id,
+            }
+        )
         return d
 
     @classmethod
@@ -227,12 +231,14 @@ class BranchCreatedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "repository_id": self.repository_id,
-            "branch_name": self.branch_name,
-            "base_commit": self.base_commit,
-            "project_id": self.project_id,
-        })
+        d.update(
+            {
+                "repository_id": self.repository_id,
+                "branch_name": self.branch_name,
+                "base_commit": self.base_commit,
+                "project_id": self.project_id,
+            }
+        )
         return d
 
     @classmethod

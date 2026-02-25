@@ -32,17 +32,14 @@ class AsyncTimeout(ITimeout):
         timeout_seconds: float,
         operation_name: str,
         *args,
-        **kwargs
+        **kwargs,
     ) -> T:
         """Execute operation with timeout."""
         self._total_operations += 1
         start_time = time.time()
 
         try:
-            result = await asyncio.wait_for(
-                operation(*args, **kwargs),
-                timeout=timeout_seconds
-            )
+            result = await asyncio.wait_for(operation(*args, **kwargs), timeout=timeout_seconds)
 
             duration = (time.time() - start_time) * 1000  # Convert to ms
             self._durations.append(duration)
@@ -63,5 +60,5 @@ class AsyncTimeout(ITimeout):
             total_operations=self._total_operations,
             total_timeouts=self._total_timeouts,
             average_duration_ms=avg_duration,
-            max_duration_ms=max_duration
+            max_duration_ms=max_duration,
         )

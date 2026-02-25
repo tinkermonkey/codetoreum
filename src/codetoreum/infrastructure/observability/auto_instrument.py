@@ -37,10 +37,7 @@ def setup_library_instrumentation(config: "ObservabilityConfig") -> None:
         return
 
     if not config.auto_instrument_libraries:
-        logger.info(
-            "Library auto-instrumentation disabled "
-            "(OTEL_AUTO_INSTRUMENT_LIBRARIES=false)"
-        )
+        logger.info("Library auto-instrumentation disabled (OTEL_AUTO_INSTRUMENT_LIBRARIES=false)")
         return
 
     logger.info("Setting up library auto-instrumentation...")
@@ -67,10 +64,7 @@ def _instrument_sqlalchemy() -> None:
         logger.info("✓ SQLAlchemy auto-instrumentation enabled")
 
     except ImportError:
-        logger.debug(
-            "SQLAlchemy instrumentation not available "
-            "(install: opentelemetry-instrumentation-sqlalchemy)"
-        )
+        logger.debug("SQLAlchemy instrumentation not available (install: opentelemetry-instrumentation-sqlalchemy)")
     except Exception as e:
         logger.warning(f"Failed to instrument SQLAlchemy: {e}", exc_info=True)
 
@@ -85,10 +79,7 @@ def _instrument_redis() -> None:
         logger.info("✓ Redis auto-instrumentation enabled")
 
     except ImportError:
-        logger.debug(
-            "Redis instrumentation not available "
-            "(install: opentelemetry-instrumentation-redis)"
-        )
+        logger.debug("Redis instrumentation not available (install: opentelemetry-instrumentation-redis)")
     except Exception as e:
         logger.warning(f"Failed to instrument Redis: {e}", exc_info=True)
 
@@ -104,10 +95,7 @@ def _instrument_http_clients() -> None:
         logger.info("✓ Requests (HTTP client) auto-instrumentation enabled")
 
     except ImportError:
-        logger.debug(
-            "Requests instrumentation not available "
-            "(install: opentelemetry-instrumentation-requests)"
-        )
+        logger.debug("Requests instrumentation not available (install: opentelemetry-instrumentation-requests)")
     except Exception as e:
         logger.warning(f"Failed to instrument requests: {e}", exc_info=True)
 
@@ -120,10 +108,7 @@ def _instrument_http_clients() -> None:
         logger.info("✓ HTTPX (async HTTP client) auto-instrumentation enabled")
 
     except ImportError:
-        logger.debug(
-            "HTTPX instrumentation not available "
-            "(install: opentelemetry-instrumentation-httpx)"
-        )
+        logger.debug("HTTPX instrumentation not available (install: opentelemetry-instrumentation-httpx)")
     except Exception as e:
         logger.warning(f"Failed to instrument httpx: {e}", exc_info=True)
 

@@ -68,9 +68,7 @@ class EventCLI:
                 events = await self.event_store.get_events_since(since=since)
                 events = events[:limit]
             else:
-                console.print(
-                    f"[yellow]Warning:[/yellow] Listing all events (limited to {limit})"
-                )
+                console.print(f"[yellow]Warning:[/yellow] Listing all events (limited to {limit})")
                 # Get events from multiple streams
                 stream_ids = await self.event_store.get_all_stream_ids()
                 events = []
@@ -124,9 +122,7 @@ class EventCLI:
             for stream_id in stream_ids:
                 events = await self.event_store.get_events(stream_id=stream_id)
                 for e in events:
-                    if str(e.event_id) == event_id or str(e.event_id).startswith(
-                        event_id
-                    ):
+                    if str(e.event_id) == event_id or str(e.event_id).startswith(event_id):
                         event = e
                         break
                 if event:
@@ -232,9 +228,7 @@ class EventCLI:
             events_by_type = stats.get("events_by_type", {})
             if events_by_type:
                 type_branch = tree.add("[yellow]Events by Type[/yellow]")
-                for event_type, count in sorted(
-                    events_by_type.items(), key=lambda x: x[1], reverse=True
-                )[:10]:
+                for event_type, count in sorted(events_by_type.items(), key=lambda x: x[1], reverse=True)[:10]:
                     type_branch.add(f"{event_type}: {count:,}")
 
             console.print(tree)
@@ -267,7 +261,7 @@ class EventCLI:
                     query={
                         "query_string": {
                             "query": query,
-                            "fields": ["event_type^2", "data.*", "aggregate_type", "user_id"]
+                            "fields": ["event_type^2", "data.*", "aggregate_type", "user_id"],
                         }
                     },
                     sort=[{"timestamp": "desc"}],
@@ -284,6 +278,7 @@ class EventCLI:
                 from codetoreum.infrastructure.event_serialization import (
                     EventSerializer,
                 )
+
                 matching_events = [EventSerializer.from_dict(hit["_source"]) for hit in hits]
 
             else:
@@ -331,6 +326,7 @@ class EventCLI:
 
 # Click CLI commands
 
+
 @click.group()
 @click.pass_context
 def cli(ctx):
@@ -344,7 +340,9 @@ def cli(ctx):
 @click.option("--since", help="Filter by timestamp (ISO format)")
 @click.option("--limit", default=50, help="Maximum number of events to show")
 @click.pass_context
-def list_events(ctx: click.Context, stream_id: str | None, event_type: str | None, since: str | None, limit: int) -> None:
+def list_events(
+    ctx: click.Context, stream_id: str | None, event_type: str | None, since: str | None, limit: int
+) -> None:
     """List events."""
     # Get event store from context
     event_store = ctx.obj.get("event_store") if ctx.obj else None

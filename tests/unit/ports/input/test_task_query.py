@@ -53,7 +53,7 @@ class TestExecutionStatusInfo:
             pipeline_name="ci-pipeline",
             stage_name="build",
             agent_name="builder-agent",
-            status=ExecutionStatus.RUNNING
+            status=ExecutionStatus.RUNNING,
         )
 
         assert info.execution_id == "exec-123"
@@ -91,7 +91,7 @@ class TestExecutionStatusInfo:
             duration_seconds=300.0,
             error_message=None,
             retry_count=1,
-            metadata=metadata
+            metadata=metadata,
         )
 
         assert info.execution_id == "exec-123"
@@ -118,7 +118,7 @@ class TestExecutionListItem:
             agent_name="builder-agent",
             status=ExecutionStatus.RUNNING,
             started_at=started,
-            duration_seconds=150.5
+            duration_seconds=150.5,
         )
 
         assert item.execution_id == "exec-123"
@@ -143,18 +143,12 @@ class TestExecutionListResult:
                 work_item_id="item-123",
                 stage_name="build",
                 agent_name="builder-agent",
-                status=ExecutionStatus.COMPLETED
+                status=ExecutionStatus.COMPLETED,
             )
             for i in range(3)
         ]
 
-        result = ExecutionListResult(
-            executions=executions,
-            total_count=50,
-            page=1,
-            page_size=10,
-            has_next=True
-        )
+        result = ExecutionListResult(executions=executions, total_count=50, page=1, page_size=10, has_next=True)
 
         assert len(result.executions) == 3
         assert result.total_count == 50
@@ -164,13 +158,7 @@ class TestExecutionListResult:
 
     def test_empty_list_result(self):
         """Test creating empty execution list result"""
-        result = ExecutionListResult(
-            executions=[],
-            total_count=0,
-            page=1,
-            page_size=10,
-            has_next=False
-        )
+        result = ExecutionListResult(executions=[], total_count=0, page=1, page_size=10, has_next=False)
 
         assert len(result.executions) == 0
         assert result.total_count == 0
@@ -194,7 +182,7 @@ class TestArtifactInfo:
             size_bytes=1024,
             created_at=created,
             mime_type="text/x-python",
-            metadata=metadata
+            metadata=metadata,
         )
 
         assert artifact.artifact_id == "art-123"
@@ -221,15 +209,12 @@ class TestArtifactListResult:
                 name=f"log-{i}.txt",
                 path=f"/artifacts/log-{i}.txt",
                 size_bytes=512,
-                created_at=datetime.now()
+                created_at=datetime.now(),
             )
             for i in range(3)
         ]
 
-        result = ArtifactListResult(
-            artifacts=artifacts,
-            total_count=3
-        )
+        result = ArtifactListResult(artifacts=artifacts, total_count=3)
 
         assert len(result.artifacts) == 3
         assert result.total_count == 3
@@ -247,7 +232,7 @@ class TestExecutionHistoryEntry:
             timestamp=timestamp,
             event_type="StageCompleted",
             message="Build stage completed successfully",
-            details=details
+            details=details,
         )
 
         assert entry.timestamp == timestamp
@@ -262,19 +247,11 @@ class TestExecutionHistory:
     def test_execution_history_creation(self):
         """Test creating execution history"""
         entries = [
-            ExecutionHistoryEntry(
-                timestamp=datetime.now(),
-                event_type=f"Event{i}",
-                message=f"Event {i} occurred"
-            )
+            ExecutionHistoryEntry(timestamp=datetime.now(), event_type=f"Event{i}", message=f"Event {i} occurred")
             for i in range(5)
         ]
 
-        history = ExecutionHistory(
-            execution_id="exec-123",
-            entries=entries,
-            total_entries=5
-        )
+        history = ExecutionHistory(execution_id="exec-123", entries=entries, total_entries=5)
 
         assert history.execution_id == "exec-123"
         assert len(history.entries) == 5
@@ -296,7 +273,7 @@ class TestITaskQueryPortInterface:
             "list_executions",
             "get_artifacts",
             "get_execution_history",
-            "get_workflow_executions"
+            "get_workflow_executions",
         ]
 
         for method_name in required_methods:
@@ -310,6 +287,7 @@ class TestITaskQueryPortInterface:
         class IncompletePort(ITaskQueryPort):
             async def get_execution_status(self, execution_id):
                 pass
+
             # Missing: list_executions, get_artifacts, get_execution_history, get_workflow_executions
 
         with pytest.raises(TypeError):
@@ -328,7 +306,7 @@ class TestITaskQueryPortInterface:
                     pipeline_name="ci",
                     stage_name="build",
                     agent_name="agent",
-                    status=ExecutionStatus.RUNNING
+                    status=ExecutionStatus.RUNNING,
                 )
 
             async def list_executions(
@@ -338,34 +316,18 @@ class TestITaskQueryPortInterface:
                 project_name=None,
                 status=None,
                 page=1,
-                page_size=50
+                page_size=50,
             ):
-                return ExecutionListResult(
-                    executions=[],
-                    total_count=0,
-                    page=page,
-                    page_size=page_size,
-                    has_next=False
-                )
+                return ExecutionListResult(executions=[], total_count=0, page=page, page_size=page_size, has_next=False)
 
             async def get_artifacts(self, execution_id, artifact_type=None):
                 return ArtifactListResult(artifacts=[], total_count=0)
 
             async def get_execution_history(self, execution_id, limit=None):
-                return ExecutionHistory(
-                    execution_id=execution_id,
-                    entries=[],
-                    total_entries=0
-                )
+                return ExecutionHistory(execution_id=execution_id, entries=[], total_entries=0)
 
             async def get_workflow_executions(self, workflow_run_id):
-                return ExecutionListResult(
-                    executions=[],
-                    total_count=0,
-                    page=1,
-                    page_size=50,
-                    has_next=False
-                )
+                return ExecutionListResult(executions=[], total_count=0, page=1, page_size=50, has_next=False)
 
         port = CompletePort()
         assert isinstance(port, ITaskQueryPort)
@@ -388,7 +350,7 @@ class TestTaskQueryPortBehavior:
                     pipeline_name="ci",
                     stage_name="build",
                     agent_name="agent",
-                    status=ExecutionStatus.COMPLETED
+                    status=ExecutionStatus.COMPLETED,
                 )
 
             async def list_executions(
@@ -398,34 +360,18 @@ class TestTaskQueryPortBehavior:
                 project_name=None,
                 status=None,
                 page=1,
-                page_size=50
+                page_size=50,
             ):
-                return ExecutionListResult(
-                    executions=[],
-                    total_count=0,
-                    page=page,
-                    page_size=page_size,
-                    has_next=False
-                )
+                return ExecutionListResult(executions=[], total_count=0, page=page, page_size=page_size, has_next=False)
 
             async def get_artifacts(self, execution_id, artifact_type=None):
                 return ArtifactListResult(artifacts=[], total_count=0)
 
             async def get_execution_history(self, execution_id, limit=None):
-                return ExecutionHistory(
-                    execution_id=execution_id,
-                    entries=[],
-                    total_entries=0
-                )
+                return ExecutionHistory(execution_id=execution_id, entries=[], total_entries=0)
 
             async def get_workflow_executions(self, workflow_run_id):
-                return ExecutionListResult(
-                    executions=[],
-                    total_count=0,
-                    page=1,
-                    page_size=50,
-                    has_next=False
-                )
+                return ExecutionListResult(executions=[], total_count=0, page=1, page_size=50, has_next=False)
 
         port = MockPort()
         status = await port.get_execution_status("exec-123")
@@ -447,7 +393,7 @@ class TestTaskQueryPortBehavior:
                     pipeline_name="ci",
                     stage_name="build",
                     agent_name="agent",
-                    status=ExecutionStatus.RUNNING
+                    status=ExecutionStatus.RUNNING,
                 )
 
             async def list_executions(
@@ -457,45 +403,24 @@ class TestTaskQueryPortBehavior:
                 project_name=None,
                 status=None,
                 page=1,
-                page_size=50
+                page_size=50,
             ):
                 # Verify parameters are passed correctly
-                return ExecutionListResult(
-                    executions=[],
-                    total_count=0,
-                    page=page,
-                    page_size=page_size,
-                    has_next=False
-                )
+                return ExecutionListResult(executions=[], total_count=0, page=page, page_size=page_size, has_next=False)
 
             async def get_artifacts(self, execution_id, artifact_type=None):
                 return ArtifactListResult(artifacts=[], total_count=0)
 
             async def get_execution_history(self, execution_id, limit=None):
-                return ExecutionHistory(
-                    execution_id=execution_id,
-                    entries=[],
-                    total_entries=0
-                )
+                return ExecutionHistory(execution_id=execution_id, entries=[], total_entries=0)
 
             async def get_workflow_executions(self, workflow_run_id):
-                return ExecutionListResult(
-                    executions=[],
-                    total_count=0,
-                    page=1,
-                    page_size=50,
-                    has_next=False
-                )
+                return ExecutionListResult(executions=[], total_count=0, page=1, page_size=50, has_next=False)
 
         port = MockPort()
 
         # Test with filters
-        result = await port.list_executions(
-            project_name="test",
-            status=ExecutionStatus.COMPLETED,
-            page=2,
-            page_size=25
-        )
+        result = await port.list_executions(project_name="test", status=ExecutionStatus.COMPLETED, page=2, page_size=25)
 
         assert isinstance(result, ExecutionListResult)
         assert result.page == 2

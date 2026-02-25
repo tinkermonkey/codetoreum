@@ -41,9 +41,7 @@ class TestLockEventEmission:
     """Test that lock service emits domain events."""
 
     @pytest.mark.asyncio
-    async def test_emits_lock_acquired_event(
-        self, lock_service_with_events, mock_event_bus
-    ):
+    async def test_emits_lock_acquired_event(self, lock_service_with_events, mock_event_bus):
         """Should emit PipelineLockAcquiredEvent when lock is acquired."""
         # Act
         result = await lock_service_with_events.try_acquire_lock(
@@ -98,9 +96,7 @@ class TestLockEventEmission:
         assert event.queue_position == 0  # First in queue
 
     @pytest.mark.asyncio
-    async def test_emits_lock_released_event(
-        self, lock_service_with_events, mock_event_bus
-    ):
+    async def test_emits_lock_released_event(self, lock_service_with_events, mock_event_bus):
         """Should emit PipelineLockReleasedEvent when lock is released."""
         # Acquire lock
         await lock_service_with_events.try_acquire_lock(
@@ -132,9 +128,7 @@ class TestLockEventEmission:
         assert event.next_work_item_id is None
 
     @pytest.mark.asyncio
-    async def test_emits_events_when_next_item_gets_lock(
-        self, lock_service_with_events, mock_event_bus
-    ):
+    async def test_emits_events_when_next_item_gets_lock(self, lock_service_with_events, mock_event_bus):
         """Should emit both released and acquired events when next item gets lock."""
         # Acquire lock with first item
         await lock_service_with_events.try_acquire_lock(
@@ -204,9 +198,7 @@ class TestLockEventEmission:
         assert result.released_work_item_id == "item-1"
 
     @pytest.mark.asyncio
-    async def test_event_source_is_correct(
-        self, lock_service_with_events, mock_event_bus
-    ):
+    async def test_event_source_is_correct(self, lock_service_with_events, mock_event_bus):
         """Should set correct source in emitted events."""
         # Acquire lock
         await lock_service_with_events.try_acquire_lock(
@@ -221,9 +213,7 @@ class TestLockEventEmission:
         assert event.source == "in_memory_lock_service"
 
     @pytest.mark.asyncio
-    async def test_events_have_valid_timestamps(
-        self, lock_service_with_events, mock_event_bus
-    ):
+    async def test_events_have_valid_timestamps(self, lock_service_with_events, mock_event_bus):
         """Should set valid ISO timestamps in events."""
         # Acquire lock
         await lock_service_with_events.try_acquire_lock(
@@ -241,9 +231,7 @@ class TestLockEventEmission:
         assert len(event.timestamp) > 19  # At least YYYY-MM-DDTHH:MM:SS
 
     @pytest.mark.asyncio
-    async def test_events_include_project_id(
-        self, lock_service_with_events, mock_event_bus
-    ):
+    async def test_events_include_project_id(self, lock_service_with_events, mock_event_bus):
         """Should include project_id in all pipeline lock events."""
         # Acquire lock with first item
         await lock_service_with_events.try_acquire_lock(
@@ -288,9 +276,7 @@ class TestLockEventEmission:
         assert acquire_event.project_id == "proj-1"
 
     @pytest.mark.asyncio
-    async def test_full_lock_lifecycle_events(
-        self, lock_service_with_events, mock_event_bus
-    ):
+    async def test_full_lock_lifecycle_events(self, lock_service_with_events, mock_event_bus):
         """Test complete lock lifecycle with all event types."""
         # 1. First item acquires lock
         await lock_service_with_events.try_acquire_lock(
@@ -300,9 +286,7 @@ class TestLockEventEmission:
             board_position=0,
         )
         assert mock_event_bus.publish.call_count == 1
-        assert isinstance(
-            mock_event_bus.publish.call_args[0][0], PipelineLockAcquiredEvent
-        )
+        assert isinstance(mock_event_bus.publish.call_args[0][0], PipelineLockAcquiredEvent)
 
         # 2. Second item gets queued
         await lock_service_with_events.try_acquire_lock(
@@ -312,9 +296,7 @@ class TestLockEventEmission:
             board_position=1,
         )
         assert mock_event_bus.publish.call_count == 2
-        assert isinstance(
-            mock_event_bus.publish.call_args[0][0], WorkItemQueuedEvent
-        )
+        assert isinstance(mock_event_bus.publish.call_args[0][0], WorkItemQueuedEvent)
 
         # 3. Third item gets queued
         await lock_service_with_events.try_acquire_lock(
@@ -357,15 +339,11 @@ class TestStaleLockDetection:
         assert service_default._stale_threshold_seconds == 7200
 
         # Custom threshold
-        service_custom = InMemoryLockService(
-            event_bus=mock_event_bus, stale_threshold_seconds=3600
-        )
+        service_custom = InMemoryLockService(event_bus=mock_event_bus, stale_threshold_seconds=3600)
         assert service_custom._stale_threshold_seconds == 3600
 
     @pytest.mark.asyncio
-    async def test_lock_not_stale_just_below_threshold(
-        self, lock_service_with_short_threshold, mock_event_bus
-    ):
+    async def test_lock_not_stale_just_below_threshold(self, lock_service_with_short_threshold, mock_event_bus):
         """Lock just below threshold (59s of 60s test threshold) should not be detected as stale."""
         # Acquire lock
         await lock_service_with_short_threshold.try_acquire_lock(
@@ -401,9 +379,7 @@ class TestStaleLockDetection:
         assert isinstance(event, WorkItemQueuedEvent)
 
     @pytest.mark.asyncio
-    async def test_lock_is_stale_just_above_threshold(
-        self, lock_service_with_short_threshold, mock_event_bus
-    ):
+    async def test_lock_is_stale_just_above_threshold(self, lock_service_with_short_threshold, mock_event_bus):
         """Lock just above threshold (2h01m) should be detected as stale."""
         # Acquire lock
         await lock_service_with_short_threshold.try_acquire_lock(
@@ -449,9 +425,7 @@ class TestStaleLockDetection:
         assert acquire_event.work_item_id == "item-2"  # New lock holder
 
     @pytest.mark.asyncio
-    async def test_stale_lock_recovery_at_exact_threshold(
-        self, lock_service_with_short_threshold, mock_event_bus
-    ):
+    async def test_stale_lock_recovery_at_exact_threshold(self, lock_service_with_short_threshold, mock_event_bus):
         """Lock just below threshold boundary (59.5s of 60s test threshold) should not be stale."""
         # Acquire lock
         await lock_service_with_short_threshold.try_acquire_lock(
@@ -571,9 +545,7 @@ class TestStaleLockDetection:
         )
 
         # Verify by getting queue state
-        state = await lock_service_with_short_threshold.get_queue_state(
-            project_id="proj-1", board_id="board-1"
-        )
+        state = await lock_service_with_short_threshold.get_queue_state(project_id="proj-1", board_id="board-1")
         assert state.lock_acquired_at == new_time
 
     @pytest.mark.asyncio
@@ -589,9 +561,7 @@ class TestStaleLockDetection:
             )
 
     @pytest.mark.asyncio
-    async def test_stale_recovery_with_queued_items(
-        self, lock_service_with_short_threshold, mock_event_bus
-    ):
+    async def test_stale_recovery_with_queued_items(self, lock_service_with_short_threshold, mock_event_bus):
         """Stale recovery should work correctly even when queue has items."""
         # Acquire lock with item-1
         await lock_service_with_short_threshold.try_acquire_lock(
@@ -637,9 +607,7 @@ class TestStaleLockDetection:
         assert result.status == LockStatus.ACQUIRED
 
         # Queue should still have items 2 and 3
-        state = await lock_service_with_short_threshold.get_queue_state(
-            project_id="proj-1", board_id="board-1"
-        )
+        state = await lock_service_with_short_threshold.get_queue_state(project_id="proj-1", board_id="board-1")
         assert state.lock_holder == "item-4"
         assert len(state.queue) == 2
         assert state.queue[0].work_item_id == "item-2"
@@ -649,9 +617,7 @@ class TestStaleLockDetection:
     async def test_stale_lock_detected_without_event_bus(self, lock_service_with_short_threshold):
         """Stale lock recovery should work even when event_bus is None."""
         # Create service without event bus
-        service_no_bus = InMemoryLockService(
-            event_bus=None, stale_threshold_seconds=60
-        )
+        service_no_bus = InMemoryLockService(event_bus=None, stale_threshold_seconds=60)
 
         # Acquire lock
         await service_no_bus.try_acquire_lock(
@@ -664,9 +630,7 @@ class TestStaleLockDetection:
         # Age the lock to be stale
         now = datetime.now(UTC)
         old_time = now - timedelta(seconds=61)
-        service_no_bus.set_lock_acquired_at(
-            project_id="proj-1", board_id="board-1", timestamp=old_time
-        )
+        service_no_bus.set_lock_acquired_at(project_id="proj-1", board_id="board-1", timestamp=old_time)
 
         # Try to acquire with different item - should recover stale lock
         result = await service_no_bus.try_acquire_lock(
@@ -680,7 +644,5 @@ class TestStaleLockDetection:
         assert result.status == LockStatus.ACQUIRED
 
         # Verify new lock holder
-        state = await service_no_bus.get_queue_state(
-            project_id="proj-1", board_id="board-1"
-        )
+        state = await service_no_bus.get_queue_state(project_id="proj-1", board_id="board-1")
         assert state.lock_holder == "item-2"

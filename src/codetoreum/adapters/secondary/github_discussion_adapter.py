@@ -195,10 +195,7 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
         try:
             while True:
                 # Fetch page of comments
-                url = (
-                    f"/repos/{self._config.organization}/{self._config.repository}"
-                    f"/issues/{work_item_id}/comments"
-                )
+                url = f"/repos/{self._config.organization}/{self._config.repository}/issues/{work_item_id}/comments"
 
                 response = await client.get(
                     url,
@@ -221,9 +218,7 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
                     raise ExternalServiceError(msg, "Rate limit exceeded")
                 if response.status_code >= 400:
                     msg = "GitHub"
-                    raise ExternalServiceError(
-                        msg, f"API error: {response.status_code}"
-                    )
+                    raise ExternalServiceError(msg, f"API error: {response.status_code}")
 
                 page_data = response.json()
                 if not page_data:
@@ -299,10 +294,7 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
         client = await self._get_client()
 
         try:
-            url = (
-                f"/repos/{self._config.organization}/{self._config.repository}"
-                f"/issues/{work_item_id}/comments"
-            )
+            url = f"/repos/{self._config.organization}/{self._config.repository}/issues/{work_item_id}/comments"
 
             response = await client.post(
                 url,
@@ -320,9 +312,7 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
                 raise ExternalServiceError(msg, "Rate limit exceeded")
             if response.status_code >= 400:
                 msg = "GitHub"
-                raise ExternalServiceError(
-                    msg, f"API error: {response.status_code}"
-                )
+                raise ExternalServiceError(msg, f"API error: {response.status_code}")
 
             data = response.json()
             comment = Comment(
@@ -356,9 +346,7 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
 
     # Work-Item-Specific Monitoring
 
-    def start_monitoring(
-        self, work_item_id: str, config: DiscussionMonitoringConfig
-    ) -> None:
+    def start_monitoring(self, work_item_id: str, config: DiscussionMonitoringConfig) -> None:
         """Start monitoring a specific work item for new comments.
 
         Enables change detection via webhook (if enabled) and/or polling.
@@ -389,9 +377,7 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
 
         # Start polling if webhook not enabled
         if not self._webhook_enabled:
-            self._polling_tasks[work_item_id] = asyncio.create_task(
-                self._poll_comments(work_item_id)
-            )
+            self._polling_tasks[work_item_id] = asyncio.create_task(self._poll_comments(work_item_id))
 
     def stop_monitoring(self, work_item_id: str) -> None:
         """Stop monitoring a specific work item for new comments.
@@ -428,6 +414,7 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
         if not self._monitoring and self._http_client is not None:
             # Schedule close to be called from async context
             import asyncio
+
             try:
                 asyncio.create_task(self.close())
             except RuntimeError:
@@ -515,9 +502,7 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
                     continue
 
                 # Find new comments since last poll
-                new_comments = self._filter_new_comments(
-                    thread.comments, self._last_processed.get(work_item_id)
-                )
+                new_comments = self._filter_new_comments(thread.comments, self._last_processed.get(work_item_id))
 
                 # Process each new comment
                 config = self._monitoring.get(work_item_id)
@@ -525,9 +510,7 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
                     for comment in new_comments:
                         # Only emit for human comments
                         if not comment.is_bot:
-                            self._emit_comment_needs_response(
-                                work_item_id, config, comment
-                            )
+                            self._emit_comment_needs_response(work_item_id, config, comment)
 
                         # Update last processed
                         self._last_processed[work_item_id] = comment.id
@@ -538,13 +521,11 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
                 logger.error(
                     f"Unexpected error in polling loop for {work_item_id}: {e}",
                     exc_info=True,
-                    extra={"error_id": "ERR_DISCUSSION_ERROR", "work_item_id": work_item_id}
+                    extra={"error_id": "ERR_DISCUSSION_ERROR", "work_item_id": work_item_id},
                 )
                 continue
 
-    def _filter_new_comments(
-        self, comments: list[Comment], last_id: str | None
-    ) -> list[Comment]:
+    def _filter_new_comments(self, comments: list[Comment], last_id: str | None) -> list[Comment]:
         """Filter comments to only new ones.
 
         Returns all comments after the last_id, or all comments if last_id is None.
@@ -626,9 +607,7 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
 
     # IEventEmitter Implementation
 
-    def on(
-        self, event_type: str, handler: Callable[[object], None]
-    ) -> None:
+    def on(self, event_type: str, handler: Callable[[object], None]) -> None:
         """Subscribe to events of a specific type.
 
         Args:
@@ -650,9 +629,7 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
 
         self._event_handlers[event_type].append(handler)
 
-    def off(
-        self, event_type: str, handler: Callable[[object], None]
-    ) -> None:
+    def off(self, event_type: str, handler: Callable[[object], None]) -> None:
         """Unsubscribe from events.
 
         Args:

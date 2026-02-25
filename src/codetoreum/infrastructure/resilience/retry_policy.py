@@ -31,7 +31,7 @@ class ExponentialBackoffRetry(IRetryPolicy):
         max_delay: float = 60.0,
         exponential_base: float = 2.0,
         jitter: bool = True,
-        retryable_exceptions: tuple[type[Exception], ...] = (Exception,)
+        retryable_exceptions: tuple[type[Exception], ...] = (Exception,),
     ):
         """
         Initialize retry policy.
@@ -57,13 +57,7 @@ class ExponentialBackoffRetry(IRetryPolicy):
         self._total_successes = 0
         self._total_failures = 0
 
-    async def execute(
-        self,
-        operation: Callable[..., T],
-        operation_name: str,
-        *args,
-        **kwargs
-    ) -> T:
+    async def execute(self, operation: Callable[..., T], operation_name: str, *args, **kwargs) -> T:
         """Execute operation with retry logic."""
         last_exception = None
 
@@ -87,10 +81,7 @@ class ExponentialBackoffRetry(IRetryPolicy):
                 if attempt >= self.max_retries:
                     self._total_failures += 1
                     message = f"Max retries ({self.max_retries}) exceeded for {operation_name}"
-                    raise MaxRetriesExceededError(
-                        message,
-                        last_exception=e
-                    ) from e
+                    raise MaxRetriesExceededError(message, last_exception=e) from e
 
                 # Calculate delay
                 delay = self._calculate_delay(attempt)
@@ -125,7 +116,7 @@ class ExponentialBackoffRetry(IRetryPolicy):
     def _calculate_delay(self, attempt: int) -> float:
         """Calculate delay for given attempt."""
         # Exponential backoff: delay = base * (exponential_base ^ attempt)
-        delay = self.base_delay * (self.exponential_base ** attempt)
+        delay = self.base_delay * (self.exponential_base**attempt)
 
         # Cap at max delay
         delay = min(delay, self.max_delay)
@@ -139,18 +130,14 @@ class ExponentialBackoffRetry(IRetryPolicy):
     def get_stats(self) -> RetryStats:
         """Get retry statistics."""
         total_completed = self._total_successes + self._total_failures
-        avg_attempts = (
-            self._total_attempts / total_completed
-            if total_completed > 0
-            else 0
-        )
+        avg_attempts = self._total_attempts / total_completed if total_completed > 0 else 0
 
         return RetryStats(
             total_attempts=self._total_attempts,
             total_retries=self._total_retries,
             total_successes=self._total_successes,
             total_failures=self._total_failures,
-            average_attempts=avg_attempts
+            average_attempts=avg_attempts,
         )
 
     def reset(self) -> None:

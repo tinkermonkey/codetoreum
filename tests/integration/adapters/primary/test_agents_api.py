@@ -241,9 +241,7 @@ class TestListAgents:
         assert data["agents"][0]["name"] == "test_agent"
         assert data["has_next"] is False
 
-    def test_list_agents_with_capability_filter(
-        self, client, mock_query_port, sample_agent_info
-    ):
+    def test_list_agents_with_capability_filter(self, client, mock_query_port, sample_agent_info):
         """Test agents listing with capability filter."""
         # Arrange
         from codetoreum.ports.input.agent_query import AgentListResult
@@ -270,9 +268,7 @@ class TestListAgents:
         filters = call_args[0]
         assert filters.capability == "code_review"
 
-    def test_list_agents_with_type_filter(
-        self, client, mock_query_port, sample_agent_info
-    ):
+    def test_list_agents_with_type_filter(self, client, mock_query_port, sample_agent_info):
         """Test agents listing with agent type filter."""
         # Arrange
         from codetoreum.ports.input.agent_query import AgentListResult
@@ -309,9 +305,7 @@ class TestListAgents:
         data = response.json()
         assert "Invalid agent type" in data["detail"]
 
-    def test_list_agents_with_multiple_filters(
-        self, client, mock_query_port, sample_agent_info
-    ):
+    def test_list_agents_with_multiple_filters(self, client, mock_query_port, sample_agent_info):
         """Test agents listing with multiple filters."""
         # Arrange
         from codetoreum.ports.input.agent_query import AgentListResult
@@ -325,9 +319,7 @@ class TestListAgents:
         )
 
         # Act
-        response = client.get(
-            "/api/v2/agents?requires_docker=true&makes_code_changes=true&agent_type=maker"
-        )
+        response = client.get("/api/v2/agents?requires_docker=true&makes_code_changes=true&agent_type=maker")
 
         # Assert
         assert response.status_code == 200
@@ -342,9 +334,7 @@ class TestListAgents:
         assert filters.makes_code_changes is True
         assert filters.agent_type == AgentType.MAKER
 
-    def test_list_agents_with_pagination(
-        self, client, mock_query_port, sample_agent_info
-    ):
+    def test_list_agents_with_pagination(self, client, mock_query_port, sample_agent_info):
         """Test agents listing with pagination."""
         # Arrange
         from codetoreum.ports.input.agent_query import AgentListResult
@@ -501,9 +491,7 @@ class TestGetAgent:
     def test_get_agent_not_found(self, client, mock_query_port):
         """Test agent retrieval when not found."""
         # Arrange
-        mock_query_port._get_agent.side_effect = ValueError(
-            "Agent with ID 'agent-nonexistent' not found"
-        )
+        mock_query_port._get_agent.side_effect = ValueError("Agent with ID 'agent-nonexistent' not found")
 
         # Act
         response = client.get("/api/v2/agents/agent-nonexistent")
@@ -517,9 +505,7 @@ class TestGetAgent:
 class TestCreateAgent:
     """Tests for POST /api/v2/agents endpoint."""
 
-    def test_create_agent_success(
-        self, client, mock_command_port, mock_query_port, sample_agent, sample_agent_info
-    ):
+    def test_create_agent_success(self, client, mock_command_port, mock_query_port, sample_agent, sample_agent_info):
         """Test successful agent creation."""
         # Arrange
         mock_command_port._create_agent.return_value = sample_agent
@@ -642,14 +628,10 @@ class TestCreateAgent:
         # Assert
         assert response.status_code == 422  # Validation error
 
-    def test_create_agent_already_exists(
-        self, client, mock_command_port, mock_query_port
-    ):
+    def test_create_agent_already_exists(self, client, mock_command_port, mock_query_port):
         """Test agent creation when name already exists."""
         # Arrange
-        mock_command_port._create_agent.side_effect = ValueError(
-            "Agent with name 'test_agent_existing' already exists"
-        )
+        mock_command_port._create_agent.side_effect = ValueError("Agent with name 'test_agent_existing' already exists")
 
         request_data = {
             "name": "test_agent_existing",
@@ -700,9 +682,7 @@ class TestCreateAgent:
 class TestUpdateAgent:
     """Tests for PUT /api/v2/agents/{id} endpoint."""
 
-    def test_update_agent_success(
-        self, client, mock_command_port, mock_query_port, sample_agent, sample_agent_info
-    ):
+    def test_update_agent_success(self, client, mock_command_port, mock_query_port, sample_agent, sample_agent_info):
         """Test successful agent update."""
         # Arrange
         mock_command_port._update_agent.return_value = sample_agent
@@ -730,9 +710,7 @@ class TestUpdateAgent:
     def test_update_agent_not_found(self, client, mock_command_port):
         """Test agent update when not found."""
         # Arrange
-        mock_command_port._update_agent.side_effect = ValueError(
-            "Agent with ID 'agent-nonexistent' not found"
-        )
+        mock_command_port._update_agent.side_effect = ValueError("Agent with ID 'agent-nonexistent' not found")
 
         request_data = {
             "display_name": "Updated Test Agent",
@@ -763,9 +741,7 @@ class TestUpdateAgent:
 class TestAgentCapabilityManagement:
     """Tests for agent capability management endpoints."""
 
-    def test_add_capability_success(
-        self, client, mock_command_port, mock_query_port, sample_agent, sample_agent_info
-    ):
+    def test_add_capability_success(self, client, mock_command_port, mock_query_port, sample_agent, sample_agent_info):
         """Test successful capability addition."""
         # Arrange
         mock_command_port._add_capability.return_value = sample_agent
@@ -797,9 +773,7 @@ class TestAgentCapabilityManagement:
     def test_add_capability_already_exists(self, client, mock_command_port):
         """Test capability addition when capability already exists."""
         # Arrange
-        mock_command_port._add_capability.side_effect = ValueError(
-            "Capability 'debugging' already exists for agent"
-        )
+        mock_command_port._add_capability.side_effect = ValueError("Capability 'debugging' already exists for agent")
 
         request_data = {
             "capability": {
@@ -842,9 +816,7 @@ class TestAgentCapabilityManagement:
     def test_remove_capability_not_found(self, client, mock_command_port):
         """Test capability removal when capability not found."""
         # Arrange
-        mock_command_port._remove_capability.side_effect = ValueError(
-            "Capability 'nonexistent' not found"
-        )
+        mock_command_port._remove_capability.side_effect = ValueError("Capability 'nonexistent' not found")
 
         # Act
         response = client.delete("/api/v2/agents/agent-123/capabilities/nonexistent")
@@ -857,9 +829,7 @@ class TestAgentCapabilityManagement:
     def test_remove_last_capability(self, client, mock_command_port):
         """Test removing the last capability from an agent."""
         # Arrange
-        mock_command_port._remove_capability.side_effect = ValueError(
-            "Cannot remove last capability from agent"
-        )
+        mock_command_port._remove_capability.side_effect = ValueError("Cannot remove last capability from agent")
 
         # Act
         response = client.delete("/api/v2/agents/agent-123/capabilities/code_review")
@@ -882,9 +852,7 @@ class TestAgentCapabilityManagement:
         }
 
         # Act
-        response = client.patch(
-            "/api/v2/agents/agent-123/capabilities/code_review", json=request_data
-        )
+        response = client.patch("/api/v2/agents/agent-123/capabilities/code_review", json=request_data)
 
         # Assert
         assert response.status_code == 200
@@ -902,18 +870,14 @@ class TestAgentCapabilityManagement:
     def test_update_capability_not_found(self, client, mock_command_port):
         """Test capability update when capability not found."""
         # Arrange
-        mock_command_port._update_capability.side_effect = ValueError(
-            "Capability 'nonexistent' not found"
-        )
+        mock_command_port._update_capability.side_effect = ValueError("Capability 'nonexistent' not found")
 
         request_data = {
             "proficiency": 0.95,
         }
 
         # Act
-        response = client.patch(
-            "/api/v2/agents/agent-123/capabilities/nonexistent", json=request_data
-        )
+        response = client.patch("/api/v2/agents/agent-123/capabilities/nonexistent", json=request_data)
 
         # Assert
         assert response.status_code == 400
@@ -924,9 +888,7 @@ class TestAgentCapabilityManagement:
 class TestAgentMcpServerManagement:
     """Tests for agent MCP server management endpoints."""
 
-    def test_add_mcp_server_success(
-        self, client, mock_command_port, mock_query_port, sample_agent, sample_agent_info
-    ):
+    def test_add_mcp_server_success(self, client, mock_command_port, mock_query_port, sample_agent, sample_agent_info):
         """Test successful MCP server addition."""
         # Arrange
         mock_command_port._add_mcp_server.return_value = sample_agent
@@ -954,9 +916,7 @@ class TestAgentMcpServerManagement:
     def test_add_mcp_server_already_exists(self, client, mock_command_port):
         """Test MCP server addition when server already configured."""
         # Arrange
-        mock_command_port._add_mcp_server.side_effect = ValueError(
-            "MCP server 'artifacts' already configured"
-        )
+        mock_command_port._add_mcp_server.side_effect = ValueError("MCP server 'artifacts' already configured")
 
         request_data = {
             "server_name": "artifacts",
@@ -996,9 +956,7 @@ class TestAgentMcpServerManagement:
     def test_remove_mcp_server_not_found(self, client, mock_command_port):
         """Test MCP server removal when server not configured."""
         # Arrange
-        mock_command_port._remove_mcp_server.side_effect = ValueError(
-            "MCP server 'nonexistent' not configured"
-        )
+        mock_command_port._remove_mcp_server.side_effect = ValueError("MCP server 'nonexistent' not configured")
 
         # Act
         response = client.delete("/api/v2/agents/agent-123/mcp-servers/nonexistent")
@@ -1037,9 +995,7 @@ class TestDeleteAgent:
     def test_delete_agent_not_found(self, client, mock_command_port):
         """Test agent deletion when not found."""
         # Arrange
-        mock_command_port._delete_agent.side_effect = ValueError(
-            "Agent with ID 'agent-nonexistent' not found"
-        )
+        mock_command_port._delete_agent.side_effect = ValueError("Agent with ID 'agent-nonexistent' not found")
 
         # Act
         response = client.delete("/api/v2/agents/agent-nonexistent")

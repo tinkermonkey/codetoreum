@@ -121,9 +121,7 @@ class CachedConfigStore(IConfigStore):
 
         logger.debug(f"Saved project config to storage and cache: {config.id}")
 
-    async def get_agent_config(
-        self, project_id: str, agent_name: str
-    ) -> AgentConfig:
+    async def get_agent_config(self, project_id: str, agent_name: str) -> AgentConfig:
         """
         Get agent configuration (cache-first).
 
@@ -165,14 +163,9 @@ class CachedConfigStore(IConfigStore):
         # Update cache
         await self.cache.set_agent_config(config)
 
-        logger.debug(
-            f"Saved agent config to storage and cache: "
-            f"{config.project_id}/{config.agent_name}"
-        )
+        logger.debug(f"Saved agent config to storage and cache: {config.project_id}/{config.agent_name}")
 
-    async def get_pipeline_config(
-        self, project_id: str, pipeline_name: str
-    ) -> PipelineConfig:
+    async def get_pipeline_config(self, project_id: str, pipeline_name: str) -> PipelineConfig:
         """
         Get pipeline configuration (cache-first).
 
@@ -214,10 +207,7 @@ class CachedConfigStore(IConfigStore):
         # Update cache
         await self.cache.set_pipeline_config(config)
 
-        logger.debug(
-            f"Saved pipeline config to storage and cache: "
-            f"{config.project_id}/{config.name}"
-        )
+        logger.debug(f"Saved pipeline config to storage and cache: {config.project_id}/{config.name}")
 
     async def get_workflow_template(self, template_name: str) -> WorkflowTemplate:
         """
@@ -298,9 +288,7 @@ class CachedConfigStore(IConfigStore):
         # Lists are not cached (too complex to invalidate correctly)
         return await self.storage.list_pipelines(project_id)
 
-    async def search_configs(
-        self, query: str, config_type: str | None = None
-    ) -> list[dict[str, Any]]:
+    async def search_configs(self, query: str, config_type: str | None = None) -> list[dict[str, Any]]:
         """
         Search configurations (storage-only, no caching for searches).
 
@@ -314,9 +302,7 @@ class CachedConfigStore(IConfigStore):
         # Searches are not cached (results depend on query)
         return await self.storage.search_configs(query, config_type)
 
-    async def get_config_version(
-        self, config_id: str, version: int
-    ) -> dict[str, Any]:
+    async def get_config_version(self, config_id: str, version: int) -> dict[str, Any]:
         """
         Get specific version of a configuration (storage-only).
 
@@ -333,9 +319,7 @@ class CachedConfigStore(IConfigStore):
         # Historical versions are not cached
         return await self.storage.get_config_version(config_id, version)
 
-    async def list_config_versions(
-        self, config_id: str, limit: int = 10
-    ) -> list[ConfigVersion]:
+    async def list_config_versions(self, config_id: str, limit: int = 10) -> list[ConfigVersion]:
         """
         List configuration version history (storage-only).
 
@@ -367,9 +351,7 @@ class CachedConfigStore(IConfigStore):
 
         logger.debug(f"Deleted project config and invalidated cache: {project_id}")
 
-    async def delete_agent_config(
-        self, project_id: str, agent_name: str
-    ) -> None:
+    async def delete_agent_config(self, project_id: str, agent_name: str) -> None:
         """
         Delete agent configuration (write-through with cache invalidation).
 
@@ -386,9 +368,7 @@ class CachedConfigStore(IConfigStore):
         # Invalidate cache
         await self.cache.invalidate_agent(project_id, agent_name)
 
-        logger.debug(
-            f"Deleted agent config and invalidated cache: {project_id}/{agent_name}"
-        )
+        logger.debug(f"Deleted agent config and invalidated cache: {project_id}/{agent_name}")
 
     async def exists(self, project_id: str) -> bool:
         """

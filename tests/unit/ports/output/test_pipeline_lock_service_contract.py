@@ -23,9 +23,7 @@ class TestPipelineLockServiceContract(ABC):
         """Acquiring lock should return (True, "") on success."""
         service = await self.create_service()
 
-        success, reason = await service.try_acquire_lock(
-            "proj-123", "board-456", "item-789"
-        )
+        success, reason = await service.try_acquire_lock("proj-123", "board-456", "item-789")
 
         assert success is True
         assert reason == ""
@@ -36,15 +34,11 @@ class TestPipelineLockServiceContract(ABC):
         service = await self.create_service()
 
         # First acquisition succeeds
-        success1, _ = await service.try_acquire_lock(
-            "proj-123", "board-456", "item-789"
-        )
+        success1, _ = await service.try_acquire_lock("proj-123", "board-456", "item-789")
         assert success1 is True
 
         # Second acquisition fails
-        success2, reason = await service.try_acquire_lock(
-            "proj-123", "board-456", "item-789"
-        )
+        success2, reason = await service.try_acquire_lock("proj-123", "board-456", "item-789")
         assert success2 is False
         assert len(reason) > 0  # Should have a reason
 
@@ -108,14 +102,10 @@ class TestPipelineLockServiceContract(ABC):
         service = await self.create_service()
 
         # Acquire in proj-1
-        success1, _ = await service.try_acquire_lock(
-            "proj-1", "board-1", "item-1"
-        )
+        success1, _ = await service.try_acquire_lock("proj-1", "board-1", "item-1")
 
         # Should succeed in proj-2
-        success2, _ = await service.try_acquire_lock(
-            "proj-2", "board-1", "item-1"
-        )
+        success2, _ = await service.try_acquire_lock("proj-2", "board-1", "item-1")
 
         assert success1 is True
         assert success2 is True
@@ -132,9 +122,7 @@ class TestPipelineLockServiceContract(ABC):
         await service.release_lock("proj-123", "board-456", "item-789")
 
         # Acquire again
-        success, _ = await service.try_acquire_lock(
-            "proj-123", "board-456", "item-789"
-        )
+        success, _ = await service.try_acquire_lock("proj-123", "board-456", "item-789")
 
         assert success is True
 

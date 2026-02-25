@@ -85,9 +85,7 @@ class CapturingMockEventEmitter(IEventEmitter):
                 raise ValueError(msg)
             self._wildcard_handlers.remove(handler)
         else:
-            if event_type not in self._handlers or handler not in self._handlers[
-                event_type
-            ]:
+            if event_type not in self._handlers or handler not in self._handlers[event_type]:
                 msg = f"Handler not subscribed to {event_type}"
                 raise ValueError(msg)
             self._handlers[event_type].remove(handler)
@@ -174,6 +172,4 @@ class CapturingMockEventEmitter(IEventEmitter):
         Returns:
             True if at least one event of that type was emitted
         """
-        return any(
-            getattr(e, "type", None) == event_type for e in self._events
-        )
+        return any(getattr(e, "type", None) == event_type for e in self._events)

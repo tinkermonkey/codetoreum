@@ -558,9 +558,7 @@ class Agent:
             return 0.0
         return self.capabilities[skill].proficiency
 
-    def can_execute_in_environment(
-        self, has_docker: bool, has_dev_container: bool
-    ) -> bool:
+    def can_execute_in_environment(self, has_docker: bool, has_dev_container: bool) -> bool:
         """
         Check if agent can execute in given environment.
 

@@ -128,9 +128,7 @@ class ConfigurableIdentityService(IIdentityService):
         """
         if not config.bot_usernames and not config.bot_patterns:
             msg = "At least one of bot_usernames or bot_patterns must be provided"
-            raise ValueError(
-                msg
-            )
+            raise ValueError(msg)
 
         self._bot_usernames = config.bot_usernames or []
         self._bot_patterns = config.bot_patterns or []

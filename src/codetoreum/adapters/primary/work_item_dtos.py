@@ -27,7 +27,12 @@ from codetoreum.config import (
 class CreateWorkItemRequest(BaseModel):
     """Request to create a new work item"""
 
-    project_id: str = Field(..., description="Project ID this work item belongs to", min_length=MIN_FIELD_LENGTH, max_length=MAX_PROJECT_ID_LENGTH)
+    project_id: str = Field(
+        ...,
+        description="Project ID this work item belongs to",
+        min_length=MIN_FIELD_LENGTH,
+        max_length=MAX_PROJECT_ID_LENGTH,
+    )
     title: str = Field(..., description="Work item title", min_length=MIN_FIELD_LENGTH, max_length=MAX_TITLE_LENGTH)
     description: str = Field(..., description="Work item description")
     labels: list[str] | None = Field(None, description="List of labels/tags")
@@ -44,7 +49,7 @@ class CreateWorkItemRequest(BaseModel):
                 "labels": ["feature", "security"],
                 "priority": "HIGH",
                 "external_id": "42",
-                "external_url": "https://github.com/org/repo/issues/42"
+                "external_url": "https://github.com/org/repo/issues/42",
             }
         }
     )
@@ -53,7 +58,9 @@ class CreateWorkItemRequest(BaseModel):
 class UpdateWorkItemRequest(BaseModel):
     """Request to update an existing work item"""
 
-    title: str | None = Field(None, description="Updated title", min_length=MIN_FIELD_LENGTH, max_length=MAX_TITLE_LENGTH)
+    title: str | None = Field(
+        None, description="Updated title", min_length=MIN_FIELD_LENGTH, max_length=MAX_TITLE_LENGTH
+    )
     description: str | None = Field(None, description="Updated description")
     labels: list[str] | None = Field(None, description="Updated labels")
     priority: str | None = Field(None, description="Updated priority: LOW, MEDIUM, HIGH, CRITICAL")
@@ -63,7 +70,7 @@ class UpdateWorkItemRequest(BaseModel):
             "example": {
                 "title": "Implement user authentication (updated)",
                 "labels": ["feature", "security", "high-priority"],
-                "priority": "CRITICAL"
+                "priority": "CRITICAL",
             }
         }
     )
@@ -112,7 +119,7 @@ class WorkItemResponse(BaseModel):
                 "current_stage": "development",
                 "created_at": "2025-11-03T09:00:00Z",
                 "updated_at": "2025-11-03T10:30:00Z",
-                "completed_at": None
+                "completed_at": None,
             }
         }
     )
@@ -148,9 +155,9 @@ class WorkItemDetailResponse(WorkItemResponse):
                     {
                         "event_type": "WorkItemStarted",
                         "occurred_at": "2025-11-03T10:15:00Z",
-                        "payload": {"started_at": "2025-11-03T10:15:00Z"}
+                        "payload": {"started_at": "2025-11-03T10:15:00Z"},
                     }
-                ]
+                ],
             }
         }
     )
@@ -178,7 +185,7 @@ class WorkItemCommandResult(BaseModel):
                 "success": True,
                 "work_item_id": "wi-123",
                 "message": "Work item deleted successfully",
-                "errors": None
+                "errors": None,
             }
         }
     )

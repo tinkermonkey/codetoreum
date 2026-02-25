@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 class MountedFileInfo(BaseModel):
     """Mounted file information"""
+
     source_path: str
     container_path: str
     read_only: bool
@@ -24,6 +25,7 @@ class MountedFileInfo(BaseModel):
 
 class ResourceUsageInfo(BaseModel):
     """Container resource usage"""
+
     cpu_percent: float
     memory_mb: float
     memory_limit_mb: float | None
@@ -36,6 +38,7 @@ class ResourceUsageInfo(BaseModel):
 
 class WorkspaceResponse(BaseModel):
     """Workspace information response"""
+
     workspace_id: str
     execution_id: str
     agent_id: str
@@ -73,6 +76,7 @@ class WorkspaceResponse(BaseModel):
 
 class WorkspaceListItemResponse(BaseModel):
     """Workspace list item (lightweight)"""
+
     workspace_id: str
     execution_id: str
     agent_name: str
@@ -86,6 +90,7 @@ class WorkspaceListItemResponse(BaseModel):
 
 class WorkspaceListResponse(BaseModel):
     """List of workspaces response"""
+
     workspaces: list[WorkspaceListItemResponse]
     total_count: int
     active_count: int
@@ -95,6 +100,7 @@ class WorkspaceListResponse(BaseModel):
 
 class ResourceUsageSummaryResponse(BaseModel):
     """Resource usage summary"""
+
     total_workspaces: int
     active_workspaces: int
     stopped_workspaces: int
@@ -108,6 +114,7 @@ class ResourceUsageSummaryResponse(BaseModel):
 
 class WorkspaceLogsResponse(BaseModel):
     """Workspace container logs"""
+
     workspace_id: str
     logs: list[str]
     total_lines: int

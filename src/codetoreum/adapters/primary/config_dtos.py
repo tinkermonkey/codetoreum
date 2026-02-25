@@ -18,6 +18,7 @@ from codetoreum.infrastructure.security import InvalidInputError, validate_env_v
 
 class UpdateProjectConfigRequest(BaseModel):
     """Request to update project configuration"""
+
     updates: dict[str, Any] = Field(..., description="Partial configuration updates")
     reason: str | None = Field(None, description="Reason for update (for audit trail)")
 
@@ -32,6 +33,7 @@ class UpdateProjectConfigRequest(BaseModel):
 
 class UpdateAgentConfigRequest(BaseModel):
     """Request to update agent configuration"""
+
     updates: dict[str, Any] = Field(..., description="Partial agent configuration updates")
     reason: str | None = Field(None, description="Reason for update")
 
@@ -46,6 +48,7 @@ class UpdateAgentConfigRequest(BaseModel):
 
 class UpdatePipelineConfigRequest(BaseModel):
     """Request to update pipeline configuration"""
+
     updates: dict[str, Any] = Field(..., description="Partial pipeline configuration updates")
     reason: str | None = Field(None, description="Reason for update")
 
@@ -60,6 +63,7 @@ class UpdatePipelineConfigRequest(BaseModel):
 
 class AddEnvironmentVariableRequest(BaseModel):
     """Request to add/update environment variable"""
+
     variable_name: str = Field(..., min_length=1, max_length=255, description="Variable name")
     # Increased limit to 100k to accommodate base64-encoded certificates, JSON configs, and multi-line scripts
     variable_value: str = Field(..., max_length=100000, description="Variable value")
@@ -92,15 +96,14 @@ class AddEnvironmentVariableRequest(BaseModel):
                     f"Variable value contains potentially unsafe pattern: '{pattern}'. "
                     "If this is intentional, please escape properly."
                 )
-                raise ValueError(
-                    msg
-                )
+                raise ValueError(msg)
 
         return v
 
 
 class SearchConfigsRequest(BaseModel):
     """Request to search configurations"""
+
     query: str = Field(..., min_length=1, description="Search query string")
     config_type: str | None = Field(None, description="Filter by type (project, agent, pipeline)")
     project_id: str | None = Field(None, description="Filter by project")
@@ -122,6 +125,7 @@ class SearchConfigsRequest(BaseModel):
 
 class EnvironmentVariableInfo(BaseModel):
     """Environment variable information"""
+
     name: str
     value: str  # Masked if secret
     is_secret: bool
@@ -130,6 +134,7 @@ class EnvironmentVariableInfo(BaseModel):
 
 class MountedCommandInfo(BaseModel):
     """Mounted command information"""
+
     command_name: str
     command_path: str
     description: str | None
@@ -137,6 +142,7 @@ class MountedCommandInfo(BaseModel):
 
 class MountedSubAgentInfo(BaseModel):
     """Mounted sub-agent information"""
+
     subagent_name: str
     config: dict[str, Any]
     description: str | None
@@ -144,6 +150,7 @@ class MountedSubAgentInfo(BaseModel):
 
 class ProjectConfigResponse(BaseModel):
     """Project configuration response"""
+
     id: str
     name: str
     description: str | None
@@ -160,6 +167,7 @@ class ProjectConfigResponse(BaseModel):
 
 class MCPServerInfo(BaseModel):
     """MCP server configuration"""
+
     server_name: str
     command: str
     args: list[str]
@@ -168,6 +176,7 @@ class MCPServerInfo(BaseModel):
 
 class AgentConfigResponse(BaseModel):
     """Agent configuration response"""
+
     project_id: str
     agent_name: str
     display_name: str | None
@@ -188,6 +197,7 @@ class AgentConfigResponse(BaseModel):
 
 class PipelineStageInfo(BaseModel):
     """Pipeline stage information"""
+
     name: str
     agent_name: str
     timeout_seconds: int
@@ -198,6 +208,7 @@ class PipelineStageInfo(BaseModel):
 
 class PipelineConfigResponse(BaseModel):
     """Pipeline configuration response"""
+
     id: str
     project_id: str
     name: str
@@ -211,6 +222,7 @@ class PipelineConfigResponse(BaseModel):
 
 class ConfigVersionHistoryItem(BaseModel):
     """Configuration version history entry"""
+
     version: int
     created_at: datetime
     created_by: str | None
@@ -220,6 +232,7 @@ class ConfigVersionHistoryItem(BaseModel):
 
 class ConfigVersionHistoryResponse(BaseModel):
     """Configuration version history response"""
+
     config_id: str
     config_type: str
     current_version: int
@@ -229,6 +242,7 @@ class ConfigVersionHistoryResponse(BaseModel):
 
 class ConfigSearchResultItem(BaseModel):
     """Configuration search result item"""
+
     config_id: str
     config_type: str
     name: str
@@ -239,6 +253,7 @@ class ConfigSearchResultItem(BaseModel):
 
 class ConfigSearchResponse(BaseModel):
     """Configuration search response"""
+
     results: list[ConfigSearchResultItem]
     total_count: int
     query: str
@@ -247,6 +262,7 @@ class ConfigSearchResponse(BaseModel):
 
 class ConfigurationCommandResponse(BaseModel):
     """Configuration command result"""
+
     success: bool
     config_version: int
     message: str
@@ -256,17 +272,20 @@ class ConfigurationCommandResponse(BaseModel):
 
 class ProjectListResponse(BaseModel):
     """List of projects"""
+
     projects: list[ProjectConfigResponse]
     total_count: int
 
 
 class AgentListResponse(BaseModel):
     """List of agents"""
+
     agents: list[AgentConfigResponse]
     total_count: int
 
 
 class PipelineListResponse(BaseModel):
     """List of pipelines"""
+
     pipelines: list[PipelineConfigResponse]
     total_count: int

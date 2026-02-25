@@ -69,9 +69,7 @@ class IWorkItemService(IEventEmitter, IMonitoredService, ABC):
         """
 
     @abstractmethod
-    async def get_work_items_by_status(
-        self, project_id: ProjectId, status: str
-    ) -> list[WorkItem]:
+    async def get_work_items_by_status(self, project_id: ProjectId, status: str) -> list[WorkItem]:
         """Query work items by status.
 
         Returns all work items in a given project with the specified status.
@@ -90,9 +88,7 @@ class IWorkItemService(IEventEmitter, IMonitoredService, ABC):
         """
 
     @abstractmethod
-    async def get_work_items_by_column(
-        self, project_id: ProjectId, column_name: str
-    ) -> list[WorkItem]:
+    async def get_work_items_by_column(self, project_id: ProjectId, column_name: str) -> list[WorkItem]:
         """Query work items in a specific board column.
 
         Returns all work items currently assigned to a column on a project board.
@@ -113,9 +109,7 @@ class IWorkItemService(IEventEmitter, IMonitoredService, ABC):
     # Command Operations
 
     @abstractmethod
-    async def update_work_item(
-        self, item_id: WorkItemId, updates: dict[str, Any]
-    ) -> WorkItem:
+    async def update_work_item(self, item_id: WorkItemId, updates: dict[str, Any]) -> WorkItem:
         """Update a work item and emit update event.
 
         Updates specified fields and emits 'workitem.updated' event.
@@ -140,13 +134,7 @@ class IWorkItemService(IEventEmitter, IMonitoredService, ABC):
         """
 
     @abstractmethod
-    async def create_work_item(
-        self,
-        project_id: ProjectId,
-        title: str,
-        description: str,
-        **kwargs: Any
-    ) -> WorkItem:
+    async def create_work_item(self, project_id: ProjectId, title: str, description: str, **kwargs: Any) -> WorkItem:
         """Create a new work item and emit creation event.
 
         Args:

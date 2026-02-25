@@ -57,9 +57,7 @@ class TestEventBusTraceContextIntegration:
         )
 
         # Mock the injector to verify it's called
-        with patch(
-            "codetoreum.infrastructure.event_bus.inject_current_trace_context_into_event"
-        ) as mock_inject:
+        with patch("codetoreum.infrastructure.event_bus.inject_current_trace_context_into_event") as mock_inject:
             await event_bus.publish(event)
             mock_inject.assert_called_once()
 

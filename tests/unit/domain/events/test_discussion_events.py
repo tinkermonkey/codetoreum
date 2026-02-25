@@ -109,32 +109,17 @@ class TestComment:
 
     def test_comment_created_at_with_z_suffix(self):
         """Test that ISO 8601 format with 'Z' suffix is accepted."""
-        comment = Comment(
-            id="c1",
-            author="alice",
-            body="text",
-            created_at="2024-01-15T10:30:00Z"
-        )
+        comment = Comment(id="c1", author="alice", body="text", created_at="2024-01-15T10:30:00Z")
         assert comment.created_at == "2024-01-15T10:30:00Z"
 
     def test_comment_created_at_with_timezone_offset(self):
         """Test that ISO 8601 format with timezone offset is accepted."""
-        comment = Comment(
-            id="c1",
-            author="alice",
-            body="text",
-            created_at="2024-01-15T10:30:00+00:00"
-        )
+        comment = Comment(id="c1", author="alice", body="text", created_at="2024-01-15T10:30:00+00:00")
         assert comment.created_at == "2024-01-15T10:30:00+00:00"
 
     def test_comment_immutability(self):
         """Test that Comment instances are immutable."""
-        comment = Comment(
-            id="c1",
-            author="alice",
-            body="text",
-            created_at=now_iso()
-        )
+        comment = Comment(id="c1", author="alice", body="text", created_at=now_iso())
 
         with pytest.raises(FrozenInstanceError):
             object.__setattr__(comment, "id", "c2")
@@ -232,10 +217,7 @@ class TestCommentContext:
 
     def test_context_immutability(self):
         """Test that CommentContext instances are immutable."""
-        context = CommentContext(
-            thread_id="t1",
-            column_name="Backlog"
-        )
+        context = CommentContext(thread_id="t1", column_name="Backlog")
 
         with pytest.raises(FrozenInstanceError):
             object.__setattr__(context, "thread_id", "t2")
@@ -244,9 +226,7 @@ class TestCommentContext:
         """Test that CommentContext with invalid parent Comment raises error."""
         # The invalid comment will raise during Comment.__post_init__
         with pytest.raises(ValueError, match="Comment id is required"):
-            CommentContext(
-                parent_comment=Comment(id="", author="alice", body="test", created_at=now_iso())
-            )
+            CommentContext(parent_comment=Comment(id="", author="alice", body="test", created_at=now_iso()))
 
     def test_context_initial_request_with_parent_raises_error(self):
         """Test that is_initial_request=True with parent_comment raises ValueError."""
@@ -387,6 +367,7 @@ class TestCommentContext:
     def test_context_factory_for_reply_missing_parent_comment(self):
         """Test that factory raises error if parent_comment is None."""
         from typing import cast
+
         with pytest.raises(ValueError, match="parent_comment cannot be None"):
             CommentContext.for_reply(
                 thread_id="t1",

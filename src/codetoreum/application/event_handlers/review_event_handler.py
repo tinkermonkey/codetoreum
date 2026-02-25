@@ -83,9 +83,7 @@ class ReviewEventHandler(EventHandler):
         elif isinstance(event, ReviewCycleEscalated):
             await self._handle_review_cycle_escalated(event)
         else:
-            logger.warning(
-                f"ReviewEventHandler received unexpected event type: {event.event_type}"
-            )
+            logger.warning(f"ReviewEventHandler received unexpected event type: {event.event_type}")
 
     async def _handle_review_cycle_created(self, event: ReviewCycleCreated) -> None:
         """
@@ -105,10 +103,7 @@ class ReviewEventHandler(EventHandler):
             f"max_iterations: {event.payload.get('max_iterations')})"
         )
 
-        logger.debug(
-            f"Total reviews: {self._metrics['total_reviews']}, "
-            f"Active: {self._metrics['active_reviews']}"
-        )
+        logger.debug(f"Total reviews: {self._metrics['total_reviews']}, Active: {self._metrics['active_reviews']}")
 
         # Note: In a full implementation, this would:
         # 1. Initialize review dashboard entry
@@ -116,9 +111,7 @@ class ReviewEventHandler(EventHandler):
         # 3. Track review cycle start time
         # 4. Create review audit log
 
-    async def _handle_review_iteration_started(
-        self, event: ReviewIterationStarted
-    ) -> None:
+    async def _handle_review_iteration_started(self, event: ReviewIterationStarted) -> None:
         """
         Handle review iteration start - log iteration.
 
@@ -144,9 +137,7 @@ class ReviewEventHandler(EventHandler):
         # 3. Update review dashboard
         # 4. Stream maker output to reviewer
 
-    async def _handle_review_feedback_submitted(
-        self, event: ReviewFeedbackSubmitted
-    ) -> None:
+    async def _handle_review_feedback_submitted(self, event: ReviewFeedbackSubmitted) -> None:
         """
         Handle review feedback submission.
 
@@ -186,8 +177,7 @@ class ReviewEventHandler(EventHandler):
         self._active_reviews.pop(event.aggregate_id, None)
 
         logger.info(
-            f"Review cycle approved: {event.aggregate_id}, "
-            f"total iterations: {event.payload.get('total_iterations')}"
+            f"Review cycle approved: {event.aggregate_id}, total iterations: {event.payload.get('total_iterations')}"
         )
 
         logger.info(
@@ -236,9 +226,7 @@ class ReviewEventHandler(EventHandler):
         # 5. Update review dashboard
         # 6. Track rejection reasons for analysis
 
-    async def _handle_review_cycle_escalated(
-        self, event: ReviewCycleEscalated
-    ) -> None:
+    async def _handle_review_cycle_escalated(self, event: ReviewCycleEscalated) -> None:
         """
         Handle review cycle escalation to human.
 
@@ -249,10 +237,7 @@ class ReviewEventHandler(EventHandler):
         self._metrics["active_reviews"] -= 1
         self._active_reviews.pop(event.aggregate_id, None)
 
-        logger.warning(
-            f"Review cycle escalated: {event.aggregate_id}, "
-            f"reason: {event.payload.get('reason')}"
-        )
+        logger.warning(f"Review cycle escalated: {event.aggregate_id}, reason: {event.payload.get('reason')}")
 
         logger.warning(
             f"Escalation rate: {self._metrics['escalated_reviews']}/{self._metrics['total_reviews']} "
@@ -271,25 +256,19 @@ class ReviewEventHandler(EventHandler):
         """Calculate approval rate percentage."""
         if self._metrics["total_reviews"] == 0:
             return 0.0
-        return (
-            self._metrics["approved_reviews"] / self._metrics["total_reviews"] * 100
-        )
+        return self._metrics["approved_reviews"] / self._metrics["total_reviews"] * 100
 
     def _get_rejection_rate(self) -> float:
         """Calculate rejection rate percentage."""
         if self._metrics["total_reviews"] == 0:
             return 0.0
-        return (
-            self._metrics["rejected_reviews"] / self._metrics["total_reviews"] * 100
-        )
+        return self._metrics["rejected_reviews"] / self._metrics["total_reviews"] * 100
 
     def _get_escalation_rate(self) -> float:
         """Calculate escalation rate percentage."""
         if self._metrics["total_reviews"] == 0:
             return 0.0
-        return (
-            self._metrics["escalated_reviews"] / self._metrics["total_reviews"] * 100
-        )
+        return self._metrics["escalated_reviews"] / self._metrics["total_reviews"] * 100
 
     def get_metrics(self) -> dict[str, object]:
         """
@@ -298,9 +277,7 @@ class ReviewEventHandler(EventHandler):
         Returns:
             Dictionary of review metrics
         """
-        avg_iterations = (
-            self._metrics["total_iterations"] / max(self._metrics["total_reviews"], 1)
-        )
+        avg_iterations = self._metrics["total_iterations"] / max(self._metrics["total_reviews"], 1)
 
         return {
             **self._metrics,

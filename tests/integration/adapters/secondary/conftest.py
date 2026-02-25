@@ -1,7 +1,6 @@
 """Shared fixtures for GitHub discussion adapter integration tests."""
 
 from unittest.mock import Mock
-import re
 
 import pytest
 
@@ -11,7 +10,7 @@ from codetoreum.adapters.secondary.github_discussion_adapter import (
 )
 from codetoreum.domain.events.discussion_events import Comment
 from codetoreum.ports.output.discussion_adapter import DiscussionMonitoringConfig
-from codetoreum.ports.output.identity_service import IIdentityService, BotIdentityConfig
+from codetoreum.ports.output.identity_service import BotIdentityConfig, IIdentityService
 
 
 class MockIdentityService(IIdentityService):

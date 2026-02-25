@@ -108,7 +108,7 @@ class SimulationEngine:
             extra={
                 "speed_multiplier": config.time.speed_multiplier,
                 "auto_advance": config.time.auto_advance,
-            }
+            },
         )
 
         return SimulationEngine(clock)

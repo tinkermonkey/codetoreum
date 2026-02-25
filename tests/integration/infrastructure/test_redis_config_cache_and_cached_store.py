@@ -244,9 +244,7 @@ async def test_redis_cache_agent_config(redis_cache, sample_agent_config):
     await redis_cache.set_agent_config(sample_agent_config)
 
     # Get agent config
-    retrieved = await redis_cache.get_agent_config(
-        sample_agent_config.project_id, sample_agent_config.agent_name
-    )
+    retrieved = await redis_cache.get_agent_config(sample_agent_config.project_id, sample_agent_config.agent_name)
 
     assert retrieved is not None
     assert retrieved.project_id == sample_agent_config.project_id
@@ -299,9 +297,7 @@ async def test_cached_store_write_through(cached_config_store, sample_project_co
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_cached_store_read_through(
-    cached_config_store, elasticsearch_storage, sample_project_config
-):
+async def test_cached_store_read_through(cached_config_store, elasticsearch_storage, sample_project_config):
     """Test read-through caching (cache miss falls back to storage)."""
     # Save directly to storage (bypass cache)
     await elasticsearch_storage.save_project_config(sample_project_config)
@@ -316,9 +312,7 @@ async def test_cached_store_read_through(
     assert retrieved.id == sample_project_config.id
 
     # Second get should hit cache
-    retrieved_again = await cached_config_store.get_project_config(
-        sample_project_config.id
-    )
+    retrieved_again = await cached_config_store.get_project_config(sample_project_config.id)
 
     assert retrieved_again is not None
     assert retrieved_again.id == sample_project_config.id
@@ -335,9 +329,7 @@ async def test_cached_store_get_by_name(cached_config_store, sample_project_conf
     await asyncio.sleep(1)
 
     # Get by name (should populate cache)
-    retrieved = await cached_config_store.get_project_config_by_name(
-        sample_project_config.name
-    )
+    retrieved = await cached_config_store.get_project_config_by_name(sample_project_config.name)
 
     assert retrieved is not None
     assert retrieved.id == sample_project_config.id
@@ -346,9 +338,7 @@ async def test_cached_store_get_by_name(cached_config_store, sample_project_conf
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_cached_store_update_invalidates_and_updates_cache(
-    cached_config_store, sample_project_config
-):
+async def test_cached_store_update_invalidates_and_updates_cache(cached_config_store, sample_project_config):
     """Test that updates properly update both storage and cache."""
     # Save initial version
     await cached_config_store.save_project_config(sample_project_config)
@@ -387,9 +377,7 @@ async def test_cached_store_agent_config(cached_config_store, sample_agent_confi
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_cached_store_delete_invalidates_cache(
-    cached_config_store, redis_cache, sample_project_config
-):
+async def test_cached_store_delete_invalidates_cache(cached_config_store, redis_cache, sample_project_config):
     """Test that delete operation invalidates cache."""
     # Save project
     await cached_config_store.save_project_config(sample_project_config)
@@ -414,9 +402,7 @@ async def test_cached_store_delete_invalidates_cache(
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_cached_store_list_operations_bypass_cache(
-    cached_config_store, sample_project_config
-):
+async def test_cached_store_list_operations_bypass_cache(cached_config_store, sample_project_config):
     """Test that list operations go directly to storage (no caching)."""
     # Save multiple projects
     project1 = sample_project_config
@@ -444,9 +430,7 @@ async def test_cached_store_list_operations_bypass_cache(
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_cached_store_search_bypasses_cache(
-    cached_config_store, sample_project_config
-):
+async def test_cached_store_search_bypasses_cache(cached_config_store, sample_project_config):
     """Test that search operations go directly to storage."""
     # Save project with unique name
     project = sample_project_config
@@ -457,9 +441,7 @@ async def test_cached_store_search_bypasses_cache(
     await asyncio.sleep(2)
 
     # Search (should bypass cache)
-    results = await cached_config_store.search_configs(
-        query="Searchable Project", config_type="project"
-    )
+    results = await cached_config_store.search_configs(query="Searchable Project", config_type="project")
 
     assert len(results) > 0
     assert any(r.get("id") == project.id for r in results)
@@ -467,9 +449,7 @@ async def test_cached_store_search_bypasses_cache(
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_cached_store_version_history_bypasses_cache(
-    cached_config_store, sample_project_config
-):
+async def test_cached_store_version_history_bypasses_cache(cached_config_store, sample_project_config):
     """Test that version history operations go directly to storage."""
     # Save and update project multiple times
     await cached_config_store.save_project_config(sample_project_config)
@@ -488,9 +468,7 @@ async def test_cached_store_version_history_bypasses_cache(
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_cached_store_exists_bypasses_cache(
-    cached_config_store, sample_project_config
-):
+async def test_cached_store_exists_bypasses_cache(cached_config_store, sample_project_config):
     """Test that exists() checks go directly to storage."""
     # Save project
     await cached_config_store.save_project_config(sample_project_config)
@@ -504,9 +482,7 @@ async def test_cached_store_exists_bypasses_cache(
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_cache_hit_rate_with_repeated_reads(
-    cached_config_store, redis_cache, sample_project_config
-):
+async def test_cache_hit_rate_with_repeated_reads(cached_config_store, redis_cache, sample_project_config):
     """Test that repeated reads increase cache hit rate."""
     # Reset stats
     await redis_cache.reset_stats()
@@ -529,9 +505,7 @@ async def test_cache_hit_rate_with_repeated_reads(
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_concurrent_cached_store_operations(
-    cached_config_store, sample_project_config
-):
+async def test_concurrent_cached_store_operations(cached_config_store, sample_project_config):
     """Test concurrent operations on cached config store."""
     # Save initial project
     await cached_config_store.save_project_config(sample_project_config)

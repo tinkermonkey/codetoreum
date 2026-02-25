@@ -102,7 +102,10 @@ class SimpleEncryptionAdapter(IEncryptionService):
         except EncryptionError:
             raise
         except Exception as e:
-            logger.error(f"Encryption failed: {e}", extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR})
+            logger.error(
+                f"Encryption failed: {e}",
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
+            )
             msg = f"Encryption failed: {e}"
             raise EncryptionError(msg) from e
 
@@ -124,9 +127,7 @@ class SimpleEncryptionAdapter(IEncryptionService):
             parts = ciphertext.split(":")
             if len(parts) != 3:
                 msg = "Invalid encrypted format. Expected: key_id:nonce:ciphertext"
-                raise DecryptionError(
-                    msg
-                )
+                raise DecryptionError(msg)
 
             key_id, nonce_b64, ciphertext_b64 = parts
 
@@ -152,7 +153,10 @@ class SimpleEncryptionAdapter(IEncryptionService):
         except DecryptionError:
             raise
         except Exception as e:
-            logger.error(f"Decryption failed: {e}", extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR})
+            logger.error(
+                f"Decryption failed: {e}",
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
+            )
             msg = f"Decryption failed: {e}"
             raise DecryptionError(msg) from e
 
@@ -188,7 +192,10 @@ class SimpleEncryptionAdapter(IEncryptionService):
         except EncryptionError:
             raise
         except Exception as e:
-            logger.error(f"Key rotation failed: {e}", extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR})
+            logger.error(
+                f"Key rotation failed: {e}",
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
+            )
             msg = f"Key rotation failed: {e}"
             raise EncryptionError(msg) from e
 

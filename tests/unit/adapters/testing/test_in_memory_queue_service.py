@@ -161,15 +161,9 @@ class TestPositionOrdering:
         now = datetime.now(UTC)
 
         # Enqueue items out of order
-        await queue_service.enqueue_item(
-            "proj-1", "board-1", "item-3", position_in_column=2, timestamp=now
-        )
-        await queue_service.enqueue_item(
-            "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-        )
-        await queue_service.enqueue_item(
-            "proj-1", "board-1", "item-2", position_in_column=1, timestamp=now
-        )
+        await queue_service.enqueue_item("proj-1", "board-1", "item-3", position_in_column=2, timestamp=now)
+        await queue_service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+        await queue_service.enqueue_item("proj-1", "board-1", "item-2", position_in_column=1, timestamp=now)
 
         entries = await queue_service.get_queue_entries("proj-1", "board-1")
 
@@ -186,12 +180,8 @@ class TestPositionOrdering:
         """get_next_waiting_item should return item with lowest position."""
         now = datetime.now(UTC)
 
-        await queue_service.enqueue_item(
-            "proj-1", "board-1", "item-2", position_in_column=2, timestamp=now
-        )
-        await queue_service.enqueue_item(
-            "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-        )
+        await queue_service.enqueue_item("proj-1", "board-1", "item-2", position_in_column=2, timestamp=now)
+        await queue_service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
 
         next_item = await queue_service.get_next_waiting_item("proj-1", "board-1")
 
@@ -204,12 +194,8 @@ class TestPositionOrdering:
         """get_next_waiting_item should skip items with status='active'."""
         now = datetime.now(UTC)
 
-        await queue_service.enqueue_item(
-            "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-        )
-        await queue_service.enqueue_item(
-            "proj-1", "board-1", "item-2", position_in_column=1, timestamp=now
-        )
+        await queue_service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+        await queue_service.enqueue_item("proj-1", "board-1", "item-2", position_in_column=1, timestamp=now)
 
         # Mark first as active
         await queue_service.mark_item_active("item-1")
@@ -233,9 +219,7 @@ class TestStatusManagement:
         """mark_item_active should change status to ACTIVE."""
         now = datetime.now(UTC)
 
-        await queue_service.enqueue_item(
-            "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-        )
+        await queue_service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
 
         await queue_service.mark_item_active("item-1")
 
@@ -253,9 +237,7 @@ class TestStatusManagement:
         """mark_item_active twice should raise InvalidQueueStateError."""
         now = datetime.now(UTC)
 
-        await queue_service.enqueue_item(
-            "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-        )
+        await queue_service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
 
         await queue_service.mark_item_active("item-1")
 
@@ -271,9 +253,7 @@ class TestRemovalOperations:
         """Removing existing item should succeed and return True."""
         now = datetime.now(UTC)
 
-        await queue_service.enqueue_item(
-            "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-        )
+        await queue_service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
 
         result = await queue_service.remove_from_queue("item-1")
 
@@ -302,9 +282,7 @@ class TestQueueQueries:
         """is_item_in_queue should return True for queued items."""
         now = datetime.now(UTC)
 
-        await queue_service.enqueue_item(
-            "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-        )
+        await queue_service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
 
         result = await queue_service.is_item_in_queue("item-1")
         assert result is True
@@ -320,9 +298,7 @@ class TestQueueQueries:
         """is_item_in_queue should return False after item is removed."""
         now = datetime.now(UTC)
 
-        await queue_service.enqueue_item(
-            "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-        )
+        await queue_service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
         await queue_service.remove_from_queue("item-1")
 
         result = await queue_service.is_item_in_queue("item-1")
@@ -333,9 +309,7 @@ class TestQueueQueries:
         """get_queue_entries should return a copy, not original list."""
         now = datetime.now(UTC)
 
-        await queue_service.enqueue_item(
-            "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-        )
+        await queue_service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
 
         entries1 = await queue_service.get_queue_entries("proj-1", "board-1")
         entries2 = await queue_service.get_queue_entries("proj-1", "board-1")
@@ -358,26 +332,18 @@ class TestBoardSynchronization:
     async def test_sync_queue_with_board_no_service(self, queue_service):
         """sync_queue_with_board should handle missing board service gracefully."""
         # Without board service, sync should just return (no-op)
-        await queue_service.sync_queue_with_board(
-            "proj-1", "board-1", "In Progress"
-        )
+        await queue_service.sync_queue_with_board("proj-1", "board-1", "In Progress")
         # Should not raise
 
     @pytest.mark.asyncio
-    async def test_sync_queue_with_board_removes_items_not_in_column(
-        self, queue_service_with_board
-    ):
+    async def test_sync_queue_with_board_removes_items_not_in_column(self, queue_service_with_board):
         """Sync should remove queue entries for items no longer in column."""
         service, board_service = queue_service_with_board
         now = datetime.now(UTC)
 
         # Setup initial queue
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-        )
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-2", position_in_column=1, timestamp=now
-        )
+        await service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+        await service.enqueue_item("proj-1", "board-1", "item-2", position_in_column=1, timestamp=now)
 
         # Setup board to only have item-2
         board = ProjectBoard(
@@ -404,17 +370,13 @@ class TestBoardSynchronization:
         assert entries[0].work_item_id == "item-2"
 
     @pytest.mark.asyncio
-    async def test_sync_queue_with_board_adds_new_items(
-        self, queue_service_with_board
-    ):
+    async def test_sync_queue_with_board_adds_new_items(self, queue_service_with_board):
         """Sync should add queue entries for items newly discovered in column."""
         service, board_service = queue_service_with_board
         now = datetime.now(UTC)
 
         # Setup initial queue with only item-1
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-        )
+        await service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
 
         # Setup board with items-1 and item-2
         board = ProjectBoard(
@@ -442,20 +404,14 @@ class TestBoardSynchronization:
         assert item_ids == {"item-1", "item-2"}
 
     @pytest.mark.asyncio
-    async def test_sync_queue_with_board_updates_positions(
-        self, queue_service_with_board
-    ):
+    async def test_sync_queue_with_board_updates_positions(self, queue_service_with_board):
         """Sync should update position_in_column based on board state."""
         service, board_service = queue_service_with_board
         now = datetime.now(UTC)
 
         # Setup initial queue (old positions)
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-        )
-        await service.enqueue_item(
-            "proj-1", "board-1", "item-2", position_in_column=1, timestamp=now
-        )
+        await service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+        await service.enqueue_item("proj-1", "board-1", "item-2", position_in_column=1, timestamp=now)
 
         # Setup board with different positions (item-2 moved to top)
         board = ProjectBoard(
@@ -485,7 +441,6 @@ class TestBoardSynchronization:
         assert entries[1].position_in_column == 1
 
 
-
 class TestConcurrency:
     """Tests for thread-safe operations."""
 
@@ -497,9 +452,7 @@ class TestConcurrency:
         now = datetime.now(UTC)
 
         async def enqueue_item(item_id, position):
-            await queue_service.enqueue_item(
-                "proj-1", "board-1", item_id, position, now
-            )
+            await queue_service.enqueue_item("proj-1", "board-1", item_id, position, now)
 
         # Simulate concurrent operations
         await asyncio.gather(
@@ -520,12 +473,8 @@ class TestMultipleQueues:
         """Queues should be independent per project."""
         now = datetime.now(UTC)
 
-        await queue_service.enqueue_item(
-            "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-        )
-        await queue_service.enqueue_item(
-            "proj-2", "board-1", "item-2", position_in_column=0, timestamp=now
-        )
+        await queue_service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+        await queue_service.enqueue_item("proj-2", "board-1", "item-2", position_in_column=0, timestamp=now)
 
         entries_proj1 = await queue_service.get_queue_entries("proj-1", "board-1")
         entries_proj2 = await queue_service.get_queue_entries("proj-2", "board-1")
@@ -540,12 +489,8 @@ class TestMultipleQueues:
         """Queues should be independent per board."""
         now = datetime.now(UTC)
 
-        await queue_service.enqueue_item(
-            "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-        )
-        await queue_service.enqueue_item(
-            "proj-1", "board-2", "item-2", position_in_column=0, timestamp=now
-        )
+        await queue_service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+        await queue_service.enqueue_item("proj-1", "board-2", "item-2", position_in_column=0, timestamp=now)
 
         entries_board1 = await queue_service.get_queue_entries("proj-1", "board-1")
         entries_board2 = await queue_service.get_queue_entries("proj-1", "board-2")
@@ -560,12 +505,8 @@ class TestMultipleQueues:
         """is_item_in_queue should search across all queues."""
         now = datetime.now(UTC)
 
-        await queue_service.enqueue_item(
-            "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-        )
-        await queue_service.enqueue_item(
-            "proj-2", "board-2", "item-2", position_in_column=0, timestamp=now
-        )
+        await queue_service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+        await queue_service.enqueue_item("proj-2", "board-2", "item-2", position_in_column=0, timestamp=now)
 
         assert await queue_service.is_item_in_queue("item-1") is True
         assert await queue_service.is_item_in_queue("item-2") is True
@@ -580,9 +521,7 @@ class TestTestHelpers:
         """Test helper should return queue length and entries."""
         now = datetime.now(UTC)
 
-        await queue_service.enqueue_item(
-            "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-        )
+        await queue_service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
 
         length, entries = queue_service.get_queue_state_for_testing("proj-1", "board-1")
 
@@ -594,12 +533,8 @@ class TestTestHelpers:
         """Test helper clear_queue_for_testing should clear specific queue."""
         now = datetime.now(UTC)
 
-        await queue_service.enqueue_item(
-            "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-        )
-        await queue_service.enqueue_item(
-            "proj-1", "board-2", "item-2", position_in_column=0, timestamp=now
-        )
+        await queue_service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+        await queue_service.enqueue_item("proj-1", "board-2", "item-2", position_in_column=0, timestamp=now)
 
         queue_service.clear_queue_for_testing("proj-1", "board-1")
 
@@ -614,12 +549,8 @@ class TestTestHelpers:
         """Test helper clear_all_queues_for_testing should clear all queues."""
         now = datetime.now(UTC)
 
-        await queue_service.enqueue_item(
-            "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-        )
-        await queue_service.enqueue_item(
-            "proj-2", "board-2", "item-2", position_in_column=0, timestamp=now
-        )
+        await queue_service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+        await queue_service.enqueue_item("proj-2", "board-2", "item-2", position_in_column=0, timestamp=now)
 
         queue_service.clear_all_queues_for_testing()
 

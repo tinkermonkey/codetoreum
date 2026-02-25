@@ -5,7 +5,7 @@ import re
 import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 from codetoreum.domain.events import (
@@ -51,8 +51,8 @@ class FakeContainerAdapter(IContainer):
         default_stderr: str = "",
         execution_delay: float = 0.0,
         max_containers: int = 100,
-        event_emitter: Optional[IEventEmitter] = None,
-        event_bus: Optional[EventBus] = None,
+        event_emitter: IEventEmitter | None = None,
+        event_bus: EventBus | None = None,
     ):
         """
         Initialize the fake container adapter.
@@ -222,16 +222,18 @@ class FakeContainerAdapter(IContainer):
 
         # Record execution
         with self._lock:
-            self._execution_history.append({
-                "container_id": container_id,
-                "image": image,
-                "command": command,
-                "volumes": volumes,
-                "environment": environment,
-                "timeout": timeout,
-                "result": result,
-                "executed_at": datetime.now(UTC),
-            })
+            self._execution_history.append(
+                {
+                    "container_id": container_id,
+                    "image": image,
+                    "command": command,
+                    "volumes": volumes,
+                    "environment": environment,
+                    "timeout": timeout,
+                    "result": result,
+                    "executed_at": datetime.now(UTC),
+                }
+            )
 
         # Simulate streaming if callback provided
         if stream_callback:
@@ -460,6 +462,7 @@ class FakeContainerAdapter(IContainer):
             logs = "\n".join(lines[-tail:])
 
         if stream:
+
             async def log_generator():
                 for line in logs.split("\n"):
                     await asyncio.sleep(0.01)

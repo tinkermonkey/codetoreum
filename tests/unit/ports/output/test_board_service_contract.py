@@ -185,9 +185,7 @@ class TestBoardServiceContract(ABC):
             item_id = board.columns[0].work_item_ids[0]
 
             with pytest.raises((ValueError, ResourceNotFoundError)):
-                await service.move_item_to_column(
-                    item_id, "NonexistentColumn12345", MovedByType.HUMAN
-                )
+                await service.move_item_to_column(item_id, "NonexistentColumn12345", MovedByType.HUMAN)
 
     @pytest.mark.asyncio
     async def test_get_item_position_nonexistent_item_fails(self):

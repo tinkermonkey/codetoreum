@@ -31,7 +31,7 @@ def mock_discussion_adapter():
     """Create a mock discussion adapter."""
     adapter = MagicMock()
     adapter.start_monitoring = MagicMock(return_value=None)  # Synchronous method
-    adapter.stop_monitoring = MagicMock(return_value=None)   # Synchronous method
+    adapter.stop_monitoring = MagicMock(return_value=None)  # Synchronous method
     adapter.add_comment = AsyncMock()
     return adapter
 
@@ -153,9 +153,7 @@ class TestInitializeLoop:
         """Test initialization fails with missing work_item_id."""
         with pytest.raises(ValueError, match="work_item_id and project_id are required"):
             await orchestrator.initialize_loop(
-                "",
-                "proj-1",
-                {"column_name": "In Review", "agent_assignment": "reviewer"}
+                "", "proj-1", {"column_name": "In Review", "agent_assignment": "reviewer"}
             )
 
     async def test_initialize_loop_missing_agent_assignment(self, orchestrator):
@@ -164,7 +162,7 @@ class TestInitializeLoop:
             await orchestrator.initialize_loop(
                 "issue-42",
                 "proj-1",
-                {"column_name": "In Review"}  # Missing agent_assignment
+                {"column_name": "In Review"},  # Missing agent_assignment
             )
 
     async def test_initialize_loop_monitoring_failure(self, orchestrator, mock_discussion_adapter, mock_event_store):
@@ -173,9 +171,7 @@ class TestInitializeLoop:
 
         with pytest.raises(Exception, match="Monitoring failed"):
             await orchestrator.initialize_loop(
-                "issue-42",
-                "proj-1",
-                {"column_name": "In Review", "agent_assignment": "reviewer"}
+                "issue-42", "proj-1", {"column_name": "In Review", "agent_assignment": "reviewer"}
             )
 
         # Verify monitoring was attempted
@@ -191,9 +187,7 @@ class TestInitializeLoop:
 
         with pytest.raises(EventStoreError, match="Storage failed"):
             await orchestrator.initialize_loop(
-                "issue-42",
-                "proj-1",
-                {"column_name": "In Review", "agent_assignment": "reviewer"}
+                "issue-42", "proj-1", {"column_name": "In Review", "agent_assignment": "reviewer"}
             )
 
         # Verify cleanup was attempted
@@ -215,9 +209,7 @@ class TestHandleCommentEvent:
     ):
         """Test successful comment handling and response posting."""
         # Mock session state loading
-        snapshot_data = {
-            "conversational_session_state": sample_session_state.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": sample_session_state.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Mock agent execution
@@ -233,7 +225,7 @@ class TestHandleCommentEvent:
             body="This is the agent's response.",
             created_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             parent_id=None,
-            is_bot=True
+            is_bot=True,
         )
         mock_discussion_adapter.add_comment = AsyncMock(return_value=mock_response_comment)
 
@@ -297,18 +289,14 @@ class TestHandleCommentEvent:
         from codetoreum.ports.exceptions import EmptyAgentResponseError
 
         # Mock session state loading
-        snapshot_data = {
-            "conversational_session_state": sample_session_state.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": sample_session_state.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Mock agent execution returning empty content
         mock_execution_result = MagicMock()
         mock_execution_result.content = ""  # Empty response
         mock_execution_result.conversation_id = "conv-abc123"
-        mock_llm_provider.continue_conversation = AsyncMock(
-            return_value=mock_execution_result
-        )
+        mock_llm_provider.continue_conversation = AsyncMock(return_value=mock_execution_result)
 
         # Create event with comment
         event = CommentNeedsResponseEvent(
@@ -384,9 +372,7 @@ class TestHandleCommentEvent:
             status="suspended",
         )
 
-        snapshot_data = {
-            "conversational_session_state": suspended_state.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": suspended_state.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         event = CommentNeedsResponseEvent(
@@ -448,9 +434,7 @@ class TestHandleCommentEvent:
             status="active",
         )
 
-        snapshot_data = {
-            "conversational_session_state": processed_state.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": processed_state.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Create event with same comment ID
@@ -487,9 +471,7 @@ class TestHandleCommentEvent:
     ):
         """Test error handling when adapter returns None for add_comment."""
         # Mock session state loading
-        snapshot_data = {
-            "conversational_session_state": sample_session_state.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": sample_session_state.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Mock agent execution
@@ -529,9 +511,7 @@ class TestHandleCommentEvent:
     ):
         """Test error handling when adapter returns invalid comment type."""
         # Mock session state loading
-        snapshot_data = {
-            "conversational_session_state": sample_session_state.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": sample_session_state.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Mock agent execution
@@ -571,9 +551,7 @@ class TestHandleCommentEvent:
     ):
         """Test error handling when adapter returns comment with no ID."""
         # Mock session state loading
-        snapshot_data = {
-            "conversational_session_state": sample_session_state.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": sample_session_state.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Mock agent execution
@@ -627,18 +605,14 @@ class TestHandleCommentEvent:
             last_interaction_timestamp=sample_session_state.last_interaction_timestamp,
             status="active",
         )
-        snapshot_data = {
-            "conversational_session_state": session_with_conv.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": session_with_conv.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Mock agent execution returning None for conversation_id
         mock_execution_result = MagicMock()
         mock_execution_result.content = "This is the agent's response."
         mock_execution_result.conversation_id = None  # LLM returned None
-        mock_llm_provider.continue_conversation = AsyncMock(
-            return_value=mock_execution_result
-        )
+        mock_llm_provider.continue_conversation = AsyncMock(return_value=mock_execution_result)
 
         # Mock adapter returning comment with ID
         posted_comment = MagicMock(spec=Comment)
@@ -701,18 +675,14 @@ class TestHandleCommentEvent:
             last_interaction_timestamp=sample_session_state.last_interaction_timestamp,
             status="active",
         )
-        snapshot_data = {
-            "conversational_session_state": session_in_progress.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": session_in_progress.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Mock agent execution
         mock_execution_result = MagicMock()
         mock_execution_result.content = "Agent response to the comment."
         mock_execution_result.conversation_id = "conv-abc123"
-        mock_llm_provider.continue_conversation = AsyncMock(
-            return_value=mock_execution_result
-        )
+        mock_llm_provider.continue_conversation = AsyncMock(return_value=mock_execution_result)
 
         # Mock adapter returning comment with ID
         posted_comment = MagicMock(spec=Comment)
@@ -759,18 +729,14 @@ class TestHandleCommentEvent:
     ):
         """Test partial failure scenario where comment is posted but event store fails."""
         # Mock session state loading
-        snapshot_data = {
-            "conversational_session_state": sample_session_state.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": sample_session_state.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Mock agent execution
         mock_execution_result = MagicMock()
         mock_execution_result.content = "This is the agent's response."
         mock_execution_result.conversation_id = "conv-abc123"
-        mock_llm_provider.continue_conversation = AsyncMock(
-            return_value=mock_execution_result
-        )
+        mock_llm_provider.continue_conversation = AsyncMock(return_value=mock_execution_result)
 
         # Mock adapter successfully posting comment
         posted_comment = MagicMock(spec=Comment)
@@ -778,9 +744,7 @@ class TestHandleCommentEvent:
         mock_discussion_adapter.add_comment = AsyncMock(return_value=posted_comment)
 
         # Mock event store failure during snapshot save (after comment posted)
-        mock_event_store.save_snapshot = AsyncMock(
-            side_effect=Exception("Storage failed")
-        )
+        mock_event_store.save_snapshot = AsyncMock(side_effect=Exception("Storage failed"))
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
@@ -820,9 +784,7 @@ class TestHandleColumnChangeEvent:
         sample_session_state,
     ):
         """Test column change when exiting conversational column."""
-        snapshot_data = {
-            "conversational_session_state": sample_session_state.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": sample_session_state.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         event = WorkItemColumnChangedEvent(
@@ -891,9 +853,7 @@ class TestCleanupLoop:
         sample_session_state,
     ):
         """Test successful loop cleanup."""
-        snapshot_data = {
-            "conversational_session_state": sample_session_state.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": sample_session_state.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         await orchestrator.cleanup_loop("issue-42", "Agent execution error")
@@ -934,9 +894,7 @@ class TestCleanupLoop:
             status="terminated",
         )
 
-        snapshot_data = {
-            "conversational_session_state": terminated_state.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": terminated_state.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Should handle gracefully - no exception
@@ -950,9 +908,7 @@ class TestCleanupLoop:
         sample_session_state,
     ):
         """Test cleanup continues even if monitoring stop fails."""
-        snapshot_data = {
-            "conversational_session_state": sample_session_state.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": sample_session_state.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
         mock_discussion_adapter.stop_monitoring.side_effect = Exception("Monitoring stop failed")
 
@@ -968,9 +924,7 @@ class TestLoadSessionState:
 
     async def test_load_session_state_exists(self, orchestrator, mock_event_store, sample_session_state):
         """Test loading existing session state."""
-        snapshot_data = {
-            "conversational_session_state": sample_session_state.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": sample_session_state.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         result = await orchestrator.load_session_state("issue-42")
@@ -1119,7 +1073,6 @@ class TestBuildThreadMessage:
         assert "alice" in message
         assert "Can you explain section 2" in message
         assert "user123" in message
-
 
 
 class TestHandleCommentEventContextValidation:

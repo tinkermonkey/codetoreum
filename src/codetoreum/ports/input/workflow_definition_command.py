@@ -13,6 +13,7 @@ from typing import Any
 @dataclass
 class StageDefinition:
     """Stage definition for workflow"""
+
     name: str
     agent_name: str
     timeout_seconds: int | None = None
@@ -24,6 +25,7 @@ class StageDefinition:
 @dataclass
 class StageTransitionDefinition:
     """Stage transition definition"""
+
     from_stage: str
     to_stage: str
     condition: str | None = None
@@ -32,6 +34,7 @@ class StageTransitionDefinition:
 @dataclass
 class CreateWorkflowDefinitionCommand:
     """Command to create a new workflow definition"""
+
     name: str
     description: str
     project_id: str
@@ -45,6 +48,7 @@ class CreateWorkflowDefinitionCommand:
 @dataclass
 class UpdateWorkflowDefinitionCommand:
     """Command to update an existing workflow definition"""
+
     workflow_id: str
     name: str | None = None
     description: str | None = None
@@ -57,6 +61,7 @@ class UpdateWorkflowDefinitionCommand:
 @dataclass
 class DeleteWorkflowDefinitionCommand:
     """Command to delete a workflow definition"""
+
     workflow_id: str
     force: bool = False  # If True, delete even if active executions exist
 
@@ -64,6 +69,7 @@ class DeleteWorkflowDefinitionCommand:
 @dataclass
 class WorkflowDefinitionCommandResult:
     """Result of executing a workflow definition command"""
+
     success: bool
     workflow_id: str
     message: str
@@ -91,8 +97,7 @@ class IWorkflowDefinitionCommandPort(ABC):
 
     @abstractmethod
     async def create_workflow_definition(
-        self,
-        command: CreateWorkflowDefinitionCommand
+        self, command: CreateWorkflowDefinitionCommand
     ) -> WorkflowDefinitionCommandResult:
         """
         Creates a new workflow definition.
@@ -118,8 +123,7 @@ class IWorkflowDefinitionCommandPort(ABC):
 
     @abstractmethod
     async def update_workflow_definition(
-        self,
-        command: UpdateWorkflowDefinitionCommand
+        self, command: UpdateWorkflowDefinitionCommand
     ) -> WorkflowDefinitionCommandResult:
         """
         Updates an existing workflow definition.
@@ -147,8 +151,7 @@ class IWorkflowDefinitionCommandPort(ABC):
 
     @abstractmethod
     async def delete_workflow_definition(
-        self,
-        command: DeleteWorkflowDefinitionCommand
+        self, command: DeleteWorkflowDefinitionCommand
     ) -> WorkflowDefinitionCommandResult:
         """
         Deletes a workflow definition.
@@ -174,10 +177,7 @@ class IWorkflowDefinitionCommandPort(ABC):
         """
 
     @abstractmethod
-    async def activate_workflow_definition(
-        self,
-        workflow_id: str
-    ) -> WorkflowDefinitionCommandResult:
+    async def activate_workflow_definition(self, workflow_id: str) -> WorkflowDefinitionCommandResult:
         """
         Activates a workflow definition.
 
@@ -194,10 +194,7 @@ class IWorkflowDefinitionCommandPort(ABC):
         """
 
     @abstractmethod
-    async def deactivate_workflow_definition(
-        self,
-        workflow_id: str
-    ) -> WorkflowDefinitionCommandResult:
+    async def deactivate_workflow_definition(self, workflow_id: str) -> WorkflowDefinitionCommandResult:
         """
         Deactivates a workflow definition.
 

@@ -324,7 +324,8 @@ class TestContainerConfig:
         """Test that invalid volume config raises error."""
         with pytest.raises(DomainError, match="must have 'bind'"):
             ContainerConfig(
-                image="python:3.11", volumes={"/host": {"mode": "rw"}}  # Missing bind
+                image="python:3.11",
+                volumes={"/host": {"mode": "rw"}},  # Missing bind
             )
 
     def test_invalid_volume_mode_raises_error(self):

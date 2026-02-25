@@ -25,12 +25,7 @@ class ProjectContextCreated(DomainEvent):
         - repository_url: str
         - default_branch: str
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ProjectContext",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectContext", payload=payload, **kwargs)
 
 
 class ProjectTestConfigUpdated(DomainEvent):
@@ -44,12 +39,7 @@ class ProjectTestConfigUpdated(DomainEvent):
         - test_command: str
         - test_framework: Optional[str]
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ProjectContext",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectContext", payload=payload, **kwargs)
 
 
 class ProjectDockerConfigUpdated(DomainEvent):
@@ -64,12 +54,7 @@ class ProjectDockerConfigUpdated(DomainEvent):
         - dockerfile_path: Optional[str]
         - requires_dev_container: bool
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ProjectContext",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectContext", payload=payload, **kwargs)
 
 
 class ProjectWorkflowMappingAdded(DomainEvent):
@@ -83,12 +68,7 @@ class ProjectWorkflowMappingAdded(DomainEvent):
         - label: str
         - template_id: str
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ProjectContext",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectContext", payload=payload, **kwargs)
 
 
 # =============================================================================
@@ -193,7 +173,7 @@ class ProjectContext:
         default_branch: str = "main",
         tech_stack: list[str] | None = None,
         primary_language: str = "python",
-        default_workflow_template_id: str | None = None
+        default_workflow_template_id: str | None = None,
     ) -> "ProjectContext":
         """
         Factory method to create a new project context.
@@ -234,7 +214,7 @@ class ProjectContext:
             mcp_servers=[],
             metadata={},
             created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC)
+            updated_at=datetime.now(UTC),
         )
 
         event = ProjectContextCreated(
@@ -244,19 +224,15 @@ class ProjectContext:
                 "display_name": display_name,
                 "repository_url": repository_url,
                 "default_branch": default_branch,
-                "primary_language": primary_language
-            }
+                "primary_language": primary_language,
+            },
         )
         project._add_event(event)
 
         return project
 
     # Configuration methods
-    def update_test_configuration(
-        self,
-        test_command: str,
-        test_framework: str | None = None
-    ) -> None:
+    def update_test_configuration(self, test_command: str, test_framework: str | None = None) -> None:
         """
         Update testing configuration.
 
@@ -277,10 +253,7 @@ class ProjectContext:
 
         event = ProjectTestConfigUpdated(
             aggregate_id=self.id,
-            payload={
-                "test_command": test_command,
-                "test_framework": test_framework
-            }
+            payload={"test_command": test_command, "test_framework": test_framework},
         )
         self._add_event(event)
 
@@ -288,7 +261,7 @@ class ProjectContext:
         self,
         has_dockerfile: bool,
         dockerfile_path: str | None = None,
-        requires_dev_container: bool = False
+        requires_dev_container: bool = False,
     ) -> None:
         """
         Configure Docker settings.
@@ -318,8 +291,8 @@ class ProjectContext:
             payload={
                 "has_dockerfile": has_dockerfile,
                 "dockerfile_path": dockerfile_path,
-                "requires_dev_container": requires_dev_container
-            }
+                "requires_dev_container": requires_dev_container,
+            },
         )
         self._add_event(event)
 
@@ -348,13 +321,7 @@ class ProjectContext:
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = ProjectWorkflowMappingAdded(
-            aggregate_id=self.id,
-            payload={
-                "label": label,
-                "template_id": template_id
-            }
-        )
+        event = ProjectWorkflowMappingAdded(aggregate_id=self.id, payload={"label": label, "template_id": template_id})
         self._add_event(event)
 
     def get_workflow_template_for_labels(self, labels: list[str]) -> str:

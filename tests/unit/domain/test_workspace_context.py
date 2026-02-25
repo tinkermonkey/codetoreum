@@ -19,9 +19,7 @@ class TestIssueWorkspace:
     def test_create_issue_workspace(self):
         """Test creating issue workspace context."""
         context = WorkspaceContext.for_issue(
-            project_id="proj-1",
-            work_item_id="item-1",
-            branch_name="feature/test-branch"
+            project_id="proj-1", work_item_id="item-1", branch_name="feature/test-branch"
         )
 
         assert context.workspace_type == WorkspaceType.ISSUE
@@ -40,7 +38,7 @@ class TestIssueWorkspace:
             project_id="proj-1",
             work_item_id="item-1",
             branch_name="feature/test-branch",
-            create_pr=False
+            create_pr=False,
         )
 
         assert context.create_pr is False
@@ -49,9 +47,7 @@ class TestIssueWorkspace:
     def test_issue_workspace_query_methods(self):
         """Test query methods on issue workspace."""
         context = WorkspaceContext.for_issue(
-            project_id="proj-1",
-            work_item_id="item-1",
-            branch_name="feature/test-branch"
+            project_id="proj-1", work_item_id="item-1", branch_name="feature/test-branch"
         )
 
         assert context.is_issue_workspace() is True
@@ -63,29 +59,17 @@ class TestIssueWorkspace:
     def test_issue_workspace_with_empty_branch_name_raises_error(self):
         """Test that creating issue workspace with empty branch name raises error."""
         with pytest.raises(ValueError, match="branch_name is required"):
-            WorkspaceContext.for_issue(
-                project_id="proj-1",
-                work_item_id="item-1",
-                branch_name=""
-            )
+            WorkspaceContext.for_issue(project_id="proj-1", work_item_id="item-1", branch_name="")
 
     def test_issue_workspace_with_empty_project_id_raises_error(self):
         """Test that creating issue workspace with empty project ID raises error."""
         with pytest.raises(ValueError, match="project_id cannot be empty"):
-            WorkspaceContext.for_issue(
-                project_id="",
-                work_item_id="item-1",
-                branch_name="feature/test"
-            )
+            WorkspaceContext.for_issue(project_id="", work_item_id="item-1", branch_name="feature/test")
 
     def test_issue_workspace_with_empty_work_item_id_raises_error(self):
         """Test that creating issue workspace with empty work item ID raises error."""
         with pytest.raises(ValueError, match="work_item_id cannot be empty"):
-            WorkspaceContext.for_issue(
-                project_id="proj-1",
-                work_item_id="",
-                branch_name="feature/test"
-            )
+            WorkspaceContext.for_issue(project_id="proj-1", work_item_id="", branch_name="feature/test")
 
 
 class TestDiscussionWorkspace:
@@ -94,9 +78,7 @@ class TestDiscussionWorkspace:
     def test_create_discussion_workspace(self):
         """Test creating discussion workspace context."""
         context = WorkspaceContext.for_discussion(
-            project_id="proj-1",
-            work_item_id="item-1",
-            discussion_id="discussion-123"
+            project_id="proj-1", work_item_id="item-1", discussion_id="discussion-123"
         )
 
         assert context.workspace_type == WorkspaceType.DISCUSSION
@@ -112,9 +94,7 @@ class TestDiscussionWorkspace:
     def test_discussion_workspace_query_methods(self):
         """Test query methods on discussion workspace."""
         context = WorkspaceContext.for_discussion(
-            project_id="proj-1",
-            work_item_id="item-1",
-            discussion_id="discussion-123"
+            project_id="proj-1", work_item_id="item-1", discussion_id="discussion-123"
         )
 
         assert context.is_issue_workspace() is False
@@ -126,20 +106,12 @@ class TestDiscussionWorkspace:
     def test_discussion_workspace_with_empty_discussion_id_raises_error(self):
         """Test that creating discussion workspace with empty discussion ID raises error."""
         with pytest.raises(ValueError, match="discussion_id is required"):
-            WorkspaceContext.for_discussion(
-                project_id="proj-1",
-                work_item_id="item-1",
-                discussion_id=""
-            )
+            WorkspaceContext.for_discussion(project_id="proj-1", work_item_id="item-1", discussion_id="")
 
     def test_discussion_workspace_with_empty_project_id_raises_error(self):
         """Test that creating discussion workspace with empty project ID raises error."""
         with pytest.raises(ValueError, match="project_id cannot be empty"):
-            WorkspaceContext.for_discussion(
-                project_id="",
-                work_item_id="item-1",
-                discussion_id="discussion-123"
-            )
+            WorkspaceContext.for_discussion(project_id="", work_item_id="item-1", discussion_id="discussion-123")
 
 
 class TestHybridWorkspace:
@@ -151,7 +123,7 @@ class TestHybridWorkspace:
             project_id="proj-1",
             work_item_id="item-1",
             branch_name="feature/test-branch",
-            discussion_id="discussion-123"
+            discussion_id="discussion-123",
         )
 
         assert context.workspace_type == WorkspaceType.HYBRID
@@ -170,7 +142,7 @@ class TestHybridWorkspace:
             project_id="proj-1",
             work_item_id="item-1",
             branch_name="feature/test-branch",
-            discussion_id="discussion-123"
+            discussion_id="discussion-123",
         )
 
         assert context.is_issue_workspace() is True
@@ -186,7 +158,7 @@ class TestHybridWorkspace:
                 project_id="proj-1",
                 work_item_id="item-1",
                 branch_name="",
-                discussion_id="discussion-123"
+                discussion_id="discussion-123",
             )
 
     def test_hybrid_workspace_with_empty_discussion_id_raises_error(self):
@@ -196,7 +168,7 @@ class TestHybridWorkspace:
                 project_id="proj-1",
                 work_item_id="item-1",
                 branch_name="feature/test",
-                discussion_id=""
+                discussion_id="",
             )
 
 
@@ -222,11 +194,7 @@ class TestImmutability:
 
     def test_workspace_context_is_immutable(self):
         """Test that WorkspaceContext is immutable (frozen)."""
-        context = WorkspaceContext.for_issue(
-            project_id="proj-1",
-            work_item_id="item-1",
-            branch_name="feature/test"
-        )
+        context = WorkspaceContext.for_issue(project_id="proj-1", work_item_id="item-1", branch_name="feature/test")
 
         # Attempting to modify frozen dataclass fields should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
@@ -245,16 +213,10 @@ class TestEquality:
     def test_equal_workspaces_are_equal(self):
         """Test that workspaces with same values are equal."""
         context1 = WorkspaceContext.for_issue(
-            project_id="proj-1",
-            work_item_id="item-1",
-            branch_name="feature/test",
-            create_pr=True
+            project_id="proj-1", work_item_id="item-1", branch_name="feature/test", create_pr=True
         )
         context2 = WorkspaceContext.for_issue(
-            project_id="proj-1",
-            work_item_id="item-1",
-            branch_name="feature/test",
-            create_pr=True
+            project_id="proj-1", work_item_id="item-1", branch_name="feature/test", create_pr=True
         )
 
         assert context1 == context2
@@ -262,30 +224,18 @@ class TestEquality:
 
     def test_different_workspaces_are_not_equal(self):
         """Test that workspaces with different values are not equal."""
-        context1 = WorkspaceContext.for_issue(
-            project_id="proj-1",
-            work_item_id="item-1",
-            branch_name="feature/test"
-        )
-        context2 = WorkspaceContext.for_issue(
-            project_id="proj-2",
-            work_item_id="item-1",
-            branch_name="feature/test"
-        )
+        context1 = WorkspaceContext.for_issue(project_id="proj-1", work_item_id="item-1", branch_name="feature/test")
+        context2 = WorkspaceContext.for_issue(project_id="proj-2", work_item_id="item-1", branch_name="feature/test")
 
         assert context1 != context2
 
     def test_issue_and_discussion_workspaces_are_not_equal(self):
         """Test that different workspace types are not equal."""
         issue_context = WorkspaceContext.for_issue(
-            project_id="proj-1",
-            work_item_id="item-1",
-            branch_name="feature/test"
+            project_id="proj-1", work_item_id="item-1", branch_name="feature/test"
         )
         discussion_context = WorkspaceContext.for_discussion(
-            project_id="proj-1",
-            work_item_id="item-1",
-            discussion_id="discussion-123"
+            project_id="proj-1", work_item_id="item-1", discussion_id="discussion-123"
         )
 
         assert issue_context != discussion_context
@@ -297,27 +247,19 @@ class TestEdgeCases:
     def test_workspace_with_whitespace_only_project_id_raises_error(self):
         """Test that workspace with whitespace-only project ID raises error."""
         with pytest.raises(ValueError, match="project_id cannot be empty"):
-            WorkspaceContext.for_issue(
-                project_id="   ",
-                work_item_id="item-1",
-                branch_name="feature/test"
-            )
+            WorkspaceContext.for_issue(project_id="   ", work_item_id="item-1", branch_name="feature/test")
 
     def test_workspace_with_whitespace_only_work_item_id_raises_error(self):
         """Test that workspace with whitespace-only work item ID raises error."""
         with pytest.raises(ValueError, match="work_item_id cannot be empty"):
-            WorkspaceContext.for_issue(
-                project_id="proj-1",
-                work_item_id="   ",
-                branch_name="feature/test"
-            )
+            WorkspaceContext.for_issue(project_id="proj-1", work_item_id="   ", branch_name="feature/test")
 
     def test_workspace_with_special_characters_in_branch_name(self):
         """Test workspace with special characters in branch name."""
         context = WorkspaceContext.for_issue(
             project_id="proj-1",
             work_item_id="item-1",
-            branch_name="feature/issue-123-add-feature_with-underscores"
+            branch_name="feature/issue-123-add-feature_with-underscores",
         )
 
         assert context.branch_name == "feature/issue-123-add-feature_with-underscores"
@@ -325,11 +267,7 @@ class TestEdgeCases:
     def test_workspace_with_long_ids(self):
         """Test workspace with very long IDs."""
         long_id = "a" * 1000
-        context = WorkspaceContext.for_issue(
-            project_id=long_id,
-            work_item_id=long_id,
-            branch_name="feature/test"
-        )
+        context = WorkspaceContext.for_issue(project_id=long_id, work_item_id=long_id, branch_name="feature/test")
 
         assert context.project_id == long_id
         assert context.work_item_id == long_id

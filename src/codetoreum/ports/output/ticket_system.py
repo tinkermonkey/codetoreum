@@ -69,9 +69,7 @@ class ITicketSystem(ABC):
         """
 
     @abstractmethod
-    async def update_work_item(
-        self, item_id: WorkItemId, updates: dict[str, Any]
-    ) -> WorkItem:
+    async def update_work_item(self, item_id: WorkItemId, updates: dict[str, Any]) -> WorkItem:
         """
         Update an existing work item.
 

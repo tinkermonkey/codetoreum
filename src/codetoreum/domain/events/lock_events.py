@@ -66,12 +66,14 @@ class LockAcquiredEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "project_id": self.project_id,
-            "board_id": self.board_id,
-            "work_item_id": self.work_item_id,
-            "acquisition_method": self.acquisition_method,
-        })
+        d.update(
+            {
+                "project_id": self.project_id,
+                "board_id": self.board_id,
+                "work_item_id": self.work_item_id,
+                "acquisition_method": self.acquisition_method,
+            }
+        )
         return d
 
     @classmethod
@@ -144,13 +146,15 @@ class LockReleasedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "project_id": self.project_id,
-            "board_id": self.board_id,
-            "work_item_id": self.work_item_id,
-            "reason": self.reason,
-            "next_in_queue": self.next_in_queue,
-        })
+        d.update(
+            {
+                "project_id": self.project_id,
+                "board_id": self.board_id,
+                "work_item_id": self.work_item_id,
+                "reason": self.reason,
+                "next_in_queue": self.next_in_queue,
+            }
+        )
         return d
 
     @classmethod
@@ -225,12 +229,14 @@ class LockStaleDetectedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "project_id": self.project_id,
-            "board_id": self.board_id,
-            "work_item_id": self.work_item_id,
-            "lock_acquired_at": self.lock_acquired_at,
-        })
+        d.update(
+            {
+                "project_id": self.project_id,
+                "board_id": self.board_id,
+                "work_item_id": self.work_item_id,
+                "lock_acquired_at": self.lock_acquired_at,
+            }
+        )
         return d
 
     @classmethod
@@ -304,12 +310,14 @@ class PipelineLockAcquiredEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "project_id": self.project_id,
-            "work_item_id": self.work_item_id,
-            "board_id": self.board_id,
-            "queue_length_at_acquire": self.queue_length_at_acquire,
-        })
+        d.update(
+            {
+                "project_id": self.project_id,
+                "work_item_id": self.work_item_id,
+                "board_id": self.board_id,
+                "queue_length_at_acquire": self.queue_length_at_acquire,
+            }
+        )
         return d
 
     @classmethod
@@ -382,12 +390,14 @@ class PipelineLockReleasedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "project_id": self.project_id,
-            "work_item_id": self.work_item_id,
-            "board_id": self.board_id,
-            "next_work_item_id": self.next_work_item_id,
-        })
+        d.update(
+            {
+                "project_id": self.project_id,
+                "work_item_id": self.work_item_id,
+                "board_id": self.board_id,
+                "next_work_item_id": self.next_work_item_id,
+            }
+        )
         return d
 
     @classmethod
@@ -458,11 +468,13 @@ class WorkItemQueuedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "work_item_id": self.work_item_id,
-            "board_id": self.board_id,
-            "queue_position": self.queue_position,
-        })
+        d.update(
+            {
+                "work_item_id": self.work_item_id,
+                "board_id": self.board_id,
+                "queue_position": self.queue_position,
+            }
+        )
         return d
 
     @classmethod

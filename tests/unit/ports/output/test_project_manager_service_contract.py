@@ -106,7 +106,6 @@ class IProjectManagerServiceContractTests(ABC):
             await service.ensure_project_cloned("nonexistent-project")
 
 
-
 class TestMockProjectManagerAdapter(IProjectManagerServiceContractTests):
     """Contract tests for MockProjectManagerAdapter.
 

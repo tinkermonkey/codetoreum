@@ -117,9 +117,7 @@ async def test_publish_control_message(adapter, mock_redis, mock_pubsub):
     mock_redis.pubsub.return_value = mock_pubsub
 
     # Publish control message
-    await adapter.publish_control_message(
-        "disconnect", {"connection_id": "ws-123", "reason": "timeout"}
-    )
+    await adapter.publish_control_message("disconnect", {"connection_id": "ws-123", "reason": "timeout"})
 
     # Verify Redis publish was called
     mock_redis.publish.assert_called_once()

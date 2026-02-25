@@ -188,8 +188,8 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
                     extra={
                         "event_type": event_type,
                         "handler": handler_name,
-                        "error_id": ErrorRegistry.ERR_VALIDATION_FAILED
-                    }
+                        "error_id": ErrorRegistry.ERR_VALIDATION_FAILED,
+                    },
                 )
                 failures.append((handler, e))
             except Exception as e:
@@ -200,8 +200,8 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
                     extra={
                         "event_type": event_type,
                         "handler": handler_name,
-                        "error_id": ErrorRegistry.ERR_HANDLER_EXECUTION
-                    }
+                        "error_id": ErrorRegistry.ERR_HANDLER_EXECUTION,
+                    },
                 )
                 failures.append((handler, e))
 
@@ -211,15 +211,13 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
                 extra={
                     "event_type": event_type,
                     "failure_count": len(failures),
-                    "error_id": ErrorRegistry.ERR_HANDLER_EXECUTION
-                }
+                    "error_id": ErrorRegistry.ERR_HANDLER_EXECUTION,
+                },
             )
 
     # IMonitoredService implementation
 
-    async def start_monitoring(
-        self, project_id: str, config: MonitoringConfig
-    ) -> None:
+    async def start_monitoring(self, project_id: str, config: MonitoringConfig) -> None:
         """Start monitoring for PR status changes.
 
         Initializes monitoring for the given project. If webhook_enabled is False,
@@ -243,19 +241,14 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
         )
 
         # Initialize polling configuration
-        self._polling_intervals[project_id] = float(
-            config.poll_interval_seconds or 60
-        )
+        self._polling_intervals[project_id] = float(config.poll_interval_seconds or 60)
         self._activity_counters[project_id] = 0
 
         # Start polling if webhooks disabled
         if not self._webhook_enabled:
-            self._polling_tasks[project_id] = asyncio.create_task(
-                self._poll_review_changes(project_id)
-            )
+            self._polling_tasks[project_id] = asyncio.create_task(self._poll_review_changes(project_id))
             logger.info(
-                f"Started polling for PR changes in {project_id} "
-                f"(interval: {self._polling_intervals[project_id]}s)"
+                f"Started polling for PR changes in {project_id} (interval: {self._polling_intervals[project_id]}s)"
             )
 
     async def stop_monitoring(self, project_id: str) -> None:
@@ -320,9 +313,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
 
     # Query Operations
 
-    async def get_review_for_work_item(
-        self, work_item_id: str
-    ) -> CodeReview | None:
+    async def get_review_for_work_item(self, work_item_id: str) -> CodeReview | None:
         """Find code review associated with a work item.
 
         Searches for a PR linked to the work item by:
@@ -539,32 +530,38 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
             # Collect review body comments
             for review in pr_node.get("reviews", {}).get("nodes", []):
                 if review.get("body"):
-                    comments.append(ReviewComment(
-                        id=review.get("id", ""),
-                        author=review.get("author", {}).get("login", "unknown"),
-                        body=review.get("body", ""),
-                        created_at=review.get("submittedAt", ""),
-                    ))
+                    comments.append(
+                        ReviewComment(
+                            id=review.get("id", ""),
+                            author=review.get("author", {}).get("login", "unknown"),
+                            body=review.get("body", ""),
+                            created_at=review.get("submittedAt", ""),
+                        )
+                    )
 
                 # Collect inline code comments from review
                 for comment_node in review.get("comments", {}).get("nodes", []):
-                    comments.append(ReviewComment(
+                    comments.append(
+                        ReviewComment(
+                            id=comment_node.get("id", ""),
+                            author=comment_node.get("author", {}).get("login", "unknown"),
+                            body=comment_node.get("body", ""),
+                            created_at=comment_node.get("createdAt", ""),
+                            file_path=comment_node.get("path"),
+                            line_number=comment_node.get("position"),
+                        )
+                    )
+
+            # Collect PR discussion comments
+            for comment_node in pr_node.get("comments", {}).get("nodes", []):
+                comments.append(
+                    ReviewComment(
                         id=comment_node.get("id", ""),
                         author=comment_node.get("author", {}).get("login", "unknown"),
                         body=comment_node.get("body", ""),
                         created_at=comment_node.get("createdAt", ""),
-                        file_path=comment_node.get("path"),
-                        line_number=comment_node.get("position"),
-                    ))
-
-            # Collect PR discussion comments
-            for comment_node in pr_node.get("comments", {}).get("nodes", []):
-                comments.append(ReviewComment(
-                    id=comment_node.get("id", ""),
-                    author=comment_node.get("author", {}).get("login", "unknown"),
-                    body=comment_node.get("body", ""),
-                    created_at=comment_node.get("createdAt", ""),
-                ))
+                    )
+                )
 
             return comments
         except ResourceNotFoundError:
@@ -642,14 +639,10 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
                 },
             )
 
-            review_node = result.get("submitPullRequestReview", {}).get(
-                "pullRequestReview"
-            )
+            review_node = result.get("submitPullRequestReview", {}).get("pullRequestReview")
             if not review_node:
                 msg = "github"
-                raise ExternalServiceError(
-                    msg, "Failed to submit review: empty response"
-                )
+                raise ExternalServiceError(msg, "Failed to submit review: empty response")
 
             # Get new status
             new_status = await self.get_review_status(review_id)
@@ -658,17 +651,19 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
 
             # Emit status changed event
             if previous_status != new_status:
-                self.emit(ReviewStatusChangedEvent(
-                    type="review.status_changed",
-                    timestamp=now_iso(),
-                    source="github",
-                    review_id=review_id,
-                    work_item_id=work_item_id,
-                    project_id=project_id,
-                    previous_status=previous_status,
-                    new_status=new_status,
-                    reviewer=review_node.get("author", {}).get("login"),
-                ))
+                self.emit(
+                    ReviewStatusChangedEvent(
+                        type="review.status_changed",
+                        timestamp=now_iso(),
+                        source="github",
+                        review_id=review_id,
+                        work_item_id=work_item_id,
+                        project_id=project_id,
+                        previous_status=previous_status,
+                        new_status=new_status,
+                        reviewer=review_node.get("author", {}).get("login"),
+                    )
+                )
 
             # Emit comment added event
             comment = Comment(
@@ -679,15 +674,17 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
                 is_bot=True,
             )
 
-            self.emit(ReviewCommentAddedEvent(
-                type="review.comment_added",
-                timestamp=now_iso(),
-                source="github",
-                review_id=review_id,
-                work_item_id=work_item_id,
-                project_id=project_id,
-                comment=comment,
-            ))
+            self.emit(
+                ReviewCommentAddedEvent(
+                    type="review.comment_added",
+                    timestamp=now_iso(),
+                    source="github",
+                    review_id=review_id,
+                    work_item_id=work_item_id,
+                    project_id=project_id,
+                    comment=comment,
+                )
+            )
 
             logger.info(f"Requested changes on PR {review_id}")
 
@@ -754,14 +751,10 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
                 },
             )
 
-            review_node = result.get("submitPullRequestReview", {}).get(
-                "pullRequestReview"
-            )
+            review_node = result.get("submitPullRequestReview", {}).get("pullRequestReview")
             if not review_node:
                 msg = "github"
-                raise ExternalServiceError(
-                    msg, "Failed to approve: empty response"
-                )
+                raise ExternalServiceError(msg, "Failed to approve: empty response")
 
             # Get new status
             new_status = await self.get_review_status(review_id)
@@ -770,17 +763,19 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
 
             # Emit status changed event
             if previous_status != new_status:
-                self.emit(ReviewStatusChangedEvent(
-                    type="review.status_changed",
-                    timestamp=now_iso(),
-                    source="github",
-                    review_id=review_id,
-                    work_item_id=work_item_id,
-                    project_id=project_id,
-                    previous_status=previous_status,
-                    new_status=new_status,
-                    reviewer=review_node.get("author", {}).get("login"),
-                ))
+                self.emit(
+                    ReviewStatusChangedEvent(
+                        type="review.status_changed",
+                        timestamp=now_iso(),
+                        source="github",
+                        review_id=review_id,
+                        work_item_id=work_item_id,
+                        project_id=project_id,
+                        previous_status=previous_status,
+                        new_status=new_status,
+                        reviewer=review_node.get("author", {}).get("login"),
+                    )
+                )
 
             logger.info(f"Approved PR {review_id}")
 
@@ -822,20 +817,14 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
 
         # Handle pull_request_review event
         if "review" in payload:
-            await self._handle_review_event(
-                payload, pr_id, work_item_id, project_id
-            )
+            await self._handle_review_event(payload, pr_id, work_item_id, project_id)
             return
 
         # Handle pull_request state change event
         if event_action in ["opened", "closed", "reopened", "merged"]:
-            await self._handle_pr_state_change(
-                payload, pr_id, work_item_id, project_id
-            )
+            await self._handle_pr_state_change(payload, pr_id, work_item_id, project_id)
 
-    async def _handle_review_event(
-        self, payload: dict, pr_id: str, work_item_id: str | None, project_id: str
-    ) -> None:
+    async def _handle_review_event(self, payload: dict, pr_id: str, work_item_id: str | None, project_id: str) -> None:
         """Handle pull_request_review webhook event.
 
         Args:
@@ -861,17 +850,19 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
         self._last_known_status[pr_id] = new_status
 
         # Emit status changed event
-        self.emit(ReviewStatusChangedEvent(
-            type="review.status_changed",
-            timestamp=now_iso(),
-            source="github",
-            review_id=pr_id,
-            work_item_id=work_item_id,
-            project_id=project_id,
-            previous_status=previous_status,
-            new_status=new_status,
-            reviewer=reviewer,
-        ))
+        self.emit(
+            ReviewStatusChangedEvent(
+                type="review.status_changed",
+                timestamp=now_iso(),
+                source="github",
+                review_id=pr_id,
+                work_item_id=work_item_id,
+                project_id=project_id,
+                previous_status=previous_status,
+                new_status=new_status,
+                reviewer=reviewer,
+            )
+        )
 
         logger.info(f"PR {pr_id} review status changed: {previous_status} -> {new_status}")
 
@@ -887,7 +878,6 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
             project_id: Project ID
         """
         action = payload.get("action")
-        pr_data = payload.get("pull_request", {})
 
         previous_status = self._last_known_status.get(pr_id, "open")
 
@@ -908,16 +898,18 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
         self._last_known_status[pr_id] = new_status
 
         # Emit status changed event
-        self.emit(ReviewStatusChangedEvent(
-            type="review.status_changed",
-            timestamp=now_iso(),
-            source="github",
-            review_id=pr_id,
-            work_item_id=work_item_id,
-            project_id=project_id,
-            previous_status=previous_status,
-            new_status=new_status,
-        ))
+        self.emit(
+            ReviewStatusChangedEvent(
+                type="review.status_changed",
+                timestamp=now_iso(),
+                source="github",
+                review_id=pr_id,
+                work_item_id=work_item_id,
+                project_id=project_id,
+                previous_status=previous_status,
+                new_status=new_status,
+            )
+        )
 
         logger.info(f"PR {pr_id} state changed: {previous_status} -> {new_status}")
 
@@ -952,21 +944,21 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
                         extra={
                             "error_id": "ERR_REVIEW_ERROR",
                             "project_id": project_id,
-                            "error_type": "permanent"
-                        }
+                            "error_type": "permanent",
+                        },
                     )
                     break
                 except ExternalServiceError as e:
                     logger.warning(
                         f"Transient error in PR polling for {project_id}: {e}",
-                        extra={"project_id": project_id, "error_type": "transient"}
+                        extra={"project_id": project_id, "error_type": "transient"},
                     )
                     continue
                 except Exception as e:
                     logger.critical(
                         f"Unexpected error in PR polling for {project_id}: {e}",
                         exc_info=True,
-                        extra={"project_id": project_id, "error_type": "unexpected"}
+                        extra={"project_id": project_id, "error_type": "unexpected"},
                     )
                     continue
 
@@ -984,21 +976,20 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
                         work_item_id = self._extract_work_item_id(pr_node)
 
                         # Emit status changed event
-                        self.emit(ReviewStatusChangedEvent(
-                            type="review.status_changed",
-                            timestamp=now_iso(),
-                            source="github",
-                            review_id=pr_id,
-                            work_item_id=work_item_id,
-                            project_id=project_id,
-                            previous_status=previous_status,
-                            new_status=current_status,
-                        ))
-
-                        logger.info(
-                            f"Detected PR {pr_id} status change: "
-                            f"{previous_status} -> {current_status}"
+                        self.emit(
+                            ReviewStatusChangedEvent(
+                                type="review.status_changed",
+                                timestamp=now_iso(),
+                                source="github",
+                                review_id=pr_id,
+                                work_item_id=work_item_id,
+                                project_id=project_id,
+                                previous_status=previous_status,
+                                new_status=current_status,
+                            )
                         )
+
+                        logger.info(f"Detected PR {pr_id} status change: {previous_status} -> {current_status}")
 
                     self._last_known_status[pr_id] = current_status
 
@@ -1012,7 +1003,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
                 logger.error(
                     f"Error in polling loop for {project_id}: {e}",
                     exc_info=True,
-                    extra={"error_id": "ERR_REVIEW_ERROR", "project_id": project_id}
+                    extra={"error_id": "ERR_REVIEW_ERROR", "project_id": project_id},
                 )
 
     def _adapt_polling_interval(self, project_id: str, changes_detected: int) -> None:
@@ -1137,9 +1128,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
         """
 
         try:
-            result = await self._graphql.execute(
-                query, {"owner": owner, "repo": repo}
-            )
+            result = await self._graphql.execute(query, {"owner": owner, "repo": repo})
             prs = result.get("repository", {}).get("pullRequests", {}).get("nodes", [])
             return prs
         except Exception as e:
@@ -1181,9 +1170,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
 
         return "open"
 
-    def _map_github_review_state(
-        self, github_state: str | None
-    ) -> CodeReviewStatus:
+    def _map_github_review_state(self, github_state: str | None) -> CodeReviewStatus:
         """Map GitHub review state to vendor-agnostic status.
 
         Args:
@@ -1200,9 +1187,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
         }
         return mapping.get(github_state, "open")  # type: ignore
 
-    def _parse_code_review(
-        self, pr_node: dict[str, Any], work_item_id: str | None = None
-    ) -> CodeReview:
+    def _parse_code_review(self, pr_node: dict[str, Any], work_item_id: str | None = None) -> CodeReview:
         """Parse PR node into CodeReview object.
 
         Args:
@@ -1224,10 +1209,12 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
                 reviewers.add(reviewer)
 
             if review.get("state") == "APPROVED":
-                approvals.append(Approval(
-                    reviewer=reviewer or "unknown",
-                    approved_at=review.get("submittedAt", ""),
-                ))
+                approvals.append(
+                    Approval(
+                        reviewer=reviewer or "unknown",
+                        approved_at=review.get("submittedAt", ""),
+                    )
+                )
 
         return CodeReview(
             id=pr_node.get("id", ""),
@@ -1263,6 +1250,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
         if "work item" in body.lower():
             # Simple heuristic: look for "item-123" pattern
             import re
+
             match = re.search(r"item-\d+", body)
             if match:
                 return match.group(0)
@@ -1294,15 +1282,11 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
         """
         # Get from ticket adapter context (implementation-specific)
         # For now, assume adapter has these attributes
-        if hasattr(self._ticket_adapter, "_owner") and hasattr(
-            self._ticket_adapter, "_repo"
-        ):
+        if hasattr(self._ticket_adapter, "_owner") and hasattr(self._ticket_adapter, "_repo"):
             return (self._ticket_adapter._owner, self._ticket_adapter._repo)
 
         msg = "github"
-        raise ExternalServiceError(
-            msg, "Unable to determine GitHub owner/repo from adapter"
-        )
+        raise ExternalServiceError(msg, "Unable to determine GitHub owner/repo from adapter")
 
     async def _get_project_id(self) -> str:
         """Get current project ID.

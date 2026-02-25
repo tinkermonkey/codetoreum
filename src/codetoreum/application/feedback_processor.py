@@ -137,9 +137,7 @@ class FeedbackProcessor:
         # Severity keywords (use custom or default)
         self.severity_keywords = severity_keywords or self.DEFAULT_SEVERITY_KEYWORDS.copy()
 
-    async def parse_review_output(
-        self, review_output: str
-    ) -> FeedbackProcessingResult:
+    async def parse_review_output(self, review_output: str) -> FeedbackProcessingResult:
         """
         Parse reviewer output into structured feedback.
 
@@ -189,16 +187,14 @@ class FeedbackProcessor:
             logger.error(
                 f"Failed to parse review output: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_FEEDBACK_PARSE_FAILURE"}
+                extra={"error_id": "ERR_FEEDBACK_PARSE_FAILURE"},
             )
             return FeedbackProcessingResult(
                 success=False,
                 error=str(e),
             )
 
-    async def extract_actionable_items(
-        self, parsed_feedback: ParsedFeedback
-    ) -> FeedbackProcessingResult:
+    async def extract_actionable_items(self, parsed_feedback: ParsedFeedback) -> FeedbackProcessingResult:
         """
         Extract actionable items from parsed feedback.
 
@@ -239,14 +235,9 @@ class FeedbackProcessor:
 
             # Determine if should create work items
             # Create work items for critical/high severity issues
-            should_create = any(
-                item.priority <= 2 for item in actionable_items
-            )
+            should_create = any(item.priority <= 2 for item in actionable_items)
 
-            logger.info(
-                f"Extracted {len(actionable_items)} actionable items, "
-                f"should_create_work_items={should_create}"
-            )
+            logger.info(f"Extracted {len(actionable_items)} actionable items, should_create_work_items={should_create}")
 
             return FeedbackProcessingResult(
                 success=True,
@@ -259,7 +250,7 @@ class FeedbackProcessor:
             logger.error(
                 f"Failed to extract actionable items: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_FEEDBACK_EXTRACT_ITEMS_FAILURE"}
+                extra={"error_id": "ERR_FEEDBACK_EXTRACT_ITEMS_FAILURE"},
             )
             return FeedbackProcessingResult(
                 success=False,
@@ -294,10 +285,7 @@ class FeedbackProcessor:
             return ReviewDecision.REQUEST_CHANGES
 
         # Default to request changes if contains error/bug keywords
-        if any(
-            keyword in output_lower
-            for keyword in ["error", "bug", "issue", "problem", "incorrect"]
-        ):
+        if any(keyword in output_lower for keyword in ["error", "bug", "issue", "problem", "incorrect"]):
             return ReviewDecision.REQUEST_CHANGES
 
         # Default to approve if no issues detected
@@ -542,9 +530,7 @@ class FeedbackProcessor:
 
         return severity_to_priority_map.get(severity, 3)
 
-    def format_feedback_for_maker(
-        self, parsed_feedback: ParsedFeedback
-    ) -> str:
+    def format_feedback_for_maker(self, parsed_feedback: ParsedFeedback) -> str:
         """
         Format parsed feedback for presentation to maker agent.
 
@@ -577,9 +563,7 @@ class FeedbackProcessor:
                         location += f":{issue.line_number}"
                     location += ")"
 
-                lines.append(
-                    f"{i}. **{issue.title}** [{issue.severity.value}]{location}"
-                )
+                lines.append(f"{i}. **{issue.title}** [{issue.severity.value}]{location}")
                 lines.append(f"   {issue.description}")
                 lines.append("")
 

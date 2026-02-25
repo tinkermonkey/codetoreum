@@ -59,9 +59,7 @@ class TestWorkflowEndpoints:
 
     def test_resume_workflow(self, client):
         """Test resuming a workflow"""
-        response = client.post(
-            "/api/v1/workflows/test-workflow-123/resume", json={}
-        )
+        response = client.post("/api/v1/workflows/test-workflow-123/resume", json={})
 
         assert response.status_code == 200
         data = response.json()

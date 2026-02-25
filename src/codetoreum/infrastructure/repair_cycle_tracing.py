@@ -19,6 +19,7 @@ try:
     from opentelemetry.instrumentation.urllib3 import URLLib3Instrumentor
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
     OTEL_AVAILABLE = True
 except ImportError:
     OTEL_AVAILABLE = False

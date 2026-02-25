@@ -1,4 +1,5 @@
 """Simulation infrastructure for testing."""
+
 from typing import TYPE_CHECKING, Any
 
 from .mock_tracer import (
@@ -101,24 +102,31 @@ def __getattr__(name: str) -> Any:
     """Lazy import bootstrap and seeding components to avoid circular imports."""
     if name == "SimulationApplicationBootstrap":
         from .bootstrap import SimulationApplicationBootstrap
+
         return SimulationApplicationBootstrap
-    elif name == "SimulationAdapters":
+    if name == "SimulationAdapters":
         from .bootstrap import SimulationAdapters
+
         return SimulationAdapters
-    elif name == "SimulationServices":
+    if name == "SimulationServices":
         from .bootstrap import SimulationServices
+
         return SimulationServices
-    elif name == "SimulationPorts":
+    if name == "SimulationPorts":
         from .bootstrap import SimulationPorts
+
         return SimulationPorts
-    elif name == "SimulationInfrastructure":
+    if name == "SimulationInfrastructure":
         from .bootstrap import SimulationInfrastructure
+
         return SimulationInfrastructure
-    elif name == "SimulationDataSeeder":
+    if name == "SimulationDataSeeder":
         from .seeding import SimulationDataSeeder
+
         return SimulationDataSeeder
-    elif name == "CreatedItems":
+    if name == "CreatedItems":
         from .seeding import CreatedItems
+
         return CreatedItems
     message = f"module {__name__!r} has no attribute {name!r}"
     raise AttributeError(message)

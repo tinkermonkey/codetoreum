@@ -18,7 +18,6 @@ class RedisEventBufferError(Exception):
     """Raised when Redis event buffer operations fail."""
 
 
-
 class RedisEventBuffer:
     """
     Buffers events in Redis Streams before Elasticsearch persistence.
@@ -82,16 +81,11 @@ class RedisEventBuffer:
                     id="0",
                     mkstream=True,
                 )
-                logger.info(
-                    f"Created consumer group '{self.consumer_group}' "
-                    f"for stream '{self.stream_name}'"
-                )
+                logger.info(f"Created consumer group '{self.consumer_group}' for stream '{self.stream_name}'")
             except aioredis.ResponseError as e:
                 if "BUSYGROUP" in str(e):
                     # Group already exists, that's fine
-                    logger.debug(
-                        f"Consumer group '{self.consumer_group}' already exists"
-                    )
+                    logger.debug(f"Consumer group '{self.consumer_group}' already exists")
                 else:
                     raise
 
@@ -189,9 +183,7 @@ class RedisEventBuffer:
 
                 message_ids = await pipe.execute()
 
-            logger.debug(
-                f"Buffered {len(events)} events to stream {self.stream_name}"
-            )
+            logger.debug(f"Buffered {len(events)} events to stream {self.stream_name}")
 
             return message_ids
 
@@ -257,7 +249,7 @@ class RedisEventBuffer:
                         logger.error(
                             f"Failed to deserialize event from message {message_id}: {e}",
                             exc_info=True,
-                            extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
+                            extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
                         )
                         await self._move_to_dead_letter(message_id, fields, str(e))
 
@@ -267,9 +259,7 @@ class RedisEventBuffer:
             message = f"Failed to read events: {e}"
             raise RedisEventBufferError(message) from e
 
-    async def acknowledge_events(
-        self, message_ids: list[str]
-    ) -> int:
+    async def acknowledge_events(self, message_ids: list[str]) -> int:
         """
         Acknowledge successful processing of events (XACK).
 
@@ -377,27 +367,17 @@ class RedisEventBuffer:
                 "stream_length": stream_length,
                 "pending_count": pending_count,
                 "consumer_count": consumer_count,
-                "first_entry_id": (
-                    stream_info.get("first-entry", [None])[0] if stream_info else None
-                ),
-                "last_entry_id": (
-                    stream_info.get("last-entry", [None])[0] if stream_info else None
-                ),
+                "first_entry_id": (stream_info.get("first-entry", [None])[0] if stream_info else None),
+                "last_entry_id": (stream_info.get("last-entry", [None])[0] if stream_info else None),
                 "max_stream_length": self.stream_max_length,
-                "utilization": (
-                    stream_length / self.stream_max_length
-                    if self.stream_max_length > 0
-                    else 0
-                ),
+                "utilization": (stream_length / self.stream_max_length if self.stream_max_length > 0 else 0),
             }
 
         except Exception as e:
             message = f"Failed to get buffer stats: {e}"
             raise RedisEventBufferError(message) from e
 
-    async def _move_to_dead_letter(
-        self, message_id: bytes, fields: dict[bytes, bytes], error: str
-    ) -> None:
+    async def _move_to_dead_letter(self, message_id: bytes, fields: dict[bytes, bytes], error: str) -> None:
         """
         Move a failed event to the dead letter queue.
 
@@ -417,16 +397,15 @@ class RedisEventBuffer:
                 },
             )
 
-            logger.warning(
-                f"Moved message {message_id} to dead letter queue due to error: {error}"
-            )
+            logger.warning(f"Moved message {message_id} to dead letter queue due to error: {error}")
 
         except Exception as e:
             logger.error(
                 f"Failed to move message {message_id} to dead letter queue: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
             )
+
     async def close(self) -> None:
         """Close the buffer (cleanup resources)."""
         # Redis client is managed externally, so nothing to do here

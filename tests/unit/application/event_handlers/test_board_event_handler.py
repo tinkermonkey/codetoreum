@@ -63,6 +63,7 @@ def mock_agent_executor():
 def mock_event_bus():
     """Create mock event bus."""
     from codetoreum.infrastructure.event_bus import EventBus
+
     return EventBus()
 
 
@@ -178,9 +179,7 @@ class TestHandleColumnChangeWithPipelineTrigger:
     ):
         """Should acquire lock when work item enters trigger column."""
         # Setup
-        mock_workflow_config.get_board_workflow_template.return_value = (
-            sample_workflow_config
-        )
+        mock_workflow_config.get_board_workflow_template.return_value = sample_workflow_config
         mock_lock_service.try_acquire_lock.return_value = LockAcquisitionResult(
             status=LockStatus.ACQUIRED,
             work_item_id="item-1",
@@ -216,9 +215,7 @@ class TestHandleColumnChangeWithPipelineTrigger:
     ):
         """Should trigger agent when lock is acquired for trigger column."""
         # Setup
-        mock_workflow_config.get_board_workflow_template.return_value = (
-            sample_workflow_config
-        )
+        mock_workflow_config.get_board_workflow_template.return_value = sample_workflow_config
         mock_lock_service.try_acquire_lock.return_value = LockAcquisitionResult(
             status=LockStatus.ACQUIRED,
             work_item_id="item-1",
@@ -236,9 +233,7 @@ class TestHandleColumnChangeWithPipelineTrigger:
         await handler.handle_column_change(event)
 
         # Assert
-        mock_agent_executor.execute.assert_called_once_with(
-            work_item_id="item-1", agent_id="agent-dev"
-        )
+        mock_agent_executor.execute.assert_called_once_with(work_item_id="item-1", agent_id="agent-dev")
 
     @pytest.mark.asyncio
     async def test_queues_when_lock_held(
@@ -250,9 +245,7 @@ class TestHandleColumnChangeWithPipelineTrigger:
     ):
         """Should queue work item when lock is held."""
         # Setup
-        mock_workflow_config.get_board_workflow_template.return_value = (
-            sample_workflow_config
-        )
+        mock_workflow_config.get_board_workflow_template.return_value = sample_workflow_config
         mock_lock_service.try_acquire_lock.return_value = LockAcquisitionResult(
             status=LockStatus.QUEUED,
             work_item_id="item-1",
@@ -284,9 +277,7 @@ class TestHandleColumnChangeWithPipelineTrigger:
     ):
         """Should not trigger agent when work item is queued."""
         # Setup
-        mock_workflow_config.get_board_workflow_template.return_value = (
-            sample_workflow_config
-        )
+        mock_workflow_config.get_board_workflow_template.return_value = sample_workflow_config
         mock_lock_service.try_acquire_lock.return_value = LockAcquisitionResult(
             status=LockStatus.QUEUED,
             work_item_id="item-1",
@@ -319,9 +310,7 @@ class TestHandleColumnChangeWithPipelineTrigger:
         """Should log when work item already holds lock."""
         # Setup
         caplog.set_level(logging.INFO)
-        mock_workflow_config.get_board_workflow_template.return_value = (
-            sample_workflow_config
-        )
+        mock_workflow_config.get_board_workflow_template.return_value = sample_workflow_config
         mock_lock_service.try_acquire_lock.return_value = LockAcquisitionResult(
             status=LockStatus.ALREADY_HELD,
             work_item_id="item-1",
@@ -356,9 +345,7 @@ class TestHandleColumnChangeWithPipelineTrigger:
         Development after review rejection while still holding the pipeline lock.
         """
         # Setup
-        mock_workflow_config.get_board_workflow_template.return_value = (
-            sample_workflow_config
-        )
+        mock_workflow_config.get_board_workflow_template.return_value = sample_workflow_config
         mock_lock_service.try_acquire_lock.return_value = LockAcquisitionResult(
             status=LockStatus.ALREADY_HELD,
             work_item_id="item-1",
@@ -397,9 +384,7 @@ class TestHandleColumnChangeWithExitColumn:
     ):
         """Should release lock when work item enters exit column."""
         # Setup
-        mock_workflow_config.get_board_workflow_template.return_value = (
-            sample_workflow_config
-        )
+        mock_workflow_config.get_board_workflow_template.return_value = sample_workflow_config
         mock_lock_service.release_lock.return_value = LockReleaseResult(
             released_work_item_id="item-1",
             next_work_item_id="item-2",
@@ -436,9 +421,7 @@ class TestHandleColumnChangeWithExitColumn:
     ):
         """Should trigger agent for next queued item when lock released."""
         # Setup
-        mock_workflow_config.get_board_workflow_template.return_value = (
-            sample_workflow_config
-        )
+        mock_workflow_config.get_board_workflow_template.return_value = sample_workflow_config
         mock_lock_service.release_lock.return_value = LockReleaseResult(
             released_work_item_id="item-1",
             next_work_item_id="item-2",
@@ -462,9 +445,7 @@ class TestHandleColumnChangeWithExitColumn:
         await handler.handle_column_change(event)
 
         # Assert
-        mock_agent_executor.execute.assert_called_once_with(
-            work_item_id="item-2", agent_id="agent-dev"
-        )
+        mock_agent_executor.execute.assert_called_once_with(work_item_id="item-2", agent_id="agent-dev")
 
     @pytest.mark.asyncio
     async def test_does_not_trigger_agent_if_next_item_has_no_agent(
@@ -478,9 +459,7 @@ class TestHandleColumnChangeWithExitColumn:
     ):
         """Should not trigger agent if next item's column has no agent."""
         # Setup
-        mock_workflow_config.get_board_workflow_template.return_value = (
-            sample_workflow_config
-        )
+        mock_workflow_config.get_board_workflow_template.return_value = sample_workflow_config
         mock_lock_service.release_lock.return_value = LockReleaseResult(
             released_work_item_id="item-1",
             next_work_item_id="item-2",
@@ -521,9 +500,7 @@ class TestHandleColumnChangeWithAutomatedColumn:
     ):
         """Should trigger agent when work item enters automated column."""
         # Setup
-        mock_workflow_config.get_board_workflow_template.return_value = (
-            sample_workflow_config
-        )
+        mock_workflow_config.get_board_workflow_template.return_value = sample_workflow_config
 
         event = create_column_changed_event(
             work_item_id="item-1",
@@ -537,9 +514,7 @@ class TestHandleColumnChangeWithAutomatedColumn:
         await handler.handle_column_change(event)
 
         # Assert
-        mock_agent_executor.execute.assert_called_once_with(
-            work_item_id="item-1", agent_id="agent-review"
-        )
+        mock_agent_executor.execute.assert_called_once_with(work_item_id="item-1", agent_id="agent-review")
 
 
 class TestHandleColumnChangeWithManualColumn:
@@ -555,9 +530,7 @@ class TestHandleColumnChangeWithManualColumn:
     ):
         """Should not trigger agent for manual column."""
         # Setup
-        mock_workflow_config.get_board_workflow_template.return_value = (
-            sample_workflow_config
-        )
+        mock_workflow_config.get_board_workflow_template.return_value = sample_workflow_config
 
         event = create_column_changed_event(
             work_item_id="item-1",
@@ -617,9 +590,7 @@ class TestHandleAgentCompletion:
     ):
         """Should auto-progress to next column on successful completion."""
         # Setup
-        mock_workflow_config.get_board_workflow_template.return_value = (
-            sample_workflow_config
-        )
+        mock_workflow_config.get_board_workflow_template.return_value = sample_workflow_config
         mock_board_service.get_item_position.return_value = WorkItemPosition(
             work_item_id="item-1",
             column_name="Review",  # Has auto_progress_on_completion=True
@@ -651,9 +622,7 @@ class TestHandleAgentCompletion:
     ):
         """Should not auto-progress when agent fails."""
         # Setup
-        mock_workflow_config.get_board_workflow_template.return_value = (
-            sample_workflow_config
-        )
+        mock_workflow_config.get_board_workflow_template.return_value = sample_workflow_config
 
         # Act
         await handler.handle_agent_completion(
@@ -676,9 +645,7 @@ class TestHandleAgentCompletion:
     ):
         """Should not auto-progress when column has auto_progress disabled."""
         # Setup
-        mock_workflow_config.get_board_workflow_template.return_value = (
-            sample_workflow_config
-        )
+        mock_workflow_config.get_board_workflow_template.return_value = sample_workflow_config
         mock_board_service.get_item_position.return_value = WorkItemPosition(
             work_item_id="item-1",
             column_name="In Development",  # Has auto_progress_on_completion=False
@@ -705,9 +672,7 @@ class TestHandleAgentCompletion:
     ):
         """Should handle case where current column is last column."""
         # Setup
-        mock_workflow_config.get_board_workflow_template.return_value = (
-            sample_workflow_config
-        )
+        mock_workflow_config.get_board_workflow_template.return_value = sample_workflow_config
         mock_board_service.get_item_position.return_value = WorkItemPosition(
             work_item_id="item-1",
             column_name="Done",  # Last column
@@ -762,9 +727,7 @@ class TestErrorHandling:
     ):
         """Should gracefully handle unknown column."""
         # Setup
-        mock_workflow_config.get_board_workflow_template.return_value = (
-            sample_workflow_config
-        )
+        mock_workflow_config.get_board_workflow_template.return_value = sample_workflow_config
 
         event = create_column_changed_event(
             work_item_id="item-1",
@@ -790,9 +753,7 @@ class TestErrorHandling:
     ):
         """Should log agent execution errors without raising."""
         # Setup
-        mock_workflow_config.get_board_workflow_template.return_value = (
-            sample_workflow_config
-        )
+        mock_workflow_config.get_board_workflow_template.return_value = sample_workflow_config
         mock_agent_executor.execute.side_effect = RuntimeError("Agent failed")
 
         event = create_column_changed_event(

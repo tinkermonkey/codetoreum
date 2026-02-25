@@ -58,9 +58,7 @@ async def test_scenario_01_simple_workflow():
     assert result.assertions_failed == 0, "Expected no failed assertions"
 
     # Verify performance goal (10-100x faster)
-    assert result.speed_multiplier >= 10.0, (
-        f"Speed multiplier {result.speed_multiplier:.1f}x below 10x target"
-    )
+    assert result.speed_multiplier >= 10.0, f"Speed multiplier {result.speed_multiplier:.1f}x below 10x target"
 
     # Verify events captured
     assert result.events_captured >= 6, "Expected at least 6 events"
@@ -184,9 +182,7 @@ async def test_scenario_05_complex_workflow():
     AssertionHelpers.assert_workflow_completed(runner, "ISSUE-400")
 
     # Verify simulated time was significant
-    assert result.simulated_duration_seconds >= 25 * 60, (
-        "Expected at least 25 minutes of simulated time"
-    )
+    assert result.simulated_duration_seconds >= 25 * 60, "Expected at least 25 minutes of simulated time"
 
     # Verify performance
     assert result.speed_multiplier >= 10.0
@@ -202,9 +198,7 @@ async def test_all_scenarios_meet_performance_target() -> None:
     MockRepairCycleAdapter directly, not through SimulationRunner.
     It has its own test suite in scenarios/scenario_07_repair_cycle.py.
     """
-    scenarios: list[
-        tuple[str, Callable[[], SimulationConfig], Callable[[SimulationRunner], object]]
-    ] = [
+    scenarios: list[tuple[str, Callable[[], SimulationConfig], Callable[[SimulationRunner], object]]] = [
         ("Simple Workflow", create_simple_config, run_simple_scenario),
         ("Parallel Executions", create_parallel_config, run_parallel_scenario),
         ("Review Cycle", create_review_config, run_review_scenario),
@@ -231,8 +225,7 @@ async def test_all_scenarios_meet_performance_target() -> None:
     # Verify all meet performance target
     for name, result in results:
         assert result.speed_multiplier >= 10.0, (
-            f"{name} failed to meet 10x performance target "
-            f"(achieved {result.speed_multiplier:.1f}x)"
+            f"{name} failed to meet 10x performance target (achieved {result.speed_multiplier:.1f}x)"
         )
 
     # Verify all succeeded
@@ -338,5 +331,3 @@ async def test_mock_adapters_integration(
     )
     assert notif_result.success
     assert mock_notifier.get_notification_count() == 1
-
-

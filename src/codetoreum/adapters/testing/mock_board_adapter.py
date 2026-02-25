@@ -9,9 +9,7 @@ import logging
 import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Optional
 
-from codetoreum.domain.events import now_iso
 from codetoreum.domain.events.board_events import (
     BoardReconciledEvent,
     WorkItemColumnChangedEvent,
@@ -91,7 +89,7 @@ class MockBoardAdapter(IBoardService):
         assert history[0].moved_by == MovedByType.HUMAN
     """
 
-    def __init__(self, event_emitter: Optional[IEventEmitter] = None) -> None:
+    def __init__(self, event_emitter: IEventEmitter | None = None) -> None:
         """Initialize the board adapter.
 
         Args:
@@ -118,9 +116,7 @@ class MockBoardAdapter(IBoardService):
     def off(self, event_type: str, handler) -> None:
         """Unregister event listener."""
         if event_type in self._event_listeners:
-            self._event_listeners[event_type] = [
-                h for h in self._event_listeners[event_type] if h != handler
-            ]
+            self._event_listeners[event_type] = [h for h in self._event_listeners[event_type] if h != handler]
 
     def emit(self, event) -> None:
         """Emit event to all registered listeners and event emitter.
@@ -186,9 +182,7 @@ class MockBoardAdapter(IBoardService):
         board = await self.get_board(self.current_project, board_id)
         return sorted(board.columns, key=lambda c: c.position)
 
-    async def get_items_in_column(
-        self, board_id: str, column_name: str
-    ) -> list[WorkItemPosition]:
+    async def get_items_in_column(self, board_id: str, column_name: str) -> list[WorkItemPosition]:
         """Get all work items in a specific column ordered by position.
 
         Args:
@@ -236,9 +230,7 @@ class MockBoardAdapter(IBoardService):
                 msg = f"Work item not in any column: {work_item_id}"
                 raise ValueError(msg)
             _, column_name, position = self._item_positions[work_item_id]
-            return WorkItemPosition(
-                work_item_id=work_item_id, column_name=column_name, position=position
-            )
+            return WorkItemPosition(work_item_id=work_item_id, column_name=column_name, position=position)
 
     # ===== Command Operations =====
 
@@ -335,9 +327,7 @@ class MockBoardAdapter(IBoardService):
             timestamp=self._get_iso_timestamp(),
         )
 
-    async def reconcile_board(
-        self, board_id: str, config: BoardConfig
-    ) -> ReconciliationResult:
+    async def reconcile_board(self, board_id: str, config: BoardConfig) -> ReconciliationResult:
         """Reconcile board structure with expected configuration.
 
         Args:
@@ -442,9 +432,7 @@ class MockBoardAdapter(IBoardService):
         with self._lock:
             return self._monitoring.get(
                 project_id,
-                MonitoringStatus(
-                    state=MonitoringState.STOPPED, project_id=project_id
-                ),
+                MonitoringStatus(state=MonitoringState.STOPPED, project_id=project_id),
             )
 
     # ===== Test Helper Methods =====
@@ -528,9 +516,7 @@ class MockBoardAdapter(IBoardService):
 
             if target_column is None:
                 msg = f"Column {column_name} not found in board {board_id}"
-                raise ValueError(
-                    msg
-                )
+                raise ValueError(msg)
 
             # Insert work item at specified position
             if position is None:
@@ -546,9 +532,7 @@ class MockBoardAdapter(IBoardService):
                     board_id_stored, col, _ = self._item_positions[item_id]
                     self._item_positions[item_id] = (board_id_stored, col, i)
 
-    async def simulate_human_move_async(
-        self, work_item_id: str, target_column: str
-    ) -> None:
+    async def simulate_human_move_async(self, work_item_id: str, target_column: str) -> None:
         """Test helper: Simulate user dragging card in board UI (async version).
 
         Use this in async test contexts where you can await the result.
@@ -571,9 +555,7 @@ class MockBoardAdapter(IBoardService):
 
         await self.move_item_to_column(work_item_id, target_column, MovedByType.HUMAN)
 
-    def simulate_human_move(
-        self, work_item_id: str, target_column: str
-    ) -> None:
+    def simulate_human_move(self, work_item_id: str, target_column: str) -> None:
         """Test helper: Simulate user dragging card in board UI (sync version).
 
         Use this in synchronous test contexts. Cannot be called from async contexts
@@ -601,28 +583,22 @@ class MockBoardAdapter(IBoardService):
 
         # Check if we're in an async context
         try:
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
             # We're in async context - don't allow sync call
             msg = (
                 "Cannot call sync simulate_human_move from async context. "
                 "Use 'await simulate_human_move_async(...)' instead."
             )
-            raise RuntimeError(
-                msg
-            )
+            raise RuntimeError(msg)
         except RuntimeError as e:
             if "no running event loop" in str(e).lower():
                 # No loop running, create one
-                asyncio.run(
-                    self.move_item_to_column(work_item_id, target_column, MovedByType.HUMAN)
-                )
+                asyncio.run(self.move_item_to_column(work_item_id, target_column, MovedByType.HUMAN))
             else:
                 # Re-raise if it's our error message
                 raise
 
-    def assert_item_in_column(
-        self, work_item_id: str, expected_column: str
-    ) -> None:
+    def assert_item_in_column(self, work_item_id: str, expected_column: str) -> None:
         """Test helper: Assert work item is in expected column.
 
         Args:
@@ -641,13 +617,8 @@ class MockBoardAdapter(IBoardService):
                 _, actual, _ = self._item_positions[work_item_id]
 
             if actual != expected_column:
-                msg = (
-                    f"Expected work item {work_item_id} in column '{expected_column}', "
-                    f"found in column '{actual}'"
-                )
-                raise AssertionError(
-                    msg
-                )
+                msg = f"Expected work item {work_item_id} in column '{expected_column}', found in column '{actual}'"
+                raise AssertionError(msg)
 
     def get_movement_history(self, work_item_id: str) -> list[MovementEvent]:
         """Test helper: Get movement audit trail for work item.
@@ -667,11 +638,7 @@ class MockBoardAdapter(IBoardService):
             assert history[0].to_column == "In Progress"
         """
         with self._lock:
-            return [
-                m
-                for m in self._movement_log
-                if m.work_item_id == work_item_id
-            ]
+            return [m for m in self._movement_log if m.work_item_id == work_item_id]
 
     def clear_movement_log(self) -> None:
         """Test helper: Clear movement history for cleanup.

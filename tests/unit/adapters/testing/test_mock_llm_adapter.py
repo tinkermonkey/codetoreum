@@ -42,6 +42,7 @@ class TestMockLLMAdapter:
         adapter = MockLLMAdapter(delay_seconds=0.01)
 
         import time
+
         start = time.time()
         await adapter.execute("Test")
         duration = time.time() - start
@@ -77,9 +78,7 @@ class TestMockLLMAdapter:
 
     async def test_create_conversation(self, adapter):
         """Test creating a conversation."""
-        conv_id = await adapter.create_conversation(
-            system_prompt="You are a helpful assistant"
-        )
+        conv_id = await adapter.create_conversation(system_prompt="You are a helpful assistant")
 
         assert conv_id is not None
 

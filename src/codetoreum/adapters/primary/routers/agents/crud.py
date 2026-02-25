@@ -40,8 +40,14 @@ def register_crud_endpoints(
         response_description="Created agent",
         responses={
             201: {"description": "Agent created successfully"},
-            400: {"description": "Bad Request - Invalid parameters or agent already exists", "content": {"application/json": {"example": {"detail": "Agent with name 'test-agent' already exists"}}}},
-            401: {"description": "Unauthorized - Authentication required", "content": {"application/json": {"example": {"detail": "Not authenticated"}}}},
+            400: {
+                "description": "Bad Request - Invalid parameters or agent already exists",
+                "content": {"application/json": {"example": {"detail": "Agent with name 'test-agent' already exists"}}},
+            },
+            401: {
+                "description": "Unauthorized - Authentication required",
+                "content": {"application/json": {"example": {"detail": "Not authenticated"}}},
+            },
         },
     )
     async def create_agent(request: CreateAgentRequest) -> AgentResponse:

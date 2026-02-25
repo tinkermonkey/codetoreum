@@ -1,6 +1,7 @@
 """
 Standardized error handling for REST API.
 """
+
 from enum import Enum
 
 from fastapi import HTTPException, status
@@ -49,15 +50,8 @@ def create_error_response(
     Returns:
         HTTPException with standardized error response
     """
-    error_response = ErrorResponse(
-        error_code=error_code,
-        message=message,
-        details=details
-    )
-    return HTTPException(
-        status_code=status_code,
-        detail=error_response.model_dump()
-    )
+    error_response = ErrorResponse(error_code=error_code, message=message, details=details)
+    return HTTPException(status_code=status_code, detail=error_response.model_dump())
 
 
 def not_found_error(resource: str, resource_id: str) -> HTTPException:
@@ -66,7 +60,7 @@ def not_found_error(resource: str, resource_id: str) -> HTTPException:
         status_code=status.HTTP_404_NOT_FOUND,
         error_code=ErrorCode.NOT_FOUND,
         message=f"{resource} not found",
-        details={"resource": resource, "id": resource_id}
+        details={"resource": resource, "id": resource_id},
     )
 
 
@@ -76,7 +70,7 @@ def conflict_error(message: str, details: dict | None = None) -> HTTPException:
         status_code=status.HTTP_409_CONFLICT,
         error_code=ErrorCode.CONFLICT,
         message=message,
-        details=details
+        details=details,
     )
 
 
@@ -86,23 +80,17 @@ def validation_error(message: str, details: dict | None = None) -> HTTPException
         status_code=status.HTTP_400_BAD_REQUEST,
         error_code=ErrorCode.VALIDATION_ERROR,
         message=message,
-        details=details
+        details=details,
     )
 
 
 def unauthorized_error(message: str = "Authentication required") -> HTTPException:
     """Create a 401 Unauthorized error."""
     return create_error_response(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        error_code=ErrorCode.UNAUTHORIZED,
-        message=message
+        status_code=status.HTTP_401_UNAUTHORIZED, error_code=ErrorCode.UNAUTHORIZED, message=message
     )
 
 
 def forbidden_error(message: str = "Access forbidden") -> HTTPException:
     """Create a 403 Forbidden error."""
-    return create_error_response(
-        status_code=status.HTTP_403_FORBIDDEN,
-        error_code=ErrorCode.FORBIDDEN,
-        message=message
-    )
+    return create_error_response(status_code=status.HTTP_403_FORBIDDEN, error_code=ErrorCode.FORBIDDEN, message=message)

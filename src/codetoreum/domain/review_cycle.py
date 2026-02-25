@@ -28,12 +28,7 @@ class ReviewCycleCreated(DomainEvent):
         - reviewer_agent_id: str
         - max_iterations: int
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ReviewCycle",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
 
 
 class ReviewIterationStarted(DomainEvent):
@@ -47,12 +42,7 @@ class ReviewIterationStarted(DomainEvent):
         - iteration_number: int
         - maker_execution_id: str
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ReviewCycle",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
 
 
 class ReviewFeedbackSubmitted(DomainEvent):
@@ -68,12 +58,7 @@ class ReviewFeedbackSubmitted(DomainEvent):
         - reviewer_execution_id: str
         - issues_count: int
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ReviewCycle",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
 
 
 class ReviewCycleApproved(DomainEvent):
@@ -87,12 +72,7 @@ class ReviewCycleApproved(DomainEvent):
         - total_iterations: int
         - approved_at: str (ISO format)
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ReviewCycle",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
 
 
 class ReviewCycleEscalated(DomainEvent):
@@ -107,12 +87,7 @@ class ReviewCycleEscalated(DomainEvent):
         - total_iterations: int
         - escalated_at: str (ISO format)
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ReviewCycle",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
 
 
 # =============================================================================
@@ -122,6 +97,7 @@ class ReviewCycleEscalated(DomainEvent):
 
 class ReviewStatus(Enum):
     """Status of review cycle."""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     APPROVED = "approved"
@@ -131,6 +107,7 @@ class ReviewStatus(Enum):
 
 class ReviewDecision(Enum):
     """Reviewer's decision."""
+
     APPROVE = "approve"
     REQUEST_CHANGES = "request_changes"
     ESCALATE = "escalate"
@@ -143,6 +120,7 @@ class ReviewFeedback:
 
     Immutable representation of reviewer's feedback on an iteration.
     """
+
     decision: ReviewDecision
     comment: str
     issues: list[str]
@@ -157,6 +135,7 @@ class ReviewIteration:
 
     Represents one round of work submission and review.
     """
+
     iteration_number: int
     maker_output: str
     maker_execution_id: str
@@ -230,7 +209,7 @@ class ReviewCycle:
             raise DomainError(msg)
 
         if self.current_iteration > self.max_iterations:
-            msg = f"Current iteration ({self.current_iteration}) cannot exceed " f"max iterations ({self.max_iterations})"
+            msg = f"Current iteration ({self.current_iteration}) cannot exceed max iterations ({self.max_iterations})"
             raise DomainError(msg)
 
     # Creation
@@ -241,7 +220,7 @@ class ReviewCycle:
         stage_name: str,
         maker_agent_id: str,
         reviewer_agent_id: str,
-        max_iterations: int = 3
+        max_iterations: int = 3,
     ) -> "ReviewCycle":
         """
         Factory method to create a new review cycle.
@@ -275,7 +254,7 @@ class ReviewCycle:
             escalation_reason=None,
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
-            completed_at=None
+            completed_at=None,
         )
 
         event = ReviewCycleCreated(
@@ -285,8 +264,8 @@ class ReviewCycle:
                 "stage_name": stage_name,
                 "maker_agent_id": maker_agent_id,
                 "reviewer_agent_id": reviewer_agent_id,
-                "max_iterations": max_iterations
-            }
+                "max_iterations": max_iterations,
+            },
         )
         cycle._add_event(event)
 
@@ -318,7 +297,7 @@ class ReviewCycle:
             reviewer_feedback=None,
             reviewer_execution_id=None,
             started_at=datetime.now(UTC),
-            completed_at=None
+            completed_at=None,
         )
 
         self.iterations.append(iteration)
@@ -330,8 +309,8 @@ class ReviewCycle:
             aggregate_id=self.id,
             payload={
                 "iteration_number": self.current_iteration,
-                "maker_execution_id": maker_execution_id
-            }
+                "maker_execution_id": maker_execution_id,
+            },
         )
         self._add_event(event)
 
@@ -341,7 +320,7 @@ class ReviewCycle:
         comment: str,
         reviewer_execution_id: str,
         issues: list[str] | None = None,
-        suggestions: list[str] | None = None
+        suggestions: list[str] | None = None,
     ) -> None:
         """
         Submit reviewer's feedback.
@@ -372,7 +351,7 @@ class ReviewCycle:
             comment=comment,
             issues=issues or [],
             suggestions=suggestions or [],
-            timestamp=datetime.now(UTC)
+            timestamp=datetime.now(UTC),
         )
 
         current.reviewer_feedback = feedback
@@ -388,8 +367,8 @@ class ReviewCycle:
                 "iteration_number": self.current_iteration,
                 "decision": decision.value,
                 "reviewer_execution_id": reviewer_execution_id,
-                "issues_count": len(issues or [])
-            }
+                "issues_count": len(issues or []),
+            },
         )
         self._add_event(event)
 
@@ -419,8 +398,8 @@ class ReviewCycle:
             aggregate_id=self.id,
             payload={
                 "total_iterations": self.current_iteration,
-                "approved_at": self.completed_at.isoformat()
-            }
+                "approved_at": self.completed_at.isoformat(),
+            },
         )
         self._add_event(event)
 
@@ -460,8 +439,8 @@ class ReviewCycle:
             payload={
                 "reason": reason,
                 "total_iterations": self.current_iteration,
-                "escalated_at": self.completed_at.isoformat()
-            }
+                "escalated_at": self.completed_at.isoformat(),
+            },
         )
         self._add_event(event)
 

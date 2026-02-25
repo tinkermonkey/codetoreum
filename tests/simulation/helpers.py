@@ -88,8 +88,7 @@ class AssertionHelpers:
         if expected_stages is not None:
             events = runner.get_events_by_aggregate(work_item_id)
             execution_events = [
-                e for e in events
-                if e.event_type in ["AgentExecutionStarted", "AgentExecutionCompleted"]
+                e for e in events if e.event_type in ["AgentExecutionStarted", "AgentExecutionCompleted"]
             ]
             runner.assert_true(
                 len(execution_events) >= expected_stages,
@@ -114,7 +113,8 @@ class AssertionHelpers:
         events = runner.get_events_by_type("AgentExecutionCompleted")
 
         matching = [
-            e for e in events
+            e
+            for e in events
             if e.payload.get("agent_id") == agent_id
             and (work_item_id is None or e.payload.get("work_item_id") == work_item_id)
         ]
@@ -218,12 +218,14 @@ class ScenarioHelpers:
                     Each stage: {"agent_id": str, "duration_minutes": int}
         """
         # Start workflow
-        event = EventBuilder() \
-            .with_aggregate_id(work_item_id) \
-            .with_aggregate_type("WorkItem") \
-            .with_event_type("WorkflowStarted") \
-            .with_payload_item("workflow_id", "test-workflow") \
+        event = (
+            EventBuilder()
+            .with_aggregate_id(work_item_id)
+            .with_aggregate_type("WorkItem")
+            .with_event_type("WorkflowStarted")
+            .with_payload_item("workflow_id", "test-workflow")
             .build()
+        )
         runner.capture_event(event)
 
         # Execute each stage
@@ -234,35 +236,41 @@ class ScenarioHelpers:
             # Start execution
             await runner.advance_time(timedelta(minutes=1))
 
-            exec_id = f"exec-{i+1}"
-            event = EventBuilder() \
-                .with_aggregate_id(exec_id) \
-                .with_aggregate_type("AgentExecution") \
-                .with_event_type("AgentExecutionStarted") \
-                .with_payload_item("agent_id", agent_id) \
-                .with_payload_item("work_item_id", work_item_id) \
+            exec_id = f"exec-{i + 1}"
+            event = (
+                EventBuilder()
+                .with_aggregate_id(exec_id)
+                .with_aggregate_type("AgentExecution")
+                .with_event_type("AgentExecutionStarted")
+                .with_payload_item("agent_id", agent_id)
+                .with_payload_item("work_item_id", work_item_id)
                 .build()
+            )
             runner.capture_event(event)
 
             # Complete execution
             await runner.advance_time(duration)
 
-            event = EventBuilder() \
-                .with_aggregate_id(exec_id) \
-                .with_aggregate_type("AgentExecution") \
-                .with_event_type("AgentExecutionCompleted") \
-                .with_payload_item("agent_id", agent_id) \
-                .with_payload_item("status", "completed") \
+            event = (
+                EventBuilder()
+                .with_aggregate_id(exec_id)
+                .with_aggregate_type("AgentExecution")
+                .with_event_type("AgentExecutionCompleted")
+                .with_payload_item("agent_id", agent_id)
+                .with_payload_item("status", "completed")
                 .build()
+            )
             runner.capture_event(event)
 
         # Complete workflow
-        event = EventBuilder() \
-            .with_aggregate_id(work_item_id) \
-            .with_aggregate_type("WorkItem") \
-            .with_event_type("WorkflowCompleted") \
-            .with_payload_item("total_stages", len(stages)) \
+        event = (
+            EventBuilder()
+            .with_aggregate_id(work_item_id)
+            .with_aggregate_type("WorkItem")
+            .with_event_type("WorkflowCompleted")
+            .with_payload_item("total_stages", len(stages))
             .build()
+        )
         runner.capture_event(event)
 
     @staticmethod
@@ -294,12 +302,14 @@ class ScenarioHelpers:
         if feedback:
             payload["feedback"] = feedback
 
-        event = EventBuilder() \
-            .with_aggregate_id(review_id) \
-            .with_aggregate_type("ReviewCycle") \
-            .with_event_type(event_type) \
-            .with_payload(payload) \
+        event = (
+            EventBuilder()
+            .with_aggregate_id(review_id)
+            .with_aggregate_type("ReviewCycle")
+            .with_event_type(event_type)
+            .with_payload(payload)
             .build()
+        )
 
         runner.capture_event(event)
 
@@ -346,11 +356,7 @@ def print_event_timeline(runner: SimulationRunner) -> None:
         aggregate_type = getattr(event, "aggregate_type", "Unknown")
         aggregate_id = getattr(event, "aggregate_id", "Unknown")
 
-        print(
-            f"{i:2d}. [{elapsed:6.1f}s] "
-            f"{event_type:30s} "
-            f"| {aggregate_type}:{aggregate_id}"
-        )
+        print(f"{i:2d}. [{elapsed:6.1f}s] {event_type:30s} | {aggregate_type}:{aggregate_id}")
 
     print("=" * 80)
 
@@ -397,11 +403,7 @@ def print_notifications_summary(runner: SimulationRunner) -> None:
         return
 
     for notif in notifications:
-        print(
-            f"- {notif['channel'].value:10s} "
-            f"| {notif['recipient']:30s} "
-            f"| {notif['subject']}"
-        )
+        print(f"- {notif['channel'].value:10s} | {notif['recipient']:30s} | {notif['subject']}")
 
     print(f"\nTotal: {len(notifications)} notifications")
     print("=" * 80)

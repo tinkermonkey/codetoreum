@@ -44,10 +44,7 @@ class TestTraceContextData:
         )
 
         traceparent = trace_data.to_traceparent()
-        assert (
-            traceparent
-            == "00-0af7651916cd43dd8448eb211c80319c-b9c7c989f97918e1-01"
-        )
+        assert traceparent == "00-0af7651916cd43dd8448eb211c80319c-b9c7c989f97918e1-01"
 
     def test_from_traceparent_valid(self):
         """Test parsing valid W3C traceparent header."""
@@ -303,9 +300,7 @@ class TestConvenienceFunctions:
         )
 
         # Mock the injector to verify it's called
-        with patch.object(
-            TraceContextPropagator, "inject_trace_context"
-        ) as mock_inject:
+        with patch.object(TraceContextPropagator, "inject_trace_context") as mock_inject:
             inject_current_trace_context_into_event(event)
             mock_inject.assert_called_once_with(event)
 

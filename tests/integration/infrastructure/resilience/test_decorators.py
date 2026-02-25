@@ -29,6 +29,7 @@ from codetoreum.ports.output.ticket_system import ITicketSystem
 # Mock Adapters for Testing
 # ============================================================================
 
+
 class FlakyTicketSystem(ITicketSystem):
     """Mock ticket system that fails intermittently."""
 
@@ -57,14 +58,20 @@ class FlakyTicketSystem(ITicketSystem):
             current_stage=None,
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
-            completed_at=None
+            completed_at=None,
         )
 
     # Stub implementations for other required methods
-    async def create_work_item(self, title: str, description: str, project_id: ProjectId,
-                                labels: list[str] | None = None, assignee: UserId | None = None,
-                                priority: WorkItemPriority | None = None,
-                                metadata: dict[str, Any] | None = None) -> WorkItem:
+    async def create_work_item(
+        self,
+        title: str,
+        description: str,
+        project_id: ProjectId,
+        labels: list[str] | None = None,
+        assignee: UserId | None = None,
+        priority: WorkItemPriority | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> WorkItem:
         raise NotImplementedError
 
     async def update_work_item(self, item_id: WorkItemId, updates: dict[str, Any]) -> WorkItem:
@@ -73,43 +80,51 @@ class FlakyTicketSystem(ITicketSystem):
     async def delete_work_item(self, item_id: WorkItemId) -> None:
         raise NotImplementedError
 
-    async def update_status(self, item_id: WorkItemId, status: WorkItemStatus,
-                           reason: str | None = None) -> WorkItem:
+    async def update_status(self, item_id: WorkItemId, status: WorkItemStatus, reason: str | None = None) -> WorkItem:
         raise NotImplementedError
 
-    async def list_work_items(self, project_id: ProjectId | None = None,
-                             status: WorkItemStatus | None = None, assignee: UserId | None = None,
-                             labels: list[str] | None = None, created_after: datetime | None = None,
-                             updated_after: datetime | None = None, limit: int = 100,
-                             offset: int = 0) -> list[WorkItem]:
+    async def list_work_items(
+        self,
+        project_id: ProjectId | None = None,
+        status: WorkItemStatus | None = None,
+        assignee: UserId | None = None,
+        labels: list[str] | None = None,
+        created_after: datetime | None = None,
+        updated_after: datetime | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[WorkItem]:
         raise NotImplementedError
 
-    async def search_work_items(self, query: str, project_id: ProjectId | None = None,
-                                limit: int = 100) -> list[WorkItem]:
+    async def search_work_items(
+        self, query: str, project_id: ProjectId | None = None, limit: int = 100
+    ) -> list[WorkItem]:
         raise NotImplementedError
 
-    async def get_work_item_stream(self, project_id: ProjectId | None = None,
-                                   since: datetime | None = None) -> AsyncIterator[WorkItem]:
+    async def get_work_item_stream(
+        self, project_id: ProjectId | None = None, since: datetime | None = None
+    ) -> AsyncIterator[WorkItem]:
         raise NotImplementedError
 
-    async def add_comment(self, item_id: WorkItemId, body: str, author: UserId | None = None,
-                         metadata: dict[str, Any] | None = None) -> Comment:
+    async def add_comment(
+        self,
+        item_id: WorkItemId,
+        body: str,
+        author: UserId | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> Comment:
         raise NotImplementedError
 
-    async def get_comments(self, item_id: WorkItemId, since: datetime | None = None,
-                          limit: int = 100) -> list[Comment]:
+    async def get_comments(self, item_id: WorkItemId, since: datetime | None = None, limit: int = 100) -> list[Comment]:
         raise NotImplementedError
 
-    async def link_work_items(self, source_id: WorkItemId, target_id: WorkItemId,
-                             relationship: str) -> None:
+    async def link_work_items(self, source_id: WorkItemId, target_id: WorkItemId, relationship: str) -> None:
         raise NotImplementedError
 
-    async def get_related_items(self, item_id: WorkItemId,
-                               relationship: str | None = None) -> list[WorkItem]:
+    async def get_related_items(self, item_id: WorkItemId, relationship: str | None = None) -> list[WorkItem]:
         raise NotImplementedError
 
-    async def register_webhook(self, url: str, events: list[str],
-                              project_id: ProjectId | None = None) -> str:
+    async def register_webhook(self, url: str, events: list[str], project_id: ProjectId | None = None) -> str:
         raise NotImplementedError
 
     async def unregister_webhook(self, webhook_id: str) -> None:
@@ -123,8 +138,9 @@ class FlakyLLMProvider(ILLMProvider):
         self.fail_count = fail_count
         self.call_count = 0
 
-    async def execute(self, prompt: str, context: ExecutionContext | None = None,
-                     stream_callback=None) -> ExecutionResult:
+    async def execute(
+        self, prompt: str, context: ExecutionContext | None = None, stream_callback=None
+    ) -> ExecutionResult:
         self.call_count += 1
         if self.call_count <= self.fail_count:
             raise Exception("Simulated transient LLM failure")
@@ -134,7 +150,7 @@ class FlakyLLMProvider(ILLMProvider):
             model="test-model",
             completion_tokens=10,
             prompt_tokens=5,
-            total_tokens=15
+            total_tokens=15,
         )
 
     # Stub implementations
@@ -166,6 +182,7 @@ class FlakyLLMProvider(ILLMProvider):
 # ============================================================================
 # Integration Tests
 # ============================================================================
+
 
 class TestResilientTicketSystemIntegration:
     """Integration tests for resilient ticket system decorator."""
@@ -218,7 +235,6 @@ class TestResilientTicketSystemIntegration:
             await resilient.get_work_item(WorkItemId("123"))
 
 
-
 class TestResilientLLMProviderIntegration:
     """Integration tests for resilient LLM provider decorator."""
 
@@ -236,8 +252,6 @@ class TestResilientLLMProviderIntegration:
 
         assert result.content == "Test response"
         assert flaky_llm.call_count == 2  # Initial + 1 retry
-
-
 
 
 class TestEndToEndResilience:
@@ -262,4 +276,3 @@ class TestEndToEndResilience:
         assert result.id == WorkItemId("123")
         # Verify resilience components handled the transient failure
         assert flaky_adapter.call_count > 1  # Should have retried after first failure
-

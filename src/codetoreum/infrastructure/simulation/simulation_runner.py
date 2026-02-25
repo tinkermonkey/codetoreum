@@ -240,9 +240,7 @@ class SimulationRunner:
             duration_seconds=real_duration,
             simulated_duration_seconds=simulated_duration,
             events_captured=len(self.captured_events),
-            metrics_captured=sum(
-                len(metrics) for metrics in self.metrics_adapter.get_all_metrics().values()
-            ),
+            metrics_captured=sum(len(metrics) for metrics in self.metrics_adapter.get_all_metrics().values()),
             notifications_sent=self.notifier_adapter.get_notification_count(),
             spans_captured=len(self.mock_tracer.get_spans()),
             assertions_passed=passed,
@@ -335,9 +333,9 @@ class SimulationRunner:
         assertion_name = assertion_name or f"Event {event_type} occurred"
 
         matching_events = [
-            e for e in self.captured_events
-            if e.event_type == event_type
-            and (aggregate_id is None or e.aggregate_id == aggregate_id)
+            e
+            for e in self.captured_events
+            if e.event_type == event_type and (aggregate_id is None or e.aggregate_id == aggregate_id)
         ]
 
         self.assert_true(
@@ -624,7 +622,9 @@ class SimulationRunner:
 
         print(f"\n=== Simulation Summary: {self.config.scenario_name} ===")
         print(f"Real time elapsed: {(self._end_time - self._start_time).total_seconds():.2f}s")
-        print(f"Simulated time: {(self._get_clock_now() - (self.config.time.start_time or self._start_time)).total_seconds():.2f}s")
+        print(
+            f"Simulated time: {(self._get_clock_now() - (self.config.time.start_time or self._start_time)).total_seconds():.2f}s"
+        )
         print(f"Speed multiplier: {self.config.time.speed_multiplier}x")
         print(f"\nEvents captured: {len(self.captured_events)}")
         print(f"Metrics recorded: {sum(len(m) for m in self.metrics_adapter.get_all_metrics().values())}")

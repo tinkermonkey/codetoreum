@@ -117,24 +117,14 @@ class ContainerRecoveryService:
         try:
             # Step 1: Process orphaned repair cycle results (highest priority)
             try:
-                repair_cycles_processed = (
-                    await self.recovery_adapter.process_orphaned_repair_results()
-                )
-                logger.info(
-                    f"Processed {repair_cycles_processed} orphaned repair cycle results"
-                )
+                repair_cycles_processed = await self.recovery_adapter.process_orphaned_repair_results()
+                logger.info(f"Processed {repair_cycles_processed} orphaned repair cycle results")
             except StorageError as e:
-                logger.warning(
-                    f"Failed to process orphaned repair results: {e}", exc_info=True
-                )
+                logger.warning(f"Failed to process orphaned repair results: {e}", exc_info=True)
 
             # Step 2: Assess repair cycle containers separately
-            repair_cycle_containers = (
-                await self.recovery_adapter.get_running_repair_cycle_containers()
-            )
-            logger.info(
-                f"Found {len(repair_cycle_containers)} running repair cycle containers"
-            )
+            repair_cycle_containers = await self.recovery_adapter.get_running_repair_cycle_containers()
+            logger.info(f"Found {len(repair_cycle_containers)} running repair cycle containers")
 
             # Step 3: List running agent containers
             logger.info("Starting container recovery cycle")
@@ -144,8 +134,7 @@ class ContainerRecoveryService:
             # Combine all containers for assessment and recovery
             all_containers = repair_cycle_containers + agent_containers
             logger.info(
-                f"Total containers to assess: "
-                f"{len(repair_cycle_containers)} repair + {len(agent_containers)} agent"
+                f"Total containers to assess: {len(repair_cycle_containers)} repair + {len(agent_containers)} agent"
             )
 
             # Step 4: Assess and execute recovery with bounded parallelism
@@ -159,19 +148,11 @@ class ContainerRecoveryService:
                         container_type = metadata.labels.get(CONTAINER_LABEL_TYPE)
 
                         if container_type == CONTAINER_TYPE_REPAIR_CYCLE:
-                            assessment = (
-                                await self.recovery_adapter.assess_repair_cycle_container(
-                                    metadata
-                                )
-                            )
+                            assessment = await self.recovery_adapter.assess_repair_cycle_container(metadata)
                         else:
-                            assessment = await self.recovery_adapter.assess_container(
-                                metadata
-                            )
+                            assessment = await self.recovery_adapter.assess_container(metadata)
 
-                        success = await self.recovery_adapter.execute_recovery_action(
-                            assessment
-                        )
+                        success = await self.recovery_adapter.execute_recovery_action(assessment)
 
                         if success:
                             if assessment.action == "reconnect":
@@ -186,9 +167,7 @@ class ContainerRecoveryService:
                                     agent_id=metadata.agent_id,
                                     work_item_id=metadata.work_item_id,
                                     execution_id=metadata.execution_id,
-                                    uptime_seconds=self._calculate_uptime_seconds(
-                                        metadata.created_at
-                                    ),
+                                    uptime_seconds=self._calculate_uptime_seconds(metadata.created_at),
                                     recovery_action=(
                                         "reconnect_with_monitoring"
                                         if assessment.with_monitoring
@@ -225,9 +204,7 @@ class ContainerRecoveryService:
                                 agent_id=metadata.agent_id,
                                 work_item_id=metadata.work_item_id,
                                 kill_reason=assessment.reason,  # type: ignore[arg-type]
-                                uptime_seconds=self._calculate_uptime_seconds(
-                                    metadata.created_at
-                                ),
+                                uptime_seconds=self._calculate_uptime_seconds(metadata.created_at),
                                 execution_marked_failed=execution_marked_failed,
                             )
                             try:
@@ -249,7 +226,7 @@ class ContainerRecoveryService:
                             extra={
                                 "error_id": ErrorRegistry.ERR_CONTAINER_ERROR,
                                 "container_id": metadata.container_id,
-                            }
+                            },
                         )
                         return ("error", False)
 
@@ -260,7 +237,7 @@ class ContainerRecoveryService:
                             extra={
                                 "error_id": ErrorRegistry.ERR_CONTAINER_ERROR,
                                 "container_id": metadata.container_id,
-                            }
+                            },
                         )
                         return ("error", False)
 
@@ -277,7 +254,7 @@ class ContainerRecoveryService:
                     logger.error(
                         f"Unexpected error in container recovery: {result}",
                         exc_info=result,
-                        extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR}
+                        extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR},
                     )
                     processed_results.append(("error", False))
                 elif result is not None:
@@ -341,7 +318,7 @@ class ContainerRecoveryService:
             logger.error(
                 f"Unrecoverable error in container recovery: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR},
             )
             return RecoveryResult(
                 recovered=recovered_count,
@@ -350,7 +327,6 @@ class ContainerRecoveryService:
                 repair_cycles_processed=repair_cycles_processed,
                 timestamp=datetime.now(UTC).isoformat(),
             )
-
 
     @staticmethod
     def _calculate_uptime_seconds(created_at: datetime) -> float:

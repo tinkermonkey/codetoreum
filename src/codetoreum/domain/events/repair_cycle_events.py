@@ -65,27 +65,25 @@ class RepairCycleStartedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "stage_name": self.stage_name,
-            "test_types": [t.value for t in self.test_types],
-            "workflow_run_id": self.workflow_run_id,
-        })
+        d.update(
+            {
+                "stage_name": self.stage_name,
+                "test_types": [t.value for t in self.test_types],
+                "workflow_run_id": self.workflow_run_id,
+            }
+        )
         return d
 
     @classmethod
     def from_dict(cls, data: dict) -> "RepairCycleStartedEvent":
         """Deserialize from dictionary with backward compatibility."""
-        test_types = tuple(
-            RepairTestType(t) if isinstance(t, str) else t
-            for t in data.get("test_types", [])
-        )
+        test_types = tuple(RepairTestType(t) if isinstance(t, str) else t for t in data.get("test_types", []))
         # Backward compatibility: Support both old and new field names
         if "pipeline_run_id" in data and "workflow_run_id" not in data:
             warnings.warn(
-                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. "
-                "Use 'workflow_run_id' instead.",
+                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. Use 'workflow_run_id' instead.",
                 DeprecationWarning,
-                stacklevel=2
+                stacklevel=2,
             )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
         return cls(
@@ -148,31 +146,30 @@ class RepairCycleTestExecutionStartedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "test_type": self.test_type.value,
-            "test_type_index": self.test_type_index,
-            "test_cycle_iteration": self.test_cycle_iteration,
-            "max_test_cycle_iterations": self.max_test_cycle_iterations,
-            "timeout": self.timeout,
-            "workflow_run_id": self.workflow_run_id,
-        })
+        d.update(
+            {
+                "test_type": self.test_type.value,
+                "test_type_index": self.test_type_index,
+                "test_cycle_iteration": self.test_cycle_iteration,
+                "max_test_cycle_iterations": self.max_test_cycle_iterations,
+                "timeout": self.timeout,
+                "workflow_run_id": self.workflow_run_id,
+            }
+        )
         return d
 
     @classmethod
     def from_dict(cls, data: dict) -> "RepairCycleTestExecutionStartedEvent":
         """Deserialize from dictionary with backward compatibility."""
         test_type = (
-            RepairTestType(data.get("test_type"))
-            if isinstance(data.get("test_type"), str)
-            else RepairTestType.UNIT
+            RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
         )
         # Backward compatibility: Support both old and new field names
         if "pipeline_run_id" in data and "workflow_run_id" not in data:
             warnings.warn(
-                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. "
-                "Use 'workflow_run_id' instead.",
+                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. Use 'workflow_run_id' instead.",
                 DeprecationWarning,
-                stacklevel=2
+                stacklevel=2,
             )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
         return cls(
@@ -247,43 +244,36 @@ class RepairCycleTestExecutionCompletedEvent(CodetoreumEvent):
         # Consistency validation: has_failures must match failed > 0
         if self.has_failures != (self.failed > 0):
             msg = f"has_failures ({self.has_failures}) must match failed > 0 ({self.failed > 0})"
-            raise ValueError(
-                msg
-            )
+            raise ValueError(msg)
 
         # Consistency validation: failed count must match failures tuple length
         if self.failed != len(self.failures):
             msg = f"failed count ({self.failed}) must match len(failures) ({len(self.failures)})"
-            raise ValueError(
-                msg
-            )
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "test_type": self.test_type.value,
-            "test_type_index": self.test_type_index,
-            "test_cycle_iteration": self.test_cycle_iteration,
-            "passed": self.passed,
-            "failed": self.failed,
-            "warnings": self.warnings,
-            "has_failures": self.has_failures,
-            "failures": [
-                {"file": f.file, "test": f.test, "message": f.message}
-                for f in self.failures
-            ],
-            "workflow_run_id": self.workflow_run_id,
-        })
+        d.update(
+            {
+                "test_type": self.test_type.value,
+                "test_type_index": self.test_type_index,
+                "test_cycle_iteration": self.test_cycle_iteration,
+                "passed": self.passed,
+                "failed": self.failed,
+                "warnings": self.warnings,
+                "has_failures": self.has_failures,
+                "failures": [{"file": f.file, "test": f.test, "message": f.message} for f in self.failures],
+                "workflow_run_id": self.workflow_run_id,
+            }
+        )
         return d
 
     @classmethod
     def from_dict(cls, data: dict) -> "RepairCycleTestExecutionCompletedEvent":
         """Deserialize from dictionary with backward compatibility."""
         test_type = (
-            RepairTestType(data.get("test_type"))
-            if isinstance(data.get("test_type"), str)
-            else RepairTestType.UNIT
+            RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
         )
         failures = tuple(
             RepairTestFailure(
@@ -296,10 +286,9 @@ class RepairCycleTestExecutionCompletedEvent(CodetoreumEvent):
         # Backward compatibility: Support both old and new field names
         if "pipeline_run_id" in data and "workflow_run_id" not in data:
             warnings.warn(
-                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. "
-                "Use 'workflow_run_id' instead.",
+                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. Use 'workflow_run_id' instead.",
                 DeprecationWarning,
-                stacklevel=2
+                stacklevel=2,
             )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
         return cls(
@@ -368,31 +357,30 @@ class RepairCycleFixCycleStartedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "test_type": self.test_type.value,
-            "test_type_index": self.test_type_index,
-            "test_cycle_iteration": self.test_cycle_iteration,
-            "file_count": self.file_count,
-            "total_failures": self.total_failures,
-            "workflow_run_id": self.workflow_run_id,
-        })
+        d.update(
+            {
+                "test_type": self.test_type.value,
+                "test_type_index": self.test_type_index,
+                "test_cycle_iteration": self.test_cycle_iteration,
+                "file_count": self.file_count,
+                "total_failures": self.total_failures,
+                "workflow_run_id": self.workflow_run_id,
+            }
+        )
         return d
 
     @classmethod
     def from_dict(cls, data: dict) -> "RepairCycleFixCycleStartedEvent":
         """Deserialize from dictionary with backward compatibility."""
         test_type = (
-            RepairTestType(data.get("test_type"))
-            if isinstance(data.get("test_type"), str)
-            else RepairTestType.UNIT
+            RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
         )
         # Backward compatibility: Support both old and new field names
         if "pipeline_run_id" in data and "workflow_run_id" not in data:
             warnings.warn(
-                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. "
-                "Use 'workflow_run_id' instead.",
+                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. Use 'workflow_run_id' instead.",
                 DeprecationWarning,
-                stacklevel=2
+                stacklevel=2,
             )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
         return cls(
@@ -448,29 +436,28 @@ class RepairCycleFileFixStartedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "test_file": self.test_file,
-            "failure_count": self.failure_count,
-            "test_type": self.test_type.value,
-            "workflow_run_id": self.workflow_run_id,
-        })
+        d.update(
+            {
+                "test_file": self.test_file,
+                "failure_count": self.failure_count,
+                "test_type": self.test_type.value,
+                "workflow_run_id": self.workflow_run_id,
+            }
+        )
         return d
 
     @classmethod
     def from_dict(cls, data: dict) -> "RepairCycleFileFixStartedEvent":
         """Deserialize from dictionary with backward compatibility."""
         test_type = (
-            RepairTestType(data.get("test_type"))
-            if isinstance(data.get("test_type"), str)
-            else RepairTestType.UNIT
+            RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
         )
         # Backward compatibility: Support both old and new field names
         if "pipeline_run_id" in data and "workflow_run_id" not in data:
             warnings.warn(
-                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. "
-                "Use 'workflow_run_id' instead.",
+                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. Use 'workflow_run_id' instead.",
                 DeprecationWarning,
-                stacklevel=2
+                stacklevel=2,
             )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
         return cls(
@@ -526,30 +513,29 @@ class RepairCycleFileFixCompletedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "test_file": self.test_file,
-            "failure_count": self.failure_count,
-            "test_type": self.test_type.value,
-            "success": self.success,
-            "workflow_run_id": self.workflow_run_id,
-        })
+        d.update(
+            {
+                "test_file": self.test_file,
+                "failure_count": self.failure_count,
+                "test_type": self.test_type.value,
+                "success": self.success,
+                "workflow_run_id": self.workflow_run_id,
+            }
+        )
         return d
 
     @classmethod
     def from_dict(cls, data: dict) -> "RepairCycleFileFixCompletedEvent":
         """Deserialize from dictionary with backward compatibility."""
         test_type = (
-            RepairTestType(data.get("test_type"))
-            if isinstance(data.get("test_type"), str)
-            else RepairTestType.UNIT
+            RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
         )
         # Backward compatibility: Support both old and new field names
         if "pipeline_run_id" in data and "workflow_run_id" not in data:
             warnings.warn(
-                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. "
-                "Use 'workflow_run_id' instead.",
+                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. Use 'workflow_run_id' instead.",
                 DeprecationWarning,
-                stacklevel=2
+                stacklevel=2,
             )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
         return cls(
@@ -606,25 +592,22 @@ class RepairCycleWarningReviewStartedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "source_file": self.source_file,
-            "warning_count": self.warning_count,
-            "test_type": self.test_type.value,
-            "warnings": [
-                {"file": w.file, "message": w.message}
-                for w in self.warnings
-            ],
-            "workflow_run_id": self.workflow_run_id,
-        })
+        d.update(
+            {
+                "source_file": self.source_file,
+                "warning_count": self.warning_count,
+                "test_type": self.test_type.value,
+                "warnings": [{"file": w.file, "message": w.message} for w in self.warnings],
+                "workflow_run_id": self.workflow_run_id,
+            }
+        )
         return d
 
     @classmethod
     def from_dict(cls, data: dict) -> "RepairCycleWarningReviewStartedEvent":
         """Deserialize from dictionary with backward compatibility."""
         test_type = (
-            RepairTestType(data.get("test_type"))
-            if isinstance(data.get("test_type"), str)
-            else RepairTestType.UNIT
+            RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
         )
         warnings_list = tuple(
             RepairTestWarning(
@@ -636,10 +619,9 @@ class RepairCycleWarningReviewStartedEvent(CodetoreumEvent):
         # Backward compatibility: Support both old and new field names
         if "pipeline_run_id" in data and "workflow_run_id" not in data:
             warnings.warn(
-                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. "
-                "Use 'workflow_run_id' instead.",
+                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. Use 'workflow_run_id' instead.",
                 DeprecationWarning,
-                stacklevel=2
+                stacklevel=2,
             )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
         return cls(
@@ -696,30 +678,29 @@ class RepairCycleWarningReviewCompletedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "source_file": self.source_file,
-            "warning_count": self.warning_count,
-            "test_type": self.test_type.value,
-            "success": self.success,
-            "workflow_run_id": self.workflow_run_id,
-        })
+        d.update(
+            {
+                "source_file": self.source_file,
+                "warning_count": self.warning_count,
+                "test_type": self.test_type.value,
+                "success": self.success,
+                "workflow_run_id": self.workflow_run_id,
+            }
+        )
         return d
 
     @classmethod
     def from_dict(cls, data: dict) -> "RepairCycleWarningReviewCompletedEvent":
         """Deserialize from dictionary with backward compatibility."""
         test_type = (
-            RepairTestType(data.get("test_type"))
-            if isinstance(data.get("test_type"), str)
-            else RepairTestType.UNIT
+            RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
         )
         # Backward compatibility: Support both old and new field names
         if "pipeline_run_id" in data and "workflow_run_id" not in data:
             warnings.warn(
-                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. "
-                "Use 'workflow_run_id' instead.",
+                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. Use 'workflow_run_id' instead.",
                 DeprecationWarning,
-                stacklevel=2
+                stacklevel=2,
             )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
         return cls(
@@ -793,34 +774,33 @@ class RepairCycleTestCycleCompletedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "test_type": self.test_type.value,
-            "test_type_index": self.test_type_index,
-            "passed": self.passed,
-            "test_cycle_iterations": self.test_cycle_iterations,
-            "files_fixed": self.files_fixed,
-            "warnings_reviewed": self.warnings_reviewed,
-            "error": self.error,
-            "duration_seconds": self.duration_seconds,
-            "workflow_run_id": self.workflow_run_id,
-        })
+        d.update(
+            {
+                "test_type": self.test_type.value,
+                "test_type_index": self.test_type_index,
+                "passed": self.passed,
+                "test_cycle_iterations": self.test_cycle_iterations,
+                "files_fixed": self.files_fixed,
+                "warnings_reviewed": self.warnings_reviewed,
+                "error": self.error,
+                "duration_seconds": self.duration_seconds,
+                "workflow_run_id": self.workflow_run_id,
+            }
+        )
         return d
 
     @classmethod
     def from_dict(cls, data: dict) -> "RepairCycleTestCycleCompletedEvent":
         """Deserialize from dictionary with backward compatibility."""
         test_type = (
-            RepairTestType(data.get("test_type"))
-            if isinstance(data.get("test_type"), str)
-            else RepairTestType.UNIT
+            RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
         )
         # Backward compatibility: Support both old and new field names
         if "pipeline_run_id" in data and "workflow_run_id" not in data:
             warnings.warn(
-                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. "
-                "Use 'workflow_run_id' instead.",
+                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. Use 'workflow_run_id' instead.",
                 DeprecationWarning,
-                stacklevel=2
+                stacklevel=2,
             )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
         return cls(
@@ -874,28 +854,27 @@ class RepairCycleFastFailEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "test_type": self.test_type.value,
-            "reason": self.reason,
-            "workflow_run_id": self.workflow_run_id,
-        })
+        d.update(
+            {
+                "test_type": self.test_type.value,
+                "reason": self.reason,
+                "workflow_run_id": self.workflow_run_id,
+            }
+        )
         return d
 
     @classmethod
     def from_dict(cls, data: dict) -> "RepairCycleFastFailEvent":
         """Deserialize from dictionary with backward compatibility."""
         test_type = (
-            RepairTestType(data.get("test_type"))
-            if isinstance(data.get("test_type"), str)
-            else RepairTestType.UNIT
+            RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
         )
         # Backward compatibility: Support both old and new field names
         if "pipeline_run_id" in data and "workflow_run_id" not in data:
             warnings.warn(
-                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. "
-                "Use 'workflow_run_id' instead.",
+                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. Use 'workflow_run_id' instead.",
                 DeprecationWarning,
-                stacklevel=2
+                stacklevel=2,
             )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
         return cls(
@@ -955,13 +934,15 @@ class RepairCycleResumedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "workflow_run_id": self.workflow_run_id,
-            "test_type": self.test_type.value,  # Serialize enum as string
-            "iteration": self.iteration,
-            "elapsed_time": self.elapsed_time,
-            "agent_calls_so_far": self.agent_calls_so_far,
-        })
+        d.update(
+            {
+                "workflow_run_id": self.workflow_run_id,
+                "test_type": self.test_type.value,  # Serialize enum as string
+                "iteration": self.iteration,
+                "elapsed_time": self.elapsed_time,
+                "agent_calls_so_far": self.agent_calls_so_far,
+            }
+        )
         return d
 
     @classmethod
@@ -970,10 +951,9 @@ class RepairCycleResumedEvent(CodetoreumEvent):
         # Backward compatibility: Support both old and new field names
         if "pipeline_run_id" in data and "workflow_run_id" not in data:
             warnings.warn(
-                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. "
-                "Use 'workflow_run_id' instead.",
+                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. Use 'workflow_run_id' instead.",
                 DeprecationWarning,
-                stacklevel=2
+                stacklevel=2,
             )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
 
@@ -1043,14 +1023,16 @@ class RepairCycleCheckpointFailedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "workflow_run_id": self.workflow_run_id,
-            "test_type": self.test_type,
-            "iteration": self.iteration,
-            "error_type": self.error_type,
-            "error_message": self.error_message,
-            "checkpoint_store_type": self.checkpoint_store_type,
-        })
+        d.update(
+            {
+                "workflow_run_id": self.workflow_run_id,
+                "test_type": self.test_type,
+                "iteration": self.iteration,
+                "error_type": self.error_type,
+                "error_message": self.error_message,
+                "checkpoint_store_type": self.checkpoint_store_type,
+            }
+        )
         return d
 
     @classmethod
@@ -1059,10 +1041,9 @@ class RepairCycleCheckpointFailedEvent(CodetoreumEvent):
         # Backward compatibility: Support both old and new field names
         if "pipeline_run_id" in data and "workflow_run_id" not in data:
             warnings.warn(
-                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. "
-                "Use 'workflow_run_id' instead.",
+                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. Use 'workflow_run_id' instead.",
                 DeprecationWarning,
-                stacklevel=2
+                stacklevel=2,
             )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
         return cls(
@@ -1125,14 +1106,16 @@ class RepairCycleMetricsBackendFailedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "operation": self.operation,
-            "error_type": self.error_type,
-            "error_message": self.error_message,
-            "consecutive_failures": self.consecutive_failures,
-            "circuit_breaker_open": self.circuit_breaker_open,
-            "workflow_run_id": self.workflow_run_id,
-        })
+        d.update(
+            {
+                "operation": self.operation,
+                "error_type": self.error_type,
+                "error_message": self.error_message,
+                "consecutive_failures": self.consecutive_failures,
+                "circuit_breaker_open": self.circuit_breaker_open,
+                "workflow_run_id": self.workflow_run_id,
+            }
+        )
         return d
 
     @classmethod
@@ -1141,10 +1124,9 @@ class RepairCycleMetricsBackendFailedEvent(CodetoreumEvent):
         # Backward compatibility: Support both old and new field names
         if "pipeline_run_id" in data and "workflow_run_id" not in data:
             warnings.warn(
-                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. "
-                "Use 'workflow_run_id' instead.",
+                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. Use 'workflow_run_id' instead.",
                 DeprecationWarning,
-                stacklevel=2
+                stacklevel=2,
             )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
         return cls(
@@ -1205,24 +1187,26 @@ class RepairCycleCompletedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "overall_success": self.overall_success,
-            "test_results": [
-                {
-                    "test_type": r.test_type.value,
-                    "passed": r.passed,
-                    "iterations": r.iterations,
-                    "files_fixed": r.files_fixed,
-                    "warnings_reviewed": r.warnings_reviewed,
-                    "duration_seconds": r.duration_seconds,
-                    "error": r.error,
-                }
-                for r in self.test_results
-            ],
-            "total_agent_calls": self.total_agent_calls,
-            "duration_seconds": self.duration_seconds,
-            "workflow_run_id": self.workflow_run_id,
-        })
+        d.update(
+            {
+                "overall_success": self.overall_success,
+                "test_results": [
+                    {
+                        "test_type": r.test_type.value,
+                        "passed": r.passed,
+                        "iterations": r.iterations,
+                        "files_fixed": r.files_fixed,
+                        "warnings_reviewed": r.warnings_reviewed,
+                        "duration_seconds": r.duration_seconds,
+                        "error": r.error,
+                    }
+                    for r in self.test_results
+                ],
+                "total_agent_calls": self.total_agent_calls,
+                "duration_seconds": self.duration_seconds,
+                "workflow_run_id": self.workflow_run_id,
+            }
+        )
         return d
 
     @classmethod
@@ -1233,17 +1217,13 @@ class RepairCycleCompletedEvent(CodetoreumEvent):
         test_results = []
         for tr in data.get("test_results", []):
             test_type = (
-                RepairTestType(tr.get("test_type"))
-                if isinstance(tr.get("test_type"), str)
-                else RepairTestType.UNIT
+                RepairTestType(tr.get("test_type")) if isinstance(tr.get("test_type"), str) else RepairTestType.UNIT
             )
             final_result = None
             if tr.get("final_result"):
                 fr = tr.get("final_result")
                 final_test_type = (
-                    RepairTestType(fr.get("test_type"))
-                    if isinstance(fr.get("test_type"), str)
-                    else RepairTestType.UNIT
+                    RepairTestType(fr.get("test_type")) if isinstance(fr.get("test_type"), str) else RepairTestType.UNIT
                 )
                 failures = tuple(
                     RepairTestFailure(
@@ -1287,10 +1267,9 @@ class RepairCycleCompletedEvent(CodetoreumEvent):
         # Backward compatibility: Support both old and new field names
         if "pipeline_run_id" in data and "workflow_run_id" not in data:
             warnings.warn(
-                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. "
-                "Use 'workflow_run_id' instead.",
+                "Field 'pipeline_run_id' is deprecated and will be removed in v3.0. Use 'workflow_run_id' instead.",
                 DeprecationWarning,
-                stacklevel=2
+                stacklevel=2,
             )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
         return cls(

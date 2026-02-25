@@ -123,7 +123,7 @@ class TestMockBoardAdapter:
         config = BoardConfig(
             board_id="board-1",
             expected_columns=["Backlog", "In Progress", "Review", "Done"],
-            auto_create_missing=True
+            auto_create_missing=True,
         )
         result = await adapter.reconcile_board("board-1", config)
 
@@ -715,9 +715,7 @@ class TestInMemoryPipelineLockService:
         events: list[Any] = []
         service.on("lock.released", events.append)
 
-        service.simulate_lock_released(
-            "proj-1", "board-1", "item-1", "timeout", next_in_queue="item-2"
-        )
+        service.simulate_lock_released("proj-1", "board-1", "item-1", "timeout", next_in_queue="item-2")
 
         assert len(events) == 1
         assert events[0].reason == "timeout"
@@ -736,10 +734,7 @@ class TestConfigurableIdentityService:
         """Test bot detection with exact username match."""
         from codetoreum.ports.output.identity_service import BotIdentityConfig
 
-        config = BotIdentityConfig(
-            bot_usernames=["dependabot", "renovate"],
-            bot_patterns=[]
-        )
+        config = BotIdentityConfig(bot_usernames=["dependabot", "renovate"], bot_patterns=[])
         service.configure(config)
 
         assert service.is_bot_user("dependabot") is True
@@ -750,13 +745,7 @@ class TestConfigurableIdentityService:
         """Test bot detection with regex pattern."""
         from codetoreum.ports.output.identity_service import BotIdentityConfig
 
-        config = BotIdentityConfig(
-            bot_usernames=[],
-            bot_patterns=[
-                re.compile("^bot-.*"),
-                re.compile(".*-bot$")
-            ]
-        )
+        config = BotIdentityConfig(bot_usernames=[], bot_patterns=[re.compile("^bot-.*"), re.compile(".*-bot$")])
         service.configure(config)
 
         assert service.is_bot_user("bot-ci") is True
@@ -767,15 +756,10 @@ class TestConfigurableIdentityService:
         """Test filtering to get only human users."""
         from codetoreum.ports.output.identity_service import BotIdentityConfig
 
-        config = BotIdentityConfig(
-            bot_usernames=["dependabot"],
-            bot_patterns=[re.compile("^bot-.*")]
-        )
+        config = BotIdentityConfig(bot_usernames=["dependabot"], bot_patterns=[re.compile("^bot-.*")])
         service.configure(config)
 
-        humans = service.get_human_users(
-            ["alice", "dependabot", "bob", "bot-ci"]
-        )
+        humans = service.get_human_users(["alice", "dependabot", "bob", "bot-ci"])
 
         assert humans == ["alice", "bob"]
 

@@ -25,17 +25,16 @@ def create_config() -> SimulationConfig:
         speed_multiplier=100.0,
     )
 
-    config.scenario_description = (
-        "Single work item through 3-stage workflow: "
-        "Code Generation -> Review -> Testing"
-    )
+    config.scenario_description = "Single work item through 3-stage workflow: Code Generation -> Review -> Testing"
 
     # Configurable test output values
-    config.metadata.update({
-        "tests_passed": 10,
-        "tests_failed": 0,
-        "coverage_percent": 95,
-    })
+    config.metadata.update(
+        {
+            "tests_passed": 10,
+            "tests_failed": 0,
+            "coverage_percent": 95,
+        }
+    )
 
     # Configure code generator agent
     config.add_agent_response_pattern(
@@ -55,12 +54,7 @@ def create_config() -> SimulationConfig:
     config.add_agent_response_pattern(
         agent_id="code-reviewer",
         pattern=r".*review.*",
-        response=(
-            "Code review feedback:\n"
-            "- Implementation looks good\n"
-            "- OAuth2 flow is correct\n"
-            "- LGTM!"
-        ),
+        response=("Code review feedback:\n- Implementation looks good\n- OAuth2 flow is correct\n- LGTM!"),
     )
 
     # Configure test runner agent
@@ -264,13 +258,12 @@ async def test_simple_workflow():
     assert result.events_captured == 8
 
     # Verify performance goal (10-100x faster)
-    assert result.speed_multiplier >= 10.0, (
-        f"Speed multiplier {result.speed_multiplier:.1f}x is below 10x target"
-    )
+    assert result.speed_multiplier >= 10.0, f"Speed multiplier {result.speed_multiplier:.1f}x is below 10x target"
 
     print(f"\n✓ Scenario completed {result.speed_multiplier:.1f}x faster than real time")
 
 
 if __name__ == "__main__":
     import asyncio
+
     asyncio.run(test_simple_workflow())

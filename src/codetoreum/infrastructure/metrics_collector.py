@@ -68,62 +68,32 @@ class MetricsCollector:
             return
 
         # Board events
-        self.event_bus.subscribe(
-            EventTypes.WORKITEM_COLUMN_CHANGED,
-            self._record_column_change
-        )
+        self.event_bus.subscribe(EventTypes.WORKITEM_COLUMN_CHANGED, self._record_column_change)
 
         # Lock events
-        self.event_bus.subscribe(
-            EventTypes.LOCK_ACQUIRED,
-            self._record_lock_acquisition
-        )
-        self.event_bus.subscribe(
-            EventTypes.LOCK_RELEASED,
-            self._record_lock_release
-        )
+        self.event_bus.subscribe(EventTypes.LOCK_ACQUIRED, self._record_lock_acquisition)
+        self.event_bus.subscribe(EventTypes.LOCK_RELEASED, self._record_lock_release)
 
         # Review events
-        self.event_bus.subscribe(
-            EventTypes.REVIEW_STATUS_CHANGED,
-            self._record_review_status
-        )
+        self.event_bus.subscribe(EventTypes.REVIEW_STATUS_CHANGED, self._record_review_status)
 
         # Discussion events
-        self.event_bus.subscribe(
-            EventTypes.COMMENT_POSTED,
-            self._record_comment
-        )
-        self.event_bus.subscribe(
-            EventTypes.COMMENT_NEEDS_RESPONSE,
-            self._record_comment_needs_response
-        )
+        self.event_bus.subscribe(EventTypes.COMMENT_POSTED, self._record_comment)
+        self.event_bus.subscribe(EventTypes.COMMENT_NEEDS_RESPONSE, self._record_comment_needs_response)
 
         # Repair cycle events
-        self.event_bus.subscribe(
-            EventTypes.REPAIR_CYCLE_STARTED,
-            self._record_repair_cycle_started
-        )
+        self.event_bus.subscribe(EventTypes.REPAIR_CYCLE_STARTED, self._record_repair_cycle_started)
         self.event_bus.subscribe(
             EventTypes.REPAIR_CYCLE_TEST_EXECUTION_COMPLETED,
-            self._record_repair_cycle_test_execution
+            self._record_repair_cycle_test_execution,
         )
-        self.event_bus.subscribe(
-            EventTypes.REPAIR_CYCLE_FILE_FIX_COMPLETED,
-            self._record_repair_cycle_file_fix
-        )
+        self.event_bus.subscribe(EventTypes.REPAIR_CYCLE_FILE_FIX_COMPLETED, self._record_repair_cycle_file_fix)
         self.event_bus.subscribe(
             EventTypes.REPAIR_CYCLE_WARNING_REVIEW_COMPLETED,
-            self._record_repair_cycle_warning_review
+            self._record_repair_cycle_warning_review,
         )
-        self.event_bus.subscribe(
-            EventTypes.REPAIR_CYCLE_FAST_FAIL,
-            self._record_repair_cycle_fast_fail
-        )
-        self.event_bus.subscribe(
-            EventTypes.REPAIR_CYCLE_COMPLETED,
-            self._record_repair_cycle_completed
-        )
+        self.event_bus.subscribe(EventTypes.REPAIR_CYCLE_FAST_FAIL, self._record_repair_cycle_fast_fail)
+        self.event_bus.subscribe(EventTypes.REPAIR_CYCLE_COMPLETED, self._record_repair_cycle_completed)
 
         logger.info("MetricsCollector subscribed to adapter events")
 
@@ -176,15 +146,14 @@ class MetricsCollector:
                 self._metrics["agents_triggered"] += 1
 
             logger.debug(
-                f"Recorded column change to '{to_column}' "
-                f"(total: {self._metrics['column_changes'][to_column]})"
+                f"Recorded column change to '{to_column}' (total: {self._metrics['column_changes'][to_column]})"
             )
 
         except Exception as e:
             logger.error(
                 f"Error recording column change metric: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_METRICS_COLUMN_CHANGE_FAILED"}
+                extra={"error_id": "ERR_METRICS_COLUMN_CHANGE_FAILED"},
             )
             self._metrics["errors"] += 1
 
@@ -200,15 +169,14 @@ class MetricsCollector:
             acquisition_method = self._get_event_attribute(event, "acquisition_method", "unknown")
 
             logger.debug(
-                f"Recorded lock acquisition "
-                f"(method: {acquisition_method}, total: {self._metrics['lock_acquisitions']})"
+                f"Recorded lock acquisition (method: {acquisition_method}, total: {self._metrics['lock_acquisitions']})"
             )
 
         except Exception as e:
             logger.error(
                 f"Error recording lock acquisition metric: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_METRICS_LOCK_ACQUISITION_FAILED"}
+                extra={"error_id": "ERR_METRICS_LOCK_ACQUISITION_FAILED"},
             )
             self._metrics["errors"] += 1
 
@@ -229,16 +197,13 @@ class MetricsCollector:
             if duration_ms:
                 self._metrics["lock_wait_time_ms"].append(duration_ms)
 
-            logger.debug(
-                f"Recorded lock release "
-                f"(reason: {reason}, total: {self._metrics['lock_releases']})"
-            )
+            logger.debug(f"Recorded lock release (reason: {reason}, total: {self._metrics['lock_releases']})")
 
         except Exception as e:
             logger.error(
                 f"Error recording lock release metric: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_METRICS_LOCK_RELEASE_FAILED"}
+                extra={"error_id": "ERR_METRICS_LOCK_RELEASE_FAILED"},
             )
             self._metrics["errors"] += 1
 
@@ -254,22 +219,16 @@ class MetricsCollector:
 
             if new_status == "approved":
                 self._metrics["reviews_approved"] += 1
-                logger.debug(
-                    f"Recorded review approval "
-                    f"(total approved: {self._metrics['reviews_approved']})"
-                )
+                logger.debug(f"Recorded review approval (total approved: {self._metrics['reviews_approved']})")
             elif new_status == "changes_requested":
                 self._metrics["reviews_changes_requested"] += 1
-                logger.debug(
-                    f"Recorded changes requested "
-                    f"(total: {self._metrics['reviews_changes_requested']})"
-                )
+                logger.debug(f"Recorded changes requested (total: {self._metrics['reviews_changes_requested']})")
 
         except Exception as e:
             logger.error(
                 f"Error recording review status metric: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_METRICS_REVIEW_STATUS_FAILED"}
+                extra={"error_id": "ERR_METRICS_REVIEW_STATUS_FAILED"},
             )
             self._metrics["errors"] += 1
 
@@ -282,16 +241,13 @@ class MetricsCollector:
         """
         try:
             self._metrics["comments_processed"] += 1
-            logger.debug(
-                f"Recorded comment posted "
-                f"(total: {self._metrics['comments_processed']})"
-            )
+            logger.debug(f"Recorded comment posted (total: {self._metrics['comments_processed']})")
 
         except Exception as e:
             logger.error(
                 f"Error recording comment metric: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_METRICS_COMMENT_FAILED"}
+                extra={"error_id": "ERR_METRICS_COMMENT_FAILED"},
             )
             self._metrics["errors"] += 1
 
@@ -311,7 +267,7 @@ class MetricsCollector:
             logger.error(
                 f"Error recording comment response metric: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_METRICS_COMMENT_RESPONSE_FAILED"}
+                extra={"error_id": "ERR_METRICS_COMMENT_RESPONSE_FAILED"},
             )
             self._metrics["errors"] += 1
 
@@ -334,7 +290,7 @@ class MetricsCollector:
             logger.error(
                 f"Error recording repair cycle started metric: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_METRICS_REPAIR_CYCLE_STARTED_FAILED"}
+                extra={"error_id": "ERR_METRICS_REPAIR_CYCLE_STARTED_FAILED"},
             )
             self._metrics["errors"] += 1
 
@@ -365,7 +321,7 @@ class MetricsCollector:
             logger.error(
                 f"Error recording repair cycle test execution metric: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_METRICS_REPAIR_CYCLE_TEST_FAILED"}
+                extra={"error_id": "ERR_METRICS_REPAIR_CYCLE_TEST_FAILED"},
             )
             self._metrics["errors"] += 1
 
@@ -387,16 +343,13 @@ class MetricsCollector:
             if fixed:
                 self._metrics["repair_cycle_file_fixes"][file_path] += 1
 
-            logger.debug(
-                f"Recorded repair cycle file fix: {file_path} "
-                f"(fixed: {fixed}, iterations: {iterations_used})"
-            )
+            logger.debug(f"Recorded repair cycle file fix: {file_path} (fixed: {fixed}, iterations: {iterations_used})")
 
         except Exception as e:
             logger.error(
                 f"Error recording repair cycle file fix metric: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_METRICS_REPAIR_CYCLE_FILE_FIX_FAILED"}
+                extra={"error_id": "ERR_METRICS_REPAIR_CYCLE_FILE_FIX_FAILED"},
             )
             self._metrics["errors"] += 1
 
@@ -411,16 +364,13 @@ class MetricsCollector:
             warnings_reviewed = self._get_event_attribute(event, "warnings_reviewed", 0)
             self._metrics["repair_cycle_warnings_reviewed"] += warnings_reviewed
 
-            logger.debug(
-                f"Recorded repair cycle warning review "
-                f"(warnings reviewed: {warnings_reviewed})"
-            )
+            logger.debug(f"Recorded repair cycle warning review (warnings reviewed: {warnings_reviewed})")
 
         except Exception as e:
             logger.error(
                 f"Error recording repair cycle warning review metric: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_METRICS_REPAIR_CYCLE_WARNING_REVIEW_FAILED"}
+                extra={"error_id": "ERR_METRICS_REPAIR_CYCLE_WARNING_REVIEW_FAILED"},
             )
             self._metrics["errors"] += 1
 
@@ -444,7 +394,7 @@ class MetricsCollector:
             logger.error(
                 f"Error recording repair cycle fast-fail metric: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_METRICS_REPAIR_CYCLE_FAST_FAIL_FAILED"}
+                extra={"error_id": "ERR_METRICS_REPAIR_CYCLE_FAST_FAIL_FAILED"},
             )
             self._metrics["errors"] += 1
 
@@ -484,7 +434,7 @@ class MetricsCollector:
             logger.error(
                 f"Error recording repair cycle completed metric: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_METRICS_REPAIR_CYCLE_COMPLETED_FAILED"}
+                extra={"error_id": "ERR_METRICS_REPAIR_CYCLE_COMPLETED_FAILED"},
             )
             self._metrics["errors"] += 1
 
@@ -498,31 +448,26 @@ class MetricsCollector:
         # Calculate averages
         avg_lock_wait_ms = None
         if self._metrics["lock_wait_time_ms"]:
-            avg_lock_wait_ms = sum(self._metrics["lock_wait_time_ms"]) / len(
-                self._metrics["lock_wait_time_ms"]
-            )
+            avg_lock_wait_ms = sum(self._metrics["lock_wait_time_ms"]) / len(self._metrics["lock_wait_time_ms"])
 
         # Calculate repair cycle averages
         avg_repair_cycle_duration_seconds = None
         if self._metrics["repair_cycle_duration_seconds"]:
-            avg_repair_cycle_duration_seconds = (
-                sum(self._metrics["repair_cycle_duration_seconds"]) /
-                len(self._metrics["repair_cycle_duration_seconds"])
+            avg_repair_cycle_duration_seconds = sum(self._metrics["repair_cycle_duration_seconds"]) / len(
+                self._metrics["repair_cycle_duration_seconds"]
             )
 
         avg_repair_cycle_agent_calls = None
         if self._metrics["repair_cycle_agent_calls"]:
-            avg_repair_cycle_agent_calls = (
-                sum(self._metrics["repair_cycle_agent_calls"]) /
-                len(self._metrics["repair_cycle_agent_calls"])
+            avg_repair_cycle_agent_calls = sum(self._metrics["repair_cycle_agent_calls"]) / len(
+                self._metrics["repair_cycle_agent_calls"]
             )
 
         # Calculate repair cycle success rate
         repair_cycle_success_rate = None
         if self._metrics["repair_cycles_completed"] > 0:
             repair_cycle_success_rate = (
-                self._metrics["repair_cycles_successful"] /
-                self._metrics["repair_cycles_completed"] * 100
+                self._metrics["repair_cycles_successful"] / self._metrics["repair_cycles_completed"] * 100
             )
 
         return {

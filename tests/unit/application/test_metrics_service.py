@@ -40,7 +40,7 @@ class MockEvent(DomainEvent):
             "aggregate_id": self.aggregate_id,
             "aggregate_type": self.aggregate_type,
             "occurred_at": self.occurred_at.isoformat(),
-            "payload": self.payload
+            "payload": self.payload,
         }
 
 
@@ -126,7 +126,8 @@ class MockEventStore(IEventStore):
             # Normalize both datetimes to naive UTC for comparison
             since_naive = since.replace(tzinfo=None) if since.tzinfo else since
             events = [
-                e for e in events
+                e
+                for e in events
                 if (e.occurred_at.replace(tzinfo=None) if e.occurred_at.tzinfo else e.occurred_at) >= since_naive
             ]
 
@@ -158,7 +159,7 @@ class MockEventStore(IEventStore):
             raise Exception("Failed to get statistics")
         return {
             "total_events": len(self.events),
-            "event_types": len(set(e.event_type for e in self.events))
+            "event_types": len(set(e.event_type for e in self.events)),
         }
 
     async def clear(self) -> None:
@@ -175,7 +176,7 @@ class TestMetricsServiceHealthCheck:
         metrics_service = MetricsService(
             event_store=event_store,
             start_time=datetime.now(),  # Use naive datetime like the service does
-            version="1.0.0"
+            version="1.0.0",
         )
 
         health = await metrics_service.get_system_health()
@@ -195,15 +196,13 @@ class TestMetricsServiceHealthCheck:
         metrics_service = MetricsService(
             event_store=event_store,
             start_time=datetime.now() - timedelta(hours=1),  # Use naive datetime
-            version="1.0.0"
+            version="1.0.0",
         )
 
         health = await metrics_service.get_system_health()
 
         assert health.status == ComponentHealth.UNHEALTHY
-        event_store_health = next(
-            (c for c in health.components if c.component_name == "event_store"), None
-        )
+        event_store_health = next((c for c in health.components if c.component_name == "event_store"), None)
         assert event_store_health is not None
         assert event_store_health.status == ComponentHealth.UNHEALTHY
 
@@ -212,11 +211,7 @@ class TestMetricsServiceHealthCheck:
         """Test getting health for specific component."""
         event_store = MockEventStore()
         start_time = datetime.now(UTC)
-        metrics_service = MetricsService(
-            event_store=event_store,
-            start_time=start_time,
-            version="1.0.0"
-        )
+        metrics_service = MetricsService(event_store=event_store, start_time=start_time, version="1.0.0")
 
         health = await metrics_service.get_component_health("event_store")
 
@@ -228,14 +223,11 @@ class TestMetricsServiceHealthCheck:
     async def test_get_component_health_unknown_component(self):
         """Test requesting unknown component raises error."""
         event_store = MockEventStore()
-        metrics_service = MetricsService(
-            event_store=event_store,
-            start_time=datetime.now(UTC),
-            version="1.0.0"
-        )
+        metrics_service = MetricsService(event_store=event_store, start_time=datetime.now(UTC), version="1.0.0")
 
         with pytest.raises(ComponentNotFoundError):
             await metrics_service.get_component_health("unknown_component")
+
 
 class TestMetricsServicePerformance:
     """Tests for performance metrics."""
@@ -244,11 +236,7 @@ class TestMetricsServicePerformance:
     async def test_get_performance_metrics_no_events(self):
         """Test performance metrics with no events."""
         event_store = MockEventStore()
-        metrics_service = MetricsService(
-            event_store=event_store,
-            start_time=datetime.now(UTC),
-            version="1.0.0"
-        )
+        metrics_service = MetricsService(event_store=event_store, start_time=datetime.now(UTC), version="1.0.0")
 
         start = datetime.now(UTC) - timedelta(hours=1)
         end = datetime.now(UTC)
@@ -264,11 +252,7 @@ class TestMetricsServicePerformance:
     async def test_get_performance_metrics_with_executions(self):
         """Test performance metrics aggregation."""
         event_store = MockEventStore()
-        metrics_service = MetricsService(
-            event_store=event_store,
-            start_time=datetime.now(UTC),
-            version="1.0.0"
-        )
+        metrics_service = MetricsService(event_store=event_store, start_time=datetime.now(UTC), version="1.0.0")
 
         # Create test events
         now = datetime.now(UTC)
@@ -276,7 +260,7 @@ class TestMetricsServicePerformance:
         completed_event = MockEvent(
             "AgentExecutionCompleted",
             {"agent_name": "test_agent", "duration_seconds": 45.5},
-            now + timedelta(seconds=45)
+            now + timedelta(seconds=45),
         )
 
         await event_store.append("stream-1", [started_event])
@@ -294,11 +278,7 @@ class TestMetricsServicePerformance:
     async def test_get_performance_metrics_active_executions(self):
         """Test calculation of active executions."""
         event_store = MockEventStore()
-        metrics_service = MetricsService(
-            event_store=event_store,
-            start_time=datetime.now(UTC),
-            version="1.0.0"
-        )
+        metrics_service = MetricsService(event_store=event_store, start_time=datetime.now(UTC), version="1.0.0")
 
         now = datetime.now(UTC)
 
@@ -324,27 +304,30 @@ class TestMetricsServiceAgentMetrics:
     async def test_get_agent_execution_metrics_all_agents(self):
         """Test aggregation of metrics for all agents."""
         event_store = MockEventStore()
-        metrics_service = MetricsService(
-            event_store=event_store,
-            start_time=datetime.now(UTC),
-            version="1.0.0"
-        )
+        metrics_service = MetricsService(event_store=event_store, start_time=datetime.now(UTC), version="1.0.0")
 
         now = datetime.now(UTC)
 
         # Create test events
         await event_store.append("stream-1", [MockEvent("AgentExecutionStarted", {"agent_name": "agent_a"}, now)])
         await event_store.append("stream-1", [MockEvent("AgentExecutionStarted", {"agent_name": "agent_b"}, now)])
-        await event_store.append("stream-1", [
-            MockEvent("AgentExecutionCompleted", {"agent_name": "agent_a", "duration_seconds": 30.0}, now + timedelta(seconds=30))
-        ])
-        await event_store.append("stream-1", [
-            MockEvent("AgentExecutionFailed", {"agent_name": "agent_b"}, now + timedelta(seconds=10))
-        ])
+        await event_store.append(
+            "stream-1",
+            [
+                MockEvent(
+                    "AgentExecutionCompleted",
+                    {"agent_name": "agent_a", "duration_seconds": 30.0},
+                    now + timedelta(seconds=30),
+                )
+            ],
+        )
+        await event_store.append(
+            "stream-1",
+            [MockEvent("AgentExecutionFailed", {"agent_name": "agent_b"}, now + timedelta(seconds=10))],
+        )
 
         metrics = await metrics_service.get_agent_execution_metrics(
-            start_time=now - timedelta(hours=1),
-            end_time=now + timedelta(hours=1)
+            start_time=now - timedelta(hours=1), end_time=now + timedelta(hours=1)
         )
 
         assert metrics["agent_name"] == "all"
@@ -357,25 +340,28 @@ class TestMetricsServiceAgentMetrics:
     async def test_get_agent_execution_metrics_specific_agent(self):
         """Test filtering metrics by specific agent."""
         event_store = MockEventStore()
-        metrics_service = MetricsService(
-            event_store=event_store,
-            start_time=datetime.now(UTC),
-            version="1.0.0"
-        )
+        metrics_service = MetricsService(event_store=event_store, start_time=datetime.now(UTC), version="1.0.0")
 
         now = datetime.now(UTC)
 
         # Create test events
         await event_store.append("stream-1", [MockEvent("AgentExecutionStarted", {"agent_name": "agent_a"}, now)])
         await event_store.append("stream-1", [MockEvent("AgentExecutionStarted", {"agent_name": "agent_b"}, now)])
-        await event_store.append("stream-1", [
-            MockEvent("AgentExecutionCompleted", {"agent_name": "agent_a", "duration_seconds": 25.0}, now + timedelta(seconds=25))
-        ])
+        await event_store.append(
+            "stream-1",
+            [
+                MockEvent(
+                    "AgentExecutionCompleted",
+                    {"agent_name": "agent_a", "duration_seconds": 25.0},
+                    now + timedelta(seconds=25),
+                )
+            ],
+        )
 
         metrics = await metrics_service.get_agent_execution_metrics(
             agent_name="agent_a",
             start_time=now - timedelta(hours=1),
-            end_time=now + timedelta(hours=1)
+            end_time=now + timedelta(hours=1),
         )
 
         assert metrics["agent_name"] == "agent_a"
@@ -386,31 +372,37 @@ class TestMetricsServiceAgentMetrics:
     async def test_get_agent_execution_metrics_duration_stats(self):
         """Test duration statistics calculation."""
         event_store = MockEventStore()
-        metrics_service = MetricsService(
-            event_store=event_store,
-            start_time=datetime.now(UTC),
-            version="1.0.0"
-        )
+        metrics_service = MetricsService(event_store=event_store, start_time=datetime.now(UTC), version="1.0.0")
 
         now = datetime.now(UTC)
 
         # Create multiple executions with different durations
         for i in range(3):
-            await event_store.append("stream-1", [
-                MockEvent("AgentExecutionStarted", {"agent_name": "test"}, now + timedelta(seconds=i*50))
-            ])
-            await event_store.append("stream-1", [
-                MockEvent(
-                    "AgentExecutionCompleted",
-                    {"agent_name": "test", "duration_seconds": 10.0 + i*5},
-                    now + timedelta(seconds=i*50 + 10 + i*5)
-                )
-            ])
+            await event_store.append(
+                "stream-1",
+                [
+                    MockEvent(
+                        "AgentExecutionStarted",
+                        {"agent_name": "test"},
+                        now + timedelta(seconds=i * 50),
+                    )
+                ],
+            )
+            await event_store.append(
+                "stream-1",
+                [
+                    MockEvent(
+                        "AgentExecutionCompleted",
+                        {"agent_name": "test", "duration_seconds": 10.0 + i * 5},
+                        now + timedelta(seconds=i * 50 + 10 + i * 5),
+                    )
+                ],
+            )
 
         metrics = await metrics_service.get_agent_execution_metrics(
             agent_name="test",
             start_time=now - timedelta(hours=1),
-            end_time=now + timedelta(hours=1)
+            end_time=now + timedelta(hours=1),
         )
 
         # Durations: 10, 15, 20
@@ -426,11 +418,7 @@ class TestMetricsServiceActiveAgents:
     async def test_get_active_agents_empty(self):
         """Test active agents list when empty."""
         event_store = MockEventStore()
-        metrics_service = MetricsService(
-            event_store=event_store,
-            start_time=datetime.now(UTC),
-            version="1.0.0"
-        )
+        metrics_service = MetricsService(event_store=event_store, start_time=datetime.now(UTC), version="1.0.0")
 
         result = await metrics_service.get_active_agents()
 
@@ -442,36 +430,35 @@ class TestMetricsServiceActiveAgents:
         """Test active agents list includes only incomplete executions."""
         event_store = MockEventStore()
         start_time = datetime.now()  # Use naive datetime
-        metrics_service = MetricsService(
-            event_store=event_store,
-            start_time=start_time,
-            version="1.0.0"
-        )
+        metrics_service = MetricsService(event_store=event_store, start_time=start_time, version="1.0.0")
 
         now = datetime.now()  # Use naive datetime to match service usage
 
         # Create test events - one active, one completed
-        await event_store.append("stream-1", [
-            MockEvent(
-                "AgentExecutionStarted",
-                {"execution_id": "exec_1", "agent_name": "agent_a", "work_item_id": "wi_1"},
-                now - timedelta(hours=12)
-            )
-        ])
-        await event_store.append("stream-1", [
-            MockEvent(
-                "AgentExecutionStarted",
-                {"execution_id": "exec_2", "agent_name": "agent_b", "work_item_id": "wi_2"},
-                now - timedelta(hours=6)
-            )
-        ])
-        await event_store.append("stream-1", [
-            MockEvent(
-                "AgentExecutionCompleted",
-                {"execution_id": "exec_1"},
-                now - timedelta(hours=10)
-            )
-        ])
+        await event_store.append(
+            "stream-1",
+            [
+                MockEvent(
+                    "AgentExecutionStarted",
+                    {"execution_id": "exec_1", "agent_name": "agent_a", "work_item_id": "wi_1"},
+                    now - timedelta(hours=12),
+                )
+            ],
+        )
+        await event_store.append(
+            "stream-1",
+            [
+                MockEvent(
+                    "AgentExecutionStarted",
+                    {"execution_id": "exec_2", "agent_name": "agent_b", "work_item_id": "wi_2"},
+                    now - timedelta(hours=6),
+                )
+            ],
+        )
+        await event_store.append(
+            "stream-1",
+            [MockEvent("AgentExecutionCompleted", {"execution_id": "exec_1"}, now - timedelta(hours=10))],
+        )
 
         result = await metrics_service.get_active_agents()
 
@@ -488,11 +475,7 @@ class TestMetricsServiceIntegrationStatus:
     async def test_get_integration_status_event_store_healthy(self):
         """Test integration status with healthy event store."""
         event_store = MockEventStore()
-        metrics_service = MetricsService(
-            event_store=event_store,
-            start_time=datetime.now(UTC),
-            version="1.0.0"
-        )
+        metrics_service = MetricsService(event_store=event_store, start_time=datetime.now(UTC), version="1.0.0")
 
         status = await metrics_service.get_integration_status()
 
@@ -506,11 +489,7 @@ class TestMetricsServiceIntegrationStatus:
         event_store = MockEventStore()
         event_store.should_fail = True
 
-        metrics_service = MetricsService(
-            event_store=event_store,
-            start_time=datetime.now(UTC),
-            version="1.0.0"
-        )
+        metrics_service = MetricsService(event_store=event_store, start_time=datetime.now(UTC), version="1.0.0")
 
         status = await metrics_service.get_integration_status()
 
@@ -525,11 +504,7 @@ class TestMetricsServiceErrorHandling:
     async def test_metrics_with_missing_event_fields(self):
         """Test metrics calculation handles missing event fields gracefully."""
         event_store = MockEventStore()
-        metrics_service = MetricsService(
-            event_store=event_store,
-            start_time=datetime.now(UTC),
-            version="1.0.0"
-        )
+        metrics_service = MetricsService(event_store=event_store, start_time=datetime.now(UTC), version="1.0.0")
 
         now = datetime.now(UTC)
 
@@ -537,18 +512,14 @@ class TestMetricsServiceErrorHandling:
         incomplete_event = MockEvent(
             "AgentExecutionCompleted",
             {"agent_name": "test"},  # No duration_seconds
-            now
+            now,
         )
         await event_store.append("stream-1", [incomplete_event])
 
         # Should not raise, just handle gracefully
-        metrics = await metrics_service.get_performance_metrics(
-            now - timedelta(hours=1),
-            now + timedelta(hours=1)
-        )
+        metrics = await metrics_service.get_performance_metrics(now - timedelta(hours=1), now + timedelta(hours=1))
 
         assert metrics.avg_execution_duration_seconds == 0.0
-
 
 
 class TestMetricsServiceEdgeCases:
@@ -558,21 +529,11 @@ class TestMetricsServiceEdgeCases:
     async def test_performance_metrics_with_zero_duration(self):
         """Test handling of executions with zero duration."""
         event_store = MockEventStore()
-        metrics_service = MetricsService(
-            event_store=event_store,
-            start_time=datetime.now(UTC),
-            version="1.0.0"
-        )
+        metrics_service = MetricsService(event_store=event_store, start_time=datetime.now(UTC), version="1.0.0")
 
         now = datetime.now(UTC)
-        await event_store.append("stream-1", [
-            MockEvent("AgentExecutionCompleted", {"duration_seconds": 0.0}, now)
-        ])
+        await event_store.append("stream-1", [MockEvent("AgentExecutionCompleted", {"duration_seconds": 0.0}, now)])
 
-        metrics = await metrics_service.get_performance_metrics(
-            now - timedelta(hours=1),
-            now + timedelta(hours=1)
-        )
+        metrics = await metrics_service.get_performance_metrics(now - timedelta(hours=1), now + timedelta(hours=1))
 
         assert metrics.avg_execution_duration_seconds == 0.0
-

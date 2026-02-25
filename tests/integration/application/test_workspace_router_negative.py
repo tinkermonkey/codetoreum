@@ -207,8 +207,12 @@ async def test_route_workspace_analyst_on_code_work_fails(
 
 @pytest.mark.asyncio
 async def test_prepare_workspace_branch_creation_fails(
-    workspace_router, code_work_item, developer_agent, sample_project,
-    mock_repository, repository_path
+    workspace_router,
+    code_work_item,
+    developer_agent,
+    sample_project,
+    mock_repository,
+    repository_path,
 ):
     """Test workspace preparation when branch creation fails."""
     context = await workspace_router.route_workspace(
@@ -234,8 +238,12 @@ async def test_prepare_workspace_branch_creation_fails(
 
 @pytest.mark.asyncio
 async def test_finalize_workspace_commit_fails(
-    workspace_router, code_work_item, developer_agent, sample_project,
-    mock_repository, repository_path
+    workspace_router,
+    code_work_item,
+    developer_agent,
+    sample_project,
+    mock_repository,
+    repository_path,
 ):
     """Test workspace finalization when commit fails."""
     from codetoreum.ports.output.repository import RepositoryStatus
@@ -273,8 +281,12 @@ async def test_finalize_workspace_commit_fails(
 
 @pytest.mark.asyncio
 async def test_finalize_workspace_push_fails(
-    workspace_router, code_work_item, developer_agent, sample_project,
-    mock_repository, repository_path
+    workspace_router,
+    code_work_item,
+    developer_agent,
+    sample_project,
+    mock_repository,
+    repository_path,
 ):
     """Test workspace finalization when push fails."""
     from codetoreum.ports.output.repository import RepositoryStatus
@@ -323,8 +335,12 @@ async def test_finalize_workspace_push_fails(
 
 @pytest.mark.asyncio
 async def test_prepare_workspace_checkout_fails(
-    workspace_router, code_work_item, developer_agent, sample_project,
-    mock_repository, repository_path
+    workspace_router,
+    code_work_item,
+    developer_agent,
+    sample_project,
+    mock_repository,
+    repository_path,
 ):
     """Test workspace preparation when checkout fails."""
     context = await workspace_router.route_workspace(

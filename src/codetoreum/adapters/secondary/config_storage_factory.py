@@ -44,10 +44,7 @@ def create_elasticsearch_config_storage(
         replica_count=replica_count,
     )
 
-    logger.info(
-        f"Created Elasticsearch config storage "
-        f"(shards={shard_count}, replicas={replica_count})"
-    )
+    logger.info(f"Created Elasticsearch config storage (shards={shard_count}, replicas={replica_count})")
 
     return storage
 
@@ -77,10 +74,7 @@ def create_redis_config_cache(
         invalidation_channel=invalidation_channel,
     )
 
-    logger.info(
-        f"Created Redis config cache "
-        f"(prefix={key_prefix}, ttl={default_ttl}s)"
-    )
+    logger.info(f"Created Redis config cache (prefix={key_prefix}, ttl={default_ttl}s)")
 
     return cache
 
@@ -167,9 +161,7 @@ def create_cached_config_store(
         cache=cache,
     )
 
-    logger.info(
-        "Created cached config store with Elasticsearch storage and Redis cache"
-    )
+    logger.info("Created cached config store with Elasticsearch storage and Redis cache")
 
     return cached_store
 

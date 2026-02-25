@@ -20,6 +20,7 @@ from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStat
 
 # Test fixtures
 
+
 # Helper function to create test agents
 def create_test_agent(agent_id: str, agent_name: str, requires_dev_container: bool = False):
     """Helper to create test agents."""
@@ -28,9 +29,7 @@ def create_test_agent(agent_id: str, agent_name: str, requires_dev_container: bo
         name=agent_name,
         display_name=agent_name.replace("-", " ").title(),
         agent_type=AgentType.DEVELOPER,
-        capabilities={
-            "code_generation": AgentCapability(skill="code_generation", proficiency=0.9)
-        },
+        capabilities={"code_generation": AgentCapability(skill="code_generation", proficiency=0.9)},
         role_description="Test agent for scheduling",
         model="claude-sonnet-4-5",
         timeout_seconds=300,
@@ -44,7 +43,6 @@ def create_test_agent(agent_id: str, agent_name: str, requires_dev_container: bo
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
     )
-
 
 
 @pytest.fixture
@@ -62,9 +60,7 @@ def mock_resource_monitor():
 
 @pytest.fixture
 def mock_rate_limiter():
-    return MockRateLimiter(
-        rate_limited_agents={"limited-agent": True, "available-agent": False}
-    )
+    return MockRateLimiter(rate_limited_agents={"limited-agent": True, "available-agent": False})
 
 
 @pytest.fixture
@@ -165,13 +161,9 @@ def sample_agent():
 
 
 @pytest.mark.asyncio
-async def test_schedule_success(
-    scheduler, mock_task_queue, mock_scheduling_events, sample_work_item, sample_agent
-):
+async def test_schedule_success(scheduler, mock_task_queue, mock_scheduling_events, sample_work_item, sample_agent):
     """Test successful task scheduling."""
-    result = await scheduler.schedule(
-        sample_work_item, sample_agent, WorkItemPriority.MEDIUM
-    )
+    result = await scheduler.schedule(sample_work_item, sample_agent, WorkItemPriority.MEDIUM)
 
     assert result.success is True
     assert result.action == ScheduleAction.QUEUED
@@ -189,15 +181,11 @@ async def test_schedule_success(
 
 
 @pytest.mark.asyncio
-async def test_schedule_rate_limited(
-    scheduler, mock_task_queue, mock_scheduling_events, sample_work_item
-):
+async def test_schedule_rate_limited(scheduler, mock_task_queue, mock_scheduling_events, sample_work_item):
     """Test scheduling when rate limited."""
     limited_agent = create_test_agent("limited-agent", "limited_agent")
 
-    result = await scheduler.schedule(
-        sample_work_item, limited_agent, WorkItemPriority.MEDIUM
-    )
+    result = await scheduler.schedule(sample_work_item, limited_agent, WorkItemPriority.MEDIUM)
 
     assert result.success is False
     assert result.action == ScheduleAction.THROTTLED
@@ -216,9 +204,7 @@ async def test_schedule_rate_limited(
 
 
 @pytest.mark.asyncio
-async def test_schedule_resource_unavailable_dev_container(
-    scheduler, mock_task_queue, mock_scheduling_events
-):
+async def test_schedule_resource_unavailable_dev_container(scheduler, mock_task_queue, mock_scheduling_events):
     """Test scheduling when dev container unavailable."""
     work_item = WorkItem(
         id="work-item-2",
@@ -265,9 +251,7 @@ async def test_schedule_resource_unavailable_max_concurrency(
     """Test scheduling when max concurrency reached."""
     busy_agent = create_test_agent("busy-agent", "busy_agent")
 
-    result = await scheduler.schedule(
-        sample_work_item, busy_agent, WorkItemPriority.MEDIUM
-    )
+    result = await scheduler.schedule(sample_work_item, busy_agent, WorkItemPriority.MEDIUM)
 
     assert result.success is False
     assert result.action == ScheduleAction.RESOURCE_UNAVAILABLE
@@ -342,14 +326,10 @@ async def test_get_queue_depth(scheduler, mock_task_queue, sample_work_item, sam
 
 
 @pytest.mark.asyncio
-async def test_schedule_with_priority(
-    scheduler, mock_task_queue, sample_work_item, sample_agent
-):
+async def test_schedule_with_priority(scheduler, mock_task_queue, sample_work_item, sample_agent):
     """Test scheduling with different priorities."""
     # Schedule high priority task
-    result_high = await scheduler.schedule(
-        sample_work_item, sample_agent, WorkItemPriority.HIGH
-    )
+    result_high = await scheduler.schedule(sample_work_item, sample_agent, WorkItemPriority.HIGH)
 
     assert result_high.success is True
 
@@ -360,9 +340,7 @@ async def test_schedule_with_priority(
 
 
 @pytest.mark.asyncio
-async def test_schedule_task_context(
-    scheduler, mock_task_queue, sample_work_item, sample_agent
-):
+async def test_schedule_task_context(scheduler, mock_task_queue, sample_work_item, sample_agent):
     """Test task context is built correctly."""
     await scheduler.schedule(sample_work_item, sample_agent, WorkItemPriority.MEDIUM)
 
@@ -377,9 +355,7 @@ async def test_schedule_task_context(
 
 
 @pytest.mark.asyncio
-async def test_schedule_multiple_tasks(
-    scheduler, mock_task_queue, sample_agent
-):
+async def test_schedule_multiple_tasks(scheduler, mock_task_queue, sample_agent):
     """Test scheduling multiple tasks for same agent."""
     # Create multiple work items
     work_items = [
@@ -406,9 +382,7 @@ async def test_schedule_multiple_tasks(
 
     # Schedule all work items
     for work_item in work_items:
-        result = await scheduler.schedule(
-            work_item, sample_agent, WorkItemPriority.MEDIUM
-        )
+        result = await scheduler.schedule(work_item, sample_agent, WorkItemPriority.MEDIUM)
         assert result.success is True
 
     # Verify all tasks queued
@@ -417,15 +391,11 @@ async def test_schedule_multiple_tasks(
 
 
 @pytest.mark.asyncio
-async def test_schedule_config_error(
-    scheduler, mock_task_queue, mock_scheduling_events, sample_work_item
-):
+async def test_schedule_config_error(scheduler, mock_task_queue, mock_scheduling_events, sample_work_item):
     """Test scheduling with unknown agent."""
     unknown_agent = create_test_agent("unknown-agent", "unknown_agent")
 
-    result = await scheduler.schedule(
-        sample_work_item, unknown_agent, WorkItemPriority.MEDIUM
-    )
+    result = await scheduler.schedule(sample_work_item, unknown_agent, WorkItemPriority.MEDIUM)
 
     # Should succeed with default config
     assert result.success is True

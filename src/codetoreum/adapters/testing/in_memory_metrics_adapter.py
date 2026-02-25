@@ -384,17 +384,11 @@ class InMemoryMetricsAdapter(IMetrics):
                 return []
 
             # Filter by time range
-            results = [
-                m for m in self._metrics[name]
-                if start_time <= m.timestamp <= end_time
-            ]
+            results = [m for m in self._metrics[name] if start_time <= m.timestamp <= end_time]
 
             # Filter by labels if provided
             if labels:
-                results = [
-                    m for m in results
-                    if all(m.labels.get(k) == v for k, v in labels.items())
-                ]
+                results = [m for m in results if all(m.labels.get(k) == v for k, v in labels.items())]
 
             # Apply aggregation if requested
             if aggregation and results:
@@ -412,13 +406,15 @@ class InMemoryMetricsAdapter(IMetrics):
                     raise ValidationError(msg)
 
                 # Return single aggregated result
-                return [MetricData(
-                    timestamp=results[-1].timestamp,
-                    name=name,
-                    value=agg_value,
-                    labels=labels or {},
-                    metric_type=results[0].metric_type,
-                )]
+                return [
+                    MetricData(
+                        timestamp=results[-1].timestamp,
+                        name=name,
+                        value=agg_value,
+                        labels=labels or {},
+                        metric_type=results[0].metric_type,
+                    )
+                ]
 
             return results
 
@@ -502,8 +498,7 @@ class InMemoryMetricsAdapter(IMetrics):
             if labels:
                 # Delete specific series
                 self._metrics[name] = [
-                    m for m in self._metrics[name]
-                    if not all(m.labels.get(k) == v for k, v in labels.items())
+                    m for m in self._metrics[name] if not all(m.labels.get(k) == v for k, v in labels.items())
                 ]
                 if not self._metrics[name]:
                     del self._metrics[name]

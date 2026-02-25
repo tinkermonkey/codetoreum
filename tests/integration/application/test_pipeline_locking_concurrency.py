@@ -56,10 +56,7 @@ class TestPipelineLockingConcurrency:
         # Spawn 10 tasks trying to acquire lock concurrently
         tasks = [
             lock_service.try_acquire_lock(
-                project_id=project_id,
-                board_id=board_id,
-                work_item_id=f"item-{i}",
-                board_position=i
+                project_id=project_id, board_id=board_id, work_item_id=f"item-{i}", board_position=i
             )
             for i in range(num_items)
         ]
@@ -76,7 +73,7 @@ class TestPipelineLockingConcurrency:
 
         # Verify queue positions are correct (item-1 at 0, item-2 at 1, etc.)
         for i, result in enumerate(sorted(queued, key=lambda r: r.queue_position)):
-            assert result.work_item_id == f"item-{i+1}"
+            assert result.work_item_id == f"item-{i + 1}"
             assert result.queue_position == i
 
     # ===== TEST 2: CONCURRENT POSITION UPDATES =====
@@ -91,24 +88,20 @@ class TestPipelineLockingConcurrency:
         board_id = "board-1"
 
         # First, establish lock and queue
-        result1 = await lock_service.try_acquire_lock(
-            project_id, board_id, "item-0", board_position=0
-        )
+        result1 = await lock_service.try_acquire_lock(project_id, board_id, "item-0", board_position=0)
         assert result1.status == LockStatus.ACQUIRED
 
-        result2 = await lock_service.try_acquire_lock(
-            project_id, board_id, "item-1", board_position=1
-        )
+        result2 = await lock_service.try_acquire_lock(project_id, board_id, "item-1", board_position=1)
         assert result2.status == LockStatus.QUEUED
         assert result2.queue_position == 0
 
         # Now update positions concurrently with release
         update_task = lock_service.update_queue_positions(
-            project_id, board_id, {"item-1": 0}  # Move to top
+            project_id,
+            board_id,
+            {"item-1": 0},  # Move to top
         )
-        release_task = lock_service.release_lock(
-            project_id, board_id, "item-0"
-        )
+        release_task = lock_service.release_lock(project_id, board_id, "item-0")
 
         update_result, release_result = await asyncio.gather(update_task, release_task)
 
@@ -139,7 +132,9 @@ class TestPipelineLockingConcurrency:
         # Race: Release while position updates happen
         release_task = lock_service.release_lock(project_id, board_id, "item-0")
         update_task = lock_service.update_queue_positions(
-            project_id, board_id, {"item-2": 0, "item-1": 1}  # Reorder
+            project_id,
+            board_id,
+            {"item-2": 0, "item-1": 1},  # Reorder
         )
 
         release_result, update_result = await asyncio.gather(release_task, update_task)
@@ -160,29 +155,21 @@ class TestPipelineLockingConcurrency:
         board_id = "board-1"
 
         # Item-0 acquires lock
-        result = await lock_service.try_acquire_lock(
-            project_id, board_id, "item-0", board_position=0
-        )
+        result = await lock_service.try_acquire_lock(project_id, board_id, "item-0", board_position=0)
         assert result.status == LockStatus.ACQUIRED
 
         # Item-1 queued
-        result = await lock_service.try_acquire_lock(
-            project_id, board_id, "item-1", board_position=1
-        )
+        result = await lock_service.try_acquire_lock(project_id, board_id, "item-1", board_position=1)
         assert result.status == LockStatus.QUEUED
 
         # Manually age the lock beyond stale threshold
         state_key = f"{project_id}:{board_id}"
         if state_key in lock_service._lock_state:
             old_time = datetime.now(UTC).timestamp() - 7300  # > 2 hours old
-            lock_service._lock_state[state_key].lock_acquired_at = datetime.fromtimestamp(
-                old_time, tz=UTC
-            )
+            lock_service._lock_state[state_key].lock_acquired_at = datetime.fromtimestamp(old_time, tz=UTC)
 
         # Try to acquire - should detect stale and recover
-        result = await lock_service.try_acquire_lock(
-            project_id, board_id, "item-2", board_position=2
-        )
+        result = await lock_service.try_acquire_lock(project_id, board_id, "item-2", board_position=2)
 
         # Stale recovery should have granted lock to item-1
         assert result.status == LockStatus.QUEUED or result.status == LockStatus.ACQUIRED
@@ -200,10 +187,7 @@ class TestPipelineLockingConcurrency:
         num_items = 100
 
         tasks = [
-            lock_service.try_acquire_lock(
-                project_id, board_id, f"item-{i}", board_position=i
-            )
-            for i in range(num_items)
+            lock_service.try_acquire_lock(project_id, board_id, f"item-{i}", board_position=i) for i in range(num_items)
         ]
         results = await asyncio.gather(*tasks)
 
@@ -264,9 +248,7 @@ class TestPipelineLockingConcurrency:
         board_id = "board-1"
 
         # Item-0 acquires lock
-        result = await lock_service.try_acquire_lock(
-            project_id, board_id, "item-0", board_position=0
-        )
+        result = await lock_service.try_acquire_lock(project_id, board_id, "item-0", board_position=0)
         assert result.status == LockStatus.ACQUIRED
 
         # Item-1 tries to release (doesn't hold lock) - should raise ValueError
@@ -290,15 +272,11 @@ class TestPipelineLockingConcurrency:
         board_id = "board-1"
 
         # Item-0 acquires lock
-        result1 = await lock_service.try_acquire_lock(
-            project_id, board_id, "item-0", board_position=0
-        )
+        result1 = await lock_service.try_acquire_lock(project_id, board_id, "item-0", board_position=0)
         assert result1.status == LockStatus.ACQUIRED
 
         # Item-0 tries to acquire again
-        result2 = await lock_service.try_acquire_lock(
-            project_id, board_id, "item-0", board_position=0
-        )
+        result2 = await lock_service.try_acquire_lock(project_id, board_id, "item-0", board_position=0)
 
         # Should return ALREADY_HELD
         assert result2.status == LockStatus.ALREADY_HELD

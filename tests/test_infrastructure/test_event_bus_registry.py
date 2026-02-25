@@ -17,7 +17,6 @@ from codetoreum.application.event_handlers.repair_cycle_event_handler import (
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 
-
 # ====================================================================================
 # Fixtures
 # ====================================================================================
@@ -165,7 +164,6 @@ class TestEventBusRegistryServiceRegistration:
         """Test register_services with no arguments (should be no-op)."""
         registry.register_services()
         assert registry._services == {}
-
 
 
 # ====================================================================================
@@ -316,7 +314,6 @@ class TestEventBusRegistryHandlerRegistration:
         assert len(registry._handlers) >= 4
 
 
-
 # ====================================================================================
 # Tests for setup_event_bus Function
 # ====================================================================================
@@ -408,7 +405,6 @@ class TestSetupEventBusFunction:
         # Only repair_cycle and clock should be registered
         assert registry._services.get("repair_cycle") == mock_repair_cycle
         assert registry._services.get("clock") == simulation_clock
-
 
 
 # ====================================================================================

@@ -12,7 +12,6 @@ class EventSerializationError(Exception):
     """Raised when event serialization/deserialization fails."""
 
 
-
 class EventSerializer:
     """
     Serializes domain events to/from JSON with schema versioning.
@@ -46,7 +45,7 @@ class EventSerializer:
         if event_type_name in cls._event_type_registry:
             existing_class = cls._event_type_registry[event_type_name]
             if existing_class != event_class:
-                message = f"Event type '{event_type_name}' already registered " f"with different class: {existing_class}"
+                message = f"Event type '{event_type_name}' already registered with different class: {existing_class}"
                 raise ValueError(message)
         else:
             cls._event_type_registry[event_type_name] = event_class
@@ -74,9 +73,7 @@ class EventSerializer:
                 "aggregate_id": event.aggregate_id,
                 "aggregate_type": event.aggregate_type,
                 "occurred_at": event.occurred_at.isoformat(),
-                "correlation_id": (
-                    str(event.correlation_id) if event.correlation_id else None
-                ),
+                "correlation_id": (str(event.correlation_id) if event.correlation_id else None),
                 "causation_id": str(event.causation_id) if event.causation_id else None,
                 "user_id": event.user_id,
                 "payload": event.payload,
@@ -109,7 +106,11 @@ class EventSerializer:
             # Check schema version for compatibility
             schema_version = data.get("schema_version", 1)
             if schema_version > cls.SCHEMA_VERSION:
-                message = f"Event schema version {schema_version} is newer than " f"supported version {cls.SCHEMA_VERSION}. " f"Please upgrade the application."
+                message = (
+                    f"Event schema version {schema_version} is newer than "
+                    f"supported version {cls.SCHEMA_VERSION}. "
+                    f"Please upgrade the application."
+                )
                 raise EventSerializationError(message)
 
             # Get event type class from registry
@@ -126,28 +127,17 @@ class EventSerializer:
             kwargs = {
                 "payload": data.get("payload", {}),
                 "user_id": data.get("user_id"),
-                "correlation_id": (
-                    UUID(data["correlation_id"]) if data.get("correlation_id") else None
-                ),
-                "causation_id": (
-                    UUID(data["causation_id"]) if data.get("causation_id") else None
-                ),
+                "correlation_id": (UUID(data["correlation_id"]) if data.get("correlation_id") else None),
+                "causation_id": (UUID(data["causation_id"]) if data.get("causation_id") else None),
                 "event_id": UUID(data["event_id"]) if data.get("event_id") else None,
-                "occurred_at": (
-                    datetime.fromisoformat(data["occurred_at"])
-                    if data.get("occurred_at")
-                    else None
-                ),
+                "occurred_at": (datetime.fromisoformat(data["occurred_at"]) if data.get("occurred_at") else None),
             }
 
             # Only pass aggregate_type for base DomainEvent
             if event_class == DomainEvent:
                 kwargs["aggregate_type"] = data["aggregate_type"]
 
-            return event_class(
-                aggregate_id=data["aggregate_id"],
-                **kwargs
-            )
+            return event_class(aggregate_id=data["aggregate_id"], **kwargs)
 
         except EventSerializationError:
             raise
@@ -177,9 +167,7 @@ class EventSerializer:
                 "aggregate_id": event.aggregate_id,
                 "aggregate_type": event.aggregate_type,
                 "timestamp": event.occurred_at.isoformat(),
-                "correlation_id": (
-                    str(event.correlation_id) if event.correlation_id else None
-                ),
+                "correlation_id": (str(event.correlation_id) if event.correlation_id else None),
                 "causation_id": str(event.causation_id) if event.causation_id else None,
                 "user_id": event.user_id,
                 "data": event.payload,
@@ -213,28 +201,17 @@ class EventSerializer:
             kwargs = {
                 "payload": data.get("data", {}),
                 "user_id": data.get("user_id"),
-                "correlation_id": (
-                    UUID(data["correlation_id"]) if data.get("correlation_id") else None
-                ),
-                "causation_id": (
-                    UUID(data["causation_id"]) if data.get("causation_id") else None
-                ),
+                "correlation_id": (UUID(data["correlation_id"]) if data.get("correlation_id") else None),
+                "causation_id": (UUID(data["causation_id"]) if data.get("causation_id") else None),
                 "event_id": UUID(data["event_id"]) if data.get("event_id") else None,
-                "occurred_at": (
-                    datetime.fromisoformat(data["timestamp"])
-                    if data.get("timestamp")
-                    else None
-                ),
+                "occurred_at": (datetime.fromisoformat(data["timestamp"]) if data.get("timestamp") else None),
             }
 
             # Only pass aggregate_type for base DomainEvent
             if event_class == DomainEvent:
                 kwargs["aggregate_type"] = data["aggregate_type"]
 
-            return event_class(
-                aggregate_id=data["aggregate_id"],
-                **kwargs
-            )
+            return event_class(aggregate_id=data["aggregate_id"], **kwargs)
 
         except Exception as e:
             message = f"Failed to reconstruct event from dict: {e}"

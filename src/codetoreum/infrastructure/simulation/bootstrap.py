@@ -316,9 +316,10 @@ class SimulationApplicationBootstrap:
             return self.app
 
         except Exception as e:
-            logger.error(f"Bootstrap setup failed: {e}",
+            logger.error(
+                f"Bootstrap setup failed: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
             )
             raise
 
@@ -360,9 +361,10 @@ class SimulationApplicationBootstrap:
             logger.info("Simulation bootstrap teardown complete")
 
         except Exception as e:
-            logger.error(f"Error during teardown: {e}",
+            logger.error(
+                f"Error during teardown: {e}",
                 extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
-                exc_info=True
+                exc_info=True,
             )
 
     # =========================================================================
@@ -416,9 +418,7 @@ class SimulationApplicationBootstrap:
         llm_provider = self._adapter_factory.create_llm_provider(adapter_name="mock")
         # Pass event_emitter and event_bus to container for event subscription
         container = self._adapter_factory.create_container(
-            adapter_name="fake",
-            event_emitter=event_emitter,
-            event_bus=event_bus
+            adapter_name="fake", event_emitter=event_emitter, event_bus=event_bus
         )
         repository = InMemoryRepositoryAdapter(event_emitter=event_emitter)
         event_store = self._adapter_factory.create_event_store(adapter_name="in_memory")
@@ -427,7 +427,7 @@ class SimulationApplicationBootstrap:
         metrics = InMemoryMetricsAdapter()
         storage = InMemoryStorageAdapter(
             event_emitter=event_emitter,
-            event_bus=event_bus  # Subscribe to container execution completion events
+            event_bus=event_bus,  # Subscribe to container execution completion events
         )
         config_store = InMemoryConfigStore()
         notifier = MockNotifierAdapter()
@@ -435,7 +435,7 @@ class SimulationApplicationBootstrap:
         # Create queue service with event emitter and event bus for causal linking
         queue_service = InMemoryQueueService(
             event_emitter=event_emitter,
-            event_bus=event_bus  # Subscribe to board position changes
+            event_bus=event_bus,  # Subscribe to board position changes
         )
 
         # Note: SimpleEncryptionAdapter is created directly (not via AdapterFactory)
@@ -460,6 +460,7 @@ class SimulationApplicationBootstrap:
 
         # Pre-configure default test project for simulation testing
         from codetoreum.domain.value_objects import ProjectConfig
+
         project_manager.add_project(
             "default_project",
             ProjectConfig(
@@ -650,9 +651,7 @@ class SimulationApplicationBootstrap:
                 self.card_movements = []
                 self.labels_added = []
 
-            async def move_card_to_column(
-                self, project: str, issue_number: int, column_name: str
-            ) -> None:
+            async def move_card_to_column(self, project: str, issue_number: int, column_name: str) -> None:
                 self.card_movements.append(
                     {
                         "project": project,
@@ -661,12 +660,8 @@ class SimulationApplicationBootstrap:
                     }
                 )
 
-            async def add_label(
-                self, project: str, issue_number: int, label: str
-            ) -> None:
-                self.labels_added.append(
-                    {"project": project, "issue_number": issue_number, "label": label}
-                )
+            async def add_label(self, project: str, issue_number: int, label: str) -> None:
+                self.labels_added.append({"project": project, "issue_number": issue_number, "label": label})
 
         workflow_state_manager = SimulationWorkflowStateManager()
         decision_events = SimulationDecisionEvents()
@@ -705,7 +700,9 @@ class SimulationApplicationBootstrap:
             poll_interval_seconds=30,
         )
 
-        logger.info("Created all application services with simulation dependencies (including container recovery and multi-project orchestrator)")
+        logger.info(
+            "Created all application services with simulation dependencies (including container recovery and multi-project orchestrator)"
+        )
 
         return SimulationServices(
             workflow_orchestrator=workflow_orchestrator,
@@ -855,9 +852,8 @@ class SimulationApplicationBootstrap:
         from codetoreum.adapters.primary.routers.simulation_ticketing import (
             create_simulation_ticketing_router,
         )
-        sim_router = create_simulation_ticketing_router(
-            self.adapters.ticket_system, self.adapters.board
-        )
+
+        sim_router = create_simulation_ticketing_router(self.adapters.ticket_system, self.adapters.board)
         app.include_router(sim_router)
 
         logger.info("Created FastAPI application with all ports wired")
@@ -960,15 +956,11 @@ class SimulationApplicationBootstrap:
                 # Sync work item status based on target column (best-effort)
                 target_status = _column_to_status.get(event.to_column)
                 if target_status is not None:
-                    loop.create_task(
-                        _sync_work_item_status(event.work_item_id, target_status)
-                    )
+                    loop.create_task(_sync_work_item_status(event.work_item_id, target_status))
             except RuntimeError:
                 pass
 
-        async def _sync_work_item_status(
-            work_item_id: str, target_status: WorkItemStatus
-        ) -> None:
+        async def _sync_work_item_status(work_item_id: str, target_status: WorkItemStatus) -> None:
             """Best-effort sync of work item status in ticket adapter.
 
             The domain model validates transitions strictly, so some jumps
@@ -994,9 +986,7 @@ class SimulationApplicationBootstrap:
                         work_item.assign_agent("simulation-agent", "Board column sync")
                         work_item.clear_events()
                     if work_item.status == WorkItemStatus.ASSIGNED:
-                        await ticket_adapter.update_status(
-                            work_item_id, WorkItemStatus.IN_PROGRESS
-                        )
+                        await ticket_adapter.update_status(work_item_id, WorkItemStatus.IN_PROGRESS)
                     return
 
                 # For UNDER_REVIEW: must go through ASSIGNED -> IN_PROGRESS first
@@ -1005,15 +995,11 @@ class SimulationApplicationBootstrap:
                         work_item.assign_agent("simulation-agent", "Board column sync")
                         work_item.clear_events()
                     if work_item.status == WorkItemStatus.ASSIGNED:
-                        await ticket_adapter.update_status(
-                            work_item_id, WorkItemStatus.IN_PROGRESS
-                        )
+                        await ticket_adapter.update_status(work_item_id, WorkItemStatus.IN_PROGRESS)
                     # Re-read after intermediate transition
                     work_item = await ticket_adapter.get_work_item(work_item_id)
                     if work_item.status == WorkItemStatus.IN_PROGRESS:
-                        await ticket_adapter.update_status(
-                            work_item_id, WorkItemStatus.UNDER_REVIEW
-                        )
+                        await ticket_adapter.update_status(work_item_id, WorkItemStatus.UNDER_REVIEW)
                     return
 
                 # For COMPLETED: must go through the full chain
@@ -1022,29 +1008,20 @@ class SimulationApplicationBootstrap:
                         work_item.assign_agent("simulation-agent", "Board column sync")
                         work_item.clear_events()
                     if work_item.status == WorkItemStatus.ASSIGNED:
-                        await ticket_adapter.update_status(
-                            work_item_id, WorkItemStatus.IN_PROGRESS
-                        )
+                        await ticket_adapter.update_status(work_item_id, WorkItemStatus.IN_PROGRESS)
                     work_item = await ticket_adapter.get_work_item(work_item_id)
                     if work_item.status == WorkItemStatus.IN_PROGRESS:
-                        await ticket_adapter.update_status(
-                            work_item_id, WorkItemStatus.UNDER_REVIEW
-                        )
+                        await ticket_adapter.update_status(work_item_id, WorkItemStatus.UNDER_REVIEW)
                     work_item = await ticket_adapter.get_work_item(work_item_id)
                     if work_item.status == WorkItemStatus.UNDER_REVIEW:
-                        await ticket_adapter.update_status(
-                            work_item_id, WorkItemStatus.COMPLETED
-                        )
+                        await ticket_adapter.update_status(work_item_id, WorkItemStatus.COMPLETED)
                     return
 
                 # Fallback: try direct update
                 await ticket_adapter.update_status(work_item_id, target_status)
 
             except Exception as e:
-                logger.debug(
-                    f"Best-effort status sync failed for {work_item_id} -> "
-                    f"{target_status.value}: {e}"
-                )
+                logger.debug(f"Best-effort status sync failed for {work_item_id} -> {target_status.value}: {e}")
 
         def board_reconciled_bridge(event):
             """Translate BoardReconciledEvent (CodetoreumEvent) to BoardReconciled (DomainEvent)."""
@@ -1094,9 +1071,7 @@ class SimulationApplicationBootstrap:
         )
 
         # Wire completion callback: executor -> handler.handle_agent_completion
-        self.adapters.agent_executor.set_completion_handler(
-            handler.handle_agent_completion, "board-1"
-        )
+        self.adapters.agent_executor.set_completion_handler(handler.handle_agent_completion, "board-1")
 
         self.infrastructure.event_bus.register_handler(handler)
         logger.info("Registered BoardColumnEventHandler with event bus")

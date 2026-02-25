@@ -18,6 +18,7 @@ try:
     from codetoreum.infrastructure.observability.logging_integration import (
         TraceContextInjector,
     )
+
     TRACE_CONTEXT_AVAILABLE = True
 except ImportError:
     # Observability module not available yet (e.g., during initial setup)
@@ -25,9 +26,7 @@ except ImportError:
     TraceContextInjector = None  # type: ignore
 
 # Context variable for correlation ID
-correlation_id_context: ContextVar[str | None] = ContextVar(
-    "correlation_id", default=None
-)
+correlation_id_context: ContextVar[str | None] = ContextVar("correlation_id", default=None)
 
 
 class SensitiveDataFilter(logging.Filter):
@@ -49,33 +48,60 @@ class SensitiveDataFilter(logging.Filter):
     # Default patterns for sensitive data
     DEFAULT_PATTERNS = [
         # API keys, tokens, secrets (various formats)
-        (re.compile(r'(?i)(api[_-]?key|token|secret|password|passwd|pwd)[\s:=]+["\']?([^\s"\']+)["\']?'), r"\1=***REDACTED***"),
+        (
+            re.compile(r'(?i)(api[_-]?key|token|secret|password|passwd|pwd)[\s:=]+["\']?([^\s"\']+)["\']?'),
+            r"\1=***REDACTED***",
+        ),
         # JWT tokens (starts with eyJ)
-        (re.compile(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b"), r"***REDACTED_JWT***"),
+        (
+            re.compile(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b"),
+            r"***REDACTED_JWT***",
+        ),
         # Bearer tokens
         (re.compile(r"(?i)bearer\s+([^\s]+)"), r"Bearer ***REDACTED***"),
         # Basic auth
         (re.compile(r"(?i)basic\s+([^\s]+)"), r"Basic ***REDACTED***"),
         # Email addresses (show first 2 chars + domain)
-        (re.compile(r"\b([a-zA-Z0-9]{1,2})[a-zA-Z0-9._%+-]*@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b"), r"\1***@\2"),
+        (
+            re.compile(r"\b([a-zA-Z0-9]{1,2})[a-zA-Z0-9._%+-]*@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b"),
+            r"\1***@\2",
+        ),
         # Credit card numbers
         (re.compile(r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b"), r"****-****-****-****"),
         # Social security numbers
         (re.compile(r"\b\d{3}-\d{2}-\d{4}\b"), r"***-**-****"),
         # AWS keys
-        (re.compile(r"(?i)(AKIA|A3T|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}"), r"***REDACTED_AWS_KEY***"),
+        (
+            re.compile(r"(?i)(AKIA|A3T|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}"),
+            r"***REDACTED_AWS_KEY***",
+        ),
         # GitHub tokens
         (re.compile(r"ghp_[a-zA-Z0-9]{36}"), r"***REDACTED_GITHUB_TOKEN***"),
         # Database connection strings
-        (re.compile(r"(?i)(postgres|mysql|mongodb|redis)://[^:]+:([^@]+)@"), r"\1://user:***REDACTED***@"),
+        (
+            re.compile(r"(?i)(postgres|mysql|mongodb|redis)://[^:]+:([^@]+)@"),
+            r"\1://user:***REDACTED***@",
+        ),
         # Private keys
-        (re.compile(r"-----BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY-----[^-]+-----END\s+(?:RSA\s+)?PRIVATE\s+KEY-----"), r"***REDACTED_PRIVATE_KEY***"),
+        (
+            re.compile(r"-----BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY-----[^-]+-----END\s+(?:RSA\s+)?PRIVATE\s+KEY-----"),
+            r"***REDACTED_PRIVATE_KEY***",
+        ),
         # Slack webhooks
-        (re.compile(r"https://hooks\.slack\.com/services/[A-Z0-9/]+"), r"***REDACTED_SLACK_WEBHOOK***"),
+        (
+            re.compile(r"https://hooks\.slack\.com/services/[A-Z0-9/]+"),
+            r"***REDACTED_SLACK_WEBHOOK***",
+        ),
         # Discord webhooks
-        (re.compile(r"https://discord(?:app)?\.com/api/webhooks/\d+/[A-Za-z0-9_-]+"), r"***REDACTED_DISCORD_WEBHOOK***"),
+        (
+            re.compile(r"https://discord(?:app)?\.com/api/webhooks/\d+/[A-Za-z0-9_-]+"),
+            r"***REDACTED_DISCORD_WEBHOOK***",
+        ),
         # Generic tokens
-        (re.compile(r'(?i)(key|token|secret)["\']\s*:\s*["\']([^"\']{8,})["\']'), r'\1": "***REDACTED***"'),
+        (
+            re.compile(r'(?i)(key|token|secret)["\']\s*:\s*["\']([^"\']{8,})["\']'),
+            r'\1": "***REDACTED***"',
+        ),
     ]
 
     def __init__(self, custom_patterns: list | None = None):
@@ -106,10 +132,7 @@ class SensitiveDataFilter(logging.Filter):
 
         # Scrub args
         if record.args:
-            record.args = tuple(
-                self._scrub(str(arg)) if isinstance(arg, (str, bytes)) else arg
-                for arg in record.args
-            )
+            record.args = tuple(self._scrub(str(arg)) if isinstance(arg, (str, bytes)) else arg for arg in record.args)
 
         return True
 

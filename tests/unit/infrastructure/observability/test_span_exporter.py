@@ -59,7 +59,6 @@ class TestInstrumentedSpanExporter:
         # Verify exporter was called
         mock_exporter.export.assert_called_once_with([])
 
-
     def test_export_without_histogram_metrics(self):
         """Test export succeeds when histogram is None (metrics creation failed)."""
         mock_exporter = mock.MagicMock()
@@ -94,6 +93,7 @@ class TestInstrumentedSpanExporter:
     def test_init_handles_metrics_creation_failure(self):
         """Test __init__ gracefully handles metrics creation failure."""
         import sys
+
         mock_exporter = mock.MagicMock()
 
         with mock.patch("codetoreum.infrastructure.observability.otel_setup.logger") as mock_logger:

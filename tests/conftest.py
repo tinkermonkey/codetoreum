@@ -31,6 +31,7 @@ def is_docker_available() -> bool:
         finally:
             # Properly close all resources to avoid ResourceWarnings
             import gc
+
             try:
                 if hasattr(client, "api"):
                     api = client.api
@@ -69,10 +70,7 @@ def is_docker_available() -> bool:
 
 
 # Create a global pytest marker for tests requiring Docker
-docker_available = pytest.mark.skipif(
-    not is_docker_available(),
-    reason="Docker is not available or not running"
-)
+docker_available = pytest.mark.skipif(not is_docker_available(), reason="Docker is not available or not running")
 
 
 @pytest.fixture(scope="session")
@@ -94,6 +92,7 @@ def docker_client() -> Generator[docker.DockerClient, None, None]:
     finally:
         # Properly close all resources to avoid ResourceWarnings
         import gc
+
         try:
             if hasattr(client, "api"):
                 api = client.api
@@ -369,7 +368,7 @@ async def wait_for_condition(
     check_fn: Callable[[], Awaitable[bool]] | Callable[[], bool],
     timeout: float = 5.0,
     poll_interval: float = 0.1,
-    timeout_message: str = "Timeout waiting for condition"
+    timeout_message: str = "Timeout waiting for condition",
 ) -> bool:
     """Wait for an async or sync condition to be true.
 
@@ -446,7 +445,7 @@ async def assert_condition(
     check_fn: Callable[[], Awaitable[bool]] | Callable[[], bool],
     timeout: float = 5.0,
     poll_interval: float = 0.1,
-    message: str = "Condition never became true"
+    message: str = "Condition never became true",
 ) -> None:
     """Wait for condition and raise AssertionError if timeout.
 
@@ -476,10 +475,8 @@ async def assert_condition(
 # Migration helpers for converting hardcoded sleeps to polling
 # These are kept simple to support gradual migration
 
-async def wait_for_cache_sync(
-    check_fn: Callable[[], Awaitable[bool]],
-    timeout: float = 5.0
-) -> bool:
+
+async def wait_for_cache_sync(check_fn: Callable[[], Awaitable[bool]], timeout: float = 5.0) -> bool:
     """Wait for cache to sync. Replaces asyncio.sleep(1) in tests.
 
     Args:
@@ -492,10 +489,7 @@ async def wait_for_cache_sync(
     return await wait_for_condition(check_fn, timeout=timeout, poll_interval=0.1)
 
 
-async def wait_for_storage(
-    check_fn: Callable[[], Awaitable[bool]],
-    timeout: float = 5.0
-) -> bool:
+async def wait_for_storage(check_fn: Callable[[], Awaitable[bool]], timeout: float = 5.0) -> bool:
     """Wait for storage operation. Replaces asyncio.sleep(1) in tests.
 
     Args:
@@ -508,10 +502,7 @@ async def wait_for_storage(
     return await wait_for_condition(check_fn, timeout=timeout, poll_interval=0.1)
 
 
-async def wait_for_elasticsearch_indexing(
-    es_client,
-    timeout: float = 5.0
-) -> bool:
+async def wait_for_elasticsearch_indexing(es_client, timeout: float = 5.0) -> bool:
     """Wait for Elasticsearch indexing to complete.
 
     Replaces hardcoded asyncio.sleep(1) delays in Elasticsearch tests.
@@ -524,6 +515,7 @@ async def wait_for_elasticsearch_indexing(
     Returns:
         True if indexing complete, False if timeout
     """
+
     async def is_ready():
         try:
             # Refresh to ensure all pending documents are indexed
@@ -537,11 +529,7 @@ async def wait_for_elasticsearch_indexing(
     return await wait_for_condition(is_ready, timeout=timeout, poll_interval=0.05)
 
 
-async def wait_for_polling_cycle(
-    event_list: list,
-    expected_count: int = 1,
-    timeout: float = 5.0
-) -> bool:
+async def wait_for_polling_cycle(event_list: list, expected_count: int = 1, timeout: float = 5.0) -> bool:
     """Wait for polling adapter to detect events.
 
     Replaces hardcoded asyncio.sleep() when waiting for polling cycles.
@@ -555,6 +543,7 @@ async def wait_for_polling_cycle(
     Returns:
         True if expected events detected, False if timeout
     """
+
     async def has_events():
         return len(event_list) >= expected_count
 

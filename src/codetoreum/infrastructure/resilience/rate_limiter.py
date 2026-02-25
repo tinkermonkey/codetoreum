@@ -27,7 +27,7 @@ class TokenBucketRateLimiter(IRateLimiter):
         max_requests: int,
         window_seconds: int = 60,
         max_tokens: int | None = None,
-        max_wait_seconds: float | None = None
+        max_wait_seconds: float | None = None,
     ):
         """
         Initialize rate limiter.
@@ -152,7 +152,7 @@ class TokenBucketRateLimiter(IRateLimiter):
             max_tokens=self.max_tokens,
             window_seconds=self.window_seconds,
             utilization=utilization,
-            next_available=next_available
+            next_available=next_available,
         )
 
     def reset(self) -> None:

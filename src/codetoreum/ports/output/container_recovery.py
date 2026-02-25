@@ -235,9 +235,7 @@ class RecoveryResult:
             parsed_dt = datetime.fromisoformat(self.timestamp)
         except (ValueError, TypeError) as e:
             msg = f"timestamp must be a valid ISO 8601 datetime string, got: {self.timestamp}"
-            raise ValueError(
-                msg
-            ) from e
+            raise ValueError(msg) from e
 
         # Validate timestamp is within reasonable bounds
         now = datetime.now(UTC)
@@ -318,9 +316,7 @@ class IAgentContainerRecoveryService(ABC):
         """
 
     @abstractmethod
-    async def assess_container(
-        self, metadata: ContainerMetadata
-    ) -> RecoveryAssessment:
+    async def assess_container(self, metadata: ContainerMetadata) -> RecoveryAssessment:
         """Assess recovery action for a single container.
 
         Evaluates the container's state to determine whether to reconnect
@@ -343,9 +339,7 @@ class IAgentContainerRecoveryService(ABC):
         """
 
     @abstractmethod
-    async def execute_recovery_action(
-        self, assessment: RecoveryAssessment
-    ) -> bool:
+    async def execute_recovery_action(self, assessment: RecoveryAssessment) -> bool:
         """Execute reconnect or kill action.
 
         Performs the recovery action determined during assessment.
@@ -381,9 +375,7 @@ class IAgentContainerRecoveryService(ABC):
         """
 
     @abstractmethod
-    async def assess_repair_cycle_container(
-        self, metadata: ContainerMetadata
-    ) -> RecoveryAssessment:
+    async def assess_repair_cycle_container(self, metadata: ContainerMetadata) -> RecoveryAssessment:
         """Assess recovery action for a repair cycle container.
 
         Evaluates repair cycle container state using specialized logic:

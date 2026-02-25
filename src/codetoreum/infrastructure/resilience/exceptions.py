@@ -4,7 +4,6 @@ Provides a hierarchy of exceptions for resilience-related errors.
 """
 
 
-
 class ResilienceError(Exception):
     """Base exception for resilience infrastructure."""
 

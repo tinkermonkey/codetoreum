@@ -27,7 +27,9 @@ class WorkflowRunStageResponse(BaseModel):
     completedAt: datetime | None = Field(None, description="Stage completion time", serialization_alias="completedAt")
     executionId: str | None = Field(None, description="Execution ID for this stage", serialization_alias="executionId")
     output: str | None = Field(None, description="Stage output content")
-    errorMessage: str | None = Field(None, description="Error message if stage failed", serialization_alias="errorMessage")
+    errorMessage: str | None = Field(
+        None, description="Error message if stage failed", serialization_alias="errorMessage"
+    )
     metadata: dict = Field(default_factory=dict, description="Additional stage metadata")
 
     model_config = ConfigDict(
@@ -42,9 +44,9 @@ class WorkflowRunStageResponse(BaseModel):
                 "executionId": "exec-111",
                 "output": "Implementation completed successfully",
                 "errorMessage": None,
-                "metadata": {}
+                "metadata": {},
             }
-        }
+        },
     )
 
 
@@ -85,9 +87,9 @@ class WorkflowRunSummaryResponse(BaseModel):
                 "issueNumber": 42,
                 "project": "codetoreum",
                 "triggeredBy": "github_webhook",
-                "priority": "high"
+                "priority": "high",
             }
-        }
+        },
     )
 
 
@@ -118,7 +120,7 @@ class WorkflowRunResponse(BaseModel):
                         "status": "completed",
                         "startedAt": "2026-02-20T10:00:00Z",
                         "completedAt": "2026-02-20T10:15:00Z",
-                        "executionId": "exec-111"
+                        "executionId": "exec-111",
                     },
                     {
                         "name": "review",
@@ -126,12 +128,12 @@ class WorkflowRunResponse(BaseModel):
                         "status": "running",
                         "startedAt": "2026-02-20T10:15:00Z",
                         "completedAt": None,
-                        "executionId": "exec-222"
-                    }
+                        "executionId": "exec-222",
+                    },
                 ],
-                "metadata": {}
+                "metadata": {},
             }
-        }
+        },
     )
 
 
@@ -171,12 +173,9 @@ class WorkflowEventResponse(BaseModel):
                 "agentName": None,
                 "stageName": "implementation",
                 "status": None,
-                "data": {
-                    "workItemId": "wi-456",
-                    "triggeredBy": "github_webhook"
-                }
+                "data": {"workItemId": "wi-456", "triggeredBy": "github_webhook"},
             }
-        }
+        },
     )
 
 

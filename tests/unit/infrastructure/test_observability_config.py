@@ -313,9 +313,7 @@ class TestObservabilityConfigValidation:
             log_level="info",
         )
 
-        with mock.patch(
-            "codetoreum.infrastructure.observability.config.logger"
-        ) as mock_logger:
+        with mock.patch("codetoreum.infrastructure.observability.config.logger") as mock_logger:
             config.validate()
             mock_logger.warning.assert_not_called()
 

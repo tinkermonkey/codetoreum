@@ -69,10 +69,8 @@ class CircuitBreakerTripped(Exception):
     """Raised when max_total_agent_calls exceeded."""
 
 
-
 class JSONParseError(Exception):
     """Raised when agent response cannot be parsed as JSON."""
-
 
 
 @dataclass(frozen=True)
@@ -272,9 +270,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         # Check circuit breaker
         if self.agent_call_count >= context.max_total_agent_calls:
             msg = f"Max agent calls ({context.max_total_agent_calls}) exceeded"
-            raise CircuitBreakerTripped(
-                msg
-            )
+            raise CircuitBreakerTripped(msg)
 
         self.agent_call_count += 1
 
@@ -301,9 +297,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             )
 
             # Parse test output with retry logic
-            test_output = await self._parse_test_output_with_retry(
-                agent_response, config.test_type
-            )
+            test_output = await self._parse_test_output_with_retry(agent_response, config.test_type)
 
             # Parse failures and warnings
             failures = self._extract_failures(test_output, config.test_type)
@@ -362,7 +356,8 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     "workflow_run_id": context.workflow_run_id,
                     "test_type": config.test_type.value,
                     "error": str(e),
-                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                },
                 exc_info=True,
             )
             raise
@@ -476,7 +471,8 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         "workflow_run_id": context.workflow_run_id,
                         "file": file_path,
                         "error": str(e),
-                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
+                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                    },
                     exc_info=True,
                 )
 
@@ -606,7 +602,8 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         "workflow_run_id": context.workflow_run_id,
                         "file": warning.file,
                         "error": str(e),
-                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
+                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                    },
                     exc_info=True,
                 )
 
@@ -686,7 +683,8 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     "iteration": iteration,
                     "error": str(e),
                     "error_type": type(e).__name__,
-                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                },
                 exc_info=True,
             )
 
@@ -736,9 +734,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
         return test_command
 
-    async def _parse_test_output_with_retry(
-        self, agent_response: str, test_type: RepairTestType
-    ) -> dict[str, Any]:
+    async def _parse_test_output_with_retry(self, agent_response: str, test_type: RepairTestType) -> dict[str, Any]:
         """Parse test output with retry logic for JSON parsing.
 
         Attempts to parse agent response as JSON up to max_json_parse_retries times.
@@ -794,13 +790,9 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     await asyncio.sleep(self.config.json_parse_retry_delay_ms / 1000.0)
 
         msg = f"Failed to parse test output after {self.config.max_json_parse_retries} attempts: {last_error}"
-        raise JSONParseError(
-            msg
-        )
+        raise JSONParseError(msg)
 
-    def _extract_failures(
-        self, test_output: dict[str, Any], test_type: RepairTestType
-    ) -> list[RepairTestFailure]:
+    def _extract_failures(self, test_output: dict[str, Any], test_type: RepairTestType) -> list[RepairTestFailure]:
         """Extract test failures from parsed test output.
 
         Assumes test_output has structure:
@@ -836,11 +828,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 failures.append(failure)
             except ValueError as e:
                 # Collect parse errors but continue processing other failures
-                parse_errors.append({
-                    "index": idx,
-                    "data": failure_data,
-                    "error": str(e)
-                })
+                parse_errors.append({"index": idx, "data": failure_data, "error": str(e)})
                 logger.error(
                     f"PARSE ERROR: Test failure #{idx} data is invalid - agent may be malfunctioning. "
                     f"Continuing to process remaining failures.",
@@ -849,7 +837,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         "failure_index": idx,
                         "failure_data": failure_data,
                         "validation_error": str(e),
-                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR
+                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
                     },
                     exc_info=True,
                 )
@@ -863,8 +851,8 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     "test_type": test_type.value,
                     "valid_failures": len(failures),
                     "parse_errors": len(parse_errors),
-                    "error_indices": [e["index"] for e in parse_errors]
-                }
+                    "error_indices": [e["index"] for e in parse_errors],
+                },
             )
         # If ALL failures failed to parse, raise error with details
         elif parse_errors and not failures:
@@ -876,8 +864,8 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     "test_type": test_type.value,
                     "total_failures": len(test_output.get("failures", [])),
                     "parse_errors": parse_errors,
-                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR
-                }
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                },
             )
             msg = (
                 f"All {len(parse_errors)} test failure entries for {test_type.value} failed to parse. "
@@ -893,9 +881,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
         return failures
 
-    def _extract_warnings(
-        self, test_output: dict[str, Any], test_type: RepairTestType
-    ) -> list[RepairTestWarning]:
+    def _extract_warnings(self, test_output: dict[str, Any], test_type: RepairTestType) -> list[RepairTestWarning]:
         """Extract test warnings from parsed test output.
 
         Assumes test_output has structure:
@@ -927,11 +913,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 warnings.append(warning)
             except ValueError as e:
                 # Collect parse errors but continue processing other warnings
-                parse_errors.append({
-                    "index": idx,
-                    "data": warning_data,
-                    "error": str(e)
-                })
+                parse_errors.append({"index": idx, "data": warning_data, "error": str(e)})
                 logger.error(
                     f"PARSE ERROR: Test warning #{idx} data is invalid - agent may be malfunctioning. "
                     f"Continuing to process remaining warnings.",
@@ -940,7 +922,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         "warning_index": idx,
                         "warning_data": warning_data,
                         "validation_error": str(e),
-                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR
+                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
                     },
                     exc_info=True,
                 )
@@ -954,8 +936,8 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     "test_type": test_type.value,
                     "valid_warnings": len(warnings),
                     "parse_errors": len(parse_errors),
-                    "error_indices": [e["index"] for e in parse_errors]
-                }
+                    "error_indices": [e["index"] for e in parse_errors],
+                },
             )
         # If ALL warnings failed to parse, raise error with details
         elif parse_errors and not warnings:
@@ -967,8 +949,8 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     "test_type": test_type.value,
                     "total_warnings": len(test_output.get("warnings", [])),
                     "parse_errors": parse_errors,
-                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR
-                }
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                },
             )
             msg = (
                 f"All {len(parse_errors)} test warning entries for {test_type.value} failed to parse. "
@@ -984,9 +966,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
         return warnings
 
-    def _build_fix_prompt(
-        self, file_path: str, failures: tuple[RepairTestFailure, ...]
-    ) -> str:
+    def _build_fix_prompt(self, file_path: str, failures: tuple[RepairTestFailure, ...]) -> str:
         """Build prompt for LLM to fix test failures in a file.
 
         Args:
@@ -996,12 +976,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         Returns:
             Prompt for LLM agent
         """
-        failure_details = "\n".join(
-            [
-                f"- {f.test}: {f.message}"
-                for f in failures
-            ]
-        )
+        failure_details = "\n".join([f"- {f.test}: {f.message}" for f in failures])
 
         return f"""Please fix the following test failures in {file_path}:
 
@@ -1109,9 +1084,7 @@ Return a JSON response with the status of fixes applied."""
 
                     # Handle warnings if configured
                     if config.review_warnings and test_result.warnings > 0:
-                        warnings_reviewed += await self.handle_warnings(
-                            test_result, config, context
-                        )
+                        warnings_reviewed += await self.handle_warnings(test_result, config, context)
 
                         # Re-test after warning fixes
                         retest = await self.run_tests(config, context)
@@ -1128,9 +1101,7 @@ Return a JSON response with the status of fixes applied."""
                 # Fix failures
                 if not cycle_passed:
                     grouped = self._group_failures_by_file(test_result.failures)
-                    files_fixed += await self.fix_failures_by_file(
-                        grouped, config, context
-                    )
+                    files_fixed += await self.fix_failures_by_file(grouped, config, context)
 
                 # Checkpoint at interval
                 if iteration % context.checkpoint_interval == 0:
@@ -1138,7 +1109,7 @@ Return a JSON response with the status of fixes applied."""
                     if not success:
                         logger.warning(
                             "Checkpoint save failed, continuing without checkpoint",
-                            extra={"workflow_run_id": context.workflow_run_id}
+                            extra={"workflow_run_id": context.workflow_run_id},
                         )
 
             except Exception as e:
@@ -1150,7 +1121,8 @@ Return a JSON response with the status of fixes applied."""
                         "test_type": config.test_type.value,
                         "iteration": iteration,
                         "error": error,
-                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
+                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                    },
                     exc_info=True,
                 )
                 break

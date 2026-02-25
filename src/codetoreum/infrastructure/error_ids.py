@@ -18,6 +18,7 @@ from enum import Enum
 
 class ErrorCategory(str, Enum):
     """Error categories for Sentry tracking and grouping."""
+
     VALIDATION = "VALIDATION"
     AUTHENTICATION = "AUTHENTICATION"
     AUTHORIZATION = "AUTHORIZATION"

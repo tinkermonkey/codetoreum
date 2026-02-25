@@ -300,7 +300,6 @@ class TestContainerRecoveryServiceWithMock:
         assert completion_event.containers_killed == 1
         assert completion_event.repair_cycles_processed == 2
 
-
     @pytest.mark.asyncio
     async def test_recovery_event_emission_failure_handling(self):
         """Service should handle event emission failures gracefully."""
@@ -532,10 +531,7 @@ class TestCriticalEdgeCases:
 
         # Verify completion event was still emitted despite partial failure
         calls = event_emitter.emit.call_args_list
-        completion_events = [
-            call[0][0] for call in calls
-            if isinstance(call[0][0], ContainerRecoveryCompletedEvent)
-        ]
+        completion_events = [call[0][0] for call in calls if isinstance(call[0][0], ContainerRecoveryCompletedEvent)]
         assert len(completion_events) == 1
         completion_event = completion_events[0]
         assert completion_event.containers_recovered == 2
@@ -597,10 +593,7 @@ class TestCriticalEdgeCases:
 
         # Verify completion event shows error
         calls = event_emitter.emit.call_args_list
-        completion_events = [
-            call[0][0] for call in calls
-            if isinstance(call[0][0], ContainerRecoveryCompletedEvent)
-        ]
+        completion_events = [call[0][0] for call in calls if isinstance(call[0][0], ContainerRecoveryCompletedEvent)]
         assert len(completion_events) == 1
         assert completion_events[0].errors_encountered == 1
 
@@ -640,10 +633,7 @@ class TestCriticalEdgeCases:
 
         # Completion event should still be emitted
         calls = event_emitter.emit.call_args_list
-        completion_events = [
-            call[0][0] for call in calls
-            if isinstance(call[0][0], ContainerRecoveryCompletedEvent)
-        ]
+        completion_events = [call[0][0] for call in calls if isinstance(call[0][0], ContainerRecoveryCompletedEvent)]
         assert len(completion_events) == 1
 
     @pytest.mark.asyncio
@@ -689,10 +679,7 @@ class TestCriticalEdgeCases:
 
         # Verify completion event shows error
         calls = event_emitter.emit.call_args_list
-        completion_events = [
-            call[0][0] for call in calls
-            if isinstance(call[0][0], ContainerRecoveryCompletedEvent)
-        ]
+        completion_events = [call[0][0] for call in calls if isinstance(call[0][0], ContainerRecoveryCompletedEvent)]
         assert len(completion_events) == 1
         assert completion_events[0].errors_encountered == 1
 
@@ -759,10 +746,7 @@ class TestCriticalEdgeCases:
 
         # Verify completion event shows all outcomes
         calls = event_emitter.emit.call_args_list
-        completion_events = [
-            call[0][0] for call in calls
-            if isinstance(call[0][0], ContainerRecoveryCompletedEvent)
-        ]
+        completion_events = [call[0][0] for call in calls if isinstance(call[0][0], ContainerRecoveryCompletedEvent)]
         assert len(completion_events) == 1
         assert completion_events[0].containers_recovered == 1
         assert completion_events[0].containers_killed == 1
@@ -887,10 +871,7 @@ class TestCriticalEdgeCases:
 
         # Verify kill event was emitted with None for optional fields
         calls = event_emitter.emit.call_args_list
-        kill_events = [
-            call[0][0] for call in calls
-            if isinstance(call[0][0], ContainerKilledEvent)
-        ]
+        kill_events = [call[0][0] for call in calls if isinstance(call[0][0], ContainerKilledEvent)]
         assert len(kill_events) == 1
         # Event should have None for missing fields, not crash
         assert kill_events[0].work_item_id is None
@@ -934,10 +915,7 @@ class TestCriticalEdgeCases:
         # Set assessments for first 8 containers
         for i in range(8):
             action = "reconnect" if i % 2 == 0 else "kill"
-            reason = (
-                "valid_execution" if action == "reconnect"
-                else "container_timeout"
-            )
+            reason = "valid_execution" if action == "reconnect" else "container_timeout"
             mock_adapter.set_assessment(
                 container_id=f"container-{i}",
                 action=action,
@@ -972,10 +950,7 @@ class TestCriticalEdgeCases:
 
         # Verify completion event was always emitted
         calls = event_emitter.emit.call_args_list
-        completion_events = [
-            call[0][0] for call in calls
-            if isinstance(call[0][0], ContainerRecoveryCompletedEvent)
-        ]
+        completion_events = [call[0][0] for call in calls if isinstance(call[0][0], ContainerRecoveryCompletedEvent)]
         assert len(completion_events) == 1
         assert completion_events[0].containers_recovered == 4
         assert completion_events[0].containers_killed == 4

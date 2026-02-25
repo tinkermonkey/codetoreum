@@ -61,12 +61,14 @@ class ArtifactUploadedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "key": self.key,
-            "size_bytes": self.size_bytes,
-            "content_type": self.content_type,
-            "project_id": self.project_id,
-        })
+        d.update(
+            {
+                "key": self.key,
+                "size_bytes": self.size_bytes,
+                "content_type": self.content_type,
+                "project_id": self.project_id,
+            }
+        )
         return d
 
     @classmethod
@@ -125,10 +127,12 @@ class ArtifactDeletedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "key": self.key,
-            "project_id": self.project_id,
-        })
+        d.update(
+            {
+                "key": self.key,
+                "project_id": self.project_id,
+            }
+        )
         return d
 
     @classmethod

@@ -17,15 +17,6 @@ from codetoreum.adapters.testing.in_memory_repository_adapter import (
     InMemoryRepositoryAdapter,
 )
 from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
-from codetoreum.domain.events.queue_events import (
-    QueueItemAddedEvent,
-)
-from codetoreum.domain.events.repository_events import (
-    CommitCreatedEvent,
-)
-from codetoreum.domain.events.storage_events import (
-    ArtifactUploadedEvent,
-)
 from codetoreum.domain.types import BranchName
 
 
@@ -355,11 +346,13 @@ class TestStorageAdapterEventEmission:
         emitter.clear_events()
 
         # Delete multiple artifacts
-        await storage_adapter.delete_many([
-            "projects/proj-1/artifacts/file-0.txt",
-            "projects/proj-1/artifacts/file-1.txt",
-            "projects/proj-1/artifacts/file-2.txt",
-        ])
+        await storage_adapter.delete_many(
+            [
+                "projects/proj-1/artifacts/file-0.txt",
+                "projects/proj-1/artifacts/file-1.txt",
+                "projects/proj-1/artifacts/file-2.txt",
+            ]
+        )
 
         events = emitter.get_events_by_type("storage.artifact_deleted")
         assert len(events) == 3

@@ -78,9 +78,7 @@ class ExecutionEventHandler(EventHandler):
         elif isinstance(event, ExecutionTimeout):
             await self._handle_execution_timeout(event)
         else:
-            logger.warning(
-                f"ExecutionEventHandler received unexpected event type: {event.event_type}"
-            )
+            logger.warning(f"ExecutionEventHandler received unexpected event type: {event.event_type}")
 
     async def _handle_execution_initialized(self, event: ExecutionInitialized) -> None:
         """
@@ -98,8 +96,7 @@ class ExecutionEventHandler(EventHandler):
         )
 
         logger.debug(
-            f"Total executions: {self._metrics['total_executions']}, "
-            f"Active: {self._metrics['active_executions']}"
+            f"Total executions: {self._metrics['total_executions']}, Active: {self._metrics['active_executions']}"
         )
 
     async def _handle_execution_started(self, event: ExecutionStarted) -> None:
@@ -113,13 +110,11 @@ class ExecutionEventHandler(EventHandler):
         self._active_executions[event.aggregate_id] = event.aggregate_id  # Track by execution ID
 
         logger.info(
-            f"Execution started: {event.aggregate_id} "
-            f"(container: {event.payload.get('container_name') or 'none'})"
+            f"Execution started: {event.aggregate_id} (container: {event.payload.get('container_name') or 'none'})"
         )
 
         logger.debug(
-            f"Active executions: {self._metrics['active_executions']}, "
-            f"Total: {self._metrics['total_executions']}"
+            f"Active executions: {self._metrics['active_executions']}, Total: {self._metrics['total_executions']}"
         )
 
         # Note: In a full implementation, this would:
@@ -171,9 +166,8 @@ class ExecutionEventHandler(EventHandler):
         self._active_executions.pop(event.aggregate_id, None)
 
         logger.error(
-            f"Execution failed: {event.aggregate_id}, "
-            f"error: {event.payload.get('error_message')}",
-            extra={"error_id": "ERR_EXECUTION_FAILED"}
+            f"Execution failed: {event.aggregate_id}, error: {event.payload.get('error_message')}",
+            extra={"error_id": "ERR_EXECUTION_FAILED"},
         )
 
         exit_code = event.payload.get("exit_code")
@@ -207,7 +201,7 @@ class ExecutionEventHandler(EventHandler):
 
         logger.error(
             f"Execution timed out: {event.aggregate_id}",
-            extra={"error_id": ErrorRegistry.ERR_EXECUTION_TIMEOUT}
+            extra={"error_id": ErrorRegistry.ERR_EXECUTION_TIMEOUT},
         )
 
         logger.warning(
@@ -227,29 +221,19 @@ class ExecutionEventHandler(EventHandler):
         """Calculate success rate percentage."""
         if self._metrics["total_executions"] == 0:
             return 0.0
-        return (
-            self._metrics["completed_executions"]
-            / self._metrics["total_executions"]
-            * 100
-        )
+        return self._metrics["completed_executions"] / self._metrics["total_executions"] * 100
 
     def _get_failure_rate(self) -> float:
         """Calculate failure rate percentage."""
         if self._metrics["total_executions"] == 0:
             return 0.0
-        return (
-            self._metrics["failed_executions"] / self._metrics["total_executions"] * 100
-        )
+        return self._metrics["failed_executions"] / self._metrics["total_executions"] * 100
 
     def _get_timeout_rate(self) -> float:
         """Calculate timeout rate percentage."""
         if self._metrics["total_executions"] == 0:
             return 0.0
-        return (
-            self._metrics["timed_out_executions"]
-            / self._metrics["total_executions"]
-            * 100
-        )
+        return self._metrics["timed_out_executions"] / self._metrics["total_executions"] * 100
 
     def get_metrics(self) -> dict[str, float]:
         """

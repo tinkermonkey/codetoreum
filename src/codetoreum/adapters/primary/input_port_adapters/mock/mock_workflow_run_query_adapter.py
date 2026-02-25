@@ -223,14 +223,18 @@ class MockWorkflowRunQueryAdapter(IWorkflowRunQueryPort):
         ]
 
         # Mock validation
-        validation = {
-            "sequenceValid": True,
-            "expectedSequence": ["WorkflowCreated", "WorkflowStarted", "WorkflowCompleted"],
-            "actualSequence": ["WorkflowCreated", "WorkflowStarted", "WorkflowCompleted"],
-            "missingEvents": [],
-            "unexpectedEvents": [],
-            "outOfOrderEvents": [],
-        } if include_validation else None
+        validation = (
+            {
+                "sequenceValid": True,
+                "expectedSequence": ["WorkflowCreated", "WorkflowStarted", "WorkflowCompleted"],
+                "actualSequence": ["WorkflowCreated", "WorkflowStarted", "WorkflowCompleted"],
+                "missingEvents": [],
+                "unexpectedEvents": [],
+                "outOfOrderEvents": [],
+            }
+            if include_validation
+            else None
+        )
 
         return WorkflowRunAuditResult(
             workflow_run=workflow_run,

@@ -142,12 +142,7 @@ class WorkItemCreated(DomainEvent):
         - external_id: Optional[str]
         - external_url: Optional[str]
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="WorkItem",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
 
 
 class AgentAssigned(DomainEvent):
@@ -162,12 +157,7 @@ class AgentAssigned(DomainEvent):
         - reason: str
         - assigned_at: str (ISO format)
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="WorkItem",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
 
 
 class WorkItemStarted(DomainEvent):
@@ -181,12 +171,7 @@ class WorkItemStarted(DomainEvent):
         - started_at: str (ISO format)
         - agent_id: str
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="WorkItem",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
 
 
 class WorkItemUnderReview(DomainEvent):
@@ -199,12 +184,7 @@ class WorkItemUnderReview(DomainEvent):
         Required payload fields:
         - review_started_at: str (ISO format)
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="WorkItem",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
 
 
 class WorkItemCompleted(DomainEvent):
@@ -218,12 +198,7 @@ class WorkItemCompleted(DomainEvent):
         - completed_at: str (ISO format)
         - agent_id: Optional[str]
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="WorkItem",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
 
 
 class WorkItemFailed(DomainEvent):
@@ -239,12 +214,7 @@ class WorkItemFailed(DomainEvent):
         - error_details: Dict[str, Any]
         - agent_id: Optional[str]
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="WorkItem",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
 
 
 class WorkItemBlocked(DomainEvent):
@@ -259,12 +229,7 @@ class WorkItemBlocked(DomainEvent):
         - reason: str
         - blocking_issue_id: Optional[str]
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="WorkItem",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
 
 
 class WorkItemUnblocked(DomainEvent):
@@ -278,12 +243,7 @@ class WorkItemUnblocked(DomainEvent):
         - unblocked_at: str (ISO format)
         - new_status: str
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="WorkItem",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
 
 
 class WorkflowAttached(DomainEvent):
@@ -297,12 +257,7 @@ class WorkflowAttached(DomainEvent):
         - workflow_id: str
         - attached_at: str (ISO format)
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="WorkItem",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
 
 
 class WorkItemStageUpdated(DomainEvent):
@@ -318,12 +273,7 @@ class WorkItemStageUpdated(DomainEvent):
         - new_stage: str
         - updated_at: str (ISO format)
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="WorkItem",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
 
 
 class WorkItemLabelsUpdated(DomainEvent):
@@ -338,12 +288,7 @@ class WorkItemLabelsUpdated(DomainEvent):
         - new_labels: List[str]
         - updated_at: str (ISO format)
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="WorkItem",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
 
 
 class WorkItemPriorityUpdated(DomainEvent):
@@ -358,12 +303,7 @@ class WorkItemPriorityUpdated(DomainEvent):
         - new_priority: int
         - updated_at: str (ISO format)
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="WorkItem",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
 
 
 # =============================================================================
@@ -385,12 +325,7 @@ class AgentCreated(DomainEvent):
         - model: str
         - capabilities: List[str]
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="Agent",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="Agent", payload=payload, **kwargs)
 
 
 class AgentCapabilityAdded(DomainEvent):
@@ -405,12 +340,7 @@ class AgentCapabilityAdded(DomainEvent):
         - proficiency: float
         - added_at: str (ISO format)
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="Agent",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="Agent", payload=payload, **kwargs)
 
 
 class AgentCapabilityRemoved(DomainEvent):
@@ -424,12 +354,7 @@ class AgentCapabilityRemoved(DomainEvent):
         - skill: str
         - removed_at: str (ISO format)
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="Agent",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="Agent", payload=payload, **kwargs)
 
 
 class AgentCapabilityUpdated(DomainEvent):
@@ -445,12 +370,7 @@ class AgentCapabilityUpdated(DomainEvent):
         - new_proficiency: float
         - updated_at: str (ISO format)
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="Agent",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="Agent", payload=payload, **kwargs)
 
 
 class AgentModelUpdated(DomainEvent):
@@ -465,12 +385,7 @@ class AgentModelUpdated(DomainEvent):
         - new_model: str
         - updated_at: str (ISO format)
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="Agent",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="Agent", payload=payload, **kwargs)
 
 
 class AgentTimeoutUpdated(DomainEvent):
@@ -485,12 +400,7 @@ class AgentTimeoutUpdated(DomainEvent):
         - new_timeout: int
         - updated_at: str (ISO format)
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="Agent",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="Agent", payload=payload, **kwargs)
 
 
 class AgentMaxRetriesUpdated(DomainEvent):
@@ -505,12 +415,7 @@ class AgentMaxRetriesUpdated(DomainEvent):
         - new_max_retries: int
         - updated_at: str (ISO format)
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="Agent",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="Agent", payload=payload, **kwargs)
 
 
 class AgentConstraintsUpdated(DomainEvent):
@@ -525,12 +430,7 @@ class AgentConstraintsUpdated(DomainEvent):
         - new_constraints: Dict[str, bool]
         - updated_at: str (ISO format)
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="Agent",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="Agent", payload=payload, **kwargs)
 
 
 class AgentMcpServerAdded(DomainEvent):
@@ -544,12 +444,7 @@ class AgentMcpServerAdded(DomainEvent):
         - server_name: str
         - added_at: str (ISO format)
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="Agent",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="Agent", payload=payload, **kwargs)
 
 
 class AgentMcpServerRemoved(DomainEvent):
@@ -563,12 +458,7 @@ class AgentMcpServerRemoved(DomainEvent):
         - server_name: str
         - removed_at: str (ISO format)
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="Agent",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="Agent", payload=payload, **kwargs)
 
 
 # =============================================================================
@@ -590,12 +480,7 @@ class ExecutionInitialized(DomainEvent):
         - stage_name: str
         - model: str
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="AgentExecution",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="AgentExecution", payload=payload, **kwargs)
 
 
 class ExecutionStarted(DomainEvent):
@@ -609,12 +494,7 @@ class ExecutionStarted(DomainEvent):
         - started_at: str (ISO format)
         - container_name: Optional[str]
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="AgentExecution",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="AgentExecution", payload=payload, **kwargs)
 
 
 class ExecutionCompleted(DomainEvent):
@@ -631,12 +511,7 @@ class ExecutionCompleted(DomainEvent):
         - duration_seconds: Optional[float]
         - session_id: Optional[str]
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="AgentExecution",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="AgentExecution", payload=payload, **kwargs)
 
 
 class ExecutionFailed(DomainEvent):
@@ -652,12 +527,7 @@ class ExecutionFailed(DomainEvent):
         - exit_code: Optional[int]
         - duration_seconds: Optional[float]
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="AgentExecution",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="AgentExecution", payload=payload, **kwargs)
 
 
 class ExecutionTimeout(DomainEvent):
@@ -671,12 +541,7 @@ class ExecutionTimeout(DomainEvent):
         - timeout_at: str (ISO format)
         - duration_seconds: Optional[float]
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="AgentExecution",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="AgentExecution", payload=payload, **kwargs)
 
 
 class ExecutionCancelled(DomainEvent):
@@ -691,12 +556,7 @@ class ExecutionCancelled(DomainEvent):
         - reason: Optional[str]
         - duration_seconds: Optional[float]
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="AgentExecution",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="AgentExecution", payload=payload, **kwargs)
 
 
 class ExecutionPaused(DomainEvent):
@@ -710,12 +570,7 @@ class ExecutionPaused(DomainEvent):
         - paused_at: str (ISO format)
         - reason: Optional[str]
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="AgentExecution",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="AgentExecution", payload=payload, **kwargs)
 
 
 class ExecutionResumed(DomainEvent):
@@ -728,12 +583,7 @@ class ExecutionResumed(DomainEvent):
         Required payload fields:
         - resumed_at: str (ISO format)
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="AgentExecution",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="AgentExecution", payload=payload, **kwargs)
 
 
 # =============================================================================
@@ -754,12 +604,7 @@ class WorkflowCreated(DomainEvent):
         - project_id: str
         - stage_count: int
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="Workflow",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="Workflow", payload=payload, **kwargs)
 
 
 class WorkflowStarted(DomainEvent):
@@ -774,12 +619,7 @@ class WorkflowStarted(DomainEvent):
         - work_item_id: str
         - first_stage: str
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="Workflow",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="Workflow", payload=payload, **kwargs)
 
 
 class WorkflowStageAdvanced(DomainEvent):
@@ -795,12 +635,7 @@ class WorkflowStageAdvanced(DomainEvent):
         - stage_index: int
         - advanced_at: str (ISO format)
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="Workflow",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="Workflow", payload=payload, **kwargs)
 
 
 class WorkflowStageStatusUpdated(DomainEvent):
@@ -816,12 +651,7 @@ class WorkflowStageStatusUpdated(DomainEvent):
         - new_status: str
         - updated_at: str (ISO format)
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="Workflow",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="Workflow", payload=payload, **kwargs)
 
 
 class WorkflowCompleted(DomainEvent):
@@ -836,12 +666,7 @@ class WorkflowCompleted(DomainEvent):
         - work_item_id: str
         - duration_seconds: float
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="Workflow",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="Workflow", payload=payload, **kwargs)
 
 
 class WorkflowFailed(DomainEvent):
@@ -857,12 +682,7 @@ class WorkflowFailed(DomainEvent):
         - failed_stage: str
         - completed_stages: List[str]
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="Workflow",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="Workflow", payload=payload, **kwargs)
 
 
 class WorkflowPaused(DomainEvent):
@@ -877,12 +697,7 @@ class WorkflowPaused(DomainEvent):
         - reason: str
         - current_stage: str
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="Workflow",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="Workflow", payload=payload, **kwargs)
 
 
 class WorkflowResumed(DomainEvent):
@@ -896,12 +711,7 @@ class WorkflowResumed(DomainEvent):
         - resumed_at: str (ISO format)
         - current_stage: str
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="Workflow",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="Workflow", payload=payload, **kwargs)
 
 
 class WorkflowCancelled(DomainEvent):
@@ -916,12 +726,7 @@ class WorkflowCancelled(DomainEvent):
         - reason: str
         - completed_stages: List[str]
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="Workflow",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="Workflow", payload=payload, **kwargs)
 
 
 # =============================================================================
@@ -944,12 +749,7 @@ class ReviewCycleCreated(DomainEvent):
         - max_iterations: int
         - review_type: str
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ReviewCycle",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
 
 
 class ReviewIterationStarted(DomainEvent):
@@ -964,12 +764,7 @@ class ReviewIterationStarted(DomainEvent):
         - started_at: str (ISO format)
         - reviewer_agent_id: Optional[str]
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ReviewCycle",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
 
 
 class ReviewFeedbackSubmitted(DomainEvent):
@@ -987,12 +782,7 @@ class ReviewFeedbackSubmitted(DomainEvent):
         - reviewer_id: str
         - issues_found: List[Dict[str, Any]]
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ReviewCycle",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
 
 
 class ReviewCycleApproved(DomainEvent):
@@ -1008,12 +798,7 @@ class ReviewCycleApproved(DomainEvent):
         - reviewer_id: str
         - approval_notes: Optional[str]
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ReviewCycle",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
 
 
 class ReviewCycleRejected(DomainEvent):
@@ -1029,12 +814,7 @@ class ReviewCycleRejected(DomainEvent):
         - reviewer_id: str
         - rejection_reason: str
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ReviewCycle",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
 
 
 class ReviewCycleEscalated(DomainEvent):
@@ -1051,12 +831,7 @@ class ReviewCycleEscalated(DomainEvent):
         - escalated_to: str
         - escalation_notes: Optional[str]
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ReviewCycle",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
 
 
 # =============================================================================
@@ -1078,12 +853,7 @@ class ProjectContextCreated(DomainEvent):
         - language: Optional[str]
         - framework: Optional[str]
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ProjectContext",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectContext", payload=payload, **kwargs)
 
 
 class ProjectTestConfigUpdated(DomainEvent):
@@ -1099,12 +869,7 @@ class ProjectTestConfigUpdated(DomainEvent):
         - test_directory: str
         - coverage_threshold: Optional[float]
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ProjectContext",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectContext", payload=payload, **kwargs)
 
 
 class ProjectDockerConfigUpdated(DomainEvent):
@@ -1120,12 +885,7 @@ class ProjectDockerConfigUpdated(DomainEvent):
         - build_args: Dict[str, str]
         - environment_vars: Dict[str, str]
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ProjectContext",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectContext", payload=payload, **kwargs)
 
 
 class ProjectWorkflowMappingAdded(DomainEvent):
@@ -1141,12 +901,7 @@ class ProjectWorkflowMappingAdded(DomainEvent):
         - workflow_template_id: str
         - priority: int
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ProjectContext",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectContext", payload=payload, **kwargs)
 
 
 # =============================================================================
@@ -1166,7 +921,7 @@ class PipelineStageStarted(DomainEvent):
         agent_config: dict[str, Any],
         execution_id: str,
         timestamp: datetime | None = None,
-        **kwargs: Any
+        **kwargs: Any,
     ):
         """
         Initialize PipelineStageStarted event.
@@ -1188,12 +943,7 @@ class PipelineStageStarted(DomainEvent):
             "execution_id": execution_id,
             "started_at": (timestamp or datetime.now(UTC)).isoformat(),
         }
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="Workflow",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="Workflow", payload=payload, **kwargs)
 
 
 class PipelineStageCompleted(DomainEvent):
@@ -1208,7 +958,7 @@ class PipelineStageCompleted(DomainEvent):
         output: str,
         duration_seconds: float,
         timestamp: datetime | None = None,
-        **kwargs: Any
+        **kwargs: Any,
     ):
         """
         Initialize PipelineStageCompleted event.
@@ -1230,12 +980,7 @@ class PipelineStageCompleted(DomainEvent):
             "duration_seconds": duration_seconds,
             "completed_at": (timestamp or datetime.now(UTC)).isoformat(),
         }
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="Workflow",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="Workflow", payload=payload, **kwargs)
 
 
 class PipelineStageFailed(DomainEvent):
@@ -1250,7 +995,7 @@ class PipelineStageFailed(DomainEvent):
         error: str,
         duration_seconds: float,
         timestamp: datetime | None = None,
-        **kwargs: Any
+        **kwargs: Any,
     ):
         """
         Initialize PipelineStageFailed event.
@@ -1272,12 +1017,7 @@ class PipelineStageFailed(DomainEvent):
             "duration_seconds": duration_seconds,
             "failed_at": (timestamp or datetime.now(UTC)).isoformat(),
         }
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="Workflow",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="Workflow", payload=payload, **kwargs)
 
 
 class PipelineCompleted(DomainEvent):
@@ -1292,7 +1032,7 @@ class PipelineCompleted(DomainEvent):
         outputs: dict[str, Any],
         duration_seconds: float,
         timestamp: datetime | None = None,
-        **kwargs: Any
+        **kwargs: Any,
     ):
         """
         Initialize PipelineCompleted event.
@@ -1314,12 +1054,7 @@ class PipelineCompleted(DomainEvent):
             "duration_seconds": duration_seconds,
             "completed_at": (timestamp or datetime.now(UTC)).isoformat(),
         }
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="Pipeline",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="Pipeline", payload=payload, **kwargs)
 
 
 class PipelineFailed(DomainEvent):
@@ -1334,7 +1069,7 @@ class PipelineFailed(DomainEvent):
         completed_stages: list,
         failed_stages: list,
         timestamp: datetime | None = None,
-        **kwargs: Any
+        **kwargs: Any,
     ):
         """
         Initialize PipelineFailed event.
@@ -1356,12 +1091,7 @@ class PipelineFailed(DomainEvent):
             "failed_stages": failed_stages,
             "failed_at": (timestamp or datetime.now(UTC)).isoformat(),
         }
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="Pipeline",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="Pipeline", payload=payload, **kwargs)
 
 
 # =============================================================================
@@ -1383,12 +1113,7 @@ class ProjectConfigUpdated(DomainEvent):
         - updated_by: str
         - reason: Optional[str]
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ProjectConfig",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectConfig", payload=payload, **kwargs)
 
 
 class AgentConfigUpdated(DomainEvent):
@@ -1406,12 +1131,7 @@ class AgentConfigUpdated(DomainEvent):
         - updated_by: str
         - reason: Optional[str]
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="AgentConfig",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="AgentConfig", payload=payload, **kwargs)
 
 
 class PipelineConfigUpdated(DomainEvent):
@@ -1429,12 +1149,7 @@ class PipelineConfigUpdated(DomainEvent):
         - updated_by: str
         - reason: Optional[str]
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="PipelineConfig",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="PipelineConfig", payload=payload, **kwargs)
 
 
 class EnvironmentVariableChanged(DomainEvent):
@@ -1451,12 +1166,7 @@ class EnvironmentVariableChanged(DomainEvent):
         - is_secret: bool
         - changed_by: str
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ProjectConfig",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectConfig", payload=payload, **kwargs)
 
 
 class CommandMounted(DomainEvent):
@@ -1472,12 +1182,7 @@ class CommandMounted(DomainEvent):
         - command_path: str
         - mounted_by: str
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ProjectConfig",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectConfig", payload=payload, **kwargs)
 
 
 class CommandUnmounted(DomainEvent):
@@ -1492,12 +1197,7 @@ class CommandUnmounted(DomainEvent):
         - command_name: str
         - unmounted_by: str
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ProjectConfig",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectConfig", payload=payload, **kwargs)
 
 
 class SubAgentMounted(DomainEvent):
@@ -1512,12 +1212,7 @@ class SubAgentMounted(DomainEvent):
         - subagent_name: str
         - mounted_by: str
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ProjectConfig",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectConfig", payload=payload, **kwargs)
 
 
 class SubAgentUnmounted(DomainEvent):
@@ -1532,12 +1227,7 @@ class SubAgentUnmounted(DomainEvent):
         - subagent_name: str
         - unmounted_by: str
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ProjectConfig",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectConfig", payload=payload, **kwargs)
 
 
 # =============================================================================
@@ -1560,12 +1250,7 @@ class WorkItemColumnChanged(DomainEvent):
         - board_id: str
         - project_id: str
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="WorkItem",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
 
 
 class BoardReconciled(DomainEvent):
@@ -1581,9 +1266,4 @@ class BoardReconciled(DomainEvent):
         - columns_removed: List[str]
         - orphaned_items: List[str]
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="Board",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="Board", payload=payload, **kwargs)

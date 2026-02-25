@@ -115,8 +115,6 @@ class WebhookProcessingError(WebhookError):
     http_status = 500
 
 
-
-
 # ============================================================================
 # GitHub Webhook Adapter
 # ============================================================================
@@ -174,10 +172,7 @@ class GitHubWebhookAdapter:
         # Track processed delivery IDs for idempotency (in-memory for now)
         self._processed_deliveries: dict[str, WebhookProcessingResult] = {}
 
-    @instrument_async_function(
-        name="github.webhook.receive",
-        attributes={"service": "github_webhook"}
-    )
+    @instrument_async_function(name="github.webhook.receive", attributes={"service": "github_webhook"})
     async def receive_webhook(
         self,
         request: Request,
@@ -216,9 +211,7 @@ class GitHubWebhookAdapter:
             # Check for idempotency - if already processed, return cached result
             if x_github_delivery in self._processed_deliveries:
                 cached_result = self._processed_deliveries[x_github_delivery]
-                self.logger.info(
-                    f"Webhook {x_github_delivery} already processed, returning cached result"
-                )
+                self.logger.info(f"Webhook {x_github_delivery} already processed, returning cached result")
                 return {
                     "status": "accepted",
                     "delivery_id": x_github_delivery,
@@ -261,9 +254,7 @@ class GitHubWebhookAdapter:
             self._processed_deliveries[x_github_delivery] = result
 
             # 8. Emit observability event
-            self.logger.info(
-                f"Webhook {x_github_delivery} processed successfully in {processing_time:.2f}ms"
-            )
+            self.logger.info(f"Webhook {x_github_delivery} processed successfully in {processing_time:.2f}ms")
 
             # 9. Return success response
             return {
@@ -286,7 +277,10 @@ class GitHubWebhookAdapter:
             raise HTTPException(status_code=400, detail=str(e))
 
         except Exception as e:
-            self.logger.error(f"Webhook processing failed: {e}", extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR})
+            self.logger.error(
+                f"Webhook processing failed: {e}",
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
             raise HTTPException(status_code=500, detail="Internal error")
 
     async def verify_signature(self, payload: bytes, signature: str) -> bool:
@@ -303,13 +297,14 @@ class GitHubWebhookAdapter:
         # Get webhook secret from configuration
         secret = await self.config.get_webhook_secret()
         if not secret:
-            self.logger.error("Webhook secret not configured", extra={"error_id": ErrorRegistry.ERR_MISSING_CONFIGURATION})
+            self.logger.error(
+                "Webhook secret not configured",
+                extra={"error_id": ErrorRegistry.ERR_MISSING_CONFIGURATION},
+            )
             return False
 
         # Compute expected signature
-        expected = hmac.new(
-            key=secret.encode("utf-8"), msg=payload, digestmod=hashlib.sha256
-        ).hexdigest()
+        expected = hmac.new(key=secret.encode("utf-8"), msg=payload, digestmod=hashlib.sha256).hexdigest()
 
         # Extract provided signature (remove 'sha256=' prefix)
         provided = signature.replace("sha256=", "")
@@ -369,10 +364,7 @@ class GitHubWebhookAdapter:
         """Validate discussion event payload"""
         return "action" in payload and "discussion" in payload
 
-    @instrument_async_function(
-        name="github.webhook.process_event",
-        attributes={"service": "github_webhook"}
-    )
+    @instrument_async_function(name="github.webhook.process_event", attributes={"service": "github_webhook"})
     async def _process_event(self, event: WebhookEvent) -> WebhookProcessingResult:
         """
         Process webhook event and create commands.
@@ -403,9 +395,7 @@ class GitHubWebhookAdapter:
         project = await self._identify_project(event.repository)
         if not project:
             msg = f"Repository {event.repository} not configured"
-            raise UnknownProjectError(
-                msg
-            )
+            raise UnknownProjectError(msg)
 
         # Handle event
         commands = await handler(event, project)
@@ -418,11 +408,9 @@ class GitHubWebhookAdapter:
 
     @instrument_async_function(
         name="github.webhook.handle_project_card",
-        attributes={"service": "github_webhook", "event_type": "project_card"}
+        attributes={"service": "github_webhook", "event_type": "project_card"},
     )
-    async def _handle_project_card_event(
-        self, event: WebhookEvent, project: str
-    ) -> list[str]:
+    async def _handle_project_card_event(self, event: WebhookEvent, project: str) -> list[str]:
         """
         Handle project_card event (card movement).
 
@@ -460,9 +448,7 @@ class GitHubWebhookAdapter:
         # Map column ID to stage
         stage_info = await self._map_column_to_stage(project, column_id)
         if not stage_info:
-            self.logger.warning(
-                f"Column {column_id} not mapped for project {project}"
-            )
+            self.logger.warning(f"Column {column_id} not mapped for project {project}")
             return []
 
         # Create workflow command
@@ -475,9 +461,7 @@ class GitHubWebhookAdapter:
             context={
                 "board_name": stage_info.board_name,
                 "column_name": stage_info.column_name,
-                "previous_column_id": payload.get("changes", {})
-                .get("column_id", {})
-                .get("from"),
+                "previous_column_id": payload.get("changes", {}).get("column_id", {}).get("from"),
                 "delivery_id": event.delivery_id,
             },
         )
@@ -489,11 +473,9 @@ class GitHubWebhookAdapter:
 
     @instrument_async_function(
         name="github.webhook.handle_issues",
-        attributes={"service": "github_webhook", "event_type": "issues"}
+        attributes={"service": "github_webhook", "event_type": "issues"},
     )
-    async def _handle_issues_event(
-        self, event: WebhookEvent, project: str
-    ) -> list[str]:
+    async def _handle_issues_event(self, event: WebhookEvent, project: str) -> list[str]:
         """
         Handle issues event (issue created/updated).
 
@@ -515,11 +497,9 @@ class GitHubWebhookAdapter:
 
     @instrument_async_function(
         name="github.webhook.handle_issue_comment",
-        attributes={"service": "github_webhook", "event_type": "issue_comment"}
+        attributes={"service": "github_webhook", "event_type": "issue_comment"},
     )
-    async def _handle_issue_comment_event(
-        self, event: WebhookEvent, project: str
-    ) -> list[str]:
+    async def _handle_issue_comment_event(self, event: WebhookEvent, project: str) -> list[str]:
         """
         Handle issue_comment event (agent feedback).
 
@@ -545,11 +525,9 @@ class GitHubWebhookAdapter:
 
     @instrument_async_function(
         name="github.webhook.handle_pull_request",
-        attributes={"service": "github_webhook", "event_type": "pull_request"}
+        attributes={"service": "github_webhook", "event_type": "pull_request"},
     )
-    async def _handle_pull_request_event(
-        self, event: WebhookEvent, project: str
-    ) -> list[str]:
+    async def _handle_pull_request_event(self, event: WebhookEvent, project: str) -> list[str]:
         """
         Handle pull_request event.
 
@@ -573,11 +551,9 @@ class GitHubWebhookAdapter:
 
     @instrument_async_function(
         name="github.webhook.handle_discussion",
-        attributes={"service": "github_webhook", "event_type": "discussion"}
+        attributes={"service": "github_webhook", "event_type": "discussion"},
     )
-    async def _handle_discussion_event(
-        self, event: WebhookEvent, project: str
-    ) -> list[str]:
+    async def _handle_discussion_event(self, event: WebhookEvent, project: str) -> list[str]:
         """
         Handle discussion event.
 
@@ -617,9 +593,7 @@ class GitHubWebhookAdapter:
                 return project
         return None
 
-    async def _map_column_to_stage(
-        self, project: str, column_id: int
-    ) -> StageInfo | None:
+    async def _map_column_to_stage(self, project: str, column_id: int) -> StageInfo | None:
         """
         Map GitHub project column ID to pipeline stage.
 

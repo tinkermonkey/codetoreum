@@ -37,9 +37,7 @@ async def security_headers_middleware(request: Request, call_next):
 
     # Add HSTS header if using HTTPS
     if os.getenv("API_USE_HTTPS", "false").lower() == "true":
-        response.headers["Strict-Transport-Security"] = (
-            "max-age=31536000; includeSubDomains"
-        )
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
 
     # Content Security Policy
     response.headers["Content-Security-Policy"] = (

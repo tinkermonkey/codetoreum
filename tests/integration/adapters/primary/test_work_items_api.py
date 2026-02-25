@@ -148,9 +148,7 @@ def sample_work_item():
 class TestCreateWorkItem:
     """Tests for POST /api/v2/work-items endpoint."""
 
-    def test_create_work_item_success(
-        self, client, mock_command_port, sample_work_item
-    ):
+    def test_create_work_item_success(self, client, mock_command_port, sample_work_item):
         """Test successful work item creation."""
         # Arrange
         mock_command_port._create_work_item.return_value = sample_work_item
@@ -183,9 +181,7 @@ class TestCreateWorkItem:
         assert isinstance(call_args, CreateWorkItemCommand)
         assert call_args.title == "Test Work Item"
 
-    def test_create_work_item_with_defaults(
-        self, client, mock_command_port, sample_work_item
-    ):
+    def test_create_work_item_with_defaults(self, client, mock_command_port, sample_work_item):
         """Test work item creation with default values."""
         # Arrange
         mock_command_port._create_work_item.return_value = sample_work_item
@@ -223,9 +219,7 @@ class TestCreateWorkItem:
 class TestListWorkItems:
     """Tests for GET /api/v2/work-items endpoint."""
 
-    def test_list_work_items_success(
-        self, client, mock_query_port, sample_work_item
-    ):
+    def test_list_work_items_success(self, client, mock_query_port, sample_work_item):
         """Test successful work items listing."""
         # Arrange
         mock_query_port._list_work_items.return_value = WorkItemListResult(
@@ -247,9 +241,7 @@ class TestListWorkItems:
         assert data["work_items"][0]["id"] == "wi-123"
         assert data["has_next"] is False
 
-    def test_list_work_items_with_filters(
-        self, client, mock_query_port, sample_work_item
-    ):
+    def test_list_work_items_with_filters(self, client, mock_query_port, sample_work_item):
         """Test work items listing with filters."""
         # Arrange
         mock_query_port._list_work_items.return_value = WorkItemListResult(
@@ -261,9 +253,7 @@ class TestListWorkItems:
         )
 
         # Act
-        response = client.get(
-            "/api/v2/work-items?status=in_progress&priority=HIGH&labels=bug,urgent"
-        )
+        response = client.get("/api/v2/work-items?status=in_progress&priority=HIGH&labels=bug,urgent")
 
         # Assert
         assert response.status_code == 200
@@ -278,9 +268,7 @@ class TestListWorkItems:
         assert filters.priority == WorkItemPriority.HIGH
         assert filters.labels == ["bug", "urgent"]
 
-    def test_list_work_items_with_pagination(
-        self, client, mock_query_port, sample_work_item
-    ):
+    def test_list_work_items_with_pagination(self, client, mock_query_port, sample_work_item):
         """Test work items listing with pagination."""
         # Arrange
         mock_query_port._list_work_items.return_value = WorkItemListResult(
@@ -302,9 +290,7 @@ class TestListWorkItems:
         assert data["page_size"] == 50
         assert data["has_next"] is True
 
-    def test_list_work_items_with_search(
-        self, client, mock_query_port, sample_work_item
-    ):
+    def test_list_work_items_with_search(self, client, mock_query_port, sample_work_item):
         """Test work items listing with search query."""
         # Arrange
         mock_query_port._search_work_items.return_value = WorkItemListResult(
@@ -371,9 +357,7 @@ class TestGetWorkItem:
 class TestUpdateWorkItem:
     """Tests for PUT /api/v2/work-items/{id} endpoint."""
 
-    def test_update_work_item_success(
-        self, client, mock_command_port, sample_work_item
-    ):
+    def test_update_work_item_success(self, client, mock_command_port, sample_work_item):
         """Test successful work item update."""
         # Arrange
         mock_command_port._update_work_item.return_value = sample_work_item
@@ -400,9 +384,7 @@ class TestUpdateWorkItem:
     def test_update_work_item_not_found(self, client, mock_command_port):
         """Test work item update when not found."""
         # Arrange
-        mock_command_port._update_work_item.side_effect = Exception(
-            "Work item not found"
-        )
+        mock_command_port._update_work_item.side_effect = Exception("Work item not found")
 
         request_data = {
             "title": "Updated Title",
@@ -440,9 +422,7 @@ class TestDeleteWorkItem:
     def test_delete_work_item_not_found(self, client, mock_command_port):
         """Test work item deletion when not found."""
         # Arrange
-        mock_command_port._delete_work_item.side_effect = Exception(
-            "Work item not found"
-        )
+        mock_command_port._delete_work_item.side_effect = Exception("Work item not found")
 
         # Act
         response = client.delete("/api/v2/work-items/wi-nonexistent")

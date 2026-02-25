@@ -243,6 +243,7 @@ class TestEventSerializer:
 
     def test_register_event_type(self):
         """Test registering event types."""
+
         # Arrange
         class CustomEvent(DomainEvent):
             pass
@@ -256,6 +257,7 @@ class TestEventSerializer:
 
     def test_register_duplicate_event_type_with_same_class_ok(self):
         """Test that registering same event type twice is OK."""
+
         # Arrange
         class CustomEvent(DomainEvent):
             pass
@@ -269,6 +271,7 @@ class TestEventSerializer:
 
     def test_register_duplicate_event_type_with_different_class_raises_error(self):
         """Test that registering same name with different class raises error."""
+
         # Arrange
         class CustomEvent1(DomainEvent):
             pass

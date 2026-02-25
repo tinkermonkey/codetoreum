@@ -131,7 +131,7 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
             id=f"thread-{work_item_id}",
             work_item_id=work_item_id,
             comments=self._threads[work_item_id].copy(),
-            thread_type="flat"
+            thread_type="flat",
         )
 
     # Command Operations
@@ -164,31 +164,29 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
             body=content,
             created_at=self._get_iso_timestamp(),
             parent_id=parent_id,
-            is_bot=True
+            is_bot=True,
         )
 
         self._threads[work_item_id].append(comment)
 
         if work_item_id in self._monitoring:
             config = self._monitoring[work_item_id]
-            self.emit(CommentPostedEvent(
-                type="comment.posted",
-                work_item_id=work_item_id,
-                project_id=config.project_id,
-                comment=comment,
-                timestamp=self._get_iso_timestamp(),
-                source="mock"
-            ))
+            self.emit(
+                CommentPostedEvent(
+                    type="comment.posted",
+                    work_item_id=work_item_id,
+                    project_id=config.project_id,
+                    comment=comment,
+                    timestamp=self._get_iso_timestamp(),
+                    source="mock",
+                )
+            )
 
         return comment
 
     # Work-Item-Specific Monitoring
 
-    def start_monitoring(
-        self,
-        work_item_id: str,
-        config: DiscussionMonitoringConfig
-    ) -> None:
+    def start_monitoring(self, work_item_id: str, config: DiscussionMonitoringConfig) -> None:
         """Start monitoring a specific work item for new comments.
 
         Args:
@@ -233,7 +231,7 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
         author: str,
         body: str,
         parent_id: str | None = None,
-        is_initial: bool = False
+        is_initial: bool = False,
     ) -> None:
         """Test helper: Simulate human comment requiring response.
 
@@ -257,7 +255,7 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
             body=body,
             created_at=self._get_iso_timestamp(),
             parent_id=parent_id,
-            is_bot=self._identity_service.is_bot_user(author)
+            is_bot=self._identity_service.is_bot_user(author),
         )
 
         self._threads[work_item_id].append(comment)
@@ -281,22 +279,19 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
                     is_initial_request=False,
                 )
 
-            self.emit(CommentNeedsResponseEvent(
-                type="comment.needs_response",
-                work_item_id=work_item_id,
-                project_id=config.project_id,
-                comment=comment,
-                context=context,
-                timestamp=self._get_iso_timestamp(),
-                source="mock"
-            ))
+            self.emit(
+                CommentNeedsResponseEvent(
+                    type="comment.needs_response",
+                    work_item_id=work_item_id,
+                    project_id=config.project_id,
+                    comment=comment,
+                    context=context,
+                    timestamp=self._get_iso_timestamp(),
+                    source="mock",
+                )
+            )
 
-    def simulate_bot_comment(
-        self,
-        work_item_id: str,
-        body: str,
-        parent_id: str | None = None
-    ) -> Comment:
+    def simulate_bot_comment(self, work_item_id: str, body: str, parent_id: str | None = None) -> Comment:
         """Test helper: Simulate bot comment.
 
         Simulates a bot (system) comment being posted to a work item discussion.
@@ -325,7 +320,7 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
             body=body,
             created_at=self._get_iso_timestamp(),
             parent_id=parent_id,
-            is_bot=True
+            is_bot=True,
         )
 
         self._threads[work_item_id].append(comment)
@@ -333,23 +328,20 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
         # Emit event if monitoring this item
         if work_item_id in self._monitoring:
             config = self._monitoring[work_item_id]
-            self.emit(CommentPostedEvent(
-                type="comment.posted",
-                work_item_id=work_item_id,
-                project_id=config.project_id,
-                comment=comment,
-                timestamp=self._get_iso_timestamp(),
-                source="mock"
-            ))
+            self.emit(
+                CommentPostedEvent(
+                    type="comment.posted",
+                    work_item_id=work_item_id,
+                    project_id=config.project_id,
+                    comment=comment,
+                    timestamp=self._get_iso_timestamp(),
+                    source="mock",
+                )
+            )
 
         return comment
 
-    def create_thread(
-        self,
-        work_item_id: str,
-        initial_comment_body: str,
-        author: str = "requester"
-    ) -> Comment:
+    def create_thread(self, work_item_id: str, initial_comment_body: str, author: str = "requester") -> Comment:
         """Test helper: Create a discussion thread with initial comment.
 
         Sets up a discussion thread for a work item with an initial comment.
@@ -376,17 +368,13 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
             body=initial_comment_body,
             created_at=self._get_iso_timestamp(),
             parent_id=None,
-            is_bot=self._identity_service.is_bot_user(author)
+            is_bot=self._identity_service.is_bot_user(author),
         )
 
         self._threads[work_item_id].append(comment)
         return comment
 
-    def get_comments_by_author(
-        self,
-        work_item_id: str,
-        author: str
-    ) -> list[Comment]:
+    def get_comments_by_author(self, work_item_id: str, author: str) -> list[Comment]:
         """Test helper: Get all comments from a specific author.
 
         Args:
@@ -492,17 +480,10 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
             "exists": work_item_id in self._threads,
             "comment_count": len(self._threads.get(work_item_id, [])),
             "is_monitored": work_item_id in self._monitoring,
-            "authors": list(set(
-                c.author for c in self._threads.get(work_item_id, [])
-            ))
+            "authors": list(set(c.author for c in self._threads.get(work_item_id, []))),
         }
 
-    def simulate_column_change(
-        self,
-        work_item_id: str,
-        from_column: str,
-        to_column: str
-    ) -> None:
+    def simulate_column_change(self, work_item_id: str, from_column: str, to_column: str) -> None:
         """Test helper: Simulate work item column change.
 
         Emits WorkItemColumnChangedEvent to trigger loop exit/entry.
@@ -535,7 +516,7 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
             to_column=to_column,
             moved_by="unknown",
             timestamp=self._get_iso_timestamp(),
-            source="mock"
+            source="mock",
         )
 
         self.emit(event)

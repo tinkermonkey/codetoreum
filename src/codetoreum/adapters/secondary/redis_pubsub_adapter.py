@@ -32,7 +32,6 @@ class RedisPubSubError(Exception):
     """Raised when Redis pub/sub operations fail."""
 
 
-
 class RedisPubSubAdapter(IMessageBroker):
     """
     Redis pub/sub adapter for WebSocket message distribution across instances.
@@ -111,9 +110,7 @@ class RedisPubSubAdapter(IMessageBroker):
                 self._listener_task = asyncio.create_task(self._listen_for_messages())
 
                 self._initialized = True
-                logger.info(
-                    f"Redis pub/sub initialized - subscribed to {self.event_channel}, {self.control_channel}"
-                )
+                logger.info(f"Redis pub/sub initialized - subscribed to {self.event_channel}, {self.control_channel}")
 
             except Exception as e:
                 msg = f"Failed to initialize pub/sub: {e}"
@@ -129,9 +126,7 @@ class RedisPubSubAdapter(IMessageBroker):
             while self._initialized and self._pubsub:
                 try:
                     # Get message with timeout to allow checking _initialized flag
-                    message = await self._pubsub.get_message(
-                        ignore_subscribe_messages=True, timeout=1.0
-                    )
+                    message = await self._pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
 
                     if message and message["type"] == "message":
                         channel = message["channel"].decode("utf-8")
@@ -144,20 +139,23 @@ class RedisPubSubAdapter(IMessageBroker):
                     # No message received, continue
                     continue
                 except Exception as e:
-                    logger.error(f"Error receiving message: {e}",
+                    logger.error(
+                        f"Error receiving message: {e}",
                         exc_info=True,
-                        extra={"error_id": ErrorRegistry.ERR_REDIS_ERROR}
-            )
+                        extra={"error_id": ErrorRegistry.ERR_REDIS_ERROR},
+                    )
                     # Continue listening despite errors
                     await asyncio.sleep(1)
 
         except asyncio.CancelledError:
             logger.info("Pub/sub listener cancelled")
         except Exception as e:
-            logger.error(f"Fatal error in pub/sub listener: {e}",
+            logger.error(
+                f"Fatal error in pub/sub listener: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_EVENT_BUS_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_EVENT_BUS_ERROR},
             )
+
     async def _dispatch_message(self, channel: str, data: bytes) -> None:
         """
         Dispatch message to registered callbacks.
@@ -185,23 +183,26 @@ class RedisPubSubAdapter(IMessageBroker):
                         callback(message_dict)
                     dispatched += 1
                 except Exception as e:
-                    logger.error(f"Error in pub/sub callback: {e}",
+                    logger.error(
+                        f"Error in pub/sub callback: {e}",
                         exc_info=True,
-                        extra={"error_id": ErrorRegistry.ERR_EVENT_BUS_ERROR}
-            )
+                        extra={"error_id": ErrorRegistry.ERR_EVENT_BUS_ERROR},
+                    )
             # Track messages that were successfully dispatched to at least one callback
             if dispatched > 0:
                 self._stats["messages_received"] += 1
 
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to decode message: {e}",
+            logger.error(
+                f"Failed to decode message: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR},
             )
         except Exception as e:
-            logger.error(f"Error dispatching message: {e}",
+            logger.error(
+                f"Error dispatching message: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_EVENT_BUS_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_EVENT_BUS_ERROR},
             )
 
     async def publish_event(self, event: DomainEvent) -> None:
@@ -233,18 +234,14 @@ class RedisPubSubAdapter(IMessageBroker):
 
             self._stats["messages_published"] += 1
 
-            logger.debug(
-                f"Published event {type(event).__name__} to channel {self.event_channel}"
-            )
+            logger.debug(f"Published event {type(event).__name__} to channel {self.event_channel}")
 
         except Exception as e:
             self._stats["publish_errors"] += 1
             msg = f"Failed to publish event: {e}"
             raise RedisPubSubError(msg) from e
 
-    async def publish_control_message(
-        self, message_type: str, data: dict[str, Any]
-    ) -> None:
+    async def publish_control_message(self, message_type: str, data: dict[str, Any]) -> None:
         """
         Publish control message to all server instances.
 
@@ -269,9 +266,7 @@ class RedisPubSubAdapter(IMessageBroker):
 
             self._stats["messages_published"] += 1
 
-            logger.debug(
-                f"Published control message {message_type} to channel {self.control_channel}"
-            )
+            logger.debug(f"Published control message {message_type} to channel {self.control_channel}")
 
         except Exception as e:
             self._stats["publish_errors"] += 1

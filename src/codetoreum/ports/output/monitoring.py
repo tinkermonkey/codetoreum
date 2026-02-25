@@ -82,9 +82,7 @@ class IMonitoredService(ABC):
     """
 
     @abstractmethod
-    async def start_monitoring(
-        self, project_id: str, config: MonitoringConfig
-    ) -> None:
+    async def start_monitoring(self, project_id: str, config: MonitoringConfig) -> None:
         """Begin monitoring for changes.
 
         Adapters should activate their change detection mechanism

@@ -107,8 +107,7 @@ class ContextBuilder:
         """
         try:
             logger.info(
-                f"Building execution context for work item {work_item.id}, "
-                f"agent {agent.name}, stage {stage_name}"
+                f"Building execution context for work item {work_item.id}, agent {agent.name}, stage {stage_name}"
             )
 
             # Use domain service to build context
@@ -131,21 +130,19 @@ class ContextBuilder:
             logger.error(
                 f"Failed to build execution context: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_CONTEXT_BUILD_DOMAIN_FAILURE"}
+                extra={"error_id": "ERR_CONTEXT_BUILD_DOMAIN_FAILURE"},
             )
             raise
         except Exception as e:
             logger.error(
                 f"Unexpected error building execution context: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_CONTEXT_BUILD_UNEXPECTED_FAILURE"}
+                extra={"error_id": "ERR_CONTEXT_BUILD_UNEXPECTED_FAILURE"},
             )
             message = f"Failed to build execution context: {e}"
             raise DomainError(message)
 
-    async def fetch_work_item_details(
-        self, work_item_id: str
-    ) -> WorkItem | None:
+    async def fetch_work_item_details(self, work_item_id: str) -> WorkItem | None:
         """
         Fetch detailed work item information from ticket system.
 
@@ -161,9 +158,7 @@ class ContextBuilder:
             work_item = await self.ticket_system.get_work_item(WorkItemId(work_item_id))
 
             if work_item:
-                logger.info(
-                    f"Fetched work item {work_item_id}: {work_item.title}"
-                )
+                logger.info(f"Fetched work item {work_item_id}: {work_item.title}")
             else:
                 logger.warning(f"Work item {work_item_id} not found")
 
@@ -173,13 +168,13 @@ class ContextBuilder:
             logger.error(
                 f"Ticket system error fetching work item {work_item_id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_CONTEXT_TICKET_SYSTEM_ERROR"}
+                extra={"error_id": "ERR_CONTEXT_TICKET_SYSTEM_ERROR"},
             )
             return None
         except ResourceNotFoundError as e:
             logger.warning(
                 f"Work item {work_item_id} not found: {e}",
-                extra={"error_id": "ERR_CONTEXT_WORK_ITEM_NOT_FOUND"}
+                extra={"error_id": "ERR_CONTEXT_WORK_ITEM_NOT_FOUND"},
             )
             return None
 
@@ -271,15 +266,10 @@ class ContextBuilder:
             # Create workspace directory
             # Use work_item_id and workspace_type to create unique workspace path
             workspace_dir_name = f"{workspace.workspace_type.value}_{workspace.work_item_id}"
-            workspace_path = (
-                self.workspace_base_path / work_item.id / workspace_dir_name
-            )
+            workspace_path = self.workspace_base_path / work_item.id / workspace_dir_name
             workspace_path.mkdir(parents=True, exist_ok=True)
 
-            logger.info(
-                f"Built workspace context with {len(context_files)} files "
-                f"at {workspace_path}"
-            )
+            logger.info(f"Built workspace context with {len(context_files)} files at {workspace_path}")
 
             return WorkspaceContextResult(
                 success=True,
@@ -291,11 +281,9 @@ class ContextBuilder:
             logger.error(
                 f"Failed to build workspace context: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_CONTEXT_WORKSPACE_BUILD_FAILURE"}
+                extra={"error_id": "ERR_CONTEXT_WORKSPACE_BUILD_FAILURE"},
             )
-            return WorkspaceContextResult(
-                success=False, context_files=[], error=str(e)
-            )
+            return WorkspaceContextResult(success=False, context_files=[], error=str(e))
 
     async def write_context_files(
         self,
@@ -313,9 +301,7 @@ class ContextBuilder:
             True if successful, False otherwise
         """
         try:
-            logger.info(
-                f"Writing {len(context_files)} context files to {workspace_path}"
-            )
+            logger.info(f"Writing {len(context_files)} context files to {workspace_path}")
 
             for context_file in context_files:
                 # Get relative path within workspace
@@ -337,14 +323,14 @@ class ContextBuilder:
             logger.error(
                 f"File system error writing context files: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_CONTEXT_FILES_WRITE_FS_ERROR"}
+                extra={"error_id": "ERR_CONTEXT_FILES_WRITE_FS_ERROR"},
             )
             return False
         except Exception as e:
             logger.error(
                 f"Unexpected error writing context files: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_CONTEXT_FILES_WRITE_UNEXPECTED_ERROR"}
+                extra={"error_id": "ERR_CONTEXT_FILES_WRITE_UNEXPECTED_ERROR"},
             )
             return False
 
@@ -370,14 +356,14 @@ class ContextBuilder:
             logger.error(
                 f"File system error cleaning up workspace {workspace_path}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_CONTEXT_WORKSPACE_CLEANUP_FS_ERROR"}
+                extra={"error_id": "ERR_CONTEXT_WORKSPACE_CLEANUP_FS_ERROR"},
             )
             return False
         except Exception as e:
             logger.error(
                 f"Unexpected error cleaning up workspace {workspace_path}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_CONTEXT_WORKSPACE_CLEANUP_UNEXPECTED_ERROR"}
+                extra={"error_id": "ERR_CONTEXT_WORKSPACE_CLEANUP_UNEXPECTED_ERROR"},
             )
             return False
 
@@ -490,9 +476,7 @@ class ContextBuilder:
             "timeout_seconds": agent.timeout_seconds,
         }
 
-    def _format_workspace_context(
-        self, workspace: WorkspaceContext
-    ) -> dict[str, Any]:
+    def _format_workspace_context(self, workspace: WorkspaceContext) -> dict[str, Any]:
         """
         Format workspace context as dictionary.
 
@@ -514,9 +498,7 @@ class ContextBuilder:
             "post_comments": workspace.post_comments,
         }
 
-    async def gather_previous_stage_context(
-        self, workflow_id: str, current_stage: str
-    ) -> str | None:
+    async def gather_previous_stage_context(self, workflow_id: str, current_stage: str) -> str | None:
         """
         Gather context from previous pipeline stages.
 
@@ -530,16 +512,13 @@ class ContextBuilder:
         try:
             # This would query the event store or storage for previous stage outputs
             # For now, return None (to be implemented when pipeline manager is ready)
-            logger.debug(
-                f"Gathering previous stage context for workflow {workflow_id}, "
-                f"stage {current_stage}"
-            )
+            logger.debug(f"Gathering previous stage context for workflow {workflow_id}, stage {current_stage}")
             return None
 
         except Exception as e:
             logger.error(
                 f"Failed to gather previous stage context: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_CONTEXT_GATHER_PREVIOUS_STAGE_FAILURE"}
+                extra={"error_id": "ERR_CONTEXT_GATHER_PREVIOUS_STAGE_FAILURE"},
             )
             return None

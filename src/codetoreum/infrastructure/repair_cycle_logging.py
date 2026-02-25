@@ -104,7 +104,11 @@ class RepairCycleLogger:
 
     def error(self, message: str, data: dict[str, Any] | None = None, exc_info: bool = True) -> None:
         """Log error message with full exception info by default (per project requirements)."""
-        self.logger.error(self._format_message(message, data), exc_info=exc_info, extra={"error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR})
+        self.logger.error(
+            self._format_message(message, data),
+            exc_info=exc_info,
+            extra={"error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
+        )
 
     def critical(self, message: str, data: dict[str, Any] | None = None, exc_info: bool = True) -> None:
         """Log critical message with full exception info by default (per project requirements)."""
@@ -127,14 +131,19 @@ class RepairCycleLogger:
             duration = time.time() - start_time
             self.info(
                 f"{operation} completed",
-                {**(data or {}), "duration_seconds": round(duration, 3), "status": "success"}
+                {**(data or {}), "duration_seconds": round(duration, 3), "status": "success"},
             )
         except Exception as e:
             duration = time.time() - start_time
             self.error(
                 f"{operation} failed",
-                {**(data or {}), "duration_seconds": round(duration, 3), "status": "failed", "error": str(e)},
-                exc_info=True
+                {
+                    **(data or {}),
+                    "duration_seconds": round(duration, 3),
+                    "status": "failed",
+                    "error": str(e),
+                },
+                exc_info=True,
             )
             raise
 
@@ -188,7 +197,7 @@ class RepairCyclePerformanceLogger:
         operation: str,
         duration_seconds: float,
         threshold_seconds: float,
-        data: dict[str, Any] | None = None
+        data: dict[str, Any] | None = None,
     ) -> None:
         """
         Log slow operation warning.
@@ -200,7 +209,6 @@ class RepairCyclePerformanceLogger:
             data: Additional context data
         """
         if duration_seconds > threshold_seconds:
-            context_dict = self.context.to_dict()
             msg = (
                 f"slow_operation_detected | operation={operation} | "
                 f"duration={duration_seconds}s | threshold={threshold_seconds}s"
@@ -258,7 +266,7 @@ class RepairCycleErrorLogger:
         test_type: str,
         test_file: str,
         failure_message: str,
-        failure_details: dict[str, Any] | None = None
+        failure_details: dict[str, Any] | None = None,
     ) -> None:
         """
         Log test failure.
@@ -271,10 +279,7 @@ class RepairCycleErrorLogger:
         """
         self._error_counts["test_failure"] = self._error_counts.get("test_failure", 0) + 1
 
-        msg = (
-            f"test_failure | test_type={test_type} | test_file={test_file} | "
-            f"message={failure_message}"
-        )
+        msg = f"test_failure | test_type={test_type} | test_file={test_file} | message={failure_message}"
         if failure_details:
             msg += " | " + " | ".join(f"{k}={v}" for k, v in failure_details.items())
 
@@ -286,7 +291,7 @@ class RepairCycleErrorLogger:
         attempt_number: int,
         success: bool,
         agent_response: str | None = None,
-        error: str | None = None
+        error: str | None = None,
     ) -> None:
         """
         Log file fix attempt.
@@ -299,10 +304,7 @@ class RepairCycleErrorLogger:
             error: Error message if failed
         """
         status = "success" if success else "failed"
-        msg = (
-            f"fix_attempt | file={file_path} | attempt={attempt_number} | "
-            f"status={status}"
-        )
+        msg = f"fix_attempt | file={file_path} | attempt={attempt_number} | status={status}"
 
         if agent_response:
             msg += f" | response_len={len(agent_response)}"
@@ -337,9 +339,7 @@ class RepairCycleErrorLogger:
             checkpoint_id: Checkpoint identifier
             data: Checkpoint data
         """
-        msg = f"checkpoint_created | checkpoint_id={checkpoint_id} | " + " | ".join(
-            f"{k}={v}" for k, v in data.items()
-        )
+        msg = f"checkpoint_created | checkpoint_id={checkpoint_id} | " + " | ".join(f"{k}={v}" for k, v in data.items())
         self.logger.info(msg)
 
     def log_checkpoint_restored(self, checkpoint_id: str, data: dict[str, Any]) -> None:
@@ -381,7 +381,7 @@ class RepairCycleLoggingContext:
             self.error_logger.logger.error(
                 f"repair_cycle_context_failed | error_type={exc_type.__name__} | error={exc_val!s}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
             )
         else:
             self.logger.info("repair_cycle_context_completed")

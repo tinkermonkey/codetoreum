@@ -282,8 +282,10 @@ class AuditLogger:
             # Never let audit logging failures affect the operation
             self.logger.error(
                 f"Failed to store audit event: {e}",
-                extra={"event_type": event.event_type.value,
-                    "error_id": ErrorRegistry.ERR_AUDIT_ERROR},
+                extra={
+                    "event_type": event.event_type.value,
+                    "error_id": ErrorRegistry.ERR_AUDIT_ERROR,
+                },
             )
 
     # Convenience methods for common audit events
@@ -295,9 +297,7 @@ class AuditLogger:
         metadata: dict[str, Any] | None = None,
     ) -> AuditEvent:
         """Log an authentication attempt."""
-        event_type = (
-            AuditEventType.AUTH_SUCCESS if success else AuditEventType.AUTH_FAILURE
-        )
+        event_type = AuditEventType.AUTH_SUCCESS if success else AuditEventType.AUTH_FAILURE
         return self.log_event(
             event_type=event_type,
             resource_type="auth",
@@ -391,9 +391,7 @@ class AuditLogger:
             "agent": AuditEventType.CONFIG_AGENT_UPDATED,
             "pipeline": AuditEventType.CONFIG_PIPELINE_UPDATED,
         }
-        event_type = event_type_map.get(
-            config_type, AuditEventType.SYSTEM_CONFIG_CHANGED
-        )
+        event_type = event_type_map.get(config_type, AuditEventType.SYSTEM_CONFIG_CHANGED)
 
         metadata = {"changes": changes}
         if reason:

@@ -20,25 +20,20 @@ class AuthenticationError(Exception):
     """Raised when authentication fails."""
 
 
-
 class UserAlreadyExistsError(Exception):
     """Raised when trying to create a user that already exists."""
-
 
 
 class UserNotFoundError(Exception):
     """Raised when a user is not found."""
 
 
-
 class APIKeyNotFoundError(Exception):
     """Raised when an API key is not found."""
 
 
-
 class ValidationError(Exception):
     """Raised when validation fails."""
-
 
 
 # ============================================================================

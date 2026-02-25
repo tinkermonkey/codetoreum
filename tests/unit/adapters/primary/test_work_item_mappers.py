@@ -207,10 +207,7 @@ class TestWorkItemMapper:
         )
 
         # Create 15 events
-        events = [
-            {"event_type": f"Event{i}", "occurred_at": now.isoformat()}
-            for i in range(15)
-        ]
+        events = [{"event_type": f"Event{i}", "occurred_at": now.isoformat()} for i in range(15)]
 
         history = WorkItemHistory(
             work_item=work_item,

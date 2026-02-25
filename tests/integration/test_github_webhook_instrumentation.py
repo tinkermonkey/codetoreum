@@ -66,14 +66,10 @@ def webhook_adapter(mock_dependencies):
 
 
 @pytest.mark.asyncio
-async def test_github_webhook_process_event_project_card(
-    tracer_provider, webhook_adapter, mock_dependencies
-):
+async def test_github_webhook_process_event_project_card(tracer_provider, webhook_adapter, mock_dependencies):
     """Verify GitHubWebhookAdapter._process_event captures webhook metadata."""
     # Setup mocks
-    mock_dependencies["config"].list_projects = AsyncMock(
-        return_value=["test-project"]
-    )
+    mock_dependencies["config"].list_projects = AsyncMock(return_value=["test-project"])
     mock_dependencies["config"].get_project_config = AsyncMock(
         return_value=MagicMock(
             github=MagicMock(org="org", repo="repo"),
@@ -83,15 +79,11 @@ async def test_github_webhook_process_event_project_card(
                     board_name="main",
                     workflow="main-workflow",
                 )
-            ]
+            ],
         )
     )
     mock_dependencies["config"].load_github_state = AsyncMock(
-        return_value={
-            "boards": {
-                "main": {"columns": {"in-progress": 456}}
-            }
-        }
+        return_value={"boards": {"main": {"columns": {"in-progress": 456}}}}
     )
     mock_dependencies["config"].get_workflow_template = AsyncMock(
         return_value=MagicMock(
@@ -103,9 +95,7 @@ async def test_github_webhook_process_event_project_card(
             ]
         )
     )
-    mock_dependencies["workflow_port"].start_workflow = AsyncMock(
-        return_value=MagicMock(workflow_run_id="run-001")
-    )
+    mock_dependencies["workflow_port"].start_workflow = AsyncMock(return_value=MagicMock(workflow_run_id="run-001"))
 
     # Create webhook event
     event = WebhookEvent(
@@ -143,28 +133,16 @@ async def test_github_webhook_process_event_project_card(
     assert process_span.attributes["github.repository"] == "org/repo"
 
 
-
-
-
-
-
-
-
-
 # ============================================================================
 # Comprehensive Context Tests
 # ============================================================================
 
 
 @pytest.mark.asyncio
-async def test_github_webhook_complete_trace_chain(
-    tracer_provider, webhook_adapter, mock_dependencies
-):
+async def test_github_webhook_complete_trace_chain(tracer_provider, webhook_adapter, mock_dependencies):
     """Verify webhook spans include complete business context for tracing."""
     # Setup mocks
-    mock_dependencies["config"].list_projects = AsyncMock(
-        return_value=["test-project"]
-    )
+    mock_dependencies["config"].list_projects = AsyncMock(return_value=["test-project"])
     mock_dependencies["config"].get_project_config = AsyncMock(
         return_value=MagicMock(
             github=MagicMock(org="acme", repo="platform"),
@@ -174,18 +152,14 @@ async def test_github_webhook_complete_trace_chain(
                     board_name="main",
                     workflow="main-workflow",
                 )
-            ]
+            ],
         )
     )
     mock_dependencies["config"].load_github_state = AsyncMock(
-        return_value={
-            "boards": {"main": {"columns": {"ready": 123}}}
-        }
+        return_value={"boards": {"main": {"columns": {"ready": 123}}}}
     )
     mock_dependencies["config"].get_workflow_template = AsyncMock(
-        return_value=MagicMock(
-            columns=[MagicMock(name="ready", agent="scheduler")]
-        )
+        return_value=MagicMock(columns=[MagicMock(name="ready", agent="scheduler")])
     )
     mock_dependencies["workflow_port"].start_workflow = AsyncMock(
         return_value=MagicMock(workflow_run_id="run-comprehensive")
@@ -232,16 +206,9 @@ async def test_github_webhook_complete_trace_chain(
     ]
 
     for attr in expected_attributes:
-        assert (
-            attr in process_span.attributes
-        ), f"Missing attribute: {attr}"
+        assert attr in process_span.attributes, f"Missing attribute: {attr}"
 
     # Verify values
     assert process_span.attributes["github.event_type"] == "project_card"
-    assert (
-        process_span.attributes["github.delivery_id"]
-        == "delivery-comprehensive"
-    )
+    assert process_span.attributes["github.delivery_id"] == "delivery-comprehensive"
     assert process_span.attributes["github.repository"] == "acme/platform"
-
-

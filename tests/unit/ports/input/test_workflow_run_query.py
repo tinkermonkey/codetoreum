@@ -60,6 +60,7 @@ class TestWorkflowRunFilters:
     def test_filters_are_immutable(self):
         """Test that WorkflowRunFilters is immutable (frozen)."""
         from dataclasses import FrozenInstanceError
+
         filters = WorkflowRunFilters(project_id="project-123")
 
         # Attempt to modify should raise FrozenInstanceError

@@ -249,6 +249,7 @@ class RestAPIAdapter:
         }
         if auth_dependencies:
             from fastapi import Depends
+
             router_kwargs["dependencies"] = [Depends(auth_dependencies.require_auth)]
 
         self.router = APIRouter(**router_kwargs)
@@ -314,9 +315,7 @@ class RestAPIAdapter:
             response_model=WorkflowResponse,
             summary="Pause a running workflow",
         )
-        async def pause_workflow(
-            workflow_run_id: str, request: WorkflowActionRequest
-        ) -> WorkflowResponse:
+        async def pause_workflow(workflow_run_id: str, request: WorkflowActionRequest) -> WorkflowResponse:
             """
             Pauses an active workflow execution.
 
@@ -354,9 +353,7 @@ class RestAPIAdapter:
             response_model=WorkflowResponse,
             summary="Resume a paused workflow",
         )
-        async def resume_workflow(
-            workflow_run_id: str, request: WorkflowActionRequest
-        ) -> WorkflowResponse:
+        async def resume_workflow(workflow_run_id: str, request: WorkflowActionRequest) -> WorkflowResponse:
             """
             Resumes a paused workflow execution.
 
@@ -369,9 +366,7 @@ class RestAPIAdapter:
             - 409 Conflict: Workflow not paused
             """
             try:
-                command = ResumeWorkflowCommand(
-                    workflow_run_id=workflow_run_id, from_stage=None
-                )
+                command = ResumeWorkflowCommand(workflow_run_id=workflow_run_id, from_stage=None)
 
                 result = await self.workflow_port.resume_workflow(command)
 
@@ -392,9 +387,7 @@ class RestAPIAdapter:
             response_model=WorkflowResponse,
             summary="Cancel a workflow",
         )
-        async def cancel_workflow(
-            workflow_run_id: str, request: WorkflowActionRequest
-        ) -> WorkflowResponse:
+        async def cancel_workflow(workflow_run_id: str, request: WorkflowActionRequest) -> WorkflowResponse:
             """
             Cancels a workflow execution.
 
@@ -431,9 +424,7 @@ class RestAPIAdapter:
             response_model=WorkflowResponse,
             summary="Retry a failed stage",
         )
-        async def retry_stage(
-            workflow_run_id: str, request: RetryStageRequest
-        ) -> WorkflowResponse:
+        async def retry_stage(workflow_run_id: str, request: RetryStageRequest) -> WorkflowResponse:
             """
             Retries a failed workflow stage.
 
@@ -466,7 +457,10 @@ class RestAPIAdapter:
                 )
 
             except Exception as e:
-                logger.exception("Failed to retry stage", extra={"workflow_run_id": workflow_run_id, "stage_name": request.stage_name})
+                logger.exception(
+                    "Failed to retry stage",
+                    extra={"workflow_run_id": workflow_run_id, "stage_name": request.stage_name},
+                )
                 raise map_exception_to_http(e, "Failed to retry stage")
 
         # ====================================================================
@@ -599,9 +593,7 @@ class RestAPIAdapter:
             - 404 Not Found: Execution not found
             """
             try:
-                result = await self.task_port.get_artifacts(
-                    execution_id, artifact_type=artifact_type
-                )
+                result = await self.task_port.get_artifacts(execution_id, artifact_type=artifact_type)
 
                 return ArtifactListResponse(
                     artifacts=[
@@ -798,7 +790,7 @@ class RestAPIAdapter:
             summary="List all agent configurations",
         )
         async def list_agent_configs(
-            project_name: str | None = Query(None)
+            project_name: str | None = Query(None),
         ) -> list[dict[str, Any]]:
             """
             Lists all agent configurations, optionally filtered by project.
@@ -810,9 +802,7 @@ class RestAPIAdapter:
             - 200 OK: List of agent configurations
             """
             try:
-                result = await self.config_port.list_agent_configs(
-                    project_name=project_name
-                )
+                result = await self.config_port.list_agent_configs(project_name=project_name)
                 return result
             except Exception as e:
                 logger.exception("Request failed", extra={"status_code": 400})
@@ -847,7 +837,7 @@ class RestAPIAdapter:
             summary="List all pipeline configurations",
         )
         async def list_pipeline_configs(
-            project_name: str | None = Query(None)
+            project_name: str | None = Query(None),
         ) -> list[dict[str, Any]]:
             """
             Lists all pipeline (workflow) configurations, optionally filtered by project.
@@ -859,9 +849,7 @@ class RestAPIAdapter:
             - 200 OK: List of pipeline configurations
             """
             try:
-                result = await self.config_port.list_pipeline_configs(
-                    project_name=project_name
-                )
+                result = await self.config_port.list_pipeline_configs(project_name=project_name)
                 return result
             except Exception as e:
                 logger.exception("Request failed", extra={"status_code": 400})
@@ -897,9 +885,7 @@ class RestAPIAdapter:
         )
         async def get_configuration_history(
             project_name: str | None = Query(None),
-            config_type: str | None = Query(
-                None, description="Filter by type: project, agent, pipeline"
-            ),
+            config_type: str | None = Query(None, description="Filter by type: project, agent, pipeline"),
             limit: int = Query(WORKSPACE_DEFAULT_PAGE_SIZE, ge=1, le=500),
             offset: int = Query(0, ge=0),
         ) -> list[dict[str, Any]]:

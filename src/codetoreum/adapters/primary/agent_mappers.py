@@ -4,7 +4,6 @@ Agent Mappers
 Converts between domain models and API DTOs for agents.
 """
 
-
 from codetoreum.adapters.primary.agent_dtos import (
     AgentCommandResult,
     AgentExecutionStatsDTO,
@@ -29,9 +28,7 @@ class AgentMapper:
     """Maps between Agent domain models and API DTOs."""
 
     # Sensitive key patterns that should be masked
-    SENSITIVE_PATTERNS = [
-        "key", "token", "secret", "password", "credential", "auth", "api_key"
-    ]
+    SENSITIVE_PATTERNS = ["key", "token", "secret", "password", "credential", "auth", "api_key"]
 
     @staticmethod
     def _mask_sensitive_values(env_vars: dict[str, str] | None) -> dict[str, str] | None:
@@ -84,9 +81,7 @@ class AgentMapper:
             )
 
         # Mask sensitive environment variable values
-        masked_env_vars = AgentMapper._mask_sensitive_values(
-            agent_info.environment_variables
-        )
+        masked_env_vars = AgentMapper._mask_sensitive_values(agent_info.environment_variables)
 
         return AgentResponse(
             id=agent_info.id,

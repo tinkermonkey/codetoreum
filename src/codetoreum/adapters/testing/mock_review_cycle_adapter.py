@@ -62,15 +62,14 @@ class ReviewSequenceItem:
         findings: Optional list of findings from the review
         summary: Optional summary of the review
     """
+
     decision: ReviewDecision
     findings: list[ReviewFinding] = field(default_factory=list)
     summary: str | None = None
 
     def to_review_result(self) -> ReviewResult:
         """Convert sequence item to ReviewResult."""
-        blocking_count = sum(
-            1 for f in self.findings if f.severity == "blocking"
-        )
+        blocking_count = sum(1 for f in self.findings if f.severity == "blocking")
 
         # Map ReviewDecision to ReviewStatus (literal)
         status_map = {
@@ -160,11 +159,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
 
     # Configuration methods
 
-    def set_review_sequence(
-        self,
-        work_item_id: str,
-        sequence: list[ReviewSequenceItem]
-    ) -> None:
+    def set_review_sequence(self, work_item_id: str, sequence: list[ReviewSequenceItem]) -> None:
         """Configure exact review sequence for a work item.
 
         Args:
@@ -186,17 +181,10 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         """
         self.set_review_sequence(
             work_item_id,
-            [ReviewSequenceItem(
-                decision=ReviewDecision.APPROVE,
-                summary="Approved immediately"
-            )]
+            [ReviewSequenceItem(decision=ReviewDecision.APPROVE, summary="Approved immediately")],
         )
 
-    def set_request_changes_then_approve(
-        self,
-        work_item_id: str,
-        iterations: int = 2
-    ) -> None:
+    def set_request_changes_then_approve(self, work_item_id: str, iterations: int = 2) -> None:
         """Configure work item to request changes then approve.
 
         Args:
@@ -204,16 +192,10 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
             iterations: Number of change requests before approval
         """
         sequence = [
-            ReviewSequenceItem(
-                decision=ReviewDecision.REQUEST_CHANGES,
-                summary=f"Please fix iteration {i+1}"
-            )
+            ReviewSequenceItem(decision=ReviewDecision.REQUEST_CHANGES, summary=f"Please fix iteration {i + 1}")
             for i in range(iterations - 1)
         ]
-        sequence.append(ReviewSequenceItem(
-            decision=ReviewDecision.APPROVE,
-            summary="Looks good now"
-        ))
+        sequence.append(ReviewSequenceItem(decision=ReviewDecision.APPROVE, summary="Looks good now"))
         self.set_review_sequence(work_item_id, sequence)
 
     def set_always_escalate(self, work_item_id: str) -> None:
@@ -224,23 +206,16 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         """
         self.set_review_sequence(
             work_item_id,
-            [ReviewSequenceItem(
-                decision=ReviewDecision.ESCALATE,
-                summary="Escalating to human review",
-                findings=[
-                    ReviewFinding(
-                        severity="blocking",
-                        description="Requires human decision"
-                    )
-                ]
-            )]
+            [
+                ReviewSequenceItem(
+                    decision=ReviewDecision.ESCALATE,
+                    summary="Escalating to human review",
+                    findings=[ReviewFinding(severity="blocking", description="Requires human decision")],
+                )
+            ],
         )
 
-    def set_max_iterations_escalation(
-        self,
-        work_item_id: str,
-        max_iterations: int = 3
-    ) -> None:
+    def set_max_iterations_escalation(self, work_item_id: str, max_iterations: int = 3) -> None:
         """Configure work item to escalate after max iterations.
 
         Args:
@@ -250,7 +225,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         sequence = [
             ReviewSequenceItem(
                 decision=ReviewDecision.REQUEST_CHANGES,
-                summary=f"Changes needed - iteration {i+1}/{max_iterations}"
+                summary=f"Changes needed - iteration {i + 1}/{max_iterations}",
             )
             for i in range(max_iterations)
         ]
@@ -289,10 +264,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
 
     # Core Review Cycle Methods
 
-    async def start_review_cycle(
-        self,
-        request: ReviewCycleRequest
-    ) -> ReviewCycleResult:
+    async def start_review_cycle(self, request: ReviewCycleRequest) -> ReviewCycleResult:
         """Start a new review cycle.
 
         Initiates a maker-checker review loop for the specified work item.
@@ -317,7 +289,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
             stage_name="review",
             maker_agent_id=request.maker_agent,
             reviewer_agent_id=request.reviewer_agent,
-            max_iterations=request.max_iterations
+            max_iterations=request.max_iterations,
         )
 
         with self._lock:
@@ -326,24 +298,28 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
 
         # Emit cycle started event
         if self._current_project:
-            self.emit(ReviewCycleStartedEvent(
-                type="review_cycle.started",
-                timestamp=self.clock.now().isoformat(),
-                source="mock_review_cycle",
-                review_cycle_id=cycle.id,
-                work_item_id=work_item_id,
-                project_id=request.project_id,
-                maker_agent=request.maker_agent,
-                reviewer_agent=request.reviewer_agent,
-                max_iterations=request.max_iterations,
-            ))
-            self._log_event({
-                "type": "REVIEW_CYCLE_STARTED",
-                "review_cycle_id": cycle.id,
-                "work_item_id": work_item_id,
-                "maker_agent": request.maker_agent,
-                "reviewer_agent": request.reviewer_agent,
-            })
+            self.emit(
+                ReviewCycleStartedEvent(
+                    type="review_cycle.started",
+                    timestamp=self.clock.now().isoformat(),
+                    source="mock_review_cycle",
+                    review_cycle_id=cycle.id,
+                    work_item_id=work_item_id,
+                    project_id=request.project_id,
+                    maker_agent=request.maker_agent,
+                    reviewer_agent=request.reviewer_agent,
+                    max_iterations=request.max_iterations,
+                )
+            )
+            self._log_event(
+                {
+                    "type": "REVIEW_CYCLE_STARTED",
+                    "review_cycle_id": cycle.id,
+                    "work_item_id": work_item_id,
+                    "maker_agent": request.maker_agent,
+                    "reviewer_agent": request.reviewer_agent,
+                }
+            )
 
         # Run review iterations
         iteration = 0
@@ -358,10 +334,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
                 f"No review sequence configured for work item {work_item_id}, "
                 "falling back to auto-approve on first iteration"
             )
-            sequence = [ReviewSequenceItem(
-                decision=ReviewDecision.APPROVE,
-                summary="Approved by mock reviewer"
-            )]
+            sequence = [ReviewSequenceItem(decision=ReviewDecision.APPROVE, summary="Approved by mock reviewer")]
 
         try:
             for iteration in range(1, request.max_iterations + 1):
@@ -384,47 +357,51 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
                 if decision_item.decision == ReviewDecision.APPROVE:
                     cycle.start_iteration(
                         maker_output="Maker output iteration",
-                        maker_execution_id=f"exec-maker-{iteration}"
+                        maker_execution_id=f"exec-maker-{iteration}",
                     )
                     cycle.submit_review(
                         decision=ReviewDecision.APPROVE,
                         comment=decision_item.summary or "Approved",
-                        reviewer_execution_id=f"exec-reviewer-{iteration}"
+                        reviewer_execution_id=f"exec-reviewer-{iteration}",
                     )
                     final_status = "APPROVED"
 
                     if self._current_project:
-                        self.emit(ReviewCycleIterationCompletedEvent(
-                            type="review_cycle.iteration_completed",
-                            timestamp=self.clock.now().isoformat(),
-                            source="mock_review_cycle",
-                            review_cycle_id=cycle.id,
-                            work_item_id=work_item_id,
-                            iteration=iteration,
-                            status="APPROVED",
-                            blocking_count=0,
-                        ))
-                        self.emit(ReviewCycleApprovedEvent(
-                            type="review_cycle.approved",
-                            timestamp=self.clock.now().isoformat(),
-                            source="mock_review_cycle",
-                            review_cycle_id=cycle.id,
-                            work_item_id=work_item_id,
-                            total_iterations=iteration,
-                        ))
+                        self.emit(
+                            ReviewCycleIterationCompletedEvent(
+                                type="review_cycle.iteration_completed",
+                                timestamp=self.clock.now().isoformat(),
+                                source="mock_review_cycle",
+                                review_cycle_id=cycle.id,
+                                work_item_id=work_item_id,
+                                iteration=iteration,
+                                status="APPROVED",
+                                blocking_count=0,
+                            )
+                        )
+                        self.emit(
+                            ReviewCycleApprovedEvent(
+                                type="review_cycle.approved",
+                                timestamp=self.clock.now().isoformat(),
+                                source="mock_review_cycle",
+                                review_cycle_id=cycle.id,
+                                work_item_id=work_item_id,
+                                total_iterations=iteration,
+                            )
+                        )
 
                     break
 
                 if decision_item.decision == ReviewDecision.REQUEST_CHANGES:
                     cycle.start_iteration(
                         maker_output="Maker output iteration",
-                        maker_execution_id=f"exec-maker-{iteration}"
+                        maker_execution_id=f"exec-maker-{iteration}",
                     )
                     cycle.submit_review(
                         decision=ReviewDecision.REQUEST_CHANGES,
                         comment=decision_item.summary or "Changes requested",
                         reviewer_execution_id=f"exec-reviewer-{iteration}",
-                        issues=[f.description for f in decision_item.findings]
+                        issues=[f.description for f in decision_item.findings],
                     )
                     final_status = "CHANGES_REQUESTED"
 
@@ -435,44 +412,52 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
                         human_escalation = True
 
                         if self._current_project:
-                            self.emit(ReviewCycleMaxIterationsReachedEvent(
-                                type="review_cycle.max_iterations_reached",
-                                timestamp=self.clock.now().isoformat(),
-                                source="mock_review_cycle",
-                                review_cycle_id=cycle.id,
-                                work_item_id=work_item_id,
-                                max_iterations=request.max_iterations,
-                            ))
-                            self.emit(ReviewCycleEscalatedToHumanEvent(
-                                type="review_cycle.escalated_to_human",
+                            self.emit(
+                                ReviewCycleMaxIterationsReachedEvent(
+                                    type="review_cycle.max_iterations_reached",
+                                    timestamp=self.clock.now().isoformat(),
+                                    source="mock_review_cycle",
+                                    review_cycle_id=cycle.id,
+                                    work_item_id=work_item_id,
+                                    max_iterations=request.max_iterations,
+                                )
+                            )
+                            self.emit(
+                                ReviewCycleEscalatedToHumanEvent(
+                                    type="review_cycle.escalated_to_human",
+                                    timestamp=self.clock.now().isoformat(),
+                                    source="mock_review_cycle",
+                                    review_cycle_id=cycle.id,
+                                    work_item_id=work_item_id,
+                                    iteration=iteration,
+                                    blocking_count=0,
+                                    escalation_reason="MAX_ITERATIONS",
+                                )
+                            )
+                        break
+                    if self._current_project:
+                        self.emit(
+                            ReviewCycleIterationCompletedEvent(
+                                type="review_cycle.iteration_completed",
                                 timestamp=self.clock.now().isoformat(),
                                 source="mock_review_cycle",
                                 review_cycle_id=cycle.id,
                                 work_item_id=work_item_id,
                                 iteration=iteration,
+                                status="CHANGES_REQUESTED",
                                 blocking_count=0,
-                                escalation_reason="MAX_ITERATIONS",
-                            ))
-                        break
-                    if self._current_project:
-                        self.emit(ReviewCycleIterationCompletedEvent(
-                            type="review_cycle.iteration_completed",
-                            timestamp=self.clock.now().isoformat(),
-                            source="mock_review_cycle",
-                            review_cycle_id=cycle.id,
-                            work_item_id=work_item_id,
-                            iteration=iteration,
-                            status="CHANGES_REQUESTED",
-                            blocking_count=0,
-                        ))
-                        self.emit(ReviewCycleMakerRevisionEvent(
-                            type="review_cycle.maker_revision",
-                            timestamp=self.clock.now().isoformat(),
-                            source="mock_review_cycle",
-                            review_cycle_id=cycle.id,
-                            work_item_id=work_item_id,
-                            iteration=iteration,
-                        ))
+                            )
+                        )
+                        self.emit(
+                            ReviewCycleMakerRevisionEvent(
+                                type="review_cycle.maker_revision",
+                                timestamp=self.clock.now().isoformat(),
+                                source="mock_review_cycle",
+                                review_cycle_id=cycle.id,
+                                work_item_id=work_item_id,
+                                iteration=iteration,
+                            )
+                        )
 
                     # Advance clock for maker revision (2 minutes)
                     await self.clock.advance(timedelta(seconds=120))
@@ -480,41 +465,43 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
                 elif decision_item.decision == ReviewDecision.ESCALATE:
                     cycle.start_iteration(
                         maker_output="Maker output iteration",
-                        maker_execution_id=f"exec-maker-{iteration}"
+                        maker_execution_id=f"exec-maker-{iteration}",
                     )
                     cycle.submit_review(
                         decision=ReviewDecision.ESCALATE,
                         comment=decision_item.summary or "Escalating to human",
                         reviewer_execution_id=f"exec-reviewer-{iteration}",
-                        issues=[f.description for f in decision_item.findings]
+                        issues=[f.description for f in decision_item.findings],
                     )
                     final_status = "BLOCKED"
                     human_escalation = True
 
                     if self._current_project:
-                        blocking_count = sum(
-                            1 for f in decision_item.findings if f.severity == "blocking"
+                        blocking_count = sum(1 for f in decision_item.findings if f.severity == "blocking")
+                        self.emit(
+                            ReviewCycleIterationCompletedEvent(
+                                type="review_cycle.iteration_completed",
+                                timestamp=self.clock.now().isoformat(),
+                                source="mock_review_cycle",
+                                review_cycle_id=cycle.id,
+                                work_item_id=work_item_id,
+                                iteration=iteration,
+                                status="BLOCKED",
+                                blocking_count=blocking_count,
+                            )
                         )
-                        self.emit(ReviewCycleIterationCompletedEvent(
-                            type="review_cycle.iteration_completed",
-                            timestamp=self.clock.now().isoformat(),
-                            source="mock_review_cycle",
-                            review_cycle_id=cycle.id,
-                            work_item_id=work_item_id,
-                            iteration=iteration,
-                            status="BLOCKED",
-                            blocking_count=blocking_count,
-                        ))
-                        self.emit(ReviewCycleEscalatedToHumanEvent(
-                            type="review_cycle.escalated_to_human",
-                            timestamp=self.clock.now().isoformat(),
-                            source="mock_review_cycle",
-                            review_cycle_id=cycle.id,
-                            work_item_id=work_item_id,
-                            iteration=iteration,
-                            blocking_count=blocking_count,
-                            escalation_reason="BLOCKED",
-                        ))
+                        self.emit(
+                            ReviewCycleEscalatedToHumanEvent(
+                                type="review_cycle.escalated_to_human",
+                                timestamp=self.clock.now().isoformat(),
+                                source="mock_review_cycle",
+                                review_cycle_id=cycle.id,
+                                work_item_id=work_item_id,
+                                iteration=iteration,
+                                blocking_count=blocking_count,
+                                escalation_reason="BLOCKED",
+                            )
+                        )
 
                     # Check for queued human feedback
                     feedback_queue = self._human_feedback_queue.get(work_item_id, [])
@@ -523,20 +510,24 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
                         await self.clock.advance(timedelta(seconds=300))
                         feedback = feedback_queue.pop(0)
                         if self._current_project:
-                            self.emit(ReviewCycleHumanFeedbackReceivedEvent(
-                                type="review_cycle.human_feedback_received",
-                                timestamp=self.clock.now().isoformat(),
-                                source="mock_review_cycle",
-                                review_cycle_id=cycle.id,
-                                work_item_id=work_item_id,
-                                feedback=feedback,
-                            ))
-                            self._log_event({
-                                "type": "REVIEW_CYCLE_HUMAN_FEEDBACK_RECEIVED",
-                                "work_item_id": work_item_id,
-                                "feedback": feedback,
-                                "iteration": iteration,
-                            })
+                            self.emit(
+                                ReviewCycleHumanFeedbackReceivedEvent(
+                                    type="review_cycle.human_feedback_received",
+                                    timestamp=self.clock.now().isoformat(),
+                                    source="mock_review_cycle",
+                                    review_cycle_id=cycle.id,
+                                    work_item_id=work_item_id,
+                                    feedback=feedback,
+                                )
+                            )
+                            self._log_event(
+                                {
+                                    "type": "REVIEW_CYCLE_HUMAN_FEEDBACK_RECEIVED",
+                                    "work_item_id": work_item_id,
+                                    "feedback": feedback,
+                                    "iteration": iteration,
+                                }
+                            )
 
                     break
 
@@ -544,7 +535,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
             logger.error(
                 f"Error during review cycle execution: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_REVIEW_CYCLE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_REVIEW_CYCLE_ERROR},
             )
             raise
 
@@ -562,7 +553,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
                 IterationOutput(
                     iteration=i,
                     output=f"Maker output iteration {i}",
-                    timestamp=self.clock.now().isoformat()
+                    timestamp=self.clock.now().isoformat(),
                 )
                 for i in range(1, iteration + 1)
             ],
@@ -570,7 +561,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
                 IterationOutput(
                     iteration=i,
                     output=f"Review iteration {i}",
-                    timestamp=self.clock.now().isoformat()
+                    timestamp=self.clock.now().isoformat(),
                 )
                 for i in range(1, iteration + 1)
             ],
@@ -584,27 +575,25 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
 
         # Log completion
         if self._current_project:
-            self._log_event({
-                "type": "REVIEW_CYCLE_COMPLETED",
-                "work_item_id": work_item_id,
-                "final_status": final_status,
-                "total_iterations": iteration,
-                "human_escalation": human_escalation,
-            })
+            self._log_event(
+                {
+                    "type": "REVIEW_CYCLE_COMPLETED",
+                    "work_item_id": work_item_id,
+                    "final_status": final_status,
+                    "total_iterations": iteration,
+                    "human_escalation": human_escalation,
+                }
+            )
 
         return ReviewCycleResult(
             next_column="Testing" if final_status == "APPROVED" else "Code Review",
             cycle_complete=True,
             final_status=final_status,
             total_iterations=iteration,
-            human_escalation_occurred=human_escalation
+            human_escalation_occurred=human_escalation,
         )
 
-    async def resume_review_cycle(
-        self,
-        work_item_id: str,
-        project_id: str
-    ) -> None:
+    async def resume_review_cycle(self, work_item_id: str, project_id: str) -> None:
         """Resume an interrupted review cycle.
 
         Args:
@@ -614,11 +603,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         logger.info(f"Resuming review cycle for work item {work_item_id}")
         # For mock, this is a no-op as we don't interrupt cycles
 
-    async def resume_with_human_feedback(
-        self,
-        cycle_state: ReviewCycleState,
-        feedback: str
-    ) -> None:
+    async def resume_with_human_feedback(self, cycle_state: ReviewCycleState, feedback: str) -> None:
         """Resume a blocked cycle with human feedback.
 
         Args:
@@ -631,24 +616,25 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         if self._current_project:
             # Generate a cycle ID for the event (use work_item_id as base for consistency)
             cycle_id = f"cycle-{cycle_state.work_item_id}"
-            self.emit(ReviewCycleHumanFeedbackReceivedEvent(
-                type="review_cycle.human_feedback_received",
-                timestamp=self.clock.now().isoformat(),
-                source="mock_review_cycle",
-                review_cycle_id=cycle_id,
-                work_item_id=cycle_state.work_item_id,
-                feedback=feedback,
-            ))
-            self._log_event({
-                "type": "REVIEW_CYCLE_HUMAN_FEEDBACK_RECEIVED",
-                "work_item_id": cycle_state.work_item_id,
-                "feedback": feedback,
-            })
+            self.emit(
+                ReviewCycleHumanFeedbackReceivedEvent(
+                    type="review_cycle.human_feedback_received",
+                    timestamp=self.clock.now().isoformat(),
+                    source="mock_review_cycle",
+                    review_cycle_id=cycle_id,
+                    work_item_id=cycle_state.work_item_id,
+                    feedback=feedback,
+                )
+            )
+            self._log_event(
+                {
+                    "type": "REVIEW_CYCLE_HUMAN_FEEDBACK_RECEIVED",
+                    "work_item_id": cycle_state.work_item_id,
+                    "feedback": feedback,
+                }
+            )
 
-    async def get_cycle_state(
-        self,
-        work_item_id: str
-    ) -> ReviewCycleState | None:
+    async def get_cycle_state(self, work_item_id: str) -> ReviewCycleState | None:
         """Retrieve current state of a review cycle.
 
         Args:
@@ -678,10 +664,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         with self._lock:
             self._cycle_states.pop(state.work_item_id, None)
 
-    async def load_active_cycles(
-        self,
-        project_id: str
-    ) -> list[ReviewCycleState]:
+    async def load_active_cycles(self, project_id: str) -> list[ReviewCycleState]:
         """Load all in-progress cycles for a project.
 
         Args:
@@ -692,7 +675,8 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         """
         with self._lock:
             return [
-                state for state in self._cycle_states.values()
+                state
+                for state in self._cycle_states.values()
                 if state.project_id == project_id and state.status != "completed"
             ]
 
@@ -717,16 +701,13 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
 
         findings = []
         if "blocking" in review_output_lower:
-            findings.append(ReviewFinding(
-                severity="blocking",
-                description="Blocking issue found in review output"
-            ))
+            findings.append(ReviewFinding(severity="blocking", description="Blocking issue found in review output"))
 
         return ReviewResult(
             status=status,
             findings=findings,
             blocking_count=len([f for f in findings if f.severity == "blocking"]),
-            summary=review_output[:100] if review_output else None
+            summary=review_output[:100] if review_output else None,
         )
 
     # ==================== IEventEmitter Implementation ====================
@@ -777,14 +758,12 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
                     logger.error(
                         f"Error in event handler for {event_type}: {e}",
                         exc_info=True,
-                        extra={"error_id": ErrorRegistry.ERR_HANDLER_EXECUTION}
+                        extra={"error_id": ErrorRegistry.ERR_HANDLER_EXECUTION},
                     )
 
     # ==================== IMonitoredService Implementation ====================
 
-    async def start_monitoring(
-        self, project_id: str, config: MonitoringConfig
-    ) -> None:
+    async def start_monitoring(self, project_id: str, config: MonitoringConfig) -> None:
         """Begin monitoring for changes.
 
         Args:
@@ -821,9 +800,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         with self._lock:
             return self._monitoring.get(
                 project_id,
-                MonitoringStatus(
-                    state=MonitoringState.STOPPED, project_id=project_id
-                ),
+                MonitoringStatus(state=MonitoringState.STOPPED, project_id=project_id),
             )
 
     # Event log retrieval
@@ -840,18 +817,12 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         emitted or logged, suitable for assertion helpers.
         """
         with self._lock:
-            return [
-                event for event in self._events
-                if isinstance(event, dict) and "type" in event
-            ]
+            return [event for event in self._events if isinstance(event, dict) and "type" in event]
 
     def get_events_by_type(self, event_type: str) -> list[dict[str, Any]]:
         """Return events of specific type."""
         with self._lock:
-            return [
-                event for event in self._events
-                if isinstance(event, dict) and event.get("type") == event_type
-            ]
+            return [event for event in self._events if isinstance(event, dict) and event.get("type") == event_type]
 
     def get_handler_errors(self) -> list[dict[str, Any]]:
         """Get all handler errors that occurred during review cycle."""
@@ -860,11 +831,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
 
     # Assertion helpers
 
-    def assert_iteration_count(
-        self,
-        work_item_id: str,
-        expected: int
-    ) -> None:
+    def assert_iteration_count(self, work_item_id: str, expected: int) -> None:
         """Assert work item took expected iterations.
 
         Args:
@@ -878,23 +845,12 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
             state = self._cycle_states.get(work_item_id)
         if not state:
             msg = f"No cycle state found for work item {work_item_id}"
-            raise AssertionError(
-                msg
-            )
+            raise AssertionError(msg)
         if state.current_iteration != expected:
-            msg = (
-                f"Expected {expected} iterations for {work_item_id}, "
-                f"got {state.current_iteration}"
-            )
-            raise AssertionError(
-                msg
-            )
+            msg = f"Expected {expected} iterations for {work_item_id}, got {state.current_iteration}"
+            raise AssertionError(msg)
 
-    def assert_final_status(
-        self,
-        work_item_id: str,
-        expected_status: ReviewStatusLiteral
-    ) -> None:
+    def assert_final_status(self, work_item_id: str, expected_status: ReviewStatusLiteral) -> None:
         """Assert work item has expected final status.
 
         Args:
@@ -908,26 +864,18 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         completion_event = None
 
         for event in reversed(events):
-            if (event.get("type") == "REVIEW_CYCLE_COMPLETED" and
-                event.get("work_item_id") == work_item_id):
+            if event.get("type") == "REVIEW_CYCLE_COMPLETED" and event.get("work_item_id") == work_item_id:
                 completion_event = event
                 break
 
         if not completion_event:
             msg = f"No completion event found for work item {work_item_id}"
-            raise AssertionError(
-                msg
-            )
+            raise AssertionError(msg)
 
         actual_status = completion_event.get("final_status")
         if actual_status != expected_status:
-            msg = (
-                f"Expected status {expected_status} for {work_item_id}, "
-                f"got {actual_status}"
-            )
-            raise AssertionError(
-                msg
-            )
+            msg = f"Expected status {expected_status} for {work_item_id}, got {actual_status}"
+            raise AssertionError(msg)
 
     def assert_escalation_occurred(self, work_item_id: str) -> None:
         """Assert work item was escalated to human.
@@ -941,19 +889,14 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         with self._lock:
             events = self.get_all_events_log()
         for event in events:
-            if (event.get("type") == "REVIEW_CYCLE_COMPLETED" and
-                event.get("work_item_id") == work_item_id):
+            if event.get("type") == "REVIEW_CYCLE_COMPLETED" and event.get("work_item_id") == work_item_id:
                 if not event.get("human_escalation"):
                     msg = f"Expected escalation for {work_item_id}"
-                    raise AssertionError(
-                        msg
-                    )
+                    raise AssertionError(msg)
                 return
 
         msg = f"No completion event found for work item {work_item_id}"
-        raise AssertionError(
-            msg
-        )
+        raise AssertionError(msg)
 
     def assert_no_escalation(self, work_item_id: str) -> None:
         """Assert work item was not escalated to human.
@@ -967,19 +910,14 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         with self._lock:
             events = self.get_all_events_log()
         for event in events:
-            if (event.get("type") == "REVIEW_CYCLE_COMPLETED" and
-                event.get("work_item_id") == work_item_id):
+            if event.get("type") == "REVIEW_CYCLE_COMPLETED" and event.get("work_item_id") == work_item_id:
                 if event.get("human_escalation"):
                     msg = f"Unexpected escalation for {work_item_id}"
-                    raise AssertionError(
-                        msg
-                    )
+                    raise AssertionError(msg)
                 return
 
         msg = f"No completion event found for work item {work_item_id}"
-        raise AssertionError(
-            msg
-        )
+        raise AssertionError(msg)
 
     def assert_no_handler_errors(self) -> None:
         """Assert no event handler errors occurred.
@@ -989,13 +927,9 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         """
         errors = self.get_handler_errors()
         if errors:
-            error_summary = "\n".join(
-                f"  - {e['event_type']}: {e['error']}" for e in errors
-            )
+            error_summary = "\n".join(f"  - {e['event_type']}: {e['error']}" for e in errors)
             msg = f"Expected no handler errors, but found {len(errors)}:\n{error_summary}"
-            raise AssertionError(
-                msg
-            )
+            raise AssertionError(msg)
 
     # Helper methods
 

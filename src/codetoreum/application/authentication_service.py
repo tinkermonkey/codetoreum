@@ -108,9 +108,7 @@ class AuthenticationService(IAuthenticationPort):
             hashed_bytes = hashed_password
         return bool(bcrypt.checkpw(password_bytes, hashed_bytes))
 
-    def _create_access_token(
-        self, data: dict, expires_delta: timedelta | None = None
-    ) -> str:
+    def _create_access_token(self, data: dict, expires_delta: timedelta | None = None) -> str:
         """Create a JWT access token."""
         to_encode = data.copy()
 
@@ -123,9 +121,7 @@ class AuthenticationService(IAuthenticationPort):
 
         return str(jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm))
 
-    def _create_refresh_token(
-        self, data: dict, expires_delta: timedelta | None = None
-    ) -> str:
+    def _create_refresh_token(self, data: dict, expires_delta: timedelta | None = None) -> str:
         """Create a JWT refresh token."""
         to_encode = data.copy()
 

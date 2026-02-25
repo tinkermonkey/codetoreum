@@ -31,9 +31,7 @@ class TestCreateBoard:
         adapter = MockBoardAdapter()
         adapter.current_project = "proj-1"
 
-        adapter.create_board(
-            "proj-1", "board-1", "My Board", ["Backlog", "In Progress", "Done"]
-        )
+        adapter.create_board("proj-1", "board-1", "My Board", ["Backlog", "In Progress", "Done"])
 
         # Verify board exists
         board = asyncio.run(adapter.get_board("proj-1", "board-1"))
@@ -86,9 +84,7 @@ class TestAddItemToColumn:
         """Create adapter with a board."""
         adapter = MockBoardAdapter()
         adapter.current_project = "proj-1"
-        adapter.create_board(
-            "proj-1", "board-1", "Board", ["Backlog", "In Progress", "Done"]
-        )
+        adapter.create_board("proj-1", "board-1", "Board", ["Backlog", "In Progress", "Done"])
         return adapter
 
     def test_add_item_to_column_appends_to_end(self, adapter_with_board):
@@ -97,9 +93,7 @@ class TestAddItemToColumn:
         adapter.add_item_to_column("board-1", "Backlog", "item-1")
         adapter.add_item_to_column("board-1", "Backlog", "item-2")
 
-        items = asyncio.run(
-            adapter.get_items_in_column("board-1", "Backlog")
-        )
+        items = asyncio.run(adapter.get_items_in_column("board-1", "Backlog"))
         assert len(items) == 2
         assert items[0].work_item_id == "item-1"
         assert items[0].position == 0
@@ -113,9 +107,7 @@ class TestAddItemToColumn:
         adapter.add_item_to_column("board-1", "Backlog", "item-3", position=1)
         adapter.add_item_to_column("board-1", "Backlog", "item-2", position=1)
 
-        items = asyncio.run(
-            adapter.get_items_in_column("board-1", "Backlog")
-        )
+        items = asyncio.run(adapter.get_items_in_column("board-1", "Backlog"))
         assert items[0].work_item_id == "item-1"
         assert items[1].work_item_id == "item-2"
         assert items[2].work_item_id == "item-3"
@@ -128,9 +120,7 @@ class TestAddItemToColumn:
         adapter.add_item_to_column("board-1", "Backlog", "item-2", position=1)
 
         # Verify positions are correct
-        for item in asyncio.run(
-            adapter.get_items_in_column("board-1", "Backlog")
-        ):
+        for item in asyncio.run(adapter.get_items_in_column("board-1", "Backlog")):
             if item.work_item_id == "item-1":
                 assert item.position == 0
             elif item.work_item_id == "item-2":
@@ -169,9 +159,7 @@ class TestSimulateHumanMove:
         """Create adapter with an item on the board."""
         adapter = MockBoardAdapter()
         adapter.current_project = "proj-1"
-        adapter.create_board(
-            "proj-1", "board-1", "Board", ["Backlog", "In Progress", "Done"]
-        )
+        adapter.create_board("proj-1", "board-1", "Board", ["Backlog", "In Progress", "Done"])
         adapter.add_item_to_column("board-1", "Backlog", "item-1")
         return adapter
 
@@ -230,9 +218,7 @@ class TestAssertItemInColumn:
         """Create adapter with an item on the board."""
         adapter = MockBoardAdapter()
         adapter.current_project = "proj-1"
-        adapter.create_board(
-            "proj-1", "board-1", "Board", ["Backlog", "In Progress", "Done"]
-        )
+        adapter.create_board("proj-1", "board-1", "Board", ["Backlog", "In Progress", "Done"])
         adapter.add_item_to_column("board-1", "Backlog", "item-1")
         return adapter
 
@@ -245,17 +231,13 @@ class TestAssertItemInColumn:
     def test_assert_item_in_column_raises_for_wrong_column(self, adapter_with_item):
         """Test assert_item_in_column() raises AssertionError for wrong column."""
         adapter = adapter_with_item
-        with pytest.raises(
-            AssertionError, match="Expected work item.*in column.*In Progress"
-        ):
+        with pytest.raises(AssertionError, match="Expected work item.*in column.*In Progress"):
             adapter.assert_item_in_column("item-1", "In Progress")
 
     def test_assert_item_in_column_raises_for_nonexistent_item(self, adapter_with_item):
         """Test assert_item_in_column() raises for item not on board."""
         adapter = adapter_with_item
-        with pytest.raises(
-            AssertionError, match="Expected work item.*in column.*Backlog"
-        ):
+        with pytest.raises(AssertionError, match="Expected work item.*in column.*Backlog"):
             adapter.assert_item_in_column("item-999", "Backlog")
 
     def test_assert_item_in_column_error_message(self, adapter_with_item):
@@ -278,9 +260,7 @@ class TestGetMovementHistory:
         """Create adapter with an item on the board."""
         adapter = MockBoardAdapter()
         adapter.current_project = "proj-1"
-        adapter.create_board(
-            "proj-1", "board-1", "Board", ["Backlog", "In Progress", "Review", "Done"]
-        )
+        adapter.create_board("proj-1", "board-1", "Board", ["Backlog", "In Progress", "Review", "Done"])
         adapter.add_item_to_column("board-1", "Backlog", "item-1")
         return adapter
 
@@ -293,9 +273,7 @@ class TestGetMovementHistory:
     def test_get_movement_history_tracks_single_move(self, adapter_with_item):
         """Test get_movement_history() records single movement."""
         adapter = adapter_with_item
-        asyncio.run(
-            adapter.move_item_to_column("item-1", "In Progress", MovedByType.ORCHESTRATOR)
-        )
+        asyncio.run(adapter.move_item_to_column("item-1", "In Progress", MovedByType.ORCHESTRATOR))
 
         history = adapter.get_movement_history("item-1")
         assert len(history) == 1
@@ -307,15 +285,9 @@ class TestGetMovementHistory:
     def test_get_movement_history_tracks_multiple_moves(self, adapter_with_item):
         """Test get_movement_history() records multiple movements."""
         adapter = adapter_with_item
-        asyncio.run(
-            adapter.move_item_to_column("item-1", "In Progress", MovedByType.HUMAN)
-        )
-        asyncio.run(
-            adapter.move_item_to_column("item-1", "Review", MovedByType.ORCHESTRATOR)
-        )
-        asyncio.run(
-            adapter.move_item_to_column("item-1", "Done", MovedByType.HUMAN)
-        )
+        asyncio.run(adapter.move_item_to_column("item-1", "In Progress", MovedByType.HUMAN))
+        asyncio.run(adapter.move_item_to_column("item-1", "Review", MovedByType.ORCHESTRATOR))
+        asyncio.run(adapter.move_item_to_column("item-1", "Done", MovedByType.HUMAN))
 
         history = adapter.get_movement_history("item-1")
         assert len(history) == 3
@@ -329,12 +301,8 @@ class TestGetMovementHistory:
     def test_get_movement_history_chronological_order(self, adapter_with_item):
         """Test get_movement_history() returns movements in chronological order."""
         adapter = adapter_with_item
-        asyncio.run(
-            adapter.move_item_to_column("item-1", "In Progress", MovedByType.HUMAN)
-        )
-        asyncio.run(
-            adapter.move_item_to_column("item-1", "Review", MovedByType.HUMAN)
-        )
+        asyncio.run(adapter.move_item_to_column("item-1", "In Progress", MovedByType.HUMAN))
+        asyncio.run(adapter.move_item_to_column("item-1", "Review", MovedByType.HUMAN))
 
         history = adapter.get_movement_history("item-1")
         # Verify timestamps are monotonically increasing
@@ -346,12 +314,8 @@ class TestGetMovementHistory:
         adapter = adapter_with_item
         adapter.add_item_to_column("board-1", "Backlog", "item-2")
 
-        asyncio.run(
-            adapter.move_item_to_column("item-1", "In Progress", MovedByType.HUMAN)
-        )
-        asyncio.run(
-            adapter.move_item_to_column("item-2", "Review", MovedByType.HUMAN)
-        )
+        asyncio.run(adapter.move_item_to_column("item-1", "In Progress", MovedByType.HUMAN))
+        asyncio.run(adapter.move_item_to_column("item-2", "Review", MovedByType.HUMAN))
 
         history1 = adapter.get_movement_history("item-1")
         history2 = adapter.get_movement_history("item-2")
@@ -364,9 +328,7 @@ class TestGetMovementHistory:
     def test_get_movement_history_returns_movement_events(self, adapter_with_item):
         """Test get_movement_history() returns MovementEvent instances."""
         adapter = adapter_with_item
-        asyncio.run(
-            adapter.move_item_to_column("item-1", "In Progress", MovedByType.HUMAN)
-        )
+        asyncio.run(adapter.move_item_to_column("item-1", "In Progress", MovedByType.HUMAN))
 
         history = adapter.get_movement_history("item-1")
         assert isinstance(history[0], MovementEvent)
@@ -385,17 +347,11 @@ class TestClearMovementLog:
         """Create adapter with some movements recorded."""
         adapter = MockBoardAdapter()
         adapter.current_project = "proj-1"
-        adapter.create_board(
-            "proj-1", "board-1", "Board", ["Backlog", "In Progress", "Done"]
-        )
+        adapter.create_board("proj-1", "board-1", "Board", ["Backlog", "In Progress", "Done"])
         adapter.add_item_to_column("board-1", "Backlog", "item-1")
         adapter.add_item_to_column("board-1", "Backlog", "item-2")
-        asyncio.run(
-            adapter.move_item_to_column("item-1", "In Progress", MovedByType.HUMAN)
-        )
-        asyncio.run(
-            adapter.move_item_to_column("item-2", "In Progress", MovedByType.HUMAN)
-        )
+        asyncio.run(adapter.move_item_to_column("item-1", "In Progress", MovedByType.HUMAN))
+        asyncio.run(adapter.move_item_to_column("item-2", "In Progress", MovedByType.HUMAN))
         return adapter
 
     def test_clear_movement_log_clears_history(self, adapter_with_movements):
@@ -421,9 +377,7 @@ class TestClearMovementLog:
         adapter.clear_movement_log()
 
         # Second test phase
-        asyncio.run(
-            adapter.move_item_to_column("item-1", "Done", MovedByType.ORCHESTRATOR)
-        )
+        asyncio.run(adapter.move_item_to_column("item-1", "Done", MovedByType.ORCHESTRATOR))
         history2 = adapter.get_movement_history("item-1")
         assert len(history2) == 1  # Only the new movement
 
@@ -436,9 +390,7 @@ class TestGetItemsInColumn:
         """Create adapter with multiple items."""
         adapter = MockBoardAdapter()
         adapter.current_project = "proj-1"
-        adapter.create_board(
-            "proj-1", "board-1", "Board", ["Backlog", "In Progress", "Done"]
-        )
+        adapter.create_board("proj-1", "board-1", "Board", ["Backlog", "In Progress", "Done"])
         return adapter
 
     async def test_get_items_in_column_returns_items_in_order(self, adapter_with_items):
@@ -487,9 +439,7 @@ class TestThreadSafety:
 
         adapter = MockBoardAdapter()
         adapter.current_project = "proj-1"
-        adapter.create_board(
-            "proj-1", "board-1", "Board", ["Backlog", "In Progress", "Done"]
-        )
+        adapter.create_board("proj-1", "board-1", "Board", ["Backlog", "In Progress", "Done"])
 
         # Add items concurrently
         def add_items(start_idx, count):
@@ -530,9 +480,7 @@ class TestThreadSafety:
         # Move items concurrently
         async def move_items():
             for i in range(10):
-                await adapter.move_item_to_column(
-                    f"item-{i}", "In Progress", MovedByType.ORCHESTRATOR
-                )
+                await adapter.move_item_to_column(f"item-{i}", "In Progress", MovedByType.ORCHESTRATOR)
 
         asyncio.run(move_items())
 

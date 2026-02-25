@@ -4,7 +4,6 @@ Project Configuration Endpoints
 Handles CRUD operations for project configurations including environment variables.
 """
 
-
 from fastapi import APIRouter, HTTPException, Query, status
 
 from codetoreum.adapters.primary.config_dtos import (
@@ -65,7 +64,7 @@ def register_project_endpoints(
         try:
             config = await query_port.get_project_config(
                 project_id=project_id,
-                include_secrets=False  # Never expose secrets via API
+                include_secrets=False,  # Never expose secrets via API
             )
 
             return ProjectConfigResponse(
@@ -165,7 +164,12 @@ def register_project_endpoints(
     )
     async def list_projects(
         offset: int = Query(DEFAULT_OFFSET, ge=0, description="Pagination offset"),
-        limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description=f"Pagination limit (max {MAX_PAGE_SIZE})"),
+        limit: int = Query(
+            DEFAULT_PAGE_SIZE,
+            ge=1,
+            le=MAX_PAGE_SIZE,
+            description=f"Pagination limit (max {MAX_PAGE_SIZE})",
+        ),
     ) -> ProjectListResponse:
         """
         List all projects with pagination.
@@ -185,20 +189,22 @@ def register_project_endpoints(
             # Convert to response DTOs
             projects = []
             for config in configs:
-                projects.append(ProjectConfigResponse(
-                    id=config.id,
-                    name=config.name,
-                    description=config.description,
-                    github_org=config.github_org,
-                    github_repo=config.github_repo,
-                    version=config.version,
-                    created_at=config.created_at,
-                    updated_at=config.updated_at,
-                    environment_variables=[],
-                    mounted_commands=[],
-                    mounted_subagents=[],
-                    metadata=config.metadata,
-                ))
+                projects.append(
+                    ProjectConfigResponse(
+                        id=config.id,
+                        name=config.name,
+                        description=config.description,
+                        github_org=config.github_org,
+                        github_repo=config.github_repo,
+                        version=config.version,
+                        created_at=config.created_at,
+                        updated_at=config.updated_at,
+                        environment_variables=[],
+                        mounted_commands=[],
+                        mounted_subagents=[],
+                        metadata=config.metadata,
+                    )
+                )
 
             # Get total count
             total = await query_port.count_configs(config_type="project")
@@ -222,7 +228,12 @@ def register_project_endpoints(
     )
     async def get_project_config_history(
         project_id: str,
-        limit: int = Query(VERSIONS_DEFAULT_LIMIT, ge=1, le=VERSIONS_MAX_LIMIT, description=f"Maximum versions to return (max {VERSIONS_MAX_LIMIT})"),
+        limit: int = Query(
+            VERSIONS_DEFAULT_LIMIT,
+            ge=1,
+            le=VERSIONS_MAX_LIMIT,
+            description=f"Maximum versions to return (max {VERSIONS_MAX_LIMIT})",
+        ),
     ) -> ConfigVersionHistoryResponse:
         """
         Get version history for project configuration.

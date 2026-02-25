@@ -37,7 +37,6 @@ class WorkItemNotFoundError(Exception):
     """Raised when a work item is not found"""
 
 
-
 class WorkItemService(IWorkItemCommandPort, IWorkItemQueryPort):
     """
     Application service for work item management.
@@ -168,15 +167,13 @@ class WorkItemService(IWorkItemCommandPort, IWorkItemQueryPort):
     async def delete_work_item(self, work_item_id: str) -> WorkItemCommandResult:
         """Soft deletes a work item."""
         # Load work item to ensure it exists
-        work_item = await self._load_work_item(work_item_id)
+        await self._load_work_item(work_item_id)
 
         # For soft delete, we could mark the stream as deleted in metadata
         # For now, we just verify it exists and return success
         # In production, implement proper soft delete with metadata
 
-        return WorkItemCommandResult(
-            success=True, work_item_id=work_item_id, message="Work item deleted successfully"
-        )
+        return WorkItemCommandResult(success=True, work_item_id=work_item_id, message="Work item deleted successfully")
 
     async def assign_agent(self, command: AssignAgentCommand) -> WorkItem:
         """Assigns an agent to a work item."""
@@ -317,9 +314,7 @@ class WorkItemService(IWorkItemCommandPort, IWorkItemQueryPort):
             has_next=has_next,
         )
 
-    async def get_work_item_history(
-        self, work_item_id: str, limit: int | None = None
-    ) -> WorkItemHistory:
+    async def get_work_item_history(self, work_item_id: str, limit: int | None = None) -> WorkItemHistory:
         """Retrieves work item history including all events."""
         work_item = await self._load_work_item(work_item_id)
 
@@ -396,9 +391,7 @@ class WorkItemService(IWorkItemCommandPort, IWorkItemQueryPort):
 
         return True
 
-    def _sort_work_items(
-        self, work_items: list[WorkItem], sort_by: SortField, sort_order: SortOrder
-    ) -> list[WorkItem]:
+    def _sort_work_items(self, work_items: list[WorkItem], sort_by: SortField, sort_order: SortOrder) -> list[WorkItem]:
         """Sort work items by the specified field and order."""
         reverse = sort_order == SortOrder.DESC
 

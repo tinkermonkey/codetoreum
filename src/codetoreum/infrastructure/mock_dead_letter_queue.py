@@ -91,24 +91,20 @@ class MockDeadLetterQueue(DeadLetterQueue):
         event_data: dict[str, Any],
         failure_reason: FailureReason,
         error_message: str,
-        metadata: dict[str, Any] | None = None
+        metadata: dict[str, Any] | None = None,
     ) -> str:
         """Add failed event and track in history."""
-        event_id = await super().add_failed_event(
-            event_type,
-            event_data,
-            failure_reason,
-            error_message,
-            metadata
-        )
+        event_id = await super().add_failed_event(event_type, event_data, failure_reason, error_message, metadata)
 
-        self._event_history.append({
-            "action": "add",
-            "event_id": event_id,
-            "event_type": event_type,
-            "failure_reason": failure_reason.value,
-            "timestamp": self._current_time,
-        })
+        self._event_history.append(
+            {
+                "action": "add",
+                "event_id": event_id,
+                "event_type": event_type,
+                "failure_reason": failure_reason.value,
+                "timestamp": self._current_time,
+            }
+        )
 
         return event_id
 
@@ -141,12 +137,14 @@ class MockDeadLetterQueue(DeadLetterQueue):
             self._total_retries_attempted += 1
             self._total_retries_succeeded += 1
 
-            self._event_history.append({
-                "action": "retry_success",
-                "event_id": event_id,
-                "retry_count": event.retry_count,
-                "timestamp": self._current_time,
-            })
+            self._event_history.append(
+                {
+                    "action": "retry_success",
+                    "event_id": event_id,
+                    "retry_count": event.retry_count,
+                    "timestamp": self._current_time,
+                }
+            )
 
             return True
 
@@ -158,31 +156,32 @@ class MockDeadLetterQueue(DeadLetterQueue):
             self._total_retries_failed += 1
 
             if event.can_retry():
-                event.next_retry_at = event.calculate_next_retry(
-                    self._base_delay_seconds,
-                    self._exponential_base
-                )
+                event.next_retry_at = event.calculate_next_retry(self._base_delay_seconds, self._exponential_base)
             else:
                 event.next_retry_at = None
 
-            self._event_history.append({
-                "action": "retry_failure",
-                "event_id": event_id,
-                "retry_count": event.retry_count,
-                "timestamp": self._current_time,
-            })
+            self._event_history.append(
+                {
+                    "action": "retry_failure",
+                    "event_id": event_id,
+                    "retry_count": event.retry_count,
+                    "timestamp": self._current_time,
+                }
+            )
 
             return False
 
         # Use default behavior from parent class
         result = await super().retry_event(event_id)
 
-        self._event_history.append({
-            "action": "retry_success" if result else "retry_failure",
-            "event_id": event_id,
-            "retry_count": event.retry_count,
-            "timestamp": self._current_time,
-        })
+        self._event_history.append(
+            {
+                "action": "retry_success" if result else "retry_failure",
+                "event_id": event_id,
+                "retry_count": event.retry_count,
+                "timestamp": self._current_time,
+            }
+        )
 
         return result
 
@@ -200,10 +199,7 @@ class MockDeadLetterQueue(DeadLetterQueue):
         retryable_events = [
             event_id
             for event_id, event in self._storage.items()
-            if event.can_retry() and (
-                event.next_retry_at is None or
-                event.next_retry_at <= self._current_time
-            )
+            if event.can_retry() and (event.next_retry_at is None or event.next_retry_at <= self._current_time)
         ]
 
         processed_count = 0

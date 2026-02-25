@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 class PatternOperator(Enum):
     """Pattern matching operators."""
+
     EXACT = "exact"  # Exact match
     ZERO_OR_MORE = "*"  # Zero or more occurrences
     ONE_OR_MORE = "+"  # One or more occurrences
@@ -33,6 +34,7 @@ class PatternOperator(Enum):
 @dataclass(frozen=True)
 class PatternElement:
     """Parsed pattern element."""
+
     event_types: tuple[str, ...]  # Event types (multiple if using |)
     operator: PatternOperator
     min_occurrences: int  # Minimum required occurrences
@@ -54,6 +56,7 @@ class PatternElement:
 @dataclass(frozen=True)
 class ValidationResult:
     """Result of sequence validation."""
+
     is_valid: bool
     missing_events: tuple[str, ...]  # Expected events that didn't occur
     unexpected_events: tuple[str, ...]  # Events that shouldn't have occurred
@@ -65,7 +68,11 @@ class ValidationResult:
         # If is_valid is True, all error lists should be empty
         if self.is_valid:
             if self.missing_events or self.unexpected_events or self.out_of_order_events:
-                message = f"ValidationResult inconsistency: is_valid=True but errors present " f"(missing={len(self.missing_events)}, unexpected={len(self.unexpected_events)}, " f"out_of_order={len(self.out_of_order_events)})"
+                message = (
+                    f"ValidationResult inconsistency: is_valid=True but errors present "
+                    f"(missing={len(self.missing_events)}, unexpected={len(self.unexpected_events)}, "
+                    f"out_of_order={len(self.out_of_order_events)})"
+                )
                 raise ValueError(message)
         # If is_valid is False, at least one error list or error_message should be present
         elif not (self.missing_events or self.unexpected_events or self.out_of_order_events or self.error_message):
@@ -96,11 +103,7 @@ class EventSequenceValidator:
         """Initialize validator."""
         self._pattern_cache: dict[str, PatternElement] = {}
 
-    def validate(
-        self,
-        expected_pattern: list[str],
-        actual_events: list[str]
-    ) -> ValidationResult:
+    def validate(self, expected_pattern: list[str], actual_events: list[str]) -> ValidationResult:
         """
         Validate actual event sequence against expected pattern.
 
@@ -131,7 +134,6 @@ class EventSequenceValidator:
         while pattern_idx < len(parsed_pattern) and event_idx <= len(actual_events):
             pattern_elem = parsed_pattern[pattern_idx]
             matches_found = 0
-            start_event_idx = event_idx
 
             # Try to match events against current pattern element
             # Continue matching while events match the pattern
@@ -167,7 +169,9 @@ class EventSequenceValidator:
             # Check if we exceeded maximum allowed matches
             if pattern_elem.max_occurrences is not None and matches_found > pattern_elem.max_occurrences:
                 for event_type in pattern_elem.event_types:
-                    unexpected_events_list.append(f"{event_type} (too many occurrences: {matches_found} > {pattern_elem.max_occurrences})")
+                    unexpected_events_list.append(
+                        f"{event_type} (too many occurrences: {matches_found} > {pattern_elem.max_occurrences})"
+                    )
 
             # Move to next pattern element
             pattern_idx += 1
@@ -201,7 +205,7 @@ class EventSequenceValidator:
                     "missing_events": missing_events_list,
                     "unexpected_events": unexpected_events_list,
                     "out_of_order_events": out_of_order_list,
-                }
+                },
             )
 
         return ValidationResult(
@@ -209,7 +213,7 @@ class EventSequenceValidator:
             missing_events=tuple(missing_events_list),
             unexpected_events=tuple(unexpected_events_list),
             out_of_order_events=tuple(out_of_order_list),
-            error_message=None if is_valid else "Sequence validation failed"
+            error_message=None if is_valid else "Sequence validation failed",
         )
 
     def _parse_pattern(self, pattern_str: str) -> PatternElement:
@@ -270,7 +274,7 @@ class EventSequenceValidator:
             event_types=event_types,
             operator=operator,
             min_occurrences=min_occ,
-            max_occurrences=max_occ
+            max_occurrences=max_occ,
         )
 
         # Cache for future use
@@ -295,11 +299,7 @@ class EventSequenceValidator:
         """Clear the pattern parsing cache."""
         self._pattern_cache.clear()
 
-    def create_audit_validation_result(
-        self,
-        expected_pattern: list[str],
-        actual_events: list[str]
-    ) -> dict:
+    def create_audit_validation_result(self, expected_pattern: list[str], actual_events: list[str]) -> dict:
         """
         Create an AuditValidationResult-compatible dictionary.
 
@@ -341,8 +341,8 @@ class EventSequenceValidator:
                 {
                     "eventType": event_type,
                     "expectedPosition": expected_pos,
-                    "actualPosition": actual_pos
+                    "actualPosition": actual_pos,
                 }
                 for event_type, expected_pos, actual_pos in result.out_of_order_events
-            ]
+            ],
         }

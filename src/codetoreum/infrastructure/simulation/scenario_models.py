@@ -15,9 +15,7 @@ class ScenarioProjectModel(BaseModel):
 
     name: str = Field(..., description="Project name (must be unique)")
     description: str = Field(default="", description="Project description")
-    repository_url: str | None = Field(
-        default=None, description="Repository URL (auto-generated if not provided)"
-    )
+    repository_url: str | None = Field(default=None, description="Repository URL (auto-generated if not provided)")
     default_branch: str = Field(default="main", description="Default branch name")
     metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
 
@@ -29,16 +27,10 @@ class ScenarioStageModel(BaseModel):
     agent_type: str = Field(..., description="Agent type for this stage")
     description: str = Field(default="", description="Stage description")
     order: int = Field(..., description="Stage order (1-based)")
-    entry_conditions: dict[str, Any] = Field(
-        default_factory=dict, description="Entry conditions"
-    )
-    exit_conditions: dict[str, Any] = Field(
-        default_factory=dict, description="Exit conditions"
-    )
+    entry_conditions: dict[str, Any] = Field(default_factory=dict, description="Entry conditions")
+    exit_conditions: dict[str, Any] = Field(default_factory=dict, description="Exit conditions")
     max_retries: int = Field(default=3, description="Maximum retry attempts", ge=0)
-    timeout_seconds: int = Field(
-        default=3600, description="Stage timeout in seconds", ge=1
-    )
+    timeout_seconds: int = Field(default=3600, description="Stage timeout in seconds", ge=1)
 
     @field_validator("order")
     @classmethod
@@ -55,9 +47,7 @@ class ScenarioWorkflowModel(BaseModel):
 
     name: str = Field(..., description="Workflow name")
     description: str = Field(default="", description="Workflow description")
-    stages: list[ScenarioStageModel] = Field(
-        default_factory=list, description="Pipeline stages"
-    )
+    stages: list[ScenarioStageModel] = Field(default_factory=list, description="Pipeline stages")
 
     @field_validator("stages")
     @classmethod
@@ -86,15 +76,9 @@ class ScenarioAgentModel(BaseModel):
     name: str = Field(..., description="Agent name")
     agent_type: str = Field(default="generic", description="Agent type")
     description: str = Field(default="", description="Agent description")
-    capabilities: list[str] = Field(
-        default_factory=lambda: ["code_generation"], description="Agent capabilities"
-    )
-    llm_model: str = Field(
-        default="claude-3-5-sonnet-20241022", description="LLM model to use"
-    )
-    temperature: float = Field(
-        default=0.7, description="LLM temperature", ge=0.0, le=2.0
-    )
+    capabilities: list[str] = Field(default_factory=lambda: ["code_generation"], description="Agent capabilities")
+    llm_model: str = Field(default="claude-3-5-sonnet-20241022", description="LLM model to use")
+    temperature: float = Field(default=0.7, description="LLM temperature", ge=0.0, le=2.0)
     max_tokens: int = Field(default=4096, description="Maximum tokens", ge=1)
     system_prompt: str = Field(default="", description="System prompt")
     enabled: bool = Field(default=True, description="Whether agent is enabled")
@@ -130,9 +114,7 @@ class ScenarioBoardModel(BaseModel):
 class ScenarioBoardItemPlacementModel(BaseModel):
     """Board item placement in scenario file."""
 
-    work_item_title: str = Field(
-        ..., description="Work item title prefix to match"
-    )
+    work_item_title: str = Field(..., description="Work item title prefix to match")
     column: str = Field(..., description="Column to place the item in")
 
 
@@ -185,42 +167,24 @@ class ScenarioModel(BaseModel):
     name: str = Field(..., description="Scenario name")
     description: str = Field(default="", description="Scenario description")
     version: str = Field(default="1.0", description="Scenario version")
-    created_at: datetime | None = Field(
-        default=None, description="Scenario creation timestamp"
-    )
+    created_at: datetime | None = Field(default=None, description="Scenario creation timestamp")
 
     # Simulation config
-    speed_multiplier: float = Field(
-        default=10.0, description="Time speed multiplier", gt=0
-    )
-    auto_advance: bool = Field(
-        default=False, description="Auto-advance time"
-    )
+    speed_multiplier: float = Field(default=10.0, description="Time speed multiplier", gt=0)
+    auto_advance: bool = Field(default=False, description="Auto-advance time")
 
     # Data definitions
-    projects: list[ScenarioProjectModel] = Field(
-        default_factory=list, description="Projects to create"
-    )
-    workflows: list[ScenarioWorkflowModel] = Field(
-        default_factory=list, description="Workflows to create"
-    )
-    agents: list[ScenarioAgentModel] = Field(
-        default_factory=list, description="Agents to create"
-    )
-    work_items: list[ScenarioWorkItemModel] = Field(
-        default_factory=list, description="Work items to create"
-    )
-    boards: list[ScenarioBoardModel] = Field(
-        default_factory=list, description="Boards to create"
-    )
+    projects: list[ScenarioProjectModel] = Field(default_factory=list, description="Projects to create")
+    workflows: list[ScenarioWorkflowModel] = Field(default_factory=list, description="Workflows to create")
+    agents: list[ScenarioAgentModel] = Field(default_factory=list, description="Agents to create")
+    work_items: list[ScenarioWorkItemModel] = Field(default_factory=list, description="Work items to create")
+    boards: list[ScenarioBoardModel] = Field(default_factory=list, description="Boards to create")
     board_placements: list[ScenarioBoardItemPlacementModel] = Field(
         default_factory=list, description="Work item placements on boards"
     )
 
     # Additional metadata
-    metadata: dict[str, Any] = Field(
-        default_factory=dict, description="Additional scenario metadata"
-    )
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional scenario metadata")
 
     @field_validator("projects")
     @classmethod

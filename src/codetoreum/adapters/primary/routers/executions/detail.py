@@ -4,7 +4,6 @@ Execution Detail Endpoints
 Handles retrieving detailed execution status and history.
 """
 
-
 from fastapi import APIRouter, HTTPException, Query
 from fastapi import status as http_status
 

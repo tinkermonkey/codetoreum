@@ -60,11 +60,7 @@ class InMemoryPipelineLockService(MockEventEmitter, IPipelineLockService):
 
     # Query Operations
 
-    async def get_lock(
-        self,
-        project_id: str,
-        board_id: str
-    ) -> PipelineLock | None:
+    async def get_lock(self, project_id: str, board_id: str) -> PipelineLock | None:
         """Query current lock state for a project's board.
 
         Args:
@@ -90,12 +86,7 @@ class InMemoryPipelineLockService(MockEventEmitter, IPipelineLockService):
 
     # Command Operations
 
-    async def try_acquire_lock(
-        self,
-        project_id: str,
-        board_id: str,
-        work_item_id: str
-    ) -> tuple[bool, str]:
+    async def try_acquire_lock(self, project_id: str, board_id: str, work_item_id: str) -> tuple[bool, str]:
         """Attempt to acquire lock for exclusive work item access.
 
         Args:
@@ -132,27 +123,24 @@ class InMemoryPipelineLockService(MockEventEmitter, IPipelineLockService):
             work_item_id=work_item_id,
             locked_by_work_item=work_item_id,
             lock_acquired_at=self._get_iso_timestamp(),
-            lock_status="locked"
+            lock_status="locked",
         )
 
-        self.emit(LockAcquiredEvent(
-            type="lock.acquired",
-            project_id=project_id,
-            board_id=board_id,
-            work_item_id=work_item_id,
-            acquisition_method="normal",
-            timestamp=self._get_iso_timestamp(),
-            source="mock"
-        ))
+        self.emit(
+            LockAcquiredEvent(
+                type="lock.acquired",
+                project_id=project_id,
+                board_id=board_id,
+                work_item_id=work_item_id,
+                acquisition_method="normal",
+                timestamp=self._get_iso_timestamp(),
+                source="mock",
+            )
+        )
 
         return (True, "lock acquired")
 
-    async def release_lock(
-        self,
-        project_id: str,
-        board_id: str,
-        work_item_id: str
-    ) -> bool:
+    async def release_lock(self, project_id: str, board_id: str, work_item_id: str) -> bool:
         """Release lock held on a work item.
 
         Args:
@@ -181,27 +169,25 @@ class InMemoryPipelineLockService(MockEventEmitter, IPipelineLockService):
 
         del self._locks[key]
 
-        self.emit(LockReleasedEvent(
-            type="lock.released",
-            project_id=project_id,
-            board_id=board_id,
-            work_item_id=work_item_id,
-            reason="completed",
-            next_in_queue=next_in_queue,
-            timestamp=self._get_iso_timestamp(),
-            source="mock"
-        ))
+        self.emit(
+            LockReleasedEvent(
+                type="lock.released",
+                project_id=project_id,
+                board_id=board_id,
+                work_item_id=work_item_id,
+                reason="completed",
+                next_in_queue=next_in_queue,
+                timestamp=self._get_iso_timestamp(),
+                source="mock",
+            )
+        )
 
         return True
 
     # Test Helper Methods
 
     def simulate_lock_acquired(
-        self,
-        project_id: str,
-        board_id: str,
-        work_item_id: str,
-        acquisition_method: str = "normal"
+        self, project_id: str, board_id: str, work_item_id: str, acquisition_method: str = "normal"
     ) -> None:
         """Test helper: Simulate lock acquisition event.
 
@@ -213,15 +199,17 @@ class InMemoryPipelineLockService(MockEventEmitter, IPipelineLockService):
             work_item_id: Work item ID
             acquisition_method: 'normal' or 'stale_recovery'
         """
-        self.emit(LockAcquiredEvent(
-            type="lock.acquired",
-            project_id=project_id,
-            board_id=board_id,
-            work_item_id=work_item_id,
-            acquisition_method=acquisition_method,  # type: ignore
-            timestamp=self._get_iso_timestamp(),
-            source="mock"
-        ))
+        self.emit(
+            LockAcquiredEvent(
+                type="lock.acquired",
+                project_id=project_id,
+                board_id=board_id,
+                work_item_id=work_item_id,
+                acquisition_method=acquisition_method,  # type: ignore
+                timestamp=self._get_iso_timestamp(),
+                source="mock",
+            )
+        )
 
     def simulate_lock_released(
         self,
@@ -229,7 +217,7 @@ class InMemoryPipelineLockService(MockEventEmitter, IPipelineLockService):
         board_id: str,
         work_item_id: str,
         reason: str = "completed",
-        next_in_queue: str | None = None
+        next_in_queue: str | None = None,
     ) -> None:
         """Test helper: Simulate lock release event.
 
@@ -242,16 +230,18 @@ class InMemoryPipelineLockService(MockEventEmitter, IPipelineLockService):
             reason: Reason for release ('completed', 'exit_column', 'timeout', 'manual')
             next_in_queue: Optional next work item in queue
         """
-        self.emit(LockReleasedEvent(
-            type="lock.released",
-            project_id=project_id,
-            board_id=board_id,
-            work_item_id=work_item_id,
-            reason=reason,  # type: ignore
-            next_in_queue=next_in_queue,
-            timestamp=self._get_iso_timestamp(),
-            source="mock"
-        ))
+        self.emit(
+            LockReleasedEvent(
+                type="lock.released",
+                project_id=project_id,
+                board_id=board_id,
+                work_item_id=work_item_id,
+                reason=reason,  # type: ignore
+                next_in_queue=next_in_queue,
+                timestamp=self._get_iso_timestamp(),
+                source="mock",
+            )
+        )
 
     # Helper Methods
 

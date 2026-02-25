@@ -126,9 +126,7 @@ class MockAgentCommandAdapter(IAgentCommandPort):
             # Check if capability already exists
             if command.capability.skill in agent.capabilities:
                 msg = f"Capability '{command.capability.skill}' already exists for agent"
-                raise DomainError(
-                    msg
-                )
+                raise DomainError(msg)
 
             # Add capability
             agent.capabilities[command.capability.skill] = command.capability
@@ -147,16 +145,12 @@ class MockAgentCommandAdapter(IAgentCommandPort):
             # Check if capability exists
             if command.skill not in agent.capabilities:
                 msg = f"Capability '{command.skill}' not found for agent"
-                raise DomainError(
-                    msg
-                )
+                raise DomainError(msg)
 
             # Check if it's the last capability
             if len(agent.capabilities) == 1:
                 msg = "Cannot remove the last capability from an agent"
-                raise DomainError(
-                    msg
-                )
+                raise DomainError(msg)
 
             # Remove capability
             del agent.capabilities[command.skill]
@@ -175,9 +169,7 @@ class MockAgentCommandAdapter(IAgentCommandPort):
             # Check if capability exists
             if command.skill not in agent.capabilities:
                 msg = f"Capability '{command.skill}' not found for agent"
-                raise DomainError(
-                    msg
-                )
+                raise DomainError(msg)
 
             # Validate proficiency
             if not 0.0 <= command.proficiency <= 1.0:
@@ -206,9 +198,7 @@ class MockAgentCommandAdapter(IAgentCommandPort):
             # Check if server already configured
             if command.server_name in agent.mcp_servers:
                 msg = f"MCP server '{command.server_name}' already configured for agent"
-                raise DomainError(
-                    msg
-                )
+                raise DomainError(msg)
 
             # Add server
             agent.mcp_servers.append(command.server_name)
@@ -227,9 +217,7 @@ class MockAgentCommandAdapter(IAgentCommandPort):
             # Check if server configured
             if command.server_name not in agent.mcp_servers:
                 msg = f"MCP server '{command.server_name}' not configured for agent"
-                raise DomainError(
-                    msg
-                )
+                raise DomainError(msg)
 
             # Remove server
             agent.mcp_servers.remove(command.server_name)

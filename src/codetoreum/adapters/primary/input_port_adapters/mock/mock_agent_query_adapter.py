@@ -48,11 +48,7 @@ class MockAgentQueryAdapter(IAgentQueryPort):
             if execution_stats:
                 self._execution_stats[agent.id] = execution_stats
 
-    def _convert_agent_to_info(
-        self,
-        agent: Agent,
-        execution_stats: AgentExecutionStats | None = None
-    ) -> AgentInfo:
+    def _convert_agent_to_info(self, agent: Agent, execution_stats: AgentExecutionStats | None = None) -> AgentInfo:
         """Convert Agent domain model to AgentInfo."""
         return AgentInfo(
             id=agent.id,
@@ -70,10 +66,7 @@ class MockAgentQueryAdapter(IAgentQueryPort):
             mcp_servers=agent.mcp_servers.copy(),
             created_at=agent.created_at,
             updated_at=agent.updated_at,
-            capabilities={
-                skill: cap.proficiency
-                for skill, cap in agent.capabilities.items()
-            },
+            capabilities={skill: cap.proficiency for skill, cap in agent.capabilities.items()},
             environment_variables=agent.metadata.get("environment_variables", {}),
             execution_stats=execution_stats,
         )

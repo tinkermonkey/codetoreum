@@ -31,10 +31,7 @@ class TestAdapterFactoryConfig:
 
     def test_custom_config(self):
         """Test custom configuration."""
-        config = AdapterFactoryConfig(
-            operation_mode=OperationMode.SIMULATION,
-            enable_resilience=False
-        )
+        config = AdapterFactoryConfig(operation_mode=OperationMode.SIMULATION, enable_resilience=False)
 
         assert config.operation_mode == OperationMode.SIMULATION
         assert config.enable_resilience is False
@@ -51,10 +48,7 @@ class TestAdapterFactory:
 
     def test_initialization_with_config(self):
         """Test factory initialization with custom config."""
-        config = AdapterFactoryConfig(
-            operation_mode=OperationMode.SIMULATION,
-            enable_resilience=False
-        )
+        config = AdapterFactoryConfig(operation_mode=OperationMode.SIMULATION, enable_resilience=False)
 
         factory = AdapterFactory(config)
         assert factory.get_operation_mode() == OperationMode.SIMULATION
@@ -273,7 +267,7 @@ class TestFactoryIntegration:
             name="custom",
             adapter_type=InMemoryTicketAdapter,
             description="Custom adapter",
-            tags=["custom"]
+            tags=["custom"],
         )
 
         # Create instance of custom adapter

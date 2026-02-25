@@ -70,7 +70,7 @@ class AdapterRegistry(ABC, Generic[T]):
         tags: list[str] | None = None,
         config_schema: dict[str, Any] | None = None,
         factory: Callable[..., T] | None = None,
-        set_as_default: bool = False
+        set_as_default: bool = False,
     ) -> None:
         """
         Register an adapter implementation.
@@ -95,7 +95,7 @@ class AdapterRegistry(ABC, Generic[T]):
 
             # Verify adapter implements the port interface
             if not self._is_valid_adapter(adapter_type):
-                message = f"Adapter {adapter_type.__name__} does not implement " f"{self._port_interface.__name__}"
+                message = f"Adapter {adapter_type.__name__} does not implement {self._port_interface.__name__}"
                 raise ValueError(message)
 
             self._adapters[name] = adapter_type
@@ -106,7 +106,7 @@ class AdapterRegistry(ABC, Generic[T]):
                 version=version,
                 tags=tags or [],
                 registered_at=datetime.now(UTC),
-                config_schema=config_schema
+                config_schema=config_schema,
             )
 
             if factory:
@@ -236,10 +236,7 @@ class AdapterRegistry(ABC, Generic[T]):
             List of matching adapter names
         """
         with self._lock:
-            return [
-                name for name, metadata in self._metadata.items()
-                if metadata.matches_tags(tags)
-            ]
+            return [name for name, metadata in self._metadata.items() if metadata.matches_tags(tags)]
 
     def has_adapter(self, name: str) -> bool:
         """
@@ -316,8 +313,5 @@ class AdapterRegistry(ABC, Generic[T]):
             count = len(self._adapters)
             default = self._default_adapter or "None"
             return (
-                f"{self.__class__.__name__}("
-                f"port={self._port_interface.__name__}, "
-                f"adapters={count}, "
-                f"default={default})"
+                f"{self.__class__.__name__}(port={self._port_interface.__name__}, adapters={count}, default={default})"
             )

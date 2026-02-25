@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 # Optional OpenTelemetry support for span creation
 try:
-    from opentelemetry import context, trace
+    from opentelemetry import context
     from opentelemetry.trace import SpanKind
 
     OPENTELEMETRY_AVAILABLE = True
@@ -34,9 +34,10 @@ except ImportError:
     SpanKind = None
     context = None
 
-# Optional Redis support
+# Optional Redis support (client passed in at construction time)
 try:
-    from redis import asyncio as aioredis
+    import redis  # noqa: F401 - import for availability check
+
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
@@ -44,7 +45,6 @@ except ImportError:
 
 class EventBusError(Exception):
     """Raised when event bus operations fail."""
-
 
 
 class EventHandler:
@@ -163,9 +163,7 @@ class EventBus:
             if not event_types:
                 # Wildcard handler (receives all events)
                 self._wildcard_handlers.append(handler)
-                logger.info(
-                    f"Registered wildcard handler: {handler.__class__.__name__}"
-                )
+                logger.info(f"Registered wildcard handler: {handler.__class__.__name__}")
             else:
                 for event_type in event_types:
                     if event_type not in self._handlers:
@@ -173,10 +171,7 @@ class EventBus:
 
                     self._handlers[event_type].append(handler)
 
-                logger.info(
-                    f"Registered handler {handler.__class__.__name__} "
-                    f"for event types: {event_types}"
-                )
+                logger.info(f"Registered handler {handler.__class__.__name__} for event types: {event_types}")
 
         except Exception as e:
             logger.error(
@@ -184,8 +179,8 @@ class EventBus:
                 exc_info=True,
                 extra={
                     "handler_class": handler.__class__.__name__,
-                    "error_id": "ERR_HANDLER_REGISTRATION"
-                }
+                    "error_id": "ERR_HANDLER_REGISTRATION",
+                },
             )
             message = f"Failed to register handler: {e}"
             raise EventBusError(message) from e
@@ -212,9 +207,7 @@ class EventBus:
 
         logger.info(f"Unregistered handler: {handler.__class__.__name__}")
 
-    def subscribe(
-        self, event_type: str | None, callback: Callable[[DomainEvent], Any]
-    ) -> None:
+    def subscribe(self, event_type: str | None, callback: Callable[[DomainEvent], Any]) -> None:
         """
         Subscribe to events with a callback function.
 
@@ -245,15 +238,13 @@ class EventBus:
                 extra={
                     "event_type": event_type,
                     "callback": callback.__name__ if hasattr(callback, "__name__") else str(callback),
-                    "error_id": "ERR_CALLBACK_SUBSCRIPTION"
-                }
+                    "error_id": "ERR_CALLBACK_SUBSCRIPTION",
+                },
             )
             message = f"Failed to subscribe callback: {e}"
             raise EventBusError(message) from e
 
-    def unsubscribe(
-        self, event_type: str | None, callback: Callable[[DomainEvent], Any]
-    ) -> None:
+    def unsubscribe(self, event_type: str | None, callback: Callable[[DomainEvent], Any]) -> None:
         """
         Unsubscribe a callback.
 
@@ -339,15 +330,15 @@ class EventBus:
                                 "event_id": event.event_id,
                                 "handler_index": idx,
                                 "error_type": type(result).__name__,
-                            "error_id": ErrorRegistry.ERR_EVENT_BUS_ERROR}
+                                "error_id": ErrorRegistry.ERR_EVENT_BUS_ERROR,
+                            },
                         )
                         self._stats["handler_errors"] += 1
 
             self._stats["events_handled"] += len(handlers) + len(callbacks)
 
             logger.debug(
-                f"Published event {event.event_type} to "
-                f"{len(handlers)} handlers and {len(callbacks)} callbacks"
+                f"Published event {event.event_type} to {len(handlers)} handlers and {len(callbacks)} callbacks"
             )
 
         except asyncio.CancelledError:
@@ -362,8 +353,8 @@ class EventBus:
                 extra={
                     "event_id": event.event_id,
                     "event_type": event.event_type,
-                    "error_id": "ERR_EVENT_BUS_CONNECTION"
-                }
+                    "error_id": "ERR_EVENT_BUS_CONNECTION",
+                },
             )
             message = f"Connection error publishing event: {e}. This may be transient - please retry."
             raise EventBusError(message)
@@ -375,8 +366,8 @@ class EventBus:
                 extra={
                     "event_id": event.event_id,
                     "event_type": event.event_type,
-                    "error_id": "ERR_EVENT_BUS_VALIDATION"
-                }
+                    "error_id": "ERR_EVENT_BUS_VALIDATION",
+                },
             )
             message = f"Invalid event data: {e}. Please check event structure."
             raise EventBusError(message)
@@ -388,8 +379,8 @@ class EventBus:
                 extra={
                     "event_id": event.event_id,
                     "event_type": event.event_type,
-                    "error_id": "ERR_EVENT_BUS_UNEXPECTED"
-                }
+                    "error_id": "ERR_EVENT_BUS_UNEXPECTED",
+                },
             )
             message = f"Unexpected error publishing event: {e}"
             raise EventBusError(message) from e
@@ -435,9 +426,7 @@ class EventBus:
 
         return callbacks
 
-    async def _dispatch_to_handler(
-        self, handler: EventHandler, event: DomainEvent
-    ) -> None:
+    async def _dispatch_to_handler(self, handler: EventHandler, event: DomainEvent) -> None:
         """
         Dispatch event to a handler with retry logic and trace context.
 
@@ -482,8 +471,7 @@ class EventBus:
                 last_exception = e
 
                 logger.warning(
-                    f"Handler {handler.__class__.__name__} failed "
-                    f"(attempt {attempt + 1}/{self.max_retries + 1}): {e}"
+                    f"Handler {handler.__class__.__name__} failed (attempt {attempt + 1}/{self.max_retries + 1}): {e}"
                 )
 
                 if attempt < self.max_retries:
@@ -492,9 +480,7 @@ class EventBus:
         # All retries exhausted
         raise last_exception
 
-    async def _dispatch_to_callback(
-        self, callback: Callable, event: DomainEvent
-    ) -> None:
+    async def _dispatch_to_callback(self, callback: Callable, event: DomainEvent) -> None:
         """
         Dispatch event to a callback with retry logic and trace context.
 
@@ -540,9 +526,7 @@ class EventBus:
             except Exception as e:
                 last_exception = e
 
-                logger.warning(
-                    f"Callback failed (attempt {attempt + 1}/{self.max_retries + 1}): {e}"
-                )
+                logger.warning(f"Callback failed (attempt {attempt + 1}/{self.max_retries + 1}): {e}")
 
                 if attempt < self.max_retries:
                     await asyncio.sleep(self.retry_delay_seconds * (attempt + 1))
@@ -589,10 +573,7 @@ class EventBus:
 
             self._stats["events_persisted"] += 1
 
-            logger.debug(
-                f"Persisted event {event.event_type} "
-                f"(ID: {event.event_id}) to Redis stream {stream_key}"
-            )
+            logger.debug(f"Persisted event {event.event_type} (ID: {event.event_id}) to Redis stream {stream_key}")
 
         except asyncio.CancelledError:
             # Always propagate cancellation - don't suppress system signals
@@ -606,7 +587,8 @@ class EventBus:
                     "event_id": event.event_id,
                     "event_type": event.event_type,
                     "error_type": "redis_connection",
-                "error_id": ErrorRegistry.ERR_EVENT_BUS_ERROR}
+                    "error_id": ErrorRegistry.ERR_EVENT_BUS_ERROR,
+                },
             )
             # Don't raise - persistence failure shouldn't block event handling
         except Exception as e:
@@ -617,8 +599,8 @@ class EventBus:
                 extra={
                     "event_id": event.event_id,
                     "event_type": event.event_type,
-                    "error_type": "unexpected"
-                }
+                    "error_type": "unexpected",
+                },
             )
             # Don't raise - persistence failure shouldn't block event handling
 
@@ -631,16 +613,10 @@ class EventBus:
         """
         return {
             **self._stats,
-            "total_handlers": sum(len(handlers) for handlers in self._handlers.values())
-            + len(self._wildcard_handlers),
-            "total_callbacks": sum(
-                len(callbacks) for callbacks in self._callbacks.values()
-            )
+            "total_handlers": sum(len(handlers) for handlers in self._handlers.values()) + len(self._wildcard_handlers),
+            "total_callbacks": sum(len(callbacks) for callbacks in self._callbacks.values())
             + len(self._wildcard_callbacks),
-            "handlers_by_type": {
-                event_type: len(handlers)
-                for event_type, handlers in self._handlers.items()
-            },
+            "handlers_by_type": {event_type: len(handlers) for event_type, handlers in self._handlers.items()},
             "wildcard_handlers": len(self._wildcard_handlers),
             "wildcard_callbacks": len(self._wildcard_callbacks),
             "redis_enabled": bool(self.redis_client),
@@ -656,6 +632,7 @@ class EventBus:
 
 
 # Decorator for easy handler registration
+
 
 def event_handler(*event_types: str):
     """

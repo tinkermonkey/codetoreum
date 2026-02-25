@@ -405,11 +405,7 @@ class WorkItem:
             raise DomainError(msg)
 
         # Return to previous state (assume assigned if agent exists)
-        self.status = (
-            WorkItemStatus.ASSIGNED
-            if self.assigned_agent_id
-            else WorkItemStatus.NEW
-        )
+        self.status = WorkItemStatus.ASSIGNED if self.assigned_agent_id else WorkItemStatus.NEW
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
@@ -557,10 +553,7 @@ class WorkItem:
         Returns:
             True if work item can be started, False otherwise
         """
-        return (
-            self.assigned_agent_id is not None
-            and self.status == WorkItemStatus.ASSIGNED
-        )
+        return self.assigned_agent_id is not None and self.status == WorkItemStatus.ASSIGNED
 
     def is_terminal(self) -> bool:
         """
@@ -713,9 +706,7 @@ class WorkItem:
         """Apply WorkItemLabelsUpdated event."""
         self.labels = event.payload["new_labels"]
 
-    def _apply_work_item_priority_updated(
-        self, event: WorkItemPriorityUpdated
-    ) -> None:
+    def _apply_work_item_priority_updated(self, event: WorkItemPriorityUpdated) -> None:
         """Apply WorkItemPriorityUpdated event."""
         self.priority = WorkItemPriority(event.payload["new_priority"])
 

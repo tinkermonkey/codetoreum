@@ -18,9 +18,11 @@ T = TypeVar("T")
 # Rate Limiter
 # ============================================================================
 
+
 @dataclass
 class RateLimitStats:
     """Rate limiter statistics."""
+
     requests_in_window: int
     tokens_in_window: int
     max_requests: int
@@ -73,16 +75,19 @@ class IRateLimiter(ABC):
 # Circuit Breaker
 # ============================================================================
 
+
 class CircuitState(Enum):
     """Circuit breaker states."""
-    CLOSED = "closed"          # Normal operation
-    OPEN = "open"              # Failing, reject requests
-    HALF_OPEN = "half_open"    # Testing recovery
+
+    CLOSED = "closed"  # Normal operation
+    OPEN = "open"  # Failing, reject requests
+    HALF_OPEN = "half_open"  # Testing recovery
 
 
 @dataclass
 class CircuitBreakerStats:
     """Circuit breaker statistics."""
+
     state: CircuitState
     failure_count: int
     success_count: int
@@ -102,13 +107,7 @@ class ICircuitBreaker(ABC):
     """
 
     @abstractmethod
-    async def call(
-        self,
-        operation: Callable[..., T],
-        operation_name: str,
-        *args,
-        **kwargs
-    ) -> T:
+    async def call(self, operation: Callable[..., T], operation_name: str, *args, **kwargs) -> T:
         """
         Execute operation with circuit breaker protection.
 
@@ -150,9 +149,11 @@ class ICircuitBreaker(ABC):
 # Retry Policy
 # ============================================================================
 
+
 @dataclass
 class RetryStats:
     """Retry policy statistics."""
+
     total_attempts: int
     total_retries: int
     total_successes: int
@@ -168,13 +169,7 @@ class IRetryPolicy(ABC):
     """
 
     @abstractmethod
-    async def execute(
-        self,
-        operation: Callable[..., T],
-        operation_name: str,
-        *args,
-        **kwargs
-    ) -> T:
+    async def execute(self, operation: Callable[..., T], operation_name: str, *args, **kwargs) -> T:
         """
         Execute operation with retry logic.
 
@@ -216,9 +211,11 @@ class IRetryPolicy(ABC):
 # Timeout
 # ============================================================================
 
+
 @dataclass
 class TimeoutStats:
     """Timeout statistics."""
+
     total_operations: int
     total_timeouts: int
     average_duration_ms: float
@@ -239,7 +236,7 @@ class ITimeout(ABC):
         timeout_seconds: float,
         operation_name: str,
         *args,
-        **kwargs
+        **kwargs,
     ) -> T:
         """
         Execute operation with timeout.

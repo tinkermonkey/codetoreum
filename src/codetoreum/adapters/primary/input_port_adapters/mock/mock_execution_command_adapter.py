@@ -31,9 +31,7 @@ class MockExecutionCommandAdapter(IExecutionCommandPort):
         with self._lock:
             self._executions[execution.id] = execution
 
-    async def terminate_execution(
-        self, command: TerminateExecutionCommand
-    ) -> ExecutionCommandResult:
+    async def terminate_execution(self, command: TerminateExecutionCommand) -> ExecutionCommandResult:
         """Terminate a running execution."""
         with self._lock:
             if command.execution_id not in self._executions:
@@ -44,9 +42,7 @@ class MockExecutionCommandAdapter(IExecutionCommandPort):
             # Check if execution is already in a terminal state
             if execution.is_terminal():
                 msg = f"Execution {command.execution_id} is already {execution.status.value}"
-                raise InvalidStateError(
-                    msg
-                )
+                raise InvalidStateError(msg)
 
             # Use domain method to cancel execution
             execution.cancel(command.reason)
@@ -59,9 +55,7 @@ class MockExecutionCommandAdapter(IExecutionCommandPort):
                 errors=None,
             )
 
-    async def pause_execution(
-        self, command: PauseExecutionCommand
-    ) -> ExecutionCommandResult:
+    async def pause_execution(self, command: PauseExecutionCommand) -> ExecutionCommandResult:
         """Pause a running execution."""
         with self._lock:
             if command.execution_id not in self._executions:
@@ -83,9 +77,7 @@ class MockExecutionCommandAdapter(IExecutionCommandPort):
                 errors=None,
             )
 
-    async def resume_execution(
-        self, command: ResumeExecutionCommand
-    ) -> ExecutionCommandResult:
+    async def resume_execution(self, command: ResumeExecutionCommand) -> ExecutionCommandResult:
         """Resume a paused execution."""
         with self._lock:
             if command.execution_id not in self._executions:

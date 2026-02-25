@@ -127,9 +127,7 @@ async def test_scenario_09_queue_position_ordering():
     assert all(e.work_item_id != "item-1" for e in remaining)
 
     # Verify next waiting item after removal
-    next_item_after_removal = await queue_service.get_next_waiting_item(
-        "proj-1", "board-1"
-    )
+    next_item_after_removal = await queue_service.get_next_waiting_item("proj-1", "board-1")
     assert next_item_after_removal is not None
     assert next_item_after_removal.work_item_id == "item-2"
 
@@ -141,20 +139,12 @@ async def test_scenario_09_parallel_queues():
     now = datetime.now(UTC)
 
     # Create items in project-1, board-1
-    await queue_service.enqueue_item(
-        "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-    )
-    await queue_service.enqueue_item(
-        "proj-1", "board-1", "item-2", position_in_column=1, timestamp=now
-    )
+    await queue_service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+    await queue_service.enqueue_item("proj-1", "board-1", "item-2", position_in_column=1, timestamp=now)
 
     # Create items in project-1, board-2
-    await queue_service.enqueue_item(
-        "proj-1", "board-2", "item-3", position_in_column=0, timestamp=now
-    )
-    await queue_service.enqueue_item(
-        "proj-1", "board-2", "item-4", position_in_column=1, timestamp=now
-    )
+    await queue_service.enqueue_item("proj-1", "board-2", "item-3", position_in_column=0, timestamp=now)
+    await queue_service.enqueue_item("proj-1", "board-2", "item-4", position_in_column=1, timestamp=now)
 
     # Verify independent queues
     queue1 = await queue_service.get_queue_entries("proj-1", "board-1")
@@ -194,15 +184,9 @@ async def test_scenario_09_position_changes_affect_priority():
     now = datetime.now(UTC)
 
     # Add items with specific positions
-    await queue_service.enqueue_item(
-        "proj-1", "board-1", "item-a", position_in_column=0, timestamp=now
-    )
-    await queue_service.enqueue_item(
-        "proj-1", "board-1", "item-b", position_in_column=5, timestamp=now
-    )
-    await queue_service.enqueue_item(
-        "proj-1", "board-1", "item-c", position_in_column=2, timestamp=now
-    )
+    await queue_service.enqueue_item("proj-1", "board-1", "item-a", position_in_column=0, timestamp=now)
+    await queue_service.enqueue_item("proj-1", "board-1", "item-b", position_in_column=5, timestamp=now)
+    await queue_service.enqueue_item("proj-1", "board-1", "item-c", position_in_column=2, timestamp=now)
 
     # Verify sorted by position
     entries = await queue_service.get_queue_entries("proj-1", "board-1")
@@ -249,15 +233,9 @@ async def test_scenario_09_with_board_service_sync():
     board_service.add_item_to_column("board-1", "Trigger", "item-3")
 
     # Initial enqueue with positions
-    await queue_service.enqueue_item(
-        "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-    )
-    await queue_service.enqueue_item(
-        "proj-1", "board-1", "item-2", position_in_column=1, timestamp=now
-    )
-    await queue_service.enqueue_item(
-        "proj-1", "board-1", "item-3", position_in_column=2, timestamp=now
-    )
+    await queue_service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+    await queue_service.enqueue_item("proj-1", "board-1", "item-2", position_in_column=1, timestamp=now)
+    await queue_service.enqueue_item("proj-1", "board-1", "item-3", position_in_column=2, timestamp=now)
 
     # Verify initial state
     entries = await queue_service.get_queue_entries("proj-1", "board-1")

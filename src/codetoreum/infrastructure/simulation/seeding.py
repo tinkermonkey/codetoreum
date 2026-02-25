@@ -297,15 +297,17 @@ class SimulationDataSeeder:
 
             # Build metadata with agent-specific info
             metadata = agent_def.get("metadata", {})
-            metadata.update({
-                "agent_type": agent_def.get("agent_type", "generic"),
-                "description": agent_def.get("description", f"{agent_name} agent"),
-                "llm_model": agent_def.get("llm_model", "claude-3-5-sonnet-20241022"),
-                "temperature": agent_def.get("temperature", 0.7),
-                "max_tokens": agent_def.get("max_tokens", 4096),
-                "system_prompt": agent_def.get("system_prompt", ""),
-                "enabled": agent_def.get("enabled", True),
-            })
+            metadata.update(
+                {
+                    "agent_type": agent_def.get("agent_type", "generic"),
+                    "description": agent_def.get("description", f"{agent_name} agent"),
+                    "llm_model": agent_def.get("llm_model", "claude-3-5-sonnet-20241022"),
+                    "temperature": agent_def.get("temperature", 0.7),
+                    "max_tokens": agent_def.get("max_tokens", 4096),
+                    "system_prompt": agent_def.get("system_prompt", ""),
+                    "enabled": agent_def.get("enabled", True),
+                }
+            )
 
             agent_config = AgentConfig(
                 project_id=project_id,
@@ -488,26 +490,30 @@ class SimulationDataSeeder:
             if is_middle and agent_index < len(agent_types):
                 agent_id = agent_types[agent_index]
                 is_trigger = agent_index == 0  # First automated column
-                columns.append(ColumnTemplate(
-                    name=col_name,
-                    type=ColumnType.AUTOMATED,
-                    agent_id=agent_id,
-                    is_pipeline_trigger=is_trigger,
-                    is_exit_column=False,
-                    position=pos,
-                    auto_progress_on_completion=True,
-                ))
+                columns.append(
+                    ColumnTemplate(
+                        name=col_name,
+                        type=ColumnType.AUTOMATED,
+                        agent_id=agent_id,
+                        is_pipeline_trigger=is_trigger,
+                        is_exit_column=False,
+                        position=pos,
+                        auto_progress_on_completion=True,
+                    )
+                )
                 agent_index += 1
             else:
-                columns.append(ColumnTemplate(
-                    name=col_name,
-                    type=ColumnType.MANUAL,
-                    agent_id=None,
-                    is_pipeline_trigger=False,
-                    is_exit_column=is_last,
-                    position=pos,
-                    auto_progress_on_completion=False,
-                ))
+                columns.append(
+                    ColumnTemplate(
+                        name=col_name,
+                        type=ColumnType.MANUAL,
+                        agent_id=None,
+                        is_pipeline_trigger=False,
+                        is_exit_column=is_last,
+                        position=pos,
+                        auto_progress_on_completion=False,
+                    )
+                )
 
         # Derive trigger/exit column names
         trigger_cols = tuple(c.name for c in columns if c.is_pipeline_trigger)
@@ -553,26 +559,28 @@ class SimulationDataSeeder:
             description="Default 3-stage workflow",
         )
 
-        await self.create_agents([
-            {
-                "name": "architect",
-                "agent_type": "architect",
-                "description": "Software architect agent",
-                "capabilities": ["code_generation", "code_review"],
-            },
-            {
-                "name": "coder",
-                "agent_type": "coder",
-                "description": "Software developer agent",
-                "capabilities": ["code_generation"],
-            },
-            {
-                "name": "tester",
-                "agent_type": "tester",
-                "description": "QA tester agent",
-                "capabilities": ["code_review", "testing"],
-            },
-        ])
+        await self.create_agents(
+            [
+                {
+                    "name": "architect",
+                    "agent_type": "architect",
+                    "description": "Software architect agent",
+                    "capabilities": ["code_generation", "code_review"],
+                },
+                {
+                    "name": "coder",
+                    "agent_type": "coder",
+                    "description": "Software developer agent",
+                    "capabilities": ["code_generation"],
+                },
+                {
+                    "name": "tester",
+                    "agent_type": "tester",
+                    "description": "QA tester agent",
+                    "capabilities": ["code_review", "testing"],
+                },
+            ]
+        )
 
         await self.create_work_items(
             count=3,
@@ -641,23 +649,25 @@ class SimulationDataSeeder:
             ],
         )
 
-        await self.create_agents([
-            {
-                "name": "architect",
-                "agent_type": "architect",
-                "capabilities": ["code_generation"],
-            },
-            {
-                "name": "coder",
-                "agent_type": "coder",
-                "capabilities": ["code_generation"],
-            },
-            {
-                "name": "tester",
-                "agent_type": "tester",
-                "capabilities": ["testing"],
-            },
-        ])
+        await self.create_agents(
+            [
+                {
+                    "name": "architect",
+                    "agent_type": "architect",
+                    "capabilities": ["code_generation"],
+                },
+                {
+                    "name": "coder",
+                    "agent_type": "coder",
+                    "capabilities": ["code_generation"],
+                },
+                {
+                    "name": "tester",
+                    "agent_type": "tester",
+                    "capabilities": ["testing"],
+                },
+            ]
+        )
 
         await self.create_work_items(
             count=1,
@@ -698,23 +708,25 @@ class SimulationDataSeeder:
             description="Workflow for parallel execution",
         )
 
-        await self.create_agents([
-            {
-                "name": "coder-1",
-                "agent_type": "coder",
-                "capabilities": ["code_generation"],
-            },
-            {
-                "name": "coder-2",
-                "agent_type": "coder",
-                "capabilities": ["code_generation"],
-            },
-            {
-                "name": "reviewer",
-                "agent_type": "reviewer",
-                "capabilities": ["code_review"],
-            },
-        ])
+        await self.create_agents(
+            [
+                {
+                    "name": "coder-1",
+                    "agent_type": "coder",
+                    "capabilities": ["code_generation"],
+                },
+                {
+                    "name": "coder-2",
+                    "agent_type": "coder",
+                    "capabilities": ["code_generation"],
+                },
+                {
+                    "name": "reviewer",
+                    "agent_type": "reviewer",
+                    "capabilities": ["code_review"],
+                },
+            ]
+        )
 
         await self.create_work_items(
             count=10,
@@ -775,20 +787,22 @@ class SimulationDataSeeder:
             ],
         )
 
-        await self.create_agents([
-            {
-                "name": "coder",
-                "agent_type": "coder",
-                "capabilities": ["code_generation"],
-                "metadata": {"review_mode": False},
-            },
-            {
-                "name": "reviewer",
-                "agent_type": "reviewer",
-                "capabilities": ["code_review"],
-                "metadata": {"strict_mode": True},
-            },
-        ])
+        await self.create_agents(
+            [
+                {
+                    "name": "coder",
+                    "agent_type": "coder",
+                    "capabilities": ["code_generation"],
+                    "metadata": {"review_mode": False},
+                },
+                {
+                    "name": "reviewer",
+                    "agent_type": "reviewer",
+                    "capabilities": ["code_review"],
+                    "metadata": {"strict_mode": True},
+                },
+            ]
+        )
 
         await self.create_work_items(
             count=5,
@@ -844,20 +858,22 @@ class SimulationDataSeeder:
             ],
         )
 
-        await self.create_agents([
-            {
-                "name": "flaky-agent",
-                "agent_type": "flaky",
-                "capabilities": ["code_generation"],
-                "metadata": {"failure_rate": 0.5},
-            },
-            {
-                "name": "recovery-agent",
-                "agent_type": "recovery",
-                "capabilities": ["code_generation"],
-                "metadata": {"failure_rate": 0.0},
-            },
-        ])
+        await self.create_agents(
+            [
+                {
+                    "name": "flaky-agent",
+                    "agent_type": "flaky",
+                    "capabilities": ["code_generation"],
+                    "metadata": {"failure_rate": 0.5},
+                },
+                {
+                    "name": "recovery-agent",
+                    "agent_type": "recovery",
+                    "capabilities": ["code_generation"],
+                    "metadata": {"failure_rate": 0.0},
+                },
+            ]
+        )
 
         await self.create_work_items(
             count=3,
@@ -1055,9 +1071,7 @@ class SimulationDataSeeder:
                         work_item_id=matched_id,
                     )
                 else:
-                    logger.warning(
-                        f"Board placement: no work item found matching title '{placement.work_item_title}'"
-                    )
+                    logger.warning(f"Board placement: no work item found matching title '{placement.work_item_title}'")
 
         logger.info(f"Scenario seeded successfully from {file_path}")
         return self
@@ -1133,9 +1147,7 @@ class SimulationDataSeeder:
             error_message=error_message,
         )
 
-        logger.debug(
-            f"Configured agent failure: {agent_name}, mode={failure_mode}, count={failure_count}"
-        )
+        logger.debug(f"Configured agent failure: {agent_name}, mode={failure_mode}, count={failure_count}")
         return self
 
     def configure_review_behavior(
@@ -1180,9 +1192,7 @@ class SimulationDataSeeder:
 
         mock_llm.set_agent_response_fn(reviewer_name, review_response_fn)
 
-        logger.debug(
-            f"Configured review behavior: {reviewer_name}, approval_rate={approval_rate}"
-        )
+        logger.debug(f"Configured review behavior: {reviewer_name}, approval_rate={approval_rate}")
         return self
 
     def configure_container_output(

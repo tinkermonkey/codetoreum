@@ -61,7 +61,10 @@ class ColumnTemplate:
 
         # Validate auto_progress only for automated columns
         if self.auto_progress_on_completion and self.type != ColumnType.AUTOMATED:
-            msg = f"auto_progress_on_completion only valid for automated columns, " f"column '{self.name}' is {self.type.value}"
+            msg = (
+                f"auto_progress_on_completion only valid for automated columns, "
+                f"column '{self.name}' is {self.type.value}"
+            )
             raise ValueError(msg)
 
 
@@ -109,7 +112,7 @@ class BoardWorkflowTemplate:
         expected = list(range(len(self.columns)))
 
         if positions != expected:
-            msg = f"Column positions must be unique and sequential starting at 0. " f"Got {positions}, expected {expected}"
+            msg = f"Column positions must be unique and sequential starting at 0. Got {positions}, expected {expected}"
             raise ValueError(msg)
 
         # Validate column names are unique
@@ -155,9 +158,7 @@ class BoardWorkflowTemplate:
         if not current_config:
             return None
         next_pos = current_config.position + 1
-        return next(
-            (c.name for c in self.columns if c.position == next_pos), None
-        )
+        return next((c.name for c in self.columns if c.position == next_pos), None)
 
 
 @dataclass(frozen=True)

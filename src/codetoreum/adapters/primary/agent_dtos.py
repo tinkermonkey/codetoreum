@@ -27,12 +27,8 @@ class AgentCapabilityDTO(BaseModel):
     """Agent capability DTO."""
 
     skill: str = Field(..., description="Skill/capability name", max_length=200)
-    proficiency: float = Field(
-        ..., description="Proficiency level (0.0 to 1.0)", ge=0.0, le=1.0
-    )
-    description: str | None = Field(
-        None, description="Optional capability description", max_length=500
-    )
+    proficiency: float = Field(..., description="Proficiency level (0.0 to 1.0)", ge=0.0, le=1.0)
+    description: str | None = Field(None, description="Optional capability description", max_length=500)
 
 
 class CreateAgentRequest(BaseModel):
@@ -48,8 +44,7 @@ class CreateAgentRequest(BaseModel):
     agent_type: str = Field(
         ...,
         description=(
-            "Agent type (maker, reviewer, specialized, requirements_analyst, "
-            "architect, developer, tester, devops)"
+            "Agent type (maker, reviewer, specialized, requirements_analyst, architect, developer, tester, devops)"
         ),
     )
     role_description: str = Field(..., description="Description of agent's role")
@@ -57,21 +52,13 @@ class CreateAgentRequest(BaseModel):
     capabilities: dict[str, AgentCapabilityDTO] = Field(
         ..., description="Agent capabilities (skill -> capability mapping)"
     )
-    timeout_seconds: int = Field(
-        300, description="Execution timeout in seconds", ge=1, le=7200
-    )
+    timeout_seconds: int = Field(300, description="Execution timeout in seconds", ge=1, le=7200)
     max_retries: int = Field(3, description="Maximum retry attempts", ge=0, le=10)
     requires_docker: bool = Field(True, description="Whether agent requires Docker")
-    requires_dev_container: bool = Field(
-        False, description="Whether agent requires dev container"
-    )
+    requires_dev_container: bool = Field(False, description="Whether agent requires dev container")
     makes_code_changes: bool = Field(False, description="Whether agent makes code changes")
-    filesystem_write_allowed: bool = Field(
-        True, description="Whether agent can write to filesystem"
-    )
-    mcp_servers: list[str] | None = Field(
-        None, description="Optional list of MCP server names"
-    )
+    filesystem_write_allowed: bool = Field(True, description="Whether agent can write to filesystem")
+    mcp_servers: list[str] | None = Field(None, description="Optional list of MCP server names")
 
     @field_validator("name")
     @classmethod
@@ -115,9 +102,7 @@ class CreateAgentRequest(BaseModel):
 
     @field_validator("capabilities")
     @classmethod
-    def validate_capabilities(
-        cls, v: dict[str, AgentCapabilityDTO]
-    ) -> dict[str, AgentCapabilityDTO]:
+    def validate_capabilities(cls, v: dict[str, AgentCapabilityDTO]) -> dict[str, AgentCapabilityDTO]:
         """Validate capabilities dictionary."""
         if not v:
             msg = "At least one capability is required"
@@ -134,24 +119,12 @@ class UpdateAgentRequest(BaseModel):
     display_name: str | None = Field(None, description="Updated display name", max_length=200)
     role_description: str | None = Field(None, description="Updated role description")
     model: str | None = Field(None, description="Updated LLM model", max_length=100)
-    timeout_seconds: int | None = Field(
-        None, description="Updated timeout in seconds", ge=1, le=7200
-    )
-    max_retries: int | None = Field(
-        None, description="Updated max retries", ge=0, le=10
-    )
-    requires_docker: bool | None = Field(
-        None, description="Updated Docker requirement"
-    )
-    requires_dev_container: bool | None = Field(
-        None, description="Updated dev container requirement"
-    )
-    makes_code_changes: bool | None = Field(
-        None, description="Updated code changes flag"
-    )
-    filesystem_write_allowed: bool | None = Field(
-        None, description="Updated filesystem write permission"
-    )
+    timeout_seconds: int | None = Field(None, description="Updated timeout in seconds", ge=1, le=7200)
+    max_retries: int | None = Field(None, description="Updated max retries", ge=0, le=10)
+    requires_docker: bool | None = Field(None, description="Updated Docker requirement")
+    requires_dev_container: bool | None = Field(None, description="Updated dev container requirement")
+    makes_code_changes: bool | None = Field(None, description="Updated code changes flag")
+    filesystem_write_allowed: bool | None = Field(None, description="Updated filesystem write permission")
 
 
 class AddCapabilityRequest(BaseModel):
@@ -163,9 +136,7 @@ class AddCapabilityRequest(BaseModel):
 class UpdateCapabilityRequest(BaseModel):
     """Request to update capability proficiency."""
 
-    proficiency: float = Field(
-        ..., description="New proficiency level (0.0 to 1.0)", ge=0.0, le=1.0
-    )
+    proficiency: float = Field(..., description="New proficiency level (0.0 to 1.0)", ge=0.0, le=1.0)
 
 
 class AddMcpServerRequest(BaseModel):

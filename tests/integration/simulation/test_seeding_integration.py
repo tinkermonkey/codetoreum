@@ -38,9 +38,7 @@ class TestSeedingBootstrapIntegration:
         # Create complete scenario with proper async chaining
         result = await seeder.create_project("integration-project")
         result = await result.create_workflow("integration-workflow")
-        result = await result.create_agents([
-            {"name": "test-agent", "capabilities": ["code_generation"]}
-        ])
+        result = await result.create_agents([{"name": "test-agent", "capabilities": ["code_generation"]}])
         result = await result.create_work_items(count=5)
 
         # Verify all data is accessible through adapters
@@ -174,8 +172,7 @@ class TestSeedingBootstrapIntegration:
                 await scenario_seeder.seed_from_yaml(scenario_path)
 
                 # Verify scenario loaded successfully
-                assert len(scenario_seeder.created_items.projects) >= 1, \
-                    f"{yaml_file} should create at least 1 project"
+                assert len(scenario_seeder.created_items.projects) >= 1, f"{yaml_file} should create at least 1 project"
 
             finally:
                 await bootstrap.teardown()
@@ -196,9 +193,7 @@ class TestSeedingBootstrapIntegration:
         assert project.name == "default-project"
 
         # Verify workflow exists
-        pipeline = await seeder._config_store.get_pipeline_config(
-            project_id, "default-workflow"
-        )
+        pipeline = await seeder._config_store.get_pipeline_config(project_id, "default-workflow")
         assert pipeline.name == "default-workflow"
         assert len(pipeline.stages) == 3
 
@@ -264,10 +259,12 @@ class TestSeedingBootstrapIntegration:
         await seeder.create_project("test-project")
         project_id = seeder._current_project_id
 
-        await seeder.create_agents([
-            {"name": "agent1", "capabilities": ["code_generation"]},
-            {"name": "agent2", "capabilities": ["code_review"]},
-        ])
+        await seeder.create_agents(
+            [
+                {"name": "agent1", "capabilities": ["code_generation"]},
+                {"name": "agent2", "capabilities": ["code_review"]},
+            ]
+        )
 
         # All agents should have the same project ID
         agent1 = await seeder._config_store.get_agent_config(project_id, "agent1")
@@ -283,9 +280,7 @@ class TestSeedingBootstrapIntegration:
 
         await seeder.create_workflow("test-workflow")
 
-        pipeline = await seeder._config_store.get_pipeline_config(
-            project_id, "test-workflow"
-        )
+        pipeline = await seeder._config_store.get_pipeline_config(project_id, "test-workflow")
         assert pipeline.project_id == project_id
 
     # =========================================================================

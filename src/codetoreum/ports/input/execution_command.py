@@ -63,9 +63,7 @@ class IExecutionCommandPort(ABC):
     """
 
     @abstractmethod
-    async def terminate_execution(
-        self, command: TerminateExecutionCommand
-    ) -> ExecutionCommandResult:
+    async def terminate_execution(self, command: TerminateExecutionCommand) -> ExecutionCommandResult:
         """
         Terminate a running execution.
 
@@ -86,9 +84,7 @@ class IExecutionCommandPort(ABC):
         """
 
     @abstractmethod
-    async def pause_execution(
-        self, command: PauseExecutionCommand
-    ) -> ExecutionCommandResult:
+    async def pause_execution(self, command: PauseExecutionCommand) -> ExecutionCommandResult:
         """
         Pause a running execution.
 
@@ -104,9 +100,7 @@ class IExecutionCommandPort(ABC):
         """
 
     @abstractmethod
-    async def resume_execution(
-        self, command: ResumeExecutionCommand
-    ) -> ExecutionCommandResult:
+    async def resume_execution(self, command: ResumeExecutionCommand) -> ExecutionCommandResult:
         """
         Resume a paused execution.
 

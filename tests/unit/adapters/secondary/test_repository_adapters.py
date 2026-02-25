@@ -33,12 +33,7 @@ class TestApiKeyRepository:
         user_id = uuid4()
         key_id = uuid4()
 
-        api_key = APIKey(
-            id=key_id,
-            user_id=user_id,
-            name="Test Key",
-            key="hashed-secret-123"
-        )
+        api_key = APIKey(id=key_id, user_id=user_id, name="Test Key", key="hashed-secret-123")
 
         await repo.save(api_key)
         retrieved = await repo.get(key_id)
@@ -184,7 +179,7 @@ class TestUserRepository:
             id=user_id,
             username="testuser",
             email="test@example.com",
-            hashed_password="hashed-password"
+            hashed_password="hashed-password",
         )
 
         await repo.save(user)
@@ -466,7 +461,12 @@ class TestRepositoryIntegration:
         # Create many users
         user_ids = [uuid4() for _ in range(100)]
         for i, user_id in enumerate(user_ids):
-            user = User(id=user_id, username=f"user{i}", email=f"user{i}@example.com", hashed_password="hash")
+            user = User(
+                id=user_id,
+                username=f"user{i}",
+                email=f"user{i}@example.com",
+                hashed_password="hash",
+            )
             await repo.save(user)
 
         # Verify all created

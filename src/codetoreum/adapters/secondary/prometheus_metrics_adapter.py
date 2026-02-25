@@ -15,6 +15,7 @@ from typing import Any
 
 try:
     from prometheus_client import Counter, Gauge, Histogram, Summary
+
     PROMETHEUS_AVAILABLE = True
 except ImportError:
     PROMETHEUS_AVAILABLE = False
@@ -155,25 +156,27 @@ class PrometheusMetricsAdapter(IMetrics):
         )
 
         # Register metrics for later retrieval
-        self._metrics_registry.update({
-            f"{prefix}_started_total": self._repair_cycles_started,
-            f"{prefix}_completed_total": self._repair_cycles_completed,
-            f"{prefix}_successful_total": self._repair_cycles_successful,
-            f"{prefix}_failed_total": self._repair_cycles_failed,
-            f"{prefix}_fast_failed_total": self._repair_cycles_fast_failed,
-            f"{prefix}_test_executions_total": self._test_executions_total,
-            f"{prefix}_test_failures_total": self._test_failures_total,
-            f"{prefix}_files_fixed_total": self._files_fixed_total,
-            f"{prefix}_warnings_reviewed_total": self._warnings_reviewed_total,
-            f"{prefix}_active_count": self._active_cycles,
-            f"{prefix}_max_iterations_reached_total": self._max_iterations_reached,
-            f"{prefix}_duration_seconds": self._cycle_duration_histogram,
-            f"{prefix}_test_execution_duration_seconds": self._test_execution_duration_histogram,
-            f"{prefix}_file_fix_duration_seconds": self._file_fix_duration_histogram,
-            f"{prefix}_iterations_count": self._iterations_histogram,
-            f"{prefix}_agent_calls_per_cycle": self._agent_calls_summary,
-            f"{prefix}_files_fixed_per_cycle": self._files_fixed_per_cycle_summary,
-        })
+        self._metrics_registry.update(
+            {
+                f"{prefix}_started_total": self._repair_cycles_started,
+                f"{prefix}_completed_total": self._repair_cycles_completed,
+                f"{prefix}_successful_total": self._repair_cycles_successful,
+                f"{prefix}_failed_total": self._repair_cycles_failed,
+                f"{prefix}_fast_failed_total": self._repair_cycles_fast_failed,
+                f"{prefix}_test_executions_total": self._test_executions_total,
+                f"{prefix}_test_failures_total": self._test_failures_total,
+                f"{prefix}_files_fixed_total": self._files_fixed_total,
+                f"{prefix}_warnings_reviewed_total": self._warnings_reviewed_total,
+                f"{prefix}_active_count": self._active_cycles,
+                f"{prefix}_max_iterations_reached_total": self._max_iterations_reached,
+                f"{prefix}_duration_seconds": self._cycle_duration_histogram,
+                f"{prefix}_test_execution_duration_seconds": self._test_execution_duration_histogram,
+                f"{prefix}_file_fix_duration_seconds": self._file_fix_duration_histogram,
+                f"{prefix}_iterations_count": self._iterations_histogram,
+                f"{prefix}_agent_calls_per_cycle": self._agent_calls_summary,
+                f"{prefix}_files_fixed_per_cycle": self._files_fixed_per_cycle_summary,
+            }
+        )
 
         logger.info("Prometheus metrics adapter initialized with %d metrics", len(self._metrics_registry))
 
@@ -204,8 +207,9 @@ class PrometheusMetricsAdapter(IMetrics):
             logger.error(
                 f"Error incrementing counter {name}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_METRICS_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_METRICS_ERROR},
             )
+
     async def set_gauge(
         self,
         name: str,
@@ -233,8 +237,9 @@ class PrometheusMetricsAdapter(IMetrics):
             logger.error(
                 f"Error setting gauge {name}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_METRICS_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_METRICS_ERROR},
             )
+
     async def record_histogram(
         self,
         name: str,
@@ -262,8 +267,9 @@ class PrometheusMetricsAdapter(IMetrics):
             logger.error(
                 f"Error recording histogram {name}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_METRICS_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_METRICS_ERROR},
             )
+
     async def record_summary(
         self,
         name: str,
@@ -291,8 +297,9 @@ class PrometheusMetricsAdapter(IMetrics):
             logger.error(
                 f"Error recording summary {name}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_METRICS_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_METRICS_ERROR},
             )
+
     async def start_timer(self, name: str) -> str:
         """
         Start a timer.
@@ -399,8 +406,7 @@ class PrometheusMetricsAdapter(IMetrics):
         # Prometheus client library doesn't provide query capabilities
         # Use Prometheus HTTP API for time-series queries
         logger.warning(
-            "query_metrics not implemented for Prometheus adapter. "
-            "Use Prometheus HTTP API /api/v1/query_range instead."
+            "query_metrics not implemented for Prometheus adapter. Use Prometheus HTTP API /api/v1/query_range instead."
         )
         return []
 
@@ -458,8 +464,7 @@ class PrometheusMetricsAdapter(IMetrics):
             labels: Optional labels to delete specific series
         """
         logger.warning(
-            "delete_metric not supported for Prometheus adapter. "
-            "Metrics are managed by Prometheus retention policies."
+            "delete_metric not supported for Prometheus adapter. Metrics are managed by Prometheus retention policies."
         )
 
     async def get_statistics(
@@ -509,8 +514,9 @@ class PrometheusMetricsAdapter(IMetrics):
                 logger.error(
                     f"Error recording batch metric: {e}",
                     exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_METRICS_ERROR}
+                    extra={"error_id": ErrorRegistry.ERR_METRICS_ERROR},
                 )
+
     async def flush(self) -> None:
         """Flush any buffered metrics."""
         # Prometheus client handles flushing automatically
@@ -530,6 +536,6 @@ class PrometheusMetricsAdapter(IMetrics):
             logger.error(
                 f"Health check failed: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_HEALTH_CHECK_FAILED}
+                extra={"error_id": ErrorRegistry.ERR_HEALTH_CHECK_FAILED},
             )
             return False

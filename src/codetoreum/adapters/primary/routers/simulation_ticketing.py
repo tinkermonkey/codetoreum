@@ -204,9 +204,7 @@ def create_simulation_ticketing_router(
         if request.board_id and request.column:
             try:
                 board_adapter.current_project = request.project_id
-                board_adapter.add_item_to_column(
-                    request.board_id, request.column, work_item.id
-                )
+                board_adapter.add_item_to_column(request.board_id, request.column, work_item.id)
                 board_position = {
                     "board_id": request.board_id,
                     "column": request.column,
@@ -302,9 +300,7 @@ def create_simulation_ticketing_router(
         board_adapter.current_project = item.project_id
 
         try:
-            result = await board_adapter.move_item_to_column(
-                issue_id, request.target_column, MovedByType.HUMAN
-            )
+            result = await board_adapter.move_item_to_column(issue_id, request.target_column, MovedByType.HUMAN)
         except ValueError as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

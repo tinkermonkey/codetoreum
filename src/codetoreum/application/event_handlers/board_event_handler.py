@@ -123,9 +123,7 @@ class BoardColumnEventHandler(EventHandler):
             Exception: If handling fails (logged but not re-raised)
         """
         if not isinstance(event, WorkItemColumnChanged):
-            logger.warning(
-                f"BoardColumnEventHandler received unexpected event type: {event.event_type}"
-            )
+            logger.warning(f"BoardColumnEventHandler received unexpected event type: {event.event_type}")
             return
 
         try:
@@ -159,40 +157,29 @@ class BoardColumnEventHandler(EventHandler):
         from_column: str = event.payload.get("from_column") or ""
         to_column: str = event.payload.get("to_column") or ""
 
-        logger.info(
-            f"Processing column change for {work_item_id}: "
-            f"{from_column} -> {to_column}"
-        )
+        logger.info(f"Processing column change for {work_item_id}: {from_column} -> {to_column}")
 
         # Get workflow configuration for this board
         config = await self.workflow_config.get_board_workflow_template(board_id)
 
         if not config:
-            logger.warning(
-                f"No workflow config found for board {board_id}, skipping automation"
-            )
+            logger.warning(f"No workflow config found for board {board_id}, skipping automation")
             return
 
         column_config = config.get_column_config(to_column)
 
         if not column_config:
-            logger.warning(
-                f"Unknown column '{to_column}' in board {board_id}, skipping automation"
-            )
+            logger.warning(f"Unknown column '{to_column}' in board {board_id}, skipping automation")
             return
 
         # Check if this is a pipeline trigger column (requires lock)
         if column_config.is_pipeline_trigger:
-            await self._handle_pipeline_trigger(
-                work_item_id, project_id, board_id, column_config, config
-            )
+            await self._handle_pipeline_trigger(work_item_id, project_id, board_id, column_config, config)
             return
 
         # Check if this is an exit column (releases lock)
         if column_config.is_exit_column:
-            await self._handle_exit_column(
-                work_item_id, project_id, board_id, column_config, config
-            )
+            await self._handle_exit_column(work_item_id, project_id, board_id, column_config, config)
 
         # Trigger agent if column has one and is automated
         if column_config.agent_id and column_config.type == ColumnType.AUTOMATED:
@@ -226,7 +213,11 @@ class BoardColumnEventHandler(EventHandler):
             logger.error(
                 f"Cannot acquire lock for {work_item_id}: work item not found on board",
                 exc_info=True,
-                extra={"error_id": "ERR_BOARD_EVENT_ITEM_NOT_FOUND", "work_item_id": work_item_id, "board_id": board_id},
+                extra={
+                    "error_id": "ERR_BOARD_EVENT_ITEM_NOT_FOUND",
+                    "work_item_id": work_item_id,
+                    "board_id": board_id,
+                },
             )
             # TODO: Emit WorkItemNotFoundEvent
             return
@@ -234,7 +225,11 @@ class BoardColumnEventHandler(EventHandler):
             logger.error(
                 f"Board service error while getting position for {work_item_id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_BOARD_EVENT_BOARD_SERVICE_ERROR", "work_item_id": work_item_id, "board_id": board_id},
+                extra={
+                    "error_id": "ERR_BOARD_EVENT_BOARD_SERVICE_ERROR",
+                    "work_item_id": work_item_id,
+                    "board_id": board_id,
+                },
             )
             # Could retry or emit error event
             return
@@ -278,9 +273,7 @@ class BoardColumnEventHandler(EventHandler):
             logger.info(f"Lock acquired for {work_item_id}")
 
             # Start workflow run lifecycle tracking
-            await self._start_workflow_run(
-                work_item_id, project_id, board_id, column_config, workflow_config
-            )
+            await self._start_workflow_run(work_item_id, project_id, board_id, column_config, workflow_config)
 
             # Trigger agent if column has one
             if column_config.agent_id:
@@ -336,23 +329,28 @@ class BoardColumnEventHandler(EventHandler):
             logger.warning(
                 f"Cannot release lock for {work_item_id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_BOARD_EVENT_LOCK_NOT_HELD", "work_item_id": work_item_id, "board_id": board_id},
+                extra={
+                    "error_id": "ERR_BOARD_EVENT_LOCK_NOT_HELD",
+                    "work_item_id": work_item_id,
+                    "board_id": board_id,
+                },
             )
             return
         except Exception as e:
             logger.critical(
                 f"Lock service failed to release lock for {work_item_id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_BOARD_EVENT_LOCK_RELEASE_CRITICAL_FAILURE", "work_item_id": work_item_id, "board_id": board_id},
+                extra={
+                    "error_id": "ERR_BOARD_EVENT_LOCK_RELEASE_CRITICAL_FAILURE",
+                    "work_item_id": work_item_id,
+                    "board_id": board_id,
+                },
             )
             # CRITICAL: Lock may be stuck
             # TODO: Emit LockStuckEvent for manual intervention
             return
 
-        logger.info(
-            f"Lock released for {work_item_id}, "
-            f"next work item: {release_result.next_work_item_id}"
-        )
+        logger.info(f"Lock released for {work_item_id}, next work item: {release_result.next_work_item_id}")
 
         # Complete workflow run lifecycle tracking
         await self._complete_workflow_run(work_item_id, column_config.name)
@@ -360,32 +358,30 @@ class BoardColumnEventHandler(EventHandler):
         # Trigger agent for next queued item if one exists
         if release_result.next_work_item_id:
             try:
-                next_position = await self.board_service.get_item_position(
-                    release_result.next_work_item_id
-                )
-                next_column_config = workflow_config.get_column_config(
-                    next_position.column_name
-                )
+                next_position = await self.board_service.get_item_position(release_result.next_work_item_id)
+                next_column_config = workflow_config.get_column_config(next_position.column_name)
 
                 if next_column_config and next_column_config.agent_id:
-                    logger.info(
-                        f"Triggering agent for next queued item: {release_result.next_work_item_id}"
-                    )
-                    await self._trigger_agent(
-                        release_result.next_work_item_id, next_column_config
-                    )
+                    logger.info(f"Triggering agent for next queued item: {release_result.next_work_item_id}")
+                    await self._trigger_agent(release_result.next_work_item_id, next_column_config)
             except ResourceNotFoundError as e:
                 logger.warning(
                     f"Next queued item {release_result.next_work_item_id} not found: {e}",
                     exc_info=True,
-                    extra={"error_id": "ERR_BOARD_EVENT_NEXT_ITEM_NOT_FOUND", "work_item_id": release_result.next_work_item_id},
+                    extra={
+                        "error_id": "ERR_BOARD_EVENT_NEXT_ITEM_NOT_FOUND",
+                        "work_item_id": release_result.next_work_item_id,
+                    },
                 )
                 # Item was deleted - OK, lock is released
             except Exception as e:
                 logger.error(
                     f"Failed to trigger next item {release_result.next_work_item_id}: {e}",
                     exc_info=True,
-                    extra={"error_id": "ERR_BOARD_EVENT_NEXT_AGENT_TRIGGER_FAILURE", "work_item_id": release_result.next_work_item_id},
+                    extra={
+                        "error_id": "ERR_BOARD_EVENT_NEXT_AGENT_TRIGGER_FAILURE",
+                        "work_item_id": release_result.next_work_item_id,
+                    },
                 )
                 # Next item holds lock but agent never triggered - PROBLEM
 
@@ -501,10 +497,7 @@ class BoardColumnEventHandler(EventHandler):
         )
         try:
             await self.event_store.append(workflow_run_id, [event])
-            logger.debug(
-                f"Workflow run {workflow_run_id} completed for {work_item_id} "
-                f"({duration:.1f}s)"
-            )
+            logger.debug(f"Workflow run {workflow_run_id} completed for {work_item_id} ({duration:.1f}s)")
         except Exception as e:
             logger.error(
                 f"Failed to persist workflow run completion for {work_item_id}: {e}",
@@ -536,9 +529,7 @@ class BoardColumnEventHandler(EventHandler):
         )
         try:
             await self.event_store.append(workflow_run_id, [event])
-            logger.debug(
-                f"Workflow run {workflow_run_id} failed for {work_item_id}: {reason}"
-            )
+            logger.debug(f"Workflow run {workflow_run_id} failed for {work_item_id}: {reason}")
         except Exception as e:
             logger.error(
                 f"Failed to persist workflow run failure for {work_item_id}: {e}",
@@ -546,9 +537,7 @@ class BoardColumnEventHandler(EventHandler):
                 extra={"error_id": "ERR_BOARD_EVENT_WORKFLOW_RUN_FAIL_FAILURE"},
             )
 
-    async def _trigger_agent(
-        self, work_item_id: str, column_config: ColumnTemplate
-    ) -> None:
+    async def _trigger_agent(self, work_item_id: str, column_config: ColumnTemplate) -> None:
         """
         Trigger agent execution for a work item.
 
@@ -564,19 +553,18 @@ class BoardColumnEventHandler(EventHandler):
             logger.warning(f"Column {column_config.name} has no agent assigned")
             return
 
-        logger.info(
-            f"Triggering agent '{column_config.agent_id}' for {work_item_id}"
-        )
+        logger.info(f"Triggering agent '{column_config.agent_id}' for {work_item_id}")
 
         try:
-            await self.agent_executor.execute(
-                work_item_id=work_item_id, agent_id=column_config.agent_id
-            )
+            await self.agent_executor.execute(work_item_id=work_item_id, agent_id=column_config.agent_id)
         except Exception as e:
             logger.error(
                 f"Agent execution failed for {work_item_id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_BOARD_EVENT_AGENT_EXECUTION_FAILURE", "work_item_id": work_item_id},
+                extra={
+                    "error_id": "ERR_BOARD_EVENT_AGENT_EXECUTION_FAILURE",
+                    "work_item_id": work_item_id,
+                },
             )
 
     async def handle_agent_completion(
@@ -600,58 +588,44 @@ class BoardColumnEventHandler(EventHandler):
             Exception: Logs error but doesn't re-raise
         """
         if not success:
-            logger.warning(
-                f"Agent failed for {work_item_id}, skipping auto-progression"
-            )
+            logger.warning(f"Agent failed for {work_item_id}, skipping auto-progression")
             await self._fail_workflow_run(work_item_id, "Agent execution failed")
             return
 
         try:
             config = await self.workflow_config.get_board_workflow_template(board_id)
             if not config:
-                logger.warning(
-                    f"No workflow config for board {board_id}, skipping auto-progression"
-                )
+                logger.warning(f"No workflow config for board {board_id}, skipping auto-progression")
                 return
 
             current_position = await self.board_service.get_item_position(work_item_id)
             current_column_config = config.get_column_config(current_position.column_name)
 
             if not current_column_config:
-                logger.warning(
-                    f"Current column '{current_position.column_name}' not found in config"
-                )
+                logger.warning(f"Current column '{current_position.column_name}' not found in config")
                 return
 
             if not current_column_config.auto_progress_on_completion:
-                logger.info(
-                    f"Auto-progression disabled for {current_position.column_name}"
-                )
+                logger.info(f"Auto-progression disabled for {current_position.column_name}")
                 return
 
             next_column_name = config.get_next_column(current_position.column_name)
             if not next_column_name:
-                logger.info(
-                    f"No next column for {current_position.column_name}, workflow complete"
-                )
+                logger.info(f"No next column for {current_position.column_name}, workflow complete")
                 return
 
-            logger.info(
-                f"Auto-progressing {work_item_id} from {current_position.column_name} "
-                f"to {next_column_name}"
-            )
+            logger.info(f"Auto-progressing {work_item_id} from {current_position.column_name} to {next_column_name}")
 
-            await self._advance_workflow_stage(
-                work_item_id, current_position.column_name, next_column_name
-            )
+            await self._advance_workflow_stage(work_item_id, current_position.column_name, next_column_name)
 
-            await self.board_service.move_item_to_column(
-                work_item_id, next_column_name, MovedByType.ORCHESTRATOR
-            )
+            await self.board_service.move_item_to_column(work_item_id, next_column_name, MovedByType.ORCHESTRATOR)
 
         except Exception as e:
             logger.error(
                 f"Error during auto-progression for {work_item_id}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_BOARD_EVENT_AUTO_PROGRESSION_FAILURE", "work_item_id": work_item_id},
+                extra={
+                    "error_id": "ERR_BOARD_EVENT_AUTO_PROGRESSION_FAILURE",
+                    "work_item_id": work_item_id,
+                },
             )

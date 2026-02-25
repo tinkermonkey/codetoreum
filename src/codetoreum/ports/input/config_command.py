@@ -13,6 +13,7 @@ from typing import Any
 @dataclass
 class UpdateProjectConfigCommand:
     """Command to update project configuration"""
+
     project_name: str
     updates: dict[str, Any]  # Partial updates
     user_id: str
@@ -22,6 +23,7 @@ class UpdateProjectConfigCommand:
 @dataclass
 class UpdateAgentConfigCommand:
     """Command to update agent configuration"""
+
     project_name: str
     agent_name: str
     updates: dict[str, Any]
@@ -32,6 +34,7 @@ class UpdateAgentConfigCommand:
 @dataclass
 class UpdatePipelineConfigCommand:
     """Command to update pipeline configuration"""
+
     project_name: str
     pipeline_name: str
     updates: dict[str, Any]
@@ -42,6 +45,7 @@ class UpdatePipelineConfigCommand:
 @dataclass
 class AddEnvironmentVariableCommand:
     """Command to add/update project environment variable"""
+
     project_name: str
     variable_name: str
     variable_value: str
@@ -53,6 +57,7 @@ class AddEnvironmentVariableCommand:
 @dataclass
 class RemoveEnvironmentVariableCommand:
     """Command to remove project environment variable"""
+
     project_name: str
     variable_name: str
     user_id: str
@@ -61,6 +66,7 @@ class RemoveEnvironmentVariableCommand:
 @dataclass
 class MountCommandCommand:
     """Command to mount a command into project agent"""
+
     project_name: str
     command_name: str
     command_path: str  # Path to command file
@@ -71,6 +77,7 @@ class MountCommandCommand:
 @dataclass
 class UnmountCommandCommand:
     """Command to unmount a command from project agent"""
+
     project_name: str
     command_name: str
     user_id: str
@@ -79,6 +86,7 @@ class UnmountCommandCommand:
 @dataclass
 class MountSubAgentCommand:
     """Command to mount a sub-agent into project agent"""
+
     project_name: str
     subagent_name: str
     subagent_config: dict[str, Any]
@@ -89,6 +97,7 @@ class MountSubAgentCommand:
 @dataclass
 class UnmountSubAgentCommand:
     """Command to unmount a sub-agent from project agent"""
+
     project_name: str
     subagent_name: str
     user_id: str
@@ -97,6 +106,7 @@ class UnmountSubAgentCommand:
 @dataclass
 class ConfigurationCommandResult:
     """Result of configuration command"""
+
     success: bool
     config_version: int  # New version number after update
     message: str
@@ -121,10 +131,7 @@ class IConfigurationCommandPort(ABC):
     """
 
     @abstractmethod
-    async def update_project_config(
-        self,
-        command: UpdateProjectConfigCommand
-    ) -> ConfigurationCommandResult:
+    async def update_project_config(self, command: UpdateProjectConfigCommand) -> ConfigurationCommandResult:
         """
         Updates project configuration.
 
@@ -141,10 +148,7 @@ class IConfigurationCommandPort(ABC):
         """
 
     @abstractmethod
-    async def update_agent_config(
-        self,
-        command: UpdateAgentConfigCommand
-    ) -> ConfigurationCommandResult:
+    async def update_agent_config(self, command: UpdateAgentConfigCommand) -> ConfigurationCommandResult:
         """
         Updates agent configuration for a project.
 
@@ -162,10 +166,7 @@ class IConfigurationCommandPort(ABC):
         """
 
     @abstractmethod
-    async def update_pipeline_config(
-        self,
-        command: UpdatePipelineConfigCommand
-    ) -> ConfigurationCommandResult:
+    async def update_pipeline_config(self, command: UpdatePipelineConfigCommand) -> ConfigurationCommandResult:
         """
         Updates pipeline configuration for a project.
 
@@ -183,10 +184,7 @@ class IConfigurationCommandPort(ABC):
         """
 
     @abstractmethod
-    async def add_environment_variable(
-        self,
-        command: AddEnvironmentVariableCommand
-    ) -> ConfigurationCommandResult:
+    async def add_environment_variable(self, command: AddEnvironmentVariableCommand) -> ConfigurationCommandResult:
         """
         Adds or updates environment variable for project.
 
@@ -207,8 +205,7 @@ class IConfigurationCommandPort(ABC):
 
     @abstractmethod
     async def remove_environment_variable(
-        self,
-        command: RemoveEnvironmentVariableCommand
+        self, command: RemoveEnvironmentVariableCommand
     ) -> ConfigurationCommandResult:
         """
         Removes environment variable from project.
@@ -226,10 +223,7 @@ class IConfigurationCommandPort(ABC):
         """
 
     @abstractmethod
-    async def mount_command(
-        self,
-        command: MountCommandCommand
-    ) -> ConfigurationCommandResult:
+    async def mount_command(self, command: MountCommandCommand) -> ConfigurationCommandResult:
         """
         Mounts a command into project agent.
 
@@ -250,10 +244,7 @@ class IConfigurationCommandPort(ABC):
         """
 
     @abstractmethod
-    async def unmount_command(
-        self,
-        command: UnmountCommandCommand
-    ) -> ConfigurationCommandResult:
+    async def unmount_command(self, command: UnmountCommandCommand) -> ConfigurationCommandResult:
         """
         Unmounts a command from project agent.
 
@@ -270,10 +261,7 @@ class IConfigurationCommandPort(ABC):
         """
 
     @abstractmethod
-    async def mount_subagent(
-        self,
-        command: MountSubAgentCommand
-    ) -> ConfigurationCommandResult:
+    async def mount_subagent(self, command: MountSubAgentCommand) -> ConfigurationCommandResult:
         """
         Mounts a sub-agent into project agent.
 
@@ -293,10 +281,7 @@ class IConfigurationCommandPort(ABC):
         """
 
     @abstractmethod
-    async def unmount_subagent(
-        self,
-        command: UnmountSubAgentCommand
-    ) -> ConfigurationCommandResult:
+    async def unmount_subagent(self, command: UnmountSubAgentCommand) -> ConfigurationCommandResult:
         """
         Unmounts a sub-agent from project agent.
 

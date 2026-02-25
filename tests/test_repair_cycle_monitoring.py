@@ -460,9 +460,7 @@ class TestPerformanceThresholdMonitor:
 
     def test_threshold_violation_detection(self):
         """Test threshold violation detection."""
-        monitor = PerformanceThresholdMonitor(
-            thresholds={"test_op": {"duration_seconds": 10.0}}
-        )
+        monitor = PerformanceThresholdMonitor(thresholds={"test_op": {"duration_seconds": 10.0}})
 
         profile = ProfileData(
             operation="test_op",
@@ -476,9 +474,7 @@ class TestPerformanceThresholdMonitor:
 
     def test_no_violations(self):
         """Test when no violations occur."""
-        monitor = PerformanceThresholdMonitor(
-            thresholds={"test_op": {"duration_seconds": 100.0}}
-        )
+        monitor = PerformanceThresholdMonitor(thresholds={"test_op": {"duration_seconds": 100.0}})
 
         profile = ProfileData(
             operation="test_op",
@@ -491,9 +487,7 @@ class TestPerformanceThresholdMonitor:
 
     def test_violations_history(self):
         """Test violations history tracking."""
-        monitor = PerformanceThresholdMonitor(
-            thresholds={"test_op": {"duration_seconds": 10.0}}
-        )
+        monitor = PerformanceThresholdMonitor(thresholds={"test_op": {"duration_seconds": 10.0}})
 
         profile = ProfileData(
             operation="test_op",

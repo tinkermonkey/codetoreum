@@ -341,6 +341,7 @@ class TestSimulationEngineCallbackScheduling:
 
     def test_schedule_callback_with_async_function(self, simulation_engine):
         """Test schedule_callback() with async function."""
+
         async def async_callback():
             pass
 

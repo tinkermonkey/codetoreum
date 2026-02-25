@@ -159,12 +159,12 @@ class RepairTestResult:
 
         # Consistency check: failed count must match failures list length
         if len(self.failures) != self.failed:
-            msg = f"failed count mismatch: {len(self.failures)} failures in list " f"but failed={self.failed}"
+            msg = f"failed count mismatch: {len(self.failures)} failures in list but failed={self.failed}"
             raise ValueError(msg)
 
         # Consistency check: warnings count must match warning_list length
         if len(self.warning_list) != self.warnings:
-            msg = f"warnings count mismatch: {len(self.warning_list)} warnings in list " f"but warnings={self.warnings}"
+            msg = f"warnings count mismatch: {len(self.warning_list)} warnings in list but warnings={self.warnings}"
             raise ValueError(msg)
 
 
@@ -278,10 +278,7 @@ class RepairCycleResult:
         # Empty test_results with overall_success=True is suspicious but may be valid
         # (e.g., no tests configured). Log warning but don't raise.
         elif self.overall_success:
-            logger.warning(
-                "overall_success=True but test_results is empty",
-                extra={"stage": self.stage}
-            )
+            logger.warning("overall_success=True but test_results is empty", extra={"stage": self.stage})
 
 
 @dataclass(frozen=True)

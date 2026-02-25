@@ -44,9 +44,7 @@ class MockConfigServiceAdapter:
 
     async def get_pipeline_config(self, project_id: str, pipeline_name: str):
         """Get pipeline configuration."""
-        return await self._config_service.get_pipeline_config(
-            project_id, pipeline_name
-        )
+        return await self._config_service.get_pipeline_config(project_id, pipeline_name)
 
     async def save_pipeline_config(self, config) -> None:
         """Save pipeline configuration."""

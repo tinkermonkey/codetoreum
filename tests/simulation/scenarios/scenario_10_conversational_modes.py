@@ -93,7 +93,7 @@ def create_identity_service() -> ConfigurableIdentityService:
     # Configure bot detection
     config = BotIdentityConfig(
         bot_usernames=["dependabot", "bot-analyst", "bot-reviewer", "codetoreum-bot"],
-        bot_patterns=[re.compile("^bot-.*")]
+        bot_patterns=[re.compile("^bot-.*")],
     )
     identity_service.configure(config)
 
@@ -176,16 +176,11 @@ async def scenario_a_normal_event_flow(runner: SimulationRunner):
     runner.assert_true(
         discussion_adapter.is_monitoring(work_item_id),
         "scenario_a_monitoring_started",
-        "Discussion adapter should be monitoring work item"
+        "Discussion adapter should be monitoring work item",
     )
 
     # Human posts first comment
-    discussion_adapter.simulate_comment(
-        work_item_id,
-        "alice",
-        "What are the requirements?",
-        is_initial=True
-    )
+    discussion_adapter.simulate_comment(work_item_id, "alice", "What are the requirements?", is_initial=True)
 
     await runner.advance_time(timedelta(milliseconds=100))
 
@@ -193,28 +188,18 @@ async def scenario_a_normal_event_flow(runner: SimulationRunner):
         len(captured_events),
         1,
         "scenario_a_first_event_captured",
-        "First comment should trigger event"
+        "First comment should trigger event",
     )
 
     # Bot posts response
     response1 = await discussion_adapter.add_comment(
-        work_item_id,
-        "Based on your feedback, here are the refined requirements: ..."
+        work_item_id, "Based on your feedback, here are the refined requirements: ..."
     )
 
-    runner.assert_true(
-        response1.is_bot,
-        "scenario_a_response_is_bot",
-        "Response should be from bot"
-    )
+    runner.assert_true(response1.is_bot, "scenario_a_response_is_bot", "Response should be from bot")
 
     # Human replies (threaded)
-    discussion_adapter.simulate_comment(
-        work_item_id,
-        "alice",
-        "Thanks, what about edge cases?",
-        parent_id=response1.id
-    )
+    discussion_adapter.simulate_comment(work_item_id, "alice", "Thanks, what about edge cases?", parent_id=response1.id)
 
     await runner.advance_time(timedelta(milliseconds=100))
 
@@ -222,7 +207,7 @@ async def scenario_a_normal_event_flow(runner: SimulationRunner):
         len(captured_events),
         2,
         "scenario_a_threaded_event_captured",
-        "Threaded comment should trigger event"
+        "Threaded comment should trigger event",
     )
 
     # Bot responds to threaded comment
@@ -231,13 +216,13 @@ async def scenario_a_normal_event_flow(runner: SimulationRunner):
     response2 = await discussion_adapter.add_comment(
         work_item_id,
         "Great question about edge cases. We should handle: ...",
-        parent_id=parent_comment.id
+        parent_id=parent_comment.id,
     )
 
     runner.assert_true(
         response2.parent_id is not None,
         "scenario_a_response_threaded",
-        "Response should be threaded"
+        "Response should be threaded",
     )
 
     # Stop monitoring (simulates column change and session termination)
@@ -246,7 +231,7 @@ async def scenario_a_normal_event_flow(runner: SimulationRunner):
     runner.assert_false(
         discussion_adapter.is_monitoring(work_item_id),
         "scenario_a_monitoring_stopped",
-        "Monitoring should be stopped"
+        "Monitoring should be stopped",
     )
 
 
@@ -291,7 +276,7 @@ async def scenario_b_restart_recovery(runner: SimulationRunner):
         checkpoint_count,
         3,
         "scenario_b_checkpoint_count",
-        "3 comments should be processed before restart"
+        "3 comments should be processed before restart",
     )
 
     # Simulate restart: reset adapter
@@ -316,7 +301,7 @@ async def scenario_b_restart_recovery(runner: SimulationRunner):
         len(captured_events),
         2,
         "scenario_b_new_comments_processed",
-        "Only 2 new comments should trigger events"
+        "Only 2 new comments should trigger events",
     )
 
 
@@ -349,7 +334,7 @@ async def edge_case_c_event_ordering(runner: SimulationRunner):
         discussion_adapter.simulate_comment(
             work_item_id,
             "alice",
-            f"Rapid comment {i+1}",
+            f"Rapid comment {i + 1}",
         )
 
     await runner.advance_time(timedelta(milliseconds=200))
@@ -358,7 +343,7 @@ async def edge_case_c_event_ordering(runner: SimulationRunner):
         len(captured_events),
         5,
         "edge_case_c_all_comments_processed",
-        "All 5 rapid comments should be processed"
+        "All 5 rapid comments should be processed",
     )
 
     # Verify order via comment count increase
@@ -366,7 +351,7 @@ async def edge_case_c_event_ordering(runner: SimulationRunner):
         len(discussion_adapter.get_comments_by_author(work_item_id, "alice")),
         5,
         "edge_case_c_order_preserved",
-        "Comments should be processed in order"
+        "Comments should be processed in order",
     )
 
 
@@ -421,18 +406,15 @@ async def edge_case_d_bot_comment_filtering(runner: SimulationRunner):
         len(captured_events),
         2,
         "edge_case_d_only_human_comments",
-        "Only 2 human comments should trigger events"
+        "Only 2 human comments should trigger events",
     )
 
     # Verify bot comment was not included in events
-    event_authors = [
-        e.comment.author for e in captured_events
-        if e.comment is not None
-    ]
+    event_authors = [e.comment.author for e in captured_events if e.comment is not None]
     runner.assert_true(
         "bot-reviewer" not in event_authors,
         "edge_case_d_bot_filtered",
-        "Bot comment should not trigger events"
+        "Bot comment should not trigger events",
     )
 
 
@@ -476,10 +458,7 @@ async def edge_case_e_threaded_context(runner: SimulationRunner):
 
     # Child comment (threaded)
     discussion_adapter.simulate_comment(
-        work_item_id,
-        "bob",
-        "Should we use REST or GraphQL?",
-        parent_id=parent_comment_id
+        work_item_id, "bob", "Should we use REST or GraphQL?", parent_id=parent_comment_id
     )
 
     await runner.advance_time(timedelta(milliseconds=50))
@@ -488,7 +467,7 @@ async def edge_case_e_threaded_context(runner: SimulationRunner):
         len(captured_events),
         2,
         "edge_case_e_threaded_comments_processed",
-        "Both parent and child should be processed"
+        "Both parent and child should be processed",
     )
 
     # Verify threaded relationship
@@ -499,7 +478,7 @@ async def edge_case_e_threaded_context(runner: SimulationRunner):
         child_comment.parent_id,
         parent_comment_id,
         "edge_case_e_parent_id_preserved",
-        "Child parent_id should be preserved"
+        "Child parent_id should be preserved",
     )
 
 
@@ -541,7 +520,7 @@ async def edge_case_f_column_change_during_processing(runner: SimulationRunner):
         len(captured_events),
         1,
         "edge_case_f_initial_comment",
-        "Initial comment should be processed"
+        "Initial comment should be processed",
     )
 
     # Stop monitoring (simulates column change)
@@ -559,14 +538,14 @@ async def edge_case_f_column_change_during_processing(runner: SimulationRunner):
     runner.assert_false(
         discussion_adapter.is_monitoring(work_item_id),
         "edge_case_f_monitoring_stopped",
-        "Monitoring should be stopped"
+        "Monitoring should be stopped",
     )
 
     runner.assert_equal(
         len(captured_events),
         1,
         "edge_case_f_post_termination_ignored",
-        "Post-termination comments should not trigger events"
+        "Post-termination comments should not trigger events",
     )
 
 
@@ -594,7 +573,7 @@ async def edge_case_g_concurrent_work_items(runner: SimulationRunner):
             discussion_adapter.simulate_comment(
                 work_item_id,
                 f"user-{i}",
-                f"Comment {j+1} for {work_item_id}",
+                f"Comment {j + 1} for {work_item_id}",
             )
 
     await runner.advance_time(timedelta(milliseconds=500))
@@ -606,7 +585,7 @@ async def edge_case_g_concurrent_work_items(runner: SimulationRunner):
             len(comments),
             2,
             f"edge_case_g_{work_item_id}_isolation",
-            f"Work item {work_item_id} should have only its 2 comments"
+            f"Work item {work_item_id} should have only its 2 comments",
         )
 
 
@@ -631,14 +610,10 @@ async def edge_case_h_initial_agent_output(runner: SimulationRunner):
     # Simulate agent posting initial output
     initial_output = await discussion_adapter.add_comment(
         work_item_id,
-        "I'm ready to help with requirements gathering. Please share your initial thoughts."
+        "I'm ready to help with requirements gathering. Please share your initial thoughts.",
     )
 
-    runner.assert_true(
-        initial_output.is_bot,
-        "edge_case_h_is_bot",
-        "Initial output should be from bot"
-    )
+    runner.assert_true(initial_output.is_bot, "edge_case_h_is_bot", "Initial output should be from bot")
 
     # Get thread and verify
     thread = await discussion_adapter.get_thread(work_item_id)
@@ -646,7 +621,7 @@ async def edge_case_h_initial_agent_output(runner: SimulationRunner):
         len(thread.comments),
         1,
         "edge_case_h_thread_has_comment",
-        "Thread should have initial bot comment"
+        "Thread should have initial bot comment",
     )
 
 
@@ -675,17 +650,13 @@ async def edge_case_i_error_handling(runner: SimulationRunner):
     except ValueError:
         error_occurred = True
 
-    runner.assert_true(
-        error_occurred,
-        "edge_case_i_error_raised",
-        "Error should be raised for invalid operation"
-    )
+    runner.assert_true(error_occurred, "edge_case_i_error_raised", "Error should be raised for invalid operation")
 
     # Verify session still recoverable
     runner.assert_true(
         discussion_adapter.is_monitoring(work_item_id),
         "edge_case_i_session_recoverable",
-        "Session should remain active despite error"
+        "Session should remain active despite error",
     )
 
 
@@ -727,7 +698,7 @@ async def edge_case_j_duplicate_prevention(runner: SimulationRunner):
         first_processing_count,
         1,
         "edge_case_j_first_processing",
-        "First processing should detect 1 comment"
+        "First processing should detect 1 comment",
     )
 
     # Get processed comment IDs
@@ -742,7 +713,7 @@ async def edge_case_j_duplicate_prevention(runner: SimulationRunner):
         len(captured_events),
         0,
         "edge_case_j_deduplication",
-        "No duplicate events should be triggered"
+        "No duplicate events should be triggered",
     )
 
     # Verify comment count stays same
@@ -751,7 +722,7 @@ async def edge_case_j_duplicate_prevention(runner: SimulationRunner):
         processed_ids_before,
         processed_ids_after,
         "edge_case_j_no_duplication_on_query",
-        "Comment count should not increase"
+        "Comment count should not increase",
     )
 
 
@@ -765,17 +736,11 @@ async def test_scenario_10_conversational_modes():
 
     # Verify success
     assert result.success, f"Scenario failed with errors: {result.errors}"
-    assert result.assertions_passed >= 25, (
-        f"Expected at least 25 assertions to pass, got {result.assertions_passed}"
-    )
-    assert result.assertions_failed == 0, (
-        f"Expected no failed assertions, got {result.assertions_failed}"
-    )
+    assert result.assertions_passed >= 25, f"Expected at least 25 assertions to pass, got {result.assertions_passed}"
+    assert result.assertions_failed == 0, f"Expected no failed assertions, got {result.assertions_failed}"
 
     # Verify performance goal (10-100x faster)
-    assert result.speed_multiplier >= 10.0, (
-        f"Speed multiplier {result.speed_multiplier:.1f}x below 10x target"
-    )
+    assert result.speed_multiplier >= 10.0, f"Speed multiplier {result.speed_multiplier:.1f}x below 10x target"
 
 
 if __name__ == "__main__":

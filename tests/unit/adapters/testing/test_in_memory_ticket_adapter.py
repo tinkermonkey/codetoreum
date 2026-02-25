@@ -1,6 +1,5 @@
 """Unit tests for InMemoryTicketAdapter."""
 
-
 import pytest
 
 from codetoreum.adapters.testing import InMemoryTicketAdapter

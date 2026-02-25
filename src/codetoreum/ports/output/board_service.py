@@ -217,9 +217,7 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
         """
 
     @abstractmethod
-    async def get_items_in_column(
-        self, board_id: str, column_name: str
-    ) -> list[WorkItemPosition]:
+    async def get_items_in_column(self, board_id: str, column_name: str) -> list[WorkItemPosition]:
         """Get all work items in a specific column ordered by position.
 
         Args:
@@ -280,9 +278,7 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
         """
 
     @abstractmethod
-    async def reconcile_board(
-        self, board_id: str, config: "BoardConfig"
-    ) -> ReconciliationResult:
+    async def reconcile_board(self, board_id: str, config: "BoardConfig") -> ReconciliationResult:
         """Reconcile board structure with expected configuration.
 
         Compares actual board structure to expected columns. If differences found:

@@ -49,18 +49,10 @@ class ErrorResponse(BaseResponse):
 
     error: str = Field(..., description="Error type/category")
     message: str = Field(..., description="Human-readable error message")
-    details: list[ErrorDetail] | None = Field(
-        None, description="Detailed error information"
-    )
-    error_id: str | None = Field(
-        None, description="Error ID for Sentry tracking and issue categorization"
-    )
-    correlation_id: str = Field(
-        default_factory=lambda: str(uuid4()), description="Request correlation ID"
-    )
-    timestamp: datetime = Field(
-        default_factory=datetime.utcnow, description="Error timestamp"
-    )
+    details: list[ErrorDetail] | None = Field(None, description="Detailed error information")
+    error_id: str | None = Field(None, description="Error ID for Sentry tracking and issue categorization")
+    correlation_id: str = Field(default_factory=lambda: str(uuid4()), description="Request correlation ID")
+    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Error timestamp")
     path: str | None = Field(None, description="Request path that caused the error")
 
     model_config = ConfigDict(
@@ -95,9 +87,7 @@ class HealthCheckResponse(BaseResponse):
     status: str = Field(..., description="Health status (healthy, degraded, unhealthy)")
     service: str = Field("codetoreum-api", description="Service name")
     version: str = Field(..., description="API version")
-    timestamp: datetime = Field(
-        default_factory=datetime.utcnow, description="Check timestamp"
-    )
+    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Check timestamp")
 
     model_config = ConfigDict()
 
@@ -107,12 +97,8 @@ class ReadinessCheckResponse(BaseResponse):
 
     status: str = Field(..., description="Readiness status (ready, not-ready)")
     service: str = Field("codetoreum-api", description="Service name")
-    dependencies: dict[str, str] = Field(
-        default_factory=dict, description="Dependency statuses"
-    )
-    timestamp: datetime = Field(
-        default_factory=datetime.utcnow, description="Check timestamp"
-    )
+    dependencies: dict[str, str] = Field(default_factory=dict, description="Dependency statuses")
+    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Check timestamp")
 
     model_config = ConfigDict()
 

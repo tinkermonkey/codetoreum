@@ -66,12 +66,14 @@ class WorkItemCreatedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "work_item_id": self.work_item_id,
-            "project_id": self.project_id,
-            "title": self.title,
-            "initial_column": self.initial_column,
-        })
+        d.update(
+            {
+                "work_item_id": self.work_item_id,
+                "project_id": self.project_id,
+                "title": self.title,
+                "initial_column": self.initial_column,
+            }
+        )
         return d
 
     @classmethod
@@ -142,11 +144,13 @@ class WorkItemUpdatedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "work_item_id": self.work_item_id,
-            "project_id": self.project_id,
-            "changes": self.changes or {},
-        })
+        d.update(
+            {
+                "work_item_id": self.work_item_id,
+                "project_id": self.project_id,
+                "changes": self.changes or {},
+            }
+        )
         return d
 
     @classmethod

@@ -141,9 +141,7 @@ class IAgentQueryPort(ABC):
         """
 
     @abstractmethod
-    async def get_agent_by_name(
-        self, name: str, include_stats: bool = False
-    ) -> AgentInfo:
+    async def get_agent_by_name(self, name: str, include_stats: bool = False) -> AgentInfo:
         """
         Get agent by name.
 

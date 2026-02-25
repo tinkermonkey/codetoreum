@@ -11,6 +11,7 @@ from enum import Enum
 
 class HealthStatus(Enum):
     """Health status enumeration."""
+
     HEALTHY = "healthy"
     UNHEALTHY = "unhealthy"
     DEGRADED = "degraded"
@@ -20,6 +21,7 @@ class HealthStatus(Enum):
 @dataclass
 class DependencyHealth:
     """Health status of a dependency."""
+
     name: str
     status: HealthStatus
     message: str | None = None
@@ -31,6 +33,7 @@ class DependencyHealth:
 @dataclass
 class HealthCheckResult:
     """Result of a health check."""
+
     status: HealthStatus
     message: str | None = None
     timestamp: datetime | None = None

@@ -70,9 +70,7 @@ class TestGetRunningRepairCycleContainers:
         # Verify Docker API was called with correct filter
         mock_client.containers.list.assert_called_once()
         call_args = mock_client.containers.list.call_args
-        assert call_args[1]["filters"]["label"] == [
-            "org.codetoreum.type=repair-cycle"
-        ]
+        assert call_args[1]["filters"]["label"] == ["org.codetoreum.type=repair-cycle"]
         assert call_args[1]["all"] is False
 
         # Verify container was returned
@@ -131,11 +129,13 @@ class TestRepairCycleContainerAssessment:
             agent_id="repair-agent",
             task_id="task-1",
             created_at=datetime.now(UTC) - timedelta(hours=1),
-            labels=MappingProxyType({
-                "org.codetoreum.type": "repair-cycle",
-                "org.codetoreum.project": "proj-1",
-                "org.codetoreum.agent": "repair-agent",
-            }),
+            labels=MappingProxyType(
+                {
+                    "org.codetoreum.type": "repair-cycle",
+                    "org.codetoreum.project": "proj-1",
+                    "org.codetoreum.agent": "repair-agent",
+                }
+            ),
             work_item_id="100",
             workflow_run_id="run-abc",
             execution_id="exec-123",
@@ -146,7 +146,6 @@ class TestRepairCycleContainerAssessment:
         assert assessment.action == "kill"
         assert assessment.reason == "completed_during_downtime"
         assert assessment.with_monitoring is False
-
 
     @pytest.mark.asyncio
     async def test_kills_if_no_checkpoint_and_old_container(self):
@@ -170,11 +169,13 @@ class TestRepairCycleContainerAssessment:
             agent_id="repair-agent",
             task_id="task-1",
             created_at=datetime.now(UTC) - timedelta(hours=3),  # 3h old
-            labels=MappingProxyType({
-                "org.codetoreum.type": "repair-cycle",
-                "org.codetoreum.project": "proj-1",
-                "org.codetoreum.agent": "repair-agent",
-            }),
+            labels=MappingProxyType(
+                {
+                    "org.codetoreum.type": "repair-cycle",
+                    "org.codetoreum.project": "proj-1",
+                    "org.codetoreum.agent": "repair-agent",
+                }
+            ),
             work_item_id="100",
             workflow_run_id="run-abc",
             execution_id="exec-123",
@@ -185,7 +186,6 @@ class TestRepairCycleContainerAssessment:
         assert assessment.action == "kill"
         assert assessment.reason == "no_checkpoint"
         assert assessment.with_monitoring is False
-
 
     @pytest.mark.asyncio
     async def test_reconnects_if_container_recent(self):
@@ -209,11 +209,13 @@ class TestRepairCycleContainerAssessment:
             agent_id="repair-agent",
             task_id="task-1",
             created_at=datetime.now(UTC) - timedelta(minutes=30),  # 30 min
-            labels=MappingProxyType({
-                "org.codetoreum.type": "repair-cycle",
-                "org.codetoreum.project": "proj-1",
-                "org.codetoreum.agent": "repair-agent",
-            }),
+            labels=MappingProxyType(
+                {
+                    "org.codetoreum.type": "repair-cycle",
+                    "org.codetoreum.project": "proj-1",
+                    "org.codetoreum.agent": "repair-agent",
+                }
+            ),
             work_item_id="100",
             workflow_run_id="run-abc",
             execution_id="exec-123",
@@ -245,11 +247,13 @@ class TestRepairCycleContainerAssessment:
             agent_id="repair-agent",
             task_id="task-1",
             created_at=datetime.now(UTC) - timedelta(hours=1),
-            labels=MappingProxyType({
-                "org.codetoreum.type": "repair-cycle",
-                "org.codetoreum.project": "proj-1",
-                "org.codetoreum.agent": "repair-agent",
-            }),
+            labels=MappingProxyType(
+                {
+                    "org.codetoreum.type": "repair-cycle",
+                    "org.codetoreum.project": "proj-1",
+                    "org.codetoreum.agent": "repair-agent",
+                }
+            ),
             work_item_id="100",
             workflow_run_id="run-abc",
             execution_id="exec-123",

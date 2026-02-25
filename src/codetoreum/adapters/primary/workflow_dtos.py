@@ -27,16 +27,28 @@ from codetoreum.config import (
 class StageTransition(BaseModel):
     """Transition between workflow stages"""
 
-    from_stage: str = Field(..., description="Source stage name", min_length=MIN_FIELD_LENGTH, max_length=MAX_STAGE_NAME_LENGTH)
-    to_stage: str = Field(..., description="Target stage name", min_length=MIN_FIELD_LENGTH, max_length=MAX_STAGE_NAME_LENGTH)
-    condition: str | None = Field(None, description="Transition condition (optional)", max_length=MAX_ERROR_MESSAGE_LENGTH)
+    from_stage: str = Field(
+        ...,
+        description="Source stage name",
+        min_length=MIN_FIELD_LENGTH,
+        max_length=MAX_STAGE_NAME_LENGTH,
+    )
+    to_stage: str = Field(
+        ...,
+        description="Target stage name",
+        min_length=MIN_FIELD_LENGTH,
+        max_length=MAX_STAGE_NAME_LENGTH,
+    )
+    condition: str | None = Field(
+        None, description="Transition condition (optional)", max_length=MAX_ERROR_MESSAGE_LENGTH
+    )
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "from_stage": "development",
                 "to_stage": "code_review",
-                "condition": "tests_passed"
+                "condition": "tests_passed",
             }
         }
     )
@@ -45,14 +57,19 @@ class StageTransition(BaseModel):
 class StageEntryCondition(BaseModel):
     """Entry condition for a workflow stage"""
 
-    condition_type: str = Field(..., description="Type of condition (status, label, approval, etc.)", min_length=MIN_FIELD_LENGTH, max_length=MAX_STAGE_NAME_LENGTH)
+    condition_type: str = Field(
+        ...,
+        description="Type of condition (status, label, approval, etc.)",
+        min_length=MIN_FIELD_LENGTH,
+        max_length=MAX_STAGE_NAME_LENGTH,
+    )
     parameters: dict[str, Any] = Field(default_factory=dict, description="Condition parameters")
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "condition_type": "work_item_status",
-                "parameters": {"status": "in_progress"}
+                "parameters": {"status": "in_progress"},
             }
         }
     )
@@ -66,8 +83,7 @@ class WorkflowStageResponse(BaseModel):
     timeout_seconds: int | None = Field(None, description="Stage timeout in seconds", ge=1)
     retry_count: int = Field(0, description="Number of retries on failure", ge=0)
     entry_conditions: list[StageEntryCondition] = Field(
-        default_factory=list,
-        description="Conditions that must be met to enter this stage"
+        default_factory=list, description="Conditions that must be met to enter this stage"
     )
     metadata: dict[str, Any] = Field(default_factory=dict, description="Additional stage metadata")
 
@@ -78,16 +94,8 @@ class WorkflowStageResponse(BaseModel):
                 "agent_name": "software_engineer",
                 "timeout_seconds": 1800,
                 "retry_count": 2,
-                "entry_conditions": [
-                    {
-                        "condition_type": "work_item_status",
-                        "parameters": {"status": "assigned"}
-                    }
-                ],
-                "metadata": {
-                    "requires_docker": True,
-                    "makes_code_changes": True
-                }
+                "entry_conditions": [{"condition_type": "work_item_status", "parameters": {"status": "assigned"}}],
+                "metadata": {"requires_docker": True, "makes_code_changes": True},
             }
         }
     )
@@ -111,7 +119,7 @@ class WorkflowStageRequest(BaseModel):
                 "timeout_seconds": 1800,
                 "retry_count": 2,
                 "entry_conditions": [],
-                "metadata": {}
+                "metadata": {},
             }
         }
     )
@@ -125,14 +133,23 @@ class WorkflowStageRequest(BaseModel):
 class CreateWorkflowRequest(BaseModel):
     """Request to create a new workflow definition"""
 
-    name: str = Field(..., description="Workflow name", min_length=MIN_FIELD_LENGTH, max_length=MAX_WORKFLOW_NAME_LENGTH)
+    name: str = Field(
+        ...,
+        description="Workflow name",
+        min_length=MIN_FIELD_LENGTH,
+        max_length=MAX_WORKFLOW_NAME_LENGTH,
+    )
     description: str = Field(..., description="Workflow description", max_length=MAX_DESCRIPTION_LENGTH)
-    project_id: str = Field(..., description="Project ID this workflow belongs to", min_length=MIN_FIELD_LENGTH, max_length=MAX_STAGE_NAME_LENGTH)
+    project_id: str = Field(
+        ...,
+        description="Project ID this workflow belongs to",
+        min_length=MIN_FIELD_LENGTH,
+        max_length=MAX_STAGE_NAME_LENGTH,
+    )
     stages: list[WorkflowStageRequest] = Field(..., description="Workflow stages", min_length=MIN_FIELD_LENGTH)
     transitions: list[StageTransition] = Field(default_factory=list, description="Stage transitions")
     work_item_types: list[str] | None = Field(
-        None,
-        description="Work item types this workflow applies to (issue, pr, discussion)"
+        None, description="Work item types this workflow applies to (issue, pr, discussion)"
     )
     is_template: bool = Field(False, description="Whether this is a reusable template")
     metadata: dict[str, Any] = Field(default_factory=dict, description="Additional workflow metadata")
@@ -148,25 +165,25 @@ class CreateWorkflowRequest(BaseModel):
                         "name": "development",
                         "agent_name": "software_engineer",
                         "timeout_seconds": 1800,
-                        "retry_count": 2
+                        "retry_count": 2,
                     },
                     {
                         "name": "code_review",
                         "agent_name": "code_reviewer",
                         "timeout_seconds": 900,
-                        "retry_count": 1
-                    }
+                        "retry_count": 1,
+                    },
                 ],
                 "transitions": [
                     {
                         "from_stage": "development",
                         "to_stage": "code_review",
-                        "condition": "tests_passed"
+                        "condition": "tests_passed",
                     }
                 ],
                 "work_item_types": ["issue", "feature"],
                 "is_template": False,
-                "metadata": {}
+                "metadata": {},
             }
         }
     )
@@ -175,7 +192,12 @@ class CreateWorkflowRequest(BaseModel):
 class UpdateWorkflowRequest(BaseModel):
     """Request to update an existing workflow definition"""
 
-    name: str | None = Field(None, description="Updated workflow name", min_length=MIN_FIELD_LENGTH, max_length=MAX_WORKFLOW_NAME_LENGTH)
+    name: str | None = Field(
+        None,
+        description="Updated workflow name",
+        min_length=MIN_FIELD_LENGTH,
+        max_length=MAX_WORKFLOW_NAME_LENGTH,
+    )
     description: str | None = Field(None, description="Updated description", max_length=MAX_DESCRIPTION_LENGTH)
     stages: list[WorkflowStageRequest] | None = Field(None, description="Updated stages", min_length=MIN_FIELD_LENGTH)
     transitions: list[StageTransition] | None = Field(None, description="Updated transitions")
@@ -192,9 +214,9 @@ class UpdateWorkflowRequest(BaseModel):
                         "name": "development",
                         "agent_name": "software_engineer",
                         "timeout_seconds": 2400,
-                        "retry_count": 3
+                        "retry_count": 3,
                     }
-                ]
+                ],
             }
         }
     )
@@ -232,22 +254,16 @@ class WorkflowResponse(BaseModel):
                         "timeout_seconds": 1800,
                         "retry_count": 2,
                         "entry_conditions": [],
-                        "metadata": {}
+                        "metadata": {},
                     }
                 ],
-                "transitions": [
-                    {
-                        "from_stage": "development",
-                        "to_stage": "code_review",
-                        "condition": None
-                    }
-                ],
+                "transitions": [{"from_stage": "development", "to_stage": "code_review", "condition": None}],
                 "work_item_types": ["issue", "feature"],
                 "is_template": False,
                 "is_active": True,
                 "created_at": "2025-11-03T10:00:00Z",
                 "updated_at": "2025-11-03T10:00:00Z",
-                "metadata": {}
+                "metadata": {},
             }
         }
     )
@@ -316,7 +332,7 @@ class WorkflowCommandResult(BaseModel):
                 "workflow_id": "wf-123",
                 "version": 2,
                 "message": "Workflow updated successfully",
-                "errors": None
+                "errors": None,
             }
         }
     )
@@ -330,7 +346,11 @@ class WorkflowCommandResult(BaseModel):
 class WorkflowValidationError(BaseModel):
     """Workflow validation error"""
 
-    error_type: str = Field(..., description="Error type (circular_dependency, invalid_agent, etc.)", max_length=MAX_STAGE_NAME_LENGTH)
+    error_type: str = Field(
+        ...,
+        description="Error type (circular_dependency, invalid_agent, etc.)",
+        max_length=MAX_STAGE_NAME_LENGTH,
+    )
     message: str = Field(..., description="Error message", max_length=MAX_ERROR_MESSAGE_LENGTH)
     stage_name: str | None = Field(None, description="Stage that caused the error", max_length=MAX_STAGE_NAME_LENGTH)
     details: dict[str, Any] = Field(default_factory=dict, description="Additional error details")
@@ -341,9 +361,7 @@ class WorkflowValidationError(BaseModel):
                 "error_type": "circular_dependency",
                 "message": "Circular dependency detected in stage transitions",
                 "stage_name": "development",
-                "details": {
-                    "cycle": ["development", "code_review", "development"]
-                }
+                "details": {"cycle": ["development", "code_review", "development"]},
             }
         }
     )
@@ -365,10 +383,10 @@ class WorkflowValidationResponse(BaseModel):
                         "error_type": "circular_dependency",
                         "message": "Circular dependency detected",
                         "stage_name": "development",
-                        "details": {}
+                        "details": {},
                     }
                 ],
-                "warnings": ["Stage 'testing' has no retry configured"]
+                "warnings": ["Stage 'testing' has no retry configured"],
             }
         }
     )

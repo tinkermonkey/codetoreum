@@ -169,9 +169,7 @@ class TestEventAdapterIntegration:
             event_bus=event_bus,
         )
 
-    async def test_column_change_triggers_agent(
-        self, event_bus, orchestrator, task_queue
-    ):
+    async def test_column_change_triggers_agent(self, event_bus, orchestrator, task_queue):
         """Test that column change event triggers agent."""
         # Arrange
         event = WorkItemCreated(
@@ -224,9 +222,7 @@ class TestEventAdapterIntegration:
         # Assert - no task should be enqueued due to missing fields
         assert len(task_queue.enqueued_tasks) == 0
 
-    async def test_comment_response_triggers_agent(
-        self, event_bus, orchestrator, task_queue
-    ):
+    async def test_comment_response_triggers_agent(self, event_bus, orchestrator, task_queue):
         """Test that comment requiring response triggers conversational agent."""
         # Arrange
         event = WorkItemCreated(
@@ -296,9 +292,7 @@ class TestEventAdapterIntegration:
 
         # Assert - no error
 
-    async def test_multiple_events_processed(
-        self, event_bus, orchestrator, task_queue
-    ):
+    async def test_multiple_events_processed(self, event_bus, orchestrator, task_queue):
         """Test that multiple events are processed correctly."""
         # Arrange
         event1 = WorkItemCreated(

@@ -264,7 +264,7 @@ class TestDomainEvent:
 
         assert event != "not an event"
         assert event != 123
-        assert event != None
+        assert event is not None
 
     def test_hash_consistency(self):
         """Test that hash is consistent for same event."""
@@ -877,7 +877,12 @@ class TestEventCausationAndCorrelation:
 
         event2 = WorkflowCreated(
             aggregate_id="workflow-123",
-            payload={"work_item_id": "work-123", "template_id": "template-1", "project_id": "proj-1", "stage_count": 3},
+            payload={
+                "work_item_id": "work-123",
+                "template_id": "template-1",
+                "project_id": "proj-1",
+                "stage_count": 3,
+            },
             correlation_id=correlation_id,
         )
 
@@ -892,7 +897,12 @@ class TestEventCausationAndCorrelation:
 
         event2 = WorkflowCreated(
             aggregate_id="workflow-123",
-            payload={"work_item_id": "work-123", "template_id": "template-1", "project_id": "proj-1", "stage_count": 3},
+            payload={
+                "work_item_id": "work-123",
+                "template_id": "template-1",
+                "project_id": "proj-1",
+                "stage_count": 3,
+            },
             causation_id=event1.event_id,
         )
 

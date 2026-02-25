@@ -31,9 +31,7 @@ class MockConfigCommandAdapter(IConfigurationCommandPort):
         self._lock = RLock()
         self._service = configuration_service
 
-    async def update_project_config(
-        self, command: UpdateProjectConfigCommand
-    ) -> ConfigurationCommandResult:
+    async def update_project_config(self, command: UpdateProjectConfigCommand) -> ConfigurationCommandResult:
         """Update project configuration."""
         with self._lock:
             return ConfigurationCommandResult(
@@ -43,9 +41,7 @@ class MockConfigCommandAdapter(IConfigurationCommandPort):
                 changes_applied=command.updates,
             )
 
-    async def update_agent_config(
-        self, command: UpdateAgentConfigCommand
-    ) -> ConfigurationCommandResult:
+    async def update_agent_config(self, command: UpdateAgentConfigCommand) -> ConfigurationCommandResult:
         """Update agent configuration."""
         with self._lock:
             return ConfigurationCommandResult(
@@ -55,9 +51,7 @@ class MockConfigCommandAdapter(IConfigurationCommandPort):
                 changes_applied=command.updates,
             )
 
-    async def update_pipeline_config(
-        self, command: UpdatePipelineConfigCommand
-    ) -> ConfigurationCommandResult:
+    async def update_pipeline_config(self, command: UpdatePipelineConfigCommand) -> ConfigurationCommandResult:
         """Update pipeline configuration."""
         with self._lock:
             return ConfigurationCommandResult(
@@ -67,9 +61,7 @@ class MockConfigCommandAdapter(IConfigurationCommandPort):
                 changes_applied=command.updates,
             )
 
-    async def add_environment_variable(
-        self, command: AddEnvironmentVariableCommand
-    ) -> ConfigurationCommandResult:
+    async def add_environment_variable(self, command: AddEnvironmentVariableCommand) -> ConfigurationCommandResult:
         """Add an environment variable."""
         with self._lock:
             return ConfigurationCommandResult(
@@ -91,9 +83,7 @@ class MockConfigCommandAdapter(IConfigurationCommandPort):
                 changes_applied={},
             )
 
-    async def mount_command(
-        self, command: MountCommandCommand
-    ) -> ConfigurationCommandResult:
+    async def mount_command(self, command: MountCommandCommand) -> ConfigurationCommandResult:
         """Mount a command."""
         with self._lock:
             return ConfigurationCommandResult(
@@ -103,9 +93,7 @@ class MockConfigCommandAdapter(IConfigurationCommandPort):
                 changes_applied={},
             )
 
-    async def unmount_command(
-        self, command: UnmountCommandCommand
-    ) -> ConfigurationCommandResult:
+    async def unmount_command(self, command: UnmountCommandCommand) -> ConfigurationCommandResult:
         """Unmount a command."""
         with self._lock:
             return ConfigurationCommandResult(
@@ -115,9 +103,7 @@ class MockConfigCommandAdapter(IConfigurationCommandPort):
                 changes_applied={},
             )
 
-    async def mount_subagent(
-        self, command: MountSubAgentCommand
-    ) -> ConfigurationCommandResult:
+    async def mount_subagent(self, command: MountSubAgentCommand) -> ConfigurationCommandResult:
         """Mount a sub-agent."""
         with self._lock:
             return ConfigurationCommandResult(
@@ -127,9 +113,7 @@ class MockConfigCommandAdapter(IConfigurationCommandPort):
                 changes_applied={},
             )
 
-    async def unmount_subagent(
-        self, command: UnmountSubAgentCommand
-    ) -> ConfigurationCommandResult:
+    async def unmount_subagent(self, command: UnmountSubAgentCommand) -> ConfigurationCommandResult:
         """Unmount a sub-agent."""
         with self._lock:
             return ConfigurationCommandResult(

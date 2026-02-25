@@ -563,9 +563,7 @@ class TraceContextValidator:
             message = f"Span {name} has kind {span.kind.value}, expected {expected_kind.value}"
             raise AssertionError(message)
 
-    def assert_span_attribute(
-        self, name: str, key: str, expected_value: Any | None = None
-    ) -> Any:
+    def assert_span_attribute(self, name: str, key: str, expected_value: Any | None = None) -> Any:
         """Assert a span has an attribute."""
         span = self.assert_span_exists(name)
         if key not in span.attributes:
@@ -584,11 +582,11 @@ class TraceContextValidator:
         child = self.assert_span_exists(child_name)
 
         if child.parent_span_id != parent.span_id:
-            message = f"Span {child_name} parent is {child.parent_span_id}, " f"expected {parent.span_id} ({parent_name})"
+            message = f"Span {child_name} parent is {child.parent_span_id}, expected {parent.span_id} ({parent_name})"
             raise AssertionError(message)
 
         if child.trace_id != parent.trace_id:
-            message = f"Span {child_name} trace {child.trace_id} does not match " f"parent trace {parent.trace_id}"
+            message = f"Span {child_name} trace {child.trace_id} does not match parent trace {parent.trace_id}"
             raise AssertionError(message)
 
     def assert_span_context_injected(self, span_name: str) -> None:

@@ -23,13 +23,11 @@ class TestSeederBoardOperations:
         await bootstrap.teardown()
 
     @pytest.fixture
-    async def seeder(
-        self, bootstrap: SimulationApplicationBootstrap
-    ) -> AsyncGenerator[SimulationDataSeeder, None]:
+    async def seeder(self, bootstrap: SimulationApplicationBootstrap) -> AsyncGenerator[SimulationDataSeeder, None]:
         """Create seeder instance with a project."""
         seeder = SimulationDataSeeder(bootstrap)
         await seeder.create_project(name="test-project", description="Test")
-        yield seeder
+        return seeder
 
     # =========================================================================
     # Board Creation Tests

@@ -281,11 +281,13 @@ class TestConcurrentAccess:
         assert await cache.size() == 3
 
         # At least some of the new keys should exist
-        new_keys_exist = sum([
-            await cache.get("key4") is not None,
-            await cache.get("key5") is not None,
-            await cache.get("key6") is not None,
-        ])
+        new_keys_exist = sum(
+            [
+                await cache.get("key4") is not None,
+                await cache.get("key5") is not None,
+                await cache.get("key6") is not None,
+            ]
+        )
         assert new_keys_exist >= 1
 
 

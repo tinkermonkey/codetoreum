@@ -119,10 +119,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
 
             # Wait before next cycle with responsive shutdown
             try:
-                await asyncio.wait_for(
-                    self._stop_event.wait(),
-                    timeout=self._poll_interval_seconds
-                )
+                await asyncio.wait_for(self._stop_event.wait(), timeout=self._poll_interval_seconds)
                 # Stop event was set, exit gracefully
                 logger.info("Orchestration cycle loop stopped")
                 break
@@ -259,15 +256,9 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                     total_errors += len(result.errors)
 
                     if result.success:
-                        logger.info(
-                            f"Successfully orchestrated {project_name} "
-                            f"({result.actions_taken} actions)"
-                        )
+                        logger.info(f"Successfully orchestrated {project_name} ({result.actions_taken} actions)")
                     else:
-                        logger.warning(
-                            f"Orchestration of {project_name} had errors: "
-                            f"{', '.join(result.errors)}"
-                        )
+                        logger.warning(f"Orchestration of {project_name} had errors: {', '.join(result.errors)}")
 
                     # Reconcile boards for the project
                     try:
@@ -386,9 +377,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                 error_message=msg,
             )
 
-    async def orchestrate_project(
-        self, project_name: str
-    ) -> ProjectOrchestrationResult:
+    async def orchestrate_project(self, project_name: str) -> ProjectOrchestrationResult:
         """Execute orchestration for a single project.
 
         Steps:
@@ -412,16 +401,12 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
         try:
             # Get project configuration
             config = await self._project_manager.get_project_config(project_name)
-            logger.debug(
-                f"Loaded configuration for {project_name}: {config.repo_url}"
-            )
+            logger.debug(f"Loaded configuration for {project_name}: {config.repo_url}")
 
             # Ensure project is cloned
             # Note: ProjectClonedEvent is emitted by the project manager adapter
             try:
-                workspace_path = await self._project_manager.ensure_project_cloned(
-                    project_name
-                )
+                workspace_path = await self._project_manager.ensure_project_cloned(project_name)
                 logger.debug(f"Project {project_name} ensured at {workspace_path}")
 
             except ExternalServiceError as clone_error:
@@ -577,9 +562,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
             f"Reconciling boards for project {project_name}",
             extra={"project_name": project_name},
         )
-        await self._board_service.reconcile_board(
-            project_name, BoardConfig(board_id=project_name, expected_columns=[])
-        )
+        await self._board_service.reconcile_board(project_name, BoardConfig(board_id=project_name, expected_columns=[]))
 
     @staticmethod
     def _get_iso_timestamp() -> str:

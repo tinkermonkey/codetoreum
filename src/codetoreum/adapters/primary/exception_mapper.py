@@ -11,7 +11,6 @@ Design:
 - Single responsibility: translate exceptions to HTTP responses
 """
 
-
 from fastapi import HTTPException, status
 
 from codetoreum.domain.exceptions import (
@@ -101,14 +100,17 @@ def map_exception_to_http(exc: Exception, default_detail: str | None = None) -> 
     # ========================================================================
 
     # Not Found (404)
-    if isinstance(exc, (
-        AgentNotFoundError,
-        ConfigNotFoundError,
-        ExecutionNotFoundError,
-        DomainWorkItemNotFoundError,
-        WorkspaceNotFoundError,
-        PipelineNotFoundError,
-    )):
+    if isinstance(
+        exc,
+        (
+            AgentNotFoundError,
+            ConfigNotFoundError,
+            ExecutionNotFoundError,
+            DomainWorkItemNotFoundError,
+            WorkspaceNotFoundError,
+            PipelineNotFoundError,
+        ),
+    ):
         return HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=detail,
@@ -129,20 +131,23 @@ def map_exception_to_http(exc: Exception, default_detail: str | None = None) -> 
     # ========================================================================
 
     # Not Found (404)
-    if isinstance(exc, (
-        InputPortAgentNotFoundError,
-        AgentExecutionNotFoundError,
-        ArtifactNotFoundError,
-        CommandFileNotFoundError,
-        CommandNotFoundError,
-        InputPortPipelineNotFoundError,
-        ProjectNotFoundError,
-        StageNotFoundError,
-        SubAgentNotFoundError,
-        VariableNotFoundError,
-        WorkflowNotFoundError,
-        InputPortWorkItemNotFoundError,
-    )):
+    if isinstance(
+        exc,
+        (
+            InputPortAgentNotFoundError,
+            AgentExecutionNotFoundError,
+            ArtifactNotFoundError,
+            CommandFileNotFoundError,
+            CommandNotFoundError,
+            InputPortPipelineNotFoundError,
+            ProjectNotFoundError,
+            StageNotFoundError,
+            SubAgentNotFoundError,
+            VariableNotFoundError,
+            WorkflowNotFoundError,
+            InputPortWorkItemNotFoundError,
+        ),
+    ):
         return HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=detail,
@@ -250,7 +255,10 @@ def map_exception_to_http(exc: Exception, default_detail: str | None = None) -> 
 
     # Generic Domain Errors (500) - unexpected business logic errors
     if isinstance(exc, DomainError):
-        logger.error(f"Unhandled domain error: {type(exc).__name__}: {exc}", extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR})
+        logger.error(
+            f"Unhandled domain error: {type(exc).__name__}: {exc}",
+            extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+        )
         return HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=detail,
@@ -261,7 +269,11 @@ def map_exception_to_http(exc: Exception, default_detail: str | None = None) -> 
     # ========================================================================
 
     # For any other exception, log and return generic 500
-    logger.exception(f"Unhandled exception: {type(exc).__name__}", exc_info=exc, extra={"error_id": "ERR_UNHANDLED_EXCEPTION"})
+    logger.exception(
+        f"Unhandled exception: {type(exc).__name__}",
+        exc_info=exc,
+        extra={"error_id": "ERR_UNHANDLED_EXCEPTION"},
+    )
     # For unknown exceptions, use default_detail if provided, otherwise use generic message
     # We don't expose the exception message for unknown exceptions (security concern)
     final_detail = default_detail if default_detail else "An internal error occurred"
@@ -284,6 +296,7 @@ def with_exception_mapping(func):
 
     Note: This is optional. You can also call map_exception_to_http directly.
     """
+
     async def wrapper(*args, **kwargs):
         try:
             return await func(*args, **kwargs)

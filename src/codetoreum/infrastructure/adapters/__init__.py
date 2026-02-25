@@ -28,7 +28,6 @@ __all__ = [
     # Base registry
     "AdapterRegistry",
     "AdapterMetadata",
-
     # Specific registries
     "TicketSystemRegistry",
     "LLMProviderRegistry",
@@ -36,7 +35,6 @@ __all__ = [
     "RepositoryRegistry",
     "EventStoreRegistry",
     "StorageRegistry",
-
     # Factory
     "AdapterFactory",
     "AdapterFactoryConfig",

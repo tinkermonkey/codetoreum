@@ -71,9 +71,7 @@ class IAuditStore(ABC):
         """
 
     @abstractmethod
-    async def query_events(
-        self, filters: AuditQueryFilters
-    ) -> list[dict[str, Any]]:
+    async def query_events(self, filters: AuditQueryFilters) -> list[dict[str, Any]]:
         """
         Query audit events with filters.
 
@@ -97,9 +95,7 @@ class IAuditStore(ABC):
         """
 
     @abstractmethod
-    async def cleanup_old_events(
-        self, retention_days: int
-    ) -> int:
+    async def cleanup_old_events(self, retention_days: int) -> int:
         """
         Delete audit events older than retention period.
 

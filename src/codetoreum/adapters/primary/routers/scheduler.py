@@ -5,7 +5,6 @@ Provides RESTful endpoints for viewing and managing the execution queue and
 scheduler status.
 """
 
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from codetoreum.adapters.primary.orchestration_dtos import ExecutionQueueResponse
@@ -51,15 +50,18 @@ def create_scheduler_router(
     )
     async def get_execution_queue(
         status_filter: str | None = Query(
-            None,
-            alias="status",
-            description="Filter by status (queued, running, pending)"
+            None, alias="status", description="Filter by status (queued, running, pending)"
         ),
         workflow_run_id: str | None = Query(None, description="Filter by workflow run ID"),
         work_item_id: str | None = Query(None, description="Filter by work item ID"),
         project_name: str | None = Query(None, description="Filter by project name"),
         page: int = Query(1, ge=1, description="Page number (1-indexed)"),
-        page_size: int = Query(SCHEDULER_DEFAULT_PAGE_SIZE, ge=1, le=SCHEDULER_MAX_PAGE_SIZE, description=f"Items per page (max {SCHEDULER_MAX_PAGE_SIZE})"),
+        page_size: int = Query(
+            SCHEDULER_DEFAULT_PAGE_SIZE,
+            ge=1,
+            le=SCHEDULER_MAX_PAGE_SIZE,
+            description=f"Items per page (max {SCHEDULER_MAX_PAGE_SIZE})",
+        ),
     ) -> ExecutionQueueResponse:
         """
         Get the current execution queue and scheduling status.
@@ -126,14 +128,8 @@ def create_scheduler_router(
             # In a real implementation, this would be a separate query or cached metric
             # For now, we'll derive it from the execution list
             queue_stats = {
-                "total_queued": sum(
-                    1 for exec in execution_list.executions
-                    if exec.status == ExecutionStatus.PENDING
-                ),
-                "total_running": sum(
-                    1 for exec in execution_list.executions
-                    if exec.status == ExecutionStatus.RUNNING
-                ),
+                "total_queued": sum(1 for exec in execution_list.executions if exec.status == ExecutionStatus.PENDING),
+                "total_running": sum(1 for exec in execution_list.executions if exec.status == ExecutionStatus.RUNNING),
                 # Priority counts would need to be added to execution data
                 "critical_priority": 0,
                 "high_priority": 0,
@@ -236,7 +232,7 @@ def create_scheduler_router(
             if pending_list.executions:
                 oldest = min(
                     pending_list.executions,
-                    key=lambda e: e.started_at if e.started_at else "9999-12-31"
+                    key=lambda e: e.started_at if e.started_at else "9999-12-31",
                 )
                 stats["oldest_queued_at"] = oldest.started_at.isoformat() if oldest.started_at else None
 

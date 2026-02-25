@@ -5,8 +5,8 @@ Tests all configuration management endpoints including projects, pipelines, agen
 environment variables, search, versioning, and audit trail.
 """
 
+from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
-from typing import Generator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -25,6 +25,7 @@ from codetoreum.ports.input.config_query import (
 # ============================================================================
 # Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def mock_config_command_port() -> AsyncMock:
@@ -143,6 +144,7 @@ def sample_agent_config() -> AgentConfigInfo:
 # Project Configuration Tests
 # ============================================================================
 
+
 class TestProjectConfiguration:
     """Tests for project configuration endpoints."""
 
@@ -243,9 +245,7 @@ class TestProjectConfiguration:
         from codetoreum.ports.input.exceptions import ValidationError
 
         mock_config_query_port.get_project_config.return_value = sample_project_config
-        mock_config_command_port.update_project_config.side_effect = ValidationError(
-            "Invalid configuration"
-        )
+        mock_config_command_port.update_project_config.side_effect = ValidationError("Invalid configuration")
 
         # Act
         response = client.put(
@@ -303,6 +303,7 @@ class TestProjectConfiguration:
 # ============================================================================
 # Pipeline Configuration Tests
 # ============================================================================
+
 
 class TestPipelineConfiguration:
     """Tests for pipeline configuration endpoints."""
@@ -391,6 +392,7 @@ class TestPipelineConfiguration:
 # ============================================================================
 # Agent Configuration Tests
 # ============================================================================
+
 
 class TestAgentConfiguration:
     """Tests for agent configuration endpoints."""
@@ -485,6 +487,7 @@ class TestAgentConfiguration:
 # Environment Variable Tests
 # ============================================================================
 
+
 class TestEnvironmentVariables:
     """Tests for environment variable management endpoints."""
 
@@ -521,7 +524,6 @@ class TestEnvironmentVariables:
         # Assert
         assert response.status_code == status.HTTP_201_CREATED
 
-
     @pytest.mark.asyncio
     async def test_remove_environment_variable(
         self,
@@ -551,6 +553,7 @@ class TestEnvironmentVariables:
 # ============================================================================
 # Configuration Search Tests
 # ============================================================================
+
 
 class TestConfigurationSearch:
     """Tests for configuration search endpoints."""
@@ -622,6 +625,7 @@ class TestConfigurationSearch:
 # Configuration Versioning Tests
 # ============================================================================
 
+
 class TestConfigurationVersioning:
     """Tests for configuration versioning and audit trail."""
 
@@ -663,4 +667,3 @@ class TestConfigurationVersioning:
         data = response.json()
         assert len(data["history"]) == 2
         assert data["history"][0]["version"] == 2
-

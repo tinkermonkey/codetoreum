@@ -213,9 +213,7 @@ class AgentExecution:
             self.session_id = session_id
 
         if self.started_at:
-            self.duration_seconds = (
-                self.completed_at - self.started_at
-            ).total_seconds()
+            self.duration_seconds = (self.completed_at - self.started_at).total_seconds()
 
         event = ExecutionCompleted(
             aggregate_id=self.id,
@@ -252,9 +250,7 @@ class AgentExecution:
         self.exit_code = exit_code
 
         if self.started_at:
-            self.duration_seconds = (
-                self.completed_at - self.started_at
-            ).total_seconds()
+            self.duration_seconds = (self.completed_at - self.started_at).total_seconds()
 
         event = ExecutionFailed(
             aggregate_id=self.id,
@@ -286,9 +282,7 @@ class AgentExecution:
         self.exit_code = -1
 
         if self.started_at:
-            self.duration_seconds = (
-                self.completed_at - self.started_at
-            ).total_seconds()
+            self.duration_seconds = (self.completed_at - self.started_at).total_seconds()
 
         event = ExecutionTimeout(
             aggregate_id=self.id,
@@ -325,9 +319,7 @@ class AgentExecution:
         self.exit_code = -2
 
         if self.started_at:
-            self.duration_seconds = (
-                self.completed_at - self.started_at
-            ).total_seconds()
+            self.duration_seconds = (self.completed_at - self.started_at).total_seconds()
 
         event = ExecutionCancelled(
             aggregate_id=self.id,

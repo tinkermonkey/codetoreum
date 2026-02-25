@@ -102,10 +102,7 @@ class GitHubTicketAdapter(ITicketSystem):
             evict_count = max(1, self.config.cache_max_entries // 10)
 
             # Sort by access time and remove oldest
-            sorted_keys = sorted(
-                self._cache_access_times.keys(),
-                key=lambda k: self._cache_access_times[k]
-            )
+            sorted_keys = sorted(self._cache_access_times.keys(), key=lambda k: self._cache_access_times[k])
 
             for key in sorted_keys[:evict_count]:
                 self._cache.pop(key, None)
@@ -234,7 +231,7 @@ class GitHubTicketAdapter(ITicketSystem):
                             reset_dt = datetime.fromtimestamp(int(reset_time), tz=UTC)
                             wait_seconds = (reset_dt - datetime.now(UTC)).total_seconds()
                             # Wait for reset or exponential backoff, whichever is shorter
-                            backoff_seconds = self.config.retry_delay_seconds * (2 ** attempt)
+                            backoff_seconds = self.config.retry_delay_seconds * (2**attempt)
                             await asyncio.sleep(min(wait_seconds, backoff_seconds, 60))
                             continue
                         msg = "GitHub"
@@ -244,13 +241,13 @@ class GitHubTicketAdapter(ITicketSystem):
 
             except httpx.TimeoutException:
                 if attempt < self.config.max_retries - 1:
-                    await asyncio.sleep(self.config.retry_delay_seconds * (2 ** attempt))
+                    await asyncio.sleep(self.config.retry_delay_seconds * (2**attempt))
                     continue
                 msg = "GitHub"
                 raise ExternalServiceError(msg, "Request timeout")
             except httpx.RequestError as e:
                 if attempt < self.config.max_retries - 1:
-                    await asyncio.sleep(self.config.retry_delay_seconds * (2 ** attempt))
+                    await asyncio.sleep(self.config.retry_delay_seconds * (2**attempt))
                     continue
                 sanitized_error = self._sanitize_error_message(str(e))
                 msg = "GitHub"
@@ -399,9 +396,7 @@ class GitHubTicketAdapter(ITicketSystem):
         issue = response.json()
         return self._map_github_issue_to_work_item(issue, project_id)
 
-    async def update_work_item(
-        self, item_id: WorkItemId, updates: dict[str, Any]
-    ) -> WorkItem:
+    async def update_work_item(self, item_id: WorkItemId, updates: dict[str, Any]) -> WorkItem:
         """Update an existing work item."""
         payload: dict[str, Any] = {}
 
@@ -668,14 +663,16 @@ class GitHubTicketAdapter(ITicketSystem):
             created_at = dateparser.isoparse(comment["created_at"])
             updated_at = dateparser.isoparse(comment["updated_at"]) if comment.get("updated_at") else None
 
-            comments.append(Comment(
-                id=CommentId(str(comment["id"])),
-                work_item_id=item_id,
-                author_id=UserId(comment["user"]["login"]),
-                body=comment["body"],
-                created_at=created_at,
-                updated_at=updated_at,
-            ))
+            comments.append(
+                Comment(
+                    id=CommentId(str(comment["id"])),
+                    work_item_id=item_id,
+                    author_id=UserId(comment["user"]["login"]),
+                    body=comment["body"],
+                    created_at=created_at,
+                    updated_at=updated_at,
+                )
+            )
 
         return comments
 
@@ -708,6 +705,7 @@ class GitHubTicketAdapter(ITicketSystem):
 
         # Extract issue numbers from description and comments
         import re
+
         issue_pattern = r"#(\d+)"
 
         referenced_ids = set()
@@ -771,6 +769,7 @@ class GitHubTicketAdapter(ITicketSystem):
 
         if response.status_code == 404:
             from codetoreum.ports.exceptions import ResourceNotFoundError
+
             msg = "Webhook"
             raise ResourceNotFoundError(msg, webhook_id)
         if response.status_code != 204:

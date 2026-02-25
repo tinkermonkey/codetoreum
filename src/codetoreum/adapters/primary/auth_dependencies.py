@@ -107,9 +107,7 @@ class AuthDependencies:
         except HTTPException:
             return None
 
-    def require_permission(
-        self, permission: Permission
-    ) -> Callable[[AuthContext], AuthContext]:
+    def require_permission(self, permission: Permission) -> Callable[[AuthContext], AuthContext]:
         """Create a dependency that requires a specific permission.
 
         Example usage:
@@ -141,9 +139,7 @@ class AuthDependencies:
 
         return permission_checker
 
-    def require_any_permission(
-        self, *permissions: Permission
-    ) -> Callable[[AuthContext], AuthContext]:
+    def require_any_permission(self, *permissions: Permission) -> Callable[[AuthContext], AuthContext]:
         """Create a dependency that requires any of the specified permissions.
 
         Args:
@@ -167,9 +163,7 @@ class AuthDependencies:
 
         return permission_checker
 
-    def require_all_permissions(
-        self, *permissions: Permission
-    ) -> Callable[[AuthContext], AuthContext]:
+    def require_all_permissions(self, *permissions: Permission) -> Callable[[AuthContext], AuthContext]:
         """Create a dependency that requires all of the specified permissions.
 
         Args:

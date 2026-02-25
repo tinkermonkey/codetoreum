@@ -161,7 +161,7 @@ def create_metrics_router(
             DEFAULT_METRICS_AGGREGATION_WINDOW_SECONDS,
             ge=MIN_METRICS_AGGREGATION_WINDOW_SECONDS,
             le=MAX_METRICS_AGGREGATION_WINDOW_SECONDS,
-            description=f"Aggregation window in seconds (min {MIN_METRICS_AGGREGATION_WINDOW_SECONDS}, max {MAX_METRICS_AGGREGATION_WINDOW_SECONDS})"
+            description=f"Aggregation window in seconds (min {MIN_METRICS_AGGREGATION_WINDOW_SECONDS}, max {MAX_METRICS_AGGREGATION_WINDOW_SECONDS})",
         ),
     ) -> PerformanceMetricsResponse:
         """
@@ -481,15 +481,17 @@ def create_metrics_router(
                 req_count = metrics.get("request_count", 0)
                 err_count = metrics.get("error_count", 0)
 
-                endpoints.append({
-                    "endpoint_path": path,
-                    "request_count": req_count,
-                    "error_count": err_count,
-                    "error_rate_percent": (err_count / req_count * 100) if req_count > 0 else 0.0,
-                    "latency_p50_ms": metrics.get("latency_p50_ms", 0.0),
-                    "latency_p95_ms": metrics.get("latency_p95_ms", 0.0),
-                    "latency_p99_ms": metrics.get("latency_p99_ms", 0.0),
-                })
+                endpoints.append(
+                    {
+                        "endpoint_path": path,
+                        "request_count": req_count,
+                        "error_count": err_count,
+                        "error_rate_percent": (err_count / req_count * 100) if req_count > 0 else 0.0,
+                        "latency_p50_ms": metrics.get("latency_p50_ms", 0.0),
+                        "latency_p95_ms": metrics.get("latency_p95_ms", 0.0),
+                        "latency_p99_ms": metrics.get("latency_p99_ms", 0.0),
+                    }
+                )
 
                 total_requests += req_count
                 total_errors += err_count
@@ -558,15 +560,17 @@ def create_metrics_router(
                 success_count = metrics.get("success_count", 0)
                 failure_count = metrics.get("failure_count", 0)
 
-                agents.append({
-                    "agent_name": name,
-                    "execution_count": exec_count,
-                    "success_count": success_count,
-                    "failure_count": failure_count,
-                    "success_rate_percent": (success_count / exec_count * 100) if exec_count > 0 else 0.0,
-                    "avg_duration_seconds": metrics.get("avg_duration_seconds", 0.0),
-                    "p95_duration_seconds": metrics.get("p95_duration_seconds", 0.0),
-                })
+                agents.append(
+                    {
+                        "agent_name": name,
+                        "execution_count": exec_count,
+                        "success_count": success_count,
+                        "failure_count": failure_count,
+                        "success_rate_percent": (success_count / exec_count * 100) if exec_count > 0 else 0.0,
+                        "avg_duration_seconds": metrics.get("avg_duration_seconds", 0.0),
+                        "p95_duration_seconds": metrics.get("p95_duration_seconds", 0.0),
+                    }
+                )
 
                 total_executions += exec_count
                 total_successes += success_count
@@ -574,7 +578,9 @@ def create_metrics_router(
             return AgentExecutionMetricsResponse(
                 agents=agents,
                 total_executions=total_executions,
-                overall_success_rate_percent=(total_successes / total_executions * 100) if total_executions > 0 else 0.0,
+                overall_success_rate_percent=(total_successes / total_executions * 100)
+                if total_executions > 0
+                else 0.0,
                 start_time=start_time,
                 end_time=end_time,
             )
@@ -673,16 +679,18 @@ def create_metrics_router(
 
             agents = []
             for agent_data in active_agents_data.get("agents", []):
-                agents.append(ActiveAgentResponse(
-                    executionId=agent_data.get("execution_id", ""),
-                    agentName=agent_data.get("agent_name", ""),
-                    workItemId=agent_data.get("work_item_id", ""),
-                    project=agent_data.get("project", ""),
-                    issueNumber=agent_data.get("issue_number"),
-                    status=agent_data.get("status", "unknown"),
-                    startedAt=agent_data.get("started_at", datetime.now(UTC)),
-                    containerName=agent_data.get("container_name"),
-                ))
+                agents.append(
+                    ActiveAgentResponse(
+                        executionId=agent_data.get("execution_id", ""),
+                        agentName=agent_data.get("agent_name", ""),
+                        workItemId=agent_data.get("work_item_id", ""),
+                        project=agent_data.get("project", ""),
+                        issueNumber=agent_data.get("issue_number"),
+                        status=agent_data.get("status", "unknown"),
+                        startedAt=agent_data.get("started_at", datetime.now(UTC)),
+                        containerName=agent_data.get("container_name"),
+                    )
+                )
 
             return ActiveAgentsResponse(
                 agents=agents,
@@ -822,12 +830,14 @@ def create_metrics_router(
                 iterations = test_data.get("iterations", 0)
                 avg_iterations = (iterations / executions) if executions > 0 else None
 
-                test_type_metrics.append({
-                    "test_type": test_type,
-                    "total_executions": executions,
-                    "total_iterations": iterations,
-                    "avg_iterations_per_cycle": avg_iterations,
-                })
+                test_type_metrics.append(
+                    {
+                        "test_type": test_type,
+                        "total_executions": executions,
+                        "total_iterations": iterations,
+                        "avg_iterations_per_cycle": avg_iterations,
+                    }
+                )
 
             # Calculate overall success rate
             overall_success_rate = None
@@ -843,15 +853,17 @@ def create_metrics_router(
                 agent_successful = agent_data.get("successful", 0)
                 agent_success_rate = (agent_successful / agent_completed * 100) if agent_completed > 0 else None
 
-                agent_metrics.append({
-                    "agent_name": agent_name_item,
-                    "cycles_started": agent_data.get("started", 0),
-                    "cycles_completed": agent_completed,
-                    "cycles_successful": agent_successful,
-                    "cycles_failed": agent_data.get("failed", 0),
-                    "cycles_fast_failed": agent_data.get("fast_failed", 0),
-                    "success_rate_percent": agent_success_rate,
-                })
+                agent_metrics.append(
+                    {
+                        "agent_name": agent_name_item,
+                        "cycles_started": agent_data.get("started", 0),
+                        "cycles_completed": agent_completed,
+                        "cycles_successful": agent_successful,
+                        "cycles_failed": agent_data.get("failed", 0),
+                        "cycles_fast_failed": agent_data.get("fast_failed", 0),
+                        "success_rate_percent": agent_success_rate,
+                    }
+                )
 
             # Calculate duration statistics
             durations = metrics_dict.get("durations", [])

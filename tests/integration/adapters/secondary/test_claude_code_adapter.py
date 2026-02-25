@@ -10,7 +10,7 @@ import os
 import pytest
 
 from codetoreum.adapters.secondary import ClaudeCodeAdapter, ClaudeCodeConfig
-from codetoreum.ports.exceptions import AuthenticationError, LLMProviderError
+from codetoreum.ports.exceptions import LLMProviderError
 from codetoreum.ports.output.llm_provider import ExecutionContext
 
 

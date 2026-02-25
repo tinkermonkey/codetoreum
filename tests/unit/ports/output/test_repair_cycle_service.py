@@ -195,13 +195,15 @@ class TestIRepairCycleProtocol:
 
     def test_protocol_has_exactly_five_methods(self) -> None:
         """Test that IRepairCycle Protocol has exactly 5 methods."""
-        methods = [
-            m
-            for m in dir(IRepairCycle)
-            if not m.startswith("_") and callable(getattr(IRepairCycle, m))
-        ]
+        methods = [m for m in dir(IRepairCycle) if not m.startswith("_") and callable(getattr(IRepairCycle, m))]
         assert len(methods) == 5
-        assert set(methods) == {"execute", "run_tests", "fix_failures_by_file", "handle_warnings", "checkpoint"}
+        assert set(methods) == {
+            "execute",
+            "run_tests",
+            "fix_failures_by_file",
+            "handle_warnings",
+            "checkpoint",
+        }
 
     @pytest.mark.asyncio
     async def test_concrete_implementation_satisfies_protocol(self) -> None:

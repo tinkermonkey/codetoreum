@@ -73,7 +73,7 @@ class TestScenario06SDLCPipelineWithRepair:
             max_iterations=5,
             auto_advance_on_approval=True,
             escalate_on_blocked=True,
-            previous_stage_output="Initial implementation output"
+            previous_stage_output="Initial implementation output",
         )
 
         review_result = await review_adapter.start_review_cycle(review_request)
@@ -93,8 +93,8 @@ class TestScenario06SDLCPipelineWithRepair:
                 "project_id": "test-project",
                 "from_column": "Code Review",
                 "to_column": "Testing",
-                "moved_by": "system"
-            }
+                "moved_by": "system",
+            },
         )
 
         # Execute repair cycle (would be triggered by event handler in full integration)
@@ -163,7 +163,7 @@ class TestScenario06SDLCPipelineWithRepair:
             max_iterations=5,
             auto_advance_on_approval=True,
             escalate_on_blocked=True,
-            previous_stage_output="Initial implementation output"
+            previous_stage_output="Initial implementation output",
         )
 
         review_result = await review_adapter.start_review_cycle(review_request)
@@ -238,7 +238,7 @@ class TestScenario06SDLCPipelineWithRepair:
             max_iterations=5,
             auto_advance_on_approval=True,
             escalate_on_blocked=True,
-            previous_stage_output="Initial implementation"
+            previous_stage_output="Initial implementation",
         )
 
         review_result = await review_adapter.start_review_cycle(review_request)
@@ -248,9 +248,7 @@ class TestScenario06SDLCPipelineWithRepair:
         repair_context = RepairCycleEventContext(
             stage_name="Testing",
             workflow_run_id="work-item-10",
-            test_configs=(
-                RepairTestRunConfig(test_type=RepairTestType.UNIT),
-            ),
+            test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
             agent_name="senior_software_engineer",
             max_total_agent_calls=5,  # Limited to force failure
             checkpoint_interval=5,
@@ -353,7 +351,7 @@ class TestScenario06SDLCPipelineWithRepair:
             max_iterations=5,
             auto_advance_on_approval=True,
             escalate_on_blocked=True,
-            previous_stage_output="Perf test output"
+            previous_stage_output="Perf test output",
         )
 
         review_result = await review_adapter.start_review_cycle(review_request)
@@ -378,6 +376,4 @@ class TestScenario06SDLCPipelineWithRepair:
         elapsed_time = time.time() - start_time
 
         # Assert performance requirements
-        assert elapsed_time < 10.0, (
-            f"Performance test failed: {elapsed_time:.2f}s (expected <10s)"
-        )
+        assert elapsed_time < 10.0, f"Performance test failed: {elapsed_time:.2f}s (expected <10s)"

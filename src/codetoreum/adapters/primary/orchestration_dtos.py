@@ -3,6 +3,7 @@ Orchestration Data Transfer Objects (DTOs)
 
 DTOs for orchestration and scheduler REST API endpoints.
 """
+
 from datetime import datetime
 from enum import Enum
 from typing import Any
@@ -34,9 +35,21 @@ class ExecutionPriority(str, Enum):
 class StartWorkflowExecutionRequest(BaseModel):
     """Request to start workflow execution for a work item"""
 
-    work_item_id: str = Field(..., description="Work item ID to execute workflow for", min_length=MIN_FIELD_LENGTH, max_length=MAX_WORK_ITEM_ID_LENGTH)
-    workflow_id: str = Field(..., description="Workflow definition ID to use", min_length=MIN_FIELD_LENGTH, max_length=MAX_WORK_ITEM_ID_LENGTH)
-    stage_name: str | None = Field(None, description="Stage to start from (optional, defaults to first stage)", max_length=100)
+    work_item_id: str = Field(
+        ...,
+        description="Work item ID to execute workflow for",
+        min_length=MIN_FIELD_LENGTH,
+        max_length=MAX_WORK_ITEM_ID_LENGTH,
+    )
+    workflow_id: str = Field(
+        ...,
+        description="Workflow definition ID to use",
+        min_length=MIN_FIELD_LENGTH,
+        max_length=MAX_WORK_ITEM_ID_LENGTH,
+    )
+    stage_name: str | None = Field(
+        None, description="Stage to start from (optional, defaults to first stage)", max_length=100
+    )
     priority: ExecutionPriority = Field(ExecutionPriority.MEDIUM, description="Execution priority")
     context: dict[str, Any] = Field(default_factory=dict, description="Additional execution context")
 
@@ -47,10 +60,7 @@ class StartWorkflowExecutionRequest(BaseModel):
                 "workflow_id": "wf-456",
                 "stage_name": None,
                 "priority": "HIGH",
-                "context": {
-                    "trigger": "manual",
-                    "user": "developer@example.com"
-                }
+                "context": {"trigger": "manual", "user": "developer@example.com"},
             }
         }
     )
@@ -59,31 +69,28 @@ class StartWorkflowExecutionRequest(BaseModel):
 class CancelWorkflowExecutionRequest(BaseModel):
     """Request to cancel a workflow execution"""
 
-    reason: str = Field(..., description="Reason for cancellation", min_length=MIN_FIELD_LENGTH, max_length=MAX_REASON_LENGTH)
+    reason: str = Field(
+        ...,
+        description="Reason for cancellation",
+        min_length=MIN_FIELD_LENGTH,
+        max_length=MAX_REASON_LENGTH,
+    )
     force: bool = Field(False, description="Force immediate cancellation without cleanup")
 
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "reason": "User requested cancellation",
-                "force": False
-            }
-        }
-    )
+    model_config = ConfigDict(json_schema_extra={"example": {"reason": "User requested cancellation", "force": False}})
 
 
 class PauseWorkflowExecutionRequest(BaseModel):
     """Request to pause a workflow execution"""
 
-    reason: str = Field(..., description="Reason for pausing", min_length=MIN_FIELD_LENGTH, max_length=MAX_REASON_LENGTH)
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "reason": "Waiting for external dependency"
-            }
-        }
+    reason: str = Field(
+        ...,
+        description="Reason for pausing",
+        min_length=MIN_FIELD_LENGTH,
+        max_length=MAX_REASON_LENGTH,
     )
+
+    model_config = ConfigDict(json_schema_extra={"example": {"reason": "Waiting for external dependency"}})
 
 
 class ResumeWorkflowExecutionRequest(BaseModel):
@@ -91,13 +98,7 @@ class ResumeWorkflowExecutionRequest(BaseModel):
 
     from_stage: str | None = Field(None, description="Stage to resume from (defaults to paused stage)", max_length=100)
 
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "from_stage": None
-            }
-        }
-    )
+    model_config = ConfigDict(json_schema_extra={"example": {"from_stage": None}})
 
 
 # ============================================================================
@@ -127,7 +128,7 @@ class WorkflowExecutionResponse(BaseModel):
                 "status": "STARTED",
                 "current_stage": "development",
                 "started_at": "2025-11-03T10:30:00Z",
-                "message": "Workflow execution started successfully"
+                "message": "Workflow execution started successfully",
             }
         }
     )
@@ -149,7 +150,7 @@ class StartWorkflowExecutionResponse(BaseModel):
                 "workflow_run_id": "wr-123",
                 "status": "ACCEPTED",
                 "message": "Workflow execution queued successfully",
-                "started_at": "2025-11-03T10:30:00Z"
+                "started_at": "2025-11-03T10:30:00Z",
             }
         }
     )
@@ -190,7 +191,7 @@ class QueuedExecutionInfo(BaseModel):
                 "priority": "HIGH",
                 "queued_at": "2025-11-03T10:30:00Z",
                 "started_at": "2025-11-03T10:31:00Z",
-                "estimated_duration_seconds": 1800
+                "estimated_duration_seconds": 1800,
             }
         }
     )
@@ -202,7 +203,7 @@ class ExecutionQueueResponse(PaginatedResponse):
     executions: list[QueuedExecutionInfo] = Field(..., description="List of queued/running executions")
     queue_stats: dict[str, int] = Field(
         default_factory=dict,
-        description="Queue statistics (total_queued, total_running, by_priority, etc.)"
+        description="Queue statistics (total_queued, total_running, by_priority, etc.)",
     )
 
     model_config = ConfigDict(
@@ -221,7 +222,7 @@ class ExecutionQueueResponse(PaginatedResponse):
                         "priority": "HIGH",
                         "queued_at": "2025-11-03T10:30:00Z",
                         "started_at": "2025-11-03T10:31:00Z",
-                        "estimated_duration_seconds": 1800
+                        "estimated_duration_seconds": 1800,
                     }
                 ],
                 "total_count": 5,
@@ -234,8 +235,8 @@ class ExecutionQueueResponse(PaginatedResponse):
                     "critical_priority": 1,
                     "high_priority": 2,
                     "medium_priority": 1,
-                    "low_priority": 1
-                }
+                    "low_priority": 1,
+                },
             }
         }
     )
@@ -249,8 +250,18 @@ class ExecutionQueueResponse(PaginatedResponse):
 class EntryConditionValidationRequest(BaseModel):
     """Request to validate workflow entry conditions"""
 
-    work_item_id: str = Field(..., description="Work item ID to validate", min_length=MIN_FIELD_LENGTH, max_length=MAX_WORK_ITEM_ID_LENGTH)
-    workflow_id: str = Field(..., description="Workflow ID to validate against", min_length=MIN_FIELD_LENGTH, max_length=MAX_WORK_ITEM_ID_LENGTH)
+    work_item_id: str = Field(
+        ...,
+        description="Work item ID to validate",
+        min_length=MIN_FIELD_LENGTH,
+        max_length=MAX_WORK_ITEM_ID_LENGTH,
+    )
+    workflow_id: str = Field(
+        ...,
+        description="Workflow ID to validate against",
+        min_length=MIN_FIELD_LENGTH,
+        max_length=MAX_WORK_ITEM_ID_LENGTH,
+    )
     stage_name: str | None = Field(None, description="Specific stage to validate (optional)", max_length=100)
 
     model_config = ConfigDict(
@@ -258,7 +269,7 @@ class EntryConditionValidationRequest(BaseModel):
             "example": {
                 "work_item_id": "wi-123",
                 "workflow_id": "wf-456",
-                "stage_name": "development"
+                "stage_name": "development",
             }
         }
     )
@@ -278,7 +289,7 @@ class ConditionValidationResult(BaseModel):
                 "condition_type": "work_item_status",
                 "is_met": True,
                 "message": "Work item status is 'in_progress'",
-                "details": {"expected": "in_progress", "actual": "in_progress"}
+                "details": {"expected": "in_progress", "actual": "in_progress"},
             }
         }
     )
@@ -302,10 +313,10 @@ class EntryConditionValidationResponse(BaseModel):
                         "condition_type": "work_item_status",
                         "is_met": True,
                         "message": "Work item status is valid",
-                        "details": {}
+                        "details": {},
                     }
                 ],
-                "blocking_conditions": []
+                "blocking_conditions": [],
             }
         }
     )

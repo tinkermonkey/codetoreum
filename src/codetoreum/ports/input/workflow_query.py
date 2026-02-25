@@ -14,6 +14,7 @@ from typing import Any
 
 class WorkflowSortField(Enum):
     """Fields available for sorting workflow lists"""
+
     NAME = "name"
     CREATED_AT = "created_at"
     UPDATED_AT = "updated_at"
@@ -22,6 +23,7 @@ class WorkflowSortField(Enum):
 
 class SortOrder(Enum):
     """Sort order"""
+
     ASC = "asc"
     DESC = "desc"
 
@@ -29,6 +31,7 @@ class SortOrder(Enum):
 @dataclass
 class WorkflowFilters:
     """Filters for listing workflows"""
+
     project_id: str | None = None
     is_template: bool | None = None
     is_active: bool | None = None
@@ -39,6 +42,7 @@ class WorkflowFilters:
 @dataclass
 class WorkflowPaginationParams:
     """Pagination parameters for workflow queries"""
+
     offset: int = 0
     limit: int = 20
     sort_by: WorkflowSortField = WorkflowSortField.UPDATED_AT
@@ -48,6 +52,7 @@ class WorkflowPaginationParams:
 @dataclass
 class StageInfo:
     """Information about a workflow stage"""
+
     name: str
     agent_name: str
     timeout_seconds: int | None
@@ -59,6 +64,7 @@ class StageInfo:
 @dataclass
 class StageTransitionInfo:
     """Information about a stage transition"""
+
     from_stage: str
     to_stage: str
     condition: str | None
@@ -67,6 +73,7 @@ class StageTransitionInfo:
 @dataclass
 class WorkflowDefinitionInfo:
     """Complete workflow definition information"""
+
     id: str
     name: str
     description: str
@@ -85,6 +92,7 @@ class WorkflowDefinitionInfo:
 @dataclass
 class WorkflowSummaryInfo:
     """Summary information for workflow list"""
+
     id: str
     name: str
     description: str
@@ -101,6 +109,7 @@ class WorkflowSummaryInfo:
 @dataclass
 class WorkflowListResult:
     """Result of listing workflows"""
+
     workflows: list[WorkflowSummaryInfo]
     total_count: int
     offset: int
@@ -111,6 +120,7 @@ class WorkflowListResult:
 @dataclass
 class WorkflowVersionInfo:
     """Information about a specific workflow version"""
+
     version: int
     created_at: datetime
     created_by: str | None
@@ -120,6 +130,7 @@ class WorkflowVersionInfo:
 @dataclass
 class WorkflowVersionHistoryResult:
     """Result of querying workflow version history"""
+
     workflow_id: str
     versions: list[WorkflowVersionInfo]
     total_count: int
@@ -128,6 +139,7 @@ class WorkflowVersionHistoryResult:
 @dataclass
 class WorkflowValidationError:
     """Workflow validation error"""
+
     error_type: str
     message: str
     stage_name: str | None
@@ -137,6 +149,7 @@ class WorkflowValidationError:
 @dataclass
 class WorkflowValidationResult:
     """Result of workflow validation"""
+
     is_valid: bool
     errors: list[WorkflowValidationError]
     warnings: list[str]
@@ -157,11 +170,7 @@ class IWorkflowQueryPort(ABC):
     """
 
     @abstractmethod
-    async def get_workflow(
-        self,
-        workflow_id: str,
-        version: int | None = None
-    ) -> WorkflowDefinitionInfo:
+    async def get_workflow(self, workflow_id: str, version: int | None = None) -> WorkflowDefinitionInfo:
         """
         Retrieves a workflow definition by ID.
 
@@ -181,7 +190,7 @@ class IWorkflowQueryPort(ABC):
     async def list_workflows(
         self,
         filters: WorkflowFilters | None = None,
-        pagination: WorkflowPaginationParams | None = None
+        pagination: WorkflowPaginationParams | None = None,
     ) -> WorkflowListResult:
         """
         Lists workflows matching the specified criteria.
@@ -198,11 +207,7 @@ class IWorkflowQueryPort(ABC):
         """
 
     @abstractmethod
-    async def get_workflow_versions(
-        self,
-        workflow_id: str,
-        limit: int = 10
-    ) -> WorkflowVersionHistoryResult:
+    async def get_workflow_versions(self, workflow_id: str, limit: int = 10) -> WorkflowVersionHistoryResult:
         """
         Retrieves version history for a workflow.
 
@@ -218,11 +223,7 @@ class IWorkflowQueryPort(ABC):
         """
 
     @abstractmethod
-    async def validate_workflow(
-        self,
-        workflow_id: str,
-        version: int | None = None
-    ) -> WorkflowValidationResult:
+    async def validate_workflow(self, workflow_id: str, version: int | None = None) -> WorkflowValidationResult:
         """
         Validates a workflow definition.
 
@@ -245,9 +246,7 @@ class IWorkflowQueryPort(ABC):
 
     @abstractmethod
     async def get_workflows_for_work_item_type(
-        self,
-        work_item_type: str,
-        project_id: str | None = None
+        self, work_item_type: str, project_id: str | None = None
     ) -> list[WorkflowSummaryInfo]:
         """
         Retrieves workflows applicable to a specific work item type.
@@ -264,10 +263,7 @@ class IWorkflowQueryPort(ABC):
         """
 
     @abstractmethod
-    async def count_active_executions(
-        self,
-        workflow_id: str
-    ) -> int:
+    async def count_active_executions(self, workflow_id: str) -> int:
         """
         Counts active executions for a workflow.
 

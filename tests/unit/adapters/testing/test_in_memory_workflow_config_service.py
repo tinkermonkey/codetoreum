@@ -197,9 +197,7 @@ class TestIntegration:
     """Integration tests for the service."""
 
     @pytest.mark.asyncio
-    async def test_full_workflow_template_retrieval_flow(
-        self, config_service, sample_workflow_template
-    ):
+    async def test_full_workflow_template_retrieval_flow(self, config_service, sample_workflow_template):
         """Test complete workflow: register template and retrieve it."""
         # Register template
         config_service.register_template("board-1", sample_workflow_template)
@@ -215,9 +213,7 @@ class TestIntegration:
         assert "In Progress" in retrieved.pipeline_trigger_columns
 
     @pytest.mark.asyncio
-    async def test_multiple_boards_independent_templates(
-        self, config_service, sample_workflow_template
-    ):
+    async def test_multiple_boards_independent_templates(self, config_service, sample_workflow_template):
         """Test that different boards can have different templates."""
         template1 = sample_workflow_template
 

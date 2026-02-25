@@ -102,11 +102,9 @@ class WorkItemId(TypeSafeId["WorkItemId"]):
     """Type-safe identifier for work items."""
 
 
-
 @dataclass(frozen=True)
 class WorkflowId(TypeSafeId["WorkflowId"]):
     """Type-safe identifier for workflows."""
-
 
 
 @dataclass(frozen=True)
@@ -114,11 +112,9 @@ class AgentId(TypeSafeId["AgentId"]):
     """Type-safe identifier for agents."""
 
 
-
 @dataclass(frozen=True)
 class ExecutionId(TypeSafeId["ExecutionId"]):
     """Type-safe identifier for agent executions."""
-
 
 
 # ============================================================================
@@ -151,10 +147,7 @@ class Requirement:
             True if capability meets requirement
         """
 
-        return (
-            capability.skill == self.skill
-            and capability.proficiency >= self.min_proficiency
-        )
+        return capability.skill == self.skill and capability.proficiency >= self.min_proficiency
 
 
 # ============================================================================
@@ -277,9 +270,7 @@ class ExecutionResult:
 
     def get_all_affected_files(self) -> list[str]:
         """Get all files affected by execution."""
-        return list(
-            set(self.modified_files + self.added_files + self.deleted_files)
-        )
+        return list(set(self.modified_files + self.added_files + self.deleted_files))
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""

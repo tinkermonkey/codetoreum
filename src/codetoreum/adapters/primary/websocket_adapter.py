@@ -77,7 +77,8 @@ class WebSocketConfig:
             rate_limit_window=int(os.getenv("WEBSOCKET_RATE_LIMIT_WINDOW", str(DEFAULT_WS_RATE_LIMIT_WINDOW))),
             max_connections=int(os.getenv("WEBSOCKET_MAX_CONNECTIONS", str(DEFAULT_WS_MAX_CONNECTIONS))),
             enable_redis_pubsub=os.getenv("WEBSOCKET_ENABLE_REDIS_PUBSUB", "true").lower() == "true",
-            enable_connection_persistence=os.getenv("WEBSOCKET_ENABLE_CONNECTION_PERSISTENCE", "true").lower() == "true",
+            enable_connection_persistence=os.getenv("WEBSOCKET_ENABLE_CONNECTION_PERSISTENCE", "true").lower()
+            == "true",
         )
 
 
@@ -338,16 +339,14 @@ class ConnectionManager:
         try:
             if self.redis_pubsub and self.config.enable_redis_pubsub:
                 await self.redis_pubsub.initialize()
-                await self.redis_pubsub.subscribe(
-                    "websocket:events", self._handle_redis_event
-                )
+                await self.redis_pubsub.subscribe("websocket:events", self._handle_redis_event)
                 self._redis_initialized = True
                 logger.info("Redis pub/sub set up for WebSocket message distribution")
         except Exception as e:
             logger.error(
                 f"Failed to setup Redis pub/sub: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
             )
 
     async def _handle_redis_event(self, message: dict[str, Any]) -> None:
@@ -368,7 +367,7 @@ class ConnectionManager:
             logger.error(
                 f"Error handling Redis event: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
             )
 
     async def connect(self, websocket: WebSocket, connection_id: str) -> bool:
@@ -388,8 +387,7 @@ class ConnectionManager:
         # Check connection limit
         if len(self.connections) >= self.config.max_connections:
             logger.warning(
-                f"Connection limit reached ({self.config.max_connections}), "
-                f"rejecting connection {connection_id}"
+                f"Connection limit reached ({self.config.max_connections}), rejecting connection {connection_id}"
             )
             await websocket.close(code=1008, reason="Max connections reached")
             self.stats["connection_rejections"] += 1
@@ -465,7 +463,7 @@ class ConnectionManager:
                 logger.error(
                     f"Redis setex operation failed for connection {connection_id}: {redis_error}",
                     exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_REDIS_ERROR}
+                    extra={"error_id": ErrorRegistry.ERR_REDIS_ERROR},
                 )
                 raise
 
@@ -473,7 +471,7 @@ class ConnectionManager:
             logger.error(
                 f"Failed to persist connection state for {connection_id}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
             )
 
     async def _remove_persisted_connection_state(self, connection_id: str) -> None:
@@ -492,14 +490,14 @@ class ConnectionManager:
                     logger.error(
                         f"Redis delete operation failed for connection {connection_id}: {redis_error}",
                         exc_info=True,
-                        extra={"error_id": ErrorRegistry.ERR_REDIS_ERROR}
+                        extra={"error_id": ErrorRegistry.ERR_REDIS_ERROR},
                     )
                     # Don't raise - this is cleanup, best effort
         except Exception as e:
             logger.error(
                 f"Failed to remove persisted connection state for {connection_id}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
             )
 
     def _create_tracked_task(self, coro):
@@ -648,9 +646,7 @@ class ConnectionManager:
                 self.project_subscribers[filter.project_name] = set()
             self.project_subscribers[filter.project_name].add(connection_id)
 
-    async def send_personal_message(
-        self, message: dict[str, Any], connection_id: str
-    ) -> bool:
+    async def send_personal_message(self, message: dict[str, Any], connection_id: str) -> bool:
         """
         Send a message to a specific connection with backpressure handling.
 
@@ -692,10 +688,7 @@ class ConnectionManager:
                     self.stats["disconnections_due_to_overflow"] += 1
                     return False
             # Check for flow control warning threshold
-            elif (
-                len(conn_state.buffer)
-                >= self.config.max_buffer_size * self.config.flow_control_threshold
-            ):
+            elif len(conn_state.buffer) >= self.config.max_buffer_size * self.config.flow_control_threshold:
                 # Send flow control warning
                 await self._send_flow_control_warning(connection_id)
 
@@ -705,7 +698,7 @@ class ConnectionManager:
             logger.error(
                 f"Error sending message to {connection_id}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
             )
             # Connection closed, clean up
             self.disconnect(connection_id)
@@ -723,7 +716,7 @@ class ConnectionManager:
             buffer_usage=buffer_usage,
             buffer_size=len(conn_state.buffer),
             max_buffer_size=self.config.max_buffer_size,
-            message=f"Warning: Buffer at {buffer_usage*100:.1f}% capacity. "
+            message=f"Warning: Buffer at {buffer_usage * 100:.1f}% capacity. "
             f"Please consume messages faster or you will be disconnected.",
             timestamp=datetime.now(UTC),
         ).model_dump(mode="json")
@@ -735,12 +728,10 @@ class ConnectionManager:
             logger.error(
                 f"Failed to send flow control warning: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
             )
 
-    async def _send_error_and_close(
-        self, connection_id: str, code: int, reason: str
-    ) -> None:
+    async def _send_error_and_close(self, connection_id: str, code: int, reason: str) -> None:
         """Send error message and close connection."""
         if connection_id not in self.connections:
             return
@@ -756,18 +747,12 @@ class ConnectionManager:
             ).model_dump(mode="json")
             await conn_state.websocket.send_json(error_msg)
         except Exception as e:
-            logger.debug(
-                f"Failed to send error message for connection {connection_id}: {e}",
-                exc_info=True
-            )
+            logger.debug(f"Failed to send error message for connection {connection_id}: {e}", exc_info=True)
 
         try:
             await conn_state.websocket.close(code=code, reason=reason)
         except Exception as e:
-            logger.debug(
-                f"Failed to close connection {connection_id}: {e}",
-                exc_info=True
-            )
+            logger.debug(f"Failed to close connection {connection_id}: {e}", exc_info=True)
 
         self.disconnect(connection_id)
 
@@ -811,30 +796,44 @@ class ConnectionManager:
         # Find subscribers using reverse indices (fast set operations)
         if attributes["workflow_run_id"] and attributes["workflow_run_id"] in self.workflow_subscribers:
             candidate_set = self.workflow_subscribers[attributes["workflow_run_id"]]
-            relevant_connections = candidate_set.copy() if relevant_connections is None else relevant_connections & candidate_set
+            relevant_connections = (
+                candidate_set.copy() if relevant_connections is None else relevant_connections & candidate_set
+            )
 
         if attributes["execution_id"] and attributes["execution_id"] in self.execution_subscribers:
             candidate_set = self.execution_subscribers[attributes["execution_id"]]
-            relevant_connections = candidate_set.copy() if relevant_connections is None else relevant_connections & candidate_set
+            relevant_connections = (
+                candidate_set.copy() if relevant_connections is None else relevant_connections & candidate_set
+            )
 
         if attributes["work_item_id"] and attributes["work_item_id"] in self.work_item_subscribers:
             candidate_set = self.work_item_subscribers[attributes["work_item_id"]]
-            relevant_connections = candidate_set.copy() if relevant_connections is None else relevant_connections & candidate_set
+            relevant_connections = (
+                candidate_set.copy() if relevant_connections is None else relevant_connections & candidate_set
+            )
 
         if attributes["workflow_id"] and attributes["workflow_id"] in self.workflow_definition_subscribers:
             candidate_set = self.workflow_definition_subscribers[attributes["workflow_id"]]
-            relevant_connections = candidate_set.copy() if relevant_connections is None else relevant_connections & candidate_set
+            relevant_connections = (
+                candidate_set.copy() if relevant_connections is None else relevant_connections & candidate_set
+            )
 
         if attributes["agent_id"] and attributes["agent_id"] in self.agent_subscribers:
             candidate_set = self.agent_subscribers[attributes["agent_id"]]
-            relevant_connections = candidate_set.copy() if relevant_connections is None else relevant_connections & candidate_set
+            relevant_connections = (
+                candidate_set.copy() if relevant_connections is None else relevant_connections & candidate_set
+            )
 
         if attributes["project_name"] and attributes["project_name"] in self.project_subscribers:
             candidate_set = self.project_subscribers[attributes["project_name"]]
-            relevant_connections = candidate_set.copy() if relevant_connections is None else relevant_connections & candidate_set
+            relevant_connections = (
+                candidate_set.copy() if relevant_connections is None else relevant_connections & candidate_set
+            )
 
         # If no index-based matches, check all connections with complex filters
-        connections_to_check = relevant_connections if relevant_connections is not None else set(self.connections.keys())
+        connections_to_check = (
+            relevant_connections if relevant_connections is not None else set(self.connections.keys())
+        )
 
         # Determine final recipients by applying detailed filter matching
         recipient_ids: set[str] = set()
@@ -884,7 +883,7 @@ class ConnectionManager:
                 logger.error(
                     f"Failed to publish event to Redis: {e}",
                     exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_REDIS_ERROR}
+                    extra={"error_id": ErrorRegistry.ERR_REDIS_ERROR},
                 )
                 # Fall back to local broadcast
                 await self._broadcast_event_local(event_dict)
@@ -892,9 +891,7 @@ class ConnectionManager:
             # No Redis, broadcast locally only
             await self._broadcast_event_local(event_dict)
 
-    def _event_matches_filter_dict(
-        self, event_type: str, event_dict: dict[str, Any], filter: EventFilter
-    ) -> bool:
+    def _event_matches_filter_dict(self, event_type: str, event_dict: dict[str, Any], filter: EventFilter) -> bool:
         """
         Check if event matches filter criteria (dictionary version).
 
@@ -923,52 +920,38 @@ class ConnectionManager:
 
         # Check specific ID filters (AND logic - all must match if specified)
         if filter.workflow_run_id:
-            workflow_run_id = event_dict.get("workflow_run_id") or event_dict.get(
-                "payload", {}
-            ).get("workflow_run_id")
+            workflow_run_id = event_dict.get("workflow_run_id") or event_dict.get("payload", {}).get("workflow_run_id")
             if workflow_run_id != filter.workflow_run_id:
                 return False
 
         if filter.execution_id:
-            execution_id = event_dict.get("execution_id") or event_dict.get(
-                "payload", {}
-            ).get("execution_id")
+            execution_id = event_dict.get("execution_id") or event_dict.get("payload", {}).get("execution_id")
             if execution_id != filter.execution_id:
                 return False
 
         if filter.work_item_id:
-            work_item_id = event_dict.get("work_item_id") or event_dict.get(
-                "payload", {}
-            ).get("work_item_id")
+            work_item_id = event_dict.get("work_item_id") or event_dict.get("payload", {}).get("work_item_id")
             if work_item_id != filter.work_item_id:
                 return False
 
         if filter.workflow_id:
-            workflow_id = event_dict.get("workflow_id") or event_dict.get(
-                "payload", {}
-            ).get("workflow_id")
+            workflow_id = event_dict.get("workflow_id") or event_dict.get("payload", {}).get("workflow_id")
             if workflow_id != filter.workflow_id:
                 return False
 
         if filter.agent_id:
-            agent_id = event_dict.get("agent_id") or event_dict.get("payload", {}).get(
-                "agent_id"
-            )
+            agent_id = event_dict.get("agent_id") or event_dict.get("payload", {}).get("agent_id")
             if agent_id != filter.agent_id:
                 return False
 
         if filter.project_name:
-            project_name = event_dict.get("project_name") or event_dict.get(
-                "payload", {}
-            ).get("project_name")
+            project_name = event_dict.get("project_name") or event_dict.get("payload", {}).get("project_name")
             if project_name != filter.project_name:
                 return False
 
         return True
 
-    def _event_matches_filter(
-        self, event: DomainEvent, event_dict: dict[str, Any], filter: EventFilter
-    ) -> bool:
+    def _event_matches_filter(self, event: DomainEvent, event_dict: dict[str, Any], filter: EventFilter) -> bool:
         """
         Check if event matches filter criteria.
 
@@ -1001,44 +984,32 @@ class ConnectionManager:
 
         # Check specific ID filters (AND logic - all must match if specified)
         if filter.workflow_run_id:
-            workflow_run_id = event_dict.get("workflow_run_id") or event_dict.get(
-                "payload", {}
-            ).get("workflow_run_id")
+            workflow_run_id = event_dict.get("workflow_run_id") or event_dict.get("payload", {}).get("workflow_run_id")
             if workflow_run_id != filter.workflow_run_id:
                 return False
 
         if filter.execution_id:
-            execution_id = event_dict.get("execution_id") or event_dict.get(
-                "payload", {}
-            ).get("execution_id")
+            execution_id = event_dict.get("execution_id") or event_dict.get("payload", {}).get("execution_id")
             if execution_id != filter.execution_id:
                 return False
 
         if filter.work_item_id:
-            work_item_id = event_dict.get("work_item_id") or event_dict.get(
-                "payload", {}
-            ).get("work_item_id")
+            work_item_id = event_dict.get("work_item_id") or event_dict.get("payload", {}).get("work_item_id")
             if work_item_id != filter.work_item_id:
                 return False
 
         if filter.workflow_id:
-            workflow_id = event_dict.get("workflow_id") or event_dict.get(
-                "payload", {}
-            ).get("workflow_id")
+            workflow_id = event_dict.get("workflow_id") or event_dict.get("payload", {}).get("workflow_id")
             if workflow_id != filter.workflow_id:
                 return False
 
         if filter.agent_id:
-            agent_id = event_dict.get("agent_id") or event_dict.get("payload", {}).get(
-                "agent_id"
-            )
+            agent_id = event_dict.get("agent_id") or event_dict.get("payload", {}).get("agent_id")
             if agent_id != filter.agent_id:
                 return False
 
         if filter.project_name:
-            project_name = event_dict.get("project_name") or event_dict.get(
-                "payload", {}
-            ).get("project_name")
+            project_name = event_dict.get("project_name") or event_dict.get("payload", {}).get("project_name")
             if project_name != filter.project_name:
                 return False
 
@@ -1146,9 +1117,7 @@ class WebSocketAdapter:
             )
 
             # Start heartbeat monitoring in background
-            heartbeat_task = asyncio.create_task(
-                self._heartbeat_monitor(connection_id)
-            )
+            heartbeat_task = asyncio.create_task(self._heartbeat_monitor(connection_id))
 
             try:
                 # Message handling loop
@@ -1222,13 +1191,9 @@ class WebSocketAdapter:
                     message_type = message.get("type")
 
                     if message_type == "subscribe":
-                        await self._handle_subscribe_with_instrumentation(
-                            connection_id, message
-                        )
+                        await self._handle_subscribe_with_instrumentation(connection_id, message)
                     elif message_type == "unsubscribe":
-                        await self._handle_unsubscribe_with_instrumentation(
-                            connection_id, message
-                        )
+                        await self._handle_unsubscribe_with_instrumentation(connection_id, message)
                     elif message_type == "ping":
                         await self._handle_ping_with_instrumentation(connection_id)
                     else:
@@ -1252,7 +1217,7 @@ class WebSocketAdapter:
                 logger.error(
                     f"ValueError in WebSocket handler for {connection_id}: {e}",
                     exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_INVALID_INPUT}
+                    extra={"error_id": ErrorRegistry.ERR_INVALID_INPUT},
                 )
                 try:
                     await self.manager.send_personal_message(
@@ -1266,7 +1231,7 @@ class WebSocketAdapter:
                 except Exception as send_error:
                     logger.debug(
                         f"Failed to send invalid message error for connection {connection_id}: {send_error}",
-                        exc_info=True
+                        exc_info=True,
                     )
                 finally:
                     self._cleanup_session_span(connection_id, reason="invalid_message")
@@ -1276,7 +1241,7 @@ class WebSocketAdapter:
                 logger.error(
                     f"JSON decode error for {connection_id}: {e}",
                     exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_INVALID_INPUT}
+                    extra={"error_id": ErrorRegistry.ERR_INVALID_INPUT},
                 )
                 try:
                     await self.manager.send_personal_message(
@@ -1290,7 +1255,7 @@ class WebSocketAdapter:
                 except Exception as send_error:
                     logger.debug(
                         f"Failed to send JSON error message for connection {connection_id}: {send_error}",
-                        exc_info=True
+                        exc_info=True,
                     )
                 finally:
                     self._cleanup_session_span(connection_id, reason="json_parse_error")
@@ -1300,7 +1265,7 @@ class WebSocketAdapter:
                 logger.error(
                     f"Unexpected WebSocket error for client {connection_id}: {e}",
                     exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_UNHANDLED_EXCEPTION}
+                    extra={"error_id": ErrorRegistry.ERR_UNHANDLED_EXCEPTION},
                 )
                 try:
                     await self.manager.send_personal_message(
@@ -1314,7 +1279,7 @@ class WebSocketAdapter:
                 except Exception as send_error:
                     logger.debug(
                         f"Failed to send internal error message for connection {connection_id}: {send_error}",
-                        exc_info=True
+                        exc_info=True,
                     )
                 finally:
                     self._cleanup_session_span(connection_id, reason="unexpected_error")
@@ -1351,8 +1316,7 @@ class WebSocketAdapter:
 
                 if time_since_heartbeat > self.manager.config.heartbeat_timeout:
                     logger.warning(
-                        f"Connection {connection_id} timed out "
-                        f"(no heartbeat for {time_since_heartbeat:.1f}s)"
+                        f"Connection {connection_id} timed out (no heartbeat for {time_since_heartbeat:.1f}s)"
                     )
                     await self.manager._send_error_and_close(
                         connection_id,
@@ -1363,14 +1327,12 @@ class WebSocketAdapter:
 
                 # Send ping to client
                 try:
-                    await conn_state.websocket.send_json(
-                        {"type": "ping", "timestamp": datetime.now(UTC).isoformat()}
-                    )
+                    await conn_state.websocket.send_json({"type": "ping", "timestamp": datetime.now(UTC).isoformat()})
                 except Exception as e:
                     logger.error(
                         f"Failed to send heartbeat ping: {e}",
                         exc_info=True,
-                        extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+                        extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
                     )
                     return
 
@@ -1378,9 +1340,7 @@ class WebSocketAdapter:
             # Task cancelled, connection closing - expected behavior
             logger.debug(f"Heartbeat monitor cancelled for connection {connection_id}")
 
-    def _cleanup_session_span(
-        self, connection_id: str, reason: str = "normal_closure"
-    ) -> None:
+    def _cleanup_session_span(self, connection_id: str, reason: str = "normal_closure") -> None:
         """
         Clean up session span for a disconnected connection.
 
@@ -1406,9 +1366,7 @@ class WebSocketAdapter:
             buffered_events=buffered_events,
         )
 
-    async def _handle_subscribe_with_instrumentation(
-        self, connection_id: str, message: dict[str, Any]
-    ) -> None:
+    async def _handle_subscribe_with_instrumentation(self, connection_id: str, message: dict[str, Any]) -> None:
         """
         Handle subscribe message with instrumentation.
 
@@ -1449,9 +1407,7 @@ class WebSocketAdapter:
             )
             raise
 
-    async def _handle_unsubscribe_with_instrumentation(
-        self, connection_id: str, message: dict[str, Any]
-    ) -> None:
+    async def _handle_unsubscribe_with_instrumentation(self, connection_id: str, message: dict[str, Any]) -> None:
         """
         Handle unsubscribe message with instrumentation.
 
@@ -1467,9 +1423,7 @@ class WebSocketAdapter:
         subscription_id = message.get("subscription_id", "unknown")
 
         # Start message span
-        message_span = message_tracer.start_unsubscribe_message(
-            connection_id, subscription_id
-        )
+        message_span = message_tracer.start_unsubscribe_message(connection_id, subscription_id)
 
         try:
             await self._handle_unsubscribe(connection_id, message)
@@ -1518,9 +1472,7 @@ class WebSocketAdapter:
         """
         try:
             # Parse subscription type
-            subscription_type = SubscriptionType[
-                message.get("subscription_type", "ALL_EVENTS").upper()
-            ]
+            subscription_type = SubscriptionType[message.get("subscription_type", "ALL_EVENTS").upper()]
 
             # Create event filter with all supported fields
             filter = EventFilter(
@@ -1560,7 +1512,7 @@ class WebSocketAdapter:
             logger.error(
                 f"Failed to process subscribe message: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_HANDLER_EXECUTION}
+                extra={"error_id": ErrorRegistry.ERR_HANDLER_EXECUTION},
             )
             await self.manager.send_personal_message(
                 ErrorMessage(

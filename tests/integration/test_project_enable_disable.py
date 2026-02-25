@@ -46,9 +46,7 @@ def orchestrator(project_manager, workflow_orchestrator, board_service):
     )
 
 
-def create_project_config(
-    repo_url: str, branch: str = "main", enabled: bool = True
-) -> ProjectConfig:
+def create_project_config(repo_url: str, branch: str = "main", enabled: bool = True) -> ProjectConfig:
     """Helper to create a project configuration."""
     return ProjectConfig(
         repo_url=repo_url,
@@ -75,12 +73,8 @@ class TestProjectEnableDisable:
         workflow orchestration for it.
         """
         # Setup: Create enabled and disabled project
-        enabled_config = create_project_config(
-            "https://github.com/org/enabled.git", enabled=True
-        )
-        disabled_config = create_project_config(
-            "https://github.com/org/disabled.git", enabled=False
-        )
+        enabled_config = create_project_config("https://github.com/org/enabled.git", enabled=True)
+        disabled_config = create_project_config("https://github.com/org/disabled.git", enabled=False)
 
         project_manager.add_project("enabled-proj", enabled_config)
         project_manager.add_project("disabled-proj", disabled_config)
@@ -97,9 +91,7 @@ class TestProjectEnableDisable:
         assert call_args["project_name"] == "enabled-proj"
 
     @pytest.mark.asyncio
-    async def test_disabling_project_stops_orchestration(
-        self, orchestrator, project_manager, workflow_orchestrator
-    ):
+    async def test_disabling_project_stops_orchestration(self, orchestrator, project_manager, workflow_orchestrator):
         """Verify disabling a project stops its orchestration on next cycle.
 
         When a project transitions from enabled to disabled, subsequent
@@ -115,9 +107,7 @@ class TestProjectEnableDisable:
         assert workflow_orchestrator.orchestrate_project.call_count == 1
 
         # Execute: Disable project
-        disabled_config = create_project_config(
-            "https://github.com/org/test.git", enabled=False
-        )
+        disabled_config = create_project_config("https://github.com/org/test.git", enabled=False)
         project_manager.update_project("test-proj", disabled_config)
 
         # Reset mock call count
@@ -144,9 +134,7 @@ class TestProjectEnableDisable:
         project_manager.add_project("test-proj", config)
 
         # Execute: Disable project
-        disabled_config = create_project_config(
-            "https://github.com/org/test.git", enabled=False
-        )
+        disabled_config = create_project_config("https://github.com/org/test.git", enabled=False)
         project_manager.update_project("test-proj", disabled_config)
 
         # Reset mock
@@ -157,9 +145,7 @@ class TestProjectEnableDisable:
         assert result_disabled.projects_processed == 0
 
         # Execute: Re-enable project
-        enabled_config = create_project_config(
-            "https://github.com/org/test.git", enabled=True
-        )
+        enabled_config = create_project_config("https://github.com/org/test.git", enabled=True)
         project_manager.update_project("test-proj", enabled_config)
 
         # Reset mock
@@ -195,9 +181,7 @@ class TestProjectEnableDisable:
         assert result1.projects_processed == 3
 
         # Execute: Disable only project-b
-        disabled_config_b = create_project_config(
-            "https://github.com/org/project-b.git", enabled=False
-        )
+        disabled_config_b = create_project_config("https://github.com/org/project-b.git", enabled=False)
         project_manager.update_project("project-b", disabled_config_b)
 
         # Reset mock
@@ -218,9 +202,7 @@ class TestProjectEnableDisable:
         assert "project-b" not in project_names
 
     @pytest.mark.asyncio
-    async def test_multiple_disable_enable_cycles(
-        self, orchestrator, project_manager, workflow_orchestrator
-    ):
+    async def test_multiple_disable_enable_cycles(self, orchestrator, project_manager, workflow_orchestrator):
         """Verify multiple disable/enable cycles work correctly.
 
         Tests that a project can be cycled between enabled and disabled

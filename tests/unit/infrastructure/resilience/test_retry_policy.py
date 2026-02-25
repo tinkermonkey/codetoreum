@@ -1,6 +1,5 @@
 """Tests for retry policy implementations."""
 
-
 import pytest
 
 from codetoreum.infrastructure.resilience import (
@@ -40,7 +39,7 @@ class TestExponentialBackoffRetry:
         """Test that operation is retried on failure."""
         policy = ExponentialBackoffRetry(
             max_retries=3,
-            base_delay=0.01  # Short delay for testing
+            base_delay=0.01,  # Short delay for testing
         )
 
         call_count = 0
@@ -65,10 +64,7 @@ class TestExponentialBackoffRetry:
     @pytest.mark.asyncio
     async def test_raises_after_max_retries(self):
         """Test that MaxRetriesExceededError is raised after exhausting retries."""
-        policy = ExponentialBackoffRetry(
-            max_retries=3,
-            base_delay=0.01
-        )
+        policy = ExponentialBackoffRetry(max_retries=3, base_delay=0.01)
 
         call_count = 0
 
@@ -94,7 +90,7 @@ class TestExponentialBackoffRetry:
             max_retries=3,
             base_delay=0.1,
             exponential_base=2.0,
-            jitter=False  # Disable jitter for predictable testing
+            jitter=False,  # Disable jitter for predictable testing
         )
 
         delays: list[float] = []
@@ -103,6 +99,7 @@ class TestExponentialBackoffRetry:
         async def failing_operation():
             nonlocal last_time
             import time
+
             current_time = time.time()
             if last_time is not None:
                 delays.append(current_time - last_time)
@@ -123,11 +120,7 @@ class TestExponentialBackoffRetry:
     async def test_max_delay_cap(self):
         """Test that delays are capped at max_delay."""
         policy = ExponentialBackoffRetry(
-            max_retries=5,
-            base_delay=1.0,
-            max_delay=2.0,
-            exponential_base=2.0,
-            jitter=False
+            max_retries=5, base_delay=1.0, max_delay=2.0, exponential_base=2.0, jitter=False
         )
 
         # Calculate what delay would be for attempt 4 without cap

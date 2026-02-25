@@ -362,13 +362,8 @@ class MockNotifierAdapter(INotifier):
 
             # Check channel matches
             if template["channel"] != channel:
-                msg = (
-                    f"Template '{template_id}' is for {template['channel'].value}, "
-                    f"not {channel.value}"
-                )
-                raise ValidationError(
-                    msg
-                )
+                msg = f"Template '{template_id}' is for {template['channel'].value}, not {channel.value}"
+                raise ValidationError(msg)
 
         # Simple variable substitution
         message = template["template"]

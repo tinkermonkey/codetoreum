@@ -69,16 +69,18 @@ class ContainerRecoveredEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "container_id": self.container_id,
-            "container_name": self.container_name,
-            "project_id": self.project_id,
-            "agent_id": self.agent_id,
-            "work_item_id": self.work_item_id,
-            "execution_id": self.execution_id,
-            "uptime_seconds": self.uptime_seconds,
-            "recovery_action": self.recovery_action,
-        })
+        d.update(
+            {
+                "container_id": self.container_id,
+                "container_name": self.container_name,
+                "project_id": self.project_id,
+                "agent_id": self.agent_id,
+                "work_item_id": self.work_item_id,
+                "execution_id": self.execution_id,
+                "uptime_seconds": self.uptime_seconds,
+                "recovery_action": self.recovery_action,
+            }
+        )
         return d
 
     @classmethod
@@ -151,7 +153,7 @@ class ContainerKilledEvent(CodetoreumEvent):
         "repair_cycle_wrong_assessment_path",
         "completed_during_downtime",
         "checkpoint_stale",
-        "no_checkpoint"
+        "no_checkpoint",
     ] = "unmanaged"
     uptime_seconds: float = 0.0
     execution_marked_failed: bool = False
@@ -179,7 +181,7 @@ class ContainerKilledEvent(CodetoreumEvent):
             "repair_cycle_wrong_assessment_path",
             "completed_during_downtime",
             "checkpoint_stale",
-            "no_checkpoint"
+            "no_checkpoint",
         )
         if self.kill_reason not in valid_reasons:
             msg = f"kill_reason must be one of: {', '.join(valid_reasons)}"
@@ -188,16 +190,18 @@ class ContainerKilledEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "container_id": self.container_id,
-            "container_name": self.container_name,
-            "project_id": self.project_id,
-            "agent_id": self.agent_id,
-            "work_item_id": self.work_item_id,
-            "kill_reason": self.kill_reason,
-            "uptime_seconds": self.uptime_seconds,
-            "execution_marked_failed": self.execution_marked_failed,
-        })
+        d.update(
+            {
+                "container_id": self.container_id,
+                "container_name": self.container_name,
+                "project_id": self.project_id,
+                "agent_id": self.agent_id,
+                "work_item_id": self.work_item_id,
+                "kill_reason": self.kill_reason,
+                "uptime_seconds": self.uptime_seconds,
+                "execution_marked_failed": self.execution_marked_failed,
+            }
+        )
         return d
 
     @classmethod
@@ -276,15 +280,17 @@ class ContainerRecoveryCompletedEvent(CodetoreumEvent):
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "containers_recovered": self.containers_recovered,
-            "containers_killed": self.containers_killed,
-            "errors_encountered": self.errors_encountered,
-            "repair_cycles_processed": self.repair_cycles_processed,
-            "started_at": self.started_at,
-            "completed_at": self.completed_at,
-            "duration_seconds": self.duration_seconds,
-        })
+        d.update(
+            {
+                "containers_recovered": self.containers_recovered,
+                "containers_killed": self.containers_killed,
+                "errors_encountered": self.errors_encountered,
+                "repair_cycles_processed": self.repair_cycles_processed,
+                "started_at": self.started_at,
+                "completed_at": self.completed_at,
+                "duration_seconds": self.duration_seconds,
+            }
+        )
         return d
 
     @classmethod

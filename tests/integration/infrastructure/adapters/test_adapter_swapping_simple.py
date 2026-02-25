@@ -70,11 +70,7 @@ class TestContainerSwapping:
         adapter = factory.create_container(adapter_name="fake")
 
         # Create container
-        container_id = await adapter.create(
-            image="python:3.11",
-            command=["python", "--version"],
-            name="test-container"
-        )
+        container_id = await adapter.create(image="python:3.11", command=["python", "--version"], name="test-container")
 
         assert container_id is not None
 
@@ -110,10 +106,7 @@ class TestModeBasedSwapping:
     @pytest.mark.asyncio
     async def test_production_mode_adapters(self):
         """Test adapter selection in production mode."""
-        config = AdapterFactoryConfig(
-            operation_mode=OperationMode.PRODUCTION,
-            enable_resilience=True
-        )
+        config = AdapterFactoryConfig(operation_mode=OperationMode.PRODUCTION, enable_resilience=True)
         factory = AdapterFactory(config)
 
         # Get default adapters (would be production adapters)
@@ -133,7 +126,7 @@ class TestModeBasedSwapping:
         """Test adapter selection in simulation mode."""
         config = AdapterFactoryConfig(
             operation_mode=OperationMode.SIMULATION,
-            enable_resilience=False  # Disable to get unwrapped instances
+            enable_resilience=False,  # Disable to get unwrapped instances
         )
         factory = AdapterFactory(config)
 
@@ -206,7 +199,7 @@ class TestRegistryModification:
             name="custom_in_memory",
             adapter_type=InMemoryTicketAdapter,
             description="Custom in-memory adapter",
-            tags=["custom", "testing"]
+            tags=["custom", "testing"],
         )
 
         # Create instance
@@ -224,7 +217,7 @@ class TestRegistryModification:
             name="custom",
             adapter_type=InMemoryTicketAdapter,
             description="Custom adapter",
-            tags=["custom"]
+            tags=["custom"],
         )
 
         # Swap to custom
@@ -239,9 +232,7 @@ class TestRegistryModification:
         """Test unregistering adapter affects future swaps."""
         # Register custom
         factory.ticket_system_registry.register(
-            name="temp",
-            adapter_type=InMemoryTicketAdapter,
-            description="Temporary adapter"
+            name="temp", adapter_type=InMemoryTicketAdapter, description="Temporary adapter"
         )
 
         # Create instance

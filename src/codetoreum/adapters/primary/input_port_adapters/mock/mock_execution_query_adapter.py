@@ -133,9 +133,7 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
                 has_more=False,  # Mock doesn't paginate logs
             )
 
-    async def get_execution_history(
-        self, execution_id: str, limit: int | None = None
-    ) -> ExecutionHistory:
+    async def get_execution_history(self, execution_id: str, limit: int | None = None) -> ExecutionHistory:
         """Get execution event history."""
         with self._lock:
             if execution_id not in self._executions:
@@ -164,9 +162,7 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
 
             return len(executions)
 
-    def _apply_filters(
-        self, executions: list[ExecutionInfo], filters: ExecutionFilters
-    ) -> list[ExecutionInfo]:
+    def _apply_filters(self, executions: list[ExecutionInfo], filters: ExecutionFilters) -> list[ExecutionInfo]:
         """Apply filters to execution list."""
         result = executions
 
@@ -186,16 +182,10 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
             result = [e for e in result if e.stage_name == filters.stage_name]
 
         if filters.start_date is not None:
-            result = [
-                e for e in result
-                if e.started_at and e.started_at >= filters.start_date
-            ]
+            result = [e for e in result if e.started_at and e.started_at >= filters.start_date]
 
         if filters.end_date is not None:
-            result = [
-                e for e in result
-                if e.started_at and e.started_at <= filters.end_date
-            ]
+            result = [e for e in result if e.started_at and e.started_at <= filters.end_date]
 
         return result
 

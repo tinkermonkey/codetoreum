@@ -30,6 +30,7 @@ class TestProductionModeCheck:
         import importlib
 
         from codetoreum.adapters.primary import error_middleware
+
         importlib.reload(error_middleware)
 
         # Debug mode should be False even though CODETOREUM_DEBUG=true
@@ -43,6 +44,7 @@ class TestProductionModeCheck:
         import importlib
 
         from codetoreum.adapters.primary import error_middleware
+
         importlib.reload(error_middleware)
 
         assert error_middleware.IS_PRODUCTION is False
@@ -55,6 +57,7 @@ class TestProductionModeCheck:
         import importlib
 
         from codetoreum.adapters.primary import error_middleware
+
         importlib.reload(error_middleware)
 
         assert error_middleware.IS_PRODUCTION is False
@@ -131,6 +134,7 @@ class TestErrorMiddlewareStackTraces:
         import importlib
 
         from codetoreum.adapters.primary import error_middleware
+
         importlib.reload(error_middleware)
 
         response = await error_middleware.error_handling_middleware(request, call_next)
@@ -161,6 +165,7 @@ class TestErrorMiddlewareStackTraces:
         import importlib
 
         from codetoreum.adapters.primary import error_middleware
+
         importlib.reload(error_middleware)
 
         # Patch the logger after reload
@@ -189,6 +194,7 @@ class TestErrorMiddlewareStackTraces:
         import importlib
 
         from codetoreum.adapters.primary import error_middleware
+
         importlib.reload(error_middleware)
 
         response = await error_middleware.error_handling_middleware(request, call_next)
@@ -218,7 +224,7 @@ class TestErrorMiddlewareLogging:
         # Use Pydantic V2 error type format with InitErrorDetails required keys
         validation_error = PydanticValidationError.from_exception_data(
             "ValidationError",
-            [{"loc": ("body", "field"), "type": "missing", "input": {}, "ctx": {}}]
+            [{"loc": ("body", "field"), "type": "missing", "input": {}, "ctx": {}}],
         )
 
         async def call_next(req):
@@ -334,6 +340,7 @@ class TestErrorMiddlewareResponseFormat:
         import importlib
 
         from codetoreum.adapters.primary import error_middleware
+
         importlib.reload(error_middleware)
 
         response = await error_middleware.error_handling_middleware(request, call_next)

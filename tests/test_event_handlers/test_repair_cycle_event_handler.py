@@ -393,6 +393,7 @@ class TestRepairCycleEventHandlerColumnChange:
     async def test_handle_column_change_logs_success(self, handler, repair_cycle_adapter, caplog):
         """Test handler logs success when repair cycle succeeds."""
         import logging
+
         caplog.set_level(logging.INFO)
 
         event = WorkItemColumnChanged(
@@ -472,9 +473,7 @@ class TestRepairCycleEventHandlerColumnChange:
                         passed=0,
                         failed=1,
                         warnings=0,
-                        failures=(
-                            Mock(file="test.py", test="test_something", message="Test failed"),
-                        ),
+                        failures=(Mock(file="test.py", test="test_something", message="Test failed"),),
                         warning_list=(),
                         raw_output="Test failed",
                         timestamp="2024-01-01T00:00:00Z",
@@ -515,6 +514,7 @@ class TestRepairCycleEventHandlerColumnChange:
     @pytest.mark.asyncio
     async def test_handle_column_change_exception_includes_error_id(self, handler, repair_cycle_adapter):
         """Test handler exception includes proper error ID."""
+
         # Make repair cycle raise an exception
         async def raise_error(context):
             raise Exception("Repair cycle failed")
@@ -545,9 +545,7 @@ class TestRepairCycleEventContext:
         context = RepairCycleEventContext(
             stage_name="Testing",
             workflow_run_id="item-1",
-            test_configs=(
-                RepairTestRunConfig(test_type=RepairTestType.UNIT),
-            ),
+            test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
             agent_name="senior_software_engineer",
             max_total_agent_calls=100,
             checkpoint_interval=5,

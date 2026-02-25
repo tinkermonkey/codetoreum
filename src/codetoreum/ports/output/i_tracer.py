@@ -94,9 +94,7 @@ class SpanProtocol(Protocol):
         """Set an attribute on the span."""
         ...
 
-    def add_event(
-        self, name: str, attributes: dict[str, Any] | None = None
-    ) -> None:
+    def add_event(self, name: str, attributes: dict[str, Any] | None = None) -> None:
         """Add an event to the span."""
         ...
 
@@ -129,28 +127,20 @@ class Span:
         # Validate trace_id and span_id format (should be hex strings)
         if not self._is_valid_trace_id(self.trace_id):
             msg = f"Invalid trace_id format: '{self.trace_id}' (must be 32-char hex string)"
-            raise ValueError(
-                msg
-            )
+            raise ValueError(msg)
         if not self._is_valid_span_id(self.span_id):
             msg = f"Invalid span_id format: '{self.span_id}' (must be 16-char hex string)"
-            raise ValueError(
-                msg
-            )
+            raise ValueError(msg)
 
         # Validate parent_span_id if provided
         if self.parent_span_id is not None and not self._is_valid_span_id(self.parent_span_id):
             msg = f"Invalid parent_span_id format: '{self.parent_span_id}' (must be 16-char hex string)"
-            raise ValueError(
-                msg
-            )
+            raise ValueError(msg)
 
         # Validate time ordering
         if self.end_time is not None and self.end_time < self.start_time:
             msg = "end_time cannot be before start_time"
-            raise ValueError(
-                msg
-            )
+            raise ValueError(msg)
 
     @staticmethod
     def _is_valid_trace_id(trace_id: str) -> bool:
@@ -196,9 +186,7 @@ class Span:
         """Set an attribute on the span."""
         self.attributes[key] = value
 
-    def add_event(
-        self, name: str, attributes: dict[str, Any] | None = None
-    ) -> None:
+    def add_event(self, name: str, attributes: dict[str, Any] | None = None) -> None:
         """
         Add an event to the span.
 
@@ -207,9 +195,7 @@ class Span:
         """
         if self.end_time is not None:
             msg = "Cannot add events to a span that has already ended"
-            raise RuntimeError(
-                msg
-            )
+            raise RuntimeError(msg)
         self.events.append(
             SpanEvent(
                 name=name,

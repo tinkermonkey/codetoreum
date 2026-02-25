@@ -69,13 +69,7 @@ def mock_config_service(webhook_secret):
 
     config.get_project_config = AsyncMock(return_value=project_config)
     config.load_github_state = AsyncMock(
-        return_value={
-            "boards": {
-                "test-board": {
-                    "columns": {"Todo": 1, "In Progress": 2, "Done": 3}
-                }
-            }
-        }
+        return_value={"boards": {"test-board": {"columns": {"Todo": 1, "In Progress": 2, "Done": 3}}}}
     )
 
     return config
@@ -108,11 +102,7 @@ def create_webhook_signature(payload_bytes: bytes, secret: str) -> str:
     Returns:
         Signature in format 'sha256=<hex>'
     """
-    signature = hmac.new(
-        secret.encode("utf-8"),
-        payload_bytes,
-        hashlib.sha256
-    ).hexdigest()
+    signature = hmac.new(secret.encode("utf-8"), payload_bytes, hashlib.sha256).hexdigest()
     return f"sha256={signature}"
 
 
@@ -216,14 +206,8 @@ class TestWebhookSignatureValidation:
         """Test that valid webhook signatures are accepted."""
         payload = {
             "action": "opened",
-            "issue": {
-                "id": 123,
-                "title": "Test Issue",
-                "body": "Test Body"
-            },
-            "repository": {
-                "full_name": "test-org/test-repo"
-            }
+            "issue": {"id": 123, "title": "Test Issue", "body": "Test Body"},
+            "repository": {"full_name": "test-org/test-repo"},
         }
         payload_bytes = json.dumps(payload).encode("utf-8")
 
@@ -236,10 +220,7 @@ class TestWebhookSignatureValidation:
 
     async def test_webhook_signature_validation_failure(self, webhook_adapter):
         """Test that invalid webhook signatures are rejected."""
-        payload = {
-            "action": "opened",
-            "issue": {"id": 123, "title": "Test", "body": "Test"}
-        }
+        payload = {"action": "opened", "issue": {"id": 123, "title": "Test", "body": "Test"}}
         payload_bytes = json.dumps(payload).encode("utf-8")
 
         # Use invalid signature
@@ -254,11 +235,7 @@ class TestWebhookSignatureValidation:
         payload_bytes = b'{"action": "opened"}'
 
         # Generate valid signature
-        expected_sig = hmac.new(
-            webhook_secret.encode("utf-8"),
-            payload_bytes,
-            hashlib.sha256
-        ).hexdigest()
+        expected_sig = hmac.new(webhook_secret.encode("utf-8"), payload_bytes, hashlib.sha256).hexdigest()
 
         # Similar but invalid signatures
         similar_sigs = [
@@ -268,10 +245,7 @@ class TestWebhookSignatureValidation:
 
         # All should be rejected with constant time
         for invalid_sig in similar_sigs:
-            result = await webhook_adapter.verify_signature(
-                payload_bytes,
-                f"sha256={invalid_sig}"
-            )
+            result = await webhook_adapter.verify_signature(payload_bytes, f"sha256={invalid_sig}")
             assert result is False
 
     async def test_webhook_missing_signature_header(self, webhook_adapter):
@@ -287,17 +261,10 @@ class TestWebhookSignatureValidation:
         payload_bytes = b'{"action": "opened"}'
 
         # Generate SHA-1 signature (old algorithm)
-        sha1_signature = hmac.new(
-            webhook_secret.encode("utf-8"),
-            payload_bytes,
-            hashlib.sha1
-        ).hexdigest()
+        sha1_signature = hmac.new(webhook_secret.encode("utf-8"), payload_bytes, hashlib.sha1).hexdigest()
 
         # Using sha1= prefix should not match sha256= expected format
-        result = await webhook_adapter.verify_signature(
-            payload_bytes,
-            f"sha1={sha1_signature}"
-        )
+        result = await webhook_adapter.verify_signature(payload_bytes, f"sha1={sha1_signature}")
         assert result is False, "SHA-1 signature should be rejected"
 
     async def test_webhook_signature_with_wrong_secret(self, webhook_adapter):
@@ -306,25 +273,15 @@ class TestWebhookSignatureValidation:
 
         # Generate signature with wrong secret
         wrong_secret = "different-secret-key"
-        wrong_signature = hmac.new(
-            wrong_secret.encode("utf-8"),
-            payload_bytes,
-            hashlib.sha256
-        ).hexdigest()
+        wrong_signature = hmac.new(wrong_secret.encode("utf-8"), payload_bytes, hashlib.sha256).hexdigest()
 
         # Should fail when verifying with correct secret
-        result = await webhook_adapter.verify_signature(
-            payload_bytes,
-            f"sha256={wrong_signature}"
-        )
+        result = await webhook_adapter.verify_signature(payload_bytes, f"sha256={wrong_signature}")
         assert result is False, "Wrong secret should be rejected"
 
     async def test_webhook_payload_tampering_detection(self, webhook_adapter, webhook_secret):
         """Test that payload tampering is detected."""
-        original_payload = {
-            "action": "opened",
-            "issue": {"id": 123, "title": "Original"}
-        }
+        original_payload = {"action": "opened", "issue": {"id": 123, "title": "Original"}}
         original_bytes = json.dumps(original_payload).encode("utf-8")
 
         # Create signature for original payload
@@ -333,7 +290,7 @@ class TestWebhookSignatureValidation:
         # Tamper with payload
         tampered_payload = {
             "action": "opened",
-            "issue": {"id": 999, "title": "Tampered"}  # Changed
+            "issue": {"id": 999, "title": "Tampered"},  # Changed
         }
         tampered_bytes = json.dumps(tampered_payload).encode("utf-8")
 
@@ -350,10 +307,7 @@ class TestWebhookSignatureValidation:
         assert isinstance(webhook_adapter._processed_deliveries, dict)
 
         # Mock a processed delivery
-        webhook_adapter._processed_deliveries[delivery_id] = MagicMock(
-            success=True,
-            message="Already processed"
-        )
+        webhook_adapter._processed_deliveries[delivery_id] = MagicMock(success=True, message="Already processed")
 
         # Verify it's tracked
         assert delivery_id in webhook_adapter._processed_deliveries
@@ -378,17 +332,10 @@ class TestWebhookSignatureValidation:
         payload_bytes = b'{"test": "payload"}'
 
         # Generate valid signature
-        expected_sig = hmac.new(
-            webhook_secret.encode("utf-8"),
-            payload_bytes,
-            hashlib.sha256
-        ).hexdigest()
+        expected_sig = hmac.new(webhook_secret.encode("utf-8"), payload_bytes, hashlib.sha256).hexdigest()
 
         # GitHub sends lowercase algorithm prefix
-        result = await webhook_adapter.verify_signature(
-            payload_bytes,
-            f"sha256={expected_sig}"
-        )
+        result = await webhook_adapter.verify_signature(payload_bytes, f"sha256={expected_sig}")
         assert result is True
 
     async def test_webhook_missing_secret_configuration(self, webhook_adapter):
@@ -399,10 +346,7 @@ class TestWebhookSignatureValidation:
         webhook_adapter.config.get_webhook_secret = AsyncMock(return_value=None)
 
         # Should be rejected when secret is missing
-        result = await webhook_adapter.verify_signature(
-            payload_bytes,
-            "sha256=any_signature"
-        )
+        result = await webhook_adapter.verify_signature(payload_bytes, "sha256=any_signature")
         assert result is False, "Missing secret should cause verification to fail"
 
     async def test_webhook_signature_with_unicode_payload(self, webhook_adapter, webhook_secret):
@@ -411,8 +355,8 @@ class TestWebhookSignatureValidation:
             "action": "opened",
             "issue": {
                 "title": "Issue with Unicode 你好 🚀",
-                "body": "Description with émojis and spëcial çhars"
-            }
+                "body": "Description with émojis and spëcial çhars",
+            },
         }
         # JSON encode with proper UTF-8 handling
         payload_bytes = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -433,8 +377,8 @@ class TestWebhookSignatureValidation:
                 "id": 123,
                 "title": "Large issue",
                 "body": "x" * 100000,  # 100KB of data
-                "repository": {"full_name": "test-org/test-repo"}
-            }
+                "repository": {"full_name": "test-org/test-repo"},
+            },
         }
         payload_bytes = json.dumps(payload).encode("utf-8")
 
@@ -461,11 +405,7 @@ class TestWebhookTimingAttackResistance:
         payload_bytes = b'{"action": "opened", "issue": {"id": 123}}'
 
         # Generate valid signature
-        valid_signature = hmac.new(
-            webhook_secret.encode("utf-8"),
-            payload_bytes,
-            hashlib.sha256
-        ).hexdigest()
+        valid_signature = hmac.new(webhook_secret.encode("utf-8"), payload_bytes, hashlib.sha256).hexdigest()
 
         # Create similar but invalid signatures
         test_sigs = [
@@ -481,10 +421,7 @@ class TestWebhookTimingAttackResistance:
             times = []
             for _ in range(iterations):
                 start = time.perf_counter()
-                await webhook_adapter.verify_signature(
-                    payload_bytes,
-                    f"sha256={sig}"
-                )
+                await webhook_adapter.verify_signature(payload_bytes, f"sha256={sig}")
                 elapsed = time.perf_counter() - start
                 times.append(elapsed)
 
@@ -499,8 +436,9 @@ class TestWebhookTimingAttackResistance:
         if min_time > 0:
             variance_ratio = max_time / min_time
             # Allow larger variance for micro-operations due to system noise
-            assert variance_ratio < TIMING_VARIANCE_THRESHOLD, \
+            assert variance_ratio < TIMING_VARIANCE_THRESHOLD, (
                 f"Timing variance {variance_ratio}x suggests potential timing attack vulnerability"
+            )
 
     async def test_early_exit_not_possible(self, webhook_adapter, webhook_secret):
         """Test that comparison doesn't exit early on mismatch.
@@ -512,11 +450,7 @@ class TestWebhookTimingAttackResistance:
         payload_bytes = b'{"test": "payload"}'
 
         # Generate valid hex signature
-        valid_hex = hmac.new(
-            webhook_secret.encode("utf-8"),
-            payload_bytes,
-            hashlib.sha256
-        ).hexdigest()
+        valid_hex = hmac.new(webhook_secret.encode("utf-8"), payload_bytes, hashlib.sha256).hexdigest()
 
         # Create signatures that differ in first character
         bad_sigs = [
@@ -526,10 +460,7 @@ class TestWebhookTimingAttackResistance:
 
         # All should fail regardless of position of difference
         for sig in bad_sigs:
-            result = await webhook_adapter.verify_signature(
-                payload_bytes,
-                f"sha256={sig}"
-            )
+            result = await webhook_adapter.verify_signature(payload_bytes, f"sha256={sig}")
             assert result is False, "Wrong signature should be rejected"
 
 
@@ -543,10 +474,7 @@ class TestWebhookSecurityErrorHandling:
         payload_bytes = b'{"action": "opened"}'
 
         # Try invalid signature
-        result = await webhook_adapter.verify_signature(
-            payload_bytes,
-            "sha256=invalid_signature"
-        )
+        result = await webhook_adapter.verify_signature(payload_bytes, "sha256=invalid_signature")
 
         assert result is False
 
@@ -558,10 +486,7 @@ class TestWebhookSecurityErrorHandling:
         webhook_adapter.config.get_webhook_secret = AsyncMock(return_value=None)
 
         # Verification should fail
-        result = await webhook_adapter.verify_signature(
-            payload_bytes,
-            "sha256=any_signature"
-        )
+        result = await webhook_adapter.verify_signature(payload_bytes, "sha256=any_signature")
 
         assert result is False
 

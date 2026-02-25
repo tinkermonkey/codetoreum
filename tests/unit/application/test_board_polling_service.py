@@ -72,8 +72,16 @@ class TestDetectChanges:
         changes = polling_service._detect_changes(previous_state, current_state)
 
         assert len(changes) == 2
-        assert {"work_item_id": "item-1", "from_column": "Backlog", "to_column": "In Progress"} in changes
-        assert {"work_item_id": "item-3", "from_column": "In Progress", "to_column": "Done"} in changes
+        assert {
+            "work_item_id": "item-1",
+            "from_column": "Backlog",
+            "to_column": "In Progress",
+        } in changes
+        assert {
+            "work_item_id": "item-3",
+            "from_column": "In Progress",
+            "to_column": "Done",
+        } in changes
 
     def test_detect_changes_ignores_new_items(self, polling_service):
         """Test that new items (not in previous state) are not reported as changes."""
@@ -155,8 +163,16 @@ class TestDetectChanges:
         changes = polling_service._detect_changes(previous_state, current_state)
 
         assert len(changes) == 3
-        assert {"work_item_id": "item-1", "from_column": "Backlog", "to_column": "In Progress"} in changes
-        assert {"work_item_id": "item-2", "from_column": "In Progress", "to_column": "Review"} in changes
+        assert {
+            "work_item_id": "item-1",
+            "from_column": "Backlog",
+            "to_column": "In Progress",
+        } in changes
+        assert {
+            "work_item_id": "item-2",
+            "from_column": "In Progress",
+            "to_column": "Review",
+        } in changes
         assert {"work_item_id": "item-3", "from_column": "Review", "to_column": "Done"} in changes
 
 
@@ -244,20 +260,14 @@ class TestPollingIntegration:
     """Integration tests for the polling loop."""
 
     @pytest.mark.asyncio
-    async def test_polling_detects_column_changes(
-        self, polling_service, mock_board_service, event_bus
-    ):
+    async def test_polling_detects_column_changes(self, polling_service, mock_board_service, event_bus):
         """Test that polling loop detects and emits change events."""
         # Setup mock board state
         column1 = BoardColumn(id="col-1", name="Backlog", position=0, work_item_ids=["item-1"])
         column2 = BoardColumn(id="col-2", name="In Progress", position=1, work_item_ids=[])
-        board = ProjectBoard(
-            id="board-1", name="Test Board", project_id="proj-1", columns=[column1, column2]
-        )
+        board = ProjectBoard(id="board-1", name="Test Board", project_id="proj-1", columns=[column1, column2])
 
-        item_pos = WorkItemPosition(
-            work_item_id="item-1", column_name="Backlog", position=0
-        )
+        item_pos = WorkItemPosition(work_item_id="item-1", column_name="Backlog", position=0)
 
         mock_board_service.get_board.return_value = board
         mock_board_service.get_items_in_column.side_effect = [
@@ -269,16 +279,14 @@ class TestPollingIntegration:
         await polling_service._poll_board("proj-1", "board-1")
 
         # Now change the state - item moved to In Progress
-        item_pos_moved = WorkItemPosition(
-            work_item_id="item-1", column_name="In Progress", position=0
-        )
+        item_pos_moved = WorkItemPosition(work_item_id="item-1", column_name="In Progress", position=0)
         column1_empty = BoardColumn(id="col-1", name="Backlog", position=0, work_item_ids=[])
-        column2_with_item = BoardColumn(
-            id="col-2", name="In Progress", position=1, work_item_ids=["item-1"]
-        )
+        column2_with_item = BoardColumn(id="col-2", name="In Progress", position=1, work_item_ids=["item-1"])
         board_updated = ProjectBoard(
-            id="board-1", name="Test Board", project_id="proj-1",
-            columns=[column1_empty, column2_with_item]
+            id="board-1",
+            name="Test Board",
+            project_id="proj-1",
+            columns=[column1_empty, column2_with_item],
         )
         mock_board_service.get_board.return_value = board_updated
         mock_board_service.get_items_in_column.side_effect = [
@@ -309,9 +317,7 @@ class TestPollingIntegration:
         assert event.payload["project_id"] == "proj-1"
 
     @pytest.mark.asyncio
-    async def test_polling_loop_continues_on_error(
-        self, polling_service, mock_board_service
-    ):
+    async def test_polling_loop_continues_on_error(self, polling_service, mock_board_service):
         """Test that polling loop continues even when board service fails."""
         from codetoreum.ports.exceptions import ExternalServiceError
 
@@ -335,15 +341,11 @@ class TestErrorRecovery:
     """Tests for error recovery and handling in polling service."""
 
     @pytest.mark.asyncio
-    async def test_permanent_error_disables_board_polling(
-        self, polling_service, mock_board_service
-    ):
+    async def test_permanent_error_disables_board_polling(self, polling_service, mock_board_service):
         """Test that permanent errors (AuthenticationError) disable polling for the board."""
         # Setup - board initially in state
         polling_service.enable_board("proj-1", "board-1")
-        polling_service._board_states["board-1"] = BoardState(
-            board_id="board-1", item_columns={}
-        )
+        polling_service._board_states["board-1"] = BoardState(board_id="board-1", item_columns={})
 
         # Mock get_board to raise AuthenticationError
         mock_board_service.get_board.side_effect = AuthenticationError("Invalid token")
@@ -355,20 +357,14 @@ class TestErrorRecovery:
         assert "board-1" not in polling_service._board_states
 
     @pytest.mark.asyncio
-    async def test_resource_not_found_disables_board_polling(
-        self, polling_service, mock_board_service
-    ):
+    async def test_resource_not_found_disables_board_polling(self, polling_service, mock_board_service):
         """Test that ResourceNotFoundError disables polling for the board."""
         # Setup
         polling_service.enable_board("proj-1", "board-1")
-        polling_service._board_states["board-1"] = BoardState(
-            board_id="board-1", item_columns={}
-        )
+        polling_service._board_states["board-1"] = BoardState(board_id="board-1", item_columns={})
 
         # Mock get_board to raise ResourceNotFoundError
-        mock_board_service.get_board.side_effect = ResourceNotFoundError(
-            "Board", "board-1"
-        )
+        mock_board_service.get_board.side_effect = ResourceNotFoundError("Board", "board-1")
 
         # Poll the board
         await polling_service._poll_board("proj-1", "board-1")
@@ -377,15 +373,11 @@ class TestErrorRecovery:
         assert "board-1" not in polling_service._board_states
 
     @pytest.mark.asyncio
-    async def test_validation_error_disables_board_polling(
-        self, polling_service, mock_board_service
-    ):
+    async def test_validation_error_disables_board_polling(self, polling_service, mock_board_service):
         """Test that ValidationError disables polling for the board."""
         # Setup
         polling_service.enable_board("proj-1", "board-1")
-        polling_service._board_states["board-1"] = BoardState(
-            board_id="board-1", item_columns={}
-        )
+        polling_service._board_states["board-1"] = BoardState(board_id="board-1", item_columns={})
 
         # Mock get_board to raise ValidationError
         mock_board_service.get_board.side_effect = ValidationError("Invalid board ID")
@@ -397,14 +389,10 @@ class TestErrorRecovery:
         assert "board-1" not in polling_service._board_states
 
     @pytest.mark.asyncio
-    async def test_transient_error_preserves_board_state(
-        self, polling_service, mock_board_service
-    ):
+    async def test_transient_error_preserves_board_state(self, polling_service, mock_board_service):
         """Test that transient errors (ExternalServiceError) preserve board state."""
         # Setup - initialize board state
-        initial_state = BoardState(
-            board_id="board-1", item_columns={"item-1": "Backlog"}
-        )
+        initial_state = BoardState(board_id="board-1", item_columns={"item-1": "Backlog"})
         polling_service.enable_board("proj-1", "board-1")
         polling_service._board_states["board-1"] = initial_state
 
@@ -421,30 +409,18 @@ class TestErrorRecovery:
         assert polling_service._board_states["board-1"] == initial_state
 
     @pytest.mark.asyncio
-    async def test_recovery_after_transient_error(
-        self, polling_service, mock_board_service
-    ):
+    async def test_recovery_after_transient_error(self, polling_service, mock_board_service):
         """Test that polling recovers successfully after a transient error."""
         # Setup - initialize board state
-        column1 = BoardColumn(
-            id="col-1", name="Backlog", position=0, work_item_ids=["item-1"]
-        )
-        board = ProjectBoard(
-            id="board-1", name="Test Board", project_id="proj-1", columns=[column1]
-        )
-        item_pos = WorkItemPosition(
-            work_item_id="item-1", column_name="Backlog", position=0
-        )
+        column1 = BoardColumn(id="col-1", name="Backlog", position=0, work_item_ids=["item-1"])
+        board = ProjectBoard(id="board-1", name="Test Board", project_id="proj-1", columns=[column1])
+        item_pos = WorkItemPosition(work_item_id="item-1", column_name="Backlog", position=0)
 
         polling_service.enable_board("proj-1", "board-1")
-        polling_service._board_states["board-1"] = BoardState(
-            board_id="board-1", item_columns={"item-1": "Backlog"}
-        )
+        polling_service._board_states["board-1"] = BoardState(board_id="board-1", item_columns={"item-1": "Backlog"})
 
         # First poll - transient error
-        mock_board_service.get_board.side_effect = ExternalServiceError(
-            "BoardService", "Network timeout"
-        )
+        mock_board_service.get_board.side_effect = ExternalServiceError("BoardService", "Network timeout")
         await polling_service._poll_board("proj-1", "board-1")
 
         # Assert - state preserved
@@ -462,27 +438,19 @@ class TestErrorRecovery:
         assert mock_board_service.get_board.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_multiple_boards_independent_error_handling(
-        self, polling_service, mock_board_service
-    ):
+    async def test_multiple_boards_independent_error_handling(self, polling_service, mock_board_service):
         """Test that error on one board doesn't affect other boards."""
         # Setup two boards
         polling_service.enable_board("proj-1", "board-1")
         polling_service.enable_board("proj-1", "board-2")
-        polling_service._board_states["board-1"] = BoardState(
-            board_id="board-1", item_columns={}
-        )
-        polling_service._board_states["board-2"] = BoardState(
-            board_id="board-2", item_columns={}
-        )
+        polling_service._board_states["board-1"] = BoardState(board_id="board-1", item_columns={})
+        polling_service._board_states["board-2"] = BoardState(board_id="board-2", item_columns={})
 
         # Mock get_board to fail for board-1 but succeed for board-2
         def get_board_side_effect(project_id, board_id):
             if board_id == "board-1":
                 raise AuthenticationError("Auth failed")
-            return ProjectBoard(
-                id=board_id, name="Board 2", project_id=project_id, columns=[]
-            )
+            return ProjectBoard(id=board_id, name="Board 2", project_id=project_id, columns=[])
 
         mock_board_service.get_board.side_effect = get_board_side_effect
         mock_board_service.get_items_in_column.return_value = []
@@ -496,17 +464,11 @@ class TestErrorRecovery:
         assert "board-2" in polling_service._board_states
 
     @pytest.mark.asyncio
-    async def test_error_during_get_items_in_column(
-        self, polling_service, mock_board_service
-    ):
+    async def test_error_during_get_items_in_column(self, polling_service, mock_board_service):
         """Test error handling when get_items_in_column fails."""
         # Setup
-        column1 = BoardColumn(
-            id="col-1", name="Backlog", position=0, work_item_ids=["item-1"]
-        )
-        board = ProjectBoard(
-            id="board-1", name="Test Board", project_id="proj-1", columns=[column1]
-        )
+        column1 = BoardColumn(id="col-1", name="Backlog", position=0, work_item_ids=["item-1"])
+        board = ProjectBoard(id="board-1", name="Test Board", project_id="proj-1", columns=[column1])
 
         polling_service.enable_board("proj-1", "board-1")
 

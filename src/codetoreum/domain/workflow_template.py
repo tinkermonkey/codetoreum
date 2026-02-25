@@ -236,9 +236,7 @@ class WorkflowTemplate:
             visited.add(stage_name)
             rec_stack.add(stage_name)
 
-            stage = next(
-                (s for s in self.stage_templates if s.name == stage_name), None
-            )
+            stage = next((s for s in self.stage_templates if s.name == stage_name), None)
             if stage:
                 for dep in stage.dependencies:
                     if dep not in visited:

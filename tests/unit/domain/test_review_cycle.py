@@ -28,7 +28,7 @@ class TestReviewCycleCreation:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
 
         assert cycle.id is not None
@@ -53,7 +53,7 @@ class TestReviewCycleCreation:
             stage_name="coding",
             maker_agent_id="maker-1",
             reviewer_agent_id="reviewer-1",
-            max_iterations=5
+            max_iterations=5,
         )
 
         assert cycle.max_iterations == 5
@@ -64,7 +64,7 @@ class TestReviewCycleCreation:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
 
         events = cycle.get_pending_events()
@@ -83,7 +83,7 @@ class TestReviewCycleCreation:
                 workflow_id="wf-1",
                 stage_name="coding",
                 maker_agent_id="agent-1",
-                reviewer_agent_id="agent-1"
+                reviewer_agent_id="agent-1",
             )
 
     def test_create_with_zero_max_iterations_raises_error(self):
@@ -94,7 +94,7 @@ class TestReviewCycleCreation:
                 stage_name="coding",
                 maker_agent_id="maker-1",
                 reviewer_agent_id="reviewer-1",
-                max_iterations=0
+                max_iterations=0,
             )
 
     def test_create_with_negative_max_iterations_raises_error(self):
@@ -105,7 +105,7 @@ class TestReviewCycleCreation:
                 stage_name="coding",
                 maker_agent_id="maker-1",
                 reviewer_agent_id="reviewer-1",
-                max_iterations=-1
+                max_iterations=-1,
             )
 
 
@@ -118,7 +118,7 @@ class TestIterationManagement:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
         cycle.clear_events()
 
@@ -149,7 +149,7 @@ class TestIterationManagement:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
 
         cycle.start_iteration("output1", "exec-1")
@@ -168,7 +168,7 @@ class TestIterationManagement:
             stage_name="coding",
             maker_agent_id="maker-1",
             reviewer_agent_id="reviewer-1",
-            max_iterations=2
+            max_iterations=2,
         )
 
         cycle.start_iteration("output1", "exec-1")
@@ -190,7 +190,7 @@ class TestReviewSubmission:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
         cycle.start_iteration("output1", "exec-1")
         cycle.clear_events()
@@ -200,7 +200,7 @@ class TestReviewSubmission:
             comment="Looks good!",
             reviewer_execution_id="exec-2",
             issues=[],
-            suggestions=["Consider adding more tests"]
+            suggestions=["Consider adding more tests"],
         )
 
         iteration = cycle.iterations[0]
@@ -228,7 +228,7 @@ class TestReviewSubmission:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
         cycle.start_iteration("output1", "exec-1")
         cycle.clear_events()
@@ -238,7 +238,7 @@ class TestReviewSubmission:
             comment="Please fix these issues",
             reviewer_execution_id="exec-2",
             issues=["Missing error handling", "Incomplete tests"],
-            suggestions=["Add try-catch blocks"]
+            suggestions=["Add try-catch blocks"],
         )
 
         iteration = cycle.iterations[0]
@@ -261,7 +261,7 @@ class TestReviewSubmission:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
         cycle.start_iteration("output1", "exec-1")
         cycle.clear_events()
@@ -269,7 +269,7 @@ class TestReviewSubmission:
         cycle.submit_review(
             decision=ReviewDecision.ESCALATE,
             comment="This needs human review",
-            reviewer_execution_id="exec-2"
+            reviewer_execution_id="exec-2",
         )
 
         assert cycle.status == ReviewStatus.ESCALATED
@@ -287,15 +287,11 @@ class TestReviewSubmission:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
         cycle.start_iteration("output1", "exec-1")
 
-        cycle.submit_review(
-            decision=ReviewDecision.APPROVE,
-            comment="Perfect",
-            reviewer_execution_id="exec-2"
-        )
+        cycle.submit_review(decision=ReviewDecision.APPROVE, comment="Perfect", reviewer_execution_id="exec-2")
 
         feedback = cycle.get_latest_feedback()
         assert feedback is not None
@@ -308,15 +304,11 @@ class TestReviewSubmission:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
 
         with pytest.raises(DomainError, match="No iterations to review"):
-            cycle.submit_review(
-                decision=ReviewDecision.APPROVE,
-                comment="Good",
-                reviewer_execution_id="exec-1"
-            )
+            cycle.submit_review(decision=ReviewDecision.APPROVE, comment="Good", reviewer_execution_id="exec-1")
 
     def test_submit_review_twice_raises_error(self):
         """Test that submitting review twice for same iteration raises error."""
@@ -324,21 +316,17 @@ class TestReviewSubmission:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
         cycle.start_iteration("output1", "exec-1")
-        cycle.submit_review(
-            decision=ReviewDecision.APPROVE,
-            comment="Good",
-            reviewer_execution_id="exec-2"
-        )
+        cycle.submit_review(decision=ReviewDecision.APPROVE, comment="Good", reviewer_execution_id="exec-2")
 
         # Cannot submit review again for same iteration
         with pytest.raises(DomainError, match="already reviewed"):
             cycle.submit_review(
                 decision=ReviewDecision.APPROVE,
                 comment="Good again",
-                reviewer_execution_id="exec-3"
+                reviewer_execution_id="exec-3",
             )
 
 
@@ -351,7 +339,7 @@ class TestApprovalFlow:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
         cycle.start_iteration("output1", "exec-1")
         cycle.submit_review(ReviewDecision.APPROVE, "Great work", "exec-2")
@@ -371,7 +359,7 @@ class TestEscalationFlow:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
         cycle.start_iteration("output1", "exec-1")
         cycle.submit_review(ReviewDecision.ESCALATE, "Too complex", "exec-2")
@@ -386,7 +374,7 @@ class TestEscalationFlow:
             stage_name="coding",
             maker_agent_id="maker-1",
             reviewer_agent_id="reviewer-1",
-            max_iterations=2
+            max_iterations=2,
         )
 
         # Iteration 1
@@ -416,7 +404,7 @@ class TestIterativeFlow:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
 
         # Iteration 1: Changes requested
@@ -425,7 +413,7 @@ class TestIterativeFlow:
             ReviewDecision.REQUEST_CHANGES,
             "Add error handling",
             "exec-2",
-            issues=["Missing error handling"]
+            issues=["Missing error handling"],
         )
 
         assert cycle.current_iteration == 1
@@ -437,7 +425,7 @@ class TestIterativeFlow:
             ReviewDecision.REQUEST_CHANGES,
             "Add more tests",
             "exec-4",
-            issues=["Insufficient test coverage"]
+            issues=["Insufficient test coverage"],
         )
 
         assert cycle.current_iteration == 2
@@ -462,7 +450,7 @@ class TestQueryMethods:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
 
         assert not cycle.is_complete()
@@ -479,7 +467,7 @@ class TestQueryMethods:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
 
         assert not cycle.needs_maker_revision()
@@ -495,7 +483,7 @@ class TestQueryMethods:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
 
         assert cycle.get_latest_feedback() is None
@@ -519,7 +507,7 @@ class TestEventManagement:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
 
         events1 = cycle.get_pending_events()
@@ -534,7 +522,7 @@ class TestEventManagement:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
 
         assert len(cycle.get_pending_events()) == 1
@@ -549,7 +537,7 @@ class TestEventManagement:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
         cycle.clear_events()
 
@@ -569,7 +557,7 @@ class TestVersioning:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
 
         assert cycle._version == 0
@@ -580,7 +568,7 @@ class TestVersioning:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
 
         cycle.start_iteration("output1", "exec-1")
@@ -603,7 +591,7 @@ class TestReviewFeedbackValueObject:
             comment="Good",
             issues=[],
             suggestions=[],
-            timestamp=datetime.now(UTC)
+            timestamp=datetime.now(UTC),
         )
 
         with pytest.raises(FrozenInstanceError):
