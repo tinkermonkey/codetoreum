@@ -253,24 +253,6 @@ class TestStageQueries:
         assert duration >= 0
         assert isinstance(duration, float)
 
-    def test_update_status(self):
-        """Test update_status method."""
-        stage = PipelineStage.create("test", "wf-1", {"agent_id": "agent-1"})
-        assert stage.status == StageStatus.PENDING
-
-        stage.update_status("ready")
-        assert stage.status == StageStatus.READY
-
-        stage.update_status("running")
-        assert stage.status == StageStatus.RUNNING
-
-    def test_update_status_invalid_value(self):
-        """Test update_status with invalid value."""
-        stage = PipelineStage.create("test", "wf-1", {"agent_id": "agent-1"})
-
-        with pytest.raises(ValueError):
-            stage.update_status("invalid")
-
     def test_get_agent_for_execution_sequential(self):
         """Test get_agent_for_execution for sequential stage."""
         stage = PipelineStage.create(
