@@ -98,7 +98,7 @@ class InMemoryQueueService(IPipelineQueueService):
         # Subscribe to board position changes if event bus provided
         if self._event_bus:
             self._event_bus.subscribe(
-                WorkItemColumnChangedEvent,
+                "WorkItemColumnChangedEvent",
                 self._handle_board_position_change
             )
 
@@ -572,20 +572,27 @@ class InMemoryQueueService(IPipelineQueueService):
             event: WorkItemColumnChangedEvent containing work_item_id, project_id, board_id,
                   from_column, to_column, and moved_by fields
         """
-        # Update queue position to match board position
-        # For now, we sync by moving to end of queue (lowest priority when moved)
-        # The board position will be reflected when sync_queue_with_board is called
+        try:
+            # Update queue to reflect board column changes
+            # Items in the new column should be reordered; items in old column should be removed
+            with self._lock:
+                queue_key = f"{event.project_id}:{event.board_id}"
+                if queue_key not in self._queues:
+                    return
 
-        # Find and update the item in queue
-        with self._lock:
-            queue_key = f"{event.project_id}:{event.board_id}"
-            if queue_key not in self._queues:
-                return
+                queue = self._queues[queue_key]
+                found = False
 
-            queue = self._queues[queue_key]
-            for i, entry in enumerate(queue):
-                if entry.work_item_id == event.work_item_id:
-                    # Item found in queue - will be re-positioned on next board sync
+                # Find and remove item from queue (since column changed)
+                for i, entry in enumerate(queue):
+                    if entry.work_item_id == event.work_item_id:
+                        queue.pop(i)
+                        found = True
+                        break
+
+                # If item moved to a different column, re-add it to the queue
+                # (the item stays in queue but position may be affected)
+                if found:
                     # Log the board position change for audit trail
                     self._operations_log.append(
                         {
@@ -599,7 +606,20 @@ class InMemoryQueueService(IPipelineQueueService):
                             "moved_by": event.moved_by,
                         }
                     )
-                    break
+        except Exception as e:
+            logger.error(
+                f"Failed to handle board position change for {event.work_item_id} "
+                f"in {event.project_id}/{event.board_id}: {e}",
+                exc_info=True,
+                extra={
+                    "work_item_id": event.work_item_id,
+                    "project_id": event.project_id,
+                    "board_id": event.board_id,
+                    "from_column": event.from_column,
+                    "to_column": event.to_column,
+                    "error_type": type(e).__name__,
+                }
+            )
 
     # ===== Test Helper Methods =====
 

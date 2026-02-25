@@ -157,7 +157,7 @@ class TestCausalLinkingIntegration:
 
         Acceptance Criteria:
         - FakeContainerAdapter emits ContainerExecutionCompletedEvent with output_files
-        - Storage adapter subscribes to event and persists files
+        - Storage adapter subscribes to event and persists files automatically
         - Files are accessible in storage after execution
         - Storage audit trail shows artifact upload events
         """
@@ -172,11 +172,11 @@ class TestCausalLinkingIntegration:
             stdout="All tests passed",
         )
 
-        # Clear event emitter to track new events
+        # Clear event emitter and storage to track new events
         event_emitter.clear()
         storage.clear()
 
-        # Action: Execute container command
+        # Action 1: Execute container command (this will emit ContainerExecutionCompletedEvent automatically)
         result = await container.run(
             image="python:3.11",
             command=["pytest", "tests/"],
@@ -184,11 +184,12 @@ class TestCausalLinkingIntegration:
             environment={"PROJECT_ID": "proj-1"},
         )
 
-        # Simulate file writes by container
-        container.write_output_file(result.container_id, "test_results.json", "")
+        # Action 2: Simulate file writes BEFORE calling run() in a real scenario
+        # In our test, we manually write files and then re-emit the event with the files list
+        container.write_output_file(result.container_id, "test_results.json", "{}")
         container.write_output_file(result.container_id, "coverage.xml", "")
 
-        # Manually emit the completion event (in production, this happens automatically)
+        # Action 3: Emit the event again with the output files (simulates automatic event after files are written)
         event = ContainerExecutionCompletedEvent(
             type="container.execution_completed",
             timestamp=now_iso(),
@@ -199,7 +200,8 @@ class TestCausalLinkingIntegration:
             output_files=tuple(container._get_output_files(result.container_id)),
             project_id="proj-1",
         )
-        await event_emitter.emit(event)
+        # Emit to event bus which routes to storage subscriber
+        await bootstrap.infrastructure.event_bus.publish(event)
 
         # Allow event propagation
         await asyncio.sleep(0.1)
@@ -208,12 +210,12 @@ class TestCausalLinkingIntegration:
         storage_info = await storage.get_storage_info()
         assert storage_info["object_count"] > 0, "Files should be persisted to storage"
 
-        # Verify artifacts are in storage
+        # Verify artifacts are in storage with correct paths
         files = await storage.list_files(prefix=f"container/proj-1/{result.container_id}")
-        assert len(files) == 2, "Both output files should be persisted"
+        assert len(files) == 2, f"Both output files should be persisted, got {len(files)}"
         file_paths = [f.key for f in files]
-        assert any("test_results.json" in p for p in file_paths)
-        assert any("coverage.xml" in p for p in file_paths)
+        assert any("test_results.json" in p for p in file_paths), f"test_results.json not found in {file_paths}"
+        assert any("coverage.xml" in p for p in file_paths), f"coverage.xml not found in {file_paths}"
 
         # Verify audit trail shows artifact uploads
         events = event_emitter.get_events()
@@ -222,7 +224,7 @@ class TestCausalLinkingIntegration:
         artifact_events = [
             e for e in events if isinstance(e, ArtifactUploadedEvent)
         ]
-        assert len(artifact_events) >= 2, "Storage should emit artifact upload events"
+        assert len(artifact_events) >= 2, f"Storage should emit artifact upload events for each file. Got {len(artifact_events)} events"
 
     @pytest.mark.asyncio
     async def test_container_execution_completed_event_structure(self, bootstrap):
@@ -276,7 +278,7 @@ class TestCausalLinkingIntegration:
         """Test that event bus correctly routes events to registered subscribers.
 
         Acceptance Criteria:
-        - Event bus supports subscribe(event_type, handler)
+        - Event bus supports subscribe(event_type, handler) with string event type
         - Handlers are called asynchronously
         - Multiple handlers can subscribe to same event type
         - No circular dependencies
@@ -289,8 +291,8 @@ class TestCausalLinkingIntegration:
         async def handler(event: WorkItemColumnChangedEvent) -> None:
             received_events.append(event)
 
-        # Subscribe to event type
-        event_bus.subscribe(WorkItemColumnChangedEvent, handler)
+        # Subscribe to event type using string name (not class)
+        event_bus.subscribe("WorkItemColumnChangedEvent", handler)
 
         # Emit event
         event = WorkItemColumnChangedEvent(

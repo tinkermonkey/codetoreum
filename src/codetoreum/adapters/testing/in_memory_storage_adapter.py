@@ -42,12 +42,11 @@ class InMemoryStorageAdapter(IStorage):
         self._lock = threading.Lock()
         self._event_emitter = event_emitter or MockEventEmitter()
         self._event_bus = event_bus
-        self._virtual_filesystems: dict[str, dict[str, str]] = {}  # For tracking container outputs
 
         # Subscribe to container execution completion events if event bus provided
         if self._event_bus:
             self._event_bus.subscribe(
-                ContainerExecutionCompletedEvent,
+                "ContainerExecutionCompletedEvent",
                 self._handle_container_completion
             )
 

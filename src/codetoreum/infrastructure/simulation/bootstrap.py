@@ -4,13 +4,16 @@ Simulation Application Bootstrap
 Wires up the entire application stack in simulation mode through 6 phases:
 
 **Phase 0**: Create simulation engine (encapsulates clock and timing)
-**Phase 1**: Create adapters (16 mock adapters: ticket system, LLM, container, repository,
+**Phase 1**: Create infrastructure (event bus, logger, error registry) - EARLY for event subscriptions
+**Phase 2**: Create adapters (16 mock adapters: ticket system, LLM, container, repository,
            event store, metrics, storage, config, notifier, encryption, board, repair cycle,
            project manager, lock service, workflow config, agent executor)
-**Phase 2**: Create infrastructure (event bus, logger, error registry)
 **Phase 3**: Create services (8 application services with their dependencies)
 **Phase 4**: Create ports (16 input port implementations)
 **Phase 5**: Create FastAPI app (wire all ports to API endpoints, register event handlers)
+
+Note: Infrastructure (event bus) is created before adapters to enable causal linking via
+event subscriptions. Adapters can subscribe to domain events during initialization.
 
 This is the foundational component that enables simulation testing. It provides a complete
 application bootstrap that wires together all components in the correct order with proper
@@ -259,13 +262,15 @@ class SimulationApplicationBootstrap:
         """
         Set up the entire application stack.
 
-        This method executes all 6 bootstrap phases in order:
+        This method executes bootstrap phases in order:
         - Phase 0: Create simulation engine (encapsulates clock and timing)
-        - Phase 1: Create adapters (12 mock adapters for all output ports)
-        - Phase 2: Create infrastructure (event bus, logger, error registry)
+        - Phase 1: Create infrastructure (event bus, logger, error registry) - EARLY for subscriptions
+        - Phase 2: Create adapters (16 mock adapters for all output ports)
         - Phase 3: Create services (8 application services with dependencies)
         - Phase 4: Create ports (16 input port implementations)
         - Phase 5: Create FastAPI app (wire all ports to API endpoints, register handlers)
+
+        Infrastructure is created before adapters to enable causal linking via event bus subscriptions.
 
         Returns:
             Fully configured FastAPI application
@@ -283,13 +288,13 @@ class SimulationApplicationBootstrap:
             logger.info("Phase 0: Creating simulation engine...")
             self._engine = SimulationEngine.create(self.config)
 
-            # Phase 2 (early): Create infrastructure including event bus
-            # This is moved before Phase 1 so adapters can subscribe to event bus
-            logger.info("Phase 2 (early): Creating infrastructure...")
+            # Phase 1 (early): Create infrastructure including event bus
+            # Created before adapters so they can subscribe to domain events
+            logger.info("Phase 1: Creating infrastructure...")
             self.infrastructure = self._create_infrastructure()
 
-            # Phase 1: Create adapters (16 total)
-            logger.info("Phase 1: Creating 16 adapters...")
+            # Phase 2: Create adapters (16 total) with event bus subscriptions
+            logger.info("Phase 2: Creating 16 adapters...")
             self.adapters = await self._create_adapters()
 
             # Phase 3: Create services
@@ -360,7 +365,7 @@ class SimulationApplicationBootstrap:
             )
 
     # =========================================================================
-    # Phase 1: Create Adapters
+    # Phase 2: Create Adapters
     # =========================================================================
 
     async def _create_adapters(self) -> SimulationAdapters:
@@ -406,7 +411,12 @@ class SimulationApplicationBootstrap:
         # Create adapters using factory
         ticket_system = self._adapter_factory.create_ticket_system(adapter_name="in_memory")
         llm_provider = self._adapter_factory.create_llm_provider(adapter_name="mock")
-        container = self._adapter_factory.create_container(adapter_name="fake")
+        # Pass event_emitter and event_bus to container for event subscription
+        container = self._adapter_factory.create_container(
+            adapter_name="fake",
+            event_emitter=event_emitter,
+            event_bus=event_bus
+        )
         repository = InMemoryRepositoryAdapter(event_emitter=event_emitter)
         event_store = self._adapter_factory.create_event_store(adapter_name="in_memory")
 
@@ -445,12 +455,6 @@ class SimulationApplicationBootstrap:
         workflow_config = InMemoryWorkflowConfigService()
         agent_executor = MockAgentExecutor(execution_delay_seconds=3.0)
 
-        # Update FakeContainerAdapter to pass event_emitter and event_bus
-        # Need to get it from the factory and update it
-        if isinstance(container, FakeContainerAdapter):
-            container._event_emitter = event_emitter
-            container._event_bus = event_bus
-
         # Pre-configure default test project for simulation testing
         from codetoreum.domain.value_objects import ProjectConfig
         project_manager.add_project(
@@ -487,7 +491,7 @@ class SimulationApplicationBootstrap:
         )
 
     # =========================================================================
-    # Phase 2: Create Infrastructure
+    # Phase 1: Create Infrastructure (Early for Event Bus Subscriptions)
     # =========================================================================
 
     def _create_infrastructure(self) -> SimulationInfrastructure:
