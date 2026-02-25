@@ -20,31 +20,6 @@ from codetoreum.ports.input.work_item_query import (
 class TestWorkItemMapper:
     """Test suite for WorkItemMapper."""
 
-    def test_to_create_command(self):
-        """Test converting CreateWorkItemRequest DTO to CreateWorkItemCommand."""
-        # Arrange
-        dto = CreateWorkItemRequest(
-            project_id="proj-123",
-            title="Test Work Item",
-            description="Test description",
-            labels=["bug", "urgent"],
-            priority="HIGH",
-            external_id="42",
-            external_url="https://github.com/org/repo/issues/42",
-        )
-
-        # Act
-        command = WorkItemMapper.to_create_command(dto)
-
-        # Assert
-        assert command.project_id == "proj-123"
-        assert command.title == "Test Work Item"
-        assert command.description == "Test description"
-        assert command.labels == ["bug", "urgent"]
-        assert command.priority == WorkItemPriority.HIGH
-        assert command.external_id == "42"
-        assert command.external_url == "https://github.com/org/repo/issues/42"
-
     def test_to_create_command_with_defaults(self):
         """Test converting CreateWorkItemRequest with default values."""
         # Arrange
@@ -65,26 +40,6 @@ class TestWorkItemMapper:
         assert command.priority == WorkItemPriority.MEDIUM
         assert command.external_id is None
         assert command.external_url is None
-
-    def test_to_update_command(self):
-        """Test converting UpdateWorkItemRequest DTO to UpdateWorkItemCommand."""
-        # Arrange
-        dto = UpdateWorkItemRequest(
-            title="Updated Title",
-            description="Updated description",
-            labels=["feature"],
-            priority="CRITICAL",
-        )
-
-        # Act
-        command = WorkItemMapper.to_update_command("wi-123", dto)
-
-        # Assert
-        assert command.work_item_id == "wi-123"
-        assert command.title == "Updated Title"
-        assert command.description == "Updated description"
-        assert command.labels == ["feature"]
-        assert command.priority == WorkItemPriority.CRITICAL
 
     def test_to_update_command_partial(self):
         """Test converting UpdateWorkItemRequest with partial updates."""

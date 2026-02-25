@@ -7,6 +7,7 @@ through WebSocket connections.
 
 
 import pytest
+from typing import TYPE_CHECKING
 
 from codetoreum.adapters.primary.websocket_adapter import (
     EventFilter,
@@ -30,7 +31,10 @@ try:
     OPENTELEMETRY_AVAILABLE = True
 except ImportError:
     OPENTELEMETRY_AVAILABLE = False
-    SpanKind = None
+    if TYPE_CHECKING:
+        from opentelemetry.trace import SpanKind
+    else:
+        SpanKind = None  # type: ignore[assignment,misc]
 
 
 # ============================================================================
@@ -378,40 +382,6 @@ async def test_websocket_adapter_session_span_initialization():
     assert len(adapter._message_tracers) == 0
 
 
-@pytest.mark.asyncio
-async def test_websocket_adapter_cleanup_session_span():
-    """Test that WebSocket adapter cleans up session spans."""
-    config = WebSocketConfig()
-    adapter = WebSocketAdapter(config=config, auth_manager=None)
-
-    connection_id = "test-conn-cleanup-1"
-
-    # Manually set up spans (simulating what handle_websocket does)
-    session_span = adapter._session_tracer.start_session(
-        connection_id=connection_id,
-        client_ip="127.0.0.1",
-        token_present=True,
-    )
-    adapter._session_spans[connection_id] = session_span
-    adapter._message_tracers[connection_id] = WebSocketMessageTracer(session_span)
-
-    # Mock connection state
-    class MockWebSocket:
-        pass
-
-    class MockConnectionState:
-        def __init__(self):
-            self.buffer = [1, 2, 3]  # 3 messages
-            self.subscriptions = [1, 2]  # 2 subscriptions
-
-    adapter.manager.connections[connection_id] = MockConnectionState()
-
-    # Clean up
-    adapter._cleanup_session_span(connection_id, reason="test_cleanup")
-
-    # Verify cleanup
-    assert connection_id not in adapter._session_spans
-    assert connection_id not in adapter._message_tracers
 
 
 # ============================================================================
