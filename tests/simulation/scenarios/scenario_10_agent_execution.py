@@ -406,7 +406,7 @@ async def scenario_execution_with_container_provisioning(runner: SimulationRunne
     )
     runner.assert_true(
         container_config.volumes is not None
-        and any("/workspace" in str(v.get("bind", "")) for v in container_config.volumes.values()),
+        and any("/workspace" in (v.get("bind") or "") for v in container_config.volumes.values()),
         "container_workspace_volume",
         "Container should have workspace volume mounted"
     )

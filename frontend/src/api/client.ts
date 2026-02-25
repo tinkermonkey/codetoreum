@@ -29,6 +29,7 @@ import type {
 import { apiConfig } from '../config/api.config'
 import { createResilienceDecoratorFromConfig } from '../infrastructure/resilience'
 import { dispatchEvent, AppEventType } from '../infrastructure/events'
+import { createApiError, type ApiError } from '../types/errors'
 
 /**
  * Request cancellation management
