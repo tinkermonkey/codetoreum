@@ -10,10 +10,11 @@ and SimulationDataSeeder to prove the wiring actually works end-to-end.
 """
 
 import asyncio
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
+from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
 from codetoreum.infrastructure.simulation.bootstrap import (
     SimulationAdapters,
     SimulationApplicationBootstrap,
@@ -27,7 +28,12 @@ from codetoreum.ports.output.board_service import MovedByType
 # ============================================================================
 
 
-async def wait_for_column(board, work_item_id, target_column, timeout=5.0):
+async def wait_for_column(
+    board: MockBoardAdapter,
+    work_item_id: str,
+    target_column: str,
+    timeout: float = 5.0,
+) -> bool:
     """Poll item position until it reaches target column or timeout."""
     elapsed = 0.0
     interval = 0.05
@@ -145,7 +151,10 @@ async def test_lock_released_after_cascade(e2e_env):
 
 
 @pytest.mark.asyncio
-async def test_cascade_stops_on_agent_failure(e2e_env):
+async def test_cascade_stops_on_agent_failure(
+    e2e_env: Any,
+    monkeypatch: Any,
+) -> None:
     """When an agent fails, the cascade stops at that column.
 
     Patch the executor to fail on the second execution (coder).
@@ -163,15 +172,20 @@ async def test_cascade_stops_on_agent_failure(e2e_env):
     original_simulate = executor._simulate_execution
     call_count = 0
 
-    async def failing_simulate(work_item_id, agent_id, execution_id, started_at):
+    async def failing_simulate(
+        work_item_id_arg: str,
+        agent_id: str,
+        execution_id: str,
+        started_at: Any,
+    ) -> None:
         nonlocal call_count
         call_count += 1
         if call_count == 2:
             # Second agent (coder) fails
             raise RuntimeError("Simulated coder failure")
-        return await original_simulate(work_item_id, agent_id, execution_id, started_at)
+        await original_simulate(work_item_id_arg, agent_id, execution_id, started_at)
 
-    executor._simulate_execution = failing_simulate
+    monkeypatch.setattr(executor, "_simulate_execution", failing_simulate)
 
     # Move item to trigger cascade
     await board.move_item_to_column(work_item_id, "Ready", MovedByType.HUMAN)
