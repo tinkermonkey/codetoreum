@@ -11,8 +11,6 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from codetoreum.adapters.primary.fastapi_app import create_app
-
 
 def enhance_openapi_spec(spec: dict) -> dict:
     """Enhance OpenAPI spec with examples and documentation."""
@@ -315,12 +313,10 @@ Legacy v1 API still available for backward compatibility.
 
 def main() -> None:
     """Generate enhanced OpenAPI specification."""
-    # Create app with minimal config (no external dependencies)
-    print("Creating FastAPI application...")
-    app = create_app(
-        disable_auth=True,  # Disable auth for spec generation
-        cors_origins=["*"]
-    )
+    # The app is instantiated at module level in fastapi_app.py
+    # We access it directly to avoid needing to pass all the ports
+    # This works because the module-level app is fully initialized
+    from codetoreum.adapters.primary.fastapi_app import app
 
     # Get OpenAPI spec
     print("Generating OpenAPI specification...")
@@ -336,7 +332,7 @@ def main() -> None:
 
     # Convert to YAML for better readability
     try:
-        import yaml
+        import yaml  # type: ignore[import-untyped]
         with open(output_path, "w") as f:
             yaml.dump(enhanced_spec, f, default_flow_style=False, sort_keys=False)
         print(f"✓ OpenAPI spec written to {output_path}")
