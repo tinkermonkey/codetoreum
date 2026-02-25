@@ -192,7 +192,7 @@ class IRetryPolicy(ABC):
         """
 
     @abstractmethod
-    def should_retry(self, exception: Exception) -> bool:
+    def should_retry(self, exception: BaseException) -> bool:
         """
         Determine if exception is retryable.
 

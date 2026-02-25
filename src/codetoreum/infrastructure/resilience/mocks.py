@@ -266,7 +266,7 @@ class MockRetryPolicy(IRetryPolicy):
         # No retries, just execute once
         return await operation(*args, **kwargs)
 
-    def should_retry(self, exception: Exception) -> bool:
+    def should_retry(self, exception: BaseException) -> bool:
         """Always returns True in mock mode."""
         return True
 

@@ -106,7 +106,7 @@ class ExponentialBackoffRetry(IRetryPolicy):
             raise last_exception
         raise MaxRetriesExceededError(f"Unexpected error in retry loop for {operation_name}")
 
-    def should_retry(self, exception: Exception) -> bool:
+    def should_retry(self, exception: BaseException) -> bool:
         """Determine if exception is retryable."""
         # Don't retry certain exceptions
         non_retryable = (
