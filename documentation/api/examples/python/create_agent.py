@@ -7,7 +7,7 @@ and MCP server configuration.
 import logging
 from typing import Any, cast
 
-import requests  # type: ignore[import-untyped]
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +155,7 @@ def main() -> None:
         logger.info("✓ Created agent successfully")
 
     except requests.exceptions.HTTPError as e:
-        logger.error("API Error: %s", e.response.status_code)
+        logger.exception("API Error: %s", e.response.status_code)
         try:
             error_detail = e.response.json()
             logger.error(
@@ -164,14 +164,13 @@ def main() -> None:
         except ValueError:
             logger.error("Detail: %s", e.response.text)
     except requests.exceptions.ConnectionError:
-        logger.error("Connection Error: Unable to connect to %s", BASE_URL)
-        logger.error("Ensure the API server is running")
+        logger.exception("Connection Error: Unable to connect to %s", BASE_URL)
     except requests.exceptions.Timeout:
-        logger.error("Timeout Error: Request took too long")
+        logger.exception("Timeout Error: Request took too long")
     except requests.exceptions.RequestException as e:
-        logger.error("Request Error: %s", str(e))
+        logger.exception("Request Error: %s", str(e))
     except Exception as e:
-        logger.error(
+        logger.exception(
             "Unexpected Error: %s: %s", type(e).__name__, str(e)
         )
 
