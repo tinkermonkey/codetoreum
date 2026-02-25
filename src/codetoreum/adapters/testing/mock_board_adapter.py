@@ -9,7 +9,9 @@ import logging
 import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Optional
 
+from codetoreum.domain.events import now_iso
 from codetoreum.domain.events.board_events import (
     BoardReconciledEvent,
     WorkItemColumnChangedEvent,
@@ -23,6 +25,7 @@ from codetoreum.ports.output.board_service import (
     ReconciliationResult,
     WorkItemPosition,
 )
+from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.monitoring import (
     MonitoringConfig,
     MonitoringState,
@@ -88,14 +91,19 @@ class MockBoardAdapter(IBoardService):
         assert history[0].moved_by == MovedByType.HUMAN
     """
 
-    def __init__(self) -> None:
-        """Initialize the board adapter."""
+    def __init__(self, event_emitter: Optional[IEventEmitter] = None) -> None:
+        """Initialize the board adapter.
+
+        Args:
+            event_emitter: Optional IEventEmitter for emitting domain events
+        """
         self._boards: dict[str, ProjectBoard] = {}  # key: "project_id:board_id"
         self._item_positions: dict[str, tuple[str, str, int]] = {}  # item_id -> (board_id, column_name, position)
         self._monitoring: dict[str, MonitoringStatus] = {}  # project_id -> status
         self._movement_log: list[MovementEvent] = []  # Audit trail of all movements
         self._lock = threading.Lock()  # Thread safety for concurrent operations
         self._event_listeners: dict[str, list] = {}  # Event type -> list of handlers
+        self._event_emitter = event_emitter
         self.current_project: str | None = None
         self.current_board: str | None = None
 
@@ -115,14 +123,28 @@ class MockBoardAdapter(IBoardService):
             ]
 
     def emit(self, event) -> None:
-        """Emit event to all registered listeners."""
+        """Emit event to all registered listeners and event emitter.
+
+        Emits to both:
+        1. Local event listeners (for backwards compatibility)
+        2. Event emitter (for domain event publishing to event bus)
+        """
         event_type = getattr(event, "type", event.__class__.__name__)
+
+        # Emit to local listeners
         if event_type in self._event_listeners:
             for handler in self._event_listeners[event_type]:
                 try:
                     handler(event)
                 except Exception as e:
                     logger.error(f"Error in event handler: {e}", exc_info=True)
+
+        # Emit to event emitter if provided (for event bus subscription)
+        if self._event_emitter:
+            try:
+                self._event_emitter.emit(event)
+            except Exception as e:
+                logger.error(f"Error emitting to event emitter: {e}", exc_info=True)
 
     # ===== Query Operations =====
 

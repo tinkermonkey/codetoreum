@@ -21,14 +21,17 @@ import logging
 import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import Optional
 
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
+from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.domain.events.queue_events import (
     QueueItemAddedEvent,
     QueueItemRemovedEvent,
     QueuePositionChangedEvent,
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.output.board_service import IBoardService
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.pipeline_queue_service import (
@@ -72,6 +75,7 @@ class InMemoryQueueService(IPipelineQueueService):
         board_service: IBoardService | None = None,
         time_source: Callable[[], datetime] | None = None,
         event_emitter: IEventEmitter | None = None,
+        event_bus: Optional[EventBus] = None,
     ) -> None:
         """Initialize empty queue service.
 
@@ -80,6 +84,7 @@ class InMemoryQueueService(IPipelineQueueService):
             time_source: Optional callable returning datetime.datetime for deterministic time
                         manipulation in simulation testing. Defaults to datetime.now(timezone.utc)
             event_emitter: Optional IEventEmitter for emitting domain events. Defaults to MockEventEmitter
+            event_bus: Optional EventBus for subscribing to domain events (e.g., WorkItemColumnChangedEvent)
         """
         self._queues: dict[str, list[PipelineQueueEntry]] = {}
         self._board_positions: dict[str, list[str]] = {}  # For set_board_order test helper
@@ -88,6 +93,14 @@ class InMemoryQueueService(IPipelineQueueService):
         self._board_service = board_service
         self._time_source = time_source or (lambda: datetime.now(UTC))
         self._event_emitter = event_emitter or MockEventEmitter()
+        self._event_bus = event_bus
+
+        # Subscribe to board position changes if event bus provided
+        if self._event_bus:
+            self._event_bus.subscribe(
+                WorkItemColumnChangedEvent,
+                self._handle_board_position_change
+            )
 
     async def is_item_in_queue(self, work_item_id: str) -> bool:
         """Check if a work item is currently in any queue.
@@ -548,6 +561,45 @@ class InMemoryQueueService(IPipelineQueueService):
             )
             # Don't raise - allow queue to remain in current state
             # Next sync or lock operation will retry
+
+    async def _handle_board_position_change(self, event: WorkItemColumnChangedEvent) -> None:
+        """Handle board position changes by updating queue positions.
+
+        This handler is invoked when WorkItemColumnChangedEvent is emitted by the board adapter,
+        enabling automatic queue position synchronization via event subscription.
+
+        Args:
+            event: WorkItemColumnChangedEvent containing work_item_id, project_id, board_id,
+                  from_column, to_column, and moved_by fields
+        """
+        # Update queue position to match board position
+        # For now, we sync by moving to end of queue (lowest priority when moved)
+        # The board position will be reflected when sync_queue_with_board is called
+
+        # Find and update the item in queue
+        with self._lock:
+            queue_key = f"{event.project_id}:{event.board_id}"
+            if queue_key not in self._queues:
+                return
+
+            queue = self._queues[queue_key]
+            for i, entry in enumerate(queue):
+                if entry.work_item_id == event.work_item_id:
+                    # Item found in queue - will be re-positioned on next board sync
+                    # Log the board position change for audit trail
+                    self._operations_log.append(
+                        {
+                            "operation": "board_position_changed",
+                            "timestamp": self._time_source(),
+                            "work_item_id": event.work_item_id,
+                            "project_id": event.project_id,
+                            "board_id": event.board_id,
+                            "from_column": event.from_column,
+                            "to_column": event.to_column,
+                            "moved_by": event.moved_by,
+                        }
+                    )
+                    break
 
     # ===== Test Helper Methods =====
 

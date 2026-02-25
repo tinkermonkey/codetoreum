@@ -283,13 +283,14 @@ class SimulationApplicationBootstrap:
             logger.info("Phase 0: Creating simulation engine...")
             self._engine = SimulationEngine.create(self.config)
 
+            # Phase 2 (early): Create infrastructure including event bus
+            # This is moved before Phase 1 so adapters can subscribe to event bus
+            logger.info("Phase 2 (early): Creating infrastructure...")
+            self.infrastructure = self._create_infrastructure()
+
             # Phase 1: Create adapters (16 total)
             logger.info("Phase 1: Creating 16 adapters...")
             self.adapters = await self._create_adapters()
-
-            # Phase 2: Create infrastructure
-            logger.info("Phase 2: Creating infrastructure...")
-            self.infrastructure = self._create_infrastructure()
 
             # Phase 3: Create services
             logger.info("Phase 3: Creating services...")
@@ -386,6 +387,8 @@ class SimulationApplicationBootstrap:
         """
         if not self._engine:
             raise RuntimeError("SimulationEngine must be created before adapters")
+        if not self.infrastructure:
+            raise RuntimeError("Infrastructure (event bus) must be created before adapters")
 
         # Create adapter factory in simulation mode with resilience disabled
         factory_config = AdapterFactoryConfig(
@@ -397,6 +400,9 @@ class SimulationApplicationBootstrap:
         # Create event emitter for domain event capture
         event_emitter = CapturingMockEventEmitter()
 
+        # Get event bus from infrastructure for event subscriptions
+        event_bus = self.infrastructure.event_bus
+
         # Create adapters using factory
         ticket_system = self._adapter_factory.create_ticket_system(adapter_name="in_memory")
         llm_provider = self._adapter_factory.create_llm_provider(adapter_name="mock")
@@ -404,14 +410,20 @@ class SimulationApplicationBootstrap:
         repository = InMemoryRepositoryAdapter(event_emitter=event_emitter)
         event_store = self._adapter_factory.create_event_store(adapter_name="in_memory")
 
-        # Adapters not in factory yet - create directly
+        # Adapters not in factory yet - create directly with event bus for causal linking
         metrics = InMemoryMetricsAdapter()
-        storage = InMemoryStorageAdapter(event_emitter=event_emitter)
+        storage = InMemoryStorageAdapter(
+            event_emitter=event_emitter,
+            event_bus=event_bus  # Subscribe to container execution completion events
+        )
         config_store = InMemoryConfigStore()
         notifier = MockNotifierAdapter()
 
-        # Create queue service with event emitter for domain event capture
-        queue_service = InMemoryQueueService(event_emitter=event_emitter)
+        # Create queue service with event emitter and event bus for causal linking
+        queue_service = InMemoryQueueService(
+            event_emitter=event_emitter,
+            event_bus=event_bus  # Subscribe to board position changes
+        )
 
         # Note: SimpleEncryptionAdapter is created directly (not via AdapterFactory)
         # because it's a simple utility service, not a main output port adapter.
@@ -422,8 +434,8 @@ class SimulationApplicationBootstrap:
         # Create time-aware adapters via engine (clock is injected internally)
         repair_cycle = self._engine.create_repair_cycle_adapter()
 
-        # Create board adapter
-        board = MockBoardAdapter()
+        # Create board adapter with event emitter for domain events
+        board = MockBoardAdapter(event_emitter=event_emitter)
 
         # Create project manager adapter
         project_manager = MockProjectManagerAdapter()
@@ -432,6 +444,12 @@ class SimulationApplicationBootstrap:
         lock_service = InMemoryLockService()
         workflow_config = InMemoryWorkflowConfigService()
         agent_executor = MockAgentExecutor(execution_delay_seconds=3.0)
+
+        # Update FakeContainerAdapter to pass event_emitter and event_bus
+        # Need to get it from the factory and update it
+        if isinstance(container, FakeContainerAdapter):
+            container._event_emitter = event_emitter
+            container._event_bus = event_bus
 
         # Pre-configure default test project for simulation testing
         from codetoreum.domain.value_objects import ProjectConfig

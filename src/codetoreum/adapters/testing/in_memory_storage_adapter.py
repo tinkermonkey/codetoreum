@@ -3,13 +3,15 @@
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
+from codetoreum.domain.events.container_events import ContainerExecutionCompletedEvent
 from codetoreum.domain.events.storage_events import (
     ArtifactDeletedEvent,
     ArtifactUploadedEvent,
 )
+from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.exceptions import ResourceNotFoundError
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.storage import IStorage, StorageObject
@@ -22,17 +24,32 @@ class InMemoryStorageAdapter(IStorage):
     Stores all objects in memory dictionaries.
     """
 
-    def __init__(self, event_emitter: IEventEmitter | None = None):
+    def __init__(
+        self,
+        event_emitter: IEventEmitter | None = None,
+        event_bus: Optional[EventBus] = None,
+    ):
         """Initialize in-memory storage.
 
         Args:
             event_emitter: Optional IEventEmitter for emitting domain events.
                           Defaults to MockEventEmitter.
+            event_bus: Optional EventBus for subscribing to domain events
+                      (e.g., ContainerExecutionCompletedEvent)
         """
         self._objects: dict[str, bytes] = {}
         self._metadata: dict[str, dict[str, any]] = {}
         self._lock = threading.Lock()
         self._event_emitter = event_emitter or MockEventEmitter()
+        self._event_bus = event_bus
+        self._virtual_filesystems: dict[str, dict[str, str]] = {}  # For tracking container outputs
+
+        # Subscribe to container execution completion events if event bus provided
+        if self._event_bus:
+            self._event_bus.subscribe(
+                ContainerExecutionCompletedEvent,
+                self._handle_container_completion
+            )
 
     async def upload(
         self,
@@ -279,6 +296,57 @@ class InMemoryStorageAdapter(IStorage):
                 "object_count": len(self._objects),
                 "total_size_bytes": total_size,
             }
+
+    async def _handle_container_completion(
+        self, event: ContainerExecutionCompletedEvent
+    ) -> None:
+        """Handle container execution completion by persisting output files.
+
+        This handler is invoked when ContainerExecutionCompletedEvent is emitted by the container
+        adapter, enabling automatic artifact persistence to storage via event subscription.
+
+        Args:
+            event: ContainerExecutionCompletedEvent containing container_id, command,
+                  exit_code, output_files list, and project_id
+        """
+        # Persist all files from the container's output directory
+        for file_path in event.output_files:
+            # Create a deterministic storage key based on container, file path, and project
+            if event.project_id:
+                storage_key = f"container/{event.project_id}/{event.container_id}/{file_path}"
+            else:
+                storage_key = f"container/{event.container_id}/{file_path}"
+
+            # In a fake environment, we store a placeholder file reference
+            # In production, this would read from the actual /output/ directory
+            content = f"Output from container {event.container_id}: {file_path}\nCommand: {event.command}\nExit code: {event.exit_code}".encode()
+
+            with self._lock:
+                self._objects[storage_key] = content
+                self._metadata[storage_key] = {
+                    "size": len(content),
+                    "content_type": "text/plain",
+                    "metadata": {
+                        "container_id": event.container_id,
+                        "file_path": file_path,
+                        "command": event.command,
+                        "exit_code": str(event.exit_code),
+                    },
+                    "last_modified": datetime.now(UTC),
+                }
+
+                # Emit domain event for the persisted artifact
+                self._event_emitter.emit(
+                    ArtifactUploadedEvent(
+                        type="storage.artifact_uploaded",
+                        timestamp=datetime.now(UTC).isoformat(),
+                        source="mock",
+                        key=storage_key,
+                        size_bytes=len(content),
+                        content_type="text/plain",
+                        project_id=event.project_id,
+                    )
+                )
 
     def clear(self) -> None:
         """Clear all objects (for testing)."""

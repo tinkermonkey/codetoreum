@@ -5,9 +5,14 @@ import re
 import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Optional
 from uuid import uuid4
 
+from codetoreum.domain.events import (
+    ContainerExecutionCompletedEvent,
+    now_iso,
+)
+from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.exceptions import (
     ContainerError,
     ResourceNotFoundError,
@@ -18,6 +23,7 @@ from codetoreum.ports.output.container import (
     ContainerStatus,
     IContainer,
 )
+from codetoreum.ports.output.event_emitter import IEventEmitter
 
 
 class FakeContainerAdapter(IContainer):
@@ -45,6 +51,8 @@ class FakeContainerAdapter(IContainer):
         default_stderr: str = "",
         execution_delay: float = 0.0,
         max_containers: int = 100,
+        event_emitter: Optional[IEventEmitter] = None,
+        event_bus: Optional[EventBus] = None,
     ):
         """
         Initialize the fake container adapter.
@@ -55,6 +63,8 @@ class FakeContainerAdapter(IContainer):
             default_stderr: Default stderr content
             execution_delay: Simulated execution delay in seconds
             max_containers: Maximum number of containers allowed (default: 100)
+            event_emitter: Optional event emitter for domain events
+            event_bus: Optional event bus for event subscriptions
 
         Raises:
             ValidationError: If parameters are invalid
@@ -69,6 +79,8 @@ class FakeContainerAdapter(IContainer):
         self._default_stderr = default_stderr
         self._execution_delay = execution_delay
         self._max_containers = max_containers
+        self._event_emitter = event_emitter
+        self._event_bus = event_bus
 
         # Container storage
         self._containers: dict[str, dict[str, Any]] = {}
@@ -78,6 +90,9 @@ class FakeContainerAdapter(IContainer):
 
         # Execution history
         self._execution_history: list[dict[str, Any]] = []
+
+        # Virtual filesystem tracking (container_id -> {file_path -> content})
+        self._virtual_filesystems: dict[str, dict[str, str]] = {}
 
         # Thread safety
         self._lock = threading.Lock()
@@ -193,6 +208,10 @@ class FakeContainerAdapter(IContainer):
         # Create container
         container_id = f"fake-{uuid4().hex[:12]}"
 
+        # Initialize virtual filesystem for this container
+        with self._lock:
+            self._virtual_filesystems[container_id] = {}
+
         # Get result
         result = self._get_result_for_command(command, container_id)
 
@@ -214,6 +233,21 @@ class FakeContainerAdapter(IContainer):
             if result.stdout:
                 for line in result.stdout.split("\n"):
                     await stream_callback(line + "\n")
+
+        # Emit ContainerExecutionCompletedEvent with output files
+        output_files = self._get_output_files(container_id)
+        if self._event_emitter:
+            event = ContainerExecutionCompletedEvent(
+                type="container.execution_completed",
+                timestamp=now_iso(),
+                source="fake_container",
+                container_id=container_id,
+                command=" ".join(command),
+                exit_code=result.exit_code,
+                output_files=tuple(output_files),
+                project_id=environment.get("PROJECT_ID"),
+            )
+            await self._event_emitter.emit(event)
 
         return result
 
@@ -694,6 +728,40 @@ class FakeContainerAdapter(IContainer):
         # Simulate copy operation
         if self._execution_delay > 0:
             await asyncio.sleep(self._execution_delay * 0.1)
+
+    # Helper methods for event emission and virtual filesystem tracking
+
+    def write_output_file(self, container_id: str, file_path: str, content: str) -> None:
+        """
+        Write a file to the virtual output directory.
+
+        Args:
+            container_id: Container ID
+            file_path: Relative path within /output/ directory
+            content: File content
+
+        Raises:
+            ResourceNotFoundError: If container does not exist
+        """
+        with self._lock:
+            if container_id not in self._virtual_filesystems:
+                raise ResourceNotFoundError("Container", container_id)
+            self._virtual_filesystems[container_id][file_path] = content
+
+    def _get_output_files(self, container_id: str) -> list[str]:
+        """
+        Get list of files written to output directory.
+
+        Args:
+            container_id: Container ID
+
+        Returns:
+            List of file paths
+        """
+        with self._lock:
+            if container_id not in self._virtual_filesystems:
+                return []
+            return list(self._virtual_filesystems[container_id].keys())
 
     # Helper methods for testing
 

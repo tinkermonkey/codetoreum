@@ -24,6 +24,11 @@ from .board_events import (
     WorkItemColumnChangedEvent,
 )
 
+# Container execution events
+from .container_events import (
+    ContainerExecutionCompletedEvent,
+)
+
 # Container recovery events
 from .container_recovery_events import (
     ContainerKilledEvent,
@@ -304,6 +309,8 @@ __all__ = [
     "ReviewCycleHumanFeedbackReceivedEvent",
     "ReviewCycleMaxIterationsReachedEvent",
     "ReviewCycleApprovedEvent",
+    # Container execution events
+    "ContainerExecutionCompletedEvent",
     # Container recovery events
     "ContainerRecoveredEvent",
     "ContainerKilledEvent",
