@@ -9,8 +9,6 @@ Tests the complete startup flow including:
 5. Proper lifespan handling
 """
 
-from unittest.mock import Mock
-
 import pytest
 
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
@@ -233,16 +231,16 @@ class TestOrchestratorStartupWithContainerRecovery:
     @pytest.mark.asyncio
     async def test_fastapi_lifespan_includes_recovery(self):
         """Test that FastAPI lifespan includes container recovery execution."""
+        import logging
+
         from codetoreum.adapters.primary.fastapi_app import create_app
         from codetoreum.adapters.primary.input_port_adapters.mock import (
             MockAgentCommandAdapter,
             MockAgentQueryAdapter,
             MockConfigCommandAdapter,
             MockConfigQueryAdapter,
-            MockConfigServiceAdapter,
             MockExecutionCommandAdapter,
             MockExecutionQueryAdapter,
-            MockLoggerAdapter,
             MockMetricsQueryAdapter,
             MockOrchestrationCommandAdapter,
             MockTaskQueryAdapter,
@@ -254,7 +252,7 @@ class TestOrchestratorStartupWithContainerRecovery:
             MockWorkItemQueryAdapter,
             MockWorkspaceQueryAdapter,
         )
-        from codetoreum.adapters.testing import InMemoryEventStore
+        from codetoreum.adapters.testing import InMemoryConfigStore, InMemoryEventStore
         from codetoreum.infrastructure.event_bus import EventBus
 
         # Setup minimal ports and adapters
@@ -307,8 +305,8 @@ class TestOrchestratorStartupWithContainerRecovery:
             execution_query_port=execution_query,
             event_store=InMemoryEventStore(),
             event_bus=EventBus(),
-            config_service=MockConfigServiceAdapter(Mock()),
-            logger=MockLoggerAdapter(),
+            config_service=InMemoryConfigStore(),
+            logger=logging.getLogger(__name__),
             disable_auth=True,
             container_recovery_service=recovery_service,
         )

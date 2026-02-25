@@ -7,13 +7,13 @@ and observability verification.
 
 Usage:
     client = SimulationE2EClient(app, bootstrap)
-    work_item = await client.create_work_item(
+    work_item = client.create_work_item(
         project_id="proj-1",
         title="Test item",
         description="Test description"
     )
-    await client.trigger_workflow(work_item.id, "workflow-1")
-    await client.wait_for_work_item_status(work_item.id, WorkItemStatus.COMPLETED)
+    client.trigger_workflow(work_item["id"], "workflow-1")
+    await client.wait_for_work_item_status(work_item["id"], "COMPLETED")
 """
 
 import asyncio
