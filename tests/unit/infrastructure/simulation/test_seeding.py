@@ -459,12 +459,10 @@ class TestScenarioModels:
         from codetoreum.infrastructure.simulation.scenario_models import ScenarioModel
 
         # Valid minimal scenario
-        data = {
-            "name": "Test Scenario",
-            "description": "Test description",
-        }
-
-        scenario = ScenarioModel(**data)
+        scenario = ScenarioModel(
+            name="Test Scenario",
+            description="Test description",
+        )
         assert scenario.name == "Test Scenario"
         assert scenario.speed_multiplier == 10.0  # Default
         assert scenario.projects == []
@@ -485,12 +483,10 @@ class TestScenarioModels:
             ScenarioProjectModel,
         )
 
-        data = {
-            "name": "test-project",
-            "description": "Test project",
-        }
-
-        project = ScenarioProjectModel(**data)
+        project = ScenarioProjectModel(
+            name="test-project",
+            description="Test project",
+        )
         assert project.name == "test-project"
         assert project.default_branch == "main"
 
@@ -503,11 +499,10 @@ class TestScenarioModels:
         )
 
         # Valid capabilities
-        data = {
-            "name": "test-agent",
-            "capabilities": ["code_generation", "code_review"],
-        }
-        agent = ScenarioAgentModel(**data)
+        agent = ScenarioAgentModel(
+            name="test-agent",
+            capabilities=["code_generation", "code_review"],
+        )
         assert "code_generation" in agent.capabilities
 
         # Invalid capability
