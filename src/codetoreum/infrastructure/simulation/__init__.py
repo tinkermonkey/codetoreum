@@ -87,34 +87,26 @@ __all__ = [
 
 def __getattr__(name: str) -> object:
     """Lazy import bootstrap and seeding components to avoid circular imports."""
-    if name in (
-        "SimulationApplicationBootstrap",
-        "SimulationAdapters",
-        "SimulationServices",
-        "SimulationPorts",
-        "SimulationInfrastructure",
-    ):
-        from .bootstrap import (
-            SimulationAdapters,
-            SimulationApplicationBootstrap,
-            SimulationInfrastructure,
-            SimulationPorts,
-            SimulationServices,
-        )
-
-        return {
-            "SimulationApplicationBootstrap": SimulationApplicationBootstrap,
-            "SimulationAdapters": SimulationAdapters,
-            "SimulationServices": SimulationServices,
-            "SimulationPorts": SimulationPorts,
-            "SimulationInfrastructure": SimulationInfrastructure,
-        }[name]
-    elif name in ("SimulationDataSeeder", "CreatedItems"):
-        from .seeding import CreatedItems, SimulationDataSeeder
-
-        return {
-            "SimulationDataSeeder": SimulationDataSeeder,
-            "CreatedItems": CreatedItems,
-        }[name]
+    if name == "SimulationApplicationBootstrap":
+        from .bootstrap import SimulationApplicationBootstrap
+        return SimulationApplicationBootstrap
+    elif name == "SimulationAdapters":
+        from .bootstrap import SimulationAdapters
+        return SimulationAdapters
+    elif name == "SimulationServices":
+        from .bootstrap import SimulationServices
+        return SimulationServices
+    elif name == "SimulationPorts":
+        from .bootstrap import SimulationPorts
+        return SimulationPorts
+    elif name == "SimulationInfrastructure":
+        from .bootstrap import SimulationInfrastructure
+        return SimulationInfrastructure
+    elif name == "SimulationDataSeeder":
+        from .seeding import SimulationDataSeeder
+        return SimulationDataSeeder
+    elif name == "CreatedItems":
+        from .seeding import CreatedItems
+        return CreatedItems
     message = f"module {__name__!r} has no attribute {name!r}"
     raise AttributeError(message)

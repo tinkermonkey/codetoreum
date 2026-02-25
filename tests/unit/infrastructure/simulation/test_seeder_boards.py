@@ -4,11 +4,9 @@ from collections.abc import AsyncGenerator
 
 import pytest
 
-from codetoreum.infrastructure.simulation import (
-    SimulationApplicationBootstrap,
-    SimulationConfig,
-    SimulationDataSeeder,
-)
+from codetoreum.infrastructure.simulation import SimulationConfig
+from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
+from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
 from codetoreum.ports.exceptions import ValidationError
 
 
