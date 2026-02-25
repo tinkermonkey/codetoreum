@@ -140,8 +140,6 @@ select = [
     "RUF", # Ruff-specific rules
 ]
 ignore = [
-    "ANN101", # Missing type annotation for self in method
-    "ANN102", # Missing type annotation for cls in classmethod
     "COM812", # Missing trailing comma (conflicts with formatter)
     "ISC001", # Implicitly concatenated string literals (conflicts with formatter)
     "S101",   # Use of assert detected (acceptable in tests)
