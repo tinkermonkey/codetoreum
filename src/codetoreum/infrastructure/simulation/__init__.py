@@ -97,7 +97,7 @@ __all__ = [
 ]
 
 
-def __getattr__(name: str) -> type[Any]:  # type: ignore[name-match]
+def __getattr__(name: str) -> Any:
     """Lazy import bootstrap and seeding components to avoid circular imports."""
     if name == "SimulationApplicationBootstrap":
         from .bootstrap import SimulationApplicationBootstrap
