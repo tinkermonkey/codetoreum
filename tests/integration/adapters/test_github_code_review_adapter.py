@@ -748,6 +748,7 @@ class TestCommandOperations:
         # Should emit comment_added event
         assert len(events) >= 1
         assert events[0].type == "review.comment_added"
+        assert events[0].comment is not None
         assert events[0].comment.body == "Please fix X"
 
     @pytest.mark.asyncio
