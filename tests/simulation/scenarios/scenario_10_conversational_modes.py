@@ -470,7 +470,9 @@ async def edge_case_e_threaded_context(runner: SimulationRunner):
     await runner.advance_time(timedelta(milliseconds=50))
 
     parent_event = captured_events[0]
-    parent_comment_id = parent_event.comment.id
+    parent_comment = parent_event.comment
+    assert parent_comment is not None, "Expected comment in parent event"
+    parent_comment_id = parent_comment.id
 
     # Child comment (threaded)
     discussion_adapter.simulate_comment(

@@ -1,7 +1,8 @@
 """Pytest fixtures for simulation testing."""
 
-from collections.abc import Generator
+from collections.abc import AsyncGenerator, Generator
 from datetime import UTC, datetime
+from typing import cast
 
 import pytest
 from fastapi import FastAPI
@@ -266,7 +267,7 @@ def custom_simulation_runner():
 @pytest.fixture
 async def simulation_bootstrap(
     fast_simulation_config: SimulationConfig,
-) -> Generator[SimulationApplicationBootstrap, None, None]:
+) -> AsyncGenerator[SimulationApplicationBootstrap, None]:
     """
     Provide a fully set up simulation bootstrap.
 
@@ -300,7 +301,7 @@ async def simulation_app(
     """
     if not simulation_bootstrap.app:
         raise RuntimeError("Bootstrap app not initialized")
-    return simulation_bootstrap.app
+    return cast(FastAPI, simulation_bootstrap.app)
 
 
 @pytest.fixture
@@ -422,7 +423,7 @@ def pytest_collection_modifyitems(config, items):
 @pytest.fixture
 async def simulation_seeder(
     simulation_bootstrap: SimulationApplicationBootstrap,
-):
+) -> AsyncGenerator:
     """
     Provide a simulation data seeder for E2E tests.
 
@@ -447,7 +448,7 @@ async def simulation_seeder(
 async def e2e_client(
     simulation_app: FastAPI,
     simulation_bootstrap: SimulationApplicationBootstrap,
-):
+) -> AsyncGenerator:
     """
     Provide an E2E test client for simulation testing.
 
