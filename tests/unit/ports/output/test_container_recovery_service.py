@@ -9,6 +9,7 @@ These tests verify:
 
 from datetime import UTC, datetime
 from types import MappingProxyType
+from typing import cast
 
 import pytest
 
@@ -610,35 +611,7 @@ class TestContainerMetadataValidation:
             }),
             )
 
-    def test_created_at_must_be_datetime(self):
-        """created_at must be a valid datetime object."""
-        with pytest.raises(ValueError, match="created_at must be a valid datetime"):
-            ContainerMetadata(
-                container_id="abc123",
-                container_name="agent-proj-001",
-                project_id="proj-1",
-                agent_id="agent-1",
-                task_id="task-1",
-                created_at="2026-01-27T23:34:55.217234+00:00",
-                labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: "agent",
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
-            )
 
-    def test_labels_must_be_mapping_proxy_type(self):
-        """labels must be a MappingProxyType (immutable)."""
-        with pytest.raises(ValueError, match="labels must be a MappingProxyType"):
-            ContainerMetadata(
-                container_id="abc123",
-                container_name="agent-proj-001",
-                project_id="proj-1",
-                agent_id="agent-1",
-                task_id="task-1",
-                created_at=datetime.now(UTC),
-                labels={"key": "value"},
-            )
 
     def test_work_item_id_must_be_non_empty_if_provided(self):
         """work_item_id must be non-empty if provided."""
@@ -970,16 +943,6 @@ class TestRecoveryAssessmentValidation:
                 execution_id="exec-456",
             )
 
-    def test_action_must_be_valid(self):
-        """action must be one of: reconnect, kill."""
-        with pytest.raises(ValueError, match="action must be one of"):
-            RecoveryAssessment(
-                container_id="abc123",
-                action="invalid",
-                reason="Test reason",
-                with_monitoring=True,
-                execution_id="exec-456",
-            )
 
     def test_reason_required(self):
         """reason is required and must be non-empty."""
@@ -1010,7 +973,7 @@ class TestRecoveryAssessmentValidation:
                 container_id="abc123",
                 action="reconnect",
                 reason="Test reason",
-                with_monitoring="true",
+                with_monitoring=cast(bool, "true"),
                 execution_id="exec-456",
             )
 

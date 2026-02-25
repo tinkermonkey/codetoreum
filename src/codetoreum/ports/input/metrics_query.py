@@ -27,7 +27,7 @@ class ComponentHealthInfo:
     status: ComponentHealth
     message: str | None
     last_check: datetime
-    response_time_ms: float | None
+    response_time_ms: float
     details: dict[str, Any]
 
 

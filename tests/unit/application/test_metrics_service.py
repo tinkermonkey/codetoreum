@@ -497,7 +497,7 @@ class TestMetricsServiceIntegrationStatus:
         status = await metrics_service.get_integration_status()
 
         assert status.event_store_connected is True
-        assert isinstance(status.event_store_latency_ms, (int, float))
+        assert status.event_store_latency_ms is not None
         assert status.event_store_latency_ms >= 0
 
     @pytest.mark.asyncio
