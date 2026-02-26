@@ -103,8 +103,8 @@ class TestDomainEvent:
             causation_id=causation_id,
             event_id=event_id,
             occurred_at=occurred_at,
+            metadata={"source": "test"},
         )
-        event.metadata = {"source": "test"}
 
         event_dict = event.to_dict()
 
@@ -209,8 +209,8 @@ class TestDomainEvent:
             aggregate_type="TestAggregate",
             payload={"key": "value"},
             user_id="user-456",
+            metadata={"source": "test"},
         )
-        original_event.metadata = {"source": "test"}
 
         # Serialize and deserialize
         event_dict = original_event.to_dict()
