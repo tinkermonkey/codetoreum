@@ -157,7 +157,6 @@ class TraceContextPropagator:
 
     # Metadata key for storing trace context in events
     TRACE_CONTEXT_KEY = "traceparent"
-    STATE_KEY = "tracestate"
 
     @staticmethod
     def inject_trace_context(event: DomainEvent, span_context: Optional["SpanContext"] = None) -> None:
@@ -195,10 +194,6 @@ class TraceContextPropagator:
                 # No active trace - create a root span context with new trace ID
                 logger.debug("No active span context, not injecting trace context")
                 return
-
-            # Convert to W3C format
-            trace_data = TraceContextData.from_span_context(span_context)
-            traceparent = trace_data.to_traceparent()
 
             # NOTE: Events are immutable (frozen). If metadata is already set,
             # we cannot mutate it. This is by design to preserve event sourcing

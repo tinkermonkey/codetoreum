@@ -138,7 +138,7 @@ class TestBuildContext:
 
         assert context.project_id == project_context.id
         assert context.repository_url == project_context.repository_url
-        assert context.tech_stack == ["python", "docker"]
+        assert context.tech_stack == ("python", "docker")
 
     def test_sets_permissions_for_code_agent(self, work_item, developer_agent, project_context, workspace_context):
         """Test that permissions are set correctly for code-making agent."""
