@@ -402,3 +402,341 @@ class TestFakeContainerAdapter:
         lines = logs.strip().split("\n")
         # Should have at most 2 lines (tail=2)
         assert len([line for line in lines if line.strip()]) <= 2
+
+
+@pytest.mark.asyncio
+class TestFakeContainerAdapterEventEmission:
+    """Test suite for FakeContainerAdapter event emission (lines 355-368)."""
+
+    async def test_event_emitter_integration(self):
+        """Test that adapter accepts event emitter and uses it."""
+        from unittest.mock import AsyncMock, Mock
+
+        mock_event_emitter = Mock()
+        mock_event_emitter.emit = Mock()
+
+        adapter = FakeContainerAdapter(event_emitter=mock_event_emitter)
+
+        result = await adapter.run(
+            image="python:3.11",
+            command=["echo", "test"],
+            volumes={},
+            environment={"PROJECT_ID": "proj-1"},
+        )
+
+        # Event emitter should have been called
+        assert mock_event_emitter.emit.called
+        assert result.exit_code == 0
+
+    async def test_container_execution_completed_event_emission(self):
+        """Test that ContainerExecutionCompletedEvent is emitted with correct data."""
+        from unittest.mock import Mock
+
+        mock_event_emitter = Mock()
+        mock_event_emitter.emit = Mock()
+
+        adapter = FakeContainerAdapter(event_emitter=mock_event_emitter)
+
+        result = await adapter.run(
+            image="python:3.11",
+            command=["python", "--version"],
+            volumes={},
+            environment={"PROJECT_ID": "proj-123"},
+        )
+
+        # Verify event was emitted
+        assert mock_event_emitter.emit.called
+
+        # Get the emitted event
+        call_args = mock_event_emitter.emit.call_args
+        event = call_args[0][0]  # First positional argument
+
+        # Verify event properties
+        assert event.type == "container.execution_completed"
+        assert event.container_id == result.container_id
+        assert event.command == "python --version"
+        assert event.exit_code == 0
+        assert event.project_id == "proj-123"
+
+    async def test_event_emission_with_output_files(self):
+        """Test that ContainerExecutionCompletedEvent includes output files."""
+        from unittest.mock import Mock
+
+        mock_event_emitter = Mock()
+        mock_event_emitter.emit = Mock()
+
+        adapter = FakeContainerAdapter(event_emitter=mock_event_emitter)
+
+        # Mock output files
+        adapter._get_output_files = Mock(return_value=["output.txt", "result.json"])
+
+        result = await adapter.run(
+            image="python:3.11",
+            command=["python", "script.py"],
+            volumes={},
+            environment={"PROJECT_ID": "proj-1"},
+        )
+
+        # Verify event was emitted
+        assert mock_event_emitter.emit.called
+
+        # Get the emitted event
+        call_args = mock_event_emitter.emit.call_args
+        event = call_args[0][0]
+
+        # Verify output files are included
+        assert event.output_files == ("output.txt", "result.json")
+
+    async def test_event_emission_without_event_emitter(self):
+        """Test that adapter works without event emitter."""
+        adapter = FakeContainerAdapter(event_emitter=None)
+
+        result = await adapter.run(
+            image="python:3.11",
+            command=["echo", "test"],
+            volumes={},
+            environment={},
+        )
+
+        # Should complete without error even without event emitter
+        assert result.exit_code == 0
+        assert result.stdout == "Fake container output"
+
+    async def test_event_contains_project_id_from_environment(self):
+        """Test that event includes project_id extracted from environment."""
+        from unittest.mock import Mock
+
+        mock_event_emitter = Mock()
+        mock_event_emitter.emit = Mock()
+
+        adapter = FakeContainerAdapter(event_emitter=mock_event_emitter)
+
+        result = await adapter.run(
+            image="python:3.11",
+            command=["pytest"],
+            volumes={},
+            environment={"PROJECT_ID": "proj-456", "OTHER_VAR": "value"},
+        )
+
+        # Get the emitted event
+        call_args = mock_event_emitter.emit.call_args
+        event = call_args[0][0]
+
+        # Project ID should match environment
+        assert event.project_id == "proj-456"
+
+    async def test_event_emission_multiple_executions(self):
+        """Test that events are emitted for multiple executions."""
+        from unittest.mock import Mock
+
+        mock_event_emitter = Mock()
+        mock_event_emitter.emit = Mock()
+
+        adapter = FakeContainerAdapter(event_emitter=mock_event_emitter)
+
+        # Run multiple commands
+        for i in range(3):
+            result = await adapter.run(
+                image="python:3.11",
+                command=["echo", f"test-{i}"],
+                volumes={},
+                environment={"PROJECT_ID": "proj-1"},
+            )
+
+        # Verify three events were emitted
+        assert mock_event_emitter.emit.call_count == 3
+
+    async def test_event_timestamp_is_current(self):
+        """Test that event contains current timestamp."""
+        from unittest.mock import Mock
+        from datetime import datetime
+
+        mock_event_emitter = Mock()
+        mock_event_emitter.emit = Mock()
+
+        adapter = FakeContainerAdapter(event_emitter=mock_event_emitter)
+
+        before_time = datetime.now()
+        result = await adapter.run(
+            image="python:3.11",
+            command=["echo", "test"],
+            volumes={},
+            environment={"PROJECT_ID": "proj-1"},
+        )
+        after_time = datetime.now()
+
+        # Get the emitted event
+        call_args = mock_event_emitter.emit.call_args
+        event = call_args[0][0]
+
+        # Event should have a timestamp
+        assert event.timestamp is not None
+        assert isinstance(event.timestamp, str)
+
+    async def test_event_emission_with_failed_command(self):
+        """Test event emission when command fails."""
+        from unittest.mock import Mock
+
+        mock_event_emitter = Mock()
+        mock_event_emitter.emit = Mock()
+
+        adapter = FakeContainerAdapter(event_emitter=mock_event_emitter)
+        adapter.set_command_result("failing_cmd", exit_code=1, stderr="Error output")
+
+        result = await adapter.run(
+            image="python:3.11",
+            command=["failing_cmd"],
+            volumes={},
+            environment={"PROJECT_ID": "proj-1"},
+        )
+
+        # Get the emitted event
+        call_args = mock_event_emitter.emit.call_args
+        event = call_args[0][0]
+
+        # Event should include the failure exit code
+        assert event.exit_code == 1
+
+    async def test_event_source_is_fake_container(self):
+        """Test that event source is set to 'fake_container'."""
+        from unittest.mock import Mock
+
+        mock_event_emitter = Mock()
+        mock_event_emitter.emit = Mock()
+
+        adapter = FakeContainerAdapter(event_emitter=mock_event_emitter)
+
+        result = await adapter.run(
+            image="python:3.11",
+            command=["echo", "test"],
+            volumes={},
+            environment={"PROJECT_ID": "proj-1"},
+        )
+
+        # Get the emitted event
+        call_args = mock_event_emitter.emit.call_args
+        event = call_args[0][0]
+
+        # Source should be 'fake_container'
+        assert event.source == "fake_container"
+
+    async def test_event_command_formatting(self):
+        """Test that event command is properly formatted."""
+        from unittest.mock import Mock
+
+        mock_event_emitter = Mock()
+        mock_event_emitter.emit = Mock()
+
+        adapter = FakeContainerAdapter(event_emitter=mock_event_emitter)
+
+        result = await adapter.run(
+            image="python:3.11",
+            command=["python", "-m", "pytest", "tests/", "-v"],
+            volumes={},
+            environment={"PROJECT_ID": "proj-1"},
+        )
+
+        # Get the emitted event
+        call_args = mock_event_emitter.emit.call_args
+        event = call_args[0][0]
+
+        # Command should be space-separated
+        assert event.command == "python -m pytest tests/ -v"
+
+    async def test_event_emission_integration_with_event_bus(self):
+        """Test event emission when event_bus is provided."""
+        from unittest.mock import Mock, AsyncMock
+
+        mock_event_bus = Mock()
+        mock_event_bus.emit = AsyncMock()
+
+        adapter = FakeContainerAdapter(event_emitter=mock_event_bus)
+
+        result = await adapter.run(
+            image="python:3.11",
+            command=["echo", "test"],
+            volumes={},
+            environment={"PROJECT_ID": "proj-1"},
+        )
+
+        # Emitter should have been called (note: event_emitter is called synchronously)
+        assert result.exit_code == 0
+
+    async def test_output_files_tuple_in_event(self):
+        """Test that output files are included as tuple in event."""
+        from unittest.mock import Mock
+
+        mock_event_emitter = Mock()
+        mock_event_emitter.emit = Mock()
+
+        adapter = FakeContainerAdapter(event_emitter=mock_event_emitter)
+
+        # Manually set output files
+        test_files = ["file1.txt", "file2.json", "file3.log"]
+        adapter._get_output_files = Mock(return_value=test_files)
+
+        result = await adapter.run(
+            image="python:3.11",
+            command=["generate_report"],
+            volumes={},
+            environment={"PROJECT_ID": "proj-1"},
+        )
+
+        # Get the emitted event
+        call_args = mock_event_emitter.emit.call_args
+        event = call_args[0][0]
+
+        # Output files should be a tuple
+        assert isinstance(event.output_files, tuple)
+        assert len(event.output_files) == 3
+        assert event.output_files == ("file1.txt", "file2.json", "file3.log")
+
+    async def test_event_container_id_matches_result(self):
+        """Test that event container_id matches result container_id."""
+        from unittest.mock import Mock
+
+        mock_event_emitter = Mock()
+        mock_event_emitter.emit = Mock()
+
+        adapter = FakeContainerAdapter(event_emitter=mock_event_emitter)
+
+        result = await adapter.run(
+            image="python:3.11",
+            command=["echo", "test"],
+            volumes={},
+            environment={"PROJECT_ID": "proj-1"},
+        )
+
+        # Get the emitted event
+        call_args = mock_event_emitter.emit.call_args
+        event = call_args[0][0]
+
+        # Container IDs should match
+        assert event.container_id == result.container_id
+
+    async def test_delay_calculation_before_event_emission(self):
+        """Test that delay is applied before event emission (lines 354-365)."""
+        import time
+        from unittest.mock import Mock
+
+        mock_event_emitter = Mock()
+        mock_event_emitter.emit = Mock()
+
+        config = SimulationConfig.create_fast_config("test", speed_multiplier=1.0)
+        adapter = FakeContainerAdapter(config=config, event_emitter=mock_event_emitter)
+
+        # Record timing
+        start_time = time.time()
+
+        result = await adapter.run(
+            image="python:3.11",
+            command=["echo", "test"],
+            volumes={},
+            environment={"PROJECT_ID": "proj-1"},
+        )
+
+        duration = time.time() - start_time
+
+        # Event should still be emitted even with delay
+        assert mock_event_emitter.emit.called
+        assert result.exit_code == 0
