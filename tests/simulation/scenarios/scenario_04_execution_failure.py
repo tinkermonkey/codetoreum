@@ -14,12 +14,12 @@ Expected outcome:
 from datetime import timedelta
 
 from codetoreum.domain.events import (
-    WorkflowStarted,
-    AgentExecutionStarted,
-    AgentExecutionFailed,
-    ExecutionRetryScheduled,
     AgentExecutionCompleted,
+    AgentExecutionFailed,
+    AgentExecutionStarted,
+    ExecutionRetryScheduled,
     WorkflowCompleted,
+    WorkflowStarted,
 )
 from codetoreum.infrastructure.simulation import (
     SimulationConfig,

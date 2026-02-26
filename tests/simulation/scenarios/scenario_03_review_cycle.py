@@ -15,11 +15,11 @@ Expected outcome:
 from datetime import timedelta
 
 from codetoreum.domain.events import (
-    WorkflowStarted,
     AgentExecutionCompleted,
-    ReviewRejected,
     ReviewApproved,
+    ReviewRejected,
     WorkflowCompleted,
+    WorkflowStarted,
 )
 from codetoreum.infrastructure.simulation import (
     SimulationConfig,

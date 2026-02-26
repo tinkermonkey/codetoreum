@@ -100,10 +100,10 @@ async def run_scenario(runner: SimulationRunner) -> None:
     # For now, we'll simulate by capturing events manually
 
     from codetoreum.domain.events import (
-        WorkflowStarted,
-        AgentExecutionStarted,
         AgentExecutionCompleted,
+        AgentExecutionStarted,
         WorkflowCompleted,
+        WorkflowStarted,
     )
 
     # Simulate workflow start
