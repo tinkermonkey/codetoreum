@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.exceptions import (
     AuthenticationError,
     ConversationNotFoundError,
@@ -22,7 +23,6 @@ from codetoreum.ports.exceptions import (
     UnsupportedFeatureError,
     ValidationError,
 )
-from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.output.llm_provider import (
     ExecutionContext,
     ExecutionResult,
