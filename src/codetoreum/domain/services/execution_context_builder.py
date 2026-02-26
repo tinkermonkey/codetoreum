@@ -83,11 +83,11 @@ class ExecutionContextBuilder:
             discussion_id=workspace.discussion_id,
             project_id=project.id,
             repository_url=project.repository_url,
-            tech_stack=project.tech_stack,
+            tech_stack=tuple(project.tech_stack),
             filesystem_write_allowed=filesystem_write_allowed,
             can_make_commits=can_make_commits,
             requires_docker=agent.requires_docker,
-            mcp_servers=ExecutionContextBuilder._merge_mcp_servers(agent, project),
+            mcp_servers=tuple(ExecutionContextBuilder._merge_mcp_servers(agent, project)),
             previous_session_id=previous_session_id,
             metadata=metadata,
         )
