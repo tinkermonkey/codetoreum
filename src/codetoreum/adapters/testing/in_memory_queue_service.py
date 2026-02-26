@@ -597,9 +597,7 @@ class InMemoryQueueService(IPipelineQueueService):
                 board = None
                 if self._board_service and event.to_column:
                     try:
-                        board = await self._board_service.get_board(
-                            event.project_id, event.board_id
-                        )
+                        board = await self._board_service.get_board(event.project_id, event.board_id)
                     except Exception as board_error:
                         logger.warning(
                             f"Failed to fetch board state for position update: {board_error}. "

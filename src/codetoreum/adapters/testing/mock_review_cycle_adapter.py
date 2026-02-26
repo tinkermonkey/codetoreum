@@ -1009,9 +1009,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
             pattern in output_lower
             for pattern in ["fixed", "resolved", "updated", "improved", "refactored", "optimized"]
         )
-        has_test_patterns = any(
-            pattern in output_lower for pattern in ["test", "assert", "verify", "validate", "pass"]
-        )
+        has_test_patterns = any(pattern in output_lower for pattern in ["test", "assert", "verify", "validate", "pass"])
 
         # Decision logic based on LLM output characteristics
         if has_error_patterns and not has_quality_patterns:
@@ -1026,26 +1024,25 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
                     )
                 ],
             )
-        elif has_quality_patterns and has_test_patterns and has_explanation:
+        if has_quality_patterns and has_test_patterns and has_explanation:
             # Output shows quality improvements with test coverage and explanation - approve
             return ReviewSequenceItem(
                 decision=ReviewDecision.APPROVE,
                 summary="Maker output demonstrates quality improvements with test coverage",
             )
-        elif has_quality_patterns and has_explanation:
+        if has_quality_patterns and has_explanation:
             # Output shows improvements with explanation but no tests - request changes
             return ReviewSequenceItem(
                 decision=ReviewDecision.REQUEST_CHANGES,
                 summary="Maker output shows improvements but lacks test verification",
                 findings=[ReviewFinding(severity="blocking", description="Missing or incomplete test coverage")],
             )
-        else:
-            # Neutral or insufficient output - request changes to be safe
-            return ReviewSequenceItem(
-                decision=ReviewDecision.REQUEST_CHANGES,
-                summary="Maker output requires review and clarification",
-                findings=[ReviewFinding(severity="blocking", description="Output needs clarification")],
-            )
+        # Neutral or insufficient output - request changes to be safe
+        return ReviewSequenceItem(
+            decision=ReviewDecision.REQUEST_CHANGES,
+            summary="Maker output requires review and clarification",
+            findings=[ReviewFinding(severity="blocking", description="Output needs clarification")],
+        )
 
     def _log_event(self, event: dict[str, Any]) -> None:
         """Log event to event tracking for testing purposes.

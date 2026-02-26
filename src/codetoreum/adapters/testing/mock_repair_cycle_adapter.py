@@ -1344,27 +1344,16 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         command_lower = command.lower()
 
         # Check for test type indicators in command
-        if any(
-            pattern in command_lower
-            for pattern in ["tests/unit", "test_unit", "unittest", "tests/unit.*py"]
-        ):
+        if any(pattern in command_lower for pattern in ["tests/unit", "test_unit", "unittest", "tests/unit.*py"]):
             return RepairTestType.UNIT
-        elif any(
-            pattern in command_lower
-            for pattern in ["tests/integration", "test_integration", "integration"]
-        ):
+        if any(pattern in command_lower for pattern in ["tests/integration", "test_integration", "integration"]):
             return RepairTestType.INTEGRATION
-        elif any(
-            pattern in command_lower
-            for pattern in ["tests/e2e", "test_e2e", "e2e", "end.to.end"]
-        ):
+        if any(pattern in command_lower for pattern in ["tests/e2e", "test_e2e", "e2e", "end.to.end"]):
             return RepairTestType.E2E
 
         return None
 
-    def _extract_test_result_from_container(
-        self, test_type: RepairTestType, iteration: int
-    ) -> RepairTestResult | None:
+    def _extract_test_result_from_container(self, test_type: RepairTestType, iteration: int) -> RepairTestResult | None:
         """Extract test result from container execution output (FR-2/US-2.4).
 
         This method implements causal linking between container test execution and repair
@@ -1420,8 +1409,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                         failure_lines = [
                             line
                             for line in combined_output.split("\n")
-                            if "test" in line.lower()
-                            and ("fail" in line.lower() or "error" in line.lower())
+                            if "test" in line.lower() and ("fail" in line.lower() or "error" in line.lower())
                         ]
 
                         failed = len(failure_lines) if failure_lines else 1
