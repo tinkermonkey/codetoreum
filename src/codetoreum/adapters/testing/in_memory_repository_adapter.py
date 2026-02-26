@@ -543,8 +543,8 @@ index abc123..def456 100644
                 current_branch=current_branch,
                 is_dirty=len(staged_files) > 0,
                 staged_files=tuple(staged_files),  # Return as tuple for immutability
-                unstaged_files=tuple(),
-                untracked_files=tuple(),
+                unstaged_files=(),
+                untracked_files=(),
                 ahead_count=0,
                 behind_count=0,
             )
@@ -637,7 +637,7 @@ index abc123..def456 100644
 
             return MergeResult(
                 success=True,
-                conflicts=tuple(),
+                conflicts=(),
                 merge_commit=new_commit,
             )
 

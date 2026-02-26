@@ -7,7 +7,6 @@ from pathlib import Path
 
 from codetoreum.domain.types import BranchName, CommitHash, RepositoryId
 
-
 # ============================================================================
 # Data Models
 # ============================================================================

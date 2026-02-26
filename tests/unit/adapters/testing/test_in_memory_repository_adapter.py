@@ -244,7 +244,7 @@ class TestInMemoryRepositoryAdapter:
 
         # Verify staging area is cleared
         status = await adapter.status(Path("/tmp/test-repo"))
-        assert status.staged_files == tuple()
+        assert status.staged_files == ()
         assert not status.is_dirty
 
     async def test_commit(self, adapter):

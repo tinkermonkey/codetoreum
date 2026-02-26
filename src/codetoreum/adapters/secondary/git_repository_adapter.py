@@ -569,7 +569,7 @@ class GitRepositoryAdapter(IRepository):
 
             return MergeResult(
                 success=True,
-                conflicts=tuple(),
+                conflicts=(),
                 merge_commit=commit_sha,
             )
 
