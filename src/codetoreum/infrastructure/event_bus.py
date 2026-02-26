@@ -650,7 +650,9 @@ def event_handler(*event_types: str):
     """
 
     def decorator(cls: type[EventHandler]) -> type[EventHandler]:
-        # Store event types on the class
+        # Store event types on the class as both a class attribute and a method
+        cls.event_types = list(event_types)
+
         def get_event_types(self) -> list[str]:
             return list(event_types)
 

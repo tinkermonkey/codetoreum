@@ -1,5 +1,6 @@
 """Unit tests for WorkflowEventHandler."""
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -56,12 +57,11 @@ class TestWorkflowEventHandlerMethods:
 
         event = WorkItemCreated(
             aggregate_id="wi-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={
                 "title": "Fix authentication bug",
                 "project_id": "proj-1",
             },
+            occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
         )
 
         with patch("codetoreum.application.event_handlers.workflow_event_handler.logger") as mock_logger:
@@ -78,13 +78,12 @@ class TestWorkflowEventHandlerMethods:
 
         event = ExecutionCompleted(
             aggregate_id="exec-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={
                 "work_item_id": "wi-1",
                 "input_tokens": 100,
                 "output_tokens": 200,
             },
+            occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
         )
 
         with patch("codetoreum.application.event_handlers.workflow_event_handler.logger") as mock_logger:
@@ -99,13 +98,12 @@ class TestWorkflowEventHandlerMethods:
 
         event = ExecutionFailed(
             aggregate_id="exec-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={
                 "work_item_id": "wi-1",
                 "error_message": "Container crashed",
                 "exit_code": 139,
             },
+            occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
         )
 
         with patch("codetoreum.application.event_handlers.workflow_event_handler.logger") as mock_logger:
@@ -120,9 +118,8 @@ class TestWorkflowEventHandlerMethods:
 
         event = ReviewCycleApproved(
             aggregate_id="review-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={"total_iterations": 2},
+            occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
         )
 
         await handler.handle(event)
@@ -137,13 +134,12 @@ class TestWorkflowEventHandlerMethods:
 
         event = ReviewCycleRejected(
             aggregate_id="review-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={
                 "current_iteration": 1,
                 "max_iterations": 3,
                 "rejection_reason": "Quality issues",
             },
+            occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
         )
 
         await handler.handle(event)
@@ -158,13 +154,12 @@ class TestWorkflowEventHandlerMethods:
 
         event = ReviewCycleRejected(
             aggregate_id="review-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={
                 "current_iteration": 3,
                 "max_iterations": 3,
                 "rejection_reason": "Still has issues",
             },
+            occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
         )
 
         with patch("codetoreum.application.event_handlers.workflow_event_handler.logger") as mock_logger:
@@ -180,9 +175,8 @@ class TestWorkflowEventHandlerMethods:
 
         event = ReviewCycleEscalated(
             aggregate_id="review-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={"reason": "Max iterations reached"},
+            occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
         )
 
         await handler.handle(event)
@@ -217,9 +211,8 @@ class TestWorkflowEventHandlerWorkflows:
         # Create work item
         create_event = WorkItemCreated(
             aggregate_id="wi-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={"title": "Implement feature X", "project_id": "proj-1"},
+            occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
         )
         await handler.handle(create_event)
 
@@ -227,9 +220,8 @@ class TestWorkflowEventHandlerWorkflows:
         # When execution completes
         complete_event = ExecutionCompleted(
             aggregate_id="exec-1",
-            timestamp="2024-01-01T01:00:00Z",
-            source="test",
             payload={"work_item_id": "wi-1"},
+            occurred_at=datetime(2024, 1, 1, 1, 0, 0, tzinfo=UTC),
         )
         await handler.handle(complete_event)
 
@@ -243,22 +235,20 @@ class TestWorkflowEventHandlerWorkflows:
         # Create work item
         create_event = WorkItemCreated(
             aggregate_id="wi-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={"title": "Complex task"},
+            occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
         )
         await handler.handle(create_event)
 
         # Execution fails
         fail_event = ExecutionFailed(
             aggregate_id="exec-1",
-            timestamp="2024-01-01T01:00:00Z",
-            source="test",
             payload={
                 "work_item_id": "wi-1",
                 "error_message": "Container out of memory",
                 "exit_code": 137,
             },
+            occurred_at=datetime(2024, 1, 1, 1, 0, 0, tzinfo=UTC),
         )
         await handler.handle(fail_event)
 
@@ -272,27 +262,24 @@ class TestWorkflowEventHandlerWorkflows:
         # Create work item
         create_event = WorkItemCreated(
             aggregate_id="wi-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={"title": "Code changes"},
+            occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
         )
         await handler.handle(create_event)
 
         # Execution completes
         complete_event = ExecutionCompleted(
             aggregate_id="exec-1",
-            timestamp="2024-01-01T01:00:00Z",
-            source="test",
             payload={"work_item_id": "wi-1"},
+            occurred_at=datetime(2024, 1, 1, 1, 0, 0, tzinfo=UTC),
         )
         await handler.handle(complete_event)
 
         # Review cycle is created and approved
         approve_event = ReviewCycleApproved(
             aggregate_id="review-1",
-            timestamp="2024-01-01T02:00:00Z",
-            source="test",
             payload={"total_iterations": 1},
+            occurred_at=datetime(2024, 1, 1, 2, 0, 0, tzinfo=UTC),
         )
         await handler.handle(approve_event)
 
@@ -306,49 +293,44 @@ class TestWorkflowEventHandlerWorkflows:
         # Create work item
         create_event = WorkItemCreated(
             aggregate_id="wi-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={"title": "Code changes"},
+            occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
         )
         await handler.handle(create_event)
 
         # First execution completes
         complete_event1 = ExecutionCompleted(
             aggregate_id="exec-1",
-            timestamp="2024-01-01T01:00:00Z",
-            source="test",
             payload={"work_item_id": "wi-1"},
+            occurred_at=datetime(2024, 1, 1, 1, 0, 0, tzinfo=UTC),
         )
         await handler.handle(complete_event1)
 
         # Review rejects, asks for changes
         reject_event = ReviewCycleRejected(
             aggregate_id="review-1",
-            timestamp="2024-01-01T02:00:00Z",
-            source="test",
             payload={
                 "current_iteration": 1,
                 "max_iterations": 3,
                 "rejection_reason": "Code quality not met",
             },
+            occurred_at=datetime(2024, 1, 1, 2, 0, 0, tzinfo=UTC),
         )
         await handler.handle(reject_event)
 
         # Maker retries
         complete_event2 = ExecutionCompleted(
             aggregate_id="exec-2",
-            timestamp="2024-01-01T03:00:00Z",
-            source="test",
             payload={"work_item_id": "wi-1"},
+            occurred_at=datetime(2024, 1, 1, 3, 0, 0, tzinfo=UTC),
         )
         await handler.handle(complete_event2)
 
         # Review approves
         approve_event = ReviewCycleApproved(
             aggregate_id="review-1",
-            timestamp="2024-01-01T04:00:00Z",
-            source="test",
             payload={"total_iterations": 2},
+            occurred_at=datetime(2024, 1, 1, 4, 0, 0, tzinfo=UTC),
         )
         await handler.handle(approve_event)
 
@@ -362,9 +344,8 @@ class TestWorkflowEventHandlerWorkflows:
         # Create work item
         create_event = WorkItemCreated(
             aggregate_id="wi-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={"title": "Complex changes"},
+            occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
         )
         await handler.handle(create_event)
 
@@ -373,9 +354,8 @@ class TestWorkflowEventHandlerWorkflows:
             # Execution
             complete_event = ExecutionCompleted(
                 aggregate_id=f"exec-{i}",
-                timestamp=f"2024-01-01T{i:02d}:00:00Z",
-                source="test",
                 payload={"work_item_id": "wi-1"},
+                occurred_at=datetime(2024, 1, 1, i, 0, 0, tzinfo=UTC),
             )
             await handler.handle(complete_event)
 
@@ -383,22 +363,20 @@ class TestWorkflowEventHandlerWorkflows:
             if i < 3:
                 reject_event = ReviewCycleRejected(
                     aggregate_id="review-1",
-                    timestamp=f"2024-01-01T{i:02d}:30:00Z",
-                    source="test",
                     payload={
                         "current_iteration": i,
                         "max_iterations": 3,
                         "rejection_reason": "Still needs work",
                     },
+                    occurred_at=datetime(2024, 1, 1, i, 30, 0, tzinfo=UTC),
                 )
                 await handler.handle(reject_event)
 
         # Escalate to human
         escalate_event = ReviewCycleEscalated(
             aggregate_id="review-1",
-            timestamp="2024-01-01T04:00:00Z",
-            source="test",
             payload={"reason": "Max iterations reached"},
+            occurred_at=datetime(2024, 1, 1, 4, 0, 0, tzinfo=UTC),
         )
         await handler.handle(escalate_event)
 
@@ -413,9 +391,8 @@ class TestWorkflowEventHandlerWorkflows:
         for i in range(5):
             create_event = WorkItemCreated(
                 aggregate_id=f"wi-{i}",
-                timestamp="2024-01-01T00:00:00Z",
-                source="test",
                 payload={"title": f"Task {i}"},
+                occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
             )
             await handler.handle(create_event)
 
@@ -423,9 +400,8 @@ class TestWorkflowEventHandlerWorkflows:
         for i in range(5):
             complete_event = ExecutionCompleted(
                 aggregate_id=f"exec-{i}",
-                timestamp="2024-01-01T01:00:00Z",
-                source="test",
                 payload={"work_item_id": f"wi-{i}"},
+                occurred_at=datetime(2024, 1, 1, 1, 0, 0, tzinfo=UTC),
             )
             await handler.handle(complete_event)
 
@@ -434,31 +410,28 @@ class TestWorkflowEventHandlerWorkflows:
                 # Approve first 3
                 approve_event = ReviewCycleApproved(
                     aggregate_id=f"review-{i}",
-                    timestamp="2024-01-01T02:00:00Z",
-                    source="test",
                     payload={"total_iterations": 1},
+                    occurred_at=datetime(2024, 1, 1, 2, 0, 0, tzinfo=UTC),
                 )
                 await handler.handle(approve_event)
             elif i < 4:
                 # Reject 4th
                 reject_event = ReviewCycleRejected(
                     aggregate_id=f"review-{i}",
-                    timestamp="2024-01-01T02:00:00Z",
-                    source="test",
                     payload={
                         "current_iteration": 1,
                         "max_iterations": 3,
                         "rejection_reason": "Needs changes",
                     },
+                    occurred_at=datetime(2024, 1, 1, 2, 0, 0, tzinfo=UTC),
                 )
                 await handler.handle(reject_event)
             else:
                 # Escalate 5th
                 escalate_event = ReviewCycleEscalated(
                     aggregate_id=f"review-{i}",
-                    timestamp="2024-01-01T02:00:00Z",
-                    source="test",
                     payload={"reason": "Human review needed"},
+                    occurred_at=datetime(2024, 1, 1, 2, 0, 0, tzinfo=UTC),
                 )
                 await handler.handle(escalate_event)
 
@@ -472,13 +445,12 @@ class TestWorkflowEventHandlerWorkflows:
         # Event where current_iteration equals max_iterations
         reject_event = ReviewCycleRejected(
             aggregate_id="review-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={
                 "current_iteration": 5,
                 "max_iterations": 5,
                 "rejection_reason": "Quality not met",
             },
+            occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
         )
 
         await handler.handle(reject_event)
@@ -494,33 +466,28 @@ class TestWorkflowEventHandlerWorkflows:
         events = [
             WorkItemCreated(
                 aggregate_id="wi-1",
-                timestamp="2024-01-01T00:00:00Z",
-                source="test",
                 payload={"title": "Task 1"},
+                occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
             ),
             ExecutionCompleted(
                 aggregate_id="exec-1",
-                timestamp="2024-01-01T01:00:00Z",
-                source="test",
                 payload={"work_item_id": "wi-1"},
+                occurred_at=datetime(2024, 1, 1, 1, 0, 0, tzinfo=UTC),
             ),
             ReviewCycleApproved(
                 aggregate_id="review-1",
-                timestamp="2024-01-01T02:00:00Z",
-                source="test",
                 payload={"total_iterations": 1},
+                occurred_at=datetime(2024, 1, 1, 2, 0, 0, tzinfo=UTC),
             ),
             WorkItemCreated(
                 aggregate_id="wi-2",
-                timestamp="2024-01-01T03:00:00Z",
-                source="test",
                 payload={"title": "Task 2"},
+                occurred_at=datetime(2024, 1, 1, 3, 0, 0, tzinfo=UTC),
             ),
             ExecutionFailed(
                 aggregate_id="exec-2",
-                timestamp="2024-01-01T04:00:00Z",
-                source="test",
                 payload={"work_item_id": "wi-2", "error_message": "Failed"},
+                occurred_at=datetime(2024, 1, 1, 4, 0, 0, tzinfo=UTC),
             ),
         ]
 

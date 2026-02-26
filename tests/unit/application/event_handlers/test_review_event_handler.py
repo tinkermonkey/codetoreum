@@ -44,14 +44,17 @@ class TestReviewEventHandlerInitialization:
         mock_service = Mock(spec=ReviewService)
         handler = ReviewEventHandler(mock_service)
 
-        # Verify handler class has event_types attribute set by decorator
-        assert hasattr(ReviewEventHandler, "event_types")
-        assert "ReviewCycleCreated" in ReviewEventHandler.event_types
-        assert "ReviewIterationStarted" in ReviewEventHandler.event_types
-        assert "ReviewFeedbackSubmitted" in ReviewEventHandler.event_types
-        assert "ReviewCycleApproved" in ReviewEventHandler.event_types
-        assert "ReviewCycleRejected" in ReviewEventHandler.event_types
-        assert "ReviewCycleEscalated" in ReviewEventHandler.event_types
+        # Check that event_handler decorator adds get_event_types method
+        assert hasattr(handler, "get_event_types")
+        event_types = handler.get_event_types()
+        assert event_types == [
+            "ReviewCycleCreated",
+            "ReviewIterationStarted",
+            "ReviewFeedbackSubmitted",
+            "ReviewCycleApproved",
+            "ReviewCycleRejected",
+            "ReviewCycleEscalated",
+        ]
 
 
 @pytest.mark.asyncio
@@ -65,8 +68,6 @@ class TestReviewEventHandlerMethods:
 
         event = ReviewCycleCreated(
             aggregate_id="review-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={
                 "workflow_id": "wf-1",
                 "stage_name": "Review",
@@ -92,8 +93,6 @@ class TestReviewEventHandlerMethods:
 
         event = ReviewIterationStarted(
             aggregate_id="review-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={
                 "iteration_number": 1,
                 "maker_execution_id": "exec-1",
@@ -111,8 +110,6 @@ class TestReviewEventHandlerMethods:
 
         event = ReviewFeedbackSubmitted(
             aggregate_id="review-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={
                 "iteration_number": 1,
                 "decision": "REQUEST_CHANGES",
@@ -138,8 +135,6 @@ class TestReviewEventHandlerMethods:
 
         event = ReviewCycleApproved(
             aggregate_id="review-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={"total_iterations": 2},
         )
 
@@ -161,8 +156,6 @@ class TestReviewEventHandlerMethods:
 
         event = ReviewCycleRejected(
             aggregate_id="review-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={
                 "final_iteration": 2,
                 "rejection_reason": "Code quality not met",
@@ -187,8 +180,6 @@ class TestReviewEventHandlerMethods:
 
         event = ReviewCycleEscalated(
             aggregate_id="review-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={"reason": "Max iterations reached"},
         )
 
@@ -358,8 +349,6 @@ class TestReviewEventHandlerWorkflow:
         # Create review cycle
         create_event = ReviewCycleCreated(
             aggregate_id="review-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={
                 "workflow_id": "wf-1",
                 "stage_name": "Review",
@@ -376,8 +365,6 @@ class TestReviewEventHandlerWorkflow:
         # Start iteration
         iter_event = ReviewIterationStarted(
             aggregate_id="review-1",
-            timestamp="2024-01-01T00:05:00Z",
-            source="test",
             payload={"iteration_number": 1, "maker_execution_id": "exec-1"},
         )
         await handler.handle(iter_event)
@@ -387,8 +374,6 @@ class TestReviewEventHandlerWorkflow:
         # Submit feedback
         feedback_event = ReviewFeedbackSubmitted(
             aggregate_id="review-1",
-            timestamp="2024-01-01T00:10:00Z",
-            source="test",
             payload={
                 "iteration_number": 1,
                 "decision": "APPROVE",
@@ -401,8 +386,6 @@ class TestReviewEventHandlerWorkflow:
         # Approve cycle
         approve_event = ReviewCycleApproved(
             aggregate_id="review-1",
-            timestamp="2024-01-01T00:15:00Z",
-            source="test",
             payload={"total_iterations": 1},
         )
         await handler.handle(approve_event)
@@ -422,8 +405,6 @@ class TestReviewEventHandlerWorkflow:
         for i in range(3):
             create_event = ReviewCycleCreated(
                 aggregate_id=f"review-{i}",
-                timestamp="2024-01-01T00:00:00Z",
-                source="test",
                 payload={"workflow_id": f"wf-{i}", "max_iterations": 3},
             )
             await handler.handle(create_event)
@@ -436,8 +417,6 @@ class TestReviewEventHandlerWorkflow:
         for i in range(2):
             approve_event = ReviewCycleApproved(
                 aggregate_id=f"review-{i}",
-                timestamp="2024-01-01T00:15:00Z",
-                source="test",
                 payload={"total_iterations": 1},
             )
             await handler.handle(approve_event)
@@ -448,8 +427,6 @@ class TestReviewEventHandlerWorkflow:
         # Reject third review
         reject_event = ReviewCycleRejected(
             aggregate_id="review-2",
-            timestamp="2024-01-01T00:20:00Z",
-            source="test",
             payload={"final_iteration": 2, "rejection_reason": "Quality issues"},
         )
         await handler.handle(reject_event)
@@ -467,8 +444,6 @@ class TestReviewEventHandlerWorkflow:
         # Create review
         create_event = ReviewCycleCreated(
             aggregate_id="review-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={"workflow_id": "wf-1", "max_iterations": 3},
         )
         await handler.handle(create_event)
@@ -476,8 +451,6 @@ class TestReviewEventHandlerWorkflow:
         # Start iteration 1
         iter1_event = ReviewIterationStarted(
             aggregate_id="review-1",
-            timestamp="2024-01-01T00:05:00Z",
-            source="test",
             payload={"iteration_number": 1},
         )
         await handler.handle(iter1_event)
@@ -485,8 +458,6 @@ class TestReviewEventHandlerWorkflow:
         # Reject with issues
         reject_event = ReviewCycleRejected(
             aggregate_id="review-1",
-            timestamp="2024-01-01T00:10:00Z",
-            source="test",
             payload={
                 "final_iteration": 1,
                 "rejection_reason": "Code quality not met",
@@ -506,8 +477,6 @@ class TestReviewEventHandlerWorkflow:
         # Create review
         create_event = ReviewCycleCreated(
             aggregate_id="review-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={"workflow_id": "wf-1", "max_iterations": 2},
         )
         await handler.handle(create_event)
@@ -516,8 +485,6 @@ class TestReviewEventHandlerWorkflow:
         for i in range(1, 3):
             iter_event = ReviewIterationStarted(
                 aggregate_id="review-1",
-                timestamp=f"2024-01-01T00:{i * 5:02d}:00Z",
-                source="test",
                 payload={"iteration_number": i},
             )
             await handler.handle(iter_event)
@@ -525,8 +492,6 @@ class TestReviewEventHandlerWorkflow:
             if i < 3:
                 reject_event = ReviewCycleRejected(
                     aggregate_id="review-1",
-                    timestamp=f"2024-01-01T00:{i * 5 + 2:02d}:00Z",
-                    source="test",
                     payload={
                         "final_iteration": i,
                         "rejection_reason": "Still has issues",
@@ -537,16 +502,12 @@ class TestReviewEventHandlerWorkflow:
         # Create new review and escalate immediately
         create_event = ReviewCycleCreated(
             aggregate_id="review-2",
-            timestamp="2024-01-01T01:00:00Z",
-            source="test",
             payload={"workflow_id": "wf-2", "max_iterations": 3},
         )
         await handler.handle(create_event)
 
         escalate_event = ReviewCycleEscalated(
             aggregate_id="review-2",
-            timestamp="2024-01-01T01:05:00Z",
-            source="test",
             payload={"reason": "Human review required"},
         )
         await handler.handle(escalate_event)
@@ -579,8 +540,6 @@ class TestReviewEventHandlerWorkflow:
             # Create review
             create_event = ReviewCycleCreated(
                 aggregate_id=review_id,
-                timestamp="2024-01-01T00:00:00Z",
-                source="test",
                 payload={"workflow_id": f"wf-{review_id}"},
             )
             await handler.handle(create_event)
@@ -596,8 +555,6 @@ class TestReviewEventHandlerWorkflow:
             for i in range(1, iter_count + 1):
                 iter_event = ReviewIterationStarted(
                     aggregate_id=review_id,
-                    timestamp="2024-01-01T00:00:00Z",
-                    source="test",
                     payload={"iteration_number": i},
                 )
                 await handler.handle(iter_event)
@@ -607,15 +564,11 @@ class TestReviewEventHandlerWorkflow:
             if outcome == "approved":
                 complete_event = ReviewCycleApproved(
                     aggregate_id=review_id,
-                    timestamp="2024-01-01T00:00:00Z",
-                    source="test",
                     payload={"total_iterations": iter_count},
                 )
             elif outcome == "rejected":
                 complete_event = ReviewCycleRejected(
                     aggregate_id=review_id,
-                    timestamp="2024-01-01T00:00:00Z",
-                    source="test",
                     payload={
                         "final_iteration": iter_count,
                         "rejection_reason": "Quality issues",
@@ -624,8 +577,6 @@ class TestReviewEventHandlerWorkflow:
             else:  # escalated
                 complete_event = ReviewCycleEscalated(
                     aggregate_id=review_id,
-                    timestamp="2024-01-01T00:00:00Z",
-                    source="test",
                     payload={"reason": "Human review required"},
                 )
 
