@@ -37,9 +37,9 @@ def mock_repository():
         return_value=RepositoryStatus(
             current_branch=BranchName("main"),
             is_dirty=False,
-            staged_files=[],
-            unstaged_files=[],
-            untracked_files=[],
+            staged_files=tuple(),
+            unstaged_files=tuple(),
+            untracked_files=tuple(),
             ahead_count=0,
             behind_count=0,
         )
@@ -395,9 +395,9 @@ async def test_finalize_workspace_with_changes(
     mock_repository.status.return_value = RepositoryStatus(
         current_branch=BranchName(context.branch_name),
         is_dirty=True,
-        staged_files=["file1.py"],
-        unstaged_files=["file2.py"],
-        untracked_files=[],
+        staged_files=("file1.py",),
+        unstaged_files=("file2.py",),
+        untracked_files=tuple(),
         ahead_count=0,
         behind_count=0,
     )
@@ -444,9 +444,9 @@ async def test_finalize_workspace_no_changes(
     mock_repository.status.return_value = RepositoryStatus(
         current_branch=BranchName(context.branch_name),
         is_dirty=False,
-        staged_files=[],
-        unstaged_files=[],
-        untracked_files=[],
+        staged_files=tuple(),
+        unstaged_files=tuple(),
+        untracked_files=tuple(),
         ahead_count=0,
         behind_count=0,
     )

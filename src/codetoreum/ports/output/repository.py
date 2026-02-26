@@ -18,14 +18,16 @@ class RepositoryStatus:
     """Repository status information.
 
     All fields are validated at construction to ensure contract boundary integrity.
-    Frozen to prevent accidental mutation after creation.
+    Frozen to prevent accidental mutation after creation. File lists are converted
+    to tuples for true immutability - the dataclass is only shallowly frozen when
+    fields contain mutable types, so we enforce deep immutability via conversion.
     """
 
     current_branch: BranchName
     is_dirty: bool
-    staged_files: list[str]
-    unstaged_files: list[str]
-    untracked_files: list[str]
+    staged_files: tuple[str, ...]
+    unstaged_files: tuple[str, ...]
+    untracked_files: tuple[str, ...]
     ahead_count: int
     behind_count: int
 
@@ -35,24 +37,51 @@ class RepositoryStatus:
             msg = "current_branch must be a non-empty string"
             raise ValueError(msg)
 
+        # Explicitly reject bool (subclass of int) before checking for bool type
+        if isinstance(self.is_dirty, int) and not isinstance(self.is_dirty, bool):
+            msg = "is_dirty must be a boolean"
+            raise ValueError(msg)
+
         if not isinstance(self.is_dirty, bool):
             msg = "is_dirty must be a boolean"
             raise ValueError(msg)
 
-        if not isinstance(self.staged_files, list):
-            msg = "staged_files must be a list"
+        if not isinstance(self.staged_files, tuple):
+            msg = "staged_files must be a tuple of strings"
             raise ValueError(msg)
 
-        if not isinstance(self.unstaged_files, list):
-            msg = "unstaged_files must be a list"
+        if not all(isinstance(f, str) for f in self.staged_files):
+            msg = "all staged_files must be strings"
             raise ValueError(msg)
 
-        if not isinstance(self.untracked_files, list):
-            msg = "untracked_files must be a list"
+        if not isinstance(self.unstaged_files, tuple):
+            msg = "unstaged_files must be a tuple of strings"
+            raise ValueError(msg)
+
+        if not all(isinstance(f, str) for f in self.unstaged_files):
+            msg = "all unstaged_files must be strings"
+            raise ValueError(msg)
+
+        if not isinstance(self.untracked_files, tuple):
+            msg = "untracked_files must be a tuple of strings"
+            raise ValueError(msg)
+
+        if not all(isinstance(f, str) for f in self.untracked_files):
+            msg = "all untracked_files must be strings"
+            raise ValueError(msg)
+
+        # Explicitly reject bool (subclass of int)
+        if isinstance(self.ahead_count, bool):
+            msg = "ahead_count must be a non-negative integer, got bool"
             raise ValueError(msg)
 
         if not isinstance(self.ahead_count, int) or self.ahead_count < 0:
             msg = "ahead_count must be a non-negative integer"
+            raise ValueError(msg)
+
+        # Explicitly reject bool (subclass of int)
+        if isinstance(self.behind_count, bool):
+            msg = "behind_count must be a non-negative integer, got bool"
             raise ValueError(msg)
 
         if not isinstance(self.behind_count, int) or self.behind_count < 0:
@@ -65,21 +94,28 @@ class MergeResult:
     """Result of merge operation.
 
     All fields are validated at construction to ensure contract boundary integrity.
-    Frozen to prevent accidental mutation after creation.
+    Frozen to prevent accidental mutation after creation. Conflicts list is converted
+    to a tuple for true immutability - the dataclass is only shallowly frozen when
+    fields contain mutable types, so we enforce deep immutability via conversion.
     """
 
     success: bool
-    conflicts: list[str]
+    conflicts: tuple[str, ...]
     merge_commit: CommitHash | None
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
+        # Explicitly reject bool (subclass of int)
+        if isinstance(self.success, int) and not isinstance(self.success, bool):
+            msg = "success must be a boolean"
+            raise ValueError(msg)
+
         if not isinstance(self.success, bool):
             msg = "success must be a boolean"
             raise ValueError(msg)
 
-        if not isinstance(self.conflicts, list):
-            msg = "conflicts must be a list"
+        if not isinstance(self.conflicts, tuple):
+            msg = "conflicts must be a tuple of strings"
             raise ValueError(msg)
 
         # Validate all conflict items are strings

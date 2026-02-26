@@ -40,6 +40,9 @@ class NonNegativeInt(int):
 
     Validates that the integer value is >= 0 at construction time.
     Inherits from int for backward compatibility and natural integer semantics.
+
+    Explicitly rejects bool values (which are technically ints in Python) to enforce
+    strict type safety at the contract boundary.
     """
 
     def __new__(cls, value: int) -> "NonNegativeInt":
@@ -52,8 +55,12 @@ class NonNegativeInt(int):
             NonNegativeInt instance
 
         Raises:
-            ValueError: If value is negative
+            ValueError: If value is negative, bool, or not an integer
         """
+        # Explicitly reject bool (subclass of int) before checking int
+        if isinstance(value, bool):
+            msg = f"NonNegativeInt requires an integer, got bool"
+            raise ValueError(msg)
         if not isinstance(value, int):
             msg = f"NonNegativeInt requires an integer, got {type(value).__name__}"
             raise ValueError(msg)
@@ -119,7 +126,7 @@ class PipelineQueueEntry:
     project_id: str
     board_id: str
     work_item_id: str
-    position_in_column: int
+    position_in_column: NonNegativeInt
     status: QueueStatus
     queued_at: datetime
     last_position_check: datetime
@@ -138,8 +145,13 @@ class PipelineQueueEntry:
             msg = "work_item_id must be a non-empty string"
             raise ValueError(msg)
 
-        if not isinstance(self.position_in_column, int) or self.position_in_column < 0:
-            msg = "position_in_column must be a non-negative integer"
+        # Explicitly reject bool before checking isinstance(x, int)
+        if isinstance(self.position_in_column, bool):
+            msg = "position_in_column must be a non-negative integer, got bool"
+            raise ValueError(msg)
+
+        if not isinstance(self.position_in_column, NonNegativeInt):
+            msg = f"position_in_column must be a NonNegativeInt, got {type(self.position_in_column).__name__}"
             raise ValueError(msg)
 
         if not isinstance(self.status, QueueStatus):

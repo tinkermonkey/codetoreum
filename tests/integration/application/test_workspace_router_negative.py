@@ -258,9 +258,9 @@ async def test_finalize_workspace_commit_fails(
     mock_repository.status.return_value = RepositoryStatus(
         current_branch=context.branch_name,
         is_dirty=True,
-        staged_files=["file.py"],
-        unstaged_files=[],
-        untracked_files=[],
+        staged_files=("file.py",),
+        unstaged_files=tuple(),
+        untracked_files=tuple(),
         ahead_count=0,
         behind_count=0,
     )
@@ -301,9 +301,9 @@ async def test_finalize_workspace_push_fails(
     mock_repository.status.return_value = RepositoryStatus(
         current_branch=context.branch_name,
         is_dirty=True,
-        staged_files=["file.py"],
-        unstaged_files=[],
-        untracked_files=[],
+        staged_files=("file.py",),
+        unstaged_files=tuple(),
+        untracked_files=tuple(),
         ahead_count=0,
         behind_count=0,
     )

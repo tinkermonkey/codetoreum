@@ -503,9 +503,9 @@ class GitRepositoryAdapter(IRepository):
         return RepositoryStatus(
             current_branch=current_branch,
             is_dirty=bool(staged_files or unstaged_files or untracked_files),
-            staged_files=staged_files,
-            unstaged_files=unstaged_files,
-            untracked_files=untracked_files,
+            staged_files=tuple(staged_files),
+            unstaged_files=tuple(unstaged_files),
+            untracked_files=tuple(untracked_files),
             ahead_count=ahead_count,
             behind_count=behind_count,
         )
@@ -569,7 +569,7 @@ class GitRepositoryAdapter(IRepository):
 
             return MergeResult(
                 success=True,
-                conflicts=[],
+                conflicts=tuple(),
                 merge_commit=commit_sha,
             )
 
@@ -585,7 +585,7 @@ class GitRepositoryAdapter(IRepository):
 
             return MergeResult(
                 success=False,
-                conflicts=conflicts,
+                conflicts=tuple(conflicts),
                 merge_commit=None,
             )
 

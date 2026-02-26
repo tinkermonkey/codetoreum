@@ -542,9 +542,9 @@ index abc123..def456 100644
             return RepositoryStatus(
                 current_branch=current_branch,
                 is_dirty=len(staged_files) > 0,
-                staged_files=list(staged_files),  # Return a copy to prevent mutation of internal state
-                unstaged_files=[],
-                untracked_files=[],
+                staged_files=tuple(staged_files),  # Return as tuple for immutability
+                unstaged_files=tuple(),
+                untracked_files=tuple(),
                 ahead_count=0,
                 behind_count=0,
             )
@@ -637,7 +637,7 @@ index abc123..def456 100644
 
             return MergeResult(
                 success=True,
-                conflicts=[],
+                conflicts=tuple(),
                 merge_commit=new_commit,
             )
 

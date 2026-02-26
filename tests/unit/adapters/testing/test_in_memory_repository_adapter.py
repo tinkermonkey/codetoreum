@@ -172,7 +172,7 @@ class TestInMemoryRepositoryAdapter:
 
         # Verify status shows staged files
         status = await adapter.status(Path("/tmp/test-repo"))
-        assert status.staged_files == ["src/main.py", "tests/test_main.py"]
+        assert status.staged_files == ("src/main.py", "tests/test_main.py")
         assert status.is_dirty
 
     async def test_stage_files_multiple_calls(self, adapter):
@@ -244,7 +244,7 @@ class TestInMemoryRepositoryAdapter:
 
         # Verify staging area is cleared
         status = await adapter.status(Path("/tmp/test-repo"))
-        assert status.staged_files == []
+        assert status.staged_files == tuple()
         assert not status.is_dirty
 
     async def test_commit(self, adapter):
