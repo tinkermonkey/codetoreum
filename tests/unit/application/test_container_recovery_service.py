@@ -495,6 +495,7 @@ class TestUnrecoverableErrorPropagation:
 
         # Simulate unrecoverable storage failure during repair results processing
         from codetoreum.ports.exceptions import StorageError
+
         mock_adapter.set_repair_results_processing_error(StorageError("Storage completely unavailable"))
 
         # Service should re-raise the unrecoverable error
@@ -525,6 +526,7 @@ class TestUnrecoverableErrorPropagation:
 
         # Simulate unrecoverable Docker API failure
         from codetoreum.ports.exceptions import ContainerError
+
         mock_adapter.set_container_listing_error(ContainerError("Docker daemon unreachable"))
 
         # Service should re-raise the unrecoverable error
@@ -579,8 +581,8 @@ class TestUnrecoverableErrorPropagation:
         # Partial success returns RecoveryResult
         result_partial = await service_partial.recover_or_cleanup_containers()
         assert isinstance(result_partial, object)  # RecoveryResult
-        assert hasattr(result_partial, 'recovered')
-        assert hasattr(result_partial, 'errors')
+        assert hasattr(result_partial, "recovered")
+        assert hasattr(result_partial, "errors")
 
         # Case 2: Catastrophic failure (Docker unavailable at start)
         mock_adapter_catastrophic = MockContainerRecoveryAdapter()
@@ -592,6 +594,7 @@ class TestUnrecoverableErrorPropagation:
         )
 
         from codetoreum.ports.exceptions import ContainerError
+
         mock_adapter_catastrophic.set_container_listing_error(ContainerError("Docker unreachable"))
 
         # Catastrophic failure raises exception
