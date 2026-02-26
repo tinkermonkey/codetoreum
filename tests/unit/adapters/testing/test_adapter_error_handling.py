@@ -186,7 +186,9 @@ class TestStorageAdapterErrorHandling:
 
         # Download should return one complete value, not corrupted
         result = await adapter.download(key)
-        assert result in [content_1, content_2], "Result must be one of the uploaded contents (last-write-wins), not corrupted"
+        assert result in [content_1, content_2], (
+            "Result must be one of the uploaded contents (last-write-wins), not corrupted"
+        )
         assert len(result) > 0, "Downloaded content must not be empty"
 
     async def test_concurrent_upload_download_no_partial_reads(self, adapter):
@@ -220,8 +222,9 @@ class TestStorageAdapterErrorHandling:
         download_result = results[1]
 
         # Download must return complete content, not partial
-        assert download_result in [initial_content, updated_content], \
+        assert download_result in [initial_content, updated_content], (
             "Download must return one complete version, not partial data"
+        )
         assert len(download_result) > 0, "Downloaded content must not be empty"
 
     async def test_concurrent_upload_delete_race(self, adapter):
