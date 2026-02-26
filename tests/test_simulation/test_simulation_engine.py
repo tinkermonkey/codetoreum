@@ -257,9 +257,7 @@ class TestSimulationEngineAdapterCreation:
         container adapter instead of using pre-configured sequences.
         """
         container_mock = Mock()
-        adapter = simulation_engine.create_repair_cycle_adapter(
-            container_adapter=container_mock
-        )
+        adapter = simulation_engine.create_repair_cycle_adapter(container_adapter=container_mock)
 
         # Adapter should have received the container_adapter
         assert adapter._container_adapter is container_mock
@@ -271,9 +269,7 @@ class TestSimulationEngineAdapterCreation:
         passed to the MockRepairCycleAdapter for recovery testing.
         """
         checkpoint_mock = Mock()
-        adapter = simulation_engine.create_repair_cycle_adapter(
-            checkpoint_store=checkpoint_mock
-        )
+        adapter = simulation_engine.create_repair_cycle_adapter(checkpoint_store=checkpoint_mock)
 
         # Adapter should have received the checkpoint_store
         assert adapter._checkpoint_store is checkpoint_mock
