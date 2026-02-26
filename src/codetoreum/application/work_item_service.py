@@ -269,7 +269,7 @@ class WorkItemService(IWorkItemCommandPort, IWorkItemQueryPort):
                     # Apply filters
                     if self._matches_filters(work_item, filters):
                         work_items.append(work_item)
-            except Exception as exc:
+            except Exception:
                 # Log error but don't silently skip - make corruption visible
                 logger.error(
                     "Failed to reconstruct work item from event stream",

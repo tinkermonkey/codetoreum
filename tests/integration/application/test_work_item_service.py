@@ -1,8 +1,8 @@
 """Integration tests for WorkItemService."""
 
 import logging
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
-from typing import Iterator
 
 import pytest
 
@@ -32,7 +32,6 @@ from codetoreum.ports.input.work_item_query import (
     WorkItemFilters,
     WorkItemSearchParams,
 )
-
 
 # Fixtures
 
