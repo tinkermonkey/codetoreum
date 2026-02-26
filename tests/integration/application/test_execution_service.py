@@ -288,7 +288,7 @@ async def test_cancel_execution(
     result = await execution_service.cancel_execution(execution)
 
     assert result.success
-    assert execution.status == ExecutionStatus.FAILED
+    assert execution.status == ExecutionStatus.CANCELLED
     assert "cancelled" in execution.error_message.lower()
 
 
