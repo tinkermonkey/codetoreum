@@ -470,3 +470,25 @@ class TestStorageContract(ABC):
         assert info["object_count"] == 2
         assert info["total_size_bytes"] == 15  # 5 + 10
         assert "provider" in info
+
+    # ===== Presigned URL Tests =====
+
+    @pytest.mark.asyncio
+    async def test_generate_presigned_url_returns_string(self):
+        """State consistency: generate_presigned_url returns a non-empty string for existing key."""
+        storage = await self.create_storage()
+
+        await storage.upload("test-key", b"content", "text/plain")
+
+        # Presigned URL should be a non-empty string
+        url = await storage.generate_presigned_url("test-key", expires_in=3600)
+        assert isinstance(url, str)
+        assert len(url) > 0
+
+    @pytest.mark.asyncio
+    async def test_generate_presigned_url_nonexistent_key_raises_error(self):
+        """Error condition: generate_presigned_url for missing key raises ResourceNotFoundError."""
+        storage = await self.create_storage()
+
+        with pytest.raises(ResourceNotFoundError):
+            await storage.generate_presigned_url("nonexistent-key", expires_in=3600)
