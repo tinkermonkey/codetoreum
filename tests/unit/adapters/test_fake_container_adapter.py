@@ -401,4 +401,4 @@ class TestFakeContainerAdapter:
         assert isinstance(logs, str)
         lines = logs.strip().split("\n")
         # Should have at most 2 lines (tail=2)
-        assert len([l for l in lines if l.strip()]) <= 2
+        assert len([line for line in lines if line.strip()]) <= 2

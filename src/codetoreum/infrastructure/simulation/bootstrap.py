@@ -419,7 +419,7 @@ class SimulationApplicationBootstrap:
         # Pass config and clock to LLM adapter for fidelity-aware timing
         llm_provider = self._adapter_factory.create_llm_provider(
             adapter_name="mock",
-            config=self._config,
+            config=self.config,
             clock=self._engine.get_clock_for_testing() if self._engine else None,
         )
 
@@ -429,7 +429,7 @@ class SimulationApplicationBootstrap:
             adapter_name="fake",
             event_emitter=event_emitter,
             event_bus=event_bus,
-            config=self._config,
+            config=self.config,
             clock=self._engine.get_clock_for_testing() if self._engine else None,
         )
 
