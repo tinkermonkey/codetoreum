@@ -748,7 +748,7 @@ def create_app(
                     DependencyStatus(
                         name="health-check",
                         status="unhealthy",
-                        message=f"Health check failed: {str(exc)}",
+                        message=f"Health check failed: {exc!s}",
                         response_time_ms=None,
                     )
                 ],
