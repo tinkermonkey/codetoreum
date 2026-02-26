@@ -1,6 +1,6 @@
 # Mock Adapters Reference
 
-**Complete inventory of 18 testing and simulation adapters**
+**Complete inventory of 24 testing and simulation adapters**
 
 ## Overview
 
@@ -8,17 +8,18 @@ Mock adapters provide fast, deterministic implementations of port interfaces for
 
 ## Adapter Categories
 
-### 1. **Mock Workflow Adapters** (3)
+### 1. **Mock Workflow Adapters** (4)
 - MockLLMAdapter - Agent/LLM execution simulation
 - MockBoardAdapter - Project board operations
 - MockReviewCycleAdapter - Code review workflow
+- MockDiscussionAdapter - Discussion/comment thread management
 
 ### 2. **Mock System Adapters** (3)
 - MockNotifierAdapter - Notification delivery
 - MockRepairCycleAdapter - Test-fix-validate loops
 - MockContainerRecoveryAdapter - Container failure recovery
 
-### 3. **In-Memory Persistence Adapters** (7)
+### 3. **In-Memory Persistence Adapters** (8)
 - InMemoryEventStore - Event sourcing
 - InMemoryStorageAdapter - File/object storage
 - InMemoryRepositoryAdapter - Git operations
@@ -26,15 +27,22 @@ Mock adapters provide fast, deterministic implementations of port interfaces for
 - InMemoryWorkflowConfigService - Workflow configuration
 - InMemoryQueueService - Work item queue
 - InMemoryCheckpointStore - Repair cycle state
+- InMemoryVersionControlService - Version control operations
 
-### 4. **Utility Adapters** (4)
-- FakeContainerAdapter - Container execution
-- SimpleEncryptionService - Data encryption
+### 4. **In-Memory Infrastructure Adapters** (2)
+- InMemoryMessageBroker - Pub/sub message distribution
 - InMemoryMetricsAdapter - Metrics collection
-- InMemoryConfigStore - Configuration storage
 
-### 5. **Support Adapters** (1)
-- Specialized encryption, messaging (as needed)
+### 5. **Utility Adapters** (5)
+- FakeContainerAdapter - Container execution
+- SimpleEncryptionAdapter - Data encryption
+- InMemoryConfigStore - Configuration storage
+- ConfigurableIdentityService - Bot/user identification
+- MockProjectManagerAdapter - Multi-project management
+
+### 6. **Support Adapters** (2)
+- CapturingMockEventEmitter - Domain event capture
+- MockAgentExecutor - Agent execution simulation
 
 ---
 
@@ -208,6 +216,59 @@ assert_feedback = adapter.get_feedback_for_iteration("item-1", 1)
 - Maker-checker workflow testing
 - Revision cycle simulation
 - Review gate validation
+
+#### 4. MockDiscussionAdapter
+**File**: `mock_discussion_adapter.py`
+**Implements**: IDiscussionAdapter
+**Purpose**: Simulate discussion threads and comment management
+
+**Key Features**:
+- ✅ In-memory discussion thread storage
+- ✅ Comment creation and retrieval
+- ✅ Work-item-specific monitoring
+- ✅ Event emission for comment actions
+- ✅ Test helpers for setup and verification
+
+**Configuration**:
+```python
+adapter = MockDiscussionAdapter(identity_service=identity_svc)
+config = DiscussionMonitoringConfig(project_id="proj-1")
+adapter.start_monitoring("item-1", config)
+```
+
+**Core Methods**:
+```python
+# Query
+thread = await adapter.get_thread("item-1")
+comments = adapter.get_comments_by_author("item-1", "alice")
+count = adapter.get_comment_count("item-1")
+
+# Commands
+comment = await adapter.add_comment("item-1", "Agent response")
+
+# Monitoring
+adapter.start_monitoring("item-1", config)
+adapter.stop_monitoring("item-1")
+```
+
+**Test Helpers**:
+- `simulate_comment()` - Simulate human comment (emits event)
+- `simulate_bot_comment()` - Simulate bot comment
+- `create_thread()` - Create discussion with initial comment
+- `get_processed_comment_ids()` - Get comment IDs for deduplication
+- `reset_monitoring_state()` - Reset for restart simulation
+- `clear_threads()` - Clear all threads
+- `clear_monitoring()` - Clear monitoring state
+- `get_thread_info()` - Get diagnostic thread information
+
+**Event Emission**:
+- `comment.needs_response` - Human comment posted (if monitoring)
+- `comment.posted` - Bot comment posted
+
+**Use Cases**:
+- Discussion monitoring workflow testing
+- Comment response handling validation
+- Duplicate prevention testing
 
 ---
 
@@ -710,9 +771,148 @@ state = saved.state
 
 ---
 
+#### 14. InMemoryVersionControlService
+**File**: `in_memory_version_control_service.py`
+**Implements**: IVersionControlService
+**Purpose**: Version control operations without git
+
+**Key Features**:
+- ✅ Repository cloning simulation
+- ✅ Branch management (checkout, create)
+- ✅ Commit simulation with SHA generation
+- ✅ Push simulation
+- ✅ Repository metadata retrieval
+
+**Usage**:
+```python
+service = InMemoryVersionControlService()
+
+# Clone repository
+await service.clone_repository(
+    url="https://github.com/org/repo.git",
+    target_path="/workspace/repo",
+    branch="main"
+)
+
+# Checkout branch
+await service.checkout("/workspace/repo", "feature/new-feature")
+
+# Commit changes
+commit_sha = await service.commit(
+    "/workspace/repo",
+    "Add feature implementation"
+)
+
+# Push to remote
+await service.push("/workspace/repo", "feature/new-feature")
+
+# Get repository info
+repo = await service.get_repository("repo-123")
+assert repo.name == "repo"
+```
+
+**Use Cases**:
+- Version control workflow testing
+- Git operation orchestration validation
+- Branch management testing
+
+---
+
+#### 15. InMemoryMessageBroker
+**File**: `in_memory_message_broker.py`
+**Implements**: IMessageBroker
+**Purpose**: Pub/sub message distribution without Redis
+
+**Key Features**:
+- ✅ Channel-based pub/sub messaging
+- ✅ Event and control message publication
+- ✅ Async and sync callback support
+- ✅ Statistics tracking
+- ✅ Test helper methods
+
+**Configuration**:
+```python
+broker = InMemoryMessageBroker()
+
+# Initialize
+await broker.initialize()
+
+# Subscribe to channel
+messages = []
+async def handler(msg):
+    messages.append(msg)
+
+await broker.subscribe("events.workflow", handler)
+```
+
+**Core Methods**:
+```python
+# Publish
+await broker.publish_event(domain_event)
+await broker.publish_control_message("disconnect", {"client_id": "123"})
+
+# Subscribe
+await broker.subscribe("channel_name", callback)
+await broker.unsubscribe("channel_name", callback)
+
+# Statistics
+stats = broker.get_stats()
+# Returns: {
+#   'events_published': N,
+#   'control_messages_published': N,
+#   'messages_delivered': N,
+#   'delivery_failures': N,
+#   'active_subscriptions': N,
+#   'channels': N
+# }
+```
+
+**Test Helpers**:
+- `get_published_messages()` - Get all published messages
+- `get_subscriptions_for_channel()` - Count subscriptions on channel
+- `clear_published_messages()` - Clear message log
+
+**Use Cases**:
+- Pub/sub message distribution testing
+- Horizontal scalability testing
+- Control message coordination testing
+
+---
+
+### In-Memory Infrastructure Adapters
+
+#### 16. InMemoryMetricsAdapter
+**File**: `in_memory_metrics_adapter.py`
+**Implements**: IMetrics
+**Purpose**: Metrics collection without Prometheus
+
+**Usage**:
+```python
+adapter = InMemoryMetricsAdapter()
+
+# Record metrics
+await adapter.increment_counter("requests", 1)
+await adapter.set_gauge("queue_size", 42)
+await adapter.record_histogram("response_time", 150)
+
+# Query
+value = adapter.get_counter_value("requests")
+all_metrics = adapter.get_all_metrics()
+
+# Assertions
+count = adapter.get_metric_count("requests")
+assert count == 5
+```
+
+**Use Cases**:
+- Metrics emission validation
+- Performance tracking testing
+
+---
+
 ### Utility Adapters
 
-#### 14. FakeContainerAdapter
+#### 17. FakeContainerAdapter
 **File**: `fake_container_adapter.py`
 **Implements**: IContainer
 **Purpose**: Container execution without Docker
@@ -760,8 +960,8 @@ await adapter.stop_container(...)
 
 ---
 
-#### 15. SimpleEncryptionService
-**File**: `simple_encryption_service.py`
+#### 18. SimpleEncryptionAdapter
+**File**: `simple_encryption_adapter.py`
 **Implements**: IEncryptionService
 **Purpose**: In-process encryption for testing
 
@@ -772,7 +972,7 @@ await adapter.stop_container(...)
 
 **Usage**:
 ```python
-service = SimpleEncryptionService()
+service = SimpleEncryptionAdapter()
 
 # Encrypt
 ciphertext = await service.encrypt("secret data")
@@ -786,36 +986,7 @@ assert plaintext == "secret data"
 
 ---
 
-#### 16. InMemoryMetricsAdapter
-**File**: `in_memory_metrics_adapter.py`
-**Implements**: IMetrics
-**Purpose**: Metrics collection without Prometheus
-
-**Usage**:
-```python
-adapter = InMemoryMetricsAdapter()
-
-# Record metrics
-await adapter.increment_counter("requests", 1)
-await adapter.set_gauge("queue_size", 42)
-await adapter.record_histogram("response_time", 150)
-
-# Query
-value = adapter.get_counter_value("requests")
-all_metrics = adapter.get_all_metrics()
-
-# Assertions
-count = adapter.get_metric_count("requests")
-assert count == 5
-```
-
-**Use Cases**:
-- Metrics emission validation
-- Performance tracking testing
-
----
-
-#### 17. InMemoryConfigStore
+#### 19. InMemoryConfigStore
 **File**: `in_memory_config_store.py`
 **Implements**: IConfigStore (if applicable)
 **Purpose**: Configuration storage without database
@@ -833,6 +1004,151 @@ config = await store.get("app_config")
 # List
 all_keys = await store.list()
 ```
+
+---
+
+#### 20. ConfigurableIdentityService
+**File**: `../secondary/configurable_identity_service.py`
+**Implements**: IIdentityService
+**Purpose**: Bot/user identification with configuration
+
+**Key Features**:
+- ✅ Bot user identification
+- ✅ Human user identification
+- ✅ Configurable bot username
+- ✅ Testing and debugging support
+
+**Configuration**:
+```python
+service = ConfigurableIdentityService(bot_username="codetoreum-bot")
+
+# Identify users
+is_bot = service.is_bot_user("codetoreum-bot")  # True
+is_bot = service.is_bot_user("alice")  # False
+
+# Get bot username
+name = service.get_bot_username()  # "codetoreum-bot"
+```
+
+**Use Cases**:
+- Bot comment filtering
+- Author attribution testing
+- Discussion thread filtering
+
+---
+
+#### 21. MockProjectManagerAdapter
+**File**: `mock_project_manager_adapter.py`
+**Implements**: IProjectManager
+**Purpose**: Multi-project management simulation
+
+**Key Features**:
+- ✅ Project CRUD operations
+- ✅ Project configuration management
+- ✅ Test helper methods
+
+**Configuration**:
+```python
+adapter = MockProjectManagerAdapter()
+
+# Add project
+adapter.add_project("proj-1", ProjectConfig(...))
+
+# Get project
+project = adapter.get_project("proj-1")
+
+# List projects
+projects = adapter.list_projects()
+```
+
+**Use Cases**:
+- Multi-project orchestration testing
+- Project configuration validation
+
+---
+
+### Support Adapters
+
+#### 22. CapturingMockEventEmitter
+**File**: `capturing_mock_event_emitter.py`
+**Implements**: IEventEmitter
+**Purpose**: Event capture and verification for testing
+
+**Key Features**:
+- ✅ Event capture
+- ✅ Event history tracking
+- ✅ Query and assertion helpers
+- ✅ Event filtering
+
+**Usage**:
+```python
+emitter = CapturingMockEventEmitter()
+
+# Capture events
+emitter.emit(domain_event)
+
+# Query
+events = emitter.get_all_events()
+filtered = emitter.get_events_by_type("WorkItemColumnChanged")
+
+# Assertions
+assert len(events) == 1
+assert events[0].event_type == "WorkItemColumnChanged"
+
+# Clear
+emitter.clear()
+```
+
+**Use Cases**:
+- Domain event capture testing
+- Event workflow validation
+- Event source verification
+
+---
+
+#### 23. MockAgentExecutor
+**File**: `mock_agent_executor.py`
+**Purpose**: Agent execution simulation without containers
+
+**Key Features**:
+- ✅ Agent execution simulation
+- ✅ Configurable delays
+- ✅ Execution tracking
+- ✅ Completion callbacks
+
+**Configuration**:
+```python
+executor = MockAgentExecutor(execution_delay_seconds=3.0)
+
+# Execute agent
+execution_id = await executor.execute_agent(
+    agent_id="agent-1",
+    work_item_id="item-1",
+    context={"issue": "..."}
+)
+
+# Track execution
+executions = executor.get_executions()
+
+# Set completion handler
+async def on_complete(result):
+    print(f"Agent execution completed: {result}")
+
+executor.set_completion_handler(on_complete, "board-1")
+```
+
+**Use Cases**:
+- Agent execution workflow testing
+- Board automation testing
+- Execution tracking validation
+
+---
+
+#### 24. MockEventEmitter (Legacy)
+**File**: `../secondary/mock_event_emitter.py`
+**Purpose**: Basic event emission mock (deprecated in favor of CapturingMockEventEmitter)
+
+**Note**: Use CapturingMockEventEmitter for new tests. This adapter is maintained for backward compatibility.
 
 ---
 

@@ -44,9 +44,9 @@ from codetoreum.adapters.secondary.in_memory_pipeline_lock_service import (
 from codetoreum.adapters.secondary.mock_code_review_adapter import (
     MockCodeReviewAdapter,
 )
-from codetoreum.adapters.secondary.mock_discussion_adapter import MockDiscussionAdapter
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
+from codetoreum.adapters.testing.mock_discussion_adapter import MockDiscussionAdapter
 
 __all__ = [
     # GitHub Ticket System

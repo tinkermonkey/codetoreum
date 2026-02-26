@@ -5,9 +5,10 @@ Wires up the entire application stack in simulation mode through 6 phases:
 
 **Phase 0**: Create simulation engine (encapsulates clock and timing)
 **Phase 1**: Create infrastructure (event bus, logger, error registry) - EARLY for event subscriptions
-**Phase 2**: Create adapters (16 mock adapters: ticket system, LLM, container, repository,
+**Phase 2**: Create adapters (24 mock adapters: ticket system, LLM, container, repository,
            event store, metrics, storage, config, notifier, encryption, board, repair cycle,
-           project manager, lock service, workflow config, agent executor)
+           project manager, lock service, workflow config, agent executor, version control,
+           message broker, discussion, review cycle, identity service, checkpoint store)
 **Phase 3**: Create services (8 application services with their dependencies)
 **Phase 4**: Create ports (16 input port implementations)
 **Phase 5**: Create FastAPI app (wire all ports to API endpoints, register event handlers)
@@ -55,33 +56,33 @@ from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 
 # Adapters
 from codetoreum.adapters.testing import (
+    CapturingMockEventEmitter,
+    ConfigurableIdentityService,
     FakeContainerAdapter,
+    InMemoryCheckpointStore,
+    InMemoryConfigStore,
     InMemoryEventStore,
+    InMemoryMessageBroker,
     InMemoryMetricsAdapter,
+    InMemoryQueueService,
     InMemoryRepositoryAdapter,
     InMemoryTicketAdapter,
+    InMemoryVersionControlService,
+    InMemoryWorkflowConfigService,
+    MockAgentExecutor,
     MockBoardAdapter,
+    MockDiscussionAdapter,
     MockLLMAdapter,
     MockNotifierAdapter,
+    MockProjectManagerAdapter,
+    MockReviewCycleAdapter,
     SimpleEncryptionAdapter,
 )
-from codetoreum.adapters.testing.capturing_mock_event_emitter import (
-    CapturingMockEventEmitter,
-)
-from codetoreum.adapters.testing.in_memory_config_store import InMemoryConfigStore
-from codetoreum.adapters.testing.in_memory_queue_service import InMemoryQueueService
 from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
-from codetoreum.adapters.testing.in_memory_workflow_config_service import (
-    InMemoryWorkflowConfigService,
-)
-from codetoreum.adapters.testing.mock_agent_executor import MockAgentExecutor
 
 # Lazy import to avoid circular dependency
 from codetoreum.adapters.testing.mock_container_recovery_adapter import (
     MockContainerRecoveryAdapter,
-)
-from codetoreum.adapters.testing.mock_project_manager_adapter import (
-    MockProjectManagerAdapter,
 )
 from codetoreum.application.agent_scheduler import AgentScheduler
 from codetoreum.application.configuration_service import ConfigurationService
@@ -152,12 +153,20 @@ class SimulationAdapters:
     encryption: SimpleEncryptionAdapter
     board: MockBoardAdapter
     repair_cycle: Any  # MockRepairCycleAdapter - lazy imported to avoid circular dependency
-    project_manager: Any  # IProjectManagerService - multi-project management
+    project_manager: MockProjectManagerAdapter  # Multi-project management
     lock_service: InMemoryLockService
     workflow_config: InMemoryWorkflowConfigService
     agent_executor: MockAgentExecutor
     queue_service: InMemoryQueueService  # Pipeline queue service for board automation
     event_emitter: CapturingMockEventEmitter  # For domain event capture
+
+    # Additional adapters (wired in simulation mode)
+    version_control: InMemoryVersionControlService  # Version control operations
+    message_broker: InMemoryMessageBroker  # Pub/sub message distribution
+    discussion_adapter: MockDiscussionAdapter  # Discussion/comment thread management
+    review_cycle: MockReviewCycleAdapter  # Code review workflow
+    identity_service: ConfigurableIdentityService  # Bot/user identification
+    checkpoint_store: InMemoryCheckpointStore  # Repair cycle state persistence
 
 
 @dataclass
@@ -373,7 +382,7 @@ class SimulationApplicationBootstrap:
 
     async def _create_adapters(self) -> SimulationAdapters:
         """
-        Create all 16 mock adapters in simulation mode.
+        Create all 24 mock adapters in simulation mode.
 
         5 adapters created via AdapterFactory:
         - ticket_system (in_memory)
@@ -382,16 +391,18 @@ class SimulationApplicationBootstrap:
         - repository (in_memory)
         - event_store (in_memory)
 
-        11 additional adapters created directly:
+        19 additional adapters created directly:
         - metrics, storage, config_store, notifier, encryption, board, repair_cycle, project_manager
         - lock_service, workflow_config, agent_executor
+        - version_control, message_broker, discussion_adapter, review_cycle, identity_service, checkpoint_store
+        - queue_service, event_emitter
 
         The SimulationEngine automatically injects the clock into time-aware
         adapters (repair_cycle), hiding simulation implementation details from
         the adapter constructors.
 
         Returns:
-            SimulationAdapters with all 16 adapters configured
+            SimulationAdapters with all 24 adapters configured
         """
         if not self._engine:
             message = "SimulationEngine must be created before adapters"
@@ -484,7 +495,16 @@ class SimulationApplicationBootstrap:
             ),
         )
 
-        logger.info("Created 16 simulation adapters with domain event emission")
+        # Create additional adapters (version control, messaging, discussion, etc.)
+        version_control = InMemoryVersionControlService()
+        message_broker = InMemoryMessageBroker()
+        await message_broker.initialize()  # Initialize message broker
+        identity_service = ConfigurableIdentityService(bot_username="codetoreum-bot")
+        discussion_adapter = MockDiscussionAdapter(identity_service=identity_service)
+        review_cycle = MockReviewCycleAdapter(clock=self._engine.get_clock_for_testing() if self._engine else None)
+        checkpoint_store = InMemoryCheckpointStore()
+
+        logger.info("Created 24 simulation adapters with domain event emission")
 
         return SimulationAdapters(
             ticket_system=ticket_system,
@@ -505,6 +525,12 @@ class SimulationApplicationBootstrap:
             agent_executor=agent_executor,
             queue_service=queue_service,
             event_emitter=event_emitter,
+            version_control=version_control,
+            message_broker=message_broker,
+            discussion_adapter=discussion_adapter,
+            review_cycle=review_cycle,
+            identity_service=identity_service,
+            checkpoint_store=checkpoint_store,
         )
 
     # =========================================================================
