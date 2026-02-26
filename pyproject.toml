@@ -342,6 +342,9 @@ ignore = [
     "F401",    # Unused imports (opentelemetry side-effect imports in tests)
     "PLE1205", # Custom logger subclasses have different signatures than stdlib logging
 ]
+"tests/integration/adapters/secondary/test_webhook_validation.py" = [
+    "S324",    # Insecure hash function SHA1 (intentionally tests SHA-1 rejection)
+]
 "src/codetoreum/adapters/secondary/docker_container_recovery_adapter.py" = [
     "F821",    # String annotations with lazy imports: valid pattern, resolved by mypy
 ]

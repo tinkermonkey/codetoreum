@@ -178,7 +178,7 @@ class InMemoryVersionControlService(IVersionControlService):
 
         # Generate a mock commit SHA based on the message
         # In reality this would be a full git hash
-        commit_sha = hashlib.sha1(f"{message}-{current_branch}".encode()).hexdigest()[:40]
+        commit_sha = hashlib.sha256(f"{message}-{current_branch}".encode()).hexdigest()[:40]
 
         # Add commit to current branch
         if current_branch not in repo["commits"]:
