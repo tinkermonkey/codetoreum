@@ -384,7 +384,7 @@ class ClaudeCodeAdapter(ILLMProvider):
             timeout = ctx.timeout_seconds
             try:
                 await asyncio.wait_for(read_stream(), timeout=timeout)
-            except TimeoutError:
+            except TimeoutError as e:
                 logging.exception(
                     "Claude Code streaming timed out after %d seconds, terminating process (PID: %s)",
                     timeout,
@@ -394,7 +394,7 @@ class ClaudeCodeAdapter(ILLMProvider):
                 # Wait for process termination with timeout to prevent hanging
                 try:
                     await asyncio.wait_for(process.wait(), timeout=_PROCESS_TIMEOUT_AFTER_SIGKILL_SECONDS)
-                except TimeoutError as e:
+                except TimeoutError:
                     # Process didn't respond to SIGKILL - it's in uninterruptible state
                     logging.warning(
                         "Process (PID: %s) did not terminate after SIGKILL within %d seconds, "
