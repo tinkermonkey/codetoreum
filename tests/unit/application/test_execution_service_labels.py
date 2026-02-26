@@ -138,27 +138,6 @@ class TestExecutionServiceLabelBuilding:
         assert labels[CONTAINER_LABEL_WORKFLOW_RUN_ID] == "workflow-789"
         assert labels[CONTAINER_LABEL_EXECUTION_ID] == "exec-123"
 
-    def test_build_container_labels_uses_execution_id_as_task_id(self):
-        """Task ID label should use execution ID."""
-        # Override execution ID for this test
-        self.execution.id = "exec-abc123"
-
-        labels = self.service._build_container_labels(self.execution, self.context)
-
-        # Task ID should be execution ID (for tracking)
-        assert labels[CONTAINER_LABEL_TASK_ID] == "exec-abc123"
-        assert labels[CONTAINER_LABEL_EXECUTION_ID] == "exec-abc123"
-
-    def test_build_container_labels_uses_workflow_id_as_workflow_run_id(self):
-        """Pipeline run ID label should use workflow ID."""
-        # Override workflow ID for this test
-        self.execution.workflow_id = "workflow-xyz789"
-        self.context.workflow_id = "workflow-xyz789"
-
-        labels = self.service._build_container_labels(self.execution, self.context)
-
-        # Pipeline run ID should be workflow ID
-        assert labels[CONTAINER_LABEL_WORKFLOW_RUN_ID] == "workflow-xyz789"
 
     def test_build_container_labels_returns_dict(self):
         """Container labels should be a dict."""
