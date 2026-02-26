@@ -116,11 +116,9 @@ class ContainerRecoveryService:
 
         try:
             # Step 1: Process orphaned repair cycle results (highest priority)
-            try:
-                repair_cycles_processed = await self.recovery_adapter.process_orphaned_repair_results()
-                logger.info(f"Processed {repair_cycles_processed} orphaned repair cycle results")
-            except StorageError as e:
-                logger.warning(f"Failed to process orphaned repair results: {e}", exc_info=True)
+            # StorageError and ContainerError here are unrecoverable - let them propagate
+            repair_cycles_processed = await self.recovery_adapter.process_orphaned_repair_results()
+            logger.info(f"Processed {repair_cycles_processed} orphaned repair cycle results")
 
             # Step 2: Assess repair cycle containers separately
             repair_cycle_containers = await self.recovery_adapter.get_running_repair_cycle_containers()
@@ -320,13 +318,10 @@ class ContainerRecoveryService:
                 exc_info=True,
                 extra={"error_id": ErrorRegistry.ERR_CONTAINER_ERROR},
             )
-            return RecoveryResult(
-                recovered=recovered_count,
-                killed=killed_count,
-                errors=error_count + 1,
-                repair_cycles_processed=repair_cycles_processed,
-                timestamp=datetime.now(UTC).isoformat(),
-            )
+            # Re-raise unrecoverable errors so callers can distinguish catastrophic
+            # failure from partial success. Returning a result with partial counts
+            # would mask the error and prevent proper error handling.
+            raise
 
     @staticmethod
     def _calculate_uptime_seconds(created_at: datetime) -> float:

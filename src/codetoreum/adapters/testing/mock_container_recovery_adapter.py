@@ -47,6 +47,8 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
         self.assessment_exceptions: dict[str, Exception] = {}  # Exceptions to raise during assessment
         self.checkpoint_store_failures: set = set()  # Container IDs that cause checkpoint store failure
         self.malformed_storage_keys: list[str] = []  # Malformed keys to simulate storage issues
+        self.repair_results_processing_error: Exception | None = None  # Unrecoverable error during repair results
+        self.container_listing_error: Exception | None = None  # Unrecoverable error during container listing
 
     def add_container(
         self,
@@ -211,7 +213,13 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
 
         Returns:
             List[ContainerMetadata]: Configured mock agent containers
+
+        Raises:
+            ContainerError: If container_listing_error is configured
         """
+        if self.container_listing_error is not None:
+            raise self.container_listing_error
+
         logger.debug(f"Mock adapter returning {len(self.containers)} agent containers")
         return self.containers
 
@@ -360,8 +368,13 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
             int: Number of repair cycles (from repair_cycles_to_process)
 
         Raises:
+            StorageError: If repair_results_processing_error is configured
             StorageError: If storage has malformed keys
         """
+        # Simulate unrecoverable storage error
+        if self.repair_results_processing_error is not None:
+            raise self.repair_results_processing_error
+
         # Simulate processing malformed storage keys
         if self.malformed_storage_keys:
             logger.warning(f"Found {len(self.malformed_storage_keys)} malformed storage keys, skipping them")
@@ -400,6 +413,8 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
         self.assessment_exceptions = {}
         self.checkpoint_store_failures = set()
         self.malformed_storage_keys = []
+        self.repair_results_processing_error = None
+        self.container_listing_error = None
 
     def set_docker_failure_after_count(self, count: int) -> None:
         """
@@ -438,3 +453,25 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
             key: Malformed key that doesn't match expected patterns
         """
         self.malformed_storage_keys.append(key)
+
+    def set_repair_results_processing_error(self, error: Exception) -> None:
+        """
+        Configure adapter to raise an error during repair results processing.
+
+        This simulates unrecoverable failures that should be propagated to callers.
+
+        Args:
+            error: Exception to raise during process_orphaned_repair_results
+        """
+        self.repair_results_processing_error = error
+
+    def set_container_listing_error(self, error: Exception) -> None:
+        """
+        Configure adapter to raise an error during container listing.
+
+        This simulates unrecoverable failures that should be propagated to callers.
+
+        Args:
+            error: Exception to raise during get_running_agent_containers
+        """
+        self.container_listing_error = error
