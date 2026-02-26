@@ -321,9 +321,7 @@ class TestCreateHighFidelityConfig:
 
     def test_create_high_fidelity_config_defaults(self):
         """Test HIGH fidelity config creation with defaults."""
-        config = SimulationConfig.create_high_fidelity_config(
-            scenario_name="test_scenario"
-        )
+        config = SimulationConfig.create_high_fidelity_config(scenario_name="test_scenario")
 
         assert config.scenario_name == "test_scenario"
         assert config.fidelity_level == FidelityLevel.HIGH
@@ -354,12 +352,8 @@ class TestCreateHighFidelityConfig:
 
     def test_high_fidelity_vs_medium_fidelity(self):
         """Test that HIGH and MEDIUM have different characteristics."""
-        high = SimulationConfig.create_high_fidelity_config(
-            scenario_name="high"
-        )
-        medium = SimulationConfig.create_realistic_config(
-            scenario_name="medium"
-        )
+        high = SimulationConfig.create_high_fidelity_config(scenario_name="high")
+        medium = SimulationConfig.create_realistic_config(scenario_name="medium")
 
         # Speed: HIGH should be slower (smaller multiplier)
         assert high.time.speed_multiplier < medium.time.speed_multiplier

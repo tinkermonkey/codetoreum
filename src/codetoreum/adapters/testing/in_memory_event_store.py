@@ -213,8 +213,9 @@ class InMemoryEventStore(IEventStore):
             # Default behavior (for backward compatibility)
             return 0.001
 
-        from codetoreum.infrastructure.simulation.simulation_config import FidelityLevel
         import random
+
+        from codetoreum.infrastructure.simulation.simulation_config import FidelityLevel
 
         if self._config.fidelity_level == FidelityLevel.LOW:
             return 0.0
