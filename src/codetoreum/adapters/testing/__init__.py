@@ -1,5 +1,10 @@
 """Testing adapters for simulation and unit testing."""
 
+# Re-export ConfigurableIdentityService from secondary package
+# This adapter is used in simulation and testing contexts for configurable identity verification
+from codetoreum.adapters.secondary.configurable_identity_service import (
+    ConfigurableIdentityService,
+)
 from codetoreum.adapters.testing.capturing_mock_event_emitter import (
     CapturingMockEventEmitter,
 )
@@ -35,18 +40,13 @@ from codetoreum.adapters.testing.mock_notifier_adapter import MockNotifierAdapte
 from codetoreum.adapters.testing.mock_project_manager_adapter import (
     MockProjectManagerAdapter,
 )
-from codetoreum.adapters.testing.mock_review_cycle_adapter import MockReviewCycleAdapter
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
     CircuitBreakerTripped,
     MockRepairCycleAdapter,
 )
+from codetoreum.adapters.testing.mock_review_cycle_adapter import MockReviewCycleAdapter
 from codetoreum.adapters.testing.simple_encryption_adapter import (
     SimpleEncryptionAdapter,
-)
-# Re-export ConfigurableIdentityService from secondary package
-# This adapter is used in simulation and testing contexts for configurable identity verification
-from codetoreum.adapters.secondary.configurable_identity_service import (
-    ConfigurableIdentityService,
 )
 
 __all__ = [

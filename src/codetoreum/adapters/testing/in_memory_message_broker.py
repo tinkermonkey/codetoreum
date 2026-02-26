@@ -9,7 +9,8 @@ import asyncio
 import inspect
 import logging
 from collections import defaultdict
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from codetoreum.domain.events import DomainEvent
 from codetoreum.ports.output.message_broker import IMessageBroker
@@ -75,7 +76,6 @@ class InMemoryMessageBroker(IMessageBroker):
             MessageBrokerError: If initialization fails
         """
         # Nothing to initialize for in-memory broker
-        pass
 
     async def publish_event(self, event: DomainEvent) -> None:
         """Publish a domain event to all subscribers across all instances.
