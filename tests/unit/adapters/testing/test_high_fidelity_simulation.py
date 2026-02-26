@@ -1,9 +1,5 @@
 """Unit tests for HIGH fidelity simulation features."""
 
-import asyncio
-from datetime import UTC, datetime
-from uuid import uuid4
-
 import pytest
 
 from codetoreum.adapters.testing import (
@@ -16,7 +12,7 @@ from codetoreum.infrastructure.simulation.simulation_config import (
     FidelityLevel,
     SimulationConfig,
 )
-from codetoreum.ports.exceptions import RateLimitError, ValidationError
+from codetoreum.ports.exceptions import RateLimitError
 
 
 @pytest.mark.asyncio

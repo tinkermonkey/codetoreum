@@ -231,6 +231,7 @@ class FakeContainerAdapter(IContainer):
 
         Uses counter-based approach for reproducibility in tests (not random).
         Only applies to HIGH fidelity level.
+        NOTE: Caller must hold self._lock before calling this method.
 
         Returns:
             True if execution should fail, False otherwise
@@ -245,9 +246,9 @@ class FakeContainerAdapter(IContainer):
 
         # Counter-based: fail approximately every 20 executions (5% failure rate)
         # This is deterministic for reproducibility
-        with self._lock:
-            self._execution_counter += 1
-            should_fail = self._execution_counter % 20 == 0
+        # NOTE: Assumes caller holds self._lock to avoid deadlock with reentrant lock
+        self._execution_counter += 1
+        should_fail = self._execution_counter % 20 == 0
 
         return should_fail
 
