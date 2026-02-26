@@ -335,13 +335,9 @@ def test_message_tracer_link_to_event_trace_context():
 
     message_tracer = WebSocketMessageTracer(session_span)
 
-    # Create a test event with trace context
-    event = ExecutionStarted(
-        aggregate_id="exec-123",
-        payload={"started_at": "2024-01-01T00:00:00Z"},
-    )
-
-    # Inject trace context (simulate)
+    # Create a test event with trace context in metadata
+    # Events are immutable, so trace context must be set at initialization
+    metadata = {}
     if OPENTELEMETRY_AVAILABLE:
         current_span = trace.get_current_span()
         if current_span and current_span.get_span_context():
@@ -350,7 +346,14 @@ def test_message_tracer_link_to_event_trace_context():
             )
 
             trace_data = TraceContextData.from_span_context(current_span.get_span_context())
-            event.metadata["traceparent"] = trace_data.to_traceparent()
+            metadata["traceparent"] = trace_data.to_traceparent()
+
+    # Create event with trace context in metadata
+    event = ExecutionStarted(
+        aggregate_id="exec-123",
+        payload={"started_at": "2024-01-01T00:00:00Z"},
+        metadata=metadata if metadata else None,
+    )
 
     # Start and link message span
     message_span = message_tracer.start_event_delivery_span(
