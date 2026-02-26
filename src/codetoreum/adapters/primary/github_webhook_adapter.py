@@ -9,6 +9,7 @@ import hashlib
 import hmac
 import logging
 import time
+from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -176,16 +177,16 @@ class GitHubWebhookAdapter:
             "discussion": self._handle_discussion_event,
         }
 
-        # Track processed delivery IDs for idempotency (bounded cache with LRU eviction)
-        self._processed_deliveries: dict[str, WebhookProcessingResult] = {}
-        self._delivery_timestamps: dict[str, datetime] = {}  # Track insertion order for LRU
+        # Track processed delivery IDs for idempotency (bounded cache with FIFO eviction)
+        # OrderedDict maintains insertion order; popitem(last=False) removes oldest entry
+        self._processed_deliveries: OrderedDict[str, WebhookProcessingResult] = OrderedDict()
 
     def _evict_old_entries_if_needed(self) -> None:
         """
         Evict oldest entries from idempotency cache if it exceeds the threshold.
 
-        Uses LRU (Least Recently Used) eviction strategy. When cache size exceeds
-        90% of max capacity, removes the oldest 10% of entries.
+        Uses FIFO (First In, First Out) eviction strategy based on insertion order.
+        When cache size exceeds 90% of max capacity, removes the oldest 10% of entries.
         """
         cache_size = len(self._processed_deliveries)
         threshold = int(self._idempotency_cache_size * self._DEFAULT_EVICTION_THRESHOLD)
@@ -194,16 +195,12 @@ class GitHubWebhookAdapter:
             # Evict 10% of cache size (at least 1 entry)
             evict_count = max(1, self._idempotency_cache_size // 10)
 
-            # Sort by timestamp and remove oldest entries
-            sorted_entries = sorted(
-                self._delivery_timestamps.items(),
-                key=lambda x: x[1],
-            )
+            # Remove oldest entries (FIFO - pop from left)
+            for _ in range(evict_count):
+                self._processed_deliveries.popitem(last=False)
 
-            for delivery_id, _ in sorted_entries[:evict_count]:
-                self._processed_deliveries.pop(delivery_id, None)
-                self._delivery_timestamps.pop(delivery_id, None)
-                self.logger.debug(f"Evicted webhook delivery {delivery_id} from idempotency cache")
+            # Single batched log instead of per-entry logging
+            self.logger.debug(f"Evicted {evict_count} oldest entries from webhook idempotency cache")
 
     @instrument_async_function(name="github.webhook.receive", attributes={"service": "github_webhook"})
     async def receive_webhook(
@@ -286,7 +283,6 @@ class GitHubWebhookAdapter:
             # 7. Cache result for idempotency (with bounded cache and eviction)
             self._evict_old_entries_if_needed()
             self._processed_deliveries[x_github_delivery] = result
-            self._delivery_timestamps[x_github_delivery] = datetime.now(UTC)
 
             # 8. Emit observability event
             self.logger.info(f"Webhook {x_github_delivery} processed successfully in {processing_time:.2f}ms")

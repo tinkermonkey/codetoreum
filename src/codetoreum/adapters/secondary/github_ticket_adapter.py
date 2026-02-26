@@ -1,5 +1,6 @@
 """GitHub Issues adapter for ITicketSystem interface."""
 
+import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -170,15 +171,6 @@ class GitHubTicketAdapter(ITicketSystem):
         if reset:
             self._rate_limit_reset = datetime.fromtimestamp(int(reset), tz=UTC)
 
-    async def _wait_for_rate_limit_if_needed(self) -> None:
-        """Wait if we're approaching rate limits."""
-        if self._rate_limit_remaining is not None and self._rate_limit_remaining < 10:
-            if self._rate_limit_reset:
-                wait_seconds = (self._rate_limit_reset - datetime.now(UTC)).total_seconds()
-                if wait_seconds > 0:
-                    # Wait with a maximum of 60 seconds
-                    await asyncio.sleep(min(wait_seconds, 60))
-
     async def _make_request(
         self,
         method: str,
@@ -205,9 +197,6 @@ class GitHubTicketAdapter(ITicketSystem):
             the infrastructure layer via resilience decorators (ResilientTicketSystemDecorator).
             This method remains pure and does not embed resilience patterns.
         """
-        # Check if we should wait for rate limits
-        await self._wait_for_rate_limit_if_needed()
-
         client = await self._get_client()
 
         try:
