@@ -204,14 +204,12 @@ class TestEventSerializer:
 
     def test_serialize_invalid_event_raises_error(self):
         """Test that serializing invalid data raises error."""
-        # Arrange
+        # Arrange - create event with non-serializable object in payload
         event = DomainEvent(
             aggregate_id="test-123",
             aggregate_type="TestAggregate",
+            payload={"bad_object": object()},  # Non-serializable object
         )
-
-        # Add non-serializable object to payload
-        event.payload = {"bad_object": object()}
 
         # Act & Assert
         with pytest.raises(EventSerializationError):

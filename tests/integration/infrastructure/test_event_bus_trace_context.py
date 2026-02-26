@@ -68,19 +68,20 @@ class TestEventBusTraceContextIntegration:
         handler = SimpleEventHandler()
         event_bus.register_handler(handler)
 
-        event = DomainEvent(
-            aggregate_id="test-123",
-            aggregate_type="TestAggregate",
-        )
-
-        # Manually inject trace context before publishing
+        # Create trace context data
         trace_data = TraceContextData(
             version="00",
             trace_id="0af7651916cd43dd8448eb211c80319c",
             span_id="b9c7c989f97918e1",
             trace_flags="01",
         )
-        event.metadata["traceparent"] = trace_data.to_traceparent()
+
+        # Create event with trace context in metadata
+        event = DomainEvent(
+            aggregate_id="test-123",
+            aggregate_type="TestAggregate",
+            metadata={"traceparent": trace_data.to_traceparent()},
+        )
 
         await event_bus.publish(event)
 
@@ -108,19 +109,19 @@ class TestEventBusTraceContextIntegration:
         handler = TraceContextCapturingHandler()
         event_bus.register_handler(handler)
 
-        event = DomainEvent(
-            aggregate_id="test-123",
-            aggregate_type="TestAggregate",
-        )
-
-        # Inject trace context
+        # Inject trace context at event creation
         trace_data = TraceContextData(
             version="00",
             trace_id="0af7651916cd43dd8448eb211c80319c",
             span_id="b9c7c989f97918e1",
             trace_flags="01",
         )
-        event.metadata["traceparent"] = trace_data.to_traceparent()
+
+        event = DomainEvent(
+            aggregate_id="test-123",
+            aggregate_type="TestAggregate",
+            metadata={"traceparent": trace_data.to_traceparent()},
+        )
 
         await event_bus.publish(event)
 
@@ -152,19 +153,19 @@ class TestEventBusTraceContextIntegration:
             handler = ContextCapturingHandler(f"handler-{i}")
             event_bus.register_handler(handler)
 
-        event = DomainEvent(
-            aggregate_id="test-123",
-            aggregate_type="TestAggregate",
-        )
-
-        # Inject trace context
+        # Create trace context data
         trace_data = TraceContextData(
             version="00",
             trace_id="0af7651916cd43dd8448eb211c80319c",
             span_id="b9c7c989f97918e1",
             trace_flags="01",
         )
-        event.metadata["traceparent"] = trace_data.to_traceparent()
+
+        event = DomainEvent(
+            aggregate_id="test-123",
+            aggregate_type="TestAggregate",
+            metadata={"traceparent": trace_data.to_traceparent()},
+        )
 
         await event_bus.publish(event)
 
@@ -187,19 +188,19 @@ class TestEventBusTraceContextIntegration:
 
         event_bus.subscribe("DomainEvent", trace_capturing_callback)
 
-        event = DomainEvent(
-            aggregate_id="test-123",
-            aggregate_type="TestAggregate",
-        )
-
-        # Inject trace context
+        # Create trace context data
         trace_data = TraceContextData(
             version="00",
             trace_id="0af7651916cd43dd8448eb211c80319c",
             span_id="b9c7c989f97918e1",
             trace_flags="01",
         )
-        event.metadata["traceparent"] = trace_data.to_traceparent()
+
+        event = DomainEvent(
+            aggregate_id="test-123",
+            aggregate_type="TestAggregate",
+            metadata={"traceparent": trace_data.to_traceparent()},
+        )
 
         await event_bus.publish(event)
 
@@ -230,19 +231,19 @@ class TestEventBusTraceContextIntegration:
         handler = RetryableHandler()
         event_bus.register_handler(handler)
 
-        event = DomainEvent(
-            aggregate_id="test-123",
-            aggregate_type="TestAggregate",
-        )
-
-        # Inject trace context
+        # Create trace context data
         trace_data = TraceContextData(
             version="00",
             trace_id="0af7651916cd43dd8448eb211c80319c",
             span_id="b9c7c989f97918e1",
             trace_flags="01",
         )
-        event.metadata["traceparent"] = trace_data.to_traceparent()
+
+        event = DomainEvent(
+            aggregate_id="test-123",
+            aggregate_type="TestAggregate",
+            metadata={"traceparent": trace_data.to_traceparent()},
+        )
 
         await event_bus.publish(event)
 
@@ -272,19 +273,19 @@ class TestEventBusTraceContextIntegration:
         handler = WildcardHandler()
         event_bus.register_handler(handler)
 
-        event = DomainEvent(
-            aggregate_id="test-123",
-            aggregate_type="TestAggregate",
-        )
-
-        # Inject trace context
+        # Create trace context data
         trace_data = TraceContextData(
             version="00",
             trace_id="0af7651916cd43dd8448eb211c80319c",
             span_id="b9c7c989f97918e1",
             trace_flags="01",
         )
-        event.metadata["traceparent"] = trace_data.to_traceparent()
+
+        event = DomainEvent(
+            aggregate_id="test-123",
+            aggregate_type="TestAggregate",
+            metadata={"traceparent": trace_data.to_traceparent()},
+        )
 
         await event_bus.publish(event)
 
@@ -331,19 +332,19 @@ class TestEventBusTraceContextIntegration:
         handler = SimpleEventHandler()
         event_bus.register_handler(handler)
 
-        event = DomainEvent(
-            aggregate_id="test-consumer-span",
-            aggregate_type="TestAggregate",
-        )
-
-        # Manually inject trace context (simulating PRODUCER span)
+        # Create trace context data (simulating PRODUCER span)
         trace_data = TraceContextData(
             version="00",
             trace_id="0af7651916cd43dd8448eb211c80319c",  # 32 hex chars
             span_id="b9c7c989f97918e1",  # 16 hex chars
             trace_flags="01",
         )
-        event.metadata["traceparent"] = trace_data.to_traceparent()
+
+        event = DomainEvent(
+            aggregate_id="test-consumer-span",
+            aggregate_type="TestAggregate",
+            metadata={"traceparent": trace_data.to_traceparent()},
+        )
 
         # Publish event - handler will create CONSUMER span
         await event_bus.publish(event)
@@ -435,20 +436,20 @@ class TestEventBusTraceContextIntegration:
         handler = SimpleEventHandler()
         instrumented_bus.register_handler(handler)
 
-        # Create event with trace context metadata
-        event = DomainEvent(
-            aggregate_id="test-span-relationship",
-            aggregate_type="TestAggregate",
-        )
-
-        # Manually inject trace context to simulate PRODUCER span
+        # Create trace context data to simulate PRODUCER span
         trace_data = TraceContextData(
             version="00",
             trace_id="1234567890abcdef1234567890abcdef",
             span_id="fedcba0987654321",
             trace_flags="01",
         )
-        event.metadata["traceparent"] = trace_data.to_traceparent()
+
+        # Create event with trace context metadata
+        event = DomainEvent(
+            aggregate_id="test-span-relationship",
+            aggregate_type="TestAggregate",
+            metadata={"traceparent": trace_data.to_traceparent()},
+        )
 
         # Publish event through instrumented bus
         await instrumented_bus.publish(event)

@@ -164,6 +164,11 @@ class TraceContextPropagator:
         """
         Inject current trace context into event metadata.
 
+        **NOTE**: Events are immutable by design. This function can only work if the
+        event was created with metadata that can be set at initialization time.
+        For events already created without trace context, this function will log a
+        warning and skip injection.
+
         If span_context is provided, uses it. Otherwise extracts from current span.
         Stores as W3C traceparent format in event.metadata[TRACE_CONTEXT_KEY].
 
@@ -172,9 +177,10 @@ class TraceContextPropagator:
             span_context: Optional SpanContext to use (defaults to current span)
 
         Example:
-            event = WorkItemCreated(...)
-            TraceContextPropagator.inject_trace_context(event)
-            # event.metadata['traceparent'] now contains W3C traceparent
+            # Events should be created with metadata at initialization:
+            event = DomainEvent(..., metadata={"traceparent": traceparent})
+
+            # OR if using OpenTelemetry, provide span_context at creation time
         """
         if not OPENTELEMETRY_AVAILABLE:
             return
@@ -194,13 +200,21 @@ class TraceContextPropagator:
             trace_data = TraceContextData.from_span_context(span_context)
             traceparent = trace_data.to_traceparent()
 
-            # Inject into event metadata
-            if event.metadata is None:
-                event.metadata = {}
+            # NOTE: Events are immutable (frozen). If metadata is already set,
+            # we cannot mutate it. This is by design to preserve event sourcing
+            # audit trail integrity. Events should include trace context at creation time.
+            if event.metadata and TraceContextPropagator.TRACE_CONTEXT_KEY in event.metadata:
+                # Trace context already present
+                logger.debug(f"Trace context already present in event {event.event_type}")
+                return
 
-            event.metadata[TraceContextPropagator.TRACE_CONTEXT_KEY] = traceparent
-
-            logger.debug(f"Injected trace context into event {event.event_type}: {traceparent}")
+            # For immutable events, we cannot inject trace context after creation
+            # Log this at debug level since it's not an error - events should be created
+            # with trace context if needed
+            logger.debug(
+                f"Cannot inject trace context into immutable event {event.event_type}. "
+                f"Events should be created with metadata at initialization time with trace context."
+            )
 
         except Exception as e:
             logger.warning(

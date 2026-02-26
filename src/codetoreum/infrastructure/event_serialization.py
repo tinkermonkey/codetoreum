@@ -1,6 +1,7 @@
 """Event serialization with schema versioning support."""
 
 import json
+import types
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -227,6 +228,9 @@ class _EventJSONEncoder(json.JSONEncoder):
             return obj.isoformat()
         if isinstance(obj, UUID):
             return str(obj)
+        # Handle immutable mappings (MappingProxyType)
+        if isinstance(obj, types.MappingProxyType):
+            return dict(obj)
         if hasattr(obj, "__dict__"):
             # Handle custom objects
             return obj.__dict__

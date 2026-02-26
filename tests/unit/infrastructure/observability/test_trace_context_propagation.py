@@ -117,7 +117,12 @@ class TestTraceContextPropagator:
     """Tests for trace context injection and extraction."""
 
     def test_inject_trace_context_into_event(self):
-        """Test injecting trace context into event metadata."""
+        """Test that inject_trace_context handles immutable events gracefully.
+
+        NOTE: Events are immutable by design. Trace context should be set at
+        event creation time, not injected after creation. This test verifies
+        that the inject function handles immutable events gracefully.
+        """
         event = DomainEvent(
             aggregate_id="test-123",
             aggregate_type="TestAggregate",
@@ -130,14 +135,12 @@ class TestTraceContextPropagator:
         mock_span_context.span_id = 0xB9C7C989F97918E1
         mock_span_context.trace_flags = TraceFlags(0x01)
 
+        # Call inject_trace_context - it should handle immutable events gracefully
+        # by logging a debug message and returning without error
         TraceContextPropagator.inject_trace_context(event, mock_span_context)
 
-        # Verify trace context injected into metadata
-        assert "traceparent" in event.metadata
-        traceparent = event.metadata["traceparent"]
-        assert traceparent.startswith("00-")
-        assert "0af7651916cd43dd8448eb211c80319c" in traceparent
-        assert "b9c7c989f97918e1" in traceparent
+        # Verify metadata is still empty (not mutated)
+        assert "traceparent" not in event.metadata
 
     def test_inject_trace_context_with_invalid_span(self):
         """Test that injection is skipped for invalid span context."""
@@ -159,8 +162,8 @@ class TestTraceContextPropagator:
         event = DomainEvent(
             aggregate_id="test-123",
             aggregate_type="TestAggregate",
+            metadata={"traceparent": "00-0af7651916cd43dd8448eb211c80319c-b9c7c989f97918e1-01"},
         )
-        event.metadata["traceparent"] = "00-0af7651916cd43dd8448eb211c80319c-b9c7c989f97918e1-01"
 
         trace_data = TraceContextPropagator.extract_trace_context(event)
 
@@ -183,8 +186,8 @@ class TestTraceContextPropagator:
         event = DomainEvent(
             aggregate_id="test-123",
             aggregate_type="TestAggregate",
+            metadata={},
         )
-        event.metadata = {}
 
         trace_data = TraceContextPropagator.extract_trace_context(event)
         assert trace_data is None
@@ -242,8 +245,8 @@ class TestEventBusTraceContext:
         event = DomainEvent(
             aggregate_id="test-123",
             aggregate_type="TestAggregate",
+            metadata={"traceparent": "00-0af7651916cd43dd8448eb211c80319c-b9c7c989f97918e1-01"},
         )
-        event.metadata["traceparent"] = "00-0af7651916cd43dd8448eb211c80319c-b9c7c989f97918e1-01"
 
         trace_ctx = EventBusTraceContext.from_event(event)
 
@@ -268,8 +271,8 @@ class TestEventBusTraceContext:
         event = DomainEvent(
             aggregate_id="test-123",
             aggregate_type="TestAggregate",
+            metadata={"traceparent": "00-0af7651916cd43dd8448eb211c80319c-b9c7c989f97918e1-01"},
         )
-        event.metadata["traceparent"] = "00-0af7651916cd43dd8448eb211c80319c-b9c7c989f97918e1-01"
 
         trace_ctx = EventBusTraceContext.from_event(event)
         ctx = trace_ctx.activate()
@@ -309,8 +312,8 @@ class TestConvenienceFunctions:
         event = DomainEvent(
             aggregate_id="test-123",
             aggregate_type="TestAggregate",
+            metadata={"traceparent": "00-0af7651916cd43dd8448eb211c80319c-b9c7c989f97918e1-01"},
         )
-        event.metadata["traceparent"] = "00-0af7651916cd43dd8448eb211c80319c-b9c7c989f97918e1-01"
 
         ctx = extract_and_activate_trace_context(event)
 

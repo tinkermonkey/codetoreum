@@ -77,6 +77,7 @@ class DomainEvent:
         causation_id: UUID | None = None,
         event_id: UUID | None = None,
         occurred_at: datetime | None = None,
+        metadata: dict[str, Any] | None = None,
     ):
         """
         Initialize domain event.
@@ -90,6 +91,7 @@ class DomainEvent:
             causation_id: ID of the event that caused this event (optional)
             event_id: Unique event ID (generated if not provided)
             occurred_at: Timestamp when event occurred (defaults to now)
+            metadata: Event metadata (optional, e.g. trace context). Once set, cannot be modified.
         """
         object.__setattr__(self, "event_id", event_id or uuid4())
         object.__setattr__(self, "event_type", self.__class__.__name__)
@@ -101,7 +103,7 @@ class DomainEvent:
         object.__setattr__(self, "causation_id", causation_id)
         object.__setattr__(self, "user_id", user_id)
         object.__setattr__(self, "payload", MappingProxyType(payload or {}))
-        object.__setattr__(self, "metadata", MappingProxyType({}))
+        object.__setattr__(self, "metadata", MappingProxyType(metadata or {}))
         object.__setattr__(self, "_initialized", True)
 
     def __setattr__(self, name: str, value: Any) -> None:
