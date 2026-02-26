@@ -46,6 +46,11 @@ RUN if [ -f requirements.txt ]; then \
     pip install --no-cache-dir -r requirements.txt; \
     fi
 
+# Install pre-commit so repair cycle agents can run `pre-commit run --all-files`.
+# The local hooks in .pre-commit-config.yaml use `language: system`, meaning they
+# rely on binaries already in PATH (ruff, black, mypy) — these come from the base image.
+RUN pip install --no-cache-dir pre-commit
+
 # ============================================================================
 # Stage 4: Ownership and Permissions
 # ============================================================================
@@ -80,9 +85,10 @@ RUN claude --version && \
     python3 --version && \
     pip --version
 
-# Verify ruff is installed and accessible (required by pre-commit hooks
-# which use 'language: system' and expect ruff in PATH)
-RUN ruff --version
+# Verify ruff and pre-commit are installed and accessible (required by pre-commit
+# hooks which use 'language: system' and expect these binaries in PATH)
+RUN ruff --version && \
+    pre-commit --version
 
 # ============================================================================
 # Default command
