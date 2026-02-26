@@ -201,25 +201,6 @@ class TestRepositoryContract(ABC):
     # ===== File Operations Tests =====
 
     @pytest.mark.asyncio
-    async def test_get_file_content_nonexistent_after_clone(self):
-        """State consistency: get_file_content raises error for files not in the repository.
-
-        This test validates that attempting to retrieve a file that doesn't exist
-        raises ResourceNotFoundError consistently.
-        """
-        repo = await self.create_repository()
-
-        with TemporaryDirectory() as tmpdir:
-            dest = Path(tmpdir) / "test-repo"
-            dest.mkdir()
-
-            await repo.clone("https://github.com/test/repo", dest)
-
-            # Attempting to get a file that wasn't committed should raise
-            with pytest.raises(ResourceNotFoundError):
-                await repo.get_file_content(dest, "nonexistent.md")
-
-    @pytest.mark.asyncio
     async def test_get_file_content_nonexistent_raises_error(self):
         """Error condition: get_file_content for missing file raises error."""
         repo = await self.create_repository()
@@ -545,7 +526,11 @@ class TestRepositoryContract(ABC):
 
     @pytest.mark.asyncio
     async def test_push_to_valid_remote(self):
-        """State consistency: push to a valid remote succeeds without error."""
+        """State consistency: push to a valid remote is callable without raising unexpected errors.
+
+        For mock implementations, push may not fully function but must not raise
+        unexpected exceptions. Production implementations should successfully push.
+        """
         repo = await self.create_repository()
 
         with TemporaryDirectory() as tmpdir:
@@ -566,18 +551,19 @@ class TestRepositoryContract(ABC):
                 files=["push-test.txt"],
             )
 
-            # Push should succeed without raising
-            # (May be mocked for test implementations)
+            # Push should be callable. If mock doesn't support it, skip gracefully.
             try:
                 await repo.push(dest, "origin", BranchName("main"))
-            except Exception:
-                # Mock implementations may not fully support push
-                # but the operation should at least be callable
-                pass
+            except NotImplementedError:
+                pytest.skip("Push not implemented in this adapter")
 
     @pytest.mark.asyncio
     async def test_pull_from_valid_remote(self):
-        """State consistency: pull from a valid remote succeeds without error."""
+        """State consistency: pull from a valid remote is callable without raising unexpected errors.
+
+        For mock implementations, pull may not fully function but must not raise
+        unexpected exceptions. Production implementations should successfully pull.
+        """
         repo = await self.create_repository()
 
         with TemporaryDirectory() as tmpdir:
@@ -586,18 +572,19 @@ class TestRepositoryContract(ABC):
 
             await repo.clone("https://github.com/test/repo", dest)
 
-            # Pull should succeed without raising
-            # (May be mocked for test implementations)
+            # Pull should be callable. If mock doesn't support it, skip gracefully.
             try:
                 await repo.pull(dest, "origin", BranchName("main"))
-            except Exception:
-                # Mock implementations may not fully support pull
-                # but the operation should at least be callable
-                pass
+            except NotImplementedError:
+                pytest.skip("Pull not implemented in this adapter")
 
     @pytest.mark.asyncio
     async def test_fetch_from_valid_remote(self):
-        """State consistency: fetch from a valid remote succeeds without error."""
+        """State consistency: fetch from a valid remote is callable without raising unexpected errors.
+
+        For mock implementations, fetch may not fully function but must not raise
+        unexpected exceptions. Production implementations should successfully fetch.
+        """
         repo = await self.create_repository()
 
         with TemporaryDirectory() as tmpdir:
@@ -606,11 +593,8 @@ class TestRepositoryContract(ABC):
 
             await repo.clone("https://github.com/test/repo", dest)
 
-            # Fetch should succeed without raising
-            # (May be mocked for test implementations)
+            # Fetch should be callable. If mock doesn't support it, skip gracefully.
             try:
                 await repo.fetch(dest, "origin")
-            except Exception:
-                # Mock implementations may not fully support fetch
-                # but the operation should at least be callable
-                pass
+            except NotImplementedError:
+                pytest.skip("Fetch not implemented in this adapter")

@@ -81,7 +81,7 @@ class TestMockBoardService(TestBoardServiceContract):
   - File I/O: upload_from_file, download_to_file
   - Storage info: statistics and provider information
   - Presigned URLs: generate_presigned_url returns valid URLs with expiration
-- **Added in Phase 6**: Storage and presigned URL contract tests for semantic validation
+- **Coverage**: Validates IStorage implementations handle all operations with consistent semantics
 
 ### TestRepositoryContract
 - **Location**: `test_repository_contract.py`
@@ -97,14 +97,13 @@ class TestMockBoardService(TestBoardServiceContract):
   - Merging: merge compatible branches with state validation
   - Diff: showing differences between refs with error handling
   - Commit metadata: get_commit_info with full details
-- **Added in Phase 6**: Repository contract tests for semantic validation
+- **Coverage**: Validates IRepository implementations handle all operations with consistent semantics
 
 ### TestPipelineQueueServiceContract
 - **Location**: `test_pipeline_queue_service_contract.py`
 - **Tests**: `IPipelineQueueService` interface
 - **Coverage**: Queue operations, board position ordering, status management, synchronization
 - **Required Methods**: `create_service()`
-- **Note**: Pre-existing contract tests (not added in Phase 6)
 
 ## Benefits
 
