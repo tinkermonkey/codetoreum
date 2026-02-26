@@ -628,6 +628,8 @@ class EventBus:
             "events_published": 0,
             "events_handled": 0,
             "handler_errors": 0,
+            "events_persisted": 0,
+            "persistence_errors": 0,
         }
 
 
