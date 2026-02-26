@@ -33,7 +33,34 @@ from enum import Enum
 
 # Type aliases for improved clarity
 PipelineId = tuple[str, str]  # (project_id, board_id)
-NonNegativeInt = int  # Used for positions, counts, etc.
+
+
+class NonNegativeInt(int):
+    """Type-safe non-negative integer wrapper.
+
+    Validates that the integer value is >= 0 at construction time.
+    Inherits from int for backward compatibility and natural integer semantics.
+    """
+
+    def __new__(cls, value: int) -> "NonNegativeInt":
+        """Create a new NonNegativeInt instance with validation.
+
+        Args:
+            value: Integer value to validate
+
+        Returns:
+            NonNegativeInt instance
+
+        Raises:
+            ValueError: If value is negative
+        """
+        if not isinstance(value, int):
+            msg = f"NonNegativeInt requires an integer, got {type(value).__name__}"
+            raise ValueError(msg)
+        if value < 0:
+            msg = f"NonNegativeInt must be >= 0, got {value}"
+            raise ValueError(msg)
+        return super().__new__(cls, value)
 
 
 class QueueStatus(str, Enum):
@@ -76,6 +103,9 @@ class PipelineQueueEntry:
     Board position is used to determine execution order - the topmost item in
     a column has the highest priority.
 
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation.
+
     Attributes:
         project_id: Project identifier for the pipeline
         board_id: Board identifier for the pipeline
@@ -93,6 +123,36 @@ class PipelineQueueEntry:
     status: QueueStatus
     queued_at: datetime
     last_position_check: datetime
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.project_id, str) or not self.project_id:
+            msg = "project_id must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.board_id, str) or not self.board_id:
+            msg = "board_id must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.work_item_id, str) or not self.work_item_id:
+            msg = "work_item_id must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.position_in_column, int) or self.position_in_column < 0:
+            msg = "position_in_column must be a non-negative integer"
+            raise ValueError(msg)
+
+        if not isinstance(self.status, QueueStatus):
+            msg = f"status must be a QueueStatus, got {type(self.status).__name__}"
+            raise ValueError(msg)
+
+        if not isinstance(self.queued_at, datetime):
+            msg = "queued_at must be a datetime object"
+            raise ValueError(msg)
+
+        if not isinstance(self.last_position_check, datetime):
+            msg = "last_position_check must be a datetime object"
+            raise ValueError(msg)
 
 
 # Backward compatibility alias for existing code

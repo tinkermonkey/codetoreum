@@ -38,7 +38,7 @@ class InMemoryStorageAdapter(IStorage):
                       (e.g., ContainerExecutionCompletedEvent)
         """
         self._objects: dict[str, bytes] = {}
-        self._metadata: dict[str, dict[str, any]] = {}
+        self._metadata: dict[str, dict[str, Any]] = {}
         self._lock = threading.Lock()
         self._event_emitter = event_emitter or MockEventEmitter()
         self._event_bus = event_bus

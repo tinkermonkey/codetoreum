@@ -7,14 +7,19 @@ from pathlib import Path
 
 from codetoreum.domain.types import BranchName, CommitHash, RepositoryId
 
+
 # ============================================================================
 # Data Models
 # ============================================================================
 
 
-@dataclass
+@dataclass(frozen=True)
 class RepositoryStatus:
-    """Repository status information."""
+    """Repository status information.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation.
+    """
 
     current_branch: BranchName
     is_dirty: bool
@@ -24,14 +29,69 @@ class RepositoryStatus:
     ahead_count: int
     behind_count: int
 
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.current_branch, str) or not self.current_branch:
+            msg = "current_branch must be a non-empty string"
+            raise ValueError(msg)
 
-@dataclass
+        if not isinstance(self.is_dirty, bool):
+            msg = "is_dirty must be a boolean"
+            raise ValueError(msg)
+
+        if not isinstance(self.staged_files, list):
+            msg = "staged_files must be a list"
+            raise ValueError(msg)
+
+        if not isinstance(self.unstaged_files, list):
+            msg = "unstaged_files must be a list"
+            raise ValueError(msg)
+
+        if not isinstance(self.untracked_files, list):
+            msg = "untracked_files must be a list"
+            raise ValueError(msg)
+
+        if not isinstance(self.ahead_count, int) or self.ahead_count < 0:
+            msg = "ahead_count must be a non-negative integer"
+            raise ValueError(msg)
+
+        if not isinstance(self.behind_count, int) or self.behind_count < 0:
+            msg = "behind_count must be a non-negative integer"
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True)
 class MergeResult:
-    """Result of merge operation."""
+    """Result of merge operation.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation.
+    """
 
     success: bool
     conflicts: list[str]
     merge_commit: CommitHash | None
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.success, bool):
+            msg = "success must be a boolean"
+            raise ValueError(msg)
+
+        if not isinstance(self.conflicts, list):
+            msg = "conflicts must be a list"
+            raise ValueError(msg)
+
+        # Validate all conflict items are strings
+        if not all(isinstance(c, str) for c in self.conflicts):
+            msg = "all conflicts must be strings"
+            raise ValueError(msg)
+
+        # Validate merge_commit is either None or a valid commit hash string
+        if self.merge_commit is not None:
+            if not isinstance(self.merge_commit, str) or not self.merge_commit:
+                msg = "merge_commit must be a non-empty string or None"
+                raise ValueError(msg)
 
 
 # ============================================================================
