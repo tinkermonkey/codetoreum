@@ -51,7 +51,7 @@ class TestHighFidelityFakeContainerAdapter:
 
         # Check that delays vary (jitter is applied)
         # With HIGH fidelity, should see variance from ±20% jitter
-        delays_unique = len(set([round(d, 4) for d in delays]))
+        delays_unique = len({round(d, 4) for d in delays})
         assert delays_unique > 1, "HIGH fidelity should add variance with jitter"
 
     async def test_high_fidelity_container_probabilistic_failure(self, high_fidelity_config):
@@ -148,7 +148,7 @@ class TestHighFidelityMockLLMAdapter:
             delays.append(delay)
 
         # Check that delays vary (jitter is applied)
-        delays_unique = len(set([round(d, 4) for d in delays]))
+        delays_unique = len({round(d, 4) for d in delays})
         assert delays_unique > 1, "HIGH fidelity should add variance with jitter"
 
     async def test_high_fidelity_llm_probabilistic_failure(self, high_fidelity_config):
@@ -312,7 +312,7 @@ class TestHighFidelityInMemoryEventStore:
             delays.append(delay)
 
         # Check variance from jitter
-        delays_unique = len(set([round(d, 5) for d in delays]))
+        delays_unique = len({round(d, 5) for d in delays})
         assert delays_unique > 1, "HIGH fidelity should add jitter variance"
 
 
