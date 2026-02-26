@@ -23,7 +23,11 @@ class TestDevelopmentMockReturnTypes:
     def test_get_workflow_run_events_source_code(self):
         """Verify get_workflow_run_events source code returns WorkflowRunEventsResult."""
         # Read the source code and verify it returns the correct dataclass
-        with open("/workspace/src/codetoreum/adapters/primary/fastapi_app.py") as f:
+        import importlib.util
+
+        spec = importlib.util.find_spec("codetoreum.adapters.primary.fastapi_app")
+        fastapi_app_path = spec.origin
+        with open(fastapi_app_path) as f:
             content = f.read()
 
         # Verify the method returns WorkflowRunEventsResult, not a dict
@@ -40,7 +44,11 @@ class TestDevelopmentMockReturnTypes:
     def test_get_workflow_run_audit_source_code(self):
         """Verify get_workflow_run_audit source code returns WorkflowRunAuditResult."""
         # Read the source code and verify it returns the correct dataclass
-        with open("/workspace/src/codetoreum/adapters/primary/fastapi_app.py") as f:
+        import importlib.util
+
+        spec = importlib.util.find_spec("codetoreum.adapters.primary.fastapi_app")
+        fastapi_app_path = spec.origin
+        with open(fastapi_app_path) as f:
             content = f.read()
 
         # Verify the method returns WorkflowRunAuditResult, not a dict
