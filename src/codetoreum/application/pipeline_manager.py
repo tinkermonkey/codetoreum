@@ -4,7 +4,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from codetoreum.domain.events import (
     PipelineCompleted,
@@ -16,6 +16,9 @@ from codetoreum.domain.events import (
 from codetoreum.domain.pipeline_stage import PipelineStage, StageStatus
 from codetoreum.domain.workflow import Workflow
 from codetoreum.ports.output import IEventStore
+
+if TYPE_CHECKING:
+    from codetoreum.application.execution_service import ExecutionService
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +126,7 @@ class PipelineManager:
     def __init__(
         self,
         event_store: IEventStore,
+        execution_service: "ExecutionService | None" = None,
         checkpoint_store: Any | None = None,
     ):
         """
@@ -130,9 +134,11 @@ class PipelineManager:
 
         Args:
             event_store: Event store port for emitting events
+            execution_service: Execution service for running agent stages
             checkpoint_store: Optional checkpoint storage (Redis, file system, etc.)
         """
         self.event_store = event_store
+        self.execution_service = execution_service
         self.checkpoint_store = checkpoint_store
         self._logger = logging.getLogger(f"{__name__}.PipelineManager")
 
@@ -340,16 +346,19 @@ class PipelineManager:
         """
         Execute single pipeline stage.
 
+        Executes a stage by delegating to the execution service for agent-based stages.
+        Updates stage status and emits domain events for each lifecycle transition.
+
         Args:
             stage: Pipeline stage to execute
-            context: Execution context
+            context: Execution context (project, work item, etc.)
             workflow_id: Optional workflow ID for event correlation
 
         Returns:
             StageResult: Result of stage execution
 
         Raises:
-            ValueError: If stage configuration is invalid
+            ValueError: If stage configuration is invalid or execution service not available
         """
         self._logger.info(
             f"Executing stage: stage={stage.name}, type={stage.stage_type.value}, status={stage.status.value}"
@@ -369,30 +378,176 @@ class PipelineManager:
             # Emit stage started event
             await self._emit_stage_started(stage, workflow_id or stage.workflow_id, context)
 
-            # TODO: This is where we'd call the actual agent execution service
-            # For now, we'll simulate execution
-            self._logger.info(f"Stage {stage.name} execution would happen here (agent_config={stage.agent_config})")
+            # If no execution service, skip actual execution (for testing/simulation)
+            if not self.execution_service:
+                self._logger.warning(
+                    f"No execution service configured for stage {stage.name}, skipping execution"
+                )
+                output = f"Simulated output from stage {stage.name}"
+                stage.complete(output)
 
-            # Simulate successful execution
-            output = f"Output from stage {stage.name}"
-            stage.complete(output)
+                duration = (datetime.now(UTC) - start_time).total_seconds()
+                await self._emit_stage_completed(stage, workflow_id or stage.workflow_id, output, duration)
+
+                return StageResult(
+                    success=True,
+                    stage_name=stage.name,
+                    output=output,
+                    error=None,
+                    duration_seconds=duration,
+                    metadata={
+                        "execution_id": execution_id,
+                        "stage_type": stage.stage_type.value,
+                        "simulated": True,
+                    },
+                )
+
+            # Get agent ID from stage configuration
+            agent_id = stage.agent_config.get("agent_id")
+            if not agent_id:
+                raise ValueError(f"Stage {stage.name} missing required 'agent_id' in agent_config")
+
+            # Build agent and work item for execution (minimal required data)
+            # In production, these would be retrieved from repositories
+            from codetoreum.domain.agent import Agent, AgentCapability, AgentType
+            from codetoreum.domain.work_item import WorkItem, WorkItemStatus, WorkItemPriority
+
+            # Create agent capabilities
+            capabilities_config = stage.agent_config.get("capabilities", {})
+            if not capabilities_config:
+                # Default capability if none specified
+                capabilities_config = {"general": {"proficiency": 1.0, "description": "General capability"}}
+
+            capabilities = {}
+            for skill_name, skill_config in capabilities_config.items():
+                if isinstance(skill_config, dict):
+                    proficiency = skill_config.get("proficiency", 1.0)
+                    description = skill_config.get("description")
+                else:
+                    proficiency = 1.0
+                    description = None
+
+                capabilities[skill_name] = AgentCapability(
+                    skill=skill_name,
+                    proficiency=proficiency,
+                    description=description,
+                )
+
+            agent = Agent.create(
+                name=stage.agent_config.get("agent_name", agent_id),
+                display_name=stage.agent_config.get("agent_display_name", agent_id),
+                agent_type=AgentType[stage.agent_config.get("agent_type", "SPECIALIZED").upper()],
+                role_description=stage.agent_config.get("agent_description", f"Agent for stage {stage.name}"),
+                capabilities=capabilities,
+                model=stage.agent_config.get("model", "claude-opus"),
+                timeout_seconds=stage.agent_config.get("timeout_seconds", 3600),
+                max_retries=stage.agent_config.get("max_retries", 3),
+            )
+
+            work_item_id = context.get("work_item_id")
+            if not work_item_id:
+                raise ValueError("Execution context missing required 'work_item_id'")
+
+            project_id = context.get("project_id")
+            if not project_id:
+                raise ValueError("Execution context missing required 'project_id'")
+
+            # Create work item with required fields
+            work_item = WorkItem(
+                id=work_item_id,
+                project_id=project_id,
+                title=context.get("work_item_title", f"Work item {work_item_id}"),
+                description=context.get("work_item_description", ""),
+                status=WorkItemStatus.IN_PROGRESS,
+                priority=WorkItemPriority.MEDIUM,
+                labels=[],
+                external_id=None,
+                external_url=None,
+                assigned_agent_id=stage.agent_config.get("agent_id"),
+                assigned_at=datetime.now(UTC),
+                current_workflow_id=workflow_id or stage.workflow_id,
+                current_stage=stage.name,
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+                completed_at=None,
+            )
+
+            # Build prompt from context
+            prompt = context.get(f"{stage.name}_prompt") or f"Execute stage {stage.name}"
+
+            # Create execution
+            execution = await self.execution_service.create_execution(
+                agent=agent,
+                work_item=work_item,
+                workflow_id=workflow_id or stage.workflow_id,
+                stage_name=stage.name,
+                prompt=prompt,
+            )
+
+            # Build execution context
+            from codetoreum.domain.value_objects import ExecutionContext as ExecutionContextVO
+
+            exec_context = ExecutionContextVO(
+                project_id=context.get("project_id", ""),
+                work_item_id=work_item_id,
+                workflow_run_id=workflow_id or stage.workflow_id,
+                timeout_seconds=stage.agent_config.get("timeout_seconds", 3600),
+            )
+
+            # Start execution
+            start_result = await self.execution_service.start_execution(
+                execution=execution,
+                context=exec_context,
+            )
+
+            if not start_result.success:
+                raise Exception(f"Failed to start execution: {start_result.error}")
+
+            # Execute with LLM (no container execution for pipeline stages)
+            exec_result = await self.execution_service.execute_with_llm(
+                execution=execution,
+                context=exec_context,
+            )
 
             duration = (datetime.now(UTC) - start_time).total_seconds()
 
-            # Emit stage completed event
-            await self._emit_stage_completed(stage, workflow_id or stage.workflow_id, output, duration)
+            if exec_result.success:
+                output = exec_result.execution.output or f"Output from stage {stage.name}"
+                stage.complete(output)
+                await self._emit_stage_completed(stage, workflow_id or stage.workflow_id, output, duration)
 
-            return StageResult(
-                success=True,
-                stage_name=stage.name,
-                output=output,
-                error=None,
-                duration_seconds=duration,
-                metadata={
-                    "execution_id": execution_id,
-                    "stage_type": stage.stage_type.value,
-                },
-            )
+                return StageResult(
+                    success=True,
+                    stage_name=stage.name,
+                    output=output,
+                    error=None,
+                    duration_seconds=duration,
+                    metadata={
+                        "execution_id": execution_id,
+                        "stage_type": stage.stage_type.value,
+                        "tokens_used": {
+                            "input": exec_result.execution.input_tokens,
+                            "output": exec_result.execution.output_tokens,
+                        },
+                    },
+                )
+            else:
+                error_msg = exec_result.error or "Execution failed"
+                stage.fail(error_msg)
+                await self._emit_stage_failed(stage, workflow_id or stage.workflow_id, error_msg, duration)
+
+                return StageResult(
+                    success=False,
+                    stage_name=stage.name,
+                    output=None,
+                    error=error_msg,
+                    duration_seconds=duration,
+                    metadata={
+                        "execution_id": execution_id,
+                        "stage_type": stage.stage_type.value,
+                        "failure_reason": str(exec_result.failure_reason),
+                    },
+                )
 
         except Exception as e:
             duration = (datetime.now(UTC) - start_time).total_seconds()
