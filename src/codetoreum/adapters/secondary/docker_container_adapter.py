@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from dateutil import parser as dateparser
+import docker.errors
 
 from codetoreum.domain.types import ContainerId
 from codetoreum.infrastructure.error_ids import ErrorRegistry
@@ -240,10 +241,10 @@ class DockerContainerAdapter(IContainer):
                 # Check if image exists locally
                 try:
                     client.images.get(image)
-                except Exception as e:
-                    if "not found" in str(e).lower():
-                        msg = f"Image not found: {image}"
-                        raise ImageNotFoundError(msg)
+                except docker.errors.ImageNotFound:
+                    msg = f"Image not found: {image}"
+                    raise ImageNotFoundError(msg)
+                except docker.errors.APIError as e:
                     # Re-raise other Docker errors as ContainerExecutionError
                     msg = f"Failed to check image: {e!s}"
                     raise ContainerExecutionError(msg)
@@ -317,7 +318,9 @@ class DockerContainerAdapter(IContainer):
                     container_id=container_id,
                 )
 
-            except ContainerTimeoutError:
+            except ContainerError:
+                # Re-raise port exceptions (ImageNotFoundError, ContainerExecutionError, ContainerTimeoutError)
+                # without reprocessing to preserve exception chain
                 raise
             except Exception as e:
                 # Cleanup container on error if it still exists and wasn't auto-removed
@@ -334,12 +337,6 @@ class DockerContainerAdapter(IContainer):
                             },
                         )
 
-                if "timeout" in str(e).lower():
-                    msg = f"Container execution timed out after {timeout}s"
-                    raise ContainerTimeoutError(msg)
-                if "not found" in str(e).lower() and "image" in str(e).lower():
-                    msg = f"Image not found: {image}"
-                    raise ImageNotFoundError(msg)
                 msg = f"Container execution failed: {e!s}"
                 raise ContainerExecutionError(msg)
 
@@ -440,10 +437,10 @@ class DockerContainerAdapter(IContainer):
                 # Check image exists
                 try:
                     client.images.get(image)
-                except Exception as e:
-                    if "not found" in str(e).lower():
-                        msg = f"Image not found: {image}"
-                        raise ImageNotFoundError(msg)
+                except docker.errors.ImageNotFound:
+                    msg = f"Image not found: {image}"
+                    raise ImageNotFoundError(msg)
+                except docker.errors.APIError as e:
                     # Re-raise other Docker errors as ContainerError
                     msg = f"Failed to check image: {e!s}"
                     raise ContainerError(msg)
@@ -694,7 +691,13 @@ class DockerContainerAdapter(IContainer):
         capture_result=False,
     )
     async def status(self, container_id: str) -> ContainerStatus:
-        """Get container status."""
+        """Get container status.
+
+        NOTE: If date parsing fails for created_at, started_at, or finished_at, the method
+        falls back to datetime.now(UTC) for created_at and None for started_at/finished_at.
+        Callers should be aware that created_at may be a fabricated value if the original
+        date was unparseable (logged at WARN level with context).
+        """
         client = self._get_client()
         loop = asyncio.get_event_loop()
 
@@ -975,9 +978,9 @@ class DockerContainerAdapter(IContainer):
                 full_image = f"{image}:{tag}"
                 client.images.get(full_image)
                 return True
-            except Exception as e:
-                if "not found" in str(e).lower():
-                    return False
+            except docker.errors.ImageNotFound:
+                return False
+            except docker.errors.APIError as e:
                 # For other errors (network, auth, etc), log and raise
                 logger.warning(
                     f"Failed to check if image exists: {e}",
