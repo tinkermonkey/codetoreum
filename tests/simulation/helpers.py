@@ -44,12 +44,18 @@ class EventBuilder:
 
     def build(self) -> DomainEvent:
         """Build the event."""
-        event = DomainEvent(
+        # Create a dynamic subclass with the desired event_type name
+        # This ensures the event_type is set correctly during initialization
+        EventClass = type(
+            self.event_type,
+            (DomainEvent,),
+            {},
+        )
+        event = EventClass(
             aggregate_id=self.aggregate_id,
             aggregate_type=self.aggregate_type,
             payload=self.payload,
         )
-        event.event_type = self.event_type
         return event
 
 
