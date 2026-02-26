@@ -191,8 +191,8 @@ class TestRepositoryAdapterEventEmission:
         assert set(event.changed_files) == {"src/main.py", "tests/test_main.py"}
 
     @pytest.mark.asyncio
-    async def test_commit_emits_files_staged_event(self, repo_adapter, emitter, temp_dir):
-        """Creating a commit with files should emit FilesStagedEvent."""
+    async def test_stage_files_emits_files_staged_event(self, repo_adapter, emitter, temp_dir):
+        """Staging files should emit FilesStagedEvent."""
         # Clone a repo first
         repo_id = await repo_adapter.clone(
             url="https://example.com/repo.git",
@@ -202,12 +202,9 @@ class TestRepositoryAdapterEventEmission:
         # Clear initial events
         emitter.clear_events()
 
-        # Create a commit with files
-        await repo_adapter.commit(
+        # Stage files
+        await repo_adapter.stage_files(
             repo_path=temp_dir / "repo",
-            message="Test commit",
-            author_name="Test Author",
-            author_email="test@example.com",
             files=["src/main.py", "tests/test_main.py"],
         )
 
@@ -218,6 +215,47 @@ class TestRepositoryAdapterEventEmission:
         assert event.type == "repository.files_staged"
         assert event.repository_id == str(repo_id)
         assert set(event.file_paths) == {"src/main.py", "tests/test_main.py"}
+
+    @pytest.mark.asyncio
+    async def test_commit_after_stage_files_does_not_emit_duplicate_event(self, repo_adapter, emitter, temp_dir):
+        """Creating a commit after staging should use staged files and not emit duplicate event."""
+        # Clone a repo first
+        repo_id = await repo_adapter.clone(
+            url="https://example.com/repo.git",
+            destination=temp_dir / "repo",
+        )
+
+        # Stage files
+        await repo_adapter.stage_files(
+            repo_path=temp_dir / "repo",
+            files=["src/main.py", "tests/test_main.py"],
+        )
+
+        # Clear events from staging
+        emitter.clear_events()
+
+        # Create a commit without explicit files (will use staged files)
+        commit_sha = await repo_adapter.commit(
+            repo_path=temp_dir / "repo",
+            message="Test commit",
+            author_name="Test Author",
+            author_email="test@example.com",
+            files=None,
+        )
+
+        # Should only emit CommitCreatedEvent, not FilesStagedEvent
+        staged_events = emitter.get_events_by_type("repository.files_staged")
+        assert len(staged_events) == 0
+
+        commit_events = emitter.get_events_by_type("repository.commit_created")
+        assert len(commit_events) == 1
+
+        event = commit_events[0]
+        assert event.type == "repository.commit_created"
+        assert event.repository_id == str(repo_id)
+        assert event.commit_sha == str(commit_sha)
+        assert event.message == "Test commit"
+        assert set(event.changed_files) == {"src/main.py", "tests/test_main.py"}
 
     @pytest.mark.asyncio
     async def test_create_branch_emits_branch_created_event(self, repo_adapter, emitter, temp_dir):
@@ -248,10 +286,15 @@ class TestRepositoryAdapterEventEmission:
         assert event.base_commit is not None  # Should have the base commit SHA
 
     @pytest.mark.asyncio
-    async def test_commit_without_files_does_not_emit_files_staged(self, repo_adapter, emitter, temp_dir):
-        """Creating a commit without files should not emit FilesStagedEvent."""
+    async def test_commit_with_explicit_files_emits_only_commit_created(self, repo_adapter, emitter, temp_dir):
+        """Creating a commit with explicit files should emit only CommitCreatedEvent.
+
+        When commit() is called directly with files, those files are committed
+        but FilesStagedEvent is not emitted (only CommitCreatedEvent). To emit
+        FilesStagedEvent, use the separate stage_files() method.
+        """
         # Clone a repo first
-        await repo_adapter.clone(
+        repo_id = await repo_adapter.clone(
             url="https://example.com/repo.git",
             destination=temp_dir / "repo",
         )
@@ -259,17 +302,25 @@ class TestRepositoryAdapterEventEmission:
         # Clear initial events
         emitter.clear_events()
 
-        # Create a commit without files
-        await repo_adapter.commit(
+        # Create a commit with explicit files
+        commit_sha = await repo_adapter.commit(
             repo_path=temp_dir / "repo",
             message="Test commit",
             author_name="Test Author",
             author_email="test@example.com",
-            files=None,
+            files=["src/main.py"],
         )
 
-        events = emitter.get_events_by_type("repository.files_staged")
-        assert len(events) == 0
+        # When files are explicitly provided to commit(), only CommitCreatedEvent is emitted
+        # FilesStagedEvent must come from the explicit stage_files() call for proper semantics
+        staged_events = emitter.get_events_by_type("repository.files_staged")
+        assert len(staged_events) == 0
+
+        commit_events = emitter.get_events_by_type("repository.commit_created")
+        assert len(commit_events) == 1
+
+        commit_event = commit_events[0]
+        assert commit_event.changed_files == ("src/main.py",)
 
 
 class TestStorageAdapterEventEmission:

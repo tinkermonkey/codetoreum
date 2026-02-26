@@ -106,6 +106,28 @@ class IRepository(ABC):
         """
 
     @abstractmethod
+    async def stage_files(
+        self,
+        repo_path: Path,
+        files: list[str],
+    ) -> None:
+        """
+        Stage files for commit.
+
+        Adds the specified files to the repository's staging area. This is a
+        prerequisite to committing - staging and committing are independent
+        operations that follow real git semantics.
+
+        Args:
+            repo_path: Repository path
+            files: List of file paths to stage
+
+        Raises:
+            RepositoryError: Stage operation failed
+            ValidationError: Invalid file paths or repo_path
+        """
+
+    @abstractmethod
     async def commit(
         self,
         repo_path: Path,

@@ -157,6 +157,96 @@ class TestInMemoryRepositoryAdapter:
                 branch_name=BranchName(""),
             )
 
+    async def test_stage_files(self, adapter):
+        """Test staging files for commit."""
+        await adapter.clone(
+            url="https://github.com/test/repo.git",
+            destination=Path("/tmp/test-repo"),
+        )
+
+        # Stage files
+        await adapter.stage_files(
+            repo_path=Path("/tmp/test-repo"),
+            files=["src/main.py", "tests/test_main.py"],
+        )
+
+        # Verify status shows staged files
+        status = await adapter.status(Path("/tmp/test-repo"))
+        assert status.staged_files == ["src/main.py", "tests/test_main.py"]
+        assert status.is_dirty
+
+    async def test_stage_files_multiple_calls(self, adapter):
+        """Test staging files across multiple calls."""
+        await adapter.clone(
+            url="https://github.com/test/repo.git",
+            destination=Path("/tmp/test-repo"),
+        )
+
+        # Stage first batch
+        await adapter.stage_files(
+            repo_path=Path("/tmp/test-repo"),
+            files=["src/main.py"],
+        )
+
+        # Stage second batch
+        await adapter.stage_files(
+            repo_path=Path("/tmp/test-repo"),
+            files=["tests/test_main.py"],
+        )
+
+        # Verify all files are staged
+        status = await adapter.status(Path("/tmp/test-repo"))
+        assert set(status.staged_files) == {"src/main.py", "tests/test_main.py"}
+
+    async def test_stage_files_validation(self, adapter):
+        """Test stage_files parameter validation."""
+        await adapter.clone(
+            url="https://github.com/test/repo.git",
+            destination=Path("/tmp/test-repo"),
+        )
+
+        with pytest.raises(ValidationError, match="Repository path is required"):
+            await adapter.stage_files(
+                repo_path=None,
+                files=["src/main.py"],
+            )
+
+        with pytest.raises(ValidationError, match="Files list is required and cannot be empty"):
+            await adapter.stage_files(
+                repo_path=Path("/tmp/test-repo"),
+                files=[],
+            )
+
+    async def test_stage_files_cleared_on_commit(self, adapter):
+        """Test that staged files are cleared after commit."""
+        await adapter.clone(
+            url="https://github.com/test/repo.git",
+            destination=Path("/tmp/test-repo"),
+        )
+
+        # Stage files
+        await adapter.stage_files(
+            repo_path=Path("/tmp/test-repo"),
+            files=["src/main.py", "tests/test_main.py"],
+        )
+
+        # Verify files are staged
+        status = await adapter.status(Path("/tmp/test-repo"))
+        assert len(status.staged_files) > 0
+
+        # Commit
+        await adapter.commit(
+            repo_path=Path("/tmp/test-repo"),
+            message="Test commit",
+            author_name="Test",
+            author_email="test@example.com",
+        )
+
+        # Verify staging area is cleared
+        status = await adapter.status(Path("/tmp/test-repo"))
+        assert status.staged_files == []
+        assert not status.is_dirty
+
     async def test_commit(self, adapter):
         """Test creating a commit."""
         await adapter.clone(

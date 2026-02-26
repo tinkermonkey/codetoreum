@@ -238,6 +238,37 @@ class GitRepositoryAdapter(IRepository):
 
         await self._run_git_command(args, cwd=repo_path)
 
+    async def stage_files(
+        self,
+        repo_path: Path,
+        files: list[str],
+    ) -> None:
+        """Stage files for commit.
+
+        Adds the specified files to the repository's staging area. This is a
+        prerequisite to committing - staging and committing are independent
+        operations that follow real git semantics.
+
+        Args:
+            repo_path: Path to the repository
+            files: List of file paths to stage
+
+        Raises:
+            RepositoryError: Stage operation failed
+            ValidationError: Invalid file paths or repo_path
+        """
+        if not repo_path or not repo_path.exists():
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
+
+        if not files:
+            msg = "Files list is required and cannot be empty"
+            raise ValidationError(msg)
+
+        # Stage each file individually to preserve proper git semantics
+        for file in files:
+            await self._run_git_command(["add", file], cwd=repo_path)
+
     async def commit(
         self,
         repo_path: Path,
@@ -255,11 +286,12 @@ class GitRepositoryAdapter(IRepository):
             msg = "Commit message is required"
             raise ValidationError(msg)
 
-        # Stage files
+        # Stage files if explicitly provided, otherwise stage all modified files
         if files:
             for file in files:
                 await self._run_git_command(["add", file], cwd=repo_path)
         else:
+            # Stage all modified and new files (backwards compatible behavior)
             await self._run_git_command(["add", "."], cwd=repo_path)
 
         # Set up environment with author info

@@ -58,6 +58,9 @@ class InMemoryRepositoryAdapter(IRepository):
         # Remote storage: (repo_id, remote_name) -> url
         self._remotes: dict[tuple[str, str], str] = {}
 
+        # Staging area: repo_id -> list of staged file paths
+        self._staged_files: dict[str, list[str]] = {}
+
         # Thread safety for concurrent test execution
         self._lock = threading.Lock()
 
@@ -218,6 +221,59 @@ class InMemoryRepositoryAdapter(IRepository):
                 )
             )
 
+    async def stage_files(
+        self,
+        repo_path: Path,
+        files: list[str],
+    ) -> None:
+        """
+        Stage files for commit.
+
+        Adds the specified files to the repository's staging area. This is a
+        prerequisite to committing - staging and committing are independent
+        operations that follow real git semantics.
+
+        Args:
+            repo_path: Path to the repository
+            files: List of file paths to stage
+
+        Raises:
+            ResourceNotFoundError: If repository doesn't exist
+            ValidationError: If repo_path or files is None/empty
+        """
+        if not repo_path:
+            msg = "Repository path is required"
+            raise ValidationError(msg)
+
+        if not files:
+            msg = "Files list is required and cannot be empty"
+            raise ValidationError(msg)
+
+        repo_id = self._get_repo_id_by_path(repo_path)
+
+        with self._lock:
+            # Initialize staging area for this repo if needed
+            if repo_id not in self._staged_files:
+                self._staged_files[repo_id] = []
+
+            # Add files to staging area (avoiding duplicates)
+            for file_path in files:
+                if file_path not in self._staged_files[repo_id]:
+                    self._staged_files[repo_id].append(file_path)
+
+            # Emit FilesStagedEvent
+            # Note: source="mock" identifies this as a test/simulation event for traceability
+            self._event_emitter.emit(
+                FilesStagedEvent(
+                    type="repository.files_staged",
+                    timestamp=datetime.now(UTC).isoformat(),
+                    source="mock",
+                    repository_id=repo_id,
+                    file_paths=tuple(files),
+                    project_id=None,
+                )
+            )
+
     async def commit(
         self,
         repo_path: Path,
@@ -261,9 +317,28 @@ class InMemoryRepositoryAdapter(IRepository):
             current_branch = self._repositories[repo_id]["current_branch"]
             parent_commit = self._branches.get((repo_id, current_branch))
 
+            # Determine which files to commit
+            if files is not None:
+                # Explicit files provided - stage them before committing
+                # (this is a convenience for backwards compatibility; real git requires
+                # separate stage + commit, but we allow both in one call)
+                changed_files = list(files)  # Make a copy
+
+                # Initialize staging area if needed
+                if repo_id not in self._staged_files:
+                    self._staged_files[repo_id] = []
+
+                # Add to staging area
+                for file_path in files:
+                    if file_path not in self._staged_files[repo_id]:
+                        self._staged_files[repo_id].append(file_path)
+            else:
+                # Use staged files if no explicit files provided
+                # Make a copy to avoid referencing the mutable list
+                changed_files = list(self._staged_files.get(repo_id, []))
+
             # Create new commit
             commit_sha = CommitHash(str(uuid4()))
-            changed_files = files or []
 
             self._commits[(repo_id, commit_sha)] = {
                 "sha": commit_sha,
@@ -278,22 +353,9 @@ class InMemoryRepositoryAdapter(IRepository):
             # Update branch pointer
             self._branches[(repo_id, current_branch)] = commit_sha
 
-            # Emit FilesStagedEvent if files were provided
-            # Note: For the in-memory adapter, FilesStagedEvent is emitted as part of the commit
-            # operation to keep state changes atomic. In real git, staging and committing are
-            # separate operations, but the in-memory adapter combines them.
-            if changed_files:
-                # Note: source="mock" identifies this as a test/simulation event for traceability
-                self._event_emitter.emit(
-                    FilesStagedEvent(
-                        type="repository.files_staged",
-                        timestamp=datetime.now(UTC).isoformat(),
-                        source="mock",
-                        repository_id=repo_id,
-                        file_paths=tuple(changed_files),
-                        project_id=None,
-                    )
-                )
+            # Clear staging area after commit
+            if repo_id in self._staged_files:
+                self._staged_files[repo_id].clear()
 
             # Emit CommitCreatedEvent
             # Note: source="mock" identifies this as a test/simulation event for traceability
@@ -485,11 +547,12 @@ index abc123..def456 100644
 
         with self._lock:
             current_branch = self._repositories[repo_id]["current_branch"]
+            staged_files = self._staged_files.get(repo_id, [])
 
             return RepositoryStatus(
                 current_branch=current_branch,
-                is_dirty=False,
-                staged_files=[],
+                is_dirty=len(staged_files) > 0,
+                staged_files=staged_files,
                 unstaged_files=[],
                 untracked_files=[],
                 ahead_count=0,
@@ -862,6 +925,7 @@ index abc123..def456 100644
             self._commits.clear()
             self._branches.clear()
             self._remotes.clear()
+            self._staged_files.clear()
 
     def get_repository_count(self) -> int:
         """
