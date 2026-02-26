@@ -283,7 +283,7 @@ class RepairCycleErrorLogger:
         if failure_details:
             msg += " | " + " | ".join(f"{k}={v}" for k, v in failure_details.items())
 
-        self.error(msg)
+        self.logger.error(msg, exc_info=True)
 
     def log_fix_attempt(
         self,
@@ -329,7 +329,7 @@ class RepairCycleErrorLogger:
         if context_data:
             msg += " | " + " | ".join(f"{k}={v}" for k, v in context_data.items())
 
-        self.critical(msg)
+        self.logger.critical(msg, exc_info=True)
 
     def log_checkpoint_created(self, checkpoint_id: str, data: dict[str, Any]) -> None:
         """
