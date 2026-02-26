@@ -249,8 +249,12 @@ if OPENTELEMETRY_AVAILABLE:
                 if self._failure_counter:
                     try:
                         self._failure_counter.add(1)
-                    except Exception:
-                        pass  # Metrics failure shouldn't prevent span export error propagation
+                    except Exception as metrics_error:
+                        logger.error(
+                            f"Failed to record metrics for span export failure: {metrics_error}",
+                            exc_info=True,
+                            extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
+                        )
 
                 # Log at ERROR level so operators know observability is failing
                 logger.error(

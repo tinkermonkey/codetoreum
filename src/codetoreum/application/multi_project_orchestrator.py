@@ -216,7 +216,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                 enabled_projects = await self._project_manager.get_enabled_projects()
             except ExternalServiceError as e:
                 msg = f"Failed to get enabled projects: {e}"
-                logger.error(msg)
+                logger.error(msg, exc_info=True)
                 duration_ms = int((time.time() - cycle_start) * 1000)
                 return OrchestrationCycleResult(
                     success=False,

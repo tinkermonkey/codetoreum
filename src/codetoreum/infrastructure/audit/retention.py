@@ -112,7 +112,7 @@ class RetentionPolicyManager:
 
         except Exception as e:
             error_msg = f"Failed to cleanup audit events: {e}"
-            logger.error(error_msg, extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR})
+            logger.error(error_msg, exc_info=True, extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR})
 
         stats["end_time"] = datetime.now(UTC).isoformat()
         return stats

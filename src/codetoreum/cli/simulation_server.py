@@ -473,11 +473,11 @@ async def main_async(
         console.print("\n[yellow]Interrupted by user[/yellow]")
     except click.FileError as e:
         console.print(f"\n[bold red]File error:[/bold red] {e}")
-        logger.error(f"File error: {e}", extra={"error_id": ErrorRegistry.ERR_FILE_READ_ERROR})
+        logger.error(f"File error: {e}", exc_info=True, extra={"error_id": ErrorRegistry.ERR_FILE_READ_ERROR})
         sys.exit(1)
     except OSError as e:
         console.print(f"\n[bold red]Server error:[/bold red] {e}")
-        logger.error(f"Server error: {e}", extra={"error_id": "ERR_SERVICE_UNAVAILABLE"})
+        logger.error(f"Server error: {e}", exc_info=True, extra={"error_id": "ERR_SERVICE_UNAVAILABLE"})
         sys.exit(1)
     except RuntimeError as e:
         console.print(f"\n[bold red]Runtime error:[/bold red] {e}")

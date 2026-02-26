@@ -120,7 +120,7 @@ class BoardColumnEventHandler(EventHandler):
             event: Domain event to handle
 
         Raises:
-            Exception: If handling fails (logged but not re-raised)
+            Exception: If handling fails
         """
         if not isinstance(event, WorkItemColumnChanged):
             logger.warning(f"BoardColumnEventHandler received unexpected event type: {event.event_type}")
@@ -134,6 +134,7 @@ class BoardColumnEventHandler(EventHandler):
                 exc_info=True,
                 extra={"error_id": "ERR_BOARD_EVENT_HANDLE_COLUMN_CHANGE_FAILURE"},
             )
+            raise
 
     async def handle_column_change(self, event: WorkItemColumnChanged) -> None:
         """
