@@ -138,7 +138,6 @@ class TestExecutionServiceLabelBuilding:
         assert labels[CONTAINER_LABEL_WORKFLOW_RUN_ID] == "workflow-789"
         assert labels[CONTAINER_LABEL_EXECUTION_ID] == "exec-123"
 
-
     def test_build_container_labels_returns_dict(self):
         """Container labels should be a dict."""
         labels = self.service._build_container_labels(self.execution, self.context)
