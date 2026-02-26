@@ -410,13 +410,28 @@ class AuthenticationService(IAuthenticationPort):
             api_key_id=matched_key.id,
         )
 
-    async def get_api_key(self, key_id: UUID) -> APIKey:
-        """Get an API key by ID."""
-        return await self.api_key_repo.get(key_id)
+    async def revoke_api_key(
+        self, key_id: UUID, requesting_user_id: UUID, is_admin: bool
+    ) -> None:
+        """Revoke an API key.
 
-    async def revoke_api_key(self, key_id: UUID) -> None:
-        """Revoke an API key."""
+        Users can only revoke their own API keys. Admins can revoke any API key.
+
+        Args:
+            key_id: ID of the API key to revoke
+            requesting_user_id: User ID of the requester
+            is_admin: Whether the requester is an admin
+
+        Raises:
+            APIKeyNotFoundError: If the API key does not exist
+            PermissionError: If the requester is not authorized to revoke this key
+        """
         api_key = await self.api_key_repo.get(key_id)
+
+        # Authorization: users can only revoke their own keys, admins can revoke any
+        if not is_admin and api_key.user_id != requesting_user_id:
+            raise PermissionError("You can only revoke your own API keys")
+
         api_key.revoke()
         await self.api_key_repo.save(api_key)
 

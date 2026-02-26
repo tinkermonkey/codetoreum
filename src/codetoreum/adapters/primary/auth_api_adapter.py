@@ -20,6 +20,7 @@ from codetoreum.config import (
 )
 from codetoreum.domain.user import AuthContext, Permission, UserRole
 from codetoreum.ports.input.authentication import (
+    APIKeyNotFoundError,
     AuthenticationError,
     CreateAPIKeyCommand,
     CreateUserCommand,
@@ -458,13 +459,21 @@ class AuthAPIAdapter:
             Users can only revoke their own API keys.
             Admins can revoke any API key.
             """
-            # Authorization check: users can only revoke their own keys, admins can revoke any
-            api_key = await self.auth_service.get_api_key(key_id)
-            if not auth.is_admin() and api_key.user_id != auth.user_id:
+            try:
+                await self.auth_service.revoke_api_key(
+                    key_id=key_id,
+                    requesting_user_id=auth.user_id,
+                    is_admin=auth.is_admin(),
+                )
+            except APIKeyNotFoundError:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="API key not found",
+                )
+            except PermissionError as e:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="You can only revoke your own API keys",
+                    detail=str(e),
                 )
-            await self.auth_service.revoke_api_key(key_id)
 
         return router

@@ -377,8 +377,87 @@ class TestAPIKeys:
         )
         api_key, plaintext_key = await auth_service.create_api_key(command)
 
-        # Revoke API key
-        await auth_service.revoke_api_key(api_key.id)
+        # Revoke API key - user can revoke their own key
+        await auth_service.revoke_api_key(
+            key_id=api_key.id,
+            requesting_user_id=user.id,
+            is_admin=False,
+        )
+
+        # Try to validate revoked key
+        with pytest.raises(AuthenticationError):
+            await auth_service.validate_api_key(plaintext_key)
+
+    @pytest.mark.asyncio
+    async def test_revoke_api_key_unauthorized(self, auth_service):
+        """Test that users cannot revoke other users' API keys."""
+        # Create two users
+        user1_command = CreateUserCommand(
+            username="user1",
+            email="user1@example.com",
+            password="TestPass123",
+            roles={UserRole.DEVELOPER},
+        )
+        user1 = await auth_service.create_user(user1_command)
+
+        user2_command = CreateUserCommand(
+            username="user2",
+            email="user2@example.com",
+            password="TestPass123",
+            roles={UserRole.DEVELOPER},
+        )
+        user2 = await auth_service.create_user(user2_command)
+
+        # Create API key for user1
+        command = CreateAPIKeyCommand(
+            name="User1's API Key",
+            user_id=user1.id,
+            roles={UserRole.SERVICE_ACCOUNT},
+        )
+        api_key, _ = await auth_service.create_api_key(command)
+
+        # Try to revoke user1's key as user2 (non-admin)
+        with pytest.raises(PermissionError, match="only revoke your own"):
+            await auth_service.revoke_api_key(
+                key_id=api_key.id,
+                requesting_user_id=user2.id,
+                is_admin=False,
+            )
+
+    @pytest.mark.asyncio
+    async def test_revoke_api_key_admin(self, auth_service):
+        """Test that admins can revoke any API key."""
+        # Create user and admin
+        user_command = CreateUserCommand(
+            username="testuser",
+            email="test@example.com",
+            password="TestPass123",
+            roles={UserRole.DEVELOPER},
+        )
+        user = await auth_service.create_user(user_command)
+
+        admin_command = CreateUserCommand(
+            username="admin",
+            email="admin@example.com",
+            password="TestPass123",
+            roles={UserRole.ADMIN},
+        )
+        admin = await auth_service.create_user(admin_command)
+
+        # Create API key for user
+        command = CreateAPIKeyCommand(
+            name="Test API Key",
+            user_id=user.id,
+            roles={UserRole.SERVICE_ACCOUNT},
+        )
+        api_key, plaintext_key = await auth_service.create_api_key(command)
+
+        # Admin should be able to revoke user's key
+        await auth_service.revoke_api_key(
+            key_id=api_key.id,
+            requesting_user_id=admin.id,
+            is_admin=True,
+        )
 
         # Try to validate revoked key
         with pytest.raises(AuthenticationError):
