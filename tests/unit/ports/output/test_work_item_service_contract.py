@@ -129,7 +129,7 @@ class TestWorkItemServiceContract(ABC):
 
         # Start monitoring
         await service.start_monitoring(ProjectId("proj-123"), config)
-        status = await service.get_monitoring_status("proj-123")
+        status = await service.get_monitoring_status(ProjectId("proj-123"))
         assert status.state.value == "active"
 
         # Stop monitoring
@@ -266,8 +266,8 @@ class TestWorkItemServiceContract(ABC):
                 title="<script>alert('XSS')</script>",
                 description="Test"
             )
-            # If it passes, verify script is not executable
-            assert "<script>" not in item.title or "&lt;script&gt;" in item.title
+            # If it passes, raw script tags must not appear in output
+            assert "<script>" not in item.title
         except (ValueError, TypeError):
             # Rejection is also acceptable
             pass
@@ -301,7 +301,7 @@ class TestWorkItemServiceContract(ABC):
         # Attempt to set invalid status
         with pytest.raises((ValueError, KeyError)):
             await service.update_work_item(
-                item.id,
+                WorkItemId(item.id),
                 {"status": "INVALID_STATUS_12345"}
             )
 

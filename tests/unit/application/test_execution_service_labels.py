@@ -9,7 +9,6 @@ from datetime import datetime, timezone
 import pytest
 
 from codetoreum.application.execution_service import ExecutionService
-from codetoreum.domain.agent import Agent, AgentCapability, AgentType
 from codetoreum.domain.agent_execution import AgentExecution
 from codetoreum.domain.types import (
     CONTAINER_LABEL_AGENT,
@@ -74,9 +73,8 @@ class TestExecutionServiceLabelBuilding:
             storage=self.storage,
         )
 
-    def test_build_container_labels_includes_all_required_labels(self):
-        """Container labels should include all required labels."""
-        execution = AgentExecution(
+        # Shared execution and context fixtures (can be overridden per test)
+        self.execution = AgentExecution(
             id="exec-123",
             agent_id="agent-1",
             work_item_id="work-item-456",
@@ -100,7 +98,7 @@ class TestExecutionServiceLabelBuilding:
             metadata={},
         )
 
-        context = ExecutionContext(
+        self.context = ExecutionContext(
             work_item_id="work-item-456",
             workflow_id="workflow-789",
             stage_name="analyze",
@@ -112,16 +110,18 @@ class TestExecutionServiceLabelBuilding:
             discussion_id=None,
             project_id="proj-1",
             repository_url="https://github.com/test/repo",
-            tech_stack=["python", "fastapi"],
+            tech_stack=("python", "fastapi"),
             filesystem_write_allowed=True,
             can_make_commits=True,
             requires_docker=False,
-            mcp_servers=[],
+            mcp_servers=(),
             previous_session_id=None,
             metadata={},
         )
 
-        labels = self.service._build_container_labels(execution, context)
+    def test_build_container_labels_includes_all_required_labels(self):
+        """Container labels should include all required labels."""
+        labels = self.service._build_container_labels(self.execution, self.context)
 
         # All required labels should be present
         assert CONTAINER_LABEL_TYPE in labels
@@ -134,52 +134,7 @@ class TestExecutionServiceLabelBuilding:
 
     def test_build_container_labels_values_match_execution_context(self):
         """Container label values should match execution and context data."""
-        execution = AgentExecution(
-            id="exec-123",
-            agent_id="agent-1",
-            work_item_id="work-item-456",
-            workflow_id="workflow-789",
-            stage_name="analyze",
-            status=None,
-            prompt="Test prompt",
-            model="claude-opus",
-            session_id=None,
-            container_name="agent-proj-001",
-            container_id=None,
-            output=None,
-            error_message=None,
-            exit_code=None,
-            input_tokens=0,
-            output_tokens=0,
-            duration_seconds=None,
-            initialized_at=datetime.now(timezone.utc),
-            started_at=None,
-            completed_at=None,
-            metadata={},
-        )
-
-        context = ExecutionContext(
-            work_item_id="work-item-456",
-            workflow_id="workflow-789",
-            stage_name="analyze",
-            agent_id="agent-1",
-            model="claude-opus",
-            timeout_seconds=300,
-            workspace_type="issue",
-            branch_name="feature/issue-456",
-            discussion_id=None,
-            project_id="proj-1",
-            repository_url="https://github.com/test/repo",
-            tech_stack=["python", "fastapi"],
-            filesystem_write_allowed=True,
-            can_make_commits=True,
-            requires_docker=False,
-            mcp_servers=[],
-            previous_session_id=None,
-            metadata={},
-        )
-
-        labels = self.service._build_container_labels(execution, context)
+        labels = self.service._build_container_labels(self.execution, self.context)
 
         # Label values should match source data
         assert labels[CONTAINER_LABEL_TYPE] == "agent"
@@ -192,52 +147,10 @@ class TestExecutionServiceLabelBuilding:
 
     def test_build_container_labels_uses_execution_id_as_task_id(self):
         """Task ID label should use execution ID."""
-        execution = AgentExecution(
-            id="exec-abc123",
-            agent_id="agent-1",
-            work_item_id="work-item-456",
-            workflow_id="workflow-789",
-            stage_name="analyze",
-            status=None,
-            prompt="Test prompt",
-            model="claude-opus",
-            session_id=None,
-            container_name="agent-proj-001",
-            container_id=None,
-            output=None,
-            error_message=None,
-            exit_code=None,
-            input_tokens=0,
-            output_tokens=0,
-            duration_seconds=None,
-            initialized_at=datetime.now(timezone.utc),
-            started_at=None,
-            completed_at=None,
-            metadata={},
-        )
+        # Override execution ID for this test
+        self.execution.id = "exec-abc123"
 
-        context = ExecutionContext(
-            work_item_id="work-item-456",
-            workflow_id="workflow-789",
-            stage_name="analyze",
-            agent_id="agent-1",
-            model="claude-opus",
-            timeout_seconds=300,
-            workspace_type="issue",
-            branch_name="feature/issue-456",
-            discussion_id=None,
-            project_id="proj-1",
-            repository_url="https://github.com/test/repo",
-            tech_stack=["python", "fastapi"],
-            filesystem_write_allowed=True,
-            can_make_commits=True,
-            requires_docker=False,
-            mcp_servers=[],
-            previous_session_id=None,
-            metadata={},
-        )
-
-        labels = self.service._build_container_labels(execution, context)
+        labels = self.service._build_container_labels(self.execution, self.context)
 
         # Task ID should be execution ID (for tracking)
         assert labels[CONTAINER_LABEL_TASK_ID] == "exec-abc123"
@@ -245,104 +158,18 @@ class TestExecutionServiceLabelBuilding:
 
     def test_build_container_labels_uses_workflow_id_as_workflow_run_id(self):
         """Pipeline run ID label should use workflow ID."""
-        execution = AgentExecution(
-            id="exec-123",
-            agent_id="agent-1",
-            work_item_id="work-item-456",
-            workflow_id="workflow-xyz789",
-            stage_name="analyze",
-            status=None,
-            prompt="Test prompt",
-            model="claude-opus",
-            session_id=None,
-            container_name="agent-proj-001",
-            container_id=None,
-            output=None,
-            error_message=None,
-            exit_code=None,
-            input_tokens=0,
-            output_tokens=0,
-            duration_seconds=None,
-            initialized_at=datetime.now(timezone.utc),
-            started_at=None,
-            completed_at=None,
-            metadata={},
-        )
+        # Override workflow ID for this test
+        self.execution.workflow_id = "workflow-xyz789"
+        self.context.workflow_id = "workflow-xyz789"
 
-        context = ExecutionContext(
-            work_item_id="work-item-456",
-            workflow_id="workflow-xyz789",
-            stage_name="analyze",
-            agent_id="agent-1",
-            model="claude-opus",
-            timeout_seconds=300,
-            workspace_type="issue",
-            branch_name="feature/issue-456",
-            discussion_id=None,
-            project_id="proj-1",
-            repository_url="https://github.com/test/repo",
-            tech_stack=["python", "fastapi"],
-            filesystem_write_allowed=True,
-            can_make_commits=True,
-            requires_docker=False,
-            mcp_servers=[],
-            previous_session_id=None,
-            metadata={},
-        )
-
-        labels = self.service._build_container_labels(execution, context)
+        labels = self.service._build_container_labels(self.execution, self.context)
 
         # Pipeline run ID should be workflow ID
         assert labels[CONTAINER_LABEL_WORKFLOW_RUN_ID] == "workflow-xyz789"
 
     def test_build_container_labels_returns_dict(self):
         """Container labels should be a dict."""
-        execution = AgentExecution(
-            id="exec-123",
-            agent_id="agent-1",
-            work_item_id="work-item-456",
-            workflow_id="workflow-789",
-            stage_name="analyze",
-            status=None,
-            prompt="Test prompt",
-            model="claude-opus",
-            session_id=None,
-            container_name="agent-proj-001",
-            container_id=None,
-            output=None,
-            error_message=None,
-            exit_code=None,
-            input_tokens=0,
-            output_tokens=0,
-            duration_seconds=None,
-            initialized_at=datetime.now(timezone.utc),
-            started_at=None,
-            completed_at=None,
-            metadata={},
-        )
-
-        context = ExecutionContext(
-            work_item_id="work-item-456",
-            workflow_id="workflow-789",
-            stage_name="analyze",
-            agent_id="agent-1",
-            model="claude-opus",
-            timeout_seconds=300,
-            workspace_type="issue",
-            branch_name="feature/issue-456",
-            discussion_id=None,
-            project_id="proj-1",
-            repository_url="https://github.com/test/repo",
-            tech_stack=["python", "fastapi"],
-            filesystem_write_allowed=True,
-            can_make_commits=True,
-            requires_docker=False,
-            mcp_servers=[],
-            previous_session_id=None,
-            metadata={},
-        )
-
-        labels = self.service._build_container_labels(execution, context)
+        labels = self.service._build_container_labels(self.execution, self.context)
 
         assert isinstance(labels, dict)
         assert all(isinstance(k, str) for k in labels.keys())
@@ -350,52 +177,7 @@ class TestExecutionServiceLabelBuilding:
 
     def test_build_container_labels_label_count(self):
         """Container labels should include exactly 7 labels."""
-        execution = AgentExecution(
-            id="exec-123",
-            agent_id="agent-1",
-            work_item_id="work-item-456",
-            workflow_id="workflow-789",
-            stage_name="analyze",
-            status=None,
-            prompt="Test prompt",
-            model="claude-opus",
-            session_id=None,
-            container_name="agent-proj-001",
-            container_id=None,
-            output=None,
-            error_message=None,
-            exit_code=None,
-            input_tokens=0,
-            output_tokens=0,
-            duration_seconds=None,
-            initialized_at=datetime.now(timezone.utc),
-            started_at=None,
-            completed_at=None,
-            metadata={},
-        )
-
-        context = ExecutionContext(
-            work_item_id="work-item-456",
-            workflow_id="workflow-789",
-            stage_name="analyze",
-            agent_id="agent-1",
-            model="claude-opus",
-            timeout_seconds=300,
-            workspace_type="issue",
-            branch_name="feature/issue-456",
-            discussion_id=None,
-            project_id="proj-1",
-            repository_url="https://github.com/test/repo",
-            tech_stack=["python", "fastapi"],
-            filesystem_write_allowed=True,
-            can_make_commits=True,
-            requires_docker=False,
-            mcp_servers=[],
-            previous_session_id=None,
-            metadata={},
-        )
-
-        labels = self.service._build_container_labels(execution, context)
+        labels = self.service._build_container_labels(self.execution, self.context)
 
         # Should have exactly 7 labels
         assert len(labels) == 7

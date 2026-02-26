@@ -738,7 +738,6 @@ async def scenario_execution_cancellation(runner: SimulationRunner):
     )
 
 
-@pytest.mark.asyncio
 async def test_scenario_10_agent_execution():
     """Test Scenario 10: Agent Execution Lifecycle."""
     config = create_config()
