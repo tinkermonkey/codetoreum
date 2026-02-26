@@ -232,9 +232,19 @@ class SimulationEngine:
     # Adapter Creation - Injection of clock into time-aware components
     # =========================================================================
 
-    def create_repair_cycle_adapter(self) -> "MockRepairCycleAdapter":
+    def create_repair_cycle_adapter(
+        self,
+        container_adapter: "object | None" = None,
+        checkpoint_store: "object | None" = None,
+    ) -> "MockRepairCycleAdapter":
         """
         Create mock repair cycle adapter with injected clock.
+
+        Args:
+            container_adapter: Optional container adapter for causal linking (FR-2/US-2.4).
+                             If provided, the adapter will use actual container test results
+                             instead of pre-configured sequences.
+            checkpoint_store: Optional checkpoint store for recovery testing
 
         Returns:
             MockRepairCycleAdapter instance with clock already configured
@@ -243,13 +253,25 @@ class SimulationEngine:
             MockRepairCycleAdapter,
         )
 
-        adapter = MockRepairCycleAdapter(clock=self._clock)
+        adapter = MockRepairCycleAdapter(
+            clock=self._clock,
+            container_adapter=container_adapter,
+            checkpoint_store=checkpoint_store,
+        )
         logger.debug("Created MockRepairCycleAdapter via SimulationEngine")
         return adapter
 
-    def create_review_cycle_adapter(self) -> "MockReviewCycleAdapter":
+    def create_review_cycle_adapter(
+        self,
+        llm_adapter: "object | None" = None,
+    ) -> "MockReviewCycleAdapter":
         """
         Create mock review cycle adapter with injected clock.
+
+        Args:
+            llm_adapter: Optional LLM adapter for causal linking (FR-2/US-2.2).
+                        If provided, the adapter will analyze actual LLM output
+                        instead of using pre-configured sequences.
 
         Returns:
             MockReviewCycleAdapter instance with clock already configured
@@ -258,7 +280,7 @@ class SimulationEngine:
             MockReviewCycleAdapter,
         )
 
-        adapter = MockReviewCycleAdapter(clock=self._clock)
+        adapter = MockReviewCycleAdapter(clock=self._clock, llm_adapter=llm_adapter)
         logger.debug("Created MockReviewCycleAdapter via SimulationEngine")
         return adapter
 

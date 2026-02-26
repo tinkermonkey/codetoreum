@@ -81,6 +81,19 @@ class CodetoreumEvent:
             msg = f"Timestamp must be ISO 8601 format, got: {self.timestamp}"
             raise ValueError(msg)
 
+    @property
+    def event_type(self) -> str:
+        """Get event type for EventBus routing.
+
+        Returns the class name for compatibility with legacy DomainEvent-based
+        EventBus routing. Subscriptions should use the class name (e.g.,
+        "WorkItemColumnChangedEvent") to match events, not the dot-notation type.
+
+        Returns:
+            Class name (e.g., "WorkItemColumnChangedEvent")
+        """
+        return self.__class__.__name__
+
     def to_dict(self) -> dict:
         """Serialize event to dictionary for storage/transmission.
 
