@@ -99,18 +99,21 @@ async def run_scenario(runner: SimulationRunner) -> None:
     # In a real scenario, this would call WorkflowOrchestrator
     # For now, we'll simulate by capturing events manually
 
-    from codetoreum.domain.events import DomainEvent
+    from codetoreum.domain.events import (
+        WorkflowStarted,
+        AgentExecutionStarted,
+        AgentExecutionCompleted,
+        WorkflowCompleted,
+    )
 
     # Simulate workflow start
-    workflow_started = DomainEvent(
+    workflow_started = WorkflowStarted(
         aggregate_id="ISSUE-123",
-        aggregate_type="WorkItem",
         payload={
             "workflow_id": "basic-workflow",
             "stage": "Code Generation",
         },
     )
-    workflow_started.event_type = "WorkflowStarted"
     runner.capture_event(workflow_started)
 
     runner.assert_event_occurred(
@@ -123,94 +126,80 @@ async def run_scenario(runner: SimulationRunner) -> None:
     await runner.advance_time(timedelta(minutes=5))
 
     # Simulate agent execution for code generation
-    execution_started_1 = DomainEvent(
+    execution_started_1 = AgentExecutionStarted(
         aggregate_id="exec-1",
-        aggregate_type="AgentExecution",
         payload={
             "agent_id": "code-generator",
             "work_item_id": "ISSUE-123",
         },
     )
-    execution_started_1.event_type = "AgentExecutionStarted"
     runner.capture_event(execution_started_1)
 
     await runner.advance_time(timedelta(minutes=2))
 
-    execution_completed_1 = DomainEvent(
+    execution_completed_1 = AgentExecutionCompleted(
         aggregate_id="exec-1",
-        aggregate_type="AgentExecution",
         payload={
             "agent_id": "code-generator",
             "status": "completed",
         },
     )
-    execution_completed_1.event_type = "AgentExecutionCompleted"
     runner.capture_event(execution_completed_1)
 
     # Advance time for stage 2 execution (code review)
     await runner.advance_time(timedelta(minutes=1))
 
-    execution_started_2 = DomainEvent(
+    execution_started_2 = AgentExecutionStarted(
         aggregate_id="exec-2",
-        aggregate_type="AgentExecution",
         payload={
             "agent_id": "code-reviewer",
             "work_item_id": "ISSUE-123",
         },
     )
-    execution_started_2.event_type = "AgentExecutionStarted"
     runner.capture_event(execution_started_2)
 
     await runner.advance_time(timedelta(minutes=3))
 
-    execution_completed_2 = DomainEvent(
+    execution_completed_2 = AgentExecutionCompleted(
         aggregate_id="exec-2",
-        aggregate_type="AgentExecution",
         payload={
             "agent_id": "code-reviewer",
             "status": "completed",
         },
     )
-    execution_completed_2.event_type = "AgentExecutionCompleted"
     runner.capture_event(execution_completed_2)
 
     # Advance time for stage 3 execution (testing)
     await runner.advance_time(timedelta(minutes=1))
 
-    execution_started_3 = DomainEvent(
+    execution_started_3 = AgentExecutionStarted(
         aggregate_id="exec-3",
-        aggregate_type="AgentExecution",
         payload={
             "agent_id": "test-runner",
             "work_item_id": "ISSUE-123",
         },
     )
-    execution_started_3.event_type = "AgentExecutionStarted"
     runner.capture_event(execution_started_3)
 
     await runner.advance_time(timedelta(minutes=4))
 
-    execution_completed_3 = DomainEvent(
+    execution_completed_3 = AgentExecutionCompleted(
         aggregate_id="exec-3",
-        aggregate_type="AgentExecution",
         payload={
             "agent_id": "test-runner",
             "status": "completed",
         },
     )
-    execution_completed_3.event_type = "AgentExecutionCompleted"
     runner.capture_event(execution_completed_3)
 
     # Workflow completes
-    workflow_completed = DomainEvent(
+    workflow_completed = WorkflowCompleted(
         aggregate_id="ISSUE-123",
-        aggregate_type="WorkItem",
         payload={
             "workflow_id": "basic-workflow",
             "final_stage": "Testing",
         },
     )
-    workflow_completed.event_type = "WorkflowCompleted"
     runner.capture_event(workflow_completed)
 
     # Final assertions

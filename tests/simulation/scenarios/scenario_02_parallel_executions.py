@@ -12,7 +12,12 @@ Expected outcome:
 
 from datetime import timedelta
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events import (
+    WorkflowStarted,
+    AgentExecutionStarted,
+    AgentExecutionCompleted,
+    WorkflowCompleted,
+)
 from codetoreum.infrastructure.simulation import (
     SimulationConfig,
     SimulationRunner,
@@ -44,12 +49,10 @@ async def run_scenario(runner: SimulationRunner) -> None:
 
     # Start all workflows
     for work_item_id in work_items:
-        event = DomainEvent(
+        event = WorkflowStarted(
             aggregate_id=work_item_id,
-            aggregate_type="WorkItem",
             payload={"workflow_id": "basic-workflow"},
         )
-        event.event_type = "WorkflowStarted"
         runner.capture_event(event)
 
     runner.assert_event_count("WorkflowStarted", 3, "all_workflows_started")
@@ -59,12 +62,10 @@ async def run_scenario(runner: SimulationRunner) -> None:
 
     # All items start execution
     for i, work_item_id in enumerate(work_items):
-        event = DomainEvent(
+        event = AgentExecutionStarted(
             aggregate_id=f"exec-{i + 1}",
-            aggregate_type="AgentExecution",
             payload={"work_item_id": work_item_id},
         )
-        event.event_type = "AgentExecutionStarted"
         runner.capture_event(event)
 
     runner.assert_event_count("AgentExecutionStarted", 3, "all_executions_started")
@@ -73,24 +74,20 @@ async def run_scenario(runner: SimulationRunner) -> None:
     await runner.advance_time(timedelta(minutes=10))
 
     for i in range(3):
-        event = DomainEvent(
+        event = AgentExecutionCompleted(
             aggregate_id=f"exec-{i + 1}",
-            aggregate_type="AgentExecution",
             payload={"status": "completed"},
         )
-        event.event_type = "AgentExecutionCompleted"
         runner.capture_event(event)
 
     runner.assert_event_count("AgentExecutionCompleted", 3, "all_executions_completed")
 
     # All workflows complete
     for work_item_id in work_items:
-        event = DomainEvent(
+        event = WorkflowCompleted(
             aggregate_id=work_item_id,
-            aggregate_type="WorkItem",
             payload={"workflow_id": "basic-workflow"},
         )
-        event.event_type = "WorkflowCompleted"
         runner.capture_event(event)
 
     runner.assert_event_count("WorkflowCompleted", 3, "all_workflows_completed")

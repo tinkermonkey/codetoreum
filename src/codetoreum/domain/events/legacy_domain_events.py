@@ -859,3 +859,64 @@ class BoardReconciled(DomainEvent):
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """Initialize BoardReconciled event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="Board", payload=payload, **kwargs)
+
+
+# =============================================================================
+# Simulation-specific Events (for testing and scenario execution)
+# =============================================================================
+
+
+class AgentExecutionStarted(DomainEvent):
+    """Emitted when an agent execution starts."""
+
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
+        """Initialize AgentExecutionStarted event."""
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="AgentExecution", payload=payload, **kwargs)
+
+
+class AgentExecutionCompleted(DomainEvent):
+    """Emitted when an agent execution completes successfully."""
+
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
+        """Initialize AgentExecutionCompleted event."""
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="AgentExecution", payload=payload, **kwargs)
+
+
+class AgentExecutionFailed(DomainEvent):
+    """Emitted when an agent execution fails."""
+
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
+        """Initialize AgentExecutionFailed event."""
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="AgentExecution", payload=payload, **kwargs)
+
+
+class ReviewApproved(DomainEvent):
+    """Emitted when a review is approved."""
+
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
+        """Initialize ReviewApproved event."""
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
+
+
+class ReviewRejected(DomainEvent):
+    """Emitted when a review is rejected."""
+
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
+        """Initialize ReviewRejected event."""
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
+
+
+class ExecutionRetryScheduled(DomainEvent):
+    """Emitted when an execution retry is scheduled."""
+
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
+        """Initialize ExecutionRetryScheduled event."""
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="AgentExecution", payload=payload, **kwargs)
+
+
+class WorkflowBranchSelected(DomainEvent):
+    """Emitted when a workflow branch is selected."""
+
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
+        """Initialize WorkflowBranchSelected event."""
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="Workflow", payload=payload, **kwargs)

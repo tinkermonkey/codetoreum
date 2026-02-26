@@ -14,7 +14,13 @@ Expected outcome:
 
 from datetime import timedelta
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events import (
+    WorkflowStarted,
+    AgentExecutionCompleted,
+    ReviewRejected,
+    ReviewApproved,
+    WorkflowCompleted,
+)
 from codetoreum.infrastructure.simulation import (
     SimulationConfig,
     SimulationRunner,
@@ -62,34 +68,28 @@ async def run_scenario(runner: SimulationRunner) -> None:
     work_item_id = "ISSUE-200"
 
     # Start workflow
-    event = DomainEvent(
+    event = WorkflowStarted(
         aggregate_id=work_item_id,
-        aggregate_type="WorkItem",
         payload={"workflow_id": "review-workflow"},
     )
-    event.event_type = "WorkflowStarted"
     runner.capture_event(event)
 
     # First code generation
     await runner.advance_time(timedelta(minutes=5))
 
-    event = DomainEvent(
+    event = AgentExecutionCompleted(
         aggregate_id="exec-1",
-        aggregate_type="AgentExecution",
         payload={"agent_id": "code-generator", "iteration": 1},
     )
-    event.event_type = "AgentExecutionCompleted"
     runner.capture_event(event)
 
     # Review rejects
     await runner.advance_time(timedelta(minutes=3))
 
-    event = DomainEvent(
+    event = ReviewRejected(
         aggregate_id="review-1",
-        aggregate_type="ReviewCycle",
         payload={"decision": "rejected", "feedback": "Add error handling"},
     )
-    event.event_type = "ReviewRejected"
     runner.capture_event(event)
 
     runner.assert_event_occurred("ReviewRejected", assertion_name="first_review_rejected")
@@ -97,34 +97,28 @@ async def run_scenario(runner: SimulationRunner) -> None:
     # Code regeneration with feedback
     await runner.advance_time(timedelta(minutes=5))
 
-    event = DomainEvent(
+    event = AgentExecutionCompleted(
         aggregate_id="exec-2",
-        aggregate_type="AgentExecution",
         payload={"agent_id": "code-generator", "iteration": 2, "with_feedback": True},
     )
-    event.event_type = "AgentExecutionCompleted"
     runner.capture_event(event)
 
     # Review approves
     await runner.advance_time(timedelta(minutes=3))
 
-    event = DomainEvent(
+    event = ReviewApproved(
         aggregate_id="review-2",
-        aggregate_type="ReviewCycle",
         payload={"decision": "approved"},
     )
-    event.event_type = "ReviewApproved"
     runner.capture_event(event)
 
     runner.assert_event_occurred("ReviewApproved", assertion_name="second_review_approved")
 
     # Workflow completes
-    event = DomainEvent(
+    event = WorkflowCompleted(
         aggregate_id=work_item_id,
-        aggregate_type="WorkItem",
         payload={"iterations": 2},
     )
-    event.event_type = "WorkflowCompleted"
     runner.capture_event(event)
 
     # Assertions
