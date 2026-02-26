@@ -575,80 +575,86 @@ class InMemoryQueueService(IPipelineQueueService):
                   from_column, to_column, and moved_by fields
         """
         try:
+            # Step 1: Find and remove item from queue under lock (no await inside lock)
+            entry_to_move = None
+            queue_key = None
             with self._lock:
                 queue_key = f"{event.project_id}:{event.board_id}"
                 if queue_key not in self._queues:
                     return
 
                 queue = self._queues[queue_key]
-                entry_to_move = None
 
-                # Step 1: Find and remove item from current position
+                # Find and remove item from current position
                 for i, entry in enumerate(queue):
                     if entry.work_item_id == event.work_item_id:
                         entry_to_move = entry
                         queue.pop(i)
                         break
 
-                if entry_to_move:
-                    # Step 2: If item moved to trigger column and board service available,
-                    # get the new position from board and re-enqueue
-                    if self._board_service and event.to_column:
-                        try:
-                            # Fetch current board state to get new position
-                            board = await self._board_service.get_board(
-                                event.project_id, event.board_id
+            if entry_to_move:
+                # Step 2: Fetch board state OUTSIDE the lock (can await here)
+                board = None
+                if self._board_service and event.to_column:
+                    try:
+                        board = await self._board_service.get_board(
+                            event.project_id, event.board_id
+                        )
+                    except Exception as board_error:
+                        logger.warning(
+                            f"Failed to fetch board state for position update: {board_error}. "
+                            f"Item will remain removed from queue.",
+                            exc_info=True,
+                        )
+
+                # Step 3: Re-enqueue and re-sort under lock (with data from outside lock)
+                with self._lock:
+                    queue = self._queues[queue_key]
+
+                    if board and event.to_column:
+                        # Find the target column and new position
+                        target_column = None
+                        new_position = None
+                        for col in board.columns:
+                            if col.name == event.to_column:
+                                target_column = col
+                                # Find the position of this work item in the column
+                                try:
+                                    new_position = col.work_item_ids.index(event.work_item_id)
+                                except ValueError:
+                                    # Item not in column - it may have been removed
+                                    new_position = None
+                                break
+
+                        # If item is in the new column, re-enqueue at new position
+                        if target_column and new_position is not None:
+                            updated_entry = PipelineQueueEntry(
+                                project_id=entry_to_move.project_id,
+                                board_id=entry_to_move.board_id,
+                                work_item_id=entry_to_move.work_item_id,
+                                position_in_column=new_position,
+                                status=entry_to_move.status,
+                                queued_at=entry_to_move.queued_at,
+                                last_position_check=self._time_source(),
                             )
+                            queue.append(updated_entry)
 
-                            # Find the target column
-                            target_column = None
-                            new_position = None
-                            for col in board.columns:
-                                if col.name == event.to_column:
-                                    target_column = col
-                                    # Find the position of this work item in the column
-                                    try:
-                                        new_position = col.work_item_ids.index(event.work_item_id)
-                                    except ValueError:
-                                        # Item not in column - it may have been removed
-                                        new_position = None
-                                    break
-
-                            # If item is in the new column, re-enqueue at new position
-                            if target_column and new_position is not None:
-                                updated_entry = PipelineQueueEntry(
-                                    project_id=entry_to_move.project_id,
-                                    board_id=entry_to_move.board_id,
-                                    work_item_id=entry_to_move.work_item_id,
-                                    position_in_column=new_position,
-                                    status=entry_to_move.status,
-                                    queued_at=entry_to_move.queued_at,
-                                    last_position_check=self._time_source(),
+                            # Emit position change event
+                            self._event_emitter.emit(
+                                QueuePositionChangedEvent(
+                                    type="queue.position_changed",
+                                    timestamp=datetime.now(UTC).isoformat(),
+                                    source="mock",
+                                    queue_name=queue_key,
+                                    item_id=event.work_item_id,
+                                    old_position=entry_to_move.position_in_column,
+                                    new_position=new_position,
+                                    project_id=event.project_id,
                                 )
-                                queue.append(updated_entry)
-
-                                # Emit position change event
-                                self._event_emitter.emit(
-                                    QueuePositionChangedEvent(
-                                        type="queue.position_changed",
-                                        timestamp=datetime.now(UTC).isoformat(),
-                                        source="mock",
-                                        queue_name=queue_key,
-                                        item_id=event.work_item_id,
-                                        old_position=entry_to_move.position_in_column,
-                                        new_position=new_position,
-                                        project_id=event.project_id,
-                                    )
-                                )
-                        except Exception as board_error:
-                            logger.warning(
-                                f"Failed to fetch board state for position update: {board_error}. "
-                                f"Item will remain removed from queue.",
-                                exc_info=False,
                             )
                     # else: Item moved to a non-trigger column or no board service - keep it removed
 
-                    # Step 3: Re-sort queue by position to maintain order
+                    # Re-sort queue by position to maintain order
                     queue.sort(key=lambda e: e.position_in_column)
                     self._queues[queue_key] = queue
 

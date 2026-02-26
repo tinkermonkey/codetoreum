@@ -353,8 +353,21 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
                 # Determine decision: either from sequence or by evaluating LLM output
                 if use_llm_output:
                     # Causal linking: get actual LLM maker output and derive decision (FR-2/US-2.2)
-                    maker_output = f"Maker output iteration {iteration}"  # Default placeholder
-                    # In real scenarios, this would be actual output from agent execution
+                    # Execute a prompt through the LLM adapter to get real output
+                    try:
+                        llm_prompt = (
+                            f"Review code changes for work item {work_item_id} iteration {iteration}. "
+                            f"Provide summary of changes made."
+                        )
+                        result = await self._llm_adapter.execute(llm_prompt)
+                        maker_output = result.content if result else ""
+                    except Exception as llm_error:
+                        logger.warning(
+                            f"Failed to get LLM output for review decision: {llm_error}",
+                            exc_info=True,
+                        )
+                        maker_output = ""
+
                     decision_item = self._evaluate_llm_output(maker_output)
                 else:
                     # Use pre-configured sequence (backward compatibility)

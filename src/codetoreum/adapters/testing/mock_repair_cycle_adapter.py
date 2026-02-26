@@ -1325,6 +1325,43 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         self._repair_state[key] = current + 1
         return current + 1
 
+    def _get_test_type_for_command(self, command: str) -> RepairTestType | None:
+        """Determine test type from command string.
+
+        Maps common test commands to their test types:
+        - pytest tests/unit -> UNIT
+        - pytest tests/integration -> INTEGRATION
+        - pytest tests/e2e -> E2E
+        - unittest tests.unit -> UNIT
+        etc.
+
+        Args:
+            command: The test command to analyze
+
+        Returns:
+            RepairTestType if recognized, None otherwise
+        """
+        command_lower = command.lower()
+
+        # Check for test type indicators in command
+        if any(
+            pattern in command_lower
+            for pattern in ["tests/unit", "test_unit", "unittest", "tests/unit.*py"]
+        ):
+            return RepairTestType.UNIT
+        elif any(
+            pattern in command_lower
+            for pattern in ["tests/integration", "test_integration", "integration"]
+        ):
+            return RepairTestType.INTEGRATION
+        elif any(
+            pattern in command_lower
+            for pattern in ["tests/e2e", "test_e2e", "e2e", "end.to.end"]
+        ):
+            return RepairTestType.E2E
+
+        return None
+
     def _extract_test_result_from_container(
         self, test_type: RepairTestType, iteration: int
     ) -> RepairTestResult | None:
@@ -1333,6 +1370,9 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         This method implements causal linking between container test execution and repair
         cycle decisions. It attempts to retrieve actual test results from the container
         adapter and parse them into RepairTestResult format.
+
+        The method correlates container execution results by test type to ensure we're
+        analyzing the right test results for the requested test_type.
 
         Args:
             test_type: Type of test (UNIT, INTEGRATION, E2E)
@@ -1345,65 +1385,76 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             return None
 
         try:
-            # Try to get command execution history from container adapter
-            # This assumes FakeContainerAdapter has test result tracking capability
+            # Access command history via public method to avoid private attribute fragility
+            # Note: FakeContainerAdapter._command_history is internal but we need it for now
+            # TODO: Add public get_command_history() method to IContainer interface
             if not hasattr(self._container_adapter, "_command_history"):
                 return None
 
-            # Extract test results from container execution
-            # Look for test execution patterns in command output
+            # Search for container executions matching the requested test_type
             for container_id, executions in self._container_adapter._command_history.items():
                 if not executions:
                     continue
 
-                # Get the most recent execution
-                latest_exec = executions[-1]
+                # Find executions for the matching test type
+                for execution in executions:
+                    # Determine test type from the command
+                    command_test_type = self._get_test_type_for_command(execution.command)
 
-                # Parse stdout for test results
-                stdout = latest_exec.stdout.lower() if latest_exec.stdout else ""
-                stderr = latest_exec.stderr.lower() if latest_exec.stderr else ""
+                    # Skip if this execution's test type doesn't match what we're looking for
+                    if command_test_type != test_type:
+                        continue
 
-                # Analyze container output for test metrics
-                passed = failed = 0
-                failures = []
+                    # Found a matching test type - parse the result
+                    stdout = execution.stdout.lower() if execution.stdout else ""
+                    stderr = execution.stderr.lower() if execution.stderr else ""
+                    combined_output = (execution.stdout or "") + (execution.stderr or "")
 
-                # Check for test failure patterns in output
-                if "failed" in stdout or "failed" in stderr or latest_exec.exit_code != 0:
-                    # Parse failure information
-                    failure_lines = [
-                        line
-                        for line in (latest_exec.stdout + latest_exec.stderr).split("\n")
-                        if "test" in line.lower() and ("fail" in line.lower() or "error" in line.lower())
-                    ]
+                    # Analyze container output for test metrics
+                    passed = failed = 0
+                    failures = []
 
-                    failed = len(failure_lines) if failure_lines else 1
+                    # Check for test failure patterns in output
+                    if "failed" in stdout or "failed" in stderr or execution.exit_code != 0:
+                        # Parse failure information
+                        failure_lines = [
+                            line
+                            for line in combined_output.split("\n")
+                            if "test" in line.lower()
+                            and ("fail" in line.lower() or "error" in line.lower())
+                        ]
 
-                    # Extract failure details
-                    for line in failure_lines:
-                        failures.append(
-                            RepairTestFailure(
-                                file="test_container.py",
-                                test=line[:100],
-                                message=line[100:200] if len(line) > 100 else "Container test failed",
+                        failed = len(failure_lines) if failure_lines else 1
+
+                        # Extract failure details
+                        for line in failure_lines:
+                            failures.append(
+                                RepairTestFailure(
+                                    file="test_container.py",
+                                    test=line[:100],
+                                    message=line[100:200] if len(line) > 100 else "Container test failed",
+                                )
                             )
-                        )
-                else:
-                    # No failures detected
-                    passed = self.default_total_tests
-                    failed = 0
+                    else:
+                        # No failures detected
+                        passed = self.default_total_tests
+                        failed = 0
 
-                # Create result from container execution
-                return RepairTestResult(
-                    test_type=test_type,
-                    iteration=iteration,
-                    passed=passed if failed == 0 else max(0, self.default_total_tests - failed),
-                    failed=failed,
-                    warnings=0,
-                    failures=tuple(failures),
-                    warning_list=(),
-                    raw_output=latest_exec.stdout or "",
-                    timestamp=self.clock.now().isoformat(),
-                )
+                    # Create result from container execution
+                    return RepairTestResult(
+                        test_type=test_type,
+                        iteration=iteration,
+                        passed=passed if failed == 0 else max(0, self.default_total_tests - failed),
+                        failed=failed,
+                        warnings=0,
+                        failures=tuple(failures),
+                        warning_list=(),
+                        raw_output=execution.stdout or "",
+                        timestamp=self.clock.now().isoformat(),
+                    )
+
+            # No matching test type found in container history
+            return None
 
         except Exception as e:
             logger.debug(
