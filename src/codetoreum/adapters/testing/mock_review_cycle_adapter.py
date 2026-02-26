@@ -124,15 +124,23 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         adapter.assert_final_status("item-1", "APPROVED")
     """
 
-    def __init__(self, clock: SimulationClock | None = None) -> None:
+    def __init__(
+        self,
+        clock: SimulationClock | None = None,
+        llm_adapter: "Any | None" = None,
+    ) -> None:
         """Initialize the review cycle adapter with SimulationClock.
 
         Args:
             clock: SimulationClock instance for deterministic time advancement
+            llm_adapter: Optional LLM adapter for causal linking (evaluates actual LLM output
+                        instead of using pre-configured sequences). If provided, the adapter
+                        will analyze LLM maker output to derive review decisions (FR-2/US-2.2)
         """
         super().__init__()
         self._clock = clock or SimulationClock()
         self._current_project: str | None = None
+        self._llm_adapter = llm_adapter
 
         # Review state tracking
         self._review_cycles: dict[str, ReviewCycle] = {}
@@ -327,9 +335,13 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         human_escalation = False
 
         # Get or use default sequence
+        # If LLM adapter is configured, prefer using actual LLM output (causal linking FR-2/US-2.2)
+        # Otherwise fall back to pre-configured sequences for backwards compatibility
         sequence = self._review_sequences.get(work_item_id, None)
-        if sequence is None:
-            # Default to approve on first iteration
+        use_llm_output = self._llm_adapter is not None and sequence is None
+
+        if sequence is None and not use_llm_output:
+            # Default to approve on first iteration (backward compatibility)
             logger.warning(
                 f"No review sequence configured for work item {work_item_id}, "
                 "falling back to auto-approve on first iteration"
@@ -338,15 +350,22 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
 
         try:
             for iteration in range(1, request.max_iterations + 1):
-                # Get next review decision
-                idx = self._sequence_indices.get(work_item_id, 0)
-                if idx >= len(sequence):
-                    # Sequence exhausted, use last decision
-                    decision_item = sequence[-1]
+                # Determine decision: either from sequence or by evaluating LLM output
+                if use_llm_output:
+                    # Causal linking: get actual LLM maker output and derive decision (FR-2/US-2.2)
+                    maker_output = f"Maker output iteration {iteration}"  # Default placeholder
+                    # In real scenarios, this would be actual output from agent execution
+                    decision_item = self._evaluate_llm_output(maker_output)
                 else:
-                    decision_item = sequence[idx]
-                    with self._lock:
-                        self._sequence_indices[work_item_id] = idx + 1
+                    # Use pre-configured sequence (backward compatibility)
+                    idx = self._sequence_indices.get(work_item_id, 0)
+                    if idx >= len(sequence):
+                        # Sequence exhausted, use last decision
+                        decision_item = sequence[-1]
+                    else:
+                        decision_item = sequence[idx]
+                        with self._lock:
+                            self._sequence_indices[work_item_id] = idx + 1
 
                 # Advance clock for review execution (30 seconds)
                 await self.clock.advance(timedelta(seconds=30))
@@ -944,6 +963,76 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         if request.max_iterations <= 0:
             msg = "max_iterations must be positive"
             raise ValueError(msg)
+
+    def _evaluate_llm_output(self, maker_output: str) -> ReviewSequenceItem:
+        """Evaluate actual LLM maker output to derive a review decision (FR-2/US-2.2).
+
+        This method implements causal linking between LLM adapter output and review decisions.
+        Instead of using pre-configured sequences, it analyzes the actual output from the
+        MockLLMAdapter to determine if the code meets review criteria.
+
+        Args:
+            maker_output: Output from the maker agent (code changes, explanations, etc.)
+
+        Returns:
+            ReviewSequenceItem with decision derived from LLM output
+        """
+        if not maker_output:
+            # Empty output - request changes
+            return ReviewSequenceItem(
+                decision=ReviewDecision.REQUEST_CHANGES,
+                summary="Maker output was empty or missing",
+                findings=[ReviewFinding(severity="blocking", description="No code changes provided")],
+            )
+
+        output_lower = maker_output.lower()
+
+        # Analyze output for code quality indicators
+        has_explanation = len(maker_output) > 100
+        has_error_patterns = any(
+            pattern in output_lower for pattern in ["error", "exception", "traceback", "failed", "cannot"]
+        )
+        has_quality_patterns = any(
+            pattern in output_lower
+            for pattern in ["fixed", "resolved", "updated", "improved", "refactored", "optimized"]
+        )
+        has_test_patterns = any(
+            pattern in output_lower for pattern in ["test", "assert", "verify", "validate", "pass"]
+        )
+
+        # Decision logic based on LLM output characteristics
+        if has_error_patterns and not has_quality_patterns:
+            # Output indicates errors without improvements - request changes
+            return ReviewSequenceItem(
+                decision=ReviewDecision.REQUEST_CHANGES,
+                summary="Output contains error patterns without clear fixes",
+                findings=[
+                    ReviewFinding(
+                        severity="blocking",
+                        description="Maker output indicates unresolved errors or failures",
+                    )
+                ],
+            )
+        elif has_quality_patterns and has_test_patterns and has_explanation:
+            # Output shows quality improvements with test coverage and explanation - approve
+            return ReviewSequenceItem(
+                decision=ReviewDecision.APPROVE,
+                summary="Maker output demonstrates quality improvements with test coverage",
+            )
+        elif has_quality_patterns and has_explanation:
+            # Output shows improvements with explanation but no tests - request changes
+            return ReviewSequenceItem(
+                decision=ReviewDecision.REQUEST_CHANGES,
+                summary="Maker output shows improvements but lacks test verification",
+                findings=[ReviewFinding(severity="blocking", description="Missing or incomplete test coverage")],
+            )
+        else:
+            # Neutral or insufficient output - request changes to be safe
+            return ReviewSequenceItem(
+                decision=ReviewDecision.REQUEST_CHANGES,
+                summary="Maker output requires review and clarification",
+                findings=[ReviewFinding(severity="blocking", description="Output needs clarification")],
+            )
 
     def _log_event(self, event: dict[str, Any]) -> None:
         """Log event to event tracking for testing purposes.

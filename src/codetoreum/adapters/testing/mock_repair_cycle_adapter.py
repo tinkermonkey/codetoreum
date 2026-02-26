@@ -103,16 +103,22 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         self,
         clock: SimulationClock | None = None,
         checkpoint_store: IRepairCycleCheckpointStore | None = None,
+        container_adapter: "Any | None" = None,
     ) -> None:
         """Initialize the repair cycle adapter with SimulationClock.
 
         Args:
             clock: SimulationClock instance for deterministic time advancement
             checkpoint_store: Optional checkpoint store for recovery testing
+            container_adapter: Optional container adapter for causal linking (FR-2/US-2.4).
+                             If provided, the adapter will use actual container test results
+                             instead of pre-configured sequences. This enables integration
+                             between test execution and repair cycle decisions.
         """
         super().__init__()
         self._clock = clock or SimulationClock()
         self._checkpoint_store = checkpoint_store
+        self._container_adapter = container_adapter
         self._current_project: str | None = None
         self._repair_state: dict[str, Any] = {}
         self._test_type_index: dict[str, int] = {}
@@ -642,6 +648,9 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
         Clock advances 30 seconds per test execution.
 
+        Uses container adapter test results if available (causal linking FR-2/US-2.4),
+        otherwise falls back to pre-configured sequences.
+
         Args:
             config: Test run configuration
             context: Repair cycle context
@@ -653,39 +662,45 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         self.total_agent_calls += 1
         await self.clock.advance(timedelta(seconds=30))
 
-        # Get configured result for this test type
-        sequence = self.test_results.get(config.test_type, [])
         iteration = self._get_iteration_for_test_type(config.test_type)
 
-        if iteration <= len(sequence):
-            result = sequence[iteration - 1]
-            # Create a new result with updated timestamp
-            result = RepairTestResult(
-                test_type=result.test_type,
-                iteration=result.iteration,
-                passed=result.passed,
-                failed=result.failed,
-                warnings=result.warnings,
-                failures=result.failures,
-                warning_list=result.warning_list,
-                raw_output=result.raw_output,
-                timestamp=self.clock.now().isoformat(),
-            )
+        # Try to use container adapter results (causal linking FR-2/US-2.4)
+        container_result = self._extract_test_result_from_container(config.test_type, iteration)
+        if container_result:
+            result = container_result
         else:
-            # Default: success - passed = total - failed
-            default_failed = 0
-            default_passed = self.default_total_tests - default_failed
-            result = RepairTestResult(
-                test_type=config.test_type,
-                iteration=iteration,
-                passed=default_passed,
-                failed=default_failed,
-                warnings=0,
-                failures=(),
-                warning_list=(),
-                raw_output="All tests passed",
-                timestamp=self.clock.now().isoformat(),
-            )
+            # Fallback to pre-configured sequences (backward compatibility)
+            sequence = self.test_results.get(config.test_type, [])
+
+            if iteration <= len(sequence):
+                result = sequence[iteration - 1]
+                # Create a new result with updated timestamp
+                result = RepairTestResult(
+                    test_type=result.test_type,
+                    iteration=result.iteration,
+                    passed=result.passed,
+                    failed=result.failed,
+                    warnings=result.warnings,
+                    failures=result.failures,
+                    warning_list=result.warning_list,
+                    raw_output=result.raw_output,
+                    timestamp=self.clock.now().isoformat(),
+                )
+            else:
+                # Default: success - passed = total - failed
+                default_failed = 0
+                default_passed = self.default_total_tests - default_failed
+                result = RepairTestResult(
+                    test_type=config.test_type,
+                    iteration=iteration,
+                    passed=default_passed,
+                    failed=default_failed,
+                    warnings=0,
+                    failures=(),
+                    warning_list=(),
+                    raw_output="All tests passed",
+                    timestamp=self.clock.now().isoformat(),
+                )
 
         self._log_event(
             {
@@ -1309,6 +1324,93 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         current = self._repair_state.get(key, 0)
         self._repair_state[key] = current + 1
         return current + 1
+
+    def _extract_test_result_from_container(
+        self, test_type: RepairTestType, iteration: int
+    ) -> RepairTestResult | None:
+        """Extract test result from container execution output (FR-2/US-2.4).
+
+        This method implements causal linking between container test execution and repair
+        cycle decisions. It attempts to retrieve actual test results from the container
+        adapter and parse them into RepairTestResult format.
+
+        Args:
+            test_type: Type of test (UNIT, INTEGRATION, E2E)
+            iteration: Current iteration number
+
+        Returns:
+            RepairTestResult if container execution data is available, None otherwise
+        """
+        if not self._container_adapter:
+            return None
+
+        try:
+            # Try to get command execution history from container adapter
+            # This assumes FakeContainerAdapter has test result tracking capability
+            if not hasattr(self._container_adapter, "_command_history"):
+                return None
+
+            # Extract test results from container execution
+            # Look for test execution patterns in command output
+            for container_id, executions in self._container_adapter._command_history.items():
+                if not executions:
+                    continue
+
+                # Get the most recent execution
+                latest_exec = executions[-1]
+
+                # Parse stdout for test results
+                stdout = latest_exec.stdout.lower() if latest_exec.stdout else ""
+                stderr = latest_exec.stderr.lower() if latest_exec.stderr else ""
+
+                # Analyze container output for test metrics
+                passed = failed = 0
+                failures = []
+
+                # Check for test failure patterns in output
+                if "failed" in stdout or "failed" in stderr or latest_exec.exit_code != 0:
+                    # Parse failure information
+                    failure_lines = [
+                        line
+                        for line in (latest_exec.stdout + latest_exec.stderr).split("\n")
+                        if "test" in line.lower() and ("fail" in line.lower() or "error" in line.lower())
+                    ]
+
+                    failed = len(failure_lines) if failure_lines else 1
+
+                    # Extract failure details
+                    for line in failure_lines:
+                        failures.append(
+                            RepairTestFailure(
+                                file="test_container.py",
+                                test=line[:100],
+                                message=line[100:200] if len(line) > 100 else "Container test failed",
+                            )
+                        )
+                else:
+                    # No failures detected
+                    passed = self.default_total_tests
+                    failed = 0
+
+                # Create result from container execution
+                return RepairTestResult(
+                    test_type=test_type,
+                    iteration=iteration,
+                    passed=passed if failed == 0 else max(0, self.default_total_tests - failed),
+                    failed=failed,
+                    warnings=0,
+                    failures=tuple(failures),
+                    warning_list=(),
+                    raw_output=latest_exec.stdout or "",
+                    timestamp=self.clock.now().isoformat(),
+                )
+
+        except Exception as e:
+            logger.debug(
+                f"Failed to extract test results from container adapter: {e}",
+                exc_info=True,
+            )
+            return None
 
     def _log_event(self, event: dict[str, Any]) -> None:
         """Log event with timestamp (FR-11.9)."""

@@ -565,31 +565,93 @@ class InMemoryQueueService(IPipelineQueueService):
         This handler is invoked when WorkItemColumnChangedEvent is emitted by the board adapter,
         enabling automatic queue position synchronization via event subscription.
 
+        For items moved within or to the trigger column, this handler:
+        1. Removes the item from its current position in the queue
+        2. Re-enqueues it at the new position (if board service available)
+        3. Re-sorts the queue to maintain board position ordering
+
         Args:
             event: WorkItemColumnChangedEvent containing work_item_id, project_id, board_id,
                   from_column, to_column, and moved_by fields
         """
         try:
-            # Update queue to reflect board column changes
-            # Items in the new column should be reordered; items in old column should be removed
             with self._lock:
                 queue_key = f"{event.project_id}:{event.board_id}"
                 if queue_key not in self._queues:
                     return
 
                 queue = self._queues[queue_key]
-                found = False
+                entry_to_move = None
 
-                # Find and remove item from queue (since column changed)
+                # Step 1: Find and remove item from current position
                 for i, entry in enumerate(queue):
                     if entry.work_item_id == event.work_item_id:
+                        entry_to_move = entry
                         queue.pop(i)
-                        found = True
                         break
 
-                # If item moved to a different column, re-add it to the queue
-                # (the item stays in queue but position may be affected)
-                if found:
+                if entry_to_move:
+                    # Step 2: If item moved to trigger column and board service available,
+                    # get the new position from board and re-enqueue
+                    if self._board_service and event.to_column:
+                        try:
+                            # Fetch current board state to get new position
+                            board = await self._board_service.get_board(
+                                event.project_id, event.board_id
+                            )
+
+                            # Find the target column
+                            target_column = None
+                            new_position = None
+                            for col in board.columns:
+                                if col.name == event.to_column:
+                                    target_column = col
+                                    # Find the position of this work item in the column
+                                    try:
+                                        new_position = col.work_item_ids.index(event.work_item_id)
+                                    except ValueError:
+                                        # Item not in column - it may have been removed
+                                        new_position = None
+                                    break
+
+                            # If item is in the new column, re-enqueue at new position
+                            if target_column and new_position is not None:
+                                updated_entry = PipelineQueueEntry(
+                                    project_id=entry_to_move.project_id,
+                                    board_id=entry_to_move.board_id,
+                                    work_item_id=entry_to_move.work_item_id,
+                                    position_in_column=new_position,
+                                    status=entry_to_move.status,
+                                    queued_at=entry_to_move.queued_at,
+                                    last_position_check=self._time_source(),
+                                )
+                                queue.append(updated_entry)
+
+                                # Emit position change event
+                                self._event_emitter.emit(
+                                    QueuePositionChangedEvent(
+                                        type="queue.position_changed",
+                                        timestamp=datetime.now(UTC).isoformat(),
+                                        source="mock",
+                                        queue_name=queue_key,
+                                        item_id=event.work_item_id,
+                                        old_position=entry_to_move.position_in_column,
+                                        new_position=new_position,
+                                        project_id=event.project_id,
+                                    )
+                                )
+                        except Exception as board_error:
+                            logger.warning(
+                                f"Failed to fetch board state for position update: {board_error}. "
+                                f"Item will remain removed from queue.",
+                                exc_info=False,
+                            )
+                    # else: Item moved to a non-trigger column or no board service - keep it removed
+
+                    # Step 3: Re-sort queue by position to maintain order
+                    queue.sort(key=lambda e: e.position_in_column)
+                    self._queues[queue_key] = queue
+
                     # Log the board position change for audit trail
                     self._operations_log.append(
                         {
