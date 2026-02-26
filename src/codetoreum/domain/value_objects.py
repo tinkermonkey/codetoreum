@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Generic, Self, TypeVar
 from uuid import uuid4
 
@@ -161,8 +162,9 @@ class ExecutionResult:
     Execution Result value object.
 
     **IMMUTABILITY**: Frozen dataclass with immutable collection types (tuples instead of lists).
-    All collections are immutable (tuples) to prevent in-place mutations that could break
-    the immutability contract. The metadata dict is intentionally frozen to prevent modifications.
+    All collections are immutable: file lists use tuples and metadata dict is wrapped in
+    MappingProxyType to prevent in-place mutations. This prevents breaking the immutability
+    contract while still allowing field reassignment to be blocked by dataclass frozen=True.
 
     Immutable representation of agent execution outcome.
     """
@@ -191,11 +193,11 @@ class ExecutionResult:
     # Session continuity
     session_id: str | None = None
 
-    # Metadata - frozen mapping for immutability
+    # Metadata - wrapped in MappingProxyType for deep immutability
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        """Validate execution result."""
+        """Validate execution result and wrap mutable collections."""
         if self.input_tokens < 0:
             msg = "Input tokens cannot be negative"
             raise DomainError(msg)
@@ -205,6 +207,8 @@ class ExecutionResult:
         if self.duration_seconds < 0:
             msg = "Duration cannot be negative"
             raise DomainError(msg)
+        # Wrap metadata dict in MappingProxyType for immutability
+        object.__setattr__(self, "metadata", MappingProxyType(self.metadata))
 
     @classmethod
     def success_result(
@@ -274,7 +278,7 @@ class ExecutionResult:
 
     def get_all_affected_files(self) -> list[str]:
         """Get all files affected by execution."""
-        return list(set(list(self.modified_files) + list(self.added_files) + list(self.deleted_files)))
+        return list(set(self.modified_files + self.added_files + self.deleted_files))
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -291,7 +295,7 @@ class ExecutionResult:
             "total_tokens": self.get_total_tokens(),
             "duration_seconds": self.duration_seconds,
             "session_id": self.session_id,
-            "metadata": self.metadata,
+            "metadata": dict(self.metadata),
             "timestamp": self.timestamp.isoformat(),
         }
 
@@ -363,8 +367,8 @@ class ExecutionContext:
     """Complete context for agent execution.
 
     **IMMUTABILITY**: Frozen dataclass with immutable collection types (tuples instead of lists).
-    All collections are immutable (tuples) to prevent in-place mutations that could break
-    the immutability contract.
+    All collections are immutable: tech_stack and mcp_servers use tuples, and metadata dict is
+    wrapped in MappingProxyType to prevent in-place mutations.
     """
 
     # Work context
@@ -402,7 +406,7 @@ class ExecutionContext:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        """Validate execution context."""
+        """Validate execution context and wrap mutable collections."""
         if self.timeout_seconds <= 0:
             msg = "Timeout must be positive"
             raise DomainError(msg)
@@ -415,6 +419,8 @@ class ExecutionContext:
         if not self.agent_id:
             msg = "Agent ID cannot be empty"
             raise DomainError(msg)
+        # Wrap metadata dict in MappingProxyType for immutability
+        object.__setattr__(self, "metadata", MappingProxyType(self.metadata))
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
@@ -436,7 +442,7 @@ class ExecutionContext:
             "requires_docker": self.requires_docker,
             "mcp_servers": list(self.mcp_servers),
             "previous_session_id": self.previous_session_id,
-            "metadata": self.metadata,
+            "metadata": dict(self.metadata),
         }
 
 
