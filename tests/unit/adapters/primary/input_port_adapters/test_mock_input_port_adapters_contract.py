@@ -1,7 +1,8 @@
 """Contract tests for mock input port adapters.
 
 These tests verify that mock adapters comply with their port interfaces
-and have basic functionality to support simulation testing.
+and correctly implement business logic (create-read-update-delete flows,
+error handling, state management).
 """
 
 import pytest
@@ -60,170 +61,233 @@ from codetoreum.adapters.primary.input_port_adapters.mock.mock_workflow_run_quer
 from codetoreum.adapters.primary.input_port_adapters.mock.mock_workspace_query_adapter import (
     MockWorkspaceQueryAdapter,
 )
+from codetoreum.domain.exceptions import ExecutionNotFoundError, InvalidStateError, WorkItemNotFoundError
+from codetoreum.domain.work_item import WorkItemPriority
+from codetoreum.ports.input.execution_command import (
+    PauseExecutionCommand,
+    ResumeExecutionCommand,
+    TerminateExecutionCommand,
+)
+from codetoreum.ports.input.work_item_command import (
+    CreateWorkItemCommand,
+    UpdateWorkItemCommand,
+)
+from codetoreum.domain.agent_execution import AgentExecution, ExecutionStatus
 
 
-class TestMockAgentAdapters:
-    """Test mock agent command and query adapters."""
+class TestMockWorkItemCommandAdapterContract:
+    """Test MockWorkItemCommandAdapter contract compliance."""
 
-    def test_agent_command_adapter_instantiation(self):
-        """Test MockAgentCommandAdapter can be instantiated."""
-        adapter = MockAgentCommandAdapter()
-        assert adapter is not None
-
-    def test_agent_query_adapter_instantiation(self):
-        """Test MockAgentQueryAdapter can be instantiated."""
-        adapter = MockAgentQueryAdapter()
-        assert adapter is not None
-
-    def test_agent_command_adapter_has_methods(self):
-        """Test MockAgentCommandAdapter has expected methods."""
-        adapter = MockAgentCommandAdapter()
-        # Verify basic method presence
-        assert hasattr(adapter, "handle") or callable(getattr(adapter, "__call__", None))
-
-    def test_agent_query_adapter_has_methods(self):
-        """Test MockAgentQueryAdapter has expected methods."""
-        adapter = MockAgentQueryAdapter()
-        # Verify basic method presence
-        assert hasattr(adapter, "handle") or callable(getattr(adapter, "__call__", None))
-
-
-class TestMockConfigAdapters:
-    """Test mock config adapters."""
-
-    def test_config_command_adapter_instantiation(self):
-        """Test MockConfigCommandAdapter can be instantiated."""
-        adapter = MockConfigCommandAdapter()
-        assert adapter is not None
-
-    def test_config_query_adapter_instantiation(self):
-        """Test MockConfigQueryAdapter can be instantiated."""
-        adapter = MockConfigQueryAdapter()
-        assert adapter is not None
-
-    def test_config_service_adapter_instantiation(self):
-        """Test MockConfigServiceAdapter can be instantiated."""
-        adapter = MockConfigServiceAdapter()
-        assert adapter is not None
-
-    def test_config_adapters_are_distinct(self):
-        """Test that config adapters are separate instances."""
-        cmd_adapter = MockConfigCommandAdapter()
-        query_adapter = MockConfigQueryAdapter()
-        service_adapter = MockConfigServiceAdapter()
-
-        assert cmd_adapter is not query_adapter
-        assert query_adapter is not service_adapter
-        assert cmd_adapter is not service_adapter
-
-
-class TestMockExecutionAdapters:
-    """Test mock execution adapters."""
-
-    def test_execution_command_adapter_instantiation(self):
-        """Test MockExecutionCommandAdapter can be instantiated."""
-        adapter = MockExecutionCommandAdapter()
-        assert adapter is not None
-
-    def test_execution_query_adapter_instantiation(self):
-        """Test MockExecutionQueryAdapter can be instantiated."""
-        adapter = MockExecutionQueryAdapter()
-        assert adapter is not None
-
-    def test_execution_adapters_are_distinct(self):
-        """Test that execution adapters are separate instances."""
-        cmd_adapter = MockExecutionCommandAdapter()
-        query_adapter = MockExecutionQueryAdapter()
-
-        assert cmd_adapter is not query_adapter
-
-
-class TestMockWorkflowAdapters:
-    """Test mock workflow adapters."""
-
-    def test_workflow_command_adapter_instantiation(self):
-        """Test MockWorkflowCommandAdapter can be instantiated."""
-        adapter = MockWorkflowCommandAdapter()
-        assert adapter is not None
-
-    def test_workflow_definition_command_adapter_instantiation(self):
-        """Test MockWorkflowDefinitionCommandAdapter can be instantiated."""
-        adapter = MockWorkflowDefinitionCommandAdapter()
-        assert adapter is not None
-
-    def test_workflow_query_adapter_instantiation(self):
-        """Test MockWorkflowQueryAdapter can be instantiated."""
-        adapter = MockWorkflowQueryAdapter()
-        assert adapter is not None
-
-    def test_workflow_run_query_adapter_instantiation(self):
-        """Test MockWorkflowRunQueryAdapter can be instantiated."""
-        adapter = MockWorkflowRunQueryAdapter()
-        assert adapter is not None
-
-    def test_workflow_adapters_are_distinct(self):
-        """Test that workflow adapters are separate instances."""
-        cmd_adapter = MockWorkflowCommandAdapter()
-        def_cmd_adapter = MockWorkflowDefinitionCommandAdapter()
-        query_adapter = MockWorkflowQueryAdapter()
-        run_query_adapter = MockWorkflowRunQueryAdapter()
-
-        assert cmd_adapter is not def_cmd_adapter
-        assert def_cmd_adapter is not query_adapter
-        assert query_adapter is not run_query_adapter
-
-
-class TestMockWorkItemAdapters:
-    """Test mock work item adapters."""
-
-    def test_work_item_command_adapter_instantiation(self):
-        """Test MockWorkItemCommandAdapter can be instantiated."""
+    @pytest.mark.asyncio
+    async def test_create_and_retrieve_work_item(self):
+        """Test create-read flow for work items."""
         adapter = MockWorkItemCommandAdapter()
-        assert adapter is not None
 
-    def test_work_item_query_adapter_instantiation(self):
-        """Test MockWorkItemQueryAdapter can be instantiated."""
-        adapter = MockWorkItemQueryAdapter()
-        assert adapter is not None
+        # Create work item
+        command = CreateWorkItemCommand(
+            project_id="proj-1",
+            title="Test Task",
+            description="Test Description",
+            priority=WorkItemPriority.HIGH,
+            labels=["bug", "urgent"],
+            external_id="ext-123",
+            external_url="https://example.com/issue/123"
+        )
+        work_item = await adapter.create_work_item(command)
 
-    def test_work_item_adapters_are_distinct(self):
-        """Test that work item adapters are separate instances."""
-        cmd_adapter = MockWorkItemCommandAdapter()
-        query_adapter = MockWorkItemQueryAdapter()
+        # Verify created item has correct properties
+        assert work_item.project_id == "proj-1"
+        assert work_item.title == "Test Task"
+        assert work_item.description == "Test Description"
+        assert work_item.priority == WorkItemPriority.HIGH
+        assert "bug" in work_item.labels
+        assert work_item.external_id == "ext-123"
 
-        assert cmd_adapter is not query_adapter
+    @pytest.mark.asyncio
+    async def test_update_work_item(self):
+        """Test update flow for work items."""
+        adapter = MockWorkItemCommandAdapter()
+
+        # Create work item
+        create_cmd = CreateWorkItemCommand(
+            project_id="proj-1",
+            title="Original Title",
+            description="Original Description",
+            priority=WorkItemPriority.LOW,
+            labels=[],
+            external_id="ext-123",
+            external_url="https://example.com"
+        )
+        work_item = await adapter.create_work_item(create_cmd)
+
+        # Update work item
+        update_cmd = UpdateWorkItemCommand(
+            work_item_id=work_item.id,
+            title="Updated Title",
+            description="Updated Description",
+            priority=WorkItemPriority.HIGH,
+            labels=["fixed"]
+        )
+        updated = await adapter.update_work_item(update_cmd)
+
+        # Verify updates applied
+        assert updated.title == "Updated Title"
+        assert updated.description == "Updated Description"
+        assert updated.priority == WorkItemPriority.HIGH
+
+    @pytest.mark.asyncio
+    async def test_update_nonexistent_work_item_raises_error(self):
+        """Test that updating nonexistent work item raises WorkItemNotFoundError."""
+        adapter = MockWorkItemCommandAdapter()
+
+        update_cmd = UpdateWorkItemCommand(
+            work_item_id="nonexistent-id",
+            title="New Title",
+            description=None,
+            priority=None,
+            labels=None
+        )
+
+        with pytest.raises(WorkItemNotFoundError):
+            await adapter.update_work_item(update_cmd)
+
+    @pytest.mark.asyncio
+    async def test_delete_work_item(self):
+        """Test delete flow for work items."""
+        adapter = MockWorkItemCommandAdapter()
+
+        # Create and delete work item
+        create_cmd = CreateWorkItemCommand(
+            project_id="proj-1",
+            title="To Delete",
+            description="",
+            priority=WorkItemPriority.LOW,
+            labels=[],
+            external_id="ext-123",
+            external_url="https://example.com"
+        )
+        work_item = await adapter.create_work_item(create_cmd)
+
+        result = await adapter.delete_work_item(work_item.id)
+
+        # Verify deletion succeeded
+        assert result.success is True
+        assert result.work_item_id == work_item.id
+
+    @pytest.mark.asyncio
+    async def test_delete_nonexistent_work_item_raises_error(self):
+        """Test that deleting nonexistent work item raises WorkItemNotFoundError."""
+        adapter = MockWorkItemCommandAdapter()
+
+        with pytest.raises(WorkItemNotFoundError):
+            await adapter.delete_work_item("nonexistent-id")
 
 
-class TestMockMetricsAndUtilityAdapters:
-    """Test mock metrics and utility adapters."""
+class TestMockExecutionCommandAdapterContract:
+    """Test MockExecutionCommandAdapter contract compliance."""
 
-    def test_metrics_query_adapter_instantiation(self):
-        """Test MockMetricsQueryAdapter can be instantiated."""
-        adapter = MockMetricsQueryAdapter()
-        assert adapter is not None
+    @pytest.mark.asyncio
+    async def test_terminate_execution(self):
+        """Test execution termination."""
+        adapter = MockExecutionCommandAdapter()
 
-    def test_logger_adapter_instantiation(self):
-        """Test MockLoggerAdapter can be instantiated."""
-        adapter = MockLoggerAdapter()
-        assert adapter is not None
+        # Create and add execution
+        execution = AgentExecution(
+            id="exec-1",
+            agent_id="agent-1",
+            work_item_id="item-1",
+            status=ExecutionStatus.RUNNING,
+            output="",
+            started_at=None,
+            completed_at=None,
+            result=None
+        )
+        adapter.add_execution(execution)
 
-    def test_orchestration_command_adapter_instantiation(self):
-        """Test MockOrchestrationCommandAdapter can be instantiated."""
-        adapter = MockOrchestrationCommandAdapter()
-        assert adapter is not None
+        # Terminate execution
+        command = TerminateExecutionCommand(
+            execution_id="exec-1",
+            reason="Test termination"
+        )
+        result = await adapter.terminate_execution(command)
 
-    def test_task_query_adapter_instantiation(self):
-        """Test MockTaskQueryAdapter can be instantiated."""
-        adapter = MockTaskQueryAdapter()
-        assert adapter is not None
+        # Verify termination succeeded
+        assert result.success is True
+        assert result.execution_id == "exec-1"
 
-    def test_workspace_query_adapter_instantiation(self):
-        """Test MockWorkspaceQueryAdapter can be instantiated."""
-        adapter = MockWorkspaceQueryAdapter()
-        assert adapter is not None
+    @pytest.mark.asyncio
+    async def test_terminate_nonexistent_execution_raises_error(self):
+        """Test that terminating nonexistent execution raises ExecutionNotFoundError."""
+        adapter = MockExecutionCommandAdapter()
+
+        command = TerminateExecutionCommand(
+            execution_id="nonexistent",
+            reason="Test"
+        )
+
+        with pytest.raises(ExecutionNotFoundError):
+            await adapter.terminate_execution(command)
+
+    @pytest.mark.asyncio
+    async def test_terminate_already_terminal_execution_raises_error(self):
+        """Test that terminating already-terminal execution raises InvalidStateError."""
+        adapter = MockExecutionCommandAdapter()
+
+        # Create completed execution
+        execution = AgentExecution(
+            id="exec-1",
+            agent_id="agent-1",
+            work_item_id="item-1",
+            status=ExecutionStatus.COMPLETED,
+            output="Done",
+            started_at=None,
+            completed_at=None,
+            result=None
+        )
+        adapter.add_execution(execution)
+
+        # Try to terminate completed execution
+        command = TerminateExecutionCommand(
+            execution_id="exec-1",
+            reason="Test"
+        )
+
+        with pytest.raises(InvalidStateError):
+            await adapter.terminate_execution(command)
+
+    @pytest.mark.asyncio
+    async def test_pause_and_resume_execution(self):
+        """Test pause and resume flows."""
+        adapter = MockExecutionCommandAdapter()
+
+        # Create running execution
+        execution = AgentExecution(
+            id="exec-1",
+            agent_id="agent-1",
+            work_item_id="item-1",
+            status=ExecutionStatus.RUNNING,
+            output="",
+            started_at=None,
+            completed_at=None,
+            result=None
+        )
+        adapter.add_execution(execution)
+
+        # Pause execution
+        pause_cmd = PauseExecutionCommand(
+            execution_id="exec-1",
+            reason="Debugging"
+        )
+        pause_result = await adapter.pause_execution(pause_cmd)
+        assert pause_result.success is True
+
+        # Resume execution
+        resume_cmd = ResumeExecutionCommand(execution_id="exec-1")
+        resume_result = await adapter.resume_execution(resume_cmd)
+        assert resume_result.success is True
 
 
-class TestAllMockAdaptersCreatable:
+class TestMockAdapterInstantiation:
     """Test that all 18 mock adapters can be instantiated."""
 
     def test_all_adapters_instantiation(self):
@@ -262,91 +326,13 @@ class TestAllMockAdaptersCreatable:
                 if i != j:
                     assert adapter1 is not adapter2
 
-
-class TestMockAdapterImmutability:
-    """Test mock adapter state management."""
-
     def test_multiple_instantiations_are_independent(self):
         """Test that multiple instantiations create independent instances."""
         adapter1 = MockConfigCommandAdapter()
         adapter2 = MockConfigCommandAdapter()
 
         assert adapter1 is not adapter2
-
-    def test_adapter_state_isolation(self):
-        """Test that adapters don't share state across instances."""
-        adapter1 = MockWorkItemCommandAdapter()
-        adapter2 = MockWorkItemCommandAdapter()
-
-        # Each should be independent
         assert id(adapter1) != id(adapter2)
-
-
-class TestMockAdapterErrorHandling:
-    """Test mock adapter error handling."""
-
-    def test_adapters_handle_missing_parameters_gracefully(self):
-        """Test that adapters handle missing data gracefully."""
-        # Create various adapters
-        adapters = [
-            MockAgentCommandAdapter(),
-            MockConfigCommandAdapter(),
-            MockExecutionCommandAdapter(),
-            MockWorkflowCommandAdapter(),
-            MockWorkItemCommandAdapter(),
-            MockOrchestrationCommandAdapter(),
-        ]
-
-        # Adapters should not raise on instantiation
-        for adapter in adapters:
-            assert adapter is not None
-
-
-class TestMockAdapterIntegration:
-    """Test mock adapters work together."""
-
-    def test_multiple_adapters_can_coexist(self):
-        """Test that multiple adapters can be created and used together."""
-        # Create instances of different adapter types
-        config_cmd = MockConfigCommandAdapter()
-        config_query = MockConfigQueryAdapter()
-        workflow_cmd = MockWorkflowCommandAdapter()
-        work_item_cmd = MockWorkItemCommandAdapter()
-
-        # All should be instantiated
-        assert config_cmd is not None
-        assert config_query is not None
-        assert workflow_cmd is not None
-        assert work_item_cmd is not None
-
-        # All should be distinct
-        assert config_cmd is not config_query
-        assert workflow_cmd is not work_item_cmd
-
-    def test_adapters_can_be_stored_in_collection(self):
-        """Test that adapters can be stored in collections."""
-        adapters_list = []
-
-        # Add each adapter type
-        adapters_list.append(MockAgentCommandAdapter())
-        adapters_list.append(MockConfigCommandAdapter())
-        adapters_list.append(MockExecutionCommandAdapter())
-        adapters_list.append(MockWorkflowCommandAdapter())
-        adapters_list.append(MockWorkItemCommandAdapter())
-
-        # Should have 5 adapters
-        assert len(adapters_list) == 5
-
-        # All should be distinct
-        seen_ids = set()
-        for adapter in adapters_list:
-            adapter_id = id(adapter)
-            assert adapter_id not in seen_ids
-            seen_ids.add(adapter_id)
-
-
-class TestMockAdapterNames:
-    """Test that adapters have correct class names."""
 
     def test_adapter_class_names(self):
         """Test that adapters have expected class names."""

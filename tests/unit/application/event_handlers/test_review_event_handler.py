@@ -36,6 +36,8 @@ class TestReviewEventHandlerInitialization:
             "total_iterations": 0,
         }
         assert handler._active_reviews == {}
+        # Verify service mock is not called during initialization
+        mock_service.assert_not_called()
 
     def test_handler_has_event_types(self):
         """Test handler is decorated with correct event types."""

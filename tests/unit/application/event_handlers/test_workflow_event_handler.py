@@ -1,6 +1,6 @@
 """Unit tests for WorkflowEventHandler."""
 
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -27,6 +27,8 @@ class TestWorkflowEventHandlerInitialization:
         handler = WorkflowEventHandler(mock_orchestrator)
 
         assert handler.orchestrator is mock_orchestrator
+        # Verify service mock is not accidentally called
+        mock_orchestrator.assert_not_called()
 
     def test_handler_has_event_types(self):
         """Test handler is decorated with correct event types."""
@@ -62,10 +64,12 @@ class TestWorkflowEventHandlerMethods:
             },
         )
 
-        await handler.handle(event)
-
-        # Should not raise any exception
-        # WorkflowEventHandler logs the event and defers to integration phase
+        with patch("codetoreum.application.event_handlers.workflow_event_handler.logger") as mock_logger:
+            await handler.handle(event)
+            # Verify logging indicates workflow started
+            mock_logger.info.assert_called()
+            call_args = str(mock_logger.info.call_args)
+            assert "Starting workflow" in call_args or "workflow" in call_args.lower()
 
     async def test_handle_execution_completed(self):
         """Test handling ExecutionCompleted event."""
@@ -83,10 +87,10 @@ class TestWorkflowEventHandlerMethods:
             },
         )
 
-        await handler.handle(event)
-
-        # Should not raise any exception
-        # WorkflowEventHandler logs the event and defers to integration phase
+        with patch("codetoreum.application.event_handlers.workflow_event_handler.logger") as mock_logger:
+            await handler.handle(event)
+            # Verify logging indicates execution completion
+            assert mock_logger.info.called or mock_logger.debug.called
 
     async def test_handle_execution_failed(self):
         """Test handling ExecutionFailed event."""
@@ -104,10 +108,10 @@ class TestWorkflowEventHandlerMethods:
             },
         )
 
-        await handler.handle(event)
-
-        # Should not raise any exception
-        # WorkflowEventHandler logs the error
+        with patch("codetoreum.application.event_handlers.workflow_event_handler.logger") as mock_logger:
+            await handler.handle(event)
+            # Verify logging indicates error handling
+            assert mock_logger.error.called or mock_logger.warning.called
 
     async def test_handle_review_cycle_approved(self):
         """Test handling ReviewCycleApproved event."""
@@ -163,10 +167,11 @@ class TestWorkflowEventHandlerMethods:
             },
         )
 
-        await handler.handle(event)
-
-        # Should not raise any exception
-        # WorkflowEventHandler detects max iterations reached
+        with patch("codetoreum.application.event_handlers.workflow_event_handler.logger") as mock_logger:
+            await handler.handle(event)
+            # Verify logging detects max iterations
+            # Handler should log when max iterations reached
+            assert mock_logger.error.called or mock_logger.warning.called or mock_logger.info.called
 
     async def test_handle_review_cycle_escalated(self):
         """Test handling ReviewCycleEscalated event."""
