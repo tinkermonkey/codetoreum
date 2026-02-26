@@ -410,6 +410,10 @@ class AuthenticationService(IAuthenticationPort):
             api_key_id=matched_key.id,
         )
 
+    async def get_api_key(self, key_id: UUID) -> APIKey:
+        """Get an API key by ID."""
+        return await self.api_key_repo.get(key_id)
+
     async def revoke_api_key(self, key_id: UUID) -> None:
         """Revoke an API key."""
         api_key = await self.api_key_repo.get(key_id)

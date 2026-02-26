@@ -238,8 +238,8 @@ class SimpleTokenAuthManager:
         try:
             payload = jwt.decode(self.server_token, self.secret_key, algorithms=["HS256"])
             return {
-                "issued_at": datetime.fromtimestamp(payload["iat"]).isoformat(),
-                "expires_at": datetime.fromtimestamp(payload["exp"]).isoformat(),
+                "issued_at": datetime.fromtimestamp(payload["iat"], tz=UTC).isoformat(),
+                "expires_at": datetime.fromtimestamp(payload["exp"], tz=UTC).isoformat(),
                 "subject": payload["sub"],
                 "is_valid": True,
             }

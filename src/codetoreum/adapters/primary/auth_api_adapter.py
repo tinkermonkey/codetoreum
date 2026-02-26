@@ -450,7 +450,7 @@ class AuthAPIAdapter:
         )
         async def revoke_api_key(
             key_id: UUID,
-            _auth: AuthContext = Depends(self.auth_deps.get_current_user),
+            auth: AuthContext = Depends(self.auth_deps.get_current_user),
         ) -> None:
             """
             Revoke an API key.
@@ -458,7 +458,13 @@ class AuthAPIAdapter:
             Users can only revoke their own API keys.
             Admins can revoke any API key.
             """
-            # TODO: Add authorization check - users can only revoke their own keys
+            # Authorization check: users can only revoke their own keys, admins can revoke any
+            api_key = await self.auth_service.get_api_key(key_id)
+            if not auth.is_admin() and api_key.user_id != auth.user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You can only revoke your own API keys",
+                )
             await self.auth_service.revoke_api_key(key_id)
 
         return router
