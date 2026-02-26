@@ -1,6 +1,7 @@
 """Tests for FakeContainerAdapter."""
 
 import time
+from datetime import UTC
 
 import pytest
 
@@ -352,7 +353,7 @@ class TestFakeContainerAdapter:
         from datetime import datetime, timezone
 
         exec1 = CommandExecution(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             command="pip install pytest",
             exit_code=0,
             stdout="Successfully installed pytest",
@@ -387,7 +388,7 @@ class TestFakeContainerAdapter:
         # Logs should contain command execution information or default message
         assert isinstance(logs, str)
         # Either we have execution history or a default message
-        assert ("pytest" in logs or "exit" in logs or "Fake logs" in logs)
+        assert "pytest" in logs or "exit" in logs or "Fake logs" in logs
 
     async def test_logs_with_tail_filter(self):
         """Test that logs respect tail parameter."""

@@ -176,12 +176,11 @@ class FakeContainerAdapter(IContainer):
         if "pytest" in command:
             # Estimate based on test count (roughly 10 ops per test)
             return 50
-        elif "pip" in command and "install" in command:
+        if "pip" in command and "install" in command:
             return 50
-        elif "git" in command:
+        if "git" in command:
             return 20
-        else:
-            return 5
+        return 5
 
     def _calculate_delay_seconds(self, command: str) -> float:
         """
@@ -566,9 +565,7 @@ class FakeContainerAdapter(IContainer):
 
         # Check if container exists in either _containers (created) or _command_history (run)
         with self._lock:
-            container_exists = (
-                container_id in self._containers or container_id in self._command_history
-            )
+            container_exists = container_id in self._containers or container_id in self._command_history
 
         if not container_exists:
             msg = "Container"
@@ -625,10 +622,9 @@ class FakeContainerAdapter(IContainer):
                     except (ValueError, IndexError):
                         # If parsing fails, include the line
                         filtered_lines.append(line)
-                else:
-                    # Non-timestamped lines are included if we have recent content
-                    if filtered_lines:
-                        filtered_lines.append(line)
+                # Non-timestamped lines are included if we have recent content
+                elif filtered_lines:
+                    filtered_lines.append(line)
             logs = "\n".join(filtered_lines)
 
         if stream:

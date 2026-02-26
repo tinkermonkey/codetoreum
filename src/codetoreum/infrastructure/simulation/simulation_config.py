@@ -24,6 +24,7 @@ class FidelityLevel(Enum):
           Speed: 1-5x faster
           Use case: Performance testing, chaos engineering
     """
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"

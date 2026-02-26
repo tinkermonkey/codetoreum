@@ -185,7 +185,10 @@ class TestMockLLMAdapter:
         )
         adapter = MockLLMAdapter(config=config)
         # Register a response pattern to ensure we get the long response
-        adapter.add_response_pattern(r"test.*test", "ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok")
+        adapter.add_response_pattern(
+            r"test.*test",
+            "ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok",
+        )
 
         # Short prompt (estimated ~50 tokens total)
         short_prompt = "test"
@@ -201,9 +204,7 @@ class TestMockLLMAdapter:
 
         # Latency should scale approximately with token count
         # Longer response should take noticeably more time
-        assert duration_long > duration_short * 2, (
-            f"Expected ~5x+ scaling, got {duration_long / duration_short:.1f}x"
-        )
+        assert duration_long > duration_short * 2, f"Expected ~5x+ scaling, got {duration_long / duration_short:.1f}x"
 
     async def test_proportional_timing_high_fidelity_scales_with_tokens(self):
         """Test HIGH fidelity latency scales with token count."""
