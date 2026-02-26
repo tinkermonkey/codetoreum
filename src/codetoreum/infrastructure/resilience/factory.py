@@ -187,7 +187,7 @@ class ResilienceFactory:
             service_config: Service-specific configuration
 
         Returns:
-            IRepository: Wrapped adapter with resilience
+            IRepository: Adapter (unwrapped placeholder)
         """
         # TODO: Implement ResilientRepositoryDecorator
         # Similar pattern to ResilientTicketSystemDecorator
@@ -207,7 +207,7 @@ class ResilienceFactory:
             service_config: Service-specific configuration
 
         Returns:
-            IContainer: Wrapped adapter with resilience
+            IContainer: Adapter (unwrapped placeholder)
         """
         # TODO: Implement ResilientContainerDecorator
         # Similar pattern to ResilientTicketSystemDecorator
