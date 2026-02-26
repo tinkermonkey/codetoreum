@@ -437,13 +437,13 @@ class DockerContainerAdapter(IContainer):
                 # Check image exists
                 try:
                     client.images.get(image)
-                except docker.errors.ImageNotFound:
+                except docker.errors.ImageNotFound as e:
                     msg = f"Image not found: {image}"
-                    raise ImageNotFoundError(msg)
+                    raise ImageNotFoundError(msg) from e
                 except docker.errors.APIError as e:
                     # Re-raise other Docker errors as ContainerError
                     msg = f"Failed to check image: {e!s}"
-                    raise ContainerError(msg)
+                    raise ContainerError(msg) from e
 
                 container = client.containers.create(**container_config)
                 return container.id
