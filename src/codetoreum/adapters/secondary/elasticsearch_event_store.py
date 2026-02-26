@@ -6,6 +6,13 @@ from datetime import datetime
 from typing import Any
 
 from elasticsearch import AsyncElasticsearch
+from elasticsearch.exceptions import (
+    ApiError,
+    AuthenticationException,
+    ConnectionError,
+    ConnectionTimeout,
+    NotFoundError,
+)
 
 from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.event_serialization import EventSerializer
@@ -887,9 +894,19 @@ class ElasticsearchEventStore(IEventStore):
             if exists:
                 logger.debug(f"Index template '{template_name}' already exists")
                 return
-        except Exception:
-            # Template doesn't exist, create it
+        except NotFoundError:
+            # Template doesn't exist, will create it below
             pass
+        except (ConnectionError, ConnectionTimeout, AuthenticationException) as e:
+            # Infrastructure failure - propagate as EventStoreError
+            msg = f"Failed to check if index template exists: {e}"
+            logger.error(msg, exc_info=True)
+            raise EventStoreError(msg) from e
+        except ApiError as e:
+            # Other API errors (permissions, service unavailable, etc.)
+            msg = f"Failed to check if index template exists (API error {e.status_code}): {e}"
+            logger.error(msg, exc_info=True)
+            raise EventStoreError(msg) from e
 
         # Define index template
         template = {
@@ -926,7 +943,18 @@ class ElasticsearchEventStore(IEventStore):
         }
 
         # Create template
-        await self.client.indices.put_index_template(name=template_name, body=template)
+        try:
+            await self.client.indices.put_index_template(name=template_name, body=template)
+        except (ConnectionError, ConnectionTimeout, AuthenticationException) as e:
+            # Infrastructure failure - propagate as EventStoreError
+            msg = f"Failed to create index template: {e}"
+            logger.error(msg, exc_info=True)
+            raise EventStoreError(msg) from e
+        except ApiError as e:
+            # Other API errors (permissions, service unavailable, etc.)
+            msg = f"Failed to create index template (API error {e.status_code}): {e}"
+            logger.error(msg, exc_info=True)
+            raise EventStoreError(msg) from e
 
         logger.info(f"Created index template '{template_name}'")
 
