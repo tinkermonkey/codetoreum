@@ -167,13 +167,12 @@ class ExecutionEventHandler(EventHandler):
 
         logger.error(
             f"Execution failed: {event.aggregate_id}, error: {event.payload.get('error_message')}",
-            exc_info=True,
             extra={"error_id": "ERR_EXECUTION_FAILED"},
         )
 
         exit_code = event.payload.get("exit_code")
         if exit_code:
-            logger.error(f"Exit code: {exit_code}", exc_info=True, extra={"error_id": ErrorRegistry.ERR_EXECUTION_ERROR})
+            logger.error(f"Exit code: {exit_code}", extra={"error_id": ErrorRegistry.ERR_EXECUTION_ERROR})
 
         logger.warning(
             f"Failure rate: {self._metrics['failed_executions']}/{self._metrics['total_executions']} "
