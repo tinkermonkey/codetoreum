@@ -26,10 +26,10 @@ repos:
         entry: ruff check --fix
         types: [python]
 
-      - id: ruff-format
-        name: ruff (formatter)
+      - id: black
+        name: black (code formatter)
         language: system
-        entry: ruff format
+        entry: black
         types: [python]
 
       - id: mypy
