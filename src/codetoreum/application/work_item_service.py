@@ -5,6 +5,7 @@ It handles command and query operations by coordinating with the event store
 and reconstructing work items from their event streams.
 """
 
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
@@ -31,6 +32,8 @@ from codetoreum.ports.input.work_item_query import (
     WorkItemSearchParams,
 )
 from codetoreum.ports.output.event_store import IEventStore
+
+logger = logging.getLogger(__name__)
 
 
 class WorkItemNotFoundError(Exception):
@@ -266,9 +269,13 @@ class WorkItemService(IWorkItemCommandPort, IWorkItemQueryPort):
                     # Apply filters
                     if self._matches_filters(work_item, filters):
                         work_items.append(work_item)
-            except Exception:
-                # Skip invalid streams
-                continue
+            except Exception as exc:
+                # Log error but don't silently skip - make corruption visible
+                logger.error(
+                    "Failed to reconstruct work item from event stream",
+                    exc_info=True,
+                    extra={"stream_id": stream_id},
+                )
 
         # Sort work items
         work_items = self._sort_work_items(work_items, pagination.sort_by, pagination.sort_order)
@@ -347,10 +354,11 @@ class WorkItemService(IWorkItemCommandPort, IWorkItemQueryPort):
         This is a simplified implementation. In production, maintain
         a catalog or use stream metadata for efficient lookups.
         """
-        # For now, we'll use a placeholder that needs implementation
-        # In production, the event store should support stream querying
-        # or maintain a separate catalog of work item IDs
-        return []
+        # Get all streams from event store, filtered to work item streams
+        all_streams = await self.event_store.get_all_stream_ids()
+        # Filter to only work-item-* streams
+        work_item_streams = [s for s in all_streams if s.startswith("work-item-")]
+        return work_item_streams
 
     def _matches_filters(self, work_item: WorkItem, filters: WorkItemFilters) -> bool:
         """Check if work item matches the given filters."""
