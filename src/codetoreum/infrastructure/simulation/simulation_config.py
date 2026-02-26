@@ -49,6 +49,15 @@ class AgentBehaviorConfig:
         }
     )
 
+    def __post_init__(self) -> None:
+        """Validate configuration constraints."""
+        if not self.agent_id:
+            raise ValueError("agent_id cannot be empty")
+        if self.execution_delay < 0:
+            raise ValueError(f"execution_delay must be non-negative, got {self.execution_delay}")
+        if not (0.0 <= self.success_rate <= 1.0):
+            raise ValueError(f"success_rate must be between 0.0 and 1.0, got {self.success_rate}")
+
 
 @dataclass
 class ContainerBehaviorConfig:
@@ -63,6 +72,11 @@ class ContainerBehaviorConfig:
     # Command-specific outputs
     command_outputs: dict[str, dict[str, str]] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        """Validate configuration constraints."""
+        if self.execution_delay < 0:
+            raise ValueError(f"execution_delay must be non-negative, got {self.execution_delay}")
+
 
 @dataclass
 class NotificationConfig:
@@ -74,6 +88,13 @@ class NotificationConfig:
     simulate_failures: bool = False
     # Failure rate (0.0 to 1.0)
     failure_rate: float = 0.0
+
+    def __post_init__(self) -> None:
+        """Validate configuration constraints."""
+        if self.send_delay < 0:
+            raise ValueError(f"send_delay must be non-negative, got {self.send_delay}")
+        if not (0.0 <= self.failure_rate <= 1.0):
+            raise ValueError(f"failure_rate must be between 0.0 and 1.0, got {self.failure_rate}")
 
 
 @dataclass
@@ -103,6 +124,11 @@ class TimeConfig:
     start_time: datetime | None = None
     # Auto-advance clock
     auto_advance: bool = False
+
+    def __post_init__(self) -> None:
+        """Validate configuration constraints."""
+        if self.speed_multiplier <= 0:
+            raise ValueError(f"speed_multiplier must be positive, got {self.speed_multiplier}")
 
 
 @dataclass
@@ -143,19 +169,43 @@ class SimulationConfig:
     # Additional metadata
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        """Validate configuration constraints."""
+        if not self.scenario_name:
+            raise ValueError("scenario_name cannot be empty")
+        if self.ms_per_token < 0:
+            raise ValueError(f"ms_per_token must be non-negative, got {self.ms_per_token}")
+        if self.ms_per_file_operation < 0:
+            raise ValueError(f"ms_per_file_operation must be non-negative, got {self.ms_per_file_operation}")
+        if self.ms_per_event < 0:
+            raise ValueError(f"ms_per_event must be non-negative, got {self.ms_per_event}")
+
     def get_agent_config(self, agent_id: str) -> AgentBehaviorConfig:
         """
         Get configuration for a specific agent.
+
+        This method does not mutate state. If no configuration exists for the agent,
+        it returns a default configuration without modifying self.agents.
 
         Args:
             agent_id: Agent identifier
 
         Returns:
-            Agent behavior configuration (creates default if not found)
+            Agent behavior configuration (default if not found)
         """
-        if agent_id not in self.agents:
-            self.agents[agent_id] = AgentBehaviorConfig(agent_id=agent_id)
-        return self.agents[agent_id]
+        return self.agents.get(agent_id) or AgentBehaviorConfig(agent_id=agent_id)
+
+    def set_agent_config(self, agent_id: str, config: AgentBehaviorConfig) -> None:
+        """
+        Set configuration for a specific agent.
+
+        Args:
+            agent_id: Agent identifier
+            config: Agent behavior configuration
+        """
+        if config.agent_id != agent_id:
+            raise ValueError(f"config.agent_id ({config.agent_id}) does not match agent_id ({agent_id})")
+        self.agents[agent_id] = config
 
     def add_agent_response_pattern(
         self,
@@ -171,7 +221,10 @@ class SimulationConfig:
             pattern: Regex pattern to match
             response: Response to return (can use metadata variables via {key})
         """
-        config = self.get_agent_config(agent_id)
+        # Get or create agent config
+        if agent_id not in self.agents:
+            self.agents[agent_id] = AgentBehaviorConfig(agent_id=agent_id)
+        config = self.agents[agent_id]
         # Support template variables from metadata
         formatted_response = response.format(**self.metadata) if self.metadata else response
         config.response_patterns[pattern] = formatted_response
