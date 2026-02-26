@@ -92,13 +92,27 @@ class HealthCheckResponse(BaseResponse):
     model_config = ConfigDict()
 
 
+class DependencyStatus(BaseModel):
+    """Status of a single dependency"""
+
+    name: str = Field(..., description="Dependency name")
+    status: str = Field(..., description="Dependency status (healthy, degraded, unhealthy)")
+    message: str | None = Field(None, description="Optional status message")
+    response_time_ms: float | None = Field(None, description="Response time in milliseconds")
+    details: dict[str, Any] = Field(default_factory=dict, description="Additional details")
+
+    model_config = ConfigDict()
+
+
 class ReadinessCheckResponse(BaseResponse):
     """Readiness check response"""
 
     status: str = Field(..., description="Readiness status (ready, not-ready)")
     service: str = Field("codetoreum-api", description="Service name")
-    dependencies: dict[str, str] = Field(default_factory=dict, description="Dependency statuses")
-    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Check timestamp")
+    dependencies: list[DependencyStatus] = Field(default_factory=list, description="Dependency statuses")
+    checked_at: datetime = Field(default_factory=datetime.utcnow, description="Check timestamp")
+    uptime_seconds: float | None = Field(None, description="System uptime in seconds")
+    version: str | None = Field(None, description="API version")
 
     model_config = ConfigDict()
 

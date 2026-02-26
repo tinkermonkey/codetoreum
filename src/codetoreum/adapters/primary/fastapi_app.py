@@ -36,6 +36,7 @@ from slowapi.util import get_remote_address
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from codetoreum.adapters.primary.api_models import (
+    DependencyStatus,
     HealthCheckResponse,
     ReadinessCheckResponse,
     TokenInfoResponse,
@@ -695,21 +696,65 @@ def create_app(
         """
         Readiness check endpoint.
 
-        Verifies that the service is ready to handle requests.
-        This endpoint does NOT require authentication.
+        Performs comprehensive health checks on all system dependencies to
+        verify the service is ready to handle requests. Used by Kubernetes
+        readiness probes and load balancers.
 
         Returns:
-            Readiness status
+            Readiness status with dependency health details
         """
-        # TODO: Add checks for dependencies (database, event store, etc.)
-        return ReadinessCheckResponse(
-            status="ready",
-            service="codetoreum-api",
-            dependencies={
-                "event_bus": "connected",
-                "config_service": "connected",
-            },
-        )
+        try:
+            # Get system health from metrics service
+            health_info = await metrics_query_port.get_system_health()
+
+            # Convert component health to dependency status format
+            dependencies: list[DependencyStatus] = []
+            for component in health_info.components:
+                dep_status = DependencyStatus(
+                    name=component.component_name,
+                    status=component.status.value,
+                    message=component.message,
+                    response_time_ms=component.response_time_ms,
+                    details=component.details,
+                )
+                dependencies.append(dep_status)
+
+            # Determine readiness based on component health
+            # Service is ready if all components are healthy or degraded
+            # Service is NOT ready if any component is unhealthy
+            is_ready = health_info.status.value != "unhealthy"
+            status = "ready" if is_ready else "not-ready"
+
+            return ReadinessCheckResponse(
+                status=status,
+                service="codetoreum-api",
+                dependencies=dependencies,
+                checked_at=health_info.checked_at,
+                uptime_seconds=health_info.uptime_seconds,
+                version=health_info.version,
+            )
+
+        except Exception as exc:
+            # If health check fails for any reason, mark service as not ready
+            logger.error(
+                "Readiness check failed",
+                exc_info=True,
+                extra={"error_id": "READINESS_CHECK_FAILED"},
+            )
+            return ReadinessCheckResponse(
+                status="not-ready",
+                service="codetoreum-api",
+                dependencies=[
+                    DependencyStatus(
+                        name="health-check",
+                        status="unhealthy",
+                        message=f"Health check failed: {str(exc)}",
+                        response_time_ms=None,
+                    )
+                ],
+                checked_at=datetime.now(UTC),
+                version="2.0.0",
+            )
 
     @app.get(
         "/api/v2/auth/token-info",
