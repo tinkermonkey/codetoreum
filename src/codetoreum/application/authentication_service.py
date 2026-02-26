@@ -410,9 +410,7 @@ class AuthenticationService(IAuthenticationPort):
             api_key_id=matched_key.id,
         )
 
-    async def revoke_api_key(
-        self, key_id: UUID, requesting_user_id: UUID, is_admin: bool
-    ) -> None:
+    async def revoke_api_key(self, key_id: UUID, requesting_user_id: UUID, is_admin: bool) -> None:
         """Revoke an API key.
 
         Users can only revoke their own API keys. Admins can revoke any API key.
