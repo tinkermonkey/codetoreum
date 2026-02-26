@@ -265,9 +265,7 @@ class TestScenarioD_HumanIntervention:
         ), "Engineer should be triggered in Development"
 
         # Auto-progress through Code Review and Testing
-        await event_handler.handle_agent_completion(
-            work_item_id="work-item-100", board_id="board-1", success=True
-        )
+        await event_handler.handle_agent_completion(work_item_id="work-item-100", board_id="board-1", success=True)
 
         # Move to Code Review
         await event_handler.handle_column_change(
@@ -282,9 +280,7 @@ class TestScenarioD_HumanIntervention:
         )
 
         # Auto-progress to Testing
-        await event_handler.handle_agent_completion(
-            work_item_id="work-item-100", board_id="board-1", success=True
-        )
+        await event_handler.handle_agent_completion(work_item_id="work-item-100", board_id="board-1", success=True)
 
         await event_handler.handle_column_change(
             create_column_changed_event(
@@ -302,14 +298,10 @@ class TestScenarioD_HumanIntervention:
 
         # Simulate repair cycle in progress (tests failing)
         agent_executor.start_repair_cycle("work-item-100", "test_runner")
-        assert agent_executor.is_repair_cycle_active("work-item-100"), (
-            "Repair cycle should be active"
-        )
+        assert agent_executor.is_repair_cycle_active("work-item-100"), "Repair cycle should be active"
 
         # Step 1: Human manually moves back to Development (override)
-        await board_service.move_item_to_column(
-            "work-item-100", "Development", MovedByType.HUMAN
-        )
+        await board_service.move_item_to_column("work-item-100", "Development", MovedByType.HUMAN)
 
         # Verify item moved to Development
         board_service.assert_item_in_column("work-item-100", "Development")
@@ -328,18 +320,15 @@ class TestScenarioD_HumanIntervention:
 
         # Step 3: Verify repair cycle cleaned up
         agent_executor.stop_repair_cycle("work-item-100")
-        assert not agent_executor.is_repair_cycle_active("work-item-100"), (
-            "Repair cycle should be cleaned up after human backward movement"
-        )
+        assert not agent_executor.is_repair_cycle_active(
+            "work-item-100"
+        ), "Repair cycle should be cleaned up after human backward movement"
 
         # Step 4: Verify engineer agent re-triggered
         # Count how many times engineer was triggered (initial + re-trigger)
         engineer_count = 0
         for execution in agent_executor._executions:
-            if (
-                execution["agent_id"] == "senior_software_engineer"
-                and execution["work_item_id"] == "work-item-100"
-            ):
+            if execution["agent_id"] == "senior_software_engineer" and execution["work_item_id"] == "work-item-100":
                 engineer_count += 1
 
         assert engineer_count >= 2, (
@@ -381,9 +370,7 @@ class TestScenarioD_HumanIntervention:
         board_service.assert_item_in_column("work-item-100", "Code Review")
 
         # Step 1: Human moves to Development (backward/override)
-        await board_service.move_item_to_column(
-            "work-item-100", "Development", MovedByType.HUMAN
-        )
+        await board_service.move_item_to_column("work-item-100", "Development", MovedByType.HUMAN)
 
         # Verify item in Development
         board_service.assert_item_in_column("work-item-100", "Development")
@@ -413,13 +400,9 @@ class TestScenarioD_HumanIntervention:
 
         # Verify the human movement from Code Review to Development
         backward_movements = [
-            h
-            for h in human_movements
-            if h.from_column == "Code Review" and h.to_column == "Development"
+            h for h in human_movements if h.from_column == "Code Review" and h.to_column == "Development"
         ]
-        assert len(backward_movements) > 0, (
-            "Human movement from Code Review to Development should be recorded"
-        )
+        assert len(backward_movements) > 0, "Human movement from Code Review to Development should be recorded"
 
     @pytest.mark.asyncio
     async def test_human_skip_forward(self, setup):
@@ -455,16 +438,12 @@ class TestScenarioD_HumanIntervention:
         )
 
         # Clear execution count to establish baseline
-        initial_engineer_count = agent_executor.get_execution_count(
-            "senior_software_engineer"
-        )
+        initial_engineer_count = agent_executor.get_execution_count("senior_software_engineer")
         initial_reviewer_count = agent_executor.get_execution_count("code_reviewer")
         initial_tester_count = agent_executor.get_execution_count("test_runner")
 
         # Step 1: Human moves directly to Staged (skips Code Review and Testing)
-        await board_service.move_item_to_column(
-            "work-item-100", "Staged", MovedByType.HUMAN
-        )
+        await board_service.move_item_to_column("work-item-100", "Staged", MovedByType.HUMAN)
 
         # Verify item in Staged
         board_service.assert_item_in_column("work-item-100", "Staged")
@@ -483,8 +462,7 @@ class TestScenarioD_HumanIntervention:
 
         # Step 2: Verify Code Review and Testing agents were NOT triggered
         assert (
-            agent_executor.get_execution_count("code_reviewer")
-            == initial_reviewer_count
+            agent_executor.get_execution_count("code_reviewer") == initial_reviewer_count
         ), "Code reviewer should NOT be triggered when human skips Code Review column"
 
         assert (
@@ -498,16 +476,10 @@ class TestScenarioD_HumanIntervention:
         skip_movements = [
             h
             for h in history
-            if (
-                h.from_column == "Development"
-                and h.to_column == "Staged"
-                and h.moved_by == MovedByType.HUMAN
-            )
+            if (h.from_column == "Development" and h.to_column == "Staged" and h.moved_by == MovedByType.HUMAN)
         ]
 
-        assert len(skip_movements) > 0, (
-            "Movement history should show human skip from Development to Staged"
-        )
+        assert len(skip_movements) > 0, "Movement history should show human skip from Development to Staged"
 
         # Verify the skip is direct (no intermediate entries)
         staged_entries = [h for h in history if h.to_column == "Staged"]
@@ -518,9 +490,7 @@ class TestScenarioD_HumanIntervention:
         assert (
             first_to_staged.from_column == "Development"
         ), "Human skip should jump directly from Development to Staged"
-        assert first_to_staged.moved_by == MovedByType.HUMAN, (
-            "Skip should be marked as human movement"
-        )
+        assert first_to_staged.moved_by == MovedByType.HUMAN, "Skip should be marked as human movement"
 
 
 if __name__ == "__main__":
