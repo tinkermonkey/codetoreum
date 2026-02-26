@@ -1051,7 +1051,7 @@ class SimulationDataSeeder:
                 try:
                     item = await self._ticket_adapter.get_work_item(item_id)
                     all_items[item.title] = item.id
-                except Exception as e:
+                except Exception:
                     logger.error(
                         f"Failed to retrieve work item {item_id} during board placement seeding",
                         exc_info=True,
