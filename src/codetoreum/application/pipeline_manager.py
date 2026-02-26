@@ -485,10 +485,17 @@ class PipelineManager:
 
             # Build execution context
             exec_context = ExecutionContextVO(
-                project_id=context.get("project_id", ""),
                 work_item_id=work_item_id,
-                workflow_run_id=workflow_id or stage.workflow_id,
+                workflow_id=workflow_id or stage.workflow_id,
+                stage_name=stage.name,
+                agent_id=agent_id,
+                model=stage.agent_config.get("model", "claude-opus"),
                 timeout_seconds=stage.agent_config.get("timeout_seconds", 3600),
+                workspace_type="container",
+                branch_name=None,
+                discussion_id=None,
+                project_id=context.get("project_id", ""),
+                repository_url=context.get("repository_url", ""),
             )
 
             # Start execution

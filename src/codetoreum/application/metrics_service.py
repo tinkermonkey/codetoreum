@@ -16,6 +16,7 @@ from codetoreum.ports.input.metrics_query import (
     IMetricsQueryPort,
     IntegrationStatus,
     MetricTimeSeries,
+    MetricTimeSeriesPoint,
     PerformanceMetrics,
     ResilienceMetrics,
     SimulationModeInfo,
@@ -419,9 +420,15 @@ class MetricsService(IMetricsQueryPort):
         filtered_events = [e for e in events if e.occurred_at <= end_time]
 
         # Calculate time series data
-        data_points = []
+        data_points: list[MetricTimeSeriesPoint] = []
         if calculation_type == "count":
-            data_points = [{"timestamp": start_time.isoformat(), "value": len(filtered_events)}]
+            data_points = [
+                MetricTimeSeriesPoint(
+                    timestamp=start_time,
+                    value=float(len(filtered_events)),
+                    labels=labels or {},
+                )
+            ]
         elif calculation_type == "rate":
             # For rate calculations, query the denominator separately
             if metric_name == "execution_success_rate":
@@ -435,7 +442,13 @@ class MetricsService(IMetricsQueryPort):
                 total_started = len(started_events)
                 total_completed = len(filtered_events)
                 rate = (total_completed / total_started * 100) if total_started > 0 else 0.0
-                data_points = [{"timestamp": start_time.isoformat(), "value": rate}]
+                data_points = [
+                    MetricTimeSeriesPoint(
+                        timestamp=start_time,
+                        value=rate,
+                        labels=labels or {},
+                    )
+                ]
             elif metric_name == "error_rate":
                 # Error rate = failed / started
                 started_events = await self.event_store.get_events_by_type(
@@ -447,22 +460,33 @@ class MetricsService(IMetricsQueryPort):
                 total_started = len(started_events)
                 total_failed = len(filtered_events)
                 rate = (total_failed / total_started * 100) if total_started > 0 else 0.0
-                data_points = [{"timestamp": start_time.isoformat(), "value": rate}]
+                data_points = [
+                    MetricTimeSeriesPoint(
+                        timestamp=start_time,
+                        value=rate,
+                        labels=labels or {},
+                    )
+                ]
         elif calculation_type == "duration":
             durations = [
                 e.payload.get("duration_seconds", 0) for e in filtered_events if "duration_seconds" in e.payload
             ]
             if durations:
                 avg_duration = sum(durations) / len(durations)
-                data_points = [{"timestamp": start_time.isoformat(), "value": avg_duration}]
+                data_points = [
+                    MetricTimeSeriesPoint(
+                        timestamp=start_time,
+                        value=avg_duration,
+                        labels=labels or {},
+                    )
+                ]
 
         return MetricTimeSeries(
             metric_name=metric_name,
-            labels=labels or {},
-            start_time=start_time,
-            end_time=end_time,
             data_points=data_points,
             aggregation=aggregation or "raw",
+            start_time=start_time,
+            end_time=end_time,
         )
 
     async def list_metric_names(self, prefix: str | None = None) -> list[str]:
