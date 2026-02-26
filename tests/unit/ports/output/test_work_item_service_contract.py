@@ -27,7 +27,6 @@ class TestWorkItemServiceContract(ABC):
     @abstractmethod
     async def create_service(self) -> IWorkItemService:
         """Create and return an IWorkItemService instance for testing."""
-        pass
 
     # Query Operation Tests
 
@@ -38,9 +37,7 @@ class TestWorkItemServiceContract(ABC):
 
         # Create a work item first
         item = await service.create_work_item(
-            project_id=ProjectId("proj-123"),
-            title="Test Item",
-            description="Test Description"
+            project_id=ProjectId("proj-123"), title="Test Item", description="Test Description"
         )
 
         # Retrieve it
@@ -79,13 +76,11 @@ class TestWorkItemServiceContract(ABC):
         """Creating a work item should emit workitem.created event."""
         service = await self.create_service()
 
-        events: List = []
+        events: list = []
         service.on("workitem.created", lambda e: events.append(e))
 
         item = await service.create_work_item(
-            project_id=ProjectId("proj-123"),
-            title="New Item",
-            description="Description"
+            project_id=ProjectId("proj-123"), title="New Item", description="Description"
         )
 
         assert isinstance(item, WorkItem)
@@ -99,20 +94,15 @@ class TestWorkItemServiceContract(ABC):
 
         # Create item
         item = await service.create_work_item(
-            project_id=ProjectId("proj-123"),
-            title="Original Title",
-            description="Original Description"
+            project_id=ProjectId("proj-123"), title="Original Title", description="Original Description"
         )
 
         # Setup event capture
-        events: List = []
+        events: list = []
         service.on("workitem.updated", lambda e: events.append(e))
 
         # Update it
-        updated = await service.update_work_item(
-            WorkItemId(item.id),
-            {"title": "Updated Title"}
-        )
+        updated = await service.update_work_item(WorkItemId(item.id), {"title": "Updated Title"})
 
         assert isinstance(updated, WorkItem)
         assert updated.title == "Updated Title"
@@ -143,9 +133,7 @@ class TestWorkItemServiceContract(ABC):
         service = await self.create_service()
 
         item = await service.create_work_item(
-            project_id=ProjectId("proj-123"),
-            title="Test Item",
-            description="Test Description"
+            project_id=ProjectId("proj-123"), title="Test Item", description="Test Description"
         )
 
         # Check required fields
@@ -194,18 +182,10 @@ class TestWorkItemServiceContract(ABC):
         """Update should return the updated work item state."""
         service = await self.create_service()
 
-        item = await service.create_work_item(
-            project_id=ProjectId("proj-123"),
-            title="Original",
-            description="Desc"
-        )
+        item = await service.create_work_item(project_id=ProjectId("proj-123"), title="Original", description="Desc")
 
         updated = await service.update_work_item(
-            WorkItemId(item.id),
-            {
-                "title": "Updated Title",
-                "status": "in_progress"
-            }
+            WorkItemId(item.id), {"title": "Updated Title", "status": "in_progress"}
         )
 
         assert updated.title == "Updated Title"
@@ -223,7 +203,7 @@ class TestWorkItemServiceContract(ABC):
             await service.create_work_item(
                 project_id=ProjectId("proj-123"),
                 title="",  # Empty string - should fail
-                description="Test Description"
+                description="Test Description",
             )
 
     @pytest.mark.asyncio
@@ -235,7 +215,7 @@ class TestWorkItemServiceContract(ABC):
             await service.create_work_item(
                 project_id=ProjectId(""),  # Empty - should fail
                 title="Test Title",
-                description="Test Description"
+                description="Test Description",
             )
 
     @pytest.mark.asyncio
@@ -244,11 +224,7 @@ class TestWorkItemServiceContract(ABC):
         service = await self.create_service()
 
         # Create a valid item first
-        item = await service.create_work_item(
-            project_id=ProjectId("proj-123"),
-            title="Test",
-            description="Test"
-        )
+        item = await service.create_work_item(project_id=ProjectId("proj-123"), title="Test", description="Test")
 
         # Attempt to get with malicious ID
         with pytest.raises((ValueError, KeyError)):
@@ -262,9 +238,7 @@ class TestWorkItemServiceContract(ABC):
         # Should either reject or sanitize
         try:
             item = await service.create_work_item(
-                project_id=ProjectId("proj-123"),
-                title="<script>alert('XSS')</script>",
-                description="Test"
+                project_id=ProjectId("proj-123"), title="<script>alert('XSS')</script>", description="Test"
             )
             # If it passes, raw script tags must not appear in output
             assert "<script>" not in item.title
@@ -281,29 +255,18 @@ class TestWorkItemServiceContract(ABC):
         huge_description = "x" * (10 * 1024 * 1024)
 
         with pytest.raises((ValueError, MemoryError, AttributeError)):
-            await service.create_work_item(
-                project_id=ProjectId("proj-123"),
-                title="Test",
-                description=huge_description
-            )
+            await service.create_work_item(project_id=ProjectId("proj-123"), title="Test", description=huge_description)
 
     @pytest.mark.asyncio
     async def test_invalid_enum_value_rejected(self):
         """Test that invalid enum values are rejected."""
         service = await self.create_service()
 
-        item = await service.create_work_item(
-            project_id=ProjectId("proj-123"),
-            title="Test",
-            description="Test"
-        )
+        item = await service.create_work_item(project_id=ProjectId("proj-123"), title="Test", description="Test")
 
         # Attempt to set invalid status
         with pytest.raises((ValueError, KeyError)):
-            await service.update_work_item(
-                WorkItemId(item.id),
-                {"status": "INVALID_STATUS_12345"}
-            )
+            await service.update_work_item(WorkItemId(item.id), {"status": "INVALID_STATUS_12345"})
 
     @pytest.mark.asyncio
     async def test_nonexistent_item_not_found(self):
@@ -321,9 +284,7 @@ class TestWorkItemServiceContract(ABC):
         service = await self.create_service()
 
         item = await service.create_work_item(
-            project_id=ProjectId("proj-123"),
-            title="Test Item",
-            description="Test Description"
+            project_id=ProjectId("proj-123"), title="Test Item", description="Test Description"
         )
 
         # Update to minimum valid priority (1 = LOW)
@@ -336,9 +297,7 @@ class TestWorkItemServiceContract(ABC):
         service = await self.create_service()
 
         item = await service.create_work_item(
-            project_id=ProjectId("proj-123"),
-            title="Test Item",
-            description="Test Description"
+            project_id=ProjectId("proj-123"), title="Test Item", description="Test Description"
         )
 
         # Update to maximum valid priority (4 = CRITICAL)
@@ -351,9 +310,7 @@ class TestWorkItemServiceContract(ABC):
         service = await self.create_service()
 
         item = await service.create_work_item(
-            project_id=ProjectId("proj-123"),
-            title="Test Item",
-            description="Test Description"
+            project_id=ProjectId("proj-123"), title="Test Item", description="Test Description"
         )
 
         # Zero priority should fail
@@ -366,9 +323,7 @@ class TestWorkItemServiceContract(ABC):
         service = await self.create_service()
 
         item = await service.create_work_item(
-            project_id=ProjectId("proj-123"),
-            title="Test Item",
-            description="Test Description"
+            project_id=ProjectId("proj-123"), title="Test Item", description="Test Description"
         )
 
         # Negative priority should fail
@@ -381,9 +336,7 @@ class TestWorkItemServiceContract(ABC):
         service = await self.create_service()
 
         item = await service.create_work_item(
-            project_id=ProjectId("proj-123"),
-            title="Test Item",
-            description="Test Description"
+            project_id=ProjectId("proj-123"), title="Test Item", description="Test Description"
         )
 
         # Priority > 4 should fail
@@ -398,9 +351,7 @@ class TestWorkItemServiceContract(ABC):
         # Create title exactly at 255 character boundary
         max_title = "x" * 255
         item = await service.create_work_item(
-            project_id=ProjectId("proj-123"),
-            title=max_title,
-            description="Test Description"
+            project_id=ProjectId("proj-123"), title=max_title, description="Test Description"
         )
 
         assert len(item.title) == 255
@@ -416,9 +367,7 @@ class TestWorkItemServiceContract(ABC):
 
         with pytest.raises((ValueError, AttributeError)):
             await service.create_work_item(
-                project_id=ProjectId("proj-123"),
-                title=oversized_title,
-                description="Test Description"
+                project_id=ProjectId("proj-123"), title=oversized_title, description="Test Description"
             )
 
     @pytest.mark.asyncio
@@ -429,9 +378,7 @@ class TestWorkItemServiceContract(ABC):
         # Create description at a reasonable boundary (e.g., 1000 chars)
         long_description = "y" * 1000
         item = await service.create_work_item(
-            project_id=ProjectId("proj-123"),
-            title="Test Item",
-            description=long_description
+            project_id=ProjectId("proj-123"), title="Test Item", description=long_description
         )
 
         assert len(item.description) == 1000
@@ -442,9 +389,7 @@ class TestWorkItemServiceContract(ABC):
         service = await self.create_service()
 
         item = await service.create_work_item(
-            project_id=ProjectId("proj-123"),
-            title="Fix bug 🐛 in login",
-            description="Test Description"
+            project_id=ProjectId("proj-123"), title="Fix bug 🐛 in login", description="Test Description"
         )
 
         assert "🐛" in item.title
@@ -456,9 +401,7 @@ class TestWorkItemServiceContract(ABC):
         service = await self.create_service()
 
         item = await service.create_work_item(
-            project_id=ProjectId("proj-123"),
-            title="Test Item",
-            description="Deploy to production 🚀 ASAP ⚡"
+            project_id=ProjectId("proj-123"), title="Test Item", description="Deploy to production 🚀 ASAP ⚡"
         )
 
         assert "🚀" in item.description
@@ -472,7 +415,7 @@ class TestWorkItemServiceContract(ABC):
         item = await service.create_work_item(
             project_id=ProjectId("proj-123"),
             title="مرحبا بك Test",  # Arabic + English
-            description="Test Description"
+            description="Test Description",
         )
 
         assert "مرحبا" in item.title
@@ -484,9 +427,7 @@ class TestWorkItemServiceContract(ABC):
         service = await self.create_service()
 
         item = await service.create_work_item(
-            project_id=ProjectId("proj-123"),
-            title="Test Item",
-            description="مرحبا بك في النظام Test description"
+            project_id=ProjectId("proj-123"), title="Test Item", description="مرحبا بك في النظام Test description"
         )
 
         assert "مرحبا" in item.description
@@ -497,9 +438,7 @@ class TestWorkItemServiceContract(ABC):
         service = await self.create_service()
 
         item = await service.create_work_item(
-            project_id=ProjectId("proj-123"),
-            title="Café résumé",
-            description="Test Description"
+            project_id=ProjectId("proj-123"), title="Café résumé", description="Test Description"
         )
 
         assert "Café" in item.title
@@ -511,9 +450,7 @@ class TestWorkItemServiceContract(ABC):
         service = await self.create_service()
 
         item = await service.create_work_item(
-            project_id=ProjectId("proj-123"),
-            title="Test Item",
-            description="Implement naïve algorithm for Zürich café"
+            project_id=ProjectId("proj-123"), title="Test Item", description="Implement naïve algorithm for Zürich café"
         )
 
         assert "naïve" in item.description
@@ -526,9 +463,7 @@ class TestWorkItemServiceContract(ABC):
 
         # Zero-width space: U+200B
         item = await service.create_work_item(
-            project_id=ProjectId("proj-123"),
-            title="Test\u200Bwith\u200Bzero-width",
-            description="Test Description"
+            project_id=ProjectId("proj-123"), title="Test\u200bwith\u200bzero-width", description="Test Description"
         )
 
         # Item should be created (handling could be preservation or stripping)
@@ -541,9 +476,7 @@ class TestWorkItemServiceContract(ABC):
 
         # Zero-width space: U+200B
         item = await service.create_work_item(
-            project_id=ProjectId("proj-123"),
-            title="Test Item",
-            description="Description\u200Bwith\u200Bzero-width"
+            project_id=ProjectId("proj-123"), title="Test Item", description="Description\u200bwith\u200bzero-width"
         )
 
         # Item should be created (handling could be preservation or stripping)
@@ -557,9 +490,7 @@ class TestWorkItemServiceContract(ABC):
         # Null byte: U+0000
         try:
             item = await service.create_work_item(
-                project_id=ProjectId("proj-123"),
-                title="Test\x00Null",
-                description="Test Description"
+                project_id=ProjectId("proj-123"), title="Test\x00Null", description="Test Description"
             )
             # If accepted, verify null byte is not preserved as-is
             assert "\x00" not in item.title
@@ -575,9 +506,7 @@ class TestWorkItemServiceContract(ABC):
         # Null byte: U+0000
         try:
             item = await service.create_work_item(
-                project_id=ProjectId("proj-123"),
-                title="Test Item",
-                description="Description\x00Null"
+                project_id=ProjectId("proj-123"), title="Test Item", description="Description\x00Null"
             )
             # If accepted, verify null byte is not preserved as-is
             assert "\x00" not in item.description

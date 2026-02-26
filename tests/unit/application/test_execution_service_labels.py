@@ -4,7 +4,7 @@ Tests verify that ExecutionService correctly builds Docker labels for containers
 according to the container recovery service requirements.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 
 import pytest
 
@@ -13,11 +13,11 @@ from codetoreum.domain.agent_execution import AgentExecution
 from codetoreum.domain.types import (
     CONTAINER_LABEL_AGENT,
     CONTAINER_LABEL_EXECUTION_ID,
-    CONTAINER_LABEL_WORKFLOW_RUN_ID,
     CONTAINER_LABEL_PROJECT,
     CONTAINER_LABEL_TASK_ID,
     CONTAINER_LABEL_TYPE,
     CONTAINER_LABEL_WORK_ITEM_ID,
+    CONTAINER_LABEL_WORKFLOW_RUN_ID,
 )
 from codetoreum.domain.value_objects import ExecutionContext
 
@@ -27,25 +27,18 @@ class MockEventStore:
 
     async def append(self, event) -> None:
         """Append event to store."""
-        pass
 
 
 class MockLLMProvider:
     """Mock LLM provider for testing."""
 
-    pass
-
 
 class MockContainer:
     """Mock container adapter for testing."""
 
-    pass
-
 
 class MockStorage:
     """Mock storage adapter for testing."""
-
-    pass
 
 
 class TestExecutionServiceLabelBuilding:
@@ -92,7 +85,7 @@ class TestExecutionServiceLabelBuilding:
             input_tokens=0,
             output_tokens=0,
             duration_seconds=None,
-            initialized_at=datetime.now(timezone.utc),
+            initialized_at=datetime.now(UTC),
             started_at=None,
             completed_at=None,
             metadata={},
