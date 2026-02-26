@@ -468,8 +468,18 @@ class GitRepositoryAdapter(IRepository):
         behind_count = 0
 
         try:
+            # Detect the actual remote for this branch
+            remote_name = "origin"  # default
             result = await self._run_git_command(
-                ["rev-list", "--left-right", "--count", f"origin/{current_branch}...HEAD"],
+                ["config", "--get", f"branch.{current_branch}.remote"],
+                cwd=repo_path,
+                check=False,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                remote_name = result.stdout.strip()
+
+            result = await self._run_git_command(
+                ["rev-list", "--left-right", "--count", f"{remote_name}/{current_branch}...HEAD"],
                 cwd=repo_path,
                 check=False,
             )
@@ -481,7 +491,7 @@ class GitRepositoryAdapter(IRepository):
             elif result.returncode != 0:
                 logger.warning(
                     "Failed to determine ahead/behind counts for remote tracking branch",
-                    extra={"current_branch": str(current_branch), "repo_path": str(repo_path)},
+                    extra={"current_branch": str(current_branch), "remote": remote_name, "repo_path": str(repo_path)},
                 )
         except Exception as e:
             logger.warning(
@@ -723,9 +733,5 @@ class GitRepositoryAdapter(IRepository):
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """
-        Async context manager exit with proper cleanup.
-
-        Ensures cleanup happens even if exceptions occur.
-        """
+        """Async context manager exit."""
         return False  # Don't suppress exceptions
