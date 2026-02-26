@@ -639,8 +639,8 @@ class ExecutionService:
                             extra={"error_id": "ERR_EXECUTION_CANCEL_CONTAINER_STOP_FAILURE"},
                         )
 
-                # Mark as failed
-                execution.fail(error_message="Execution cancelled by user")
+                # Mark as cancelled
+                execution.cancel(reason="Execution cancelled by user")
 
                 # Persist events
                 events = execution.get_pending_events()
