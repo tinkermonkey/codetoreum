@@ -22,6 +22,7 @@ from codetoreum.ports.exceptions import (
     UnsupportedFeatureError,
     ValidationError,
 )
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.output.llm_provider import (
     ExecutionContext,
     ExecutionResult,
@@ -379,11 +380,10 @@ class ClaudeCodeAdapter(ILLMProvider):
                             conversation_id = event["session_id"]
 
                     except json.JSONDecodeError as e:
-                        # Log truncated/malformed JSON from network interruptions
-                        logger.warning(
-                            f"Failed to parse JSON event line (possible truncation from network interruption): {e}",
-                            exc_info=True,
-                            extra={"error_id": "ERR_JSON_PARSE_FAILED"},
+                        # Log non-JSON lines (expected) at debug level; actual parse errors are rare
+                        logger.debug(
+                            f"Skipping non-JSON event line (may be progress output or stderr leakage): {e}",
+                            extra={"error_id": ErrorRegistry.ERR_LLM_PROVIDER_ERROR},
                         )
 
             # Read with timeout
@@ -532,8 +532,6 @@ class ClaudeCodeAdapter(ILLMProvider):
         if tools and self.config.enable_mcp:
             if not ctx.mcp_servers:
                 # Log warning but continue - Claude has built-in tools
-                import logging
-
                 logger.warning(
                     "Tool definitions provided but no MCP servers configured. "
                     "Custom tools will not be available. Built-in Claude tools will be used."
@@ -865,6 +863,6 @@ class ClaudeCodeAdapter(ILLMProvider):
                 "Error during context manager cleanup: %s",
                 str(e),
                 exc_info=True,
-                extra={"error_id": "ERR_CLAUDE_CODE_ADAPTER_CLEANUP_ERROR"},
+                extra={"error_id": ErrorRegistry.ERR_EXECUTION_CONTEXT_ERROR},
             )
         return False  # Don't suppress exceptions
