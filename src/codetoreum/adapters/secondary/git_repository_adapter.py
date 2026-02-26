@@ -1,6 +1,7 @@
 """Git repository adapter for IRepository interface."""
 
 import asyncio
+import logging
 import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -19,6 +20,8 @@ from codetoreum.ports.output.repository import (
     MergeResult,
     RepositoryStatus,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -419,9 +422,18 @@ class GitRepositoryAdapter(IRepository):
                 if result.returncode == 0 and result.stdout.strip():
                     current_branch = BranchName(result.stdout.strip())
                 else:
-                    # Fallback to config default or "master"
+                    # Fallback to config default
+                    logger.warning(
+                        "Failed to detect default branch, using config value",
+                        extra={"default_branch": self.config.default_branch, "repo_path": str(repo_path)},
+                    )
                     current_branch = BranchName(self.config.default_branch)
-            except Exception:
+            except Exception as e:
+                logger.warning(
+                    "Exception detecting default branch, using config value",
+                    extra={"error": str(e), "default_branch": self.config.default_branch, "repo_path": str(repo_path)},
+                    exc_info=True,
+                )
                 current_branch = BranchName(self.config.default_branch)
         else:
             current_branch = BranchName(result.stdout.strip())
@@ -466,9 +478,17 @@ class GitRepositoryAdapter(IRepository):
                 parts = result.stdout.strip().split()
                 if len(parts) == 2:
                     behind_count, ahead_count = map(int, parts)
-        except Exception:
-            # Remote tracking branch may not exist
-            pass
+            elif result.returncode != 0:
+                logger.warning(
+                    "Failed to determine ahead/behind counts for remote tracking branch",
+                    extra={"current_branch": str(current_branch), "repo_path": str(repo_path)},
+                )
+        except Exception as e:
+            logger.warning(
+                "Exception determining ahead/behind counts, remote tracking branch may not exist",
+                extra={"error": str(e), "current_branch": str(current_branch), "repo_path": str(repo_path)},
+                exc_info=True,
+            )
 
         return RepositoryStatus(
             current_branch=current_branch,
@@ -708,10 +728,4 @@ class GitRepositoryAdapter(IRepository):
 
         Ensures cleanup happens even if exceptions occur.
         """
-        try:
-            # Cleanup any resources if needed
-            pass
-        except Exception:
-            # Suppress cleanup errors to avoid masking original exception
-            pass
         return False  # Don't suppress exceptions
