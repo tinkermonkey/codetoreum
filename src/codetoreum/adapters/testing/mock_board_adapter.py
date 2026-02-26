@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from codetoreum.domain.events.board_events import (
     BoardReconciledEvent,
     WorkItemColumnChangedEvent,
+    WorkItemPositionChangedEvent,
 )
 from codetoreum.ports.exceptions import ResourceNotFoundError
 from codetoreum.ports.output.board_service import (
@@ -290,8 +291,22 @@ class MockBoardAdapter(IBoardService):
                             for i in range(removed_position, len(col.work_item_ids)):
                                 item_id = col.work_item_ids[i]
                                 if item_id in self._item_positions:
-                                    board_id_stored, col_name, _ = self._item_positions[item_id]
+                                    board_id_stored, col_name, old_pos = self._item_positions[item_id]
                                     self._item_positions[item_id] = (board_id_stored, col_name, i)
+                                    # Emit position change event for sibling items
+                                    self.emit(
+                                        WorkItemPositionChangedEvent(
+                                            type="workitem.position_changed",
+                                            work_item_id=item_id,
+                                            project_id=self.current_project,
+                                            board_id=board_id,
+                                            column_name=col_name,
+                                            old_position=old_pos,
+                                            new_position=i,
+                                            timestamp=self._get_iso_timestamp(),
+                                            source="mock",
+                                        )
+                                    )
                         break
 
                 # Add to new column
@@ -538,8 +553,23 @@ class MockBoardAdapter(IBoardService):
             for i in range(position + 1, len(target_column.work_item_ids)):
                 item_id = target_column.work_item_ids[i]
                 if item_id in self._item_positions:
-                    board_id_stored, col, _ = self._item_positions[item_id]
+                    board_id_stored, col, old_pos = self._item_positions[item_id]
                     self._item_positions[item_id] = (board_id_stored, col, i)
+                    # Emit position change event for shifted items
+                    if self.current_project:
+                        self.emit(
+                            WorkItemPositionChangedEvent(
+                                type="workitem.position_changed",
+                                work_item_id=item_id,
+                                project_id=self.current_project,
+                                board_id=board_id,
+                                column_name=col,
+                                old_position=old_pos,
+                                new_position=i,
+                                timestamp=self._get_iso_timestamp(),
+                                source="mock",
+                            )
+                        )
 
     async def simulate_human_move_async(self, work_item_id: str, target_column: str) -> None:
         """Test helper: Simulate user dragging card in board UI (async version).

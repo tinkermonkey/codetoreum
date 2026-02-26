@@ -22,6 +22,7 @@ from .adapter_events import (
 from .board_events import (
     BoardReconciledEvent,
     WorkItemColumnChangedEvent,
+    WorkItemPositionChangedEvent,
 )
 
 # Container execution events
@@ -279,6 +280,7 @@ __all__ = [
     "now_iso",
     # Board events
     "WorkItemColumnChangedEvent",
+    "WorkItemPositionChangedEvent",
     "BoardReconciledEvent",
     # Discussion events
     "Comment",
