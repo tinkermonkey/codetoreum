@@ -317,9 +317,9 @@ class TestEndToEndCausalChains:
         for event_type, handlers in all_subscriptions.items():
             for handler in handlers if isinstance(handlers, list) else [handlers]:
                 # Should be callable or EventHandler with handle method
-                assert callable(handler) or hasattr(
-                    handler, "handle"
-                ), f"Event handler for {event_type} should be callable or EventHandler"
+                assert callable(handler) or hasattr(handler, "handle"), (
+                    f"Event handler for {event_type} should be callable or EventHandler"
+                )
 
         # Verify: Event bus itself doesn't hold adapter instances
         # (it only holds callable references)

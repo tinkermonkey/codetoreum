@@ -436,9 +436,9 @@ class TestWebhookTimingAttackResistance:
         if min_time > 0:
             variance_ratio = max_time / min_time
             # Allow larger variance for micro-operations due to system noise
-            assert (
-                variance_ratio < TIMING_VARIANCE_THRESHOLD
-            ), f"Timing variance {variance_ratio}x suggests potential timing attack vulnerability"
+            assert variance_ratio < TIMING_VARIANCE_THRESHOLD, (
+                f"Timing variance {variance_ratio}x suggests potential timing attack vulnerability"
+            )
 
     async def test_early_exit_not_possible(self, webhook_adapter, webhook_secret):
         """Test that comparison doesn't exit early on mismatch.

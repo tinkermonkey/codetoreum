@@ -202,9 +202,9 @@ class TestContainerLabelConstants:
         ]
 
         for constant in constants:
-            assert constant.startswith(
-                "org.codetoreum."
-            ), f"Label constant '{constant}' should start with 'org.codetoreum.'"
+            assert constant.startswith("org.codetoreum."), (
+                f"Label constant '{constant}' should start with 'org.codetoreum.'"
+            )
 
     def test_label_constants_are_unique(self):
         """All label constants should be unique."""

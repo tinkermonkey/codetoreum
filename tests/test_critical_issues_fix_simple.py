@@ -27,9 +27,9 @@ class TestDevelopmentMockReturnTypes:
             content = f.read()
 
         # Verify the method returns WorkflowRunEventsResult, not a dict
-        assert (
-            "return WorkflowRunEventsResult(" in content
-        ), "get_workflow_run_events should return WorkflowRunEventsResult dataclass"
+        assert "return WorkflowRunEventsResult(" in content, (
+            "get_workflow_run_events should return WorkflowRunEventsResult dataclass"
+        )
         assert "total_count=1" in content, "Should use snake_case total_count, not camelCase totalCount"
         assert "has_next=False" in content, "Should use snake_case has_next, not camelCase hasNext"
 
@@ -44,9 +44,9 @@ class TestDevelopmentMockReturnTypes:
             content = f.read()
 
         # Verify the method returns WorkflowRunAuditResult, not a dict
-        assert (
-            "return WorkflowRunAuditResult(" in content
-        ), "get_workflow_run_audit should return WorkflowRunAuditResult dataclass"
+        assert "return WorkflowRunAuditResult(" in content, (
+            "get_workflow_run_audit should return WorkflowRunAuditResult dataclass"
+        )
 
         # Verify validation dict uses camelCase keys (per AuditValidationResult Pydantic model)
         assert '"sequenceValid": True' in content, "Validation dict should use camelCase sequenceValid"
@@ -158,9 +158,9 @@ class TestBuildStageInfoStatusMapping:
 
             # Verify the status was correctly mapped
             assert len(stages_info) == 1, f"Should have 1 stage for {domain_status}"
-            assert (
-                stages_info[0]["status"] == expected_api_status
-            ), f"StageStatus.{domain_status.name} should map to '{expected_api_status}', got '{stages_info[0]['status']}'"
+            assert stages_info[0]["status"] == expected_api_status, (
+                f"StageStatus.{domain_status.name} should map to '{expected_api_status}', got '{stages_info[0]['status']}'"
+            )
 
     def test_skipped_maps_to_skipped_not_pending(self):
         """Critical fix: SKIPPED should map to 'skipped', not 'pending'."""
@@ -195,6 +195,6 @@ class TestBuildStageInfoStatusMapping:
         stages_info = service._build_stage_info(mock_workflow, events=[])
 
         # Critical assertion: SKIPPED must map to "skipped", not "pending"
-        assert (
-            stages_info[0]["status"] == "skipped"
-        ), "CRITICAL BUG: StageStatus.SKIPPED incorrectly maps to 'pending' instead of 'skipped'"
+        assert stages_info[0]["status"] == "skipped", (
+            "CRITICAL BUG: StageStatus.SKIPPED incorrectly maps to 'pending' instead of 'skipped'"
+        )

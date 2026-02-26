@@ -246,9 +246,9 @@ class TestScenarioC_ReviewRejectionLoop:
 
         # Verify lock acquired
         queue_state = await lock_service.get_queue_state("proj-1", "board-1")
-        assert (
-            queue_state.lock_holder == "work-item-100"
-        ), "Expected lock holder to be 'work-item-100' when entering Development"
+        assert queue_state.lock_holder == "work-item-100", (
+            "Expected lock holder to be 'work-item-100' when entering Development"
+        )
 
         # Step 2: Engineer completes work → auto-progression to Code Review
         await event_handler.handle_agent_completion(work_item_id="work-item-100", board_id="board-1", success=True)
@@ -269,9 +269,9 @@ class TestScenarioC_ReviewRejectionLoop:
         )
 
         # Verify code_reviewer agent triggered (first review)
-        assert agent_executor.was_triggered(
-            "code_reviewer", "work-item-100"
-        ), "Code reviewer should be triggered when work item enters Code Review"
+        assert agent_executor.was_triggered("code_reviewer", "work-item-100"), (
+            "Code reviewer should be triggered when work item enters Code Review"
+        )
 
         # Step 3: Simulate reviewer requesting changes (CHANGES_REQUESTED outcome)
         # Reviewer moves item back to Development
@@ -294,9 +294,9 @@ class TestScenarioC_ReviewRejectionLoop:
 
         # Verify engineer agent re-triggered (FR6)
         # Check execution count: should have 2 executions now (initial + re-trigger on second entry to Development)
-        assert (
-            agent_executor.get_execution_count("senior_software_engineer") >= 2
-        ), "Engineer should be re-triggered when work item re-enters Development after rejection"
+        assert agent_executor.get_execution_count("senior_software_engineer") >= 2, (
+            "Engineer should be re-triggered when work item re-enters Development after rejection"
+        )
 
         # Step 4: Engineer fixes the issues and completes → auto-progression to Code Review (second time)
         await event_handler.handle_agent_completion(work_item_id="work-item-100", board_id="board-1", success=True)
@@ -318,9 +318,9 @@ class TestScenarioC_ReviewRejectionLoop:
 
         # Verify code_reviewer agent triggered again (second review)
         # Check execution count: should have 2 executions now (initial rejection + second approval review)
-        assert (
-            agent_executor.get_execution_count("code_reviewer") >= 2
-        ), "Code reviewer should be triggered twice (initial rejection + second approval)"
+        assert agent_executor.get_execution_count("code_reviewer") >= 2, (
+            "Code reviewer should be triggered twice (initial rejection + second approval)"
+        )
 
         # Step 5: Simulate reviewer approving (APPROVED outcome)
         # Auto-progression to Testing
@@ -342,9 +342,9 @@ class TestScenarioC_ReviewRejectionLoop:
         )
 
         # Verify test runner agent triggered
-        assert agent_executor.was_triggered(
-            "test_runner", "work-item-100"
-        ), "Test runner should be triggered when work item enters Testing"
+        assert agent_executor.was_triggered("test_runner", "work-item-100"), (
+            "Test runner should be triggered when work item enters Testing"
+        )
 
         # Step 6: Verify movement history shows rejection loop pattern
         history = board_service.get_movement_history("work-item-100")
@@ -354,9 +354,9 @@ class TestScenarioC_ReviewRejectionLoop:
         expected_columns = ["Code Review", "Development", "Code Review", "Testing"]
         actual_path = [h.to_column for h in history]
 
-        assert (
-            len(history) >= 4
-        ), f"Expected at least 4 movements in history (Dev→CR→Dev→CR→Testing), got {len(history)}"
+        assert len(history) >= 4, (
+            f"Expected at least 4 movements in history (Dev→CR→Dev→CR→Testing), got {len(history)}"
+        )
 
         # Verify the rejection loop pattern: Code Review appears twice
         code_review_count = actual_path.count("Code Review")
@@ -366,9 +366,9 @@ class TestScenarioC_ReviewRejectionLoop:
         )
 
         # Verify Development appears in the middle (backward movement)
-        assert (
-            "Development" in actual_path[1:]
-        ), "Development should appear in the middle of the path (indicating backward movement)"
+        assert "Development" in actual_path[1:], (
+            "Development should appear in the middle of the path (indicating backward movement)"
+        )
 
         # Verify movement metadata is correct for rejection (human move back to Development)
         # Find the movement where work item goes back to Development
@@ -379,9 +379,9 @@ class TestScenarioC_ReviewRejectionLoop:
                 break
 
         assert dev_rejection_move is not None, "Should have a movement from Code Review back to Development"
-        assert (
-            dev_rejection_move.moved_by == MovedByType.HUMAN
-        ), "Rejection move (CR→Dev) should be marked as HUMAN movement"
+        assert dev_rejection_move.moved_by == MovedByType.HUMAN, (
+            "Rejection move (CR→Dev) should be marked as HUMAN movement"
+        )
 
     @pytest.mark.asyncio
     async def test_review_approved_auto_progresses(self, setup):
@@ -418,9 +418,9 @@ class TestScenarioC_ReviewRejectionLoop:
         )
 
         # Verify code_reviewer triggered
-        assert agent_executor.was_triggered(
-            "code_reviewer", "work-item-200"
-        ), "Code reviewer should be triggered when work item enters Code Review"
+        assert agent_executor.was_triggered("code_reviewer", "work-item-200"), (
+            "Code reviewer should be triggered when work item enters Code Review"
+        )
 
         # Clear previous executions to count only the approval
         agent_executor.clear()
@@ -444,12 +444,12 @@ class TestScenarioC_ReviewRejectionLoop:
         )
 
         # Verify test runner triggered (not code reviewer again)
-        assert agent_executor.was_triggered(
-            "test_runner", "work-item-200"
-        ), "Test runner should be triggered after approval"
-        assert (
-            agent_executor.get_execution_count("code_reviewer") == 0
-        ), "Code reviewer should not be triggered again after approval"
+        assert agent_executor.was_triggered("test_runner", "work-item-200"), (
+            "Test runner should be triggered after approval"
+        )
+        assert agent_executor.get_execution_count("code_reviewer") == 0, (
+            "Code reviewer should not be triggered again after approval"
+        )
 
     @pytest.mark.asyncio
     async def test_review_blocked_outcome(self, setup):
@@ -494,9 +494,9 @@ class TestScenarioC_ReviewRejectionLoop:
         # Verify no movement to next column
         history = board_service.get_movement_history("work-item-300")
         for h in history:
-            assert (
-                h.from_column != "Code Review" or h.to_column == "Code Review"
-            ), "Should not have moved away from Code Review after BLOCKED"
+            assert h.from_column != "Code Review" or h.to_column == "Code Review", (
+                "Should not have moved away from Code Review after BLOCKED"
+            )
 
     @pytest.mark.asyncio
     async def test_multiple_rejection_cycles(self, setup):
@@ -631,12 +631,12 @@ class TestScenarioC_ReviewRejectionLoop:
         )
 
         # Verify agent execution counts
-        assert (
-            agent_executor.get_execution_count("senior_software_engineer") >= 3
-        ), "Engineer should be triggered 3 times (initial + 2 rejections)"
-        assert (
-            agent_executor.get_execution_count("code_reviewer") >= 3
-        ), "Code reviewer should be triggered 3 times (all 3 review cycles)"
+        assert agent_executor.get_execution_count("senior_software_engineer") >= 3, (
+            "Engineer should be triggered 3 times (initial + 2 rejections)"
+        )
+        assert agent_executor.get_execution_count("code_reviewer") >= 3, (
+            "Code reviewer should be triggered 3 times (all 3 review cycles)"
+        )
 
         # Verify lock maintained throughout
         queue_state = await lock_service.get_queue_state("proj-1", "board-1")

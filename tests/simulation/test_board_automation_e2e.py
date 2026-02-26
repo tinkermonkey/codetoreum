@@ -104,16 +104,16 @@ async def test_item_cascades_from_trigger_to_exit(e2e_env):
 
     # Verify movement history
     history = board.get_movement_history(work_item_id)
-    assert (
-        len(history) == 4
-    ), f"Expected 4 movements (Backlog→Ready, Ready→In Progress, In Progress→Review, Review→Done), got {len(history)}"
+    assert len(history) == 4, (
+        f"Expected 4 movements (Backlog→Ready, Ready→In Progress, In Progress→Review, Review→Done), got {len(history)}"
+    )
 
     # First move is HUMAN, rest are ORCHESTRATOR
     assert history[0].moved_by == MovedByType.HUMAN
     for move in history[1:]:
-        assert (
-            move.moved_by == MovedByType.ORCHESTRATOR
-        ), f"Expected ORCHESTRATOR for {move.from_column}→{move.to_column}, got {move.moved_by}"
+        assert move.moved_by == MovedByType.ORCHESTRATOR, (
+            f"Expected ORCHESTRATOR for {move.from_column}→{move.to_column}, got {move.moved_by}"
+        )
 
     # Verify column progression path
     columns_visited = [history[0].from_column] + [m.to_column for m in history]
@@ -145,9 +145,9 @@ async def test_lock_released_after_cascade(e2e_env):
 
     # Verify lock is released (lock_holder should be None)
     queue_state = await lock_service.get_queue_state(project_id, "board-1")
-    assert (
-        queue_state.lock_holder is None
-    ), f"Lock should be released after cascade, but holder is {queue_state.lock_holder}"
+    assert queue_state.lock_holder is None, (
+        f"Lock should be released after cascade, but holder is {queue_state.lock_holder}"
+    )
 
 
 @pytest.mark.asyncio
@@ -199,9 +199,9 @@ async def test_cascade_stops_on_agent_failure(
 
     # Item should still be in "In Progress" (coder failed, no auto-progress)
     pos = await board.get_item_position(work_item_id)
-    assert (
-        pos.column_name == "In Progress"
-    ), f"Expected item to stay in 'In Progress' after coder failure, but found in '{pos.column_name}'"
+    assert pos.column_name == "In Progress", (
+        f"Expected item to stay in 'In Progress' after coder failure, but found in '{pos.column_name}'"
+    )
 
     # Verify architect executed but cascade stopped after coder failure
     item_executions = [e for e in executor.executions if e["work_item_id"] == work_item_id]
