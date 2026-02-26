@@ -61,6 +61,7 @@ from codetoreum.adapters.primary.input_port_adapters.mock.mock_workflow_run_quer
 from codetoreum.adapters.primary.input_port_adapters.mock.mock_workspace_query_adapter import (
     MockWorkspaceQueryAdapter,
 )
+from codetoreum.domain.agent_execution import AgentExecution, ExecutionStatus
 from codetoreum.domain.exceptions import ExecutionNotFoundError, InvalidStateError, WorkItemNotFoundError
 from codetoreum.domain.work_item import WorkItemPriority
 from codetoreum.ports.input.execution_command import (
@@ -72,7 +73,6 @@ from codetoreum.ports.input.work_item_command import (
     CreateWorkItemCommand,
     UpdateWorkItemCommand,
 )
-from codetoreum.domain.agent_execution import AgentExecution, ExecutionStatus
 
 
 class TestMockWorkItemCommandAdapterContract:
@@ -91,7 +91,7 @@ class TestMockWorkItemCommandAdapterContract:
             priority=WorkItemPriority.HIGH,
             labels=["bug", "urgent"],
             external_id="ext-123",
-            external_url="https://example.com/issue/123"
+            external_url="https://example.com/issue/123",
         )
         work_item = await adapter.create_work_item(command)
 
@@ -116,7 +116,7 @@ class TestMockWorkItemCommandAdapterContract:
             priority=WorkItemPriority.LOW,
             labels=[],
             external_id="ext-123",
-            external_url="https://example.com"
+            external_url="https://example.com",
         )
         work_item = await adapter.create_work_item(create_cmd)
 
@@ -126,7 +126,7 @@ class TestMockWorkItemCommandAdapterContract:
             title="Updated Title",
             description="Updated Description",
             priority=WorkItemPriority.HIGH,
-            labels=["fixed"]
+            labels=["fixed"],
         )
         updated = await adapter.update_work_item(update_cmd)
 
@@ -141,11 +141,7 @@ class TestMockWorkItemCommandAdapterContract:
         adapter = MockWorkItemCommandAdapter()
 
         update_cmd = UpdateWorkItemCommand(
-            work_item_id="nonexistent-id",
-            title="New Title",
-            description=None,
-            priority=None,
-            labels=None
+            work_item_id="nonexistent-id", title="New Title", description=None, priority=None, labels=None
         )
 
         with pytest.raises(WorkItemNotFoundError):
@@ -164,7 +160,7 @@ class TestMockWorkItemCommandAdapterContract:
             priority=WorkItemPriority.LOW,
             labels=[],
             external_id="ext-123",
-            external_url="https://example.com"
+            external_url="https://example.com",
         )
         work_item = await adapter.create_work_item(create_cmd)
 
@@ -200,15 +196,12 @@ class TestMockExecutionCommandAdapterContract:
             output="",
             started_at=None,
             completed_at=None,
-            result=None
+            result=None,
         )
         adapter.add_execution(execution)
 
         # Terminate execution
-        command = TerminateExecutionCommand(
-            execution_id="exec-1",
-            reason="Test termination"
-        )
+        command = TerminateExecutionCommand(execution_id="exec-1", reason="Test termination")
         result = await adapter.terminate_execution(command)
 
         # Verify termination succeeded
@@ -220,10 +213,7 @@ class TestMockExecutionCommandAdapterContract:
         """Test that terminating nonexistent execution raises ExecutionNotFoundError."""
         adapter = MockExecutionCommandAdapter()
 
-        command = TerminateExecutionCommand(
-            execution_id="nonexistent",
-            reason="Test"
-        )
+        command = TerminateExecutionCommand(execution_id="nonexistent", reason="Test")
 
         with pytest.raises(ExecutionNotFoundError):
             await adapter.terminate_execution(command)
@@ -242,15 +232,12 @@ class TestMockExecutionCommandAdapterContract:
             output="Done",
             started_at=None,
             completed_at=None,
-            result=None
+            result=None,
         )
         adapter.add_execution(execution)
 
         # Try to terminate completed execution
-        command = TerminateExecutionCommand(
-            execution_id="exec-1",
-            reason="Test"
-        )
+        command = TerminateExecutionCommand(execution_id="exec-1", reason="Test")
 
         with pytest.raises(InvalidStateError):
             await adapter.terminate_execution(command)
@@ -269,15 +256,12 @@ class TestMockExecutionCommandAdapterContract:
             output="",
             started_at=None,
             completed_at=None,
-            result=None
+            result=None,
         )
         adapter.add_execution(execution)
 
         # Pause execution
-        pause_cmd = PauseExecutionCommand(
-            execution_id="exec-1",
-            reason="Debugging"
-        )
+        pause_cmd = PauseExecutionCommand(execution_id="exec-1", reason="Debugging")
         pause_result = await adapter.pause_execution(pause_cmd)
         assert pause_result.success is True
 

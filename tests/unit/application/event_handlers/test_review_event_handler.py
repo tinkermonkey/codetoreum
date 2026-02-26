@@ -516,7 +516,7 @@ class TestReviewEventHandlerWorkflow:
         for i in range(1, 3):
             iter_event = ReviewIterationStarted(
                 aggregate_id="review-1",
-                timestamp=f"2024-01-01T00:{i*5:02d}:00Z",
+                timestamp=f"2024-01-01T00:{i * 5:02d}:00Z",
                 source="test",
                 payload={"iteration_number": i},
             )
@@ -525,7 +525,7 @@ class TestReviewEventHandlerWorkflow:
             if i < 3:
                 reject_event = ReviewCycleRejected(
                     aggregate_id="review-1",
-                    timestamp=f"2024-01-01T00:{i*5+2:02d}:00Z",
+                    timestamp=f"2024-01-01T00:{i * 5 + 2:02d}:00Z",
                     source="test",
                     payload={
                         "final_iteration": i,

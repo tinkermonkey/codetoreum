@@ -616,7 +616,7 @@ class TestFakeContainerAdapterEventEmission:
 
     async def test_event_emission_integration_with_event_bus(self):
         """Test event emission when event_bus is provided."""
-        from unittest.mock import Mock, AsyncMock
+        from unittest.mock import AsyncMock, Mock
 
         mock_event_bus = Mock()
         mock_event_bus.emit = AsyncMock()
