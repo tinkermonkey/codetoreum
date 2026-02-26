@@ -405,33 +405,6 @@ async def test_audit_endpoint_stage_grouping(e2e_client, simulation_env):
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="Mock adapter returns success for any ID - error handling tested in integration tests")
-async def test_audit_endpoint_not_found(e2e_client, simulation_env):
-    """
-    Test audit endpoint returns 404 for non-existent workflow run.
-
-    NOTE: Skipped in simulation mode because mock adapters return
-    successful responses for any workflow ID. Error handling is
-    tested in integration tests with real adapters.
-
-    Validates:
-    - Returns 404 status code
-    - Error message is descriptive
-    """
-    # Use a non-existent workflow run ID
-    non_existent_id = "wfrun-nonexistent-12345"
-
-    with TestClient(simulation_env["app"]) as client:
-        response = client.get(f"/api/v2/workflows/runs/{non_existent_id}/audit")
-
-        assert response.status_code == 404, f"Expected 404, got {response.status_code}"
-
-        error_data = response.json()
-        assert "detail" in error_data
-        assert non_existent_id in error_data["detail"]
-
-
-@pytest.mark.asyncio
 async def test_audit_endpoint_validation_disabled(e2e_client, simulation_env):
     """
     Test audit endpoint with validation disabled.
