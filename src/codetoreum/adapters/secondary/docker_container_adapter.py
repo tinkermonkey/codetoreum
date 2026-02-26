@@ -240,9 +240,13 @@ class DockerContainerAdapter(IContainer):
                 # Check if image exists locally
                 try:
                     client.images.get(image)
-                except Exception:
-                    msg = f"Image not found: {image}"
-                    raise ImageNotFoundError(msg)
+                except Exception as e:
+                    if "not found" in str(e).lower():
+                        msg = f"Image not found: {image}"
+                        raise ImageNotFoundError(msg)
+                    # Re-raise other Docker errors as ContainerExecutionError
+                    msg = f"Failed to check image: {e!s}"
+                    raise ContainerExecutionError(msg)
 
                 # Create and start container with auto-removal enabled
                 container = client.containers.run(**container_config)
@@ -436,17 +440,20 @@ class DockerContainerAdapter(IContainer):
                 # Check image exists
                 try:
                     client.images.get(image)
-                except Exception:
-                    msg = f"Image not found: {image}"
-                    raise ImageNotFoundError(msg)
+                except Exception as e:
+                    if "not found" in str(e).lower():
+                        msg = f"Image not found: {image}"
+                        raise ImageNotFoundError(msg)
+                    # Re-raise other Docker errors as ContainerError
+                    msg = f"Failed to check image: {e!s}"
+                    raise ContainerError(msg)
 
                 container = client.containers.create(**container_config)
                 return container.id
 
+            except (ImageNotFoundError, ContainerError):
+                raise
             except Exception as e:
-                if "not found" in str(e).lower() and "image" in str(e).lower():
-                    msg = f"Image not found: {image}"
-                    raise ImageNotFoundError(msg)
                 msg = f"Failed to create container: {e!s}"
                 raise ContainerError(msg)
 
@@ -730,7 +737,15 @@ class DockerContainerAdapter(IContainer):
 
                 try:
                     created_at = dateparser.isoparse(attrs["Created"])
-                except Exception:
+                except Exception as parse_error:
+                    logger.warning(
+                        f"Failed to parse Created date, using current time: {parse_error}",
+                        exc_info=True,
+                        extra={
+                            "error_id": "ERR_DATE_PARSE_FAILED",
+                            "date_value": attrs.get("Created"),
+                        },
+                    )
                     created_at = datetime.now(UTC)  # Fallback
 
                 return ContainerStatus(
@@ -960,8 +975,21 @@ class DockerContainerAdapter(IContainer):
                 full_image = f"{image}:{tag}"
                 client.images.get(full_image)
                 return True
-            except Exception:
-                return False
+            except Exception as e:
+                if "not found" in str(e).lower():
+                    return False
+                # For other errors (network, auth, etc), log and raise
+                logger.warning(
+                    f"Failed to check if image exists: {e}",
+                    exc_info=True,
+                    extra={
+                        "error_id": "ERR_IMAGE_CHECK_FAILED",
+                        "image": image,
+                        "tag": tag,
+                    },
+                )
+                msg = f"Failed to check if image exists: {e!s}"
+                raise ContainerError(msg)
 
         return await loop.run_in_executor(None, _check)
 
