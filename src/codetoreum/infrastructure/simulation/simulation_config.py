@@ -337,6 +337,56 @@ class SimulationConfig:
             ms_per_event=ms_per_event,
         )
 
+    @classmethod
+    def create_high_fidelity_config(
+        cls,
+        scenario_name: str,
+        speed_multiplier: float = 5.0,
+        ms_per_token: float = 50.0,
+        ms_per_file_operation: float = 10.0,
+        ms_per_event: float = 1.0,
+    ) -> "SimulationConfig":
+        """
+        Create a configuration with high fidelity simulation.
+
+        HIGH fidelity includes:
+        - Realistic timing with jitter (±20% randomness)
+        - Probabilistic failures (agent timeouts, container failures)
+        - Slower execution than MEDIUM (5x faster than real-time)
+
+        Use case: Performance testing, chaos engineering, failure scenarios
+
+        Args:
+            scenario_name: Name of the scenario
+            speed_multiplier: How much faster than real time (default 5x)
+            ms_per_token: Milliseconds per LLM token for proportional timing
+            ms_per_file_operation: Milliseconds per file operation for proportional timing
+            ms_per_event: Milliseconds per event processing for proportional timing
+
+        Returns:
+            SimulationConfig with HIGH fidelity
+        """
+        return cls(
+            scenario_name=scenario_name,
+            time=TimeConfig(
+                speed_multiplier=speed_multiplier,
+                auto_advance=False,
+            ),
+            agents={},
+            container=ContainerBehaviorConfig(
+                execution_delay=1.0,  # 5 seconds at 5x speed
+            ),
+            notifications=NotificationConfig(
+                send_delay=0.01,
+                simulate_failures=True,
+                failure_rate=0.05,  # 5% failure rate
+            ),
+            fidelity_level=FidelityLevel.HIGH,
+            ms_per_token=ms_per_token,
+            ms_per_file_operation=ms_per_file_operation,
+            ms_per_event=ms_per_event,
+        )
+
     def to_dict(self) -> dict[str, Any]:
         """
         Convert configuration to dictionary.

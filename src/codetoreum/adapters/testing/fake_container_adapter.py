@@ -1,6 +1,7 @@
 """Fake container adapter for testing."""
 
 import asyncio
+import random
 import re
 import threading
 from collections.abc import Callable
@@ -124,6 +125,9 @@ class FakeContainerAdapter(IContainer):
         # Thread safety
         self._lock = threading.Lock()
 
+        # Counter for probabilistic failures (deterministic for reproducibility)
+        self._execution_counter = 0
+
     def set_command_result(
         self,
         command_pattern: str,
@@ -189,6 +193,8 @@ class FakeContainerAdapter(IContainer):
         Uses SimulationConfig if available for fidelity-aware timing.
         Otherwise falls back to fixed execution_delay.
 
+        For HIGH fidelity, adds timing jitter (±20% randomness).
+
         Args:
             command: Command string to analyze
 
@@ -213,7 +219,37 @@ class FakeContainerAdapter(IContainer):
         delay_ms = base_delay_ms + operation_delay_ms
         delay_seconds = delay_ms / 1000.0
 
+        # HIGH fidelity: add timing jitter (±20% randomness)
+        if self._config.fidelity_level == FidelityLevel.HIGH:
+            delay_seconds = random.uniform(delay_seconds * 0.8, delay_seconds * 1.2)
+
         return delay_seconds
+
+    def _should_fail_for_high_fidelity(self) -> bool:
+        """
+        Determine if execution should fail based on HIGH fidelity probabilistic failures.
+
+        Uses counter-based approach for reproducibility in tests (not random).
+        Only applies to HIGH fidelity level.
+
+        Returns:
+            True if execution should fail, False otherwise
+        """
+        if not self._config:
+            return False
+
+        from codetoreum.infrastructure.simulation.simulation_config import FidelityLevel
+
+        if self._config.fidelity_level != FidelityLevel.HIGH:
+            return False
+
+        # Counter-based: fail approximately every 20 executions (5% failure rate)
+        # This is deterministic for reproducibility
+        with self._lock:
+            self._execution_counter += 1
+            should_fail = self._execution_counter % 20 == 0
+
+        return should_fail
 
     def _get_result_for_command(
         self,
@@ -222,6 +258,9 @@ class FakeContainerAdapter(IContainer):
     ) -> ContainerResult:
         """
         Get result for a command.
+
+        For HIGH fidelity, may return a failure (exit code 1) based on
+        probabilistic logic (~5% failure rate).
 
         Args:
             command: Command list
@@ -245,6 +284,16 @@ class FakeContainerAdapter(IContainer):
                     result = self._command_results[first_word]
                     result.container_id = container_id
                     return result
+
+            # Apply probabilistic failures for HIGH fidelity
+            if self._should_fail_for_high_fidelity():
+                return ContainerResult(
+                    exit_code=1,
+                    stdout="",
+                    stderr="Container execution failed (HIGH fidelity probabilistic failure)",
+                    duration_ms=int(self._execution_delay * 1000),
+                    container_id=container_id,
+                )
 
             # Return default
             return ContainerResult(

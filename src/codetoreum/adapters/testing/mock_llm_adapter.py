@@ -1,6 +1,7 @@
 """Mock LLM provider adapter for testing."""
 
 import asyncio
+import random
 import re
 import threading
 from collections.abc import AsyncIterator
@@ -111,6 +112,9 @@ class MockLLMAdapter(ILLMProvider):
         # Thread safety
         self._lock = threading.Lock()
 
+        # Counter for probabilistic failures (deterministic for reproducibility)
+        self._execution_counter = 0
+
     def add_response_pattern(self, pattern: str, response: str) -> None:
         """
         Add a pattern-based response.
@@ -132,6 +136,32 @@ class MockLLMAdapter(ILLMProvider):
         compiled_pattern = re.compile(pattern, re.IGNORECASE | re.DOTALL)
         with self._lock:
             self._response_patterns.append((compiled_pattern, response))
+
+    def _should_fail_for_high_fidelity(self) -> bool:
+        """
+        Determine if execution should fail based on HIGH fidelity probabilistic failures.
+
+        Uses counter-based approach for reproducibility in tests (not random).
+        Only applies to HIGH fidelity level.
+
+        Returns:
+            True if execution should timeout/fail, False otherwise
+        """
+        if not self._config:
+            return False
+
+        from codetoreum.infrastructure.simulation.simulation_config import FidelityLevel
+
+        if self._config.fidelity_level != FidelityLevel.HIGH:
+            return False
+
+        # Counter-based: fail approximately every 25 executions (~4% failure rate)
+        # This is deterministic for reproducibility
+        with self._lock:
+            self._execution_counter += 1
+            should_fail = self._execution_counter % 25 == 0
+
+        return should_fail
 
     def _get_response_for_prompt(self, prompt: str) -> str:
         """
@@ -155,6 +185,8 @@ class MockLLMAdapter(ILLMProvider):
 
         Uses SimulationConfig if available for fidelity-aware timing.
         Otherwise falls back to fixed delay_seconds.
+
+        For HIGH fidelity, adds timing jitter (±20% randomness).
 
         Args:
             prompt: The input prompt
@@ -184,6 +216,10 @@ class MockLLMAdapter(ILLMProvider):
         delay_ms = total_tokens * self._config.ms_per_token
         delay_seconds = delay_ms / 1000.0
 
+        # HIGH fidelity: add timing jitter (±20% randomness)
+        if self._config.fidelity_level == FidelityLevel.HIGH:
+            delay_seconds = random.uniform(delay_seconds * 0.8, delay_seconds * 1.2)
+
         return delay_seconds
 
     async def execute(
@@ -205,7 +241,7 @@ class MockLLMAdapter(ILLMProvider):
 
         Raises:
             ValidationError: If prompt is empty
-            RateLimitError: If rate limits are simulated and exceeded
+            RateLimitError: If rate limits are simulated and exceeded or HIGH fidelity
         """
         if not prompt or not prompt.strip():
             msg = "Prompt cannot be empty"
@@ -215,6 +251,11 @@ class MockLLMAdapter(ILLMProvider):
             if self._simulate_rate_limits and self._total_requests >= 100:
                 msg = "Mock rate limit exceeded (100 requests)"
                 raise RateLimitError(msg)
+
+        # HIGH fidelity: probabilistic timeout/failure
+        if self._should_fail_for_high_fidelity():
+            msg = "LLM execution timeout (HIGH fidelity probabilistic failure)"
+            raise RateLimitError(msg)
 
         started_at = datetime.now(UTC)
 

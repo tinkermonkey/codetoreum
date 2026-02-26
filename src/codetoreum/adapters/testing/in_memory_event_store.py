@@ -4,7 +4,7 @@ import asyncio
 import threading
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from codetoreum.domain.events import DomainEvent
 from codetoreum.ports.exceptions import (
@@ -14,6 +14,9 @@ from codetoreum.ports.exceptions import (
 )
 from codetoreum.ports.output.event_store import IEventStore
 
+if TYPE_CHECKING:
+    from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+
 
 class InMemoryEventStore(IEventStore):
     """
@@ -22,12 +25,27 @@ class InMemoryEventStore(IEventStore):
     Uses simple list-based event storage. Supports replay for testing
     and provides complete event history without external dependencies.
 
+    Supports fidelity-aware timing when SimulationConfig is provided:
+    - LOW: no delay
+    - MEDIUM: uses ms_per_event from config
+    - HIGH: uses ms_per_event with ±20% jitter
+
     Note: This adapter is thread-safe for concurrent test execution. All
     dictionary and list modifications are protected by a lock.
     """
 
-    def __init__(self):
-        """Initialize the in-memory event store with thread-safe storage."""
+    def __init__(
+        self,
+        config: "SimulationConfig | None" = None,
+        clock: "Any | None" = None,
+    ):
+        """
+        Initialize the in-memory event store with thread-safe storage.
+
+        Args:
+            config: Optional SimulationConfig for fidelity-aware timing
+            clock: Optional SimulationClock for time manipulation
+        """
         # Stream storage: stream_id -> list of events
         self._streams: dict[str, list[DomainEvent]] = {}
 
@@ -45,6 +63,10 @@ class InMemoryEventStore(IEventStore):
 
         # Thread safety for concurrent test execution
         self._lock = threading.Lock()
+
+        # Configuration for fidelity-aware timing
+        self._config = config
+        self._clock = clock
 
     async def append(
         self,
@@ -175,6 +197,37 @@ class InMemoryEventStore(IEventStore):
 
             return [e for e in events if e.occurred_at > since]
 
+    async def _get_event_delay_seconds(self) -> float:
+        """
+        Calculate delay for streaming/replaying a single event.
+
+        Uses fidelity-aware timing from SimulationConfig if available.
+        - LOW: 0 delay
+        - MEDIUM: ms_per_event from config
+        - HIGH: ms_per_event with ±20% jitter
+
+        Returns:
+            Delay in seconds
+        """
+        if not self._config:
+            # Default behavior (for backward compatibility)
+            return 0.001
+
+        from codetoreum.infrastructure.simulation.simulation_config import FidelityLevel
+        import random
+
+        if self._config.fidelity_level == FidelityLevel.LOW:
+            return 0.0
+
+        # MEDIUM/HIGH: use ms_per_event from config
+        delay_seconds = self._config.ms_per_event / 1000.0
+
+        # HIGH fidelity: add timing jitter (±20% randomness)
+        if self._config.fidelity_level == FidelityLevel.HIGH:
+            delay_seconds = random.uniform(delay_seconds * 0.8, delay_seconds * 1.2)
+
+        return delay_seconds
+
     async def stream_events(
         self,
         stream_id: str | None = None,
@@ -182,6 +235,8 @@ class InMemoryEventStore(IEventStore):
     ) -> AsyncIterator[DomainEvent]:
         """
         Stream events in real-time.
+
+        Uses fidelity-aware timing when SimulationConfig is provided.
 
         Args:
             stream_id: Optional stream ID to filter by
@@ -202,8 +257,16 @@ class InMemoryEventStore(IEventStore):
             else:
                 events = self._all_events[from_version:].copy()
 
+        delay_seconds = await self._get_event_delay_seconds()
+
         for event in events:
-            await asyncio.sleep(0.001)  # Simulate streaming delay
+            if delay_seconds > 0:
+                if self._clock:
+                    # Use simulated clock for time manipulation
+                    await self._clock.sleep(delay_seconds)
+                else:
+                    # Fall back to asyncio.sleep
+                    await asyncio.sleep(delay_seconds)
             yield event
 
     async def get_stream_version(self, stream_id: str) -> int:
@@ -438,6 +501,8 @@ class InMemoryEventStore(IEventStore):
         """
         Replay events from a stream for debugging/recovery.
 
+        Uses fidelity-aware timing when SimulationConfig is provided.
+
         Args:
             stream_id: Unique stream identifier
             from_version: Starting version (default 0)
@@ -470,8 +535,16 @@ class InMemoryEventStore(IEventStore):
             # Copy to avoid holding lock during iteration
             events = events.copy()
 
+        delay_seconds = await self._get_event_delay_seconds()
+
         for event in events:
-            await asyncio.sleep(0.001)  # Simulate replay delay
+            if delay_seconds > 0:
+                if self._clock:
+                    # Use simulated clock for time manipulation
+                    await self._clock.sleep(delay_seconds)
+                else:
+                    # Fall back to asyncio.sleep
+                    await asyncio.sleep(delay_seconds)
             yield event
 
     async def get_statistics(self) -> dict[str, Any]:
