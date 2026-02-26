@@ -248,6 +248,54 @@ class TestSimulationEngineAdapterCreation:
         assert hasattr(adapter, "clock")
         assert adapter.clock is simulation_engine._clock
 
+    def test_create_repair_cycle_adapter_passes_container_adapter(self, simulation_engine):
+        """Test create_repair_cycle_adapter() passes container_adapter parameter.
+
+        Verifies that when a container_adapter is provided, it's correctly
+        passed to the MockRepairCycleAdapter for causal linking (FR-2/US-2.4).
+        This enables the repair adapter to extract test results from the
+        container adapter instead of using pre-configured sequences.
+        """
+        container_mock = Mock()
+        adapter = simulation_engine.create_repair_cycle_adapter(
+            container_adapter=container_mock
+        )
+
+        # Adapter should have received the container_adapter
+        assert adapter._container_adapter is container_mock
+
+    def test_create_repair_cycle_adapter_passes_checkpoint_store(self, simulation_engine):
+        """Test create_repair_cycle_adapter() passes checkpoint_store parameter.
+
+        Verifies that when a checkpoint_store is provided, it's correctly
+        passed to the MockRepairCycleAdapter for recovery testing.
+        """
+        checkpoint_mock = Mock()
+        adapter = simulation_engine.create_repair_cycle_adapter(
+            checkpoint_store=checkpoint_mock
+        )
+
+        # Adapter should have received the checkpoint_store
+        assert adapter._checkpoint_store is checkpoint_mock
+
+    def test_create_repair_cycle_adapter_passes_both_parameters(self, simulation_engine):
+        """Test create_repair_cycle_adapter() passes both parameters correctly.
+
+        Verifies parameter ordering is correct: checkpoint_store before
+        container_adapter, matching the adapter's __init__ signature.
+        """
+        checkpoint_mock = Mock()
+        container_mock = Mock()
+
+        adapter = simulation_engine.create_repair_cycle_adapter(
+            checkpoint_store=checkpoint_mock,
+            container_adapter=container_mock,
+        )
+
+        # Both should be passed correctly
+        assert adapter._checkpoint_store is checkpoint_mock
+        assert adapter._container_adapter is container_mock
+
     def test_create_review_cycle_adapter(self, simulation_engine):
         """Test create_review_cycle_adapter() creates adapter."""
         adapter = simulation_engine.create_review_cycle_adapter()
@@ -258,6 +306,21 @@ class TestSimulationEngineAdapterCreation:
         adapter = simulation_engine.create_review_cycle_adapter()
         assert hasattr(adapter, "clock")
         assert adapter.clock is simulation_engine._clock
+
+    def test_create_review_cycle_adapter_passes_llm_adapter(self, simulation_engine):
+        """Test create_review_cycle_adapter() passes llm_adapter parameter.
+
+        Verifies that when an llm_adapter is provided, it's correctly
+        passed to the MockReviewCycleAdapter for causal linking (FR-2/US-2.2).
+        This enables the review adapter to analyze actual LLM output instead
+        of using pre-configured sequences, allowing LLM code quality to
+        influence review decisions.
+        """
+        llm_mock = Mock()
+        adapter = simulation_engine.create_review_cycle_adapter(llm_adapter=llm_mock)
+
+        # Adapter should have received the llm_adapter
+        assert adapter._llm_adapter is llm_mock
 
     def test_create_metrics_query_adapter(self, simulation_engine):
         """Test create_metrics_query_adapter() creates adapter."""

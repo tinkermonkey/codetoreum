@@ -36,9 +36,20 @@ class CodetoreumEvent:
     ensuring consistent routing, tracing, and handling by the
     orchestrator regardless of the source vendor.
 
+    **EventBus Routing**: This class provides two type identifiers with
+    different purposes:
+    - `type` (field): Dot-notation type for semantic categorization
+      (e.g., "workitem.column_changed"). Human-readable, hierarchical,
+      used for event store queries and documentation.
+    - `event_type` (property): Class name for EventBus subscription routing
+      (e.g., "WorkItemColumnChangedEvent"). Matches legacy DomainEvent
+      routing behavior. When subscribing to events, use the class name,
+      not the dot-notation type.
+
     Attributes:
         type: Event type in dot notation (e.g., "workitem.column_changed",
-               "comment.needs_response"). Used for handler routing.
+               "comment.needs_response"). Used for semantic categorization
+               and event store queries.
         timestamp: ISO 8601 timestamp when event occurred.
         source: Adapter that emitted the event (e.g., "github", "jira", "trello").
                Used to identify adapter-specific fields in the event.
@@ -56,6 +67,7 @@ class CodetoreumEvent:
         ... )
         >>> event.type = "modified.event"  # ❌ Raises FrozenInstanceError
         >>> # Events are read-only after construction—this is enforced by the frozen dataclass
+        >>> event.event_type  # Returns "CodetoreumEvent" (class name)
     """
 
     type: str

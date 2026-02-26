@@ -233,6 +233,65 @@ class TestCodetoreumEventSerialization:
         assert len(json_str) > 0
 
 
+class TestEventTypeProperty:
+    """Test the event_type property for EventBus routing compatibility."""
+
+    def test_event_type_returns_class_name(self):
+        """Test that event_type property returns the class name."""
+        event = CodetoreumEvent(
+            type="workitem.created",
+            timestamp=now_iso(),
+            source="github",
+        )
+
+        assert event.event_type == "CodetoreumEvent"
+
+    def test_event_type_matches_legacy_domain_event_behavior(self):
+        """Test that event_type works with EventBus subscription routing.
+
+        The EventBus expects events to have an event_type property that
+        returns the class name for subscription matching. This ensures
+        compatibility between CodetoreumEvent (vendor-agnostic) and
+        legacy DomainEvent hierarchies.
+        """
+        event = CodetoreumEvent(
+            type="workitem.column_changed",
+            timestamp=now_iso(),
+            source="github",
+            correlation_id="test-123",
+        )
+
+        # event_type should be the class name, suitable for EventBus routing
+        assert event.event_type == "CodetoreumEvent"
+        # type should be the dot-notation, suitable for semantic categorization
+        assert event.type == "workitem.column_changed"
+
+    def test_event_type_property_is_read_only(self):
+        """Test that event_type is a computed property, not a field."""
+        event = CodetoreumEvent(
+            type="workitem.created",
+            timestamp=now_iso(),
+            source="github",
+        )
+
+        # event_type is read-only (property)
+        with pytest.raises(AttributeError):
+            event.event_type = "NewType"  # type: ignore
+
+    def test_event_type_distinct_from_type_field(self):
+        """Test that event_type (class name) differs from type (dot-notation)."""
+        event = CodetoreumEvent(
+            type="example.test.event",
+            timestamp=now_iso(),
+            source="test_adapter",
+        )
+
+        # They should be different
+        assert event.event_type != event.type
+        assert event.event_type == "CodetoreumEvent"
+        assert event.type == "example.test.event"
+
+
 class TestNowIso:
     """Test the now_iso() helper function."""
 
