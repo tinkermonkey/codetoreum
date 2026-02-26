@@ -301,14 +301,21 @@ class IAuthenticationPort(ABC):
         """
 
     @abstractmethod
-    async def revoke_api_key(self, key_id: UUID) -> None:
+    async def revoke_api_key(
+        self, key_id: UUID, requesting_user_id: UUID, is_admin: bool
+    ) -> None:
         """Revoke an API key.
 
+        Users can only revoke their own API keys. Admins can revoke any API key.
+
         Args:
-            key_id: API key ID
+            key_id: ID of the API key to revoke
+            requesting_user_id: User ID of the requester
+            is_admin: Whether the requester is an admin
 
         Raises:
             APIKeyNotFoundError: If API key does not exist
+            PermissionError: If the requester is not authorized to revoke this key
         """
 
     @abstractmethod
