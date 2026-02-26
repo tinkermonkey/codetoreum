@@ -42,13 +42,13 @@ class TestExecutionEventHandlerInitialization:
         mock_service = Mock(spec=ExecutionService)
         handler = ExecutionEventHandler(mock_service)
 
-        # Verify handler class has event_types attribute set by decorator
-        assert hasattr(ExecutionEventHandler, "event_types")
-        assert "ExecutionInitialized" in ExecutionEventHandler.event_types
-        assert "ExecutionStarted" in ExecutionEventHandler.event_types
-        assert "ExecutionCompleted" in ExecutionEventHandler.event_types
-        assert "ExecutionFailed" in ExecutionEventHandler.event_types
-        assert "ExecutionTimeout" in ExecutionEventHandler.event_types
+        # Verify handler has get_event_types method set by decorator
+        event_types = handler.get_event_types()
+        assert "ExecutionInitialized" in event_types
+        assert "ExecutionStarted" in event_types
+        assert "ExecutionCompleted" in event_types
+        assert "ExecutionFailed" in event_types
+        assert "ExecutionTimeout" in event_types
 
 
 @pytest.mark.asyncio
@@ -62,8 +62,6 @@ class TestExecutionEventHandlerMethods:
 
         event = ExecutionInitialized(
             aggregate_id="exec-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={
                 "agent_id": "agent-1",
                 "work_item_id": "wi-1",
@@ -84,8 +82,6 @@ class TestExecutionEventHandlerMethods:
 
         event = ExecutionStarted(
             aggregate_id="exec-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={"container_name": "container-1"},
         )
 
@@ -107,8 +103,6 @@ class TestExecutionEventHandlerMethods:
 
         event = ExecutionCompleted(
             aggregate_id="exec-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={"input_tokens": 100, "output_tokens": 200},
         )
 
@@ -130,8 +124,6 @@ class TestExecutionEventHandlerMethods:
 
         event = ExecutionFailed(
             aggregate_id="exec-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={
                 "error_message": "Test failed",
                 "exit_code": 1,
@@ -156,8 +148,6 @@ class TestExecutionEventHandlerMethods:
 
         event = ExecutionTimeout(
             aggregate_id="exec-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={},
         )
 
@@ -304,8 +294,6 @@ class TestExecutionEventHandlerWorkflow:
         # Initialization event
         init_event = ExecutionInitialized(
             aggregate_id="exec-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={
                 "agent_id": "agent-1",
                 "work_item_id": "wi-1",
@@ -320,8 +308,6 @@ class TestExecutionEventHandlerWorkflow:
         # Start event
         start_event = ExecutionStarted(
             aggregate_id="exec-1",
-            timestamp="2024-01-01T00:05:00Z",
-            source="test",
             payload={"container_name": "container-1"},
         )
         await handler.handle(start_event)
@@ -331,8 +317,6 @@ class TestExecutionEventHandlerWorkflow:
         # Completion event
         complete_event = ExecutionCompleted(
             aggregate_id="exec-1",
-            timestamp="2024-01-01T00:10:00Z",
-            source="test",
             payload={"input_tokens": 100, "output_tokens": 200},
         )
         await handler.handle(complete_event)
@@ -350,16 +334,12 @@ class TestExecutionEventHandlerWorkflow:
         for i in range(5):
             init_event = ExecutionInitialized(
                 aggregate_id=f"exec-{i}",
-                timestamp="2024-01-01T00:00:00Z",
-                source="test",
                 payload={"agent_id": f"agent-{i}"},
             )
             await handler.handle(init_event)
 
             start_event = ExecutionStarted(
                 aggregate_id=f"exec-{i}",
-                timestamp="2024-01-01T00:05:00Z",
-                source="test",
                 payload={},
             )
             await handler.handle(start_event)
@@ -372,8 +352,6 @@ class TestExecutionEventHandlerWorkflow:
         for i in range(3):
             complete_event = ExecutionCompleted(
                 aggregate_id=f"exec-{i}",
-                timestamp="2024-01-01T00:10:00Z",
-                source="test",
                 payload={},
             )
             await handler.handle(complete_event)
@@ -390,16 +368,12 @@ class TestExecutionEventHandlerWorkflow:
         # Initialize and start
         init_event = ExecutionInitialized(
             aggregate_id="exec-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={},
         )
         await handler.handle(init_event)
 
         start_event = ExecutionStarted(
             aggregate_id="exec-1",
-            timestamp="2024-01-01T00:05:00Z",
-            source="test",
             payload={},
         )
         await handler.handle(start_event)
@@ -407,8 +381,6 @@ class TestExecutionEventHandlerWorkflow:
         # Fail event
         fail_event = ExecutionFailed(
             aggregate_id="exec-1",
-            timestamp="2024-01-01T00:10:00Z",
-            source="test",
             payload={"error_message": "Container crashed", "exit_code": 139},
         )
         await handler.handle(fail_event)
@@ -425,16 +397,12 @@ class TestExecutionEventHandlerWorkflow:
         # Initialize and start
         init_event = ExecutionInitialized(
             aggregate_id="exec-1",
-            timestamp="2024-01-01T00:00:00Z",
-            source="test",
             payload={},
         )
         await handler.handle(init_event)
 
         start_event = ExecutionStarted(
             aggregate_id="exec-1",
-            timestamp="2024-01-01T00:05:00Z",
-            source="test",
             payload={},
         )
         await handler.handle(start_event)
@@ -442,8 +410,6 @@ class TestExecutionEventHandlerWorkflow:
         # Timeout event
         timeout_event = ExecutionTimeout(
             aggregate_id="exec-1",
-            timestamp="2024-01-01T00:10:00Z",
-            source="test",
             payload={},
         )
         await handler.handle(timeout_event)
@@ -477,8 +443,6 @@ class TestExecutionEventHandlerWorkflow:
             # Initialize
             init_event = ExecutionInitialized(
                 aggregate_id=exec_id,
-                timestamp="2024-01-01T00:00:00Z",
-                source="test",
                 payload={},
             )
             await handler.handle(init_event)
@@ -486,8 +450,6 @@ class TestExecutionEventHandlerWorkflow:
             # Start
             start_event = ExecutionStarted(
                 aggregate_id=exec_id,
-                timestamp="2024-01-01T00:05:00Z",
-                source="test",
                 payload={},
             )
             await handler.handle(start_event)
@@ -496,22 +458,16 @@ class TestExecutionEventHandlerWorkflow:
             if event_type == ExecutionCompleted:
                 complete_event = ExecutionCompleted(
                     aggregate_id=exec_id,
-                    timestamp="2024-01-01T00:10:00Z",
-                    source="test",
                     payload={},
                 )
             elif event_type == ExecutionFailed:
                 complete_event = ExecutionFailed(
                     aggregate_id=exec_id,
-                    timestamp="2024-01-01T00:10:00Z",
-                    source="test",
                     payload={"error_message": "Failed"},
                 )
             else:  # ExecutionTimeout
                 complete_event = ExecutionTimeout(
                     aggregate_id=exec_id,
-                    timestamp="2024-01-01T00:10:00Z",
-                    source="test",
                     payload={},
                 )
 
