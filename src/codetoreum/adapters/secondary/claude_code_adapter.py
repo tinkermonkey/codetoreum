@@ -477,14 +477,14 @@ class ClaudeCodeAdapter(ILLMProvider):
                 },
             )
 
-        except FileNotFoundError:
+        except FileNotFoundError as e:
             msg = f"Claude CLI not found at: {self.config.claude_cli_path}"
-            raise LLMProviderError(msg)
+            raise LLMProviderError(msg) from e
         except Exception as e:
             if isinstance(e, (LLMProviderError, AuthenticationError, RateLimitError)):
                 raise
             msg = f"Execution error: {e!s}"
-            raise LLMProviderError(msg)
+            raise LLMProviderError(msg) from e
 
     async def execute_with_tools(
         self,
@@ -634,7 +634,7 @@ class ClaudeCodeAdapter(ILLMProvider):
                 raise
             sanitized_error = self._sanitize_error_message(str(e))
             msg = f"Streaming error: {sanitized_error}"
-            raise StreamingError(msg)
+            raise StreamingError(msg) from e
 
     async def create_conversation(
         self,
@@ -829,16 +829,16 @@ class ClaudeCodeAdapter(ILLMProvider):
                     raise LLMProviderError(msg)
             except Exception as e:
                 msg = f"Credential validation failed: {e!s}"
-                raise LLMProviderError(msg)
+                raise LLMProviderError(msg) from e
 
             return True
 
-        except FileNotFoundError:
+        except FileNotFoundError as e:
             msg = f"Claude CLI not found at: {self.config.claude_cli_path}"
-            raise LLMProviderError(msg)
-        except subprocess.TimeoutExpired:
+            raise LLMProviderError(msg) from e
+        except subprocess.TimeoutExpired as e:
             msg = "Claude CLI version check timed out"
-            raise LLMProviderError(msg)
+            raise LLMProviderError(msg) from e
 
     async def __aenter__(self):
         """Async context manager entry."""

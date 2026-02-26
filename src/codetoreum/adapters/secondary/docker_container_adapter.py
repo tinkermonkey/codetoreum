@@ -94,7 +94,7 @@ class DockerContainerAdapter(IContainer):
 
             except Exception as e:
                 msg = f"Failed to connect to Docker: {e!s}"
-                raise ContainerError(msg)
+                raise ContainerError(msg) from e
 
         return self._docker_client
 
@@ -131,7 +131,7 @@ class DockerContainerAdapter(IContainer):
 
             except (OSError, RuntimeError) as e:
                 msg = f"Invalid host path '{host_path}': {e}"
-                raise ValidationError(msg)
+                raise ValidationError(msg) from e
 
             # Parse container_path:mode
             parts = spec.split(":")
@@ -241,13 +241,13 @@ class DockerContainerAdapter(IContainer):
                 # Check if image exists locally
                 try:
                     client.images.get(image)
-                except docker.errors.ImageNotFound:
+                except docker.errors.ImageNotFound as e:
                     msg = f"Image not found: {image}"
-                    raise ImageNotFoundError(msg)
+                    raise ImageNotFoundError(msg) from e
                 except docker.errors.APIError as e:
                     # Re-raise other Docker errors as ContainerExecutionError
                     msg = f"Failed to check image: {e!s}"
-                    raise ContainerExecutionError(msg)
+                    raise ContainerExecutionError(msg) from e
 
                 # Create and start container with auto-removal enabled
                 container = client.containers.run(**container_config)
@@ -338,7 +338,7 @@ class DockerContainerAdapter(IContainer):
                         )
 
                 msg = f"Container execution failed: {e!s}"
-                raise ContainerExecutionError(msg)
+                raise ContainerExecutionError(msg) from e
 
         try:
             # Create executor task for cancellation support
@@ -368,7 +368,7 @@ class DockerContainerAdapter(IContainer):
             raise
         except Exception as e:
             msg = f"Unexpected error: {e!s}"
-            raise ContainerExecutionError(msg)
+            raise ContainerExecutionError(msg) from e
 
     @instrument_async_function(
         name="container.create",
@@ -452,7 +452,7 @@ class DockerContainerAdapter(IContainer):
                 raise
             except Exception as e:
                 msg = f"Failed to create container: {e!s}"
-                raise ContainerError(msg)
+                raise ContainerError(msg) from e
 
         container_id = await loop.run_in_executor(None, _create)
 
@@ -505,9 +505,9 @@ class DockerContainerAdapter(IContainer):
             except Exception as e:
                 if "not found" in str(e).lower():
                     msg = "Container"
-                    raise ResourceNotFoundError(msg, container_id)
+                    raise ResourceNotFoundError(msg, container_id) from e
                 msg = f"Failed to start container: {e!s}"
-                raise ContainerError(msg)
+                raise ContainerError(msg) from e
 
         await loop.run_in_executor(None, _start)
 
@@ -539,9 +539,9 @@ class DockerContainerAdapter(IContainer):
             except Exception as e:
                 if "not found" in str(e).lower():
                     msg = "Container"
-                    raise ResourceNotFoundError(msg, container_id)
+                    raise ResourceNotFoundError(msg, container_id) from e
                 msg = f"Failed to stop container: {e!s}"
-                raise ContainerError(msg)
+                raise ContainerError(msg) from e
 
         await loop.run_in_executor(None, _stop)
 
@@ -574,9 +574,9 @@ class DockerContainerAdapter(IContainer):
                 if "not found" in str(e).lower():
                     # Container already removed - still success
                     msg = "Container"
-                    raise ResourceNotFoundError(msg, container_id)
+                    raise ResourceNotFoundError(msg, container_id) from e
                 msg = f"Failed to remove container: {e!s}"
-                raise ContainerError(msg)
+                raise ContainerError(msg) from e
 
         try:
             await loop.run_in_executor(None, _remove)
@@ -619,9 +619,9 @@ class DockerContainerAdapter(IContainer):
             except Exception as e:
                 if "not found" in str(e).lower():
                     msg = "Container"
-                    raise ResourceNotFoundError(msg, container_id)
+                    raise ResourceNotFoundError(msg, container_id) from e
                 msg = f"Failed to kill container: {e!s}"
-                raise ContainerError(msg)
+                raise ContainerError(msg) from e
 
         await loop.run_in_executor(None, _kill)
 
@@ -675,9 +675,9 @@ class DockerContainerAdapter(IContainer):
             except Exception as e:
                 if "not found" in str(e).lower():
                     msg = "Container"
-                    raise ResourceNotFoundError(msg, container_id)
+                    raise ResourceNotFoundError(msg, container_id) from e
                 msg = f"Failed to get logs: {e!s}"
-                raise ContainerError(msg)
+                raise ContainerError(msg) from e
 
         return await loop.run_in_executor(None, _get_logs)
 
@@ -763,9 +763,9 @@ class DockerContainerAdapter(IContainer):
             except Exception as e:
                 if "not found" in str(e).lower():
                     msg = "Container"
-                    raise ResourceNotFoundError(msg, container_id)
+                    raise ResourceNotFoundError(msg, container_id) from e
                 msg = f"Failed to get status: {e!s}"
-                raise ContainerError(msg)
+                raise ContainerError(msg) from e
 
         return await loop.run_in_executor(None, _get_status)
 
@@ -827,9 +827,9 @@ class DockerContainerAdapter(IContainer):
             except Exception as e:
                 if "not found" in str(e).lower():
                     msg = "Container"
-                    raise ResourceNotFoundError(msg, container_id)
+                    raise ResourceNotFoundError(msg, container_id) from e
                 msg = f"Failed to execute command: {e!s}"
-                raise ContainerError(msg)
+                raise ContainerError(msg) from e
 
         return await loop.run_in_executor(None, _exec)
 
@@ -917,7 +917,7 @@ class DockerContainerAdapter(IContainer):
 
             except Exception as e:
                 msg = f"Failed to list containers: {e!s}"
-                raise ContainerError(msg)
+                raise ContainerError(msg) from e
 
         return await loop.run_in_executor(None, _list)
 
@@ -950,12 +950,12 @@ class DockerContainerAdapter(IContainer):
             except Exception as e:
                 if "not found" in str(e).lower():
                     msg = f"Image not found: {image}:{tag}"
-                    raise ImageNotFoundError(msg)
+                    raise ImageNotFoundError(msg) from e
                 if "unauthorized" in str(e).lower() or "authentication" in str(e).lower():
                     msg = f"Authentication failed for image: {image}:{tag}"
-                    raise AuthenticationError(msg)
+                    raise AuthenticationError(msg) from e
                 msg = f"Failed to pull image: {e!s}"
-                raise ContainerError(msg)
+                raise ContainerError(msg) from e
 
         await loop.run_in_executor(None, _pull)
 
@@ -992,7 +992,7 @@ class DockerContainerAdapter(IContainer):
                     },
                 )
                 msg = f"Failed to check if image exists: {e!s}"
-                raise ContainerError(msg)
+                raise ContainerError(msg) from e
 
         return await loop.run_in_executor(None, _check)
 
@@ -1017,9 +1017,9 @@ class DockerContainerAdapter(IContainer):
             except Exception as e:
                 if "not found" in str(e).lower():
                     msg = "Container"
-                    raise ResourceNotFoundError(msg, container_id)
+                    raise ResourceNotFoundError(msg, container_id) from e
                 msg = f"Failed to inspect container: {e!s}"
-                raise ContainerError(msg)
+                raise ContainerError(msg) from e
 
         return await loop.run_in_executor(None, _inspect)
 
@@ -1051,12 +1051,12 @@ class DockerContainerAdapter(IContainer):
             except Exception as e:
                 if "not found" in str(e).lower():
                     msg = "Container"
-                    raise ResourceNotFoundError(msg, container_id)
+                    raise ResourceNotFoundError(msg, container_id) from e
                 if "timeout" in str(e).lower():
                     msg = f"Wait timed out after {timeout}s"
-                    raise ContainerTimeoutError(msg)
+                    raise ContainerTimeoutError(msg) from e
                 msg = f"Failed to wait for container: {e!s}"
-                raise ContainerError(msg)
+                raise ContainerError(msg) from e
 
         exit_code = await loop.run_in_executor(None, _wait)
         duration_seconds = time.time() - start_time
@@ -1109,9 +1109,9 @@ class DockerContainerAdapter(IContainer):
             except Exception as e:
                 if "not found" in str(e).lower() and "container" in str(e).lower():
                     msg = "Container"
-                    raise ResourceNotFoundError(msg, container_id)
+                    raise ResourceNotFoundError(msg, container_id) from e
                 msg = f"Failed to copy to container: {e!s}"
-                raise ContainerError(msg)
+                raise ContainerError(msg) from e
 
         await loop.run_in_executor(None, _copy)
 
@@ -1155,9 +1155,9 @@ class DockerContainerAdapter(IContainer):
             except Exception as e:
                 if "not found" in str(e).lower() and "container" in str(e).lower():
                     msg = "Container"
-                    raise ResourceNotFoundError(msg, container_id)
+                    raise ResourceNotFoundError(msg, container_id) from e
                 msg = f"Failed to copy from container: {e!s}"
-                raise ContainerError(msg)
+                raise ContainerError(msg) from e
 
         await loop.run_in_executor(None, _copy)
 

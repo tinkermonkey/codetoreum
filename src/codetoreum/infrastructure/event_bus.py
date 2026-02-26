@@ -357,7 +357,7 @@ class EventBus:
                 },
             )
             message = f"Connection error publishing event: {e}. This may be transient - please retry."
-            raise EventBusError(message)
+            raise EventBusError(message) from e
         except ValueError as e:
             # Validation errors - permanent issues with event data
             logger.error(
@@ -370,7 +370,7 @@ class EventBus:
                 },
             )
             message = f"Invalid event data: {e}. Please check event structure."
-            raise EventBusError(message)
+            raise EventBusError(message) from e
         except Exception as e:
             # Unexpected errors that don't fit other categories
             logger.critical(

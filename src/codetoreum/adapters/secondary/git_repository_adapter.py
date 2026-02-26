@@ -156,21 +156,21 @@ class GitRepositoryAdapter(IRepository):
 
                 if "authentication" in error_text or "permission denied" in error_text:
                     msg = f"Git authentication failed: {e.stderr}"
-                    raise AuthenticationError(msg)
+                    raise AuthenticationError(msg) from e
                 if "conflict" in error_text or "merge conflict" in error_text:
                     msg = f"Merge conflict detected: {e.stderr}"
-                    raise MergeConflictError(msg)
+                    raise MergeConflictError(msg) from e
                 if "not found" in error_text:
                     msg = "Git resource"
-                    raise ResourceNotFoundError(msg, str(args))
+                    raise ResourceNotFoundError(msg, str(args)) from e
                 msg = f"Git command failed: {e.stderr}"
-                raise RepositoryError(msg)
-            except subprocess.TimeoutExpired:
+                raise RepositoryError(msg) from e
+            except subprocess.TimeoutExpired as e:
                 msg = f"Git command timed out after {self.config.timeout_seconds}s"
-                raise RepositoryError(msg)
-            except FileNotFoundError:
+                raise RepositoryError(msg) from e
+            except FileNotFoundError as e:
                 msg = f"Git executable not found at: {self.config.git_path}"
-                raise RepositoryError(msg)
+                raise RepositoryError(msg) from e
 
         return await loop.run_in_executor(None, _run)
 
