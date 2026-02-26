@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any, cast
 
+from codetoreum.domain.agent import Agent, AgentCapability, AgentType
 from codetoreum.domain.events import (
     PipelineCompleted,
     PipelineFailed,
@@ -14,6 +15,8 @@ from codetoreum.domain.events import (
     PipelineStageStarted,
 )
 from codetoreum.domain.pipeline_stage import PipelineStage, StageStatus
+from codetoreum.domain.value_objects import ExecutionContext as ExecutionContextVO
+from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
 from codetoreum.domain.workflow import Workflow
 from codetoreum.ports.output import IEventStore
 
@@ -408,10 +411,8 @@ class PipelineManager:
                 raise ValueError(f"Stage {stage.name} missing required 'agent_id' in agent_config")
 
             # Build agent and work item for execution (minimal required data)
-            # In production, these would be retrieved from repositories
-            from codetoreum.domain.agent import Agent, AgentCapability, AgentType
-            from codetoreum.domain.work_item import WorkItem, WorkItemStatus, WorkItemPriority
-
+            # TODO: In production, these should be retrieved from repositories instead of
+            # constructing inline from configuration. This is a placeholder for initial implementation.
             # Create agent capabilities
             capabilities_config = stage.agent_config.get("capabilities", {})
             if not capabilities_config:
@@ -485,8 +486,6 @@ class PipelineManager:
             )
 
             # Build execution context
-            from codetoreum.domain.value_objects import ExecutionContext as ExecutionContextVO
-
             exec_context = ExecutionContextVO(
                 project_id=context.get("project_id", ""),
                 work_item_id=work_item_id,

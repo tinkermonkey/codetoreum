@@ -25,6 +25,12 @@ from codetoreum.ports.output.event_store import IEventStore
 
 logger = logging.getLogger(__name__)
 
+# Claude API pricing (tokens per 1K tokens)
+# NOTE: These rates should be configurable via environment or config store
+# Currently hardcoded but must be updated when Claude pricing changes
+CLAUDE_INPUT_COST_PER_1K_TOKENS = 0.003
+CLAUDE_OUTPUT_COST_PER_1K_TOKENS = 0.015
+
 
 class MetricsService(IMetricsQueryPort):
     """
@@ -212,6 +218,10 @@ class MetricsService(IMetricsQueryPort):
             limit=10000,
         )
 
+        # Filter to time range (end_time boundary)
+        retry_events = [e for e in retry_events if e.occurred_at <= end_time]
+        timeout_events = [e for e in timeout_events if e.occurred_at <= end_time]
+
         # Count retry attempts and outcomes
         retry_attempts = len(retry_events)
         retry_successes = sum(1 for e in retry_events if e.payload.get("success", False))
@@ -247,7 +257,7 @@ class MetricsService(IMetricsQueryPort):
         event_store_latency = None
         try:
             check_start = datetime.now(UTC)
-            stats = await self.event_store.get_statistics()
+            await self.event_store.get_statistics()
             event_store_latency = (datetime.now(UTC) - check_start).total_seconds() * 1000
         except Exception as e:
             logger.warning(
@@ -295,8 +305,10 @@ class MetricsService(IMetricsQueryPort):
             )
             if container_events or container_stopped:
                 docker_connected = True
-                # Rough calculation of running containers
-                docker_containers_running = max(0, len(container_events) - len(container_stopped))
+                # Track running containers by ID (containers may start/stop multiple times)
+                started_ids = {e.payload.get("container_id") for e in container_events if "container_id" in e.payload}
+                stopped_ids = {e.payload.get("container_id") for e in container_stopped if "container_id" in e.payload}
+                docker_containers_running = len(started_ids - stopped_ids)
         except Exception as e:
             logger.debug(f"Could not check Docker connectivity: {e}")
 
@@ -411,9 +423,30 @@ class MetricsService(IMetricsQueryPort):
         if calculation_type == "count":
             data_points = [{"timestamp": start_time.isoformat(), "value": len(filtered_events)}]
         elif calculation_type == "rate":
-            total_events = len(filtered_events)
-            if total_events > 0:
-                rate = (total_events / max(1, total_events)) * 100
+            # For rate calculations, query the denominator separately
+            if metric_name == "execution_success_rate":
+                # Success rate = completed / started
+                started_events = await self.event_store.get_events_by_type(
+                    event_type="AgentExecutionStarted",
+                    since=start_time,
+                    limit=10000,
+                )
+                started_events = [e for e in started_events if e.occurred_at <= end_time]
+                total_started = len(started_events)
+                total_completed = len(filtered_events)
+                rate = (total_completed / total_started * 100) if total_started > 0 else 0.0
+                data_points = [{"timestamp": start_time.isoformat(), "value": rate}]
+            elif metric_name == "error_rate":
+                # Error rate = failed / started
+                started_events = await self.event_store.get_events_by_type(
+                    event_type="AgentExecutionStarted",
+                    since=start_time,
+                    limit=10000,
+                )
+                started_events = [e for e in started_events if e.occurred_at <= end_time]
+                total_started = len(started_events)
+                total_failed = len(filtered_events)
+                rate = (total_failed / total_started * 100) if total_started > 0 else 0.0
                 data_points = [{"timestamp": start_time.isoformat(), "value": rate}]
         elif calculation_type == "duration":
             durations = [e.payload.get("duration_seconds", 0) for e in filtered_events if "duration_seconds" in e.payload]
@@ -440,17 +473,12 @@ class MetricsService(IMetricsQueryPort):
         Returns:
             List of metric names
         """
-        # List of available metrics that can be queried
+        # List of metrics available via get_metric_time_series
         available_metrics = [
             "execution_count",
             "execution_success_rate",
             "execution_avg_duration",
             "error_rate",
-            "active_executions",
-            "completed_executions",
-            "failed_executions",
-            "container_count",
-            "queue_depth",
         ]
 
         if prefix:
@@ -503,7 +531,7 @@ class MetricsService(IMetricsQueryPort):
                     "requests": 0,
                     "errors": 0,
                     "total_latency_ms": 0,
-                    "min_latency_ms": float("inf"),
+                    "min_latency_ms": None,
                     "max_latency_ms": 0,
                 }
 
@@ -513,7 +541,10 @@ class MetricsService(IMetricsQueryPort):
 
             latency = event.payload.get("latency_ms", 0)
             endpoints[ep]["total_latency_ms"] += latency
-            endpoints[ep]["min_latency_ms"] = min(endpoints[ep]["min_latency_ms"], latency)
+            if endpoints[ep]["min_latency_ms"] is None:
+                endpoints[ep]["min_latency_ms"] = latency
+            else:
+                endpoints[ep]["min_latency_ms"] = min(endpoints[ep]["min_latency_ms"], latency)
             endpoints[ep]["max_latency_ms"] = max(endpoints[ep]["max_latency_ms"], latency)
 
         # Calculate averages and error rates
@@ -521,6 +552,9 @@ class MetricsService(IMetricsQueryPort):
             if ep_metrics["requests"] > 0:
                 ep_metrics["avg_latency_ms"] = ep_metrics["total_latency_ms"] / ep_metrics["requests"]
                 ep_metrics["error_rate"] = ep_metrics["errors"] / ep_metrics["requests"]
+                # Ensure min_latency_ms is a number (shouldn't be None given requests > 0, but be safe)
+                if ep_metrics["min_latency_ms"] is None:
+                    ep_metrics["min_latency_ms"] = 0
             else:
                 ep_metrics["avg_latency_ms"] = 0
                 ep_metrics["error_rate"] = 0
@@ -693,8 +727,10 @@ class MetricsService(IMetricsQueryPort):
         output_tokens_today = sum(e.payload.get("output_tokens", 0) for e in llm_events)
         total_tokens_today = input_tokens_today + output_tokens_today
 
-        # Estimate cost (simplified - $0.003 per 1K input tokens, $0.015 per 1K output tokens)
-        estimated_cost = (input_tokens_today / 1000 * 0.003) + (output_tokens_today / 1000 * 0.015)
+        # Estimate cost based on configured rates
+        estimated_cost = (input_tokens_today / 1000 * CLAUDE_INPUT_COST_PER_1K_TOKENS) + (
+            output_tokens_today / 1000 * CLAUDE_OUTPUT_COST_PER_1K_TOKENS
+        )
 
         return {
             "claude_api": {
