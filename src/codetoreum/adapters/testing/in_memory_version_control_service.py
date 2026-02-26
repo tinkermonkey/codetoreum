@@ -5,6 +5,8 @@ git operations (clone, pull, checkout, commit, push) without actual filesystem o
 git operations. Useful for testing orchestration logic without external dependencies.
 """
 
+import hashlib
+
 from codetoreum.ports.output.version_control_service import (
     IVersionControlService,
     Repository,
@@ -176,8 +178,6 @@ class InMemoryVersionControlService(IVersionControlService):
 
         # Generate a mock commit SHA based on the message
         # In reality this would be a full git hash
-        import hashlib
-
         commit_sha = hashlib.sha1(f"{message}-{current_branch}".encode()).hexdigest()[:40]
 
         # Add commit to current branch

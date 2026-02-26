@@ -229,9 +229,9 @@ class SimulationApplicationBootstrap:
     Bootstrap the entire application stack in simulation mode.
 
     This class wires up:
-    1. All 16 mock adapters (5 via AdapterFactory + 8 additional)
+    1. All 24 testing and simulation adapters
     2. Infrastructure (event bus, clock, logger)
-    3. All 8 application services
+    3. All application services
     4. All input/output ports
     5. FastAPI application
 

@@ -13,6 +13,7 @@ from codetoreum.adapters.testing.in_memory_queue_service import InMemoryQueueSer
 from codetoreum.adapters.testing.in_memory_repository_adapter import (
     InMemoryRepositoryAdapter,
 )
+from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
 from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
 from codetoreum.adapters.testing.in_memory_version_control_service import (
     InMemoryVersionControlService,
@@ -42,6 +43,8 @@ from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
 from codetoreum.adapters.testing.simple_encryption_adapter import (
     SimpleEncryptionAdapter,
 )
+# Re-export ConfigurableIdentityService from secondary package
+# This adapter is used in simulation and testing contexts for configurable identity verification
 from codetoreum.adapters.secondary.configurable_identity_service import (
     ConfigurableIdentityService,
 )
@@ -58,6 +61,7 @@ __all__ = [
     "InMemoryMetricsAdapter",
     "InMemoryQueueService",
     "InMemoryRepositoryAdapter",
+    "InMemoryStorageAdapter",
     "InMemoryTicketAdapter",
     "InMemoryVersionControlService",
     "InMemoryWorkflowConfigService",

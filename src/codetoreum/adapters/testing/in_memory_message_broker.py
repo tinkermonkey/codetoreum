@@ -5,11 +5,16 @@ pub/sub messaging without external infrastructure like Redis. Useful for
 testing distributed event distribution logic without external dependencies.
 """
 
+import asyncio
+import inspect
+import logging
 from collections import defaultdict
 from typing import Any, Callable
 
 from codetoreum.domain.events import DomainEvent
 from codetoreum.ports.output.message_broker import IMessageBroker
+
+_logger = logging.getLogger(__name__)
 
 
 class InMemoryMessageBroker(IMessageBroker):
@@ -121,9 +126,6 @@ class InMemoryMessageBroker(IMessageBroker):
             MessageBrokerError: If subscription fails
         """
         # Determine if callback is async
-        import asyncio
-        import inspect
-
         is_async = asyncio.iscoroutinefunction(callback) or inspect.iscoroutinefunction(callback)
 
         self._subscriptions[channel].append((callback, is_async))
@@ -203,6 +205,7 @@ class InMemoryMessageBroker(IMessageBroker):
                 self._stats["messages_delivered"] += 1
             except Exception:
                 self._stats["delivery_failures"] += 1
+                _logger.error("Message delivery failed for channel %s", channel, exc_info=True)
 
     def get_published_messages(self) -> list[Any]:
         """Test helper: Get all published messages.

@@ -33,7 +33,7 @@ import pytest
 from codetoreum.adapters.secondary.configurable_identity_service import (
     ConfigurableIdentityService,
 )
-from codetoreum.adapters.secondary.mock_discussion_adapter import MockDiscussionAdapter
+from codetoreum.adapters.testing import MockDiscussionAdapter
 from codetoreum.domain.events.discussion_events import CommentNeedsResponseEvent
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation import (
