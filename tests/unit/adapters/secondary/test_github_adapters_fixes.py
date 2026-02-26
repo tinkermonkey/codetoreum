@@ -46,9 +46,9 @@ class TestGitHubTicketAdapterResilience:
         adapter = GitHubTicketAdapter(config)
 
         # Method should not exist
-        assert not hasattr(adapter, "_wait_for_rate_limit_if_needed"), (
-            "_wait_for_rate_limit_if_needed should be removed (embedded resilience logic)"
-        )
+        assert not hasattr(
+            adapter, "_wait_for_rate_limit_if_needed"
+        ), "_wait_for_rate_limit_if_needed should be removed (embedded resilience logic)"
 
     @pytest.mark.asyncio
     async def test_make_request_does_not_call_rate_limit_wait(self):
@@ -95,9 +95,9 @@ class TestGitHubWebhookAdapterCache:
             logger=mock_logger,
         )
 
-        assert isinstance(adapter._processed_deliveries, OrderedDict), (
-            "Cache should use OrderedDict for FIFO insertion-order tracking"
-        )
+        assert isinstance(
+            adapter._processed_deliveries, OrderedDict
+        ), "Cache should use OrderedDict for FIFO insertion-order tracking"
 
     def test_cache_bounded_at_configured_size(self):
         """Verify cache respects configured maximum size."""
@@ -152,9 +152,9 @@ class TestGitHubWebhookAdapterCache:
         adapter._evict_old_entries_if_needed()
 
         # Should have evicted 10% (10 entries) - now back to 90 - 10 + 1 = 81
-        assert len(adapter._processed_deliveries) <= cache_size, (
-            "Cache should not exceed configured size after eviction"
-        )
+        assert (
+            len(adapter._processed_deliveries) <= cache_size
+        ), "Cache should not exceed configured size after eviction"
 
     def test_eviction_removes_oldest_entries_fifo(self):
         """Verify eviction removes oldest (first inserted) entries."""
@@ -248,9 +248,9 @@ class TestGitHubWebhookAdapterCache:
         )
 
         # Should not have a _delivery_timestamps attribute
-        assert not hasattr(adapter, "_delivery_timestamps"), (
-            "OrderedDict eliminates need for separate timestamp tracking"
-        )
+        assert not hasattr(
+            adapter, "_delivery_timestamps"
+        ), "OrderedDict eliminates need for separate timestamp tracking"
 
 
 class TestGitHubWebhookAdapterExceptionChaining:
@@ -292,9 +292,9 @@ class TestGitHubWebhookAdapterExceptionChaining:
 
             # Verify the exception has a cause chain
             # HTTPException should have been raised with `from e`
-            assert exc_info.value.__cause__ is not None or isinstance(exc_info.value.__context__, Exception), (
-                "Exception should preserve context chain"
-            )
+            assert exc_info.value.__cause__ is not None or isinstance(
+                exc_info.value.__context__, Exception
+            ), "Exception should preserve context chain"
 
 
 if __name__ == "__main__":

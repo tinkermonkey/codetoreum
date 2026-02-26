@@ -260,9 +260,9 @@ class TestScenarioD_HumanIntervention:
         )
 
         # Verify engineer triggered
-        assert agent_executor.was_triggered("senior_software_engineer", "work-item-100"), (
-            "Engineer should be triggered in Development"
-        )
+        assert agent_executor.was_triggered(
+            "senior_software_engineer", "work-item-100"
+        ), "Engineer should be triggered in Development"
 
         # Auto-progress through Code Review and Testing
         await event_handler.handle_agent_completion(work_item_id="work-item-100", board_id="board-1", success=True)
@@ -320,9 +320,9 @@ class TestScenarioD_HumanIntervention:
 
         # Step 3: Verify repair cycle cleaned up
         agent_executor.stop_repair_cycle("work-item-100")
-        assert not agent_executor.is_repair_cycle_active("work-item-100"), (
-            "Repair cycle should be cleaned up after human backward movement"
-        )
+        assert not agent_executor.is_repair_cycle_active(
+            "work-item-100"
+        ), "Repair cycle should be cleaned up after human backward movement"
 
         # Step 4: Verify engineer agent re-triggered
         # Count how many times engineer was triggered (should be 2: initial + re-trigger)
@@ -460,13 +460,13 @@ class TestScenarioD_HumanIntervention:
         )
 
         # Step 2: Verify Code Review and Testing agents were NOT triggered
-        assert agent_executor.get_execution_count("code_reviewer") == initial_reviewer_count, (
-            "Code reviewer should NOT be triggered when human skips Code Review column"
-        )
+        assert (
+            agent_executor.get_execution_count("code_reviewer") == initial_reviewer_count
+        ), "Code reviewer should NOT be triggered when human skips Code Review column"
 
-        assert agent_executor.get_execution_count("test_runner") == initial_tester_count, (
-            "Test runner should NOT be triggered when human skips Testing column"
-        )
+        assert (
+            agent_executor.get_execution_count("test_runner") == initial_tester_count
+        ), "Test runner should NOT be triggered when human skips Testing column"
 
         # Step 3: Verify movement history shows skip
         history = board_service.get_movement_history("work-item-100")
@@ -486,9 +486,9 @@ class TestScenarioD_HumanIntervention:
 
         # The first entry to Staged should be from Development (the skip)
         first_to_staged = staged_entries[0]
-        assert first_to_staged.from_column == "Development", (
-            "Human skip should jump directly from Development to Staged"
-        )
+        assert (
+            first_to_staged.from_column == "Development"
+        ), "Human skip should jump directly from Development to Staged"
         assert first_to_staged.moved_by == MovedByType.HUMAN, "Skip should be marked as human movement"
 
 

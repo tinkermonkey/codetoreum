@@ -36,9 +36,9 @@ class InMemoryCheckpointStore(IRepairCycleCheckpointStore):
 
     def __init__(self) -> None:
         """Initialize in-memory checkpoint store."""
-        self._checkpoints: dict[
-            tuple[str, str], tuple[RepairCycleCheckpoint, datetime]
-        ] = {}  # Key: (workflow_run_id, test_type), Value: (checkpoint, saved_time)
+        self._checkpoints: dict[tuple[str, str], tuple[RepairCycleCheckpoint, datetime]] = (
+            {}
+        )  # Key: (workflow_run_id, test_type), Value: (checkpoint, saved_time)
         self._lock = threading.RLock()
 
     async def save_checkpoint(self, checkpoint: RepairCycleCheckpoint) -> None:

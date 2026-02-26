@@ -224,9 +224,9 @@ async def test_all_scenarios_meet_performance_target() -> None:
 
     # Verify all meet performance target
     for name, result in results:
-        assert result.speed_multiplier >= 10.0, (
-            f"{name} failed to meet 10x performance target (achieved {result.speed_multiplier:.1f}x)"
-        )
+        assert (
+            result.speed_multiplier >= 10.0
+        ), f"{name} failed to meet 10x performance target (achieved {result.speed_multiplier:.1f}x)"
 
     # Verify all succeeded
     for name, result in results:
