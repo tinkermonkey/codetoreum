@@ -129,6 +129,9 @@ async def test_commit_workflow(git_adapter, temp_repo):
     assert status.is_dirty is True
     assert "test.txt" in status.untracked_files
 
+    # Stage the file
+    await git_adapter.stage_files(repo_path, ["test.txt"])
+
     # Commit
     commit_sha = await git_adapter.commit(
         repo_path,
@@ -166,6 +169,8 @@ async def test_get_commit_info(git_adapter, temp_repo):
     test_file = repo_path / "test.txt"
     test_file.write_text("Test content")
 
+    # Stage and commit
+    await git_adapter.stage_files(repo_path, ["test.txt"])
     commit_sha = await git_adapter.commit(
         repo_path,
         message="Test commit",
@@ -206,6 +211,8 @@ async def test_get_commit_history(git_adapter, temp_repo):
         test_file = repo_path / f"file{i}.txt"
         test_file.write_text(f"Content {i}")
 
+        # Stage and commit
+        await git_adapter.stage_files(repo_path, [f"file{i}.txt"])
         await git_adapter.commit(
             repo_path,
             message=f"Commit {i}",
@@ -241,6 +248,7 @@ async def test_merge_branches(git_adapter, temp_repo):
 
     # Create initial commit on main
     (repo_path / "main.txt").write_text("Main")
+    await git_adapter.stage_files(repo_path, ["main.txt"])
     await git_adapter.commit(
         repo_path,
         message="Main commit",
@@ -254,6 +262,7 @@ async def test_merge_branches(git_adapter, temp_repo):
 
     # Create commit on feature branch
     (repo_path / "feature.txt").write_text("Feature")
+    await git_adapter.stage_files(repo_path, ["feature.txt"])
     await git_adapter.commit(
         repo_path,
         message="Feature commit",
@@ -292,6 +301,7 @@ async def test_diff(git_adapter, temp_repo):
 
     # Create first commit
     (repo_path / "file.txt").write_text("Version 1")
+    await git_adapter.stage_files(repo_path, ["file.txt"])
     commit1 = await git_adapter.commit(
         repo_path,
         message="First",
@@ -301,6 +311,7 @@ async def test_diff(git_adapter, temp_repo):
 
     # Create second commit
     (repo_path / "file.txt").write_text("Version 2")
+    await git_adapter.stage_files(repo_path, ["file.txt"])
     commit2 = await git_adapter.commit(
         repo_path,
         message="Second",
@@ -335,6 +346,7 @@ async def test_get_file_content(git_adapter, temp_repo):
 
     # Create and commit file
     (repo_path / "test.txt").write_text("Test content")
+    await git_adapter.stage_files(repo_path, ["test.txt"])
     commit_sha = await git_adapter.commit(
         repo_path,
         message="Add file",

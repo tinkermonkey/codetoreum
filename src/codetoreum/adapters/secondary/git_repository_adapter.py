@@ -286,13 +286,11 @@ class GitRepositoryAdapter(IRepository):
             msg = "Commit message is required"
             raise ValidationError(msg)
 
-        # Stage files if explicitly provided, otherwise stage all modified files
+        # Stage files only if explicitly provided
+        # If no files provided, commit uses whatever is already staged (real git semantics)
         if files:
             for file in files:
                 await self._run_git_command(["add", file], cwd=repo_path)
-        else:
-            # Stage all modified and new files (backwards compatible behavior)
-            await self._run_git_command(["add", "."], cwd=repo_path)
 
         # Set up environment with author info
         import os

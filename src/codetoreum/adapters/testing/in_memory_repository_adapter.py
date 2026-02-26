@@ -319,23 +319,17 @@ class InMemoryRepositoryAdapter(IRepository):
 
             # Determine which files to commit
             if files is not None:
-                # Explicit files provided - stage them before committing
-                # (this is a convenience for backwards compatibility; real git requires
-                # separate stage + commit, but we allow both in one call)
+                # Explicit files provided - commit them directly without modifying staging area
+                # This maintains separation between explicit file commits and staged commits
                 changed_files = list(files)  # Make a copy
-
-                # Initialize staging area if needed
-                if repo_id not in self._staged_files:
-                    self._staged_files[repo_id] = []
-
-                # Add to staging area
-                for file_path in files:
-                    if file_path not in self._staged_files[repo_id]:
-                        self._staged_files[repo_id].append(file_path)
             else:
                 # Use staged files if no explicit files provided
                 # Make a copy to avoid referencing the mutable list
                 changed_files = list(self._staged_files.get(repo_id, []))
+
+                # Clear staging area after commit (only when committing staged files)
+                if repo_id in self._staged_files:
+                    self._staged_files[repo_id].clear()
 
             # Create new commit
             commit_sha = CommitHash(str(uuid4()))
@@ -352,10 +346,6 @@ class InMemoryRepositoryAdapter(IRepository):
 
             # Update branch pointer
             self._branches[(repo_id, current_branch)] = commit_sha
-
-            # Clear staging area after commit
-            if repo_id in self._staged_files:
-                self._staged_files[repo_id].clear()
 
             # Emit CommitCreatedEvent
             # Note: source="mock" identifies this as a test/simulation event for traceability
@@ -552,7 +542,7 @@ index abc123..def456 100644
             return RepositoryStatus(
                 current_branch=current_branch,
                 is_dirty=len(staged_files) > 0,
-                staged_files=staged_files,
+                staged_files=list(staged_files),  # Return a copy to prevent mutation of internal state
                 unstaged_files=[],
                 untracked_files=[],
                 ahead_count=0,
