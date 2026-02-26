@@ -645,9 +645,11 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                     project_id=project_id,
                     column_config={
                         "column_name": to_column,
-                        "agent_assignment": getattr(event.context, "agent_assignment", "default-agent")
-                        if hasattr(event, "context")
-                        else "default-agent",
+                        "agent_assignment": (
+                            getattr(event.context, "agent_assignment", "default-agent")
+                            if hasattr(event, "context")
+                            else "default-agent"
+                        ),
                     },
                 )
                 logger.info(

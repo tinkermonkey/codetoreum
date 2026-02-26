@@ -500,8 +500,7 @@ class PostgreSQLAuditStore(IAuditStore):
         async with self.async_session() as session:
             try:
                 await session.execute(
-                    text(
-                        """
+                    text("""
                         INSERT INTO audit_events (
                             id, timestamp, event_type, resource_type, resource_id,
                             action, user_id, correlation_id, metadata, success, error_message
@@ -509,8 +508,7 @@ class PostgreSQLAuditStore(IAuditStore):
                             :id, :timestamp, :event_type, :resource_type, :resource_id,
                             :action, :user_id, :correlation_id, :metadata::jsonb, :success, :error_message
                         )
-                        """
-                    ),
+                        """),
                     {
                         "id": event_id,
                         "timestamp": timestamp,
@@ -718,15 +716,13 @@ class PostgreSQLAuditStore(IAuditStore):
         async with self.async_session() as session:
             try:
                 result = await session.execute(
-                    text(
-                        """
+                    text("""
                         SELECT
                             id, timestamp, event_type, resource_type, resource_id,
                             action, user_id, correlation_id, metadata, success, error_message
                         FROM audit_events
                         WHERE id = :id
-                        """
-                    ),
+                        """),
                     {"id": event_id},
                 )
                 row = result.fetchone()

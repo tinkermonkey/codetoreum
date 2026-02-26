@@ -444,14 +444,16 @@ class TestEventBusConcurrentFailures:
 
         # Mix of different event types
         events = [
-            WorkItemCreated(
-                aggregate_id=f"work-{i}",
-                payload={"title": f"Test {i}"},
-            )
-            if i % 2 == 0
-            else WorkItemCompleted(
-                aggregate_id=f"work-{i}",
-                payload={"completed_at": "2025-10-27T12:00:00Z"},
+            (
+                WorkItemCreated(
+                    aggregate_id=f"work-{i}",
+                    payload={"title": f"Test {i}"},
+                )
+                if i % 2 == 0
+                else WorkItemCompleted(
+                    aggregate_id=f"work-{i}",
+                    payload={"completed_at": "2025-10-27T12:00:00Z"},
+                )
             )
             for i in range(10)
         ]

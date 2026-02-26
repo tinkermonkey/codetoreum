@@ -180,9 +180,7 @@ CLAUDE_RESILIENCE_CONFIG = ServiceResilienceConfig(
         base_delay=2.0,
         max_delay=30.0,
     ),
-    timeout=TimeoutConfig(
-        default_timeout_seconds=300.0  # 5 minutes for LLM
-    ),
+    timeout=TimeoutConfig(default_timeout_seconds=300.0),  # 5 minutes for LLM
 )
 
 # Docker/Container configuration

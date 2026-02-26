@@ -306,18 +306,20 @@ def create_workspace_router(
                 container_name=workspace.container_name,
                 image_name=workspace.image_name,
                 status=workspace.status.value,
-                resource_usage=ResourceUsageInfo(
-                    cpu_percent=workspace.resource_usage.cpu_percent,
-                    memory_mb=workspace.resource_usage.memory_mb,
-                    memory_limit_mb=workspace.resource_usage.memory_limit_mb,
-                    memory_percent=workspace.resource_usage.memory_percent,
-                    disk_usage_mb=workspace.resource_usage.disk_usage_mb,
-                    disk_limit_mb=workspace.resource_usage.disk_limit_mb,
-                    network_rx_bytes=workspace.resource_usage.network_rx_bytes,
-                    network_tx_bytes=workspace.resource_usage.network_tx_bytes,
-                )
-                if workspace.resource_usage
-                else None,
+                resource_usage=(
+                    ResourceUsageInfo(
+                        cpu_percent=workspace.resource_usage.cpu_percent,
+                        memory_mb=workspace.resource_usage.memory_mb,
+                        memory_limit_mb=workspace.resource_usage.memory_limit_mb,
+                        memory_percent=workspace.resource_usage.memory_percent,
+                        disk_usage_mb=workspace.resource_usage.disk_usage_mb,
+                        disk_limit_mb=workspace.resource_usage.disk_limit_mb,
+                        network_rx_bytes=workspace.resource_usage.network_rx_bytes,
+                        network_tx_bytes=workspace.resource_usage.network_tx_bytes,
+                    )
+                    if workspace.resource_usage
+                    else None
+                ),
                 mounted_files=[
                     MountedFileInfo(
                         source_path=f.source_path,

@@ -196,9 +196,9 @@ def create_events_router(
                         aggregate_id=event_dict.get("aggregate_id", ""),
                         aggregate_type=event_dict.get("aggregate_type", ""),
                         occurred_at=event_dict.get("occurred_at", datetime.now(UTC)),
-                        correlation_id=str(event_dict.get("correlation_id"))
-                        if event_dict.get("correlation_id")
-                        else None,
+                        correlation_id=(
+                            str(event_dict.get("correlation_id")) if event_dict.get("correlation_id") else None
+                        ),
                         causation_id=str(event_dict.get("causation_id")) if event_dict.get("causation_id") else None,
                         user_id=event_dict.get("user_id"),
                         payload=event_dict.get("payload", {}),

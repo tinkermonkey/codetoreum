@@ -602,9 +602,9 @@ class SimulationE2EClient:
             AssertionError: If metrics not found
         """
         metrics = self.get_metrics(metric_name=metric_name, labels=labels)
-        assert len(metrics) >= min_count, (
-            f"Expected at least {min_count} data points for metric '{metric_name}', but found {len(metrics)}"
-        )
+        assert (
+            len(metrics) >= min_count
+        ), f"Expected at least {min_count} data points for metric '{metric_name}', but found {len(metrics)}"
 
     def assert_events_recorded(
         self,
@@ -624,6 +624,6 @@ class SimulationE2EClient:
             AssertionError: If events not found
         """
         events = self.get_events(event_type=event_type, aggregate_id=aggregate_id)
-        assert len(events) >= min_count, (
-            f"Expected at least {min_count} events of type '{event_type}', but found {len(events)}"
-        )
+        assert (
+            len(events) >= min_count
+        ), f"Expected at least {min_count} events of type '{event_type}', but found {len(events)}"

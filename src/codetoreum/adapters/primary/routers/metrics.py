@@ -578,9 +578,9 @@ def create_metrics_router(
             return AgentExecutionMetricsResponse(
                 agents=agents,
                 total_executions=total_executions,
-                overall_success_rate_percent=(total_successes / total_executions * 100)
-                if total_executions > 0
-                else 0.0,
+                overall_success_rate_percent=(
+                    (total_successes / total_executions * 100) if total_executions > 0 else 0.0
+                ),
                 start_time=start_time,
                 end_time=end_time,
             )

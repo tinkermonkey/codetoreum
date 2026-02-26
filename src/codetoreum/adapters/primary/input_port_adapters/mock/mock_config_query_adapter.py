@@ -68,15 +68,17 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
             version=cfg.version,
             created_at=cfg.created_at or datetime.now(UTC),
             updated_at=cfg.updated_at or datetime.now(UTC),
-            environment_variables={k: v for k, v in cfg.environment_variables.items()}
-            if cfg.environment_variables
-            else {},
-            mounted_commands=list(cfg.mounted_commands.values())
-            if isinstance(cfg.mounted_commands, dict)
-            else cfg.mounted_commands,
-            mounted_subagents=list(cfg.mounted_subagents.values())
-            if isinstance(cfg.mounted_subagents, dict)
-            else cfg.mounted_subagents,
+            environment_variables=(
+                {k: v for k, v in cfg.environment_variables.items()} if cfg.environment_variables else {}
+            ),
+            mounted_commands=(
+                list(cfg.mounted_commands.values()) if isinstance(cfg.mounted_commands, dict) else cfg.mounted_commands
+            ),
+            mounted_subagents=(
+                list(cfg.mounted_subagents.values())
+                if isinstance(cfg.mounted_subagents, dict)
+                else cfg.mounted_subagents
+            ),
             metadata=cfg.metadata,
         )
 

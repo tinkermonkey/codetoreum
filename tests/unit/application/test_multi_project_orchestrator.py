@@ -415,9 +415,7 @@ class TestCycleMetrics:
         )
         project_manager.ensure_project_cloned = AsyncMock(return_value="/workspace/project")
         board_service.reconcile_board = AsyncMock()
-        workflow_orchestrator.orchestrate_project = AsyncMock(
-            side_effect=[7, 3]  # Total 10 actions
-        )
+        workflow_orchestrator.orchestrate_project = AsyncMock(side_effect=[7, 3])  # Total 10 actions
 
         # Execute
         result = await multi_orchestrator.run_orchestration_cycle()

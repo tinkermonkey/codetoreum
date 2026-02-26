@@ -194,24 +194,26 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                     passed=7 if is_last else 7,
                     failed=0 if is_last else 3,
                     warnings=0,
-                    failures=()
-                    if is_last
-                    else (
-                        RepairTestFailure(
-                            file="test_example.py",
-                            test=f"test_case_{i}_1",
-                            message="Simulated failure",
-                        ),
-                        RepairTestFailure(
-                            file="test_example.py",
-                            test=f"test_case_{i}_2",
-                            message="Simulated failure",
-                        ),
-                        RepairTestFailure(
-                            file="test_example.py",
-                            test=f"test_case_{i}_3",
-                            message="Simulated failure",
-                        ),
+                    failures=(
+                        ()
+                        if is_last
+                        else (
+                            RepairTestFailure(
+                                file="test_example.py",
+                                test=f"test_case_{i}_1",
+                                message="Simulated failure",
+                            ),
+                            RepairTestFailure(
+                                file="test_example.py",
+                                test=f"test_case_{i}_2",
+                                message="Simulated failure",
+                            ),
+                            RepairTestFailure(
+                                file="test_example.py",
+                                test=f"test_case_{i}_3",
+                                message="Simulated failure",
+                            ),
+                        )
                     ),
                     warning_list=(),
                     raw_output="",

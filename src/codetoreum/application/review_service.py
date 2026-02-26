@@ -431,14 +431,16 @@ class ReviewService:
             "max_iterations": review_cycle.max_iterations,
             "is_complete": review_cycle.is_complete(),
             "needs_revision": review_cycle.needs_maker_revision(),
-            "latest_feedback": {
-                "decision": latest_feedback.decision.value,
-                "comment": latest_feedback.comment,
-                "issues_count": len(latest_feedback.issues),
-                "suggestions_count": len(latest_feedback.suggestions),
-            }
-            if latest_feedback
-            else None,
+            "latest_feedback": (
+                {
+                    "decision": latest_feedback.decision.value,
+                    "comment": latest_feedback.comment,
+                    "issues_count": len(latest_feedback.issues),
+                    "suggestions_count": len(latest_feedback.suggestions),
+                }
+                if latest_feedback
+                else None
+            ),
             "final_decision": review_cycle.final_decision.value if review_cycle.final_decision else None,
             "escalation_reason": review_cycle.escalation_reason,
         }

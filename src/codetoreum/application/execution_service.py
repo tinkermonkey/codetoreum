@@ -310,9 +310,9 @@ class ExecutionService:
                 result = await self.llm_provider.execute(
                     prompt=execution.prompt,
                     context=llm_context,
-                    stream_callback=self._create_stream_callback(execution.id, stream_callback)
-                    if stream_callback
-                    else None,
+                    stream_callback=(
+                        self._create_stream_callback(execution.id, stream_callback) if stream_callback else None
+                    ),
                 )
 
                 # Complete execution successfully

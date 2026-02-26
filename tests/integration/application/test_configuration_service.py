@@ -655,10 +655,7 @@ async def test_large_configuration_objects(config_service, config_store, sample_
     large_pipelines = [
         {
             "name": f"pipeline_{i}",
-            "stages": [
-                {"name": f"stage_{j}", "agent": "test_agent"}
-                for j in range(20)  # 20 stages per pipeline
-            ],
+            "stages": [{"name": f"stage_{j}", "agent": "test_agent"} for j in range(20)],  # 20 stages per pipeline
         }
         for i in range(50)  # 50 pipelines
     ]

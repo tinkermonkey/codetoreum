@@ -157,9 +157,11 @@ async def multiple_workflows(event_store):
                 "workflow_id": workflow_id,
                 "work_item_id": work_item_id,
                 "project_id": project_id,
-                "status": WorkflowRunStatus.COMPLETED
-                if i < 2
-                else (WorkflowRunStatus.FAILED if i == 2 else WorkflowRunStatus.RUNNING),
+                "status": (
+                    WorkflowRunStatus.COMPLETED
+                    if i < 2
+                    else (WorkflowRunStatus.FAILED if i == 2 else WorkflowRunStatus.RUNNING)
+                ),
             }
         )
 

@@ -126,16 +126,12 @@ async def verify_schema(connection_string: str) -> bool:
     try:
         async with engine.begin() as conn:
             # Check if table exists
-            result = await conn.execute(
-                text(
-                    """
+            result = await conn.execute(text("""
                     SELECT EXISTS (
                         SELECT FROM information_schema.tables
                         WHERE table_name = 'audit_events'
                     )
-                    """
-                )
-            )
+                    """))
             table_exists = result.scalar()
 
             if not table_exists:
@@ -155,14 +151,12 @@ async def verify_schema(connection_string: str) -> bool:
 
             for index_name in required_indexes:
                 result = await conn.execute(
-                    text(
-                        """
+                    text("""
                         SELECT EXISTS (
                             SELECT FROM pg_indexes
                             WHERE indexname = :index_name
                         )
-                        """
-                    ),
+                        """),
                     {"index_name": index_name},
                 )
                 index_exists = result.scalar()
