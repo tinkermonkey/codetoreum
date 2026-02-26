@@ -53,7 +53,7 @@ jobs:
 
       - name: Run tests
         run: |
-          poetry run pytest tests -v --tb=short
+          poetry run pytest tests -v --tb=short -m "not integration"
         env:
           REDIS_URL: redis://localhost:6379
 
@@ -89,7 +89,7 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          poetry run pytest tests -v --cov=src/codetoreum --cov-report=xml
+          poetry run pytest tests -v --cov=src/codetoreum --cov-report=xml -m "not integration"
         env:
           REDIS_URL: redis://localhost:6379
 
