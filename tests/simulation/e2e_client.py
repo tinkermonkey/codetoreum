@@ -162,8 +162,8 @@ class WebSocketEventCollector:
                 return event
 
         raise AssertionError(
-            f"Event '{event_type}' not found in {len(self.received_events)} received events. "
-            f"Event types: {sorted(self._event_types)}"
+            f"Event '{event_type}' not found in {len(self.received_events)} "
+            f"received events. Event types: {sorted(self._event_types)}"
         )
 
     def _matches_event(
@@ -582,7 +582,7 @@ class SimulationE2EClient:
                     return execution
             await asyncio.sleep(poll_interval)
 
-        raise TimeoutError(f"Execution {execution_id} did not reach status {expected_status} within {timeout}s")
+        raise TimeoutError(f"Execution {execution_id} did not reach status {expected_status} " f"within {timeout}s")
 
     def assert_metrics_recorded(
         self,
@@ -602,9 +602,9 @@ class SimulationE2EClient:
             AssertionError: If metrics not found
         """
         metrics = self.get_metrics(metric_name=metric_name, labels=labels)
-        assert (
-            len(metrics) >= min_count
-        ), f"Expected at least {min_count} data points for metric '{metric_name}', but found {len(metrics)}"
+        assert len(metrics) >= min_count, (
+            f"Expected at least {min_count} data points for metric " f"'{metric_name}', but found {len(metrics)}"
+        )
 
     def assert_events_recorded(
         self,
@@ -624,6 +624,6 @@ class SimulationE2EClient:
             AssertionError: If events not found
         """
         events = self.get_events(event_type=event_type, aggregate_id=aggregate_id)
-        assert (
-            len(events) >= min_count
-        ), f"Expected at least {min_count} events of type '{event_type}', but found {len(events)}"
+        assert len(events) >= min_count, (
+            f"Expected at least {min_count} events of type '{event_type}', " f"but found {len(events)}"
+        )
