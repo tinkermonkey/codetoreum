@@ -160,6 +160,10 @@ class ExecutionResult:
     """
     Execution Result value object.
 
+    **IMMUTABILITY**: Frozen dataclass with immutable collection types (tuples instead of lists).
+    All collections are immutable (tuples) to prevent in-place mutations that could break
+    the immutability contract. The metadata dict is intentionally frozen to prevent modifications.
+
     Immutable representation of agent execution outcome.
     """
 
@@ -171,24 +175,24 @@ class ExecutionResult:
     output: str
     error_message: str | None
 
-    # Files modified (for code changes)
-    modified_files: list[str]
-    added_files: list[str]
-    deleted_files: list[str]
-
-    # Metrics
+    # Metrics (required fields before optional)
     input_tokens: int
     output_tokens: int
     duration_seconds: float
 
-    # Session continuity
-    session_id: str | None
-
-    # Metadata
-    metadata: dict[str, Any]
-
     # Timestamp
     timestamp: datetime
+
+    # Files modified (for code changes) - immutable tuples instead of mutable lists
+    modified_files: tuple[str, ...] = ()
+    added_files: tuple[str, ...] = ()
+    deleted_files: tuple[str, ...] = ()
+
+    # Session continuity
+    session_id: str | None = None
+
+    # Metadata - frozen mapping for immutability
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Validate execution result."""
@@ -221,9 +225,9 @@ class ExecutionResult:
             exit_code=0,
             output=output,
             error_message=None,
-            modified_files=modified_files or [],
-            added_files=added_files or [],
-            deleted_files=deleted_files or [],
+            modified_files=tuple(modified_files or []),
+            added_files=tuple(added_files or []),
+            deleted_files=tuple(deleted_files or []),
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             duration_seconds=duration_seconds,
@@ -249,9 +253,9 @@ class ExecutionResult:
             exit_code=exit_code,
             output=output,
             error_message=error_message,
-            modified_files=[],
-            added_files=[],
-            deleted_files=[],
+            modified_files=(),
+            added_files=(),
+            deleted_files=(),
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             duration_seconds=duration_seconds,
@@ -270,7 +274,7 @@ class ExecutionResult:
 
     def get_all_affected_files(self) -> list[str]:
         """Get all files affected by execution."""
-        return list(set(self.modified_files + self.added_files + self.deleted_files))
+        return list(set(list(self.modified_files) + list(self.added_files) + list(self.deleted_files)))
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -279,9 +283,9 @@ class ExecutionResult:
             "exit_code": self.exit_code,
             "output": self.output,
             "error_message": self.error_message,
-            "modified_files": self.modified_files,
-            "added_files": self.added_files,
-            "deleted_files": self.deleted_files,
+            "modified_files": list(self.modified_files),
+            "added_files": list(self.added_files),
+            "deleted_files": list(self.deleted_files),
             "input_tokens": self.input_tokens,
             "output_tokens": self.output_tokens,
             "total_tokens": self.get_total_tokens(),
@@ -356,7 +360,12 @@ class ContainerConfig:
 
 @dataclass(frozen=True)
 class ExecutionContext:
-    """Complete context for agent execution."""
+    """Complete context for agent execution.
+
+    **IMMUTABILITY**: Frozen dataclass with immutable collection types (tuples instead of lists).
+    All collections are immutable (tuples) to prevent in-place mutations that could break
+    the immutability contract.
+    """
 
     # Work context
     work_item_id: str
@@ -376,21 +385,21 @@ class ExecutionContext:
     # Project context
     project_id: str
     repository_url: str
-    tech_stack: list[str]
+    tech_stack: tuple[str, ...] = ()
 
     # Permissions
-    filesystem_write_allowed: bool
-    can_make_commits: bool
-    requires_docker: bool
+    filesystem_write_allowed: bool = False
+    can_make_commits: bool = False
+    requires_docker: bool = False
 
-    # MCP servers
-    mcp_servers: list[str]
+    # MCP servers - immutable tuple instead of mutable list
+    mcp_servers: tuple[str, ...] = ()
 
     # Session continuity
-    previous_session_id: str | None
+    previous_session_id: str | None = None
 
     # Metadata
-    metadata: dict[str, Any]
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Validate execution context."""
@@ -421,11 +430,11 @@ class ExecutionContext:
             "discussion_id": self.discussion_id,
             "project_id": self.project_id,
             "repository_url": self.repository_url,
-            "tech_stack": self.tech_stack,
+            "tech_stack": list(self.tech_stack),
             "filesystem_write_allowed": self.filesystem_write_allowed,
             "can_make_commits": self.can_make_commits,
             "requires_docker": self.requires_docker,
-            "mcp_servers": self.mcp_servers,
+            "mcp_servers": list(self.mcp_servers),
             "previous_session_id": self.previous_session_id,
             "metadata": self.metadata,
         }

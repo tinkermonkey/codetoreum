@@ -183,9 +183,9 @@ class TestExecutionResult:
         assert result.input_tokens == 1000
         assert result.output_tokens == 500
         assert result.duration_seconds == 45.2
-        assert result.modified_files == ["src/main.py"]
-        assert result.added_files == ["tests/test_main.py"]
-        assert result.deleted_files == []
+        assert result.modified_files == ("src/main.py",)
+        assert result.added_files == ("tests/test_main.py",)
+        assert result.deleted_files == ()
         assert result.session_id == "session-123"
 
     def test_failure_result(self):

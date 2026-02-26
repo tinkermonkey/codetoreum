@@ -1,4 +1,13 @@
-"""Domain events base classes and specific event types."""
+"""Domain events base classes and specific event types.
+
+**DEPRECATED**: This module contains legacy domain events using the old DomainEvent base class.
+These are maintained for backward compatibility but new code should use the modern frozen
+dataclass-based events from other event modules (e.g., adapter_events, board_events, etc.).
+
+All events in this module are now immutable as per CLAUDE.md requirements.
+The DomainEvent base class enforces immutability through a custom __setattr__ override
+to prevent mutations after initialization.
+"""
 
 from datetime import UTC, datetime
 from typing import Any
@@ -6,7 +15,41 @@ from uuid import UUID, uuid4
 
 
 class DomainEvent:
-    """Base class for all domain events."""
+    """
+    Base class for all domain events.
+
+    **IMMUTABILITY**: This class prevents mutations after initialization by overriding
+    __setattr__ to reject modifications after the object is fully constructed.
+    All fields are read-only after construction to maintain event sourcing audit trail
+    integrity. Events represent immutable facts—attempting to modify any field will raise
+    AttributeError. This immutability is essential because events are the permanent
+    record of state changes in the system and must never be altered once created.
+
+    Attributes:
+        aggregate_id: ID of the aggregate that emitted this event
+        aggregate_type: Type of the aggregate (e.g., "WorkItem", "Agent")
+        payload: Event-specific data
+        user_id: ID of the user who triggered this event (optional)
+        correlation_id: ID to group related events (optional)
+        causation_id: ID of the event that caused this event (optional)
+        event_id: Unique event ID (generated if not provided)
+        occurred_at: Timestamp when event occurred (defaults to now)
+    """
+
+    __slots__ = (
+        "event_id",
+        "event_type",
+        "event_version",
+        "aggregate_id",
+        "aggregate_type",
+        "occurred_at",
+        "correlation_id",
+        "causation_id",
+        "user_id",
+        "payload",
+        "metadata",
+        "_initialized",
+    )
 
     def __init__(
         self,
@@ -32,17 +75,25 @@ class DomainEvent:
             event_id: Unique event ID (generated if not provided)
             occurred_at: Timestamp when event occurred (defaults to now)
         """
-        self.event_id = event_id or uuid4()
-        self.event_type = self.__class__.__name__
-        self.event_version = 1
-        self.aggregate_id = aggregate_id
-        self.aggregate_type = aggregate_type
-        self.occurred_at = occurred_at or datetime.now(UTC)
-        self.correlation_id = correlation_id or uuid4()
-        self.causation_id = causation_id
-        self.user_id = user_id
-        self.payload = payload or {}
-        self.metadata: dict[str, Any] = {}
+        object.__setattr__(self, "event_id", event_id or uuid4())
+        object.__setattr__(self, "event_type", self.__class__.__name__)
+        object.__setattr__(self, "event_version", 1)
+        object.__setattr__(self, "aggregate_id", aggregate_id)
+        object.__setattr__(self, "aggregate_type", aggregate_type)
+        object.__setattr__(self, "occurred_at", occurred_at or datetime.now(UTC))
+        object.__setattr__(self, "correlation_id", correlation_id or uuid4())
+        object.__setattr__(self, "causation_id", causation_id)
+        object.__setattr__(self, "user_id", user_id)
+        object.__setattr__(self, "payload", payload or {})
+        object.__setattr__(self, "metadata", {})
+        object.__setattr__(self, "_initialized", True)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Prevent mutations after initialization (enforce immutability)."""
+        if hasattr(self, "_initialized") and self._initialized:
+            msg = f"cannot assign to field {name!r}; {self.__class__.__name__} is immutable"
+            raise AttributeError(msg)
+        object.__setattr__(self, name, value)
 
     def to_dict(self) -> dict[str, Any]:
         """
@@ -127,182 +178,134 @@ class DomainEvent:
 
 
 class WorkItemCreated(DomainEvent):
-    """Emitted when a work item is created."""
+    """Emitted when a work item is created.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize WorkItemCreated event.
-
-        Required payload fields:
-        - title: str
-        - description: str
-        - project_id: str
-        - labels: List[str]
-        - priority: int
-        - external_id: Optional[str]
-        - external_url: Optional[str]
-        """
+        """Initialize WorkItemCreated event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
 
 
 class AgentAssigned(DomainEvent):
-    """Emitted when an agent is assigned to work item."""
+    """Emitted when an agent is assigned to work item.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize AgentAssigned event.
-
-        Required payload fields:
-        - agent_id: str
-        - reason: str
-        - assigned_at: str (ISO format)
-        """
+        """Initialize AgentAssigned event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
 
 
 class WorkItemStarted(DomainEvent):
-    """Emitted when work begins on item."""
+    """Emitted when work begins on item.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize WorkItemStarted event.
-
-        Required payload fields:
-        - started_at: str (ISO format)
-        - agent_id: str
-        """
+        """Initialize WorkItemStarted event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
 
 
 class WorkItemUnderReview(DomainEvent):
-    """Emitted when work item enters review."""
+    """Emitted when work item enters review.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize WorkItemUnderReview event.
-
-        Required payload fields:
-        - review_started_at: str (ISO format)
-        """
+        """Initialize WorkItemUnderReview event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
 
 
 class WorkItemCompleted(DomainEvent):
-    """Emitted when work item completes successfully."""
+    """Emitted when work item completes successfully.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize WorkItemCompleted event.
-
-        Required payload fields:
-        - completed_at: str (ISO format)
-        - agent_id: Optional[str]
-        """
+        """Initialize WorkItemCompleted event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
 
 
 class WorkItemFailed(DomainEvent):
-    """Emitted when work item fails."""
+    """Emitted when work item fails.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize WorkItemFailed event.
-
-        Required payload fields:
-        - failed_at: str (ISO format)
-        - reason: str
-        - error_details: Dict[str, Any]
-        - agent_id: Optional[str]
-        """
+        """Initialize WorkItemFailed event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
 
 
 class WorkItemBlocked(DomainEvent):
-    """Emitted when work item is blocked."""
+    """Emitted when work item is blocked.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize WorkItemBlocked event.
-
-        Required payload fields:
-        - blocked_at: str (ISO format)
-        - reason: str
-        - blocking_issue_id: Optional[str]
-        """
+        """Initialize WorkItemBlocked event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
 
 
 class WorkItemUnblocked(DomainEvent):
-    """Emitted when work item is unblocked."""
+    """Emitted when work item is unblocked.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize WorkItemUnblocked event.
-
-        Required payload fields:
-        - unblocked_at: str (ISO format)
-        - new_status: str
-        """
+        """Initialize WorkItemUnblocked event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
 
 
 class WorkflowAttached(DomainEvent):
-    """Emitted when workflow attached to work item."""
+    """Emitted when workflow attached to work item.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize WorkflowAttached event.
-
-        Required payload fields:
-        - workflow_id: str
-        - attached_at: str (ISO format)
-        """
+        """Initialize WorkflowAttached event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
 
 
 class WorkItemStageUpdated(DomainEvent):
-    """Emitted when work item moves to new stage."""
+    """Emitted when work item moves to new stage.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize WorkItemStageUpdated event.
-
-        Required payload fields:
-        - workflow_id: str
-        - old_stage: Optional[str]
-        - new_stage: str
-        - updated_at: str (ISO format)
-        """
+        """Initialize WorkItemStageUpdated event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
 
 
 class WorkItemLabelsUpdated(DomainEvent):
-    """Emitted when work item labels change."""
+    """Emitted when work item labels change.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize WorkItemLabelsUpdated event.
-
-        Required payload fields:
-        - old_labels: List[str]
-        - new_labels: List[str]
-        - updated_at: str (ISO format)
-        """
+        """Initialize WorkItemLabelsUpdated event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
 
 
 class WorkItemPriorityUpdated(DomainEvent):
-    """Emitted when work item priority changes."""
+    """Emitted when work item priority changes.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize WorkItemPriorityUpdated event.
-
-        Required payload fields:
-        - old_priority: int
-        - new_priority: int
-        - updated_at: str (ISO format)
-        """
+        """Initialize WorkItemPriorityUpdated event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
 
 
@@ -312,152 +315,112 @@ class WorkItemPriorityUpdated(DomainEvent):
 
 
 class AgentCreated(DomainEvent):
-    """Emitted when agent is created."""
+    """Emitted when agent is created.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize AgentCreated event.
-
-        Required payload fields:
-        - name: str
-        - display_name: str
-        - agent_type: str
-        - model: str
-        - capabilities: List[str]
-        """
+        """Initialize AgentCreated event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="Agent", payload=payload, **kwargs)
 
 
 class AgentCapabilityAdded(DomainEvent):
-    """Emitted when capability added to agent."""
+    """Emitted when capability added to agent.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize AgentCapabilityAdded event.
-
-        Required payload fields:
-        - skill: str
-        - proficiency: float
-        - added_at: str (ISO format)
-        """
+        """Initialize AgentCapabilityAdded event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="Agent", payload=payload, **kwargs)
 
 
 class AgentCapabilityRemoved(DomainEvent):
-    """Emitted when capability removed from agent."""
+    """Emitted when capability removed from agent.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize AgentCapabilityRemoved event.
-
-        Required payload fields:
-        - skill: str
-        - removed_at: str (ISO format)
-        """
+        """Initialize AgentCapabilityRemoved event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="Agent", payload=payload, **kwargs)
 
 
 class AgentCapabilityUpdated(DomainEvent):
-    """Emitted when capability proficiency updated."""
+    """Emitted when capability proficiency updated.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize AgentCapabilityUpdated event.
-
-        Required payload fields:
-        - skill: str
-        - old_proficiency: float
-        - new_proficiency: float
-        - updated_at: str (ISO format)
-        """
+        """Initialize AgentCapabilityUpdated event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="Agent", payload=payload, **kwargs)
 
 
 class AgentModelUpdated(DomainEvent):
-    """Emitted when agent LLM model changed."""
+    """Emitted when agent LLM model changed.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize AgentModelUpdated event.
-
-        Required payload fields:
-        - old_model: str
-        - new_model: str
-        - updated_at: str (ISO format)
-        """
+        """Initialize AgentModelUpdated event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="Agent", payload=payload, **kwargs)
 
 
 class AgentTimeoutUpdated(DomainEvent):
-    """Emitted when agent timeout changed."""
+    """Emitted when agent timeout changed.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize AgentTimeoutUpdated event.
-
-        Required payload fields:
-        - old_timeout: int
-        - new_timeout: int
-        - updated_at: str (ISO format)
-        """
+        """Initialize AgentTimeoutUpdated event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="Agent", payload=payload, **kwargs)
 
 
 class AgentMaxRetriesUpdated(DomainEvent):
-    """Emitted when agent max retries changed."""
+    """Emitted when agent max retries changed.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize AgentMaxRetriesUpdated event.
-
-        Required payload fields:
-        - old_max_retries: int
-        - new_max_retries: int
-        - updated_at: str (ISO format)
-        """
+        """Initialize AgentMaxRetriesUpdated event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="Agent", payload=payload, **kwargs)
 
 
 class AgentConstraintsUpdated(DomainEvent):
-    """Emitted when agent constraints changed."""
+    """Emitted when agent constraints changed.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize AgentConstraintsUpdated event.
-
-        Required payload fields:
-        - old_constraints: Dict[str, bool]
-        - new_constraints: Dict[str, bool]
-        - updated_at: str (ISO format)
-        """
+        """Initialize AgentConstraintsUpdated event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="Agent", payload=payload, **kwargs)
 
 
 class AgentMcpServerAdded(DomainEvent):
-    """Emitted when MCP server added to agent."""
+    """Emitted when MCP server added to agent.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize AgentMcpServerAdded event.
-
-        Required payload fields:
-        - server_name: str
-        - added_at: str (ISO format)
-        """
+        """Initialize AgentMcpServerAdded event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="Agent", payload=payload, **kwargs)
 
 
 class AgentMcpServerRemoved(DomainEvent):
-    """Emitted when MCP server removed from agent."""
+    """Emitted when MCP server removed from agent.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize AgentMcpServerRemoved event.
-
-        Required payload fields:
-        - server_name: str
-        - removed_at: str (ISO format)
-        """
+        """Initialize AgentMcpServerRemoved event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="Agent", payload=payload, **kwargs)
 
 
@@ -467,122 +430,90 @@ class AgentMcpServerRemoved(DomainEvent):
 
 
 class ExecutionInitialized(DomainEvent):
-    """Emitted when execution is initialized."""
+    """Emitted when execution is initialized.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize ExecutionInitialized event.
-
-        Required payload fields:
-        - agent_id: str
-        - work_item_id: str
-        - workflow_id: str
-        - stage_name: str
-        - model: str
-        """
+        """Initialize ExecutionInitialized event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="AgentExecution", payload=payload, **kwargs)
 
 
 class ExecutionStarted(DomainEvent):
-    """Emitted when execution starts."""
+    """Emitted when execution starts.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize ExecutionStarted event.
-
-        Required payload fields:
-        - started_at: str (ISO format)
-        - container_name: Optional[str]
-        """
+        """Initialize ExecutionStarted event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="AgentExecution", payload=payload, **kwargs)
 
 
 class ExecutionCompleted(DomainEvent):
-    """Emitted when execution completes successfully."""
+    """Emitted when execution completes successfully.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize ExecutionCompleted event.
-
-        Required payload fields:
-        - completed_at: str (ISO format)
-        - input_tokens: int
-        - output_tokens: int
-        - duration_seconds: Optional[float]
-        - session_id: Optional[str]
-        """
+        """Initialize ExecutionCompleted event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="AgentExecution", payload=payload, **kwargs)
 
 
 class ExecutionFailed(DomainEvent):
-    """Emitted when execution fails."""
+    """Emitted when execution fails.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize ExecutionFailed event.
-
-        Required payload fields:
-        - failed_at: str (ISO format)
-        - error_message: str
-        - exit_code: Optional[int]
-        - duration_seconds: Optional[float]
-        """
+        """Initialize ExecutionFailed event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="AgentExecution", payload=payload, **kwargs)
 
 
 class ExecutionTimeout(DomainEvent):
-    """Emitted when execution times out."""
+    """Emitted when execution times out.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize ExecutionTimeout event.
-
-        Required payload fields:
-        - timeout_at: str (ISO format)
-        - duration_seconds: Optional[float]
-        """
+        """Initialize ExecutionTimeout event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="AgentExecution", payload=payload, **kwargs)
 
 
 class ExecutionCancelled(DomainEvent):
-    """Emitted when execution is cancelled."""
+    """Emitted when execution is cancelled.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize ExecutionCancelled event.
-
-        Required payload fields:
-        - cancelled_at: str (ISO format)
-        - reason: Optional[str]
-        - duration_seconds: Optional[float]
-        """
+        """Initialize ExecutionCancelled event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="AgentExecution", payload=payload, **kwargs)
 
 
 class ExecutionPaused(DomainEvent):
-    """Emitted when execution is paused."""
+    """Emitted when execution is paused.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize ExecutionPaused event.
-
-        Required payload fields:
-        - paused_at: str (ISO format)
-        - reason: Optional[str]
-        """
+        """Initialize ExecutionPaused event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="AgentExecution", payload=payload, **kwargs)
 
 
 class ExecutionResumed(DomainEvent):
-    """Emitted when execution is resumed."""
+    """Emitted when execution is resumed.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize ExecutionResumed event.
-
-        Required payload fields:
-        - resumed_at: str (ISO format)
-        """
+        """Initialize ExecutionResumed event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="AgentExecution", payload=payload, **kwargs)
 
 
@@ -592,140 +523,101 @@ class ExecutionResumed(DomainEvent):
 
 
 class WorkflowCreated(DomainEvent):
-    """Emitted when a workflow is created."""
+    """Emitted when a workflow is created.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize WorkflowCreated event.
-
-        Required payload fields:
-        - work_item_id: str
-        - template_id: str
-        - project_id: str
-        - stage_count: int
-        """
+        """Initialize WorkflowCreated event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="Workflow", payload=payload, **kwargs)
 
 
 class WorkflowStarted(DomainEvent):
-    """Emitted when workflow execution begins."""
+    """Emitted when workflow execution begins.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize WorkflowStarted event.
-
-        Required payload fields:
-        - started_at: str (ISO format)
-        - work_item_id: str
-        - first_stage: str
-        """
+        """Initialize WorkflowStarted event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="Workflow", payload=payload, **kwargs)
 
 
 class WorkflowStageAdvanced(DomainEvent):
-    """Emitted when workflow moves to the next stage."""
+    """Emitted when workflow moves to the next stage.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize WorkflowStageAdvanced event.
-
-        Required payload fields:
-        - from_stage: str
-        - to_stage: str
-        - stage_index: int
-        - advanced_at: str (ISO format)
-        """
+        """Initialize WorkflowStageAdvanced event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="Workflow", payload=payload, **kwargs)
 
 
 class WorkflowStageStatusUpdated(DomainEvent):
-    """Emitted when a stage's status changes."""
+    """Emitted when a stage's status changes.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize WorkflowStageStatusUpdated event.
-
-        Required payload fields:
-        - stage_name: str
-        - old_status: str
-        - new_status: str
-        - updated_at: str (ISO format)
-        """
+        """Initialize WorkflowStageStatusUpdated event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="Workflow", payload=payload, **kwargs)
 
 
 class WorkflowCompleted(DomainEvent):
-    """Emitted when workflow completes successfully."""
+    """Emitted when workflow completes successfully.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize WorkflowCompleted event.
-
-        Required payload fields:
-        - completed_at: str (ISO format)
-        - work_item_id: str
-        - duration_seconds: float
-        """
+        """Initialize WorkflowCompleted event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="Workflow", payload=payload, **kwargs)
 
 
 class WorkflowFailed(DomainEvent):
-    """Emitted when workflow fails."""
+    """Emitted when workflow fails.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize WorkflowFailed event.
-
-        Required payload fields:
-        - failed_at: str (ISO format)
-        - reason: str
-        - failed_stage: str
-        - completed_stages: List[str]
-        """
+        """Initialize WorkflowFailed event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="Workflow", payload=payload, **kwargs)
 
 
 class WorkflowPaused(DomainEvent):
-    """Emitted when workflow is paused."""
+    """Emitted when workflow is paused.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize WorkflowPaused event.
-
-        Required payload fields:
-        - paused_at: str (ISO format)
-        - reason: str
-        - current_stage: str
-        """
+        """Initialize WorkflowPaused event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="Workflow", payload=payload, **kwargs)
 
 
 class WorkflowResumed(DomainEvent):
-    """Emitted when workflow is resumed."""
+    """Emitted when workflow is resumed.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize WorkflowResumed event.
-
-        Required payload fields:
-        - resumed_at: str (ISO format)
-        - current_stage: str
-        """
+        """Initialize WorkflowResumed event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="Workflow", payload=payload, **kwargs)
 
 
 class WorkflowCancelled(DomainEvent):
-    """Emitted when workflow is cancelled."""
+    """Emitted when workflow is cancelled.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize WorkflowCancelled event.
-
-        Required payload fields:
-        - cancelled_at: str (ISO format)
-        - reason: str
-        - completed_stages: List[str]
-        """
+        """Initialize WorkflowCancelled event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="Workflow", payload=payload, **kwargs)
 
 
@@ -735,102 +627,68 @@ class WorkflowCancelled(DomainEvent):
 
 
 class ReviewCycleCreated(DomainEvent):
-    """Emitted when a review cycle is created."""
+    """Emitted when a review cycle is created.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize ReviewCycleCreated event.
-
-        Required payload fields:
-        - work_item_id: str
-        - workflow_id: str
-        - stage_name: str
-        - execution_id: str
-        - max_iterations: int
-        - review_type: str
-        """
+        """Initialize ReviewCycleCreated event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
 
 
 class ReviewIterationStarted(DomainEvent):
-    """Emitted when a new review iteration starts."""
+    """Emitted when a new review iteration starts.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize ReviewIterationStarted event.
-
-        Required payload fields:
-        - iteration_number: int
-        - started_at: str (ISO format)
-        - reviewer_agent_id: Optional[str]
-        """
+        """Initialize ReviewIterationStarted event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
 
 
 class ReviewFeedbackSubmitted(DomainEvent):
-    """Emitted when reviewer provides feedback."""
+    """Emitted when reviewer provides feedback.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize ReviewFeedbackSubmitted event.
-
-        Required payload fields:
-        - iteration_number: int
-        - submitted_at: str (ISO format)
-        - feedback: str
-        - decision: str (approved, rejected, needs_changes)
-        - reviewer_id: str
-        - issues_found: List[Dict[str, Any]]
-        """
+        """Initialize ReviewFeedbackSubmitted event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
 
 
 class ReviewCycleApproved(DomainEvent):
-    """Emitted when review is approved."""
+    """Emitted when review is approved.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize ReviewCycleApproved event.
-
-        Required payload fields:
-        - approved_at: str (ISO format)
-        - final_iteration: int
-        - reviewer_id: str
-        - approval_notes: Optional[str]
-        """
+        """Initialize ReviewCycleApproved event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
 
 
 class ReviewCycleRejected(DomainEvent):
-    """Emitted when review is rejected."""
+    """Emitted when review is rejected.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize ReviewCycleRejected event.
-
-        Required payload fields:
-        - rejected_at: str (ISO format)
-        - final_iteration: int
-        - reviewer_id: str
-        - rejection_reason: str
-        """
+        """Initialize ReviewCycleRejected event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
 
 
 class ReviewCycleEscalated(DomainEvent):
-    """Emitted when review is escalated to human."""
+    """Emitted when review is escalated to human.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize ReviewCycleEscalated event.
-
-        Required payload fields:
-        - escalated_at: str (ISO format)
-        - reason: str
-        - iteration_count: int
-        - escalated_to: str
-        - escalation_notes: Optional[str]
-        """
+        """Initialize ReviewCycleEscalated event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
 
 
@@ -840,67 +698,46 @@ class ReviewCycleEscalated(DomainEvent):
 
 
 class ProjectContextCreated(DomainEvent):
-    """Emitted when project context is created."""
+    """Emitted when project context is created.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize ProjectContextCreated event.
-
-        Required payload fields:
-        - project_name: str
-        - repository_url: str
-        - default_branch: str
-        - language: Optional[str]
-        - framework: Optional[str]
-        """
+        """Initialize ProjectContextCreated event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectContext", payload=payload, **kwargs)
 
 
 class ProjectTestConfigUpdated(DomainEvent):
-    """Emitted when test configuration changes."""
+    """Emitted when test configuration changes.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize ProjectTestConfigUpdated event.
-
-        Required payload fields:
-        - updated_at: str (ISO format)
-        - test_command: str
-        - test_directory: str
-        - coverage_threshold: Optional[float]
-        """
+        """Initialize ProjectTestConfigUpdated event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectContext", payload=payload, **kwargs)
 
 
 class ProjectDockerConfigUpdated(DomainEvent):
-    """Emitted when Docker configuration changes."""
+    """Emitted when Docker configuration changes.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize ProjectDockerConfigUpdated event.
-
-        Required payload fields:
-        - updated_at: str (ISO format)
-        - base_image: str
-        - build_args: Dict[str, str]
-        - environment_vars: Dict[str, str]
-        """
+        """Initialize ProjectDockerConfigUpdated event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectContext", payload=payload, **kwargs)
 
 
 class ProjectWorkflowMappingAdded(DomainEvent):
-    """Emitted when custom workflow mapping is added."""
+    """Emitted when custom workflow mapping is added.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize ProjectWorkflowMappingAdded event.
-
-        Required payload fields:
-        - added_at: str (ISO format)
-        - label_pattern: str
-        - workflow_template_id: str
-        - priority: int
-        """
+        """Initialize ProjectWorkflowMappingAdded event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectContext", payload=payload, **kwargs)
 
 
@@ -910,7 +747,10 @@ class ProjectWorkflowMappingAdded(DomainEvent):
 
 
 class PipelineStageStarted(DomainEvent):
-    """Emitted when a pipeline stage starts execution."""
+    """Emitted when a pipeline stage starts execution.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(
         self,
@@ -923,18 +763,7 @@ class PipelineStageStarted(DomainEvent):
         timestamp: datetime | None = None,
         **kwargs: Any,
     ):
-        """
-        Initialize PipelineStageStarted event.
-
-        Args:
-            aggregate_id: Workflow ID
-            pipeline_id: Pipeline execution ID
-            stage_name: Name of the stage
-            stage_type: Type of stage (sequential, parallel, review)
-            agent_config: Agent configuration for this stage
-            execution_id: Execution ID for this stage
-            timestamp: Event timestamp
-        """
+        """Initialize PipelineStageStarted event."""
         payload = {
             "pipeline_id": pipeline_id,
             "stage_name": stage_name,
@@ -947,7 +776,10 @@ class PipelineStageStarted(DomainEvent):
 
 
 class PipelineStageCompleted(DomainEvent):
-    """Emitted when a pipeline stage completes successfully."""
+    """Emitted when a pipeline stage completes successfully.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(
         self,
@@ -960,18 +792,7 @@ class PipelineStageCompleted(DomainEvent):
         timestamp: datetime | None = None,
         **kwargs: Any,
     ):
-        """
-        Initialize PipelineStageCompleted event.
-
-        Args:
-            aggregate_id: Workflow ID
-            pipeline_id: Pipeline execution ID
-            stage_name: Name of the stage
-            execution_id: Execution ID for this stage
-            output: Stage output
-            duration_seconds: Duration in seconds
-            timestamp: Event timestamp
-        """
+        """Initialize PipelineStageCompleted event."""
         payload = {
             "pipeline_id": pipeline_id,
             "stage_name": stage_name,
@@ -984,7 +805,10 @@ class PipelineStageCompleted(DomainEvent):
 
 
 class PipelineStageFailed(DomainEvent):
-    """Emitted when a pipeline stage fails."""
+    """Emitted when a pipeline stage fails.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(
         self,
@@ -997,18 +821,7 @@ class PipelineStageFailed(DomainEvent):
         timestamp: datetime | None = None,
         **kwargs: Any,
     ):
-        """
-        Initialize PipelineStageFailed event.
-
-        Args:
-            aggregate_id: Workflow ID
-            pipeline_id: Pipeline execution ID
-            stage_name: Name of the stage
-            execution_id: Execution ID for this stage
-            error: Error message
-            duration_seconds: Duration in seconds
-            timestamp: Event timestamp
-        """
+        """Initialize PipelineStageFailed event."""
         payload = {
             "pipeline_id": pipeline_id,
             "stage_name": stage_name,
@@ -1021,31 +834,23 @@ class PipelineStageFailed(DomainEvent):
 
 
 class PipelineCompleted(DomainEvent):
-    """Emitted when entire pipeline completes successfully."""
+    """Emitted when entire pipeline completes successfully.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(
         self,
         aggregate_id: str,
         pipeline_id: str,
         workflow_id: str,
-        completed_stages: list,
+        completed_stages: list[str],
         outputs: dict[str, Any],
         duration_seconds: float,
         timestamp: datetime | None = None,
         **kwargs: Any,
     ):
-        """
-        Initialize PipelineCompleted event.
-
-        Args:
-            aggregate_id: Pipeline execution ID
-            pipeline_id: Pipeline execution ID
-            workflow_id: Workflow ID
-            completed_stages: List of completed stage names
-            outputs: Dictionary of stage outputs
-            duration_seconds: Total duration in seconds
-            timestamp: Event timestamp
-        """
+        """Initialize PipelineCompleted event."""
         payload = {
             "pipeline_id": pipeline_id,
             "workflow_id": workflow_id,
@@ -1058,7 +863,10 @@ class PipelineCompleted(DomainEvent):
 
 
 class PipelineFailed(DomainEvent):
-    """Emitted when pipeline execution fails."""
+    """Emitted when pipeline execution fails.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(
         self,
@@ -1066,23 +874,12 @@ class PipelineFailed(DomainEvent):
         pipeline_id: str,
         workflow_id: str,
         error: str,
-        completed_stages: list,
-        failed_stages: list,
+        completed_stages: list[str],
+        failed_stages: list[str],
         timestamp: datetime | None = None,
         **kwargs: Any,
     ):
-        """
-        Initialize PipelineFailed event.
-
-        Args:
-            aggregate_id: Pipeline execution ID
-            pipeline_id: Pipeline execution ID
-            workflow_id: Workflow ID
-            error: Error message
-            completed_stages: List of completed stage names
-            failed_stages: List of failed stage names
-            timestamp: Event timestamp
-        """
+        """Initialize PipelineFailed event."""
         payload = {
             "pipeline_id": pipeline_id,
             "workflow_id": workflow_id,
@@ -1100,133 +897,90 @@ class PipelineFailed(DomainEvent):
 
 
 class ProjectConfigUpdated(DomainEvent):
-    """Emitted when project configuration is updated."""
+    """Emitted when project configuration is updated.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize ProjectConfigUpdated event.
-
-        Required payload fields:
-        - project_id: str
-        - version: int
-        - changes: Dict[str, Any]
-        - updated_by: str
-        - reason: Optional[str]
-        """
+        """Initialize ProjectConfigUpdated event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectConfig", payload=payload, **kwargs)
 
 
 class AgentConfigUpdated(DomainEvent):
-    """Emitted when agent configuration is updated."""
+    """Emitted when agent configuration is updated.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize AgentConfigUpdated event.
-
-        Required payload fields:
-        - project_id: str
-        - agent_name: str
-        - version: int
-        - changes: Dict[str, Any]
-        - updated_by: str
-        - reason: Optional[str]
-        """
+        """Initialize AgentConfigUpdated event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="AgentConfig", payload=payload, **kwargs)
 
 
 class PipelineConfigUpdated(DomainEvent):
-    """Emitted when pipeline configuration is updated."""
+    """Emitted when pipeline configuration is updated.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize PipelineConfigUpdated event.
-
-        Required payload fields:
-        - project_id: str
-        - pipeline_name: str
-        - version: int
-        - changes: Dict[str, Any]
-        - updated_by: str
-        - reason: Optional[str]
-        """
+        """Initialize PipelineConfigUpdated event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="PipelineConfig", payload=payload, **kwargs)
 
 
 class EnvironmentVariableChanged(DomainEvent):
-    """Emitted when environment variable is added, updated, or removed."""
+    """Emitted when environment variable is added, updated, or removed.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize EnvironmentVariableChanged event.
-
-        Required payload fields:
-        - project_id: str
-        - variable_name: str
-        - action: str (added, updated, removed)
-        - is_secret: bool
-        - changed_by: str
-        """
+        """Initialize EnvironmentVariableChanged event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectConfig", payload=payload, **kwargs)
 
 
 class CommandMounted(DomainEvent):
-    """Emitted when command is mounted to project agent."""
+    """Emitted when command is mounted to project agent.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize CommandMounted event.
-
-        Required payload fields:
-        - project_id: str
-        - command_name: str
-        - command_path: str
-        - mounted_by: str
-        """
+        """Initialize CommandMounted event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectConfig", payload=payload, **kwargs)
 
 
 class CommandUnmounted(DomainEvent):
-    """Emitted when command is unmounted from project agent."""
+    """Emitted when command is unmounted from project agent.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize CommandUnmounted event.
-
-        Required payload fields:
-        - project_id: str
-        - command_name: str
-        - unmounted_by: str
-        """
+        """Initialize CommandUnmounted event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectConfig", payload=payload, **kwargs)
 
 
 class SubAgentMounted(DomainEvent):
-    """Emitted when sub-agent is mounted to project agent."""
+    """Emitted when sub-agent is mounted to project agent.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize SubAgentMounted event.
-
-        Required payload fields:
-        - project_id: str
-        - subagent_name: str
-        - mounted_by: str
-        """
+        """Initialize SubAgentMounted event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectConfig", payload=payload, **kwargs)
 
 
 class SubAgentUnmounted(DomainEvent):
-    """Emitted when sub-agent is unmounted from project agent."""
+    """Emitted when sub-agent is unmounted from project agent.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize SubAgentUnmounted event.
-
-        Required payload fields:
-        - project_id: str
-        - subagent_name: str
-        - unmounted_by: str
-        """
+        """Initialize SubAgentUnmounted event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectConfig", payload=payload, **kwargs)
 
 
@@ -1236,34 +990,22 @@ class SubAgentUnmounted(DomainEvent):
 
 
 class WorkItemColumnChanged(DomainEvent):
-    """Emitted when work item moves between board columns."""
+    """Emitted when work item moves between board columns.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize WorkItemColumnChanged event.
-
-        Required payload fields:
-        - work_item_id: str
-        - from_column: Optional[str]
-        - to_column: str
-        - moved_by: str (HUMAN or ORCHESTRATOR)
-        - board_id: str
-        - project_id: str
-        """
+        """Initialize WorkItemColumnChanged event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
 
 
 class BoardReconciled(DomainEvent):
-    """Emitted after board structure synchronized with config."""
+    """Emitted after board structure synchronized with config.
+
+    **Immutability**: This is an immutable event. All fields read-only after construction.
+    """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize BoardReconciled event.
-
-        Required payload fields:
-        - board_id: str
-        - columns_added: List[str]
-        - columns_removed: List[str]
-        - orphaned_items: List[str]
-        """
+        """Initialize BoardReconciled event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="Board", payload=payload, **kwargs)
