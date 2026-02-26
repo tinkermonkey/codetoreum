@@ -128,6 +128,10 @@ class GitHubWebhookAdapter:
     into domain commands via input ports.
     """
 
+    # Idempotency cache configuration
+    _DEFAULT_CACHE_SIZE = 1000
+    _DEFAULT_EVICTION_THRESHOLD = 0.9  # Evict when at 90% capacity
+
     @staticmethod
     def _get_span():
         """Get current span if OpenTelemetry is available, otherwise return None."""
@@ -145,6 +149,7 @@ class GitHubWebhookAdapter:
         event_bus: IEventBus,
         config_service: IConfigurationService,
         logger: ILogger,
+        idempotency_cache_size: int = _DEFAULT_CACHE_SIZE,
     ):
         """
         Initialize adapter with dependencies.
@@ -154,11 +159,13 @@ class GitHubWebhookAdapter:
             event_bus: Event bus for publishing events
             config_service: Configuration service
             logger: Logging service
+            idempotency_cache_size: Maximum size of idempotency cache (bounded, with LRU eviction)
         """
         self.workflow_port = workflow_command_port
         self.event_bus = event_bus
         self.config = config_service
         self.logger = logger
+        self._idempotency_cache_size = idempotency_cache_size
 
         # Event handlers by GitHub event type
         self.handlers: dict[str, Callable] = {
@@ -169,8 +176,34 @@ class GitHubWebhookAdapter:
             "discussion": self._handle_discussion_event,
         }
 
-        # Track processed delivery IDs for idempotency (in-memory for now)
+        # Track processed delivery IDs for idempotency (bounded cache with LRU eviction)
         self._processed_deliveries: dict[str, WebhookProcessingResult] = {}
+        self._delivery_timestamps: dict[str, datetime] = {}  # Track insertion order for LRU
+
+    def _evict_old_entries_if_needed(self) -> None:
+        """
+        Evict oldest entries from idempotency cache if it exceeds the threshold.
+
+        Uses LRU (Least Recently Used) eviction strategy. When cache size exceeds
+        90% of max capacity, removes the oldest 10% of entries.
+        """
+        cache_size = len(self._processed_deliveries)
+        threshold = int(self._idempotency_cache_size * self._DEFAULT_EVICTION_THRESHOLD)
+
+        if cache_size >= threshold:
+            # Evict 10% of cache size (at least 1 entry)
+            evict_count = max(1, self._idempotency_cache_size // 10)
+
+            # Sort by timestamp and remove oldest entries
+            sorted_entries = sorted(
+                self._delivery_timestamps.items(),
+                key=lambda x: x[1],
+            )
+
+            for delivery_id, _ in sorted_entries[:evict_count]:
+                self._processed_deliveries.pop(delivery_id, None)
+                self._delivery_timestamps.pop(delivery_id, None)
+                self.logger.debug(f"Evicted webhook delivery {delivery_id} from idempotency cache")
 
     @instrument_async_function(name="github.webhook.receive", attributes={"service": "github_webhook"})
     async def receive_webhook(
@@ -250,8 +283,10 @@ class GitHubWebhookAdapter:
             processing_time = (time.time() - start_time) * 1000
             result.processing_time_ms = processing_time
 
-            # 7. Cache result for idempotency
+            # 7. Cache result for idempotency (with bounded cache and eviction)
+            self._evict_old_entries_if_needed()
             self._processed_deliveries[x_github_delivery] = result
+            self._delivery_timestamps[x_github_delivery] = datetime.now(UTC)
 
             # 8. Emit observability event
             self.logger.info(f"Webhook {x_github_delivery} processed successfully in {processing_time:.2f}ms")
@@ -265,23 +300,28 @@ class GitHubWebhookAdapter:
             }
 
         except WebhookVerificationError as e:
-            self.logger.warning(f"Webhook verification failed: {e}")
-            raise HTTPException(status_code=401, detail=str(e))
+            self.logger.warning(f"Webhook verification failed: {e}", exc_info=True)
+            raise HTTPException(status_code=401, detail=str(e)) from e
 
         except UnknownProjectError as e:
-            self.logger.warning(f"Unknown project: {e}")
-            raise HTTPException(status_code=404, detail=str(e))
+            self.logger.warning(f"Unknown project: {e}", exc_info=True)
+            raise HTTPException(status_code=404, detail=str(e)) from e
 
         except InvalidPayloadError as e:
-            self.logger.error(f"Invalid payload: {e}", extra={"error_id": ErrorRegistry.ERR_INVALID_INPUT})
-            raise HTTPException(status_code=400, detail=str(e))
+            self.logger.error(
+                f"Invalid payload: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INVALID_INPUT},
+            )
+            raise HTTPException(status_code=400, detail=str(e)) from e
 
         except Exception as e:
             self.logger.error(
                 f"Webhook processing failed: {e}",
+                exc_info=True,
                 extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
             )
-            raise HTTPException(status_code=500, detail="Internal error")
+            raise HTTPException(status_code=500, detail="Internal error") from e
 
     async def verify_signature(self, payload: bytes, signature: str) -> bool:
         """

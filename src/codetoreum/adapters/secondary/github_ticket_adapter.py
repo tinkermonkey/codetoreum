@@ -1,6 +1,5 @@
 """GitHub Issues adapter for ITicketSystem interface."""
 
-import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -35,10 +34,6 @@ class GitHubConfig:
     # API configuration
     api_base_url: str = "https://api.github.com"
     api_version: str = "2022-11-28"
-
-    # Rate limiting and retry
-    max_retries: int = 3
-    retry_delay_seconds: float = 1.0
     timeout_seconds: int = 30
 
     # Caching
@@ -191,7 +186,7 @@ class GitHubTicketAdapter(ITicketSystem):
         **kwargs,
     ) -> httpx.Response:
         """
-        Make HTTP request with retry logic and rate limit handling.
+        Make HTTP request.
 
         Args:
             method: HTTP method
@@ -204,57 +199,43 @@ class GitHubTicketAdapter(ITicketSystem):
         Raises:
             AuthenticationError: Invalid credentials
             ExternalServiceError: GitHub API error
+
+        Note:
+            Retry logic, rate limiting, and timeout handling are managed by
+            the infrastructure layer via resilience decorators (ResilientTicketSystemDecorator).
+            This method remains pure and does not embed resilience patterns.
         """
         # Check if we should wait for rate limits
         await self._wait_for_rate_limit_if_needed()
 
         client = await self._get_client()
 
-        for attempt in range(self.config.max_retries):
-            try:
-                response = await client.request(method, path, **kwargs)
+        try:
+            response = await client.request(method, path, **kwargs)
 
-                # Update rate limit tracking from headers
-                self._update_rate_limits(response)
+            # Update rate limit tracking from headers
+            self._update_rate_limits(response)
 
-                # Handle authentication errors
-                if response.status_code == 401:
-                    msg = "Invalid GitHub token"
-                    raise AuthenticationError(msg)
+            # Handle authentication errors
+            if response.status_code == 401:
+                msg = "Invalid GitHub token"
+                raise AuthenticationError(msg)
 
-                # Handle rate limiting with intelligent backoff
-                if response.status_code == 403:
-                    if "rate limit" in response.text.lower():
-                        # Parse reset time from headers
-                        reset_time = response.headers.get("X-RateLimit-Reset")
-                        if reset_time and attempt < self.config.max_retries - 1:
-                            reset_dt = datetime.fromtimestamp(int(reset_time), tz=UTC)
-                            wait_seconds = (reset_dt - datetime.now(UTC)).total_seconds()
-                            # Wait for reset or exponential backoff, whichever is shorter
-                            backoff_seconds = self.config.retry_delay_seconds * (2**attempt)
-                            await asyncio.sleep(min(wait_seconds, backoff_seconds, 60))
-                            continue
-                        msg = "GitHub"
-                        raise ExternalServiceError(msg, "Rate limit exceeded")
+            # Handle rate limiting (don't retry, let infrastructure handle it)
+            if response.status_code == 403:
+                if "rate limit" in response.text.lower():
+                    msg = "GitHub"
+                    raise ExternalServiceError(msg, "Rate limit exceeded")
 
-                return response
+            return response
 
-            except httpx.TimeoutException:
-                if attempt < self.config.max_retries - 1:
-                    await asyncio.sleep(self.config.retry_delay_seconds * (2**attempt))
-                    continue
-                msg = "GitHub"
-                raise ExternalServiceError(msg, "Request timeout")
-            except httpx.RequestError as e:
-                if attempt < self.config.max_retries - 1:
-                    await asyncio.sleep(self.config.retry_delay_seconds * (2**attempt))
-                    continue
-                sanitized_error = self._sanitize_error_message(str(e))
-                msg = "GitHub"
-                raise ExternalServiceError(msg, f"Request failed: {sanitized_error}")
-
-        msg = "GitHub"
-        raise ExternalServiceError(msg, "Max retries exceeded")
+        except httpx.TimeoutException as e:
+            msg = "GitHub"
+            raise ExternalServiceError(msg, "Request timeout") from e
+        except httpx.RequestError as e:
+            sanitized_error = self._sanitize_error_message(str(e))
+            msg = "GitHub"
+            raise ExternalServiceError(msg, f"Request failed: {sanitized_error}") from e
 
     def _map_github_issue_to_work_item(self, issue: dict[str, Any], project_id: str) -> WorkItem:
         """
