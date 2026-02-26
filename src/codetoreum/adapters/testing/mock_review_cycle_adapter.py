@@ -437,9 +437,8 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
                     )
                     final_status = "CHANGES_REQUESTED"
 
-                    # Check if max iterations reached
+                    # Check if max iterations reached (automatically escalated by request_changes())
                     if iteration >= request.max_iterations:
-                        cycle.escalate("Max iterations reached")
                         final_status = "BLOCKED"
                         human_escalation = True
 
