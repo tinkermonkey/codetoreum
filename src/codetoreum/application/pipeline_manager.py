@@ -383,9 +383,7 @@ class PipelineManager:
 
             # If no execution service, skip actual execution (for testing/simulation)
             if not self.execution_service:
-                self._logger.warning(
-                    f"No execution service configured for stage {stage.name}, skipping execution"
-                )
+                self._logger.warning(f"No execution service configured for stage {stage.name}, skipping execution")
                 output = f"Simulated output from stage {stage.name}"
                 stage.complete(output)
 
@@ -530,23 +528,22 @@ class PipelineManager:
                         },
                     },
                 )
-            else:
-                error_msg = exec_result.error or "Execution failed"
-                stage.fail(error_msg)
-                await self._emit_stage_failed(stage, workflow_id or stage.workflow_id, error_msg, duration)
+            error_msg = exec_result.error or "Execution failed"
+            stage.fail(error_msg)
+            await self._emit_stage_failed(stage, workflow_id or stage.workflow_id, error_msg, duration)
 
-                return StageResult(
-                    success=False,
-                    stage_name=stage.name,
-                    output=None,
-                    error=error_msg,
-                    duration_seconds=duration,
-                    metadata={
-                        "execution_id": execution_id,
-                        "stage_type": stage.stage_type.value,
-                        "failure_reason": str(exec_result.failure_reason),
-                    },
-                )
+            return StageResult(
+                success=False,
+                stage_name=stage.name,
+                output=None,
+                error=error_msg,
+                duration_seconds=duration,
+                metadata={
+                    "execution_id": execution_id,
+                    "stage_type": stage.stage_type.value,
+                    "failure_reason": str(exec_result.failure_reason),
+                },
+            )
 
         except Exception as e:
             duration = (datetime.now(UTC) - start_time).total_seconds()

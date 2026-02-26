@@ -449,7 +449,9 @@ class MetricsService(IMetricsQueryPort):
                 rate = (total_failed / total_started * 100) if total_started > 0 else 0.0
                 data_points = [{"timestamp": start_time.isoformat(), "value": rate}]
         elif calculation_type == "duration":
-            durations = [e.payload.get("duration_seconds", 0) for e in filtered_events if "duration_seconds" in e.payload]
+            durations = [
+                e.payload.get("duration_seconds", 0) for e in filtered_events if "duration_seconds" in e.payload
+            ]
             if durations:
                 avg_duration = sum(durations) / len(durations)
                 data_points = [{"timestamp": start_time.isoformat(), "value": avg_duration}]
