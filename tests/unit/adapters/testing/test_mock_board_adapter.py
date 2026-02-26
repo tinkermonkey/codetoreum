@@ -432,6 +432,113 @@ class TestGetItemsInColumn:
         assert items[1].position == 1
 
 
+class TestPositionRecalculationOnRemoval:
+    """Tests for FR-8: Position recalculation when removing items from column."""
+
+    @pytest.fixture
+    def adapter_with_items(self):
+        """Create adapter with multiple items in a column."""
+        adapter = MockBoardAdapter()
+        adapter.current_project = "proj-1"
+        adapter.create_board("proj-1", "board-1", "Board", ["Backlog", "In Progress", "Done"])
+        # Add items at positions 0-4
+        for i in range(5):
+            adapter.add_item_to_column("board-1", "Backlog", f"item-{i}", position=i)
+        return adapter
+
+    @pytest.mark.asyncio
+    async def test_remove_item_at_position_3_shifts_items_down(self, adapter_with_items):
+        """Test that removing item at position 3 shifts items 4+ down by 1.
+
+        FR-8 requirement: When an item is removed from a column at a specific
+        position, all items at positions greater than that position should shift
+        down by 1 to fill the gap.
+
+        Initial state:
+            position 0: item-0
+            position 1: item-1
+            position 2: item-2
+            position 3: item-3  <- removed
+            position 4: item-4
+
+        Expected after removal:
+            position 0: item-0
+            position 1: item-1
+            position 2: item-2
+            position 3: item-4  <- shifted down from position 4
+        """
+        adapter = adapter_with_items
+
+        # Verify initial state
+        items_before = await adapter.get_items_in_column("board-1", "Backlog")
+        assert len(items_before) == 5
+        assert items_before[3].work_item_id == "item-3"
+        assert items_before[4].work_item_id == "item-4"
+        assert items_before[4].position == 4
+
+        # Move item-3 to another column (removes it from Backlog)
+        await adapter.move_item_to_column("item-3", "In Progress", MovedByType.HUMAN)
+
+        # Verify state after removal
+        items_after = await adapter.get_items_in_column("board-1", "Backlog")
+        assert len(items_after) == 4
+
+        # Verify positions are sequential starting from 0
+        for i, item in enumerate(items_after):
+            assert item.position == i, f"Item {item.work_item_id} should be at position {i}, got {item.position}"
+
+        # Verify items that were after position 3 have shifted down
+        assert items_after[3].work_item_id == "item-4"
+        assert items_after[3].position == 3
+
+        # Verify the position cache is also correct
+        item_4_position = await adapter.get_item_position("item-4")
+        assert item_4_position.position == 3
+        assert item_4_position.column_name == "Backlog"
+
+    @pytest.mark.asyncio
+    async def test_remove_item_at_position_0_shifts_all_items_down(self, adapter_with_items):
+        """Test that removing item at position 0 shifts all subsequent items down by 1."""
+        adapter = adapter_with_items
+
+        # Verify initial state
+        items_before = await adapter.get_items_in_column("board-1", "Backlog")
+        assert len(items_before) == 5
+        assert items_before[0].work_item_id == "item-0"
+
+        # Move item-0 to another column
+        await adapter.move_item_to_column("item-0", "In Progress", MovedByType.HUMAN)
+
+        # Verify all items shifted down by 1
+        items_after = await adapter.get_items_in_column("board-1", "Backlog")
+        assert len(items_after) == 4
+        assert items_after[0].work_item_id == "item-1"
+        assert items_after[0].position == 0
+        assert items_after[1].work_item_id == "item-2"
+        assert items_after[1].position == 1
+
+    @pytest.mark.asyncio
+    async def test_remove_last_item_no_position_updates_needed(self, adapter_with_items):
+        """Test that removing the last item requires no position updates."""
+        adapter = adapter_with_items
+
+        # Verify initial state
+        items_before = await adapter.get_items_in_column("board-1", "Backlog")
+        assert len(items_before) == 5
+        assert items_before[4].work_item_id == "item-4"
+
+        # Move last item to another column
+        await adapter.move_item_to_column("item-4", "In Progress", MovedByType.HUMAN)
+
+        # Verify only the last item was removed
+        items_after = await adapter.get_items_in_column("board-1", "Backlog")
+        assert len(items_after) == 4
+        # Other positions should remain unchanged
+        for i in range(4):
+            assert items_after[i].work_item_id == f"item-{i}"
+            assert items_after[i].position == i
+
+
 class TestThreadSafety:
     """Tests for thread safety of concurrent operations."""
 

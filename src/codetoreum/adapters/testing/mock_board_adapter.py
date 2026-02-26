@@ -280,10 +280,18 @@ class MockBoardAdapter(IBoardService):
             # Update item positions
             if from_column != target_column:
                 # Remove from old column
+                removed_position = None
                 for col in board.columns:
                     if col.name == from_column:
                         if work_item_id in col.work_item_ids:
+                            removed_position = col.work_item_ids.index(work_item_id)
                             col.work_item_ids.remove(work_item_id)
+                            # Recalculate positions of remaining items after the removed position
+                            for i in range(removed_position, len(col.work_item_ids)):
+                                item_id = col.work_item_ids[i]
+                                if item_id in self._item_positions:
+                                    board_id_stored, col_name, _ = self._item_positions[item_id]
+                                    self._item_positions[item_id] = (board_id_stored, col_name, i)
                         break
 
                 # Add to new column
