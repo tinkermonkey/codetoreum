@@ -239,7 +239,18 @@ class MockBoardAdapter(IBoardService):
     async def move_item_to_column(
         self, work_item_id: str, target_column: str, moved_by: MovedByType
     ) -> "ColumnMovementResult":
-        """Move work item to target column.
+        """Move work item to target column with automatic position recalculation.
+
+        When an item is moved from one column to another:
+        1. The item is removed from the source column
+        2. All items in the source column after the removed position shift down by 1
+        3. WorkItemPositionChangedEvent is emitted for each shifted sibling item
+        4. The item is appended to the target column at the end
+        5. WorkItemColumnChangedEvent is emitted for the moved item
+
+        Note: The moved item itself does not emit a WorkItemPositionChangedEvent since
+        its position in the target column (end of column) is not part of the recalculation.
+        Cross-column moves are captured solely by WorkItemColumnChangedEvent.
 
         Args:
             work_item_id: Item to move
@@ -251,6 +262,7 @@ class MockBoardAdapter(IBoardService):
 
         Raises:
             ResourceNotFoundError: Work item or target column doesn't exist
+            ValueError: current_project not set
         """
         from codetoreum.ports.output.board_service import ColumnMovementResult
 
@@ -514,11 +526,15 @@ class MockBoardAdapter(IBoardService):
             position: Position in column (defaults to end of column)
 
         Raises:
-            ValueError: Board or column doesn't exist
+            ValueError: Board, column, or project context doesn't exist
 
         Example:
             adapter.add_item_to_column("board-1", "Backlog", "item-1", position=0)
         """
+        if self.current_project is None:
+            msg = "current_project not set"
+            raise ValueError(msg)
+
         with self._lock:
             # Find the board containing this column
             board = None
@@ -556,20 +572,19 @@ class MockBoardAdapter(IBoardService):
                     board_id_stored, col, old_pos = self._item_positions[item_id]
                     self._item_positions[item_id] = (board_id_stored, col, i)
                     # Emit position change event for shifted items
-                    if self.current_project:
-                        self.emit(
-                            WorkItemPositionChangedEvent(
-                                type="workitem.position_changed",
-                                work_item_id=item_id,
-                                project_id=self.current_project,
-                                board_id=board_id,
-                                column_name=col,
-                                old_position=old_pos,
-                                new_position=i,
-                                timestamp=self._get_iso_timestamp(),
-                                source="mock",
-                            )
+                    self.emit(
+                        WorkItemPositionChangedEvent(
+                            type="workitem.position_changed",
+                            work_item_id=item_id,
+                            project_id=self.current_project,
+                            board_id=board_id,
+                            column_name=col,
+                            old_position=old_pos,
+                            new_position=i,
+                            timestamp=self._get_iso_timestamp(),
+                            source="mock",
                         )
+                    )
 
     async def simulate_human_move_async(self, work_item_id: str, target_column: str) -> None:
         """Test helper: Simulate user dragging card in board UI (async version).

@@ -20,6 +20,7 @@ from codetoreum.adapters.testing.mock_board_adapter import (
     MockBoardAdapter,
     MovementEvent,
 )
+from codetoreum.domain.events import WorkItemPositionChangedEvent
 from codetoreum.ports.output.board_service import MovedByType
 
 
@@ -596,6 +597,137 @@ class TestThreadSafety:
         # Verify all items are in target column
         items = asyncio.run(adapter.get_items_in_column("board-1", "In Progress"))
         assert len(items) == 10
+
+
+class TestPositionChangedEventEmissions:
+    """Tests for WorkItemPositionChangedEvent emissions during position recalculation."""
+
+    @pytest.fixture
+    def adapter_with_items(self):
+        """Create adapter with multiple items in a column."""
+        adapter = MockBoardAdapter()
+        adapter.current_project = "proj-1"
+        adapter.create_board("proj-1", "board-1", "Board", ["Backlog", "In Progress", "Done"])
+        # Add items at positions 0-2
+        for i in range(3):
+            adapter.add_item_to_column("board-1", "Backlog", f"item-{i}", position=i)
+        return adapter
+
+    @pytest.mark.asyncio
+    async def test_move_item_emits_position_changed_for_siblings_after_removal(self, adapter_with_items):
+        """Test that move_item_to_column() emits WorkItemPositionChangedEvent for sibling items.
+
+        When item-1 is removed from [item-0, item-1, item-2], the sibling items
+        at positions >= the removed position should shift down and emit events.
+        """
+        from codetoreum.domain.events import WorkItemPositionChangedEvent
+
+        adapter = adapter_with_items
+        position_events: list[WorkItemPositionChangedEvent] = []
+        adapter.on("workitem.position_changed", position_events.append)
+
+        # Move item-1 (at position 1) to In Progress
+        await adapter.move_item_to_column("item-1", "In Progress", MovedByType.HUMAN)
+
+        # Verify position changed events were emitted for item-2
+        # item-2 should shift from position 2 to position 1
+        assert len(position_events) == 1
+        assert position_events[0].work_item_id == "item-2"
+        assert position_events[0].old_position == 2
+        assert position_events[0].new_position == 1
+        assert position_events[0].column_name == "Backlog"
+
+    @pytest.mark.asyncio
+    async def test_move_item_no_position_changed_event_when_only_item_removed(self, adapter_with_items):
+        """Test no position changed event when removing the last item in column."""
+        adapter = adapter_with_items
+        # Remove all but item-0
+        await adapter.move_item_to_column("item-1", "In Progress", MovedByType.HUMAN)
+        await adapter.move_item_to_column("item-2", "In Progress", MovedByType.HUMAN)
+
+        position_events: list[WorkItemPositionChangedEvent] = []
+        adapter.on("workitem.position_changed", position_events.append)
+
+        # Move item-0 (the only remaining item) - no position changes for siblings
+        await adapter.move_item_to_column("item-0", "Done", MovedByType.HUMAN)
+
+        assert len(position_events) == 0
+
+    @pytest.mark.asyncio
+    async def test_add_item_to_column_emits_position_changed_for_shifted_items(self, adapter_with_items):
+        """Test that add_item_to_column() emits WorkItemPositionChangedEvent for shifted items.
+
+        When item-4 is inserted at position 0, all existing items shift down
+        and should emit position changed events.
+        """
+        from codetoreum.domain.events import WorkItemPositionChangedEvent
+
+        adapter = adapter_with_items
+        position_events: list[WorkItemPositionChangedEvent] = []
+        adapter.on("workitem.position_changed", position_events.append)
+
+        # Add new item at position 0 - should shift item-0, item-1, item-2
+        adapter.add_item_to_column("board-1", "Backlog", "item-new", position=0)
+
+        # Verify position changed events were emitted for all shifted items
+        assert len(position_events) == 3
+
+        # Verify events are for the correct items and positions
+        events_by_item = {e.work_item_id: e for e in position_events}
+
+        assert "item-0" in events_by_item
+        assert events_by_item["item-0"].old_position == 0
+        assert events_by_item["item-0"].new_position == 1
+
+        assert "item-1" in events_by_item
+        assert events_by_item["item-1"].old_position == 1
+        assert events_by_item["item-1"].new_position == 2
+
+        assert "item-2" in events_by_item
+        assert events_by_item["item-2"].old_position == 2
+        assert events_by_item["item-2"].new_position == 3
+
+    def test_add_item_to_column_no_events_when_appending_to_end(self, adapter_with_items):
+        """Test no position changed events when adding to end of column."""
+        adapter = adapter_with_items
+        position_events: list[WorkItemPositionChangedEvent] = []
+        adapter.on("workitem.position_changed", position_events.append)
+
+        # Add item to end (default position) - should not shift any items
+        adapter.add_item_to_column("board-1", "Backlog", "item-new")
+
+        assert len(position_events) == 0
+
+    def test_add_item_requires_current_project(self):
+        """Test that add_item_to_column() requires current_project to be set."""
+        adapter = MockBoardAdapter()
+        # Note: current_project is not set
+        adapter.create_board("proj-1", "board-1", "Board", ["Backlog"])
+
+        with pytest.raises(ValueError, match="current_project not set"):
+            adapter.add_item_to_column("board-1", "Backlog", "item-1")
+
+    @pytest.mark.asyncio
+    async def test_position_changed_event_has_correct_metadata(self, adapter_with_items):
+        """Test that WorkItemPositionChangedEvent has correct metadata."""
+        from codetoreum.domain.events import WorkItemPositionChangedEvent
+
+        adapter = adapter_with_items
+        position_events: list[WorkItemPositionChangedEvent] = []
+        adapter.on("workitem.position_changed", position_events.append)
+
+        await adapter.move_item_to_column("item-1", "In Progress", MovedByType.HUMAN)
+
+        assert len(position_events) == 1
+        event = position_events[0]
+
+        # Verify event metadata
+        assert event.type == "workitem.position_changed"
+        assert event.project_id == "proj-1"
+        assert event.board_id == "board-1"
+        assert event.column_name == "Backlog"
+        assert event.source == "mock"
+        assert event.timestamp is not None
 
 
 if __name__ == "__main__":

@@ -182,6 +182,9 @@ class WorkItemPositionChangedEvent(CodetoreumEvent):
         if self.new_position < 0:
             msg = "new_position must be non-negative"
             raise ValueError(msg)
+        if self.old_position == self.new_position:
+            msg = "old_position must differ from new_position (position did not actually change)"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""

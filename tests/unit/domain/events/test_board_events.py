@@ -7,6 +7,7 @@ import pytest
 from codetoreum.domain.events import (
     BoardReconciledEvent,
     WorkItemColumnChangedEvent,
+    WorkItemPositionChangedEvent,
     now_iso,
 )
 
@@ -541,3 +542,270 @@ class TestBoardReconciledEventImmutability:
         assert event.source == "github"
         assert event.correlation_id == "corr-1"
         assert event.items_moved == 3
+
+
+class TestWorkItemPositionChangedEvent:
+    """Test WorkItemPositionChangedEvent."""
+
+    def test_create_valid_event(self):
+        """Test creating a valid position changed event."""
+        timestamp = now_iso()
+        event = WorkItemPositionChangedEvent(
+            type="workitem.position_changed",
+            timestamp=timestamp,
+            source="mock",
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
+            column_name="In Progress",
+            old_position=2,
+            new_position=1,
+        )
+
+        assert event.work_item_id == "item-1"
+        assert event.project_id == "proj-1"
+        assert event.board_id == "board-1"
+        assert event.column_name == "In Progress"
+        assert event.old_position == 2
+        assert event.new_position == 1
+
+    def test_position_change_to_end(self):
+        """Test moving item to end of column."""
+        event = WorkItemPositionChangedEvent(
+            type="workitem.position_changed",
+            timestamp=now_iso(),
+            source="mock",
+            work_item_id="item-3",
+            project_id="proj-1",
+            board_id="board-1",
+            column_name="Backlog",
+            old_position=0,
+            new_position=5,
+        )
+
+        assert event.old_position == 0
+        assert event.new_position == 5
+
+    def test_position_change_to_start(self):
+        """Test moving item to start of column."""
+        event = WorkItemPositionChangedEvent(
+            type="workitem.position_changed",
+            timestamp=now_iso(),
+            source="mock",
+            work_item_id="item-2",
+            project_id="proj-1",
+            board_id="board-1",
+            column_name="Done",
+            old_position=4,
+            new_position=0,
+        )
+
+        assert event.old_position == 4
+        assert event.new_position == 0
+
+    def test_missing_work_item_id(self):
+        """Test that work_item_id is required."""
+        with pytest.raises(ValueError, match="work_item_id"):
+            WorkItemPositionChangedEvent(
+                type="workitem.position_changed",
+                timestamp=now_iso(),
+                source="mock",
+                work_item_id="",  # Empty
+                project_id="proj-1",
+                board_id="board-1",
+                column_name="In Progress",
+                old_position=0,
+                new_position=1,
+            )
+
+    def test_missing_project_id(self):
+        """Test that project_id is required."""
+        with pytest.raises(ValueError, match="project_id"):
+            WorkItemPositionChangedEvent(
+                type="workitem.position_changed",
+                timestamp=now_iso(),
+                source="mock",
+                work_item_id="item-1",
+                project_id="",  # Empty
+                board_id="board-1",
+                column_name="In Progress",
+                old_position=0,
+                new_position=1,
+            )
+
+    def test_missing_board_id(self):
+        """Test that board_id is required."""
+        with pytest.raises(ValueError, match="board_id"):
+            WorkItemPositionChangedEvent(
+                type="workitem.position_changed",
+                timestamp=now_iso(),
+                source="mock",
+                work_item_id="item-1",
+                project_id="proj-1",
+                board_id="",  # Empty
+                column_name="In Progress",
+                old_position=0,
+                new_position=1,
+            )
+
+    def test_missing_column_name(self):
+        """Test that column_name is required."""
+        with pytest.raises(ValueError, match="column_name"):
+            WorkItemPositionChangedEvent(
+                type="workitem.position_changed",
+                timestamp=now_iso(),
+                source="mock",
+                work_item_id="item-1",
+                project_id="proj-1",
+                board_id="board-1",
+                column_name="",  # Empty
+                old_position=0,
+                new_position=1,
+            )
+
+    def test_negative_old_position(self):
+        """Test that old_position cannot be negative."""
+        with pytest.raises(ValueError, match="old_position must be non-negative"):
+            WorkItemPositionChangedEvent(
+                type="workitem.position_changed",
+                timestamp=now_iso(),
+                source="mock",
+                work_item_id="item-1",
+                project_id="proj-1",
+                board_id="board-1",
+                column_name="In Progress",
+                old_position=-1,
+                new_position=1,
+            )
+
+    def test_negative_new_position(self):
+        """Test that new_position cannot be negative."""
+        with pytest.raises(ValueError, match="new_position must be non-negative"):
+            WorkItemPositionChangedEvent(
+                type="workitem.position_changed",
+                timestamp=now_iso(),
+                source="mock",
+                work_item_id="item-1",
+                project_id="proj-1",
+                board_id="board-1",
+                column_name="In Progress",
+                old_position=1,
+                new_position=-1,
+            )
+
+    def test_equal_positions_not_allowed(self):
+        """Test that old_position cannot equal new_position."""
+        with pytest.raises(ValueError, match="old_position must differ from new_position"):
+            WorkItemPositionChangedEvent(
+                type="workitem.position_changed",
+                timestamp=now_iso(),
+                source="mock",
+                work_item_id="item-1",
+                project_id="proj-1",
+                board_id="board-1",
+                column_name="In Progress",
+                old_position=2,
+                new_position=2,
+            )
+
+    def test_position_changed_serialization(self):
+        """Test position changed event serialization."""
+        timestamp = now_iso()
+        event = WorkItemPositionChangedEvent(
+            type="workitem.position_changed",
+            timestamp=timestamp,
+            source="mock",
+            correlation_id="corr-789",
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
+            column_name="In Progress",
+            old_position=2,
+            new_position=1,
+        )
+
+        d = event.to_dict()
+
+        assert d["type"] == "workitem.position_changed"
+        assert d["work_item_id"] == "item-1"
+        assert d["project_id"] == "proj-1"
+        assert d["board_id"] == "board-1"
+        assert d["column_name"] == "In Progress"
+        assert d["old_position"] == 2
+        assert d["new_position"] == 1
+
+    def test_position_changed_deserialization(self):
+        """Test position changed event deserialization."""
+        timestamp = now_iso()
+        d = {
+            "type": "workitem.position_changed",
+            "timestamp": timestamp,
+            "source": "mock",
+            "correlation_id": "corr-789",
+            "work_item_id": "item-1",
+            "project_id": "proj-1",
+            "board_id": "board-1",
+            "column_name": "In Progress",
+            "old_position": 2,
+            "new_position": 1,
+        }
+
+        event = WorkItemPositionChangedEvent.from_dict(d)
+
+        assert event.type == "workitem.position_changed"
+        assert event.work_item_id == "item-1"
+        assert event.old_position == 2
+        assert event.new_position == 1
+
+    def test_position_changed_roundtrip(self):
+        """Test position changed event roundtrip serialization."""
+        timestamp = now_iso()
+        original = WorkItemPositionChangedEvent(
+            type="workitem.position_changed",
+            timestamp=timestamp,
+            source="mock",
+            correlation_id="corr-101",
+            work_item_id="item-5",
+            project_id="proj-2",
+            board_id="board-2",
+            column_name="Review",
+            old_position=3,
+            new_position=0,
+        )
+
+        d = original.to_dict()
+        restored = WorkItemPositionChangedEvent.from_dict(d)
+
+        assert restored.work_item_id == original.work_item_id
+        assert restored.old_position == original.old_position
+        assert restored.new_position == original.new_position
+        assert restored.column_name == original.column_name
+
+    def test_position_changed_event_is_frozen(self):
+        """Test that WorkItemPositionChangedEvent is immutable (frozen dataclass)."""
+        event = WorkItemPositionChangedEvent(
+            type="workitem.position_changed",
+            timestamp=now_iso(),
+            source="mock",
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
+            column_name="In Progress",
+            old_position=2,
+            new_position=1,
+        )
+
+        # Verify the event is properly created
+        assert event.old_position == 2
+        assert event.new_position == 1
+
+        # WorkItemPositionChangedEvent is a frozen dataclass, so attempting to modify
+        # any attribute should raise FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
+            event.old_position = 0  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.new_position = 5  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.work_item_id = "item-2"  # type: ignore
