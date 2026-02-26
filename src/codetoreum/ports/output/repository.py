@@ -37,11 +37,6 @@ class RepositoryStatus:
             msg = "current_branch must be a non-empty string"
             raise ValueError(msg)
 
-        # Explicitly reject bool (subclass of int) before checking for bool type
-        if isinstance(self.is_dirty, int) and not isinstance(self.is_dirty, bool):
-            msg = "is_dirty must be a boolean"
-            raise ValueError(msg)
-
         if not isinstance(self.is_dirty, bool):
             msg = "is_dirty must be a boolean"
             raise ValueError(msg)
@@ -105,11 +100,6 @@ class MergeResult:
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
-        # Explicitly reject bool (subclass of int)
-        if isinstance(self.success, int) and not isinstance(self.success, bool):
-            msg = "success must be a boolean"
-            raise ValueError(msg)
-
         if not isinstance(self.success, bool):
             msg = "success must be a boolean"
             raise ValueError(msg)

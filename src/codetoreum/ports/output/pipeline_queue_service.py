@@ -59,7 +59,7 @@ class NonNegativeInt(int):
         """
         # Explicitly reject bool (subclass of int) before checking int
         if isinstance(value, bool):
-            msg = f"NonNegativeInt requires an integer, got bool"
+            msg = "NonNegativeInt requires an integer, got bool"
             raise ValueError(msg)
         if not isinstance(value, int):
             msg = f"NonNegativeInt requires an integer, got {type(value).__name__}"
@@ -143,11 +143,6 @@ class PipelineQueueEntry:
 
         if not isinstance(self.work_item_id, str) or not self.work_item_id:
             msg = "work_item_id must be a non-empty string"
-            raise ValueError(msg)
-
-        # Explicitly reject bool before checking isinstance(x, int)
-        if isinstance(self.position_in_column, bool):
-            msg = "position_in_column must be a non-negative integer, got bool"
             raise ValueError(msg)
 
         if not isinstance(self.position_in_column, NonNegativeInt):
