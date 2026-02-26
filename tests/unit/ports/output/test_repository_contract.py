@@ -333,9 +333,9 @@ class TestRepositoryContract(ABC):
             status = await repo.status(dest)
             assert isinstance(status, RepositoryStatus)
             assert isinstance(status.is_dirty, bool)
-            assert isinstance(status.staged_files, list)
-            assert isinstance(status.unstaged_files, list)
-            assert isinstance(status.untracked_files, list)
+            assert isinstance(status.staged_files, tuple)
+            assert isinstance(status.unstaged_files, tuple)
+            assert isinstance(status.untracked_files, tuple)
 
     # ===== Remote Operations Tests =====
 
@@ -414,7 +414,7 @@ class TestRepositoryContract(ABC):
             assert isinstance(result, MergeResult)
             # Compatible branches should merge without conflicts
             assert result.success is True
-            assert isinstance(result.conflicts, list)
+            assert isinstance(result.conflicts, tuple)
 
     # ===== Diff Tests =====
 
