@@ -123,9 +123,17 @@ class ReviewFeedback:
 
     decision: ReviewDecision
     comment: str
-    issues: list[str]
-    suggestions: list[str]
+    issues: tuple[str, ...]
+    suggestions: tuple[str, ...]
     timestamp: datetime
+
+    def __post_init__(self) -> None:
+        """Ensure lists are converted to tuples for immutability."""
+        # Handle case where issues/suggestions were passed as lists
+        if isinstance(self.issues, list):
+            object.__setattr__(self, "issues", tuple(self.issues))
+        if isinstance(self.suggestions, list):
+            object.__setattr__(self, "suggestions", tuple(self.suggestions))
 
 
 @dataclass(frozen=True)
@@ -156,22 +164,24 @@ class ReviewCycle:
     until approval, escalation, or max iterations reached.
 
     Encapsulation Strategy:
-    - Public readonly fields: id, workflow_id, stage_name, maker_agent_id, reviewer_agent_id, max_iterations
-    - Private state fields: _status, _current_iteration, _final_decision, _escalation_reason, _iterations
-    - Timestamps handled via accessor methods with copy semantics
-    - All mutations guarded by state machine enforcement
+    - Identity fields (id, workflow_id, stage_name, maker_agent_id, reviewer_agent_id, max_iterations):
+      Protected by __setattr__ — cannot be modified after initialization
+    - Private state fields (_status, _current_iteration, _final_decision, _escalation_reason, _iterations):
+      Internal mutations only through guarded domain methods, enforced by access control and docstring
+    - All mutations guarded by state machine enforcement: start_iteration, submit_review, approve,
+      request_changes, and escalate validate preconditions before state transitions
     """
 
-    # Identity (readonly)
+    # Identity (readonly - protected by __setattr__)
     id: str
     workflow_id: str
     stage_name: str
 
-    # Agents (readonly)
+    # Agents (readonly - protected by __setattr__)
     maker_agent_id: str
     reviewer_agent_id: str
 
-    # Configuration (readonly)
+    # Configuration (readonly - protected by __setattr__)
     max_iterations: int
 
     # Status (private - guarded by state transitions)
@@ -194,9 +204,51 @@ class ReviewCycle:
     _events: list[DomainEvent] = field(default_factory=list, init=False, repr=False)
     _version: int = field(default=0, init=False, repr=False)
 
+    # Track initialization state for __setattr__ protection
+    _initialized: bool = field(default=False, init=False, repr=False)
+
     def __post_init__(self) -> None:
         """Validate invariants after initialization."""
         self._validate_invariants()
+        # Mark as initialized to activate __setattr__ protection
+        object.__setattr__(self, "_initialized", True)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """
+        Protect identity fields from external modification.
+
+        Identity fields (id, workflow_id, stage_name, maker_agent_id,
+        reviewer_agent_id, max_iterations) cannot be modified after
+        initialization.
+
+        Args:
+            name: Attribute name
+            value: Value to set
+
+        Raises:
+            AttributeError: If attempting to modify identity fields after init
+        """
+        # Allow all attributes during __init__ and __post_init__
+        if not hasattr(self, "_initialized") or not object.__getattribute__(self, "_initialized"):
+            object.__setattr__(self, name, value)
+            return
+
+        # After initialization, protect identity fields
+        identity_fields = {
+            "id",
+            "workflow_id",
+            "stage_name",
+            "maker_agent_id",
+            "reviewer_agent_id",
+            "max_iterations",
+        }
+
+        if name in identity_fields:
+            msg = f"Cannot modify identity field '{name}' after initialization"
+            raise AttributeError(msg)
+
+        # Allow internal fields and other attributes to be set
+        object.__setattr__(self, name, value)
 
     def _validate_invariants(self) -> None:
         """
@@ -333,10 +385,15 @@ class ReviewCycle:
             maker_execution_id: Execution ID of maker's run
 
         Raises:
-            DomainError: If max iterations already reached
+            DomainError: If max iterations already reached or cycle is in terminal state
 
         Emits: ReviewIterationStarted event
         """
+        # Validate preconditions
+        if self._status in {ReviewStatus.APPROVED, ReviewStatus.ESCALATED}:
+            msg = f"Cannot start iteration on {self._status.value} cycle"
+            raise DomainError(msg)
+
         if self._current_iteration >= self.max_iterations:
             msg = f"Exceeded max iterations ({self.max_iterations})"
             raise DomainError(msg)
@@ -401,8 +458,8 @@ class ReviewCycle:
         feedback = ReviewFeedback(
             decision=decision,
             comment=comment,
-            issues=issues or [],
-            suggestions=suggestions or [],
+            issues=tuple(issues or []),
+            suggestions=tuple(suggestions or []),
             timestamp=datetime.now(UTC),
         )
 
@@ -449,8 +506,16 @@ class ReviewCycle:
 
         Marks the review cycle as complete and approved.
 
+        Raises:
+            DomainError: If cycle is not in IN_PROGRESS state
+
         Emits: ReviewCycleApproved event
         """
+        # Validate precondition: can only approve from IN_PROGRESS state
+        if self._status != ReviewStatus.IN_PROGRESS:
+            msg = f"Can only approve cycle in IN_PROGRESS state, current state: {self._status.value}"
+            raise DomainError(msg)
+
         now = datetime.now(UTC)
         self._status = ReviewStatus.APPROVED
         self._final_decision = ReviewDecision.APPROVE
@@ -489,8 +554,16 @@ class ReviewCycle:
         Args:
             reason: Reason for escalation
 
+        Raises:
+            DomainError: If cycle is already in terminal state (APPROVED or ESCALATED)
+
         Emits: ReviewCycleEscalated event
         """
+        # Validate precondition: cannot escalate terminal states
+        if self._status in {ReviewStatus.APPROVED, ReviewStatus.ESCALATED}:
+            msg = f"Cannot escalate {self._status.value} cycle"
+            raise DomainError(msg)
+
         now = datetime.now(UTC)
         self._status = ReviewStatus.ESCALATED
         self._final_decision = ReviewDecision.ESCALATE
@@ -517,7 +590,7 @@ class ReviewCycle:
         Returns:
             True if cycle is approved or escalated
         """
-        return self.status in [ReviewStatus.APPROVED, ReviewStatus.ESCALATED]
+        return self._status in {ReviewStatus.APPROVED, ReviewStatus.ESCALATED}
 
     def needs_maker_revision(self) -> bool:
         """
@@ -526,7 +599,7 @@ class ReviewCycle:
         Returns:
             True if changes were requested
         """
-        return self.status == ReviewStatus.CHANGES_REQUESTED
+        return self._status == ReviewStatus.CHANGES_REQUESTED
 
     def get_latest_feedback(self) -> ReviewFeedback | None:
         """
@@ -535,9 +608,9 @@ class ReviewCycle:
         Returns:
             Most recent ReviewFeedback or None if no feedback yet
         """
-        if not self.iterations:
+        if not self._iterations:
             return None
-        return self.iterations[-1].reviewer_feedback
+        return self._iterations[-1].reviewer_feedback
 
     # Event management
     def _add_event(self, event: DomainEvent) -> None:

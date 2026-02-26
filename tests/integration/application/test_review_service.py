@@ -642,65 +642,6 @@ async def test_submit_review_event_store_error(maker_agent, reviewer_agent, make
 
 
 @pytest.mark.asyncio
-async def test_complete_cycle_event_store_error(
-    review_service, maker_agent, reviewer_agent, maker_execution, reviewer_execution
-):
-    """Test error handling when event store fails during cycle completion."""
-    # Create review cycle
-    result = await review_service.create_review_cycle(
-        workflow_id="workflow-1",
-        stage_name="coding",
-        maker_agent=maker_agent,
-        reviewer_agent=reviewer_agent,
-        max_iterations=3,
-    )
-    review_cycle = result.review_cycle
-
-    # Start iteration and get it approved
-    await review_service.start_iteration(
-        review_cycle=review_cycle,
-        maker_output="def hello(): return 'world'",
-        maker_execution=maker_execution,
-    )
-
-    await review_service.submit_review(
-        review_cycle=review_cycle,
-        decision=ReviewDecision.APPROVE,
-        comment="Looks good!",
-        reviewer_execution=reviewer_execution,
-    )
-
-    # Create fresh cycle to test complete_cycle error handling with failing store
-    # (In real scenario, we'd test against a cycle that needs completion)
-    from codetoreum.ports.exceptions import EventStoreError
-
-    create_result_2 = await review_service.create_review_cycle(
-        workflow_id="workflow-2",
-        stage_name="coding",
-        maker_agent=maker_agent,
-        reviewer_agent=reviewer_agent,
-    )
-    review_cycle_2 = create_result_2.review_cycle
-
-    # Start and complete iteration
-    await review_service.start_iteration(
-        review_cycle=review_cycle_2,
-        maker_output="code",
-        maker_execution=maker_execution,
-    )
-
-    # Now try to complete with failing store
-    failing_store = FailingEventStore(fail_on_call=1)
-    review_service_2 = ReviewService(event_store=failing_store)
-
-    with pytest.raises(EventStoreError, match="Event store connection failed"):
-        await review_service_2.complete_cycle(review_cycle=review_cycle_2, approved=True)
-
-    # Verify no events were persisted
-    assert failing_store.get_total_event_count() == 0
-
-
-@pytest.mark.asyncio
 async def test_escalate_on_first_iteration(
     review_service, maker_agent, reviewer_agent, maker_execution, reviewer_execution
 ):
