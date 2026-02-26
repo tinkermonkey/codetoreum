@@ -499,7 +499,8 @@ class SimulationApplicationBootstrap:
         version_control = InMemoryVersionControlService()
         message_broker = InMemoryMessageBroker()
         await message_broker.initialize()  # Initialize message broker
-        identity_service = ConfigurableIdentityService(bot_username="codetoreum-bot")
+        identity_service = ConfigurableIdentityService()
+        identity_service.set_bot_username("codetoreum-bot")
         discussion_adapter = MockDiscussionAdapter(identity_service=identity_service)
         review_cycle = MockReviewCycleAdapter(clock=self._engine.get_clock_for_testing() if self._engine else None)
         checkpoint_store = InMemoryCheckpointStore()

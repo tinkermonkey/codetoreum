@@ -8,6 +8,7 @@ for simulating discussion updates via event emission.
 from datetime import UTC, datetime
 from typing import Any
 
+from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.domain.events.discussion_events import (
     Comment,
@@ -21,8 +22,6 @@ from codetoreum.ports.output.discussion_adapter import (
     IDiscussionAdapter,
 )
 from codetoreum.ports.output.identity_service import IIdentityService
-
-from .mock_event_emitter import MockEventEmitter
 
 
 class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
