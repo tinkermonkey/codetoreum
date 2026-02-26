@@ -642,13 +642,12 @@ async def test_submit_review_event_store_error(maker_agent, reviewer_agent, make
 
 
 @pytest.mark.asyncio
-async def test_complete_cycle_event_store_error(maker_agent, reviewer_agent, maker_execution, reviewer_execution):
+async def test_complete_cycle_event_store_error(
+    review_service, maker_agent, reviewer_agent, maker_execution, reviewer_execution
+):
     """Test error handling when event store fails during cycle completion."""
     # Create review cycle
-    working_store = InMemoryEventStore()
-    review_service_1 = ReviewService(event_store=working_store)
-
-    result = await review_service_1.create_review_cycle(
+    result = await review_service.create_review_cycle(
         workflow_id="workflow-1",
         stage_name="coding",
         maker_agent=maker_agent,
@@ -658,32 +657,44 @@ async def test_complete_cycle_event_store_error(maker_agent, reviewer_agent, mak
     review_cycle = result.review_cycle
 
     # Start iteration and get it approved
-    await review_service_1.start_iteration(
+    await review_service.start_iteration(
         review_cycle=review_cycle,
         maker_output="def hello(): return 'world'",
         maker_execution=maker_execution,
     )
 
-    await review_service_1.submit_review(
+    await review_service.submit_review(
         review_cycle=review_cycle,
         decision=ReviewDecision.APPROVE,
         comment="Looks good!",
         reviewer_execution=reviewer_execution,
     )
 
-    # Manually reset status to test complete_cycle error handling
-    # (In real scenario, this wouldn't happen, but we need to test the error path)
-    review_cycle.status = ReviewStatus.IN_PROGRESS
-    review_cycle.completed_at = None
+    # Create fresh cycle to test complete_cycle error handling with failing store
+    # (In real scenario, we'd test against a cycle that needs completion)
+    from codetoreum.ports.exceptions import EventStoreError
+
+    create_result_2 = await review_service.create_review_cycle(
+        workflow_id="workflow-2",
+        stage_name="coding",
+        maker_agent=maker_agent,
+        reviewer_agent=reviewer_agent,
+    )
+    review_cycle_2 = create_result_2.review_cycle
+
+    # Start and complete iteration
+    await review_service.start_iteration(
+        review_cycle=review_cycle_2,
+        maker_output="code",
+        maker_execution=maker_execution,
+    )
 
     # Now try to complete with failing store
     failing_store = FailingEventStore(fail_on_call=1)
     review_service_2 = ReviewService(event_store=failing_store)
 
-    from codetoreum.ports.exceptions import EventStoreError
-
     with pytest.raises(EventStoreError, match="Event store connection failed"):
-        await review_service_2.complete_cycle(review_cycle=review_cycle, approved=True)
+        await review_service_2.complete_cycle(review_cycle=review_cycle_2, approved=True)
 
     # Verify no events were persisted
     assert failing_store.get_total_event_count() == 0
